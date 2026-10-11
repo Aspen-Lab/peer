@@ -1348,6 +1348,28 @@ function chainSpaced(parts: [string, Partial<PdfTextItem>?][], at: { x?: number;
   });
 }
 
+// P7-11's table, row by row (a number raised after what it follows is dropped or kept), read with and without the
+// run the PDF stores after a script: the reading must not depend on it.
+const DROPPED: [string, string, string][] = [
+  ["Quillwort cathodes are used in many small cells and other materials.", "12", " They also fade."],
+  ["Quillwort films were grown on gold,", "3−5", " and then annealed."],
+  ["Quillwort films were grown on gold (see below)", "4", " and then annealed."],
+  ["Quillwort films were grown on gold [Li]", "4", " and then annealed."],
+  ["Quillwort films were grown on gold;", "2,3", " they then fade."],
+  ["Quillwort films were grown on gold–silver", "5", " and then annealed."],
+  ["Quillwort cathode degradation", "17", " is slow in cells."],
+];
+const KEPT: [string, string, string][] = [
+  ["a rate of 5 x 10", "−3", " per second"],
+  ["a diffusivity in cm", "2", " per second"],
+  ["a rate in s", "−1", " at room temperature"],
+  ["a current of 12.5 mA cm", "−2", " was used"],
+  ["the fit gave R", "2", " above 0.99"],
+  ["an area of 4 mm", "2", " each"],
+  ["a rate in mol", "−1", " of lithium"],
+  ["a rate in min", "-1", " of lithium"],
+];
+
 describe("a raised run joins its text row, the space the PDF stores after it too (P9-08, cluster A)", () => {
   const UPPER = "kinetics of the quillwort film are set by the grain size and by the";
 
@@ -1404,26 +1426,6 @@ describe("a raised run joins its text row, the space the PDF stores after it too
     expect(linesOfPage({ page: 1, items }).map((l) => l.text)).toEqual(["Films of TiO2 were grown on gold"]);
   });
 
-  // P7-11's table, row by row, with and without the run the PDF stores: the reading must not depend on it.
-  const DROPPED: [string, string, string][] = [
-    ["Quillwort cathodes are used in many small cells and other materials.", "12", " They also fade."],
-    ["Quillwort films were grown on gold,", "3−5", " and then annealed."],
-    ["Quillwort films were grown on gold (see below)", "4", " and then annealed."],
-    ["Quillwort films were grown on gold [Li]", "4", " and then annealed."],
-    ["Quillwort films were grown on gold;", "2,3", " they then fade."],
-    ["Quillwort films were grown on gold–silver", "5", " and then annealed."],
-    ["Quillwort cathode degradation", "17", " is slow in cells."],
-  ];
-  const KEPT: [string, string, string][] = [
-    ["a rate of 5 x 10", "−3", " per second"],
-    ["a diffusivity in cm", "2", " per second"],
-    ["a rate in s", "−1", " at room temperature"],
-    ["a current of 12.5 mA cm", "−2", " was used"],
-    ["the fit gave R", "2", " above 0.99"],
-    ["an area of 4 mm", "2", " each"],
-    ["a rate in mol", "−1", " of lithium"],
-    ["a rate in min", "-1", " of lithium"],
-  ];
   describe.each([
     ["without the space run", chain],
     ["with the space run", chainSpaced],
@@ -1438,6 +1440,89 @@ describe("a raised run joins its text row, the space the PDF stores after it too
     it("keeps a negative exponent stored as two raised runs, a sign and a digit", () => {
       expect(read([["a rate in mol"], ["−", sup()], ["1", sup()], [" of lithium"]])).toEqual(["a rate in mol−1 of lithium"]);
     });
+  });
+});
+
+// ── P9-08 (round P9, Theme 1; B P9-01 §3): what a raised number is, a citation or an exponent ────────
+//
+// A citation number is dropped, an exponent is kept (P7-11). The rule that told them apart read the
+// word before the number: punctuation, or three ASCII letters. It missed a suspended hyphen
+// ("inter-" … "and intragranular"), a closing quote, an element symbol of two letters (Fe, Ni) and a
+// formula that ends in digits (ZnTiO3): the number fused to the word, "ZnTiO335". And it dropped an
+// exponent after a closing bracket, "(i/imax)2". Cluster A's fold alone would have let the fused cites
+// appear (a lone cite used to be thrown away by accident, as a folio), so A and B ship together.
+
+describe.each([
+  ["without the space run", chain],
+  ["with the space run", chainSpaced],
+] as const)("what a raised number is: a citation or an exponent, %s (P9-08, cluster B)", (_name, build) => {
+  const read = (parts: [string, Partial<PdfTextItem>?][]) => linesOfPage({ page: 1, items: build(parts) }).map((l) => l.text);
+
+  it("drops a citation after a suspended hyphen, a closing quote, an element symbol or a formula that ends in digits", () => {
+    // a suspended hyphen: kept, and the citation after it goes ("inter- and intragranular")
+    expect(read([["a quillwort grain-"], ["2", sup()], [" (size) and film-dependent growth"]])).toEqual(["a quillwort grain- (size) and film-dependent growth"]);
+    expect(read([["cells that crack inter-"], ["5,6", sup()], [" and intragranular"]])).toEqual(["cells that crack inter- and intragranular"]);
+    // a closing quote, curly or straight
+    expect(read([["the film shows “fatigue”"], ["16", sup()], [" (a term used here)"]])).toEqual(["the film shows “fatigue” (a term used here)"]);
+    expect(read([['the film shows "fatigue"'], ["16", sup()], [" (a term used here)"]])).toEqual(['the film shows "fatigue" (a term used here)']);
+    expect(read([["called ‘fatigue’"], ["7", sup()], [" in cells"]])).toEqual(["called ‘fatigue’ in cells"]);
+    // an element symbol, two letters, the second lower case
+    expect(read([["a layer of Fe"], ["30", sup()], [" and Ni"], ["24", sup()], [" in the cell"]])).toEqual(["a layer of Fe and Ni in the cell"]);
+    // a formula that already ends in digits
+    expect(read([["this holds for ZnTiO3"], ["35", sup()], [" (Figure S12)."]])).toEqual(["this holds for ZnTiO3 (Figure S12)."]);
+    expect(read([["such as Sn, Pb, and Sb2Se3"], ["52", sup()], [" also twin"]])).toEqual(["such as Sn, Pb, and Sb2Se3 also twin"]);
+  });
+
+  it("drops every row of P7-11's table, and keeps its exponents", () => {
+    for (const [before, mark, after] of DROPPED) expect(read([[before], [mark, sup()], [after]]), `${before} + ${mark}`).toEqual([`${before}${after}`]);
+    for (const [before, mark, after] of KEPT) expect(read([[before], [mark, sup()], [after]]), `${before} + ${mark}`).toEqual([`${before}${mark}${after}`]);
+  });
+
+  it("an exponent stays: after a unit of one or two lower-case letters, a one-letter variable, a bare number, or with its own sign", () => {
+    expect(read([["a diffusivity in cm"], ["2", sup()], [" per second"]])).toEqual(["a diffusivity in cm2 per second"]);
+    expect(read([["a current density in mA/cm"], ["2", sup()], [" was held"]])).toEqual(["a current density in mA/cm2 was held"]);
+    expect(read([["the fit gave R"], ["2", sup()], [" above 0.99"]])).toEqual(["the fit gave R2 above 0.99"]);
+    expect(read([["a rate of 5 x 10"], ["12", sup()], [" per second"]])).toEqual(["a rate of 5 x 1012 per second"]);
+    expect(read([["a wavenumber of 595 cm"], ["−1", sup()], [" was seen"]])).toEqual(["a wavenumber of 595 cm−1 was seen"]);
+    expect(read([["a toughness of 2.1 MPam"], ["1/2", sup()], [" was seen"]])).toEqual(["a toughness of 2.1 MPam1/2 was seen"]);
+  });
+
+  it("a charge stays: a digit with its sign, however the formula before it ends", () => {
+    expect(read([["the complex Fe(CN)6"], ["4−", sup()], [" is stable"]])).toEqual(["the complex Fe(CN)64− is stable"]);
+    expect(read([["the ion Ni"], ["2+", sup()], [" binds the film"]])).toEqual(["the ion Ni2+ binds the film"]);
+    expect(read([["a lone hydroxide OH"], ["−", sup()], [" was found"]])).toEqual(["a lone hydroxide OH− was found"]);
+  });
+
+  it("a single raised digit after a bracketed group with a slash and no space is an exponent: '(i/imax)2'", () => {
+    expect(read([["the plot of (i/imax)"], ["2", sup()], [" against t/tmax"]])).toEqual(["the plot of (i/imax)2 against t/tmax"]);
+  });
+
+  it("any other number after a closing bracket is still a citation: a name, a phrase with a space, two digits", () => {
+    expect(read([["a layer of the cathode (ABC)"], ["12", sup()], [" was tested"]])).toEqual(["a layer of the cathode (ABC) was tested"]);
+    expect(read([["as shown in (Figure 2)"], ["12", sup()], [" for the film"]])).toEqual(["as shown in (Figure 2) for the film"]);
+    expect(read([["the plot of (i/imax)"], ["12", sup()], [" against t/tmax"]])).toEqual(["the plot of (i/imax) against t/tmax"]);
+    expect(read([["a layer of the cathode (ABC)"], ["2", sup()], [" was tested"]])).toEqual(["a layer of the cathode (ABC) was tested"]);
+  });
+});
+
+describe("what a raised number is, across runs (P9-08, cluster B)", () => {
+  const read = (parts: [string, Partial<PdfTextItem>?][]) => linesOfPage({ page: 1, items: chain(parts) }).map((l) => l.text);
+
+  it("a charge stays when a bracket follows it: '[OH−]/[Ni2+]'", () => {
+    expect(read([["a ratio [OH"], ["−", sup()], ["]/[Ni"], ["2+", sup()], ["]"]])).toEqual(["a ratio [OH−]/[Ni2+]"]);
+  });
+
+  it("a mark that carries its own sign is never a citation: '4−', '2+', '−13'", () => {
+    // After a word of three letters, where a bare number would go.
+    expect(read([["the cathode"], ["2+", sup()], [" binds"]])).toEqual(["the cathode2+ binds"]);
+    expect(read([["the cathode"], ["4−", sup()], [" binds"]])).toEqual(["the cathode4− binds"]);
+    expect(read([["the cathode"], ["−13", sup()], [" binds"]])).toEqual(["the cathode−13 binds"]);
+  });
+
+  it("a range keeps its shape: a dash, a comma or the space a PDF leaves where an en dash was", () => {
+    expect(read([["grown on gold,"], ["3−5", sup()], [" and annealed"]])).toEqual(["grown on gold, and annealed"]);
+    expect(read([["grown on gold,"], ["89 91", sup()], [" and annealed"]])).toEqual(["grown on gold, and annealed"]);
+    expect(read([["grown on gold,"], ["5,6", sup()], [" and annealed"]])).toEqual(["grown on gold, and annealed"]);
   });
 });
 

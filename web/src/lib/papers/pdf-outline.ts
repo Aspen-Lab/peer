@@ -333,16 +333,24 @@ const RUN_IN_LABEL = /^(?:abstract|summary|synopsis|key\s*words?|highlights)\s*[
 /** A script raised by more than this many points above its row's baseline is
  *  a superscript. */
 const SUPERSCRIPT_RISE = 1;
-/** A citation number: digits, commas, dashes and spaces, led by a digit
- *  ("12", "3−5", "5,6"), and no longer than this. A dash first is a negative
- *  exponent ("s−1"), which no citation is. */
-const CITATION_MARK = /^\d[\d\s,\u2013\u2212-]*$/;
+/** A citation number: whole numbers joined by commas, dashes or spaces
+ *  ("12", "3−5", "5,6", "89 91" — the space is where an en dash did not
+ *  survive), and no longer than this. A run that carries a sign of its own is
+ *  not one: a charge ("4−", "2+") or a negative exponent ("−13"), which no
+ *  citation is. */
+const CITATION_MARK = /^\d+(?:[\s,\u2013\u2212-]+\d+)*$/;
 const CITATION_MARK_MAX = 12;
-/** What a citation number stands after: the end of a clause or a bracket
- *  ("materials.12", "films,3−5"), or a word of three letters or more
- *  ("degradation17"). After a digit or a one- or two-letter unit ("10−3",
- *  "cm2", "s−1") a raised digit is an exponent, and it is kept. */
-const CITED = /(?:[.,;)\]]|[A-Za-z]{3,})$/;
+/** What a citation number stands after: the end of a clause, a bracket or a
+ *  quote ("materials.12", "films,3−5", "“fatigue”16"), a suspended hyphen
+ *  ("inter-5,6 and intragranular"), a word of three letters or more
+ *  ("degradation17"), a capitalised pair, which is an element ("Fe30"), or a
+ *  formula that already ends in digits ("ZnTiO335"). After a digit, a
+ *  one-letter variable or one or two lower-case letters ("10−3", "R2", "cm2",
+ *  "s−1") a raised digit is an exponent, and it is kept. */
+const CITED = /(?:[.,;:!?)\]\u201D\u2019"']|\p{L}-|\p{L}{3,}|\p{Lu}\p{Ll}|[\p{L})]\d+)$/u;
+/** A bracketed group with a slash in it and no space: "(i/imax)". One raised
+ *  digit after it is an exponent ("(i/imax)2"), not a citation of the group. */
+const RATIO_GROUP = /\([^()\s]*\/[^()\s]*\)$/;
 
 /** One baseline's worth of runs. */
 interface Row {
@@ -448,7 +456,8 @@ function lineOf(page: number, y: number, runs: PdfTextItem[], raised?: ReadonlyS
       while (end < runs.length && raised.has(runs[end])) end++;
       const mark = runs.slice(i, end).map((run) => run.str).join("").trim();
       const shape = mark.length <= CITATION_MARK_MAX && CITATION_MARK.test(mark);
-      if (shape && CITED.test(text.trimEnd())) {
+      const before = text.trimEnd();
+      if (shape && CITED.test(before) && !(mark.length === 1 && RATIO_GROUP.test(before))) {
         const last = runs[end - 1];
         // The space a raised run carried is the one the next word needs.
         if (text && /\s$/.test(last.str) && !/\s$/.test(text)) text += " ";
