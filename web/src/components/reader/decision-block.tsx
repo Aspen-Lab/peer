@@ -1,21 +1,22 @@
 "use client";
 
-// The decision: one plain sentence saying what Peer has and has not read,
-// then open · save · skip · copy, one key or one tap away. It sits directly
-// after the paper's own words and before Peer's additions, so nothing above
-// it moves when the sections or a model land, and a thumb reaches it on a
-// phone. The sentence is `describeAvailability`'s, never typed here.
+// The decision: open · save · skip · copy, one key or one tap away, and under
+// them one plain sentence saying what Peer has and has not read. P7-14 (R2):
+// the commands come first — the owner asked for them directly under the title —
+// and the page puts the whole block right after the title in both layouts, so
+// nothing above it moves when the sections or a model land, and a thumb reaches
+// it on a phone. The sentence is `describeAvailability`'s, never typed here.
 //
-// The block only orders its parts: the commands are `ReaderCommands`, the
-// reading controls are `ReadingControls`, and this file keeps the sentence,
-// the DOI (a link to the journal's page, P7-12) and the progress bar.
+// The block only orders its parts: the commands (with the upload row) are
+// `ReaderCommands`, the reading controls are `ReadingControls`, and this file
+// keeps the sentence, the private-PDF line it is handed, the DOI (a link to
+// the journal's page, P7-12) and the progress bar — in that order.
 
 import Link from "next/link";
 import { ADD_KEY_HREF } from "@/lib/navigation/add-key-destination";
 import type { Ref, ReactNode } from "react";
 import { IconLink } from "@/components/icons";
 import { cn } from "@/lib/cn";
-import { SECTION_GAP } from "@/components/ui/band";
 import type { PaperReading } from "@/lib/papers/reading";
 import { useSpread } from "./reader-layout";
 import { ReaderCommands } from "./reader-commands";
@@ -80,18 +81,31 @@ export function DecisionBlock({
   uploadAction?: ReactNode;
   uploadStatus?: ReactNode;
 }) {
-  // On the spread the block is a panel under the title, not a pause under
-  // the abstract: the sentence is a note there, set at the panel's size
-  // with a rule beside it, and it sits close under the byline.
+  // On the spread the block is a panel under the title: the sentence is a
+  // note there, set at the panel's size with a rule beside it. Below it the
+  // sentence is prose in the reading column. Either way it follows the
+  // commands (P7-14, R2), at the same distance.
   const spread = useSpread();
 
   return (
     <div ref={ref}>
+      <ReaderCommands
+        onRead={onRead}
+        readLabel={readLabel}
+        source={source}
+        isSaved={isSaved}
+        onSave={onSave}
+        onSkip={onSkip}
+        onCopy={onCopy}
+        onOpen={onOpen}
+        uploadAction={uploadAction}
+      />
+
       <p
         className={
           spread
             ? "mt-6 border-l border-border-strong pl-3 font-reading text-body leading-[1.55] text-text-muted"
-            : cn("reading-prose text-text-muted measure-lede", SECTION_GAP)
+            : "reading-prose mt-6 text-text-muted measure-lede"
         }
       >
         {sentences.join(" ")}
@@ -111,18 +125,6 @@ export function DecisionBlock({
           </>
         )}
       </p>
-
-      <ReaderCommands
-        onRead={onRead}
-        readLabel={readLabel}
-        source={source}
-        isSaved={isSaved}
-        onSave={onSave}
-        onSkip={onSkip}
-        onCopy={onCopy}
-        onOpen={onOpen}
-        uploadAction={uploadAction}
-      />
       {uploadStatus}
 
       <ReadingControls />

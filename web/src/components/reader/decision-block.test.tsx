@@ -209,3 +209,71 @@ describe("DecisionBlock — the DOI (P7-12, R6)", () => {
     expect(html).not.toContain("doi:");
   });
 });
+
+// P7-14 (R2, the owner's review): the commands come first. The block used to open with the
+// availability sentence, then the command rows, then the private-PDF line, the reading controls
+// and the DOI. The owner wanted "Read it here", Save and Copy directly under the title; the
+// sentence that says what Peer has and has not read follows them, then the rest in the order it
+// had. The panel's pin is by its top now, so the commands are what stays in view.
+describe("DecisionBlock — the command rows first (P7-14, R2)", () => {
+  const DOI_VALUE = "10.1021/jacs.5c15436";
+  const html = renderToStaticMarkup(
+    createElement(DecisionBlock, {
+      sentences: ["SENTENCE-MARK says what Peer has read."],
+      stage: null,
+      onRead: NOOP,
+      readLabel: "Read it here",
+      source: { label: "Open on arXiv", url: "https://arxiv.org/abs/2601.00001" },
+      doi: DOI_VALUE,
+      isSaved: false,
+      showAddKey: false,
+      onSave: NOOP,
+      onSkip: NOOP,
+      onCopy: NOOP,
+      onOpen: NOOP,
+      uploadAction: createElement("p", null, "UPLOAD-ROW"),
+      uploadStatus: createElement("p", null, "PRIVATE-PDF-LINE"),
+    }),
+  );
+  const at = (needle: string) => html.indexOf(needle);
+
+  it("lists the command rows — read, the source, save · skip · copy, the upload row — before the availability sentence", () => {
+    const rows = ["Read it here", "Open on arXiv", ">Save<", ">Skip<", ">Copy<", "UPLOAD-ROW"].map(at);
+
+    expect(rows.every((index) => index >= 0)).toBe(true);
+    expect([...rows].sort((a, b) => a - b)).toEqual(rows);
+    expect(at("SENTENCE-MARK")).toBeGreaterThan(rows[rows.length - 1]);
+  });
+
+  it("then the sentence, the private-PDF line, the reading controls and the DOI, in that order", () => {
+    const after = [at("SENTENCE-MARK"), at("PRIVATE-PDF-LINE"), at('aria-label="Fit to screen"'), at(`doi:${DOI_VALUE}`)];
+
+    expect(after.every((index) => index >= 0)).toBe(true);
+    expect([...after].sort((a, b) => a - b)).toEqual(after);
+  });
+
+  it("keeps the progress bar last while the model works", () => {
+    const working = renderToStaticMarkup(
+      createElement(DecisionBlock, {
+        sentences: ["SENTENCE-MARK."],
+        stage: { label: "Reading", pct: 40 },
+        source: null,
+        doi: DOI_VALUE,
+        isSaved: false,
+        showAddKey: false,
+        onSave: NOOP,
+        onCopy: NOOP,
+        onOpen: NOOP,
+      }),
+    );
+
+    expect(working.indexOf('role="progressbar"')).toBeGreaterThan(working.indexOf(`doi:${DOI_VALUE}`));
+    expect(working.indexOf(">Save<")).toBeLessThan(working.indexOf("SENTENCE-MARK"));
+  });
+
+  it("the page's own block has no command after the sentence: nothing between the sentence and the private-PDF line but Peer's words", () => {
+    const between = html.slice(at("SENTENCE-MARK"), at("PRIVATE-PDF-LINE"));
+
+    expect(between).not.toContain("<button");
+  });
+});

@@ -268,3 +268,35 @@ describe("globals.css — the term highlight token (P3-01)", () => {
     ]);
   });
 });
+
+// P7-14 (R2): the reading spread's left panel pins by its TOP. It used to pin by its bottom when it
+// was taller than the window — `top: min(4rem, 100vh - --panel-h - legend - 1rem)`, with `--panel-h`
+// written by a ResizeObserver — so that the decision, then at the panel's bottom, stayed in view
+// while the plate scrolled away. The commands are under the title now, the question box and the
+// map moved to the column, and the panel is short: `top: 4rem` and nothing to measure. Source-text
+// assertions, as above: a computed style in jsdom would not resolve `calc()` against custom
+// properties the way a browser does.
+describe("globals.css — the reader panel pins by its top (P7-14, R2)", () => {
+  const utility = css.slice(css.indexOf("@utility reader-panel {"));
+  const rule = utility.slice(0, utility.indexOf("\n}") + 2);
+
+  it("is sticky, with a top of 4rem divided by the page zoom", () => {
+    expect(rule).toMatch(/position:\s*sticky;/);
+    expect(rule).toMatch(/top:\s*calc\(\s*4rem\s*\/\s*var\(--page-zoom,\s*1\)\s*\);/);
+  });
+
+  it("has no bottom-pin arithmetic: no min(), no viewport height, no panel height, no legend", () => {
+    expect(rule).not.toMatch(/\bmin\(/);
+    expect(rule).not.toContain("100vh");
+    expect(rule).not.toContain("--panel-h");
+    expect(rule).not.toContain("--legend-h");
+  });
+
+  it("writes --panel-h nowhere any more", () => {
+    expect(css).not.toContain("--panel-h:");
+  });
+
+  it("keeps --legend-h, which the key legend's own height reads", () => {
+    expect(css).toMatch(/--legend-h:\s*1\.75rem;/);
+  });
+});

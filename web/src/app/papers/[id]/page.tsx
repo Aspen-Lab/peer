@@ -1028,19 +1028,18 @@ function Reader({
   const [toast, showToast] = useReaderToast();
 
   // ── Decided-read ──
-  // Read means decided: the Decision block seen, or a decision made. Not
+  // Read means decided: the paper's words seen, or a decision made. Not
   // "opened" — that marked a paper read before its title had been looked at.
-  // On the spread the decision is on screen at open, so seeing it says
-  // nothing; there "seen" is the end of the paper's words (the abstract's
-  // footer) on screen for the same second — the one-column rule
-  // re-expressed, since in one column the decision sits under the abstract.
-  // A page with no words (record only) falls back to the decision, which
-  // keeps it read on open, as v0.13.1 says.
+  // The decision block follows the title in both layouts (P7-14, R2), so it
+  // is on screen at open and seeing it says nothing; "seen" is the end of the
+  // paper's words (the abstract's footer) on screen for the same second, in
+  // one column as on the spread. A page with no words (record only) falls
+  // back to the decision, which keeps it read on open, as v0.13.1 says.
   const decide = useCallback(() => markRead(paper.id, paper), [markRead, paper]);
   const decisionRef = useRef<HTMLDivElement>(null);
   const wordsEndRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
-    const el = spread ? (wordsEndRef.current ?? decisionRef.current) : decisionRef.current;
+    const el = wordsEndRef.current ?? decisionRef.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
     let timer: number | undefined;
     const observer = new IntersectionObserver(
@@ -1067,9 +1066,9 @@ function Reader({
       observer.disconnect();
       if (timer !== undefined) window.clearTimeout(timer);
     };
-    // `spread` chooses the target and re-runs the effect when the layout
-    // switches, so the observer attaches to the remounted block; `reading`
-    // re-attaches when the words (and their footer) arrive or change.
+    // `spread` re-runs the effect when the layout switches, so the observer
+    // attaches to the remounted block; `reading` re-attaches when the words
+    // (and their footer) arrive or change.
   }, [decide, spread, reading]);
 
   // The approach. One observer for every `[data-reveal]` in the scope below.

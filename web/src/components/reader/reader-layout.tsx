@@ -1,19 +1,25 @@
 "use client";
 
 // Arranges the reader's blocks — it renders none of them. Below xl the
-// children come back as a fragment in the spec's order, so the DOM is
-// today's; from xl they are placed on the spread: plate, title and decision
-// in the panel, the words, the additions and the Next row in the column.
-// The block order, strings and type are untouched; only the place. The rail
-// is not a block any more: position and the way back live in the shell.
+// children come back as a fragment, from xl they are placed on the spread:
+// plate, title and decision in the panel, the words, the additions and the
+// Next row in the column. The block order, strings and type are untouched;
+// only the place. The rail is not a block any more: position and the way
+// back live in the shell.
+//
+// P7-14 (R2, Q1): the decision block — the commands: "Read it here", Save,
+// Copy — follows the title in BOTH layouts, before the abstract and before
+// the question box. It used to follow the abstract below xl, so that a screen
+// reader would meet the abstract first; the owner asked for the commands
+// directly under the title and answered that the narrow layout is no
+// exception. The DOM order is the visual order.
 //
 // The structure is chosen in JS rather than with `display: contents` and
-// `order`, because a CSS re-ordering would have a screen reader announce
-// the decision before the abstract on a phone. Crossing 80rem remounts the
-// blocks (the authors toggle resets); a window resize across the
-// breakpoint is rare and gets no transition.
+// `order`, so what a screen reader announces is what the page shows. Crossing
+// 80rem remounts the blocks (the authors toggle resets); a window resize
+// across the breakpoint is rare and gets no transition.
 
-import { useEffect, useRef, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { fitZoom, READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
 import { COLUMN_CLASS, PANEL_CLASS, SPREAD_GRID, SPREAD_QUERY } from "./spread";
 
@@ -23,7 +29,8 @@ interface ReaderLayoutProps {
   plate: ReactNode;
   title: ReactNode;
   /** P1-03 (§1f.10): "Before you read" — the question field (and, from
-   *  P1-04, the map), immediately after the title in both layouts. */
+   *  P1-04, the map). P7-14 (R2): after the decision block, which follows
+   *  the title. */
   ask?: ReactNode;
   words: ReactNode;
   decision: ReactNode;
@@ -99,7 +106,6 @@ export function usePageZoom(): number {
 }
 
 export function ReaderLayout(p: ReaderLayoutProps) {
-  const panelRef = useRef<HTMLDivElement>(null);
   // S15/S21: read here, not threaded as a prop from page.tsx — this file
   // already self-contains its other layout-affecting state (`useSpread`),
   // so the reading-size scale follows the same shape. Sets --reading-scale
@@ -110,32 +116,21 @@ export function ReaderLayout(p: ReaderLayoutProps) {
   const readingScale = useResolvedReadingScale();
   const readingScaleStyle = { "--reading-scale": readingScale } as CSSProperties;
 
-  // The panel's height, for the sticky rule: a panel taller than the
-  // viewport pins by its bottom so the decision stays and the plate scrolls
-  // away. Written as `--panel-h` — keep that name: `globals.css` gives every
-  // inline variable whose name contains `--i` a stagger delay.
-  useEffect(() => {
-    const el = panelRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => {
-      el.style.setProperty("--panel-h", `${el.offsetHeight}px`);
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [p.spread]);
+  // P7-14 (R2): no panel-height measuring. The panel pins by its top
+  // (`globals.css`, `reader-panel`); it used to measure itself so that a panel
+  // taller than the window could pin by its bottom and keep the decision in view.
 
   if (!p.spread) {
-    // Today's DOM, byte for byte except for the two new scale wrappers:
-    // spec order, fragments flatten. `decision` sits between `words` and
-    // `additions` here (screen-reader order), so each gets its own thin
-    // wrapper rather than one shared one around both.
+    // One column: the blocks in reading order. `words` and `additions` each get
+    // a thin scale wrapper of their own — the question box and the decision
+    // between and before them are not scaled.
     return (
       <>
         {p.plate}
         {p.title}
+        {p.decision}
         {p.ask}
         <div className="reading-scaled" style={readingScaleStyle}>{p.words}</div>
-        {p.decision}
         <div className="reading-scaled" style={readingScaleStyle}>{p.additions}</div>
         {p.next}
       </>
@@ -155,11 +150,11 @@ export function ReaderLayout(p: ReaderLayoutProps) {
           Fit's own DOM query to [data-zoom-root], see usePageZoom above) —
           left on the element as a stable selector future code may still
           want, costs nothing to keep. */}
-      <div ref={panelRef} className={PANEL_CLASS} data-reader-panel="">
+      <div className={PANEL_CLASS} data-reader-panel="">
         {p.plate}
         {p.title}
-        {p.ask}
         {p.decision}
+        {p.ask}
       </div>
       <div className={COLUMN_CLASS}>
         <div className="reading-scaled" style={readingScaleStyle}>{p.words}</div>
