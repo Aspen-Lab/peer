@@ -35,7 +35,7 @@ import { useState } from "react";
 import type { PaperReading } from "@/lib/papers/reading";
 import {
   gistRoute,
-  routeByQuestions,
+  routeByQuestionsCached,
   type ReadingMap,
   type ReadingRole,
   type RouteResult,
@@ -65,7 +65,8 @@ export function readingRoute(
 ): RouteResult | undefined {
   const map = reading?.map;
   if (!map || !asked || (asked.items.length === 0 && !asked.gist)) return undefined;
-  return asked.gist && asked.items.length === 0 ? gistRoute(map) : routeByQuestions(map, reading.body ?? [], asked.items);
+  // P7-13 (R11b): each question's route is kept, so a keystroke in one of five recomputes one.
+  return asked.gist && asked.items.length === 0 ? gistRoute(map) : routeByQuestionsCached(map, reading.body ?? [], asked.items);
 }
 
 /** How deep the paper says this heading is ("3.2.1" is two levels in) —

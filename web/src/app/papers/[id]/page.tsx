@@ -31,7 +31,7 @@ import { paperNav } from "@/lib/reader/paper-nav";
 import { paperKeysFor, registerReaderActions, type ReaderActions } from "@/lib/reader/reader-keys";
 import { recommendationLine } from "@/lib/reader/recommendation";
 import { allocatePlateTerms } from "@/lib/papers/plate-terms";
-import { firstOccurrence, mergeTerms, paperDefinedTermsInReading, routeTermScope } from "@/lib/papers/terms";
+import { firstOccurrence, mergeTerms, paperDefinedTermsInReading, routeTermScope, termScopeKey, termScopeOfKey } from "@/lib/papers/terms";
 import { placeEvidence } from "@/lib/papers/evidence";
 import {
   PDF_NO_TEXT_MESSAGE,
@@ -101,9 +101,10 @@ import { PAPER_BODY_ID } from "@/components/reader/paper-body";
 import { PaperContents } from "@/components/reader/paper-contents";
 import { QuestionField, focusFirstEmptyQuestion } from "@/components/reader/question-field";
 import { ReadingMapView, readingRoute } from "@/components/reader/reading-map";
+import { useDebouncedQuestions } from "@/components/reader/use-debounced-questions";
 import { TermsStrip } from "@/components/reader/terms-strip";
 import { SectionLinks } from "@/components/reader/evidence-quote";
-import { settledQuestions, useReadingQuestionsHydrated, useReadingQuestionsStore } from "@/store/reading-questions";
+import { settledQuestions, useReadingQuestionsHydrated } from "@/store/reading-questions";
 import { explanationFor, passageHash, useExplainThreadsStore, type ExplainTurn } from "@/store/explain-threads";
 import { paragraphKey, usePlainRewritesStore } from "@/store/plain-rewrites";
 import { PLAIN_DEFAULT_LEVEL, isPlainLevel, type PlainLevel } from "@/lib/papers/plain-levels";
@@ -656,10 +657,14 @@ function Reader({
   const nextPaper = nav.nextId ? (feedPapers.find((p) => p.id === nav.nextId) ?? null) : null;
 
   const { reading, fromServer } = useReading(paper);
-  // P1-05 (§1f.13): the reader's questions for this paper — a subscription,
-  // so the route follows the field as it writes through. P2-03 (§1g.11 b):
-  // the deep report is asked about the settled ones only (never the gist).
-  const asked = useReadingQuestionsStore((state) => state.byPaper[paper.id]);
+  // P1-05 (§1f.13): the reader's questions for this paper, so the route follows
+  // the field as it writes through. P7-13 (R11b): not on every keystroke — the
+  // page's copy is updated 250 ms after the typing stops (and at once on a
+  // settle), so a key in the box no longer re-renders the whole page; the
+  // field still writes each one to the store. The same copy serves the
+  // example tags. P2-03 (§1g.11 b): the deep report is asked about the
+  // settled ones only (never the gist).
+  const { asked, byPaper: askedByPaper } = useDebouncedQuestions(paper.id);
   const model = useModelReport({ paper: ready ? paper : undefined, profile, questions: settledQuestions(asked) });
   // Where Peer has read the paper, the text is already on the page — the
   // command and the contents are ways down to it, not ways to open it.
@@ -668,7 +673,8 @@ function Reader({
   // name; the quotes read the headings from `SectionLinks` below.
   const bodyHeadings = useMemo(() => (reading?.body ?? []).map((section) => section.heading), [reading]);
   // P1-05 (§1f.13): those questions routed through the reading this page
-  // holds — here, in the browser, from the live `items`.
+  // holds — here, in the browser, from the `items` the page last read (P7-13:
+  // up to 250 ms behind the typing).
   const tier0Route = useMemo(() => readingRoute(reading, asked), [reading, asked]);
   const readHere = useCallback(() => {
     const block = document.getElementById(PAPER_BODY_ID);
@@ -697,10 +703,12 @@ function Reader({
   // request. The term the reader clicked is kept with its paper, so it never
   // follows them to another, and its first use in the body is what the body
   // marks.
-  const termScope = useMemo(() => routeTermScope(route), [route]);
+  // P7-13 (R11b): keyed on WHICH sections are read, as a string — `routeTermScope`
+  // makes a new object on every route, and the scan below re-ran on each of them.
+  const scopeKey = useMemo(() => termScopeKey(routeTermScope(route)), [route]);
   const tier0Terms = useMemo(
-    () => (reading ? paperDefinedTermsInReading(reading, termScope) : []),
-    [reading, termScope],
+    () => (reading ? paperDefinedTermsInReading(reading, termScopeOfKey(scopeKey)) : []),
+    [reading, scopeKey],
   );
   const terms = useMemo(() => mergeTerms(tier0Terms, report?.terms), [tier0Terms, report?.terms]);
   const [clickedTerm, setClickedTerm] = useState<{ paperId: string; term: string } | null>(null);
@@ -962,7 +970,6 @@ function Reader({
   // question field — the reader's questions on earlier papers, and their
   // profile asked as questions. No shared-terms gate: the profile group
   // shows whenever the profile has something in it.
-  const askedByPaper = useReadingQuestionsStore((state) => state.byPaper);
   const examples = useMemo(
     () => exampleQuestions({ profile, byPaper: askedByPaper, paperId: paper.id }),
     [profile, askedByPaper, paper.id],

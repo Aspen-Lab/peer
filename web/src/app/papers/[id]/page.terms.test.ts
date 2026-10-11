@@ -20,8 +20,10 @@ function termsProblems(source: string): string[] {
     if (!text.includes(needle)) problems.push(why);
   };
 
-  has("const termScope = useMemo(() => routeTermScope(route), [route]);", "the terms' scope is no longer the merged route's (`routeTermScope(route)`)");
-  has("paperDefinedTermsInReading(reading, termScope)", "Tier 0 terms no longer come from the reading through the route's scope");
+  // P7-13 (R11b): the scope is kept as the string of its section ids (`termScopeKey`), so the scan
+  // does not re-run for a route that reads the same sections; the pins are the same two joins, as written now.
+  has("const scopeKey = useMemo(() => termScopeKey(routeTermScope(route)), [route]);", "the terms' scope is no longer the merged route's (`routeTermScope(route)`)");
+  has("paperDefinedTermsInReading(reading, termScopeOfKey(scopeKey))", "Tier 0 terms no longer come from the reading through the route's scope");
   has("mergeTerms(tier0Terms, report?.terms)", "the model's terms no longer merge in after the Tier 0 ones");
   has("firstOccurrence(reading.body ?? [], markedTerm)", "the clicked term's first use is no longer looked up in the body");
   // P3-02 (§1h.2): the body also reports the reader's selection (`onSelect`),
@@ -74,7 +76,7 @@ describe("the page's Terms to know wiring (P3-01)", () => {
   });
 
   it("would notice the scope widened past the route's read and background sections", () => {
-    const widened = source.replace("paperDefinedTermsInReading(reading, termScope)", "paperDefinedTermsInReading(reading)");
+    const widened = source.replace("paperDefinedTermsInReading(reading, termScopeOfKey(scopeKey))", "paperDefinedTermsInReading(reading)");
 
     expect(termsProblems(widened)).toEqual(["Tier 0 terms no longer come from the reading through the route's scope"]);
   });

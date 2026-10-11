@@ -382,6 +382,26 @@ function routeSection(paragraphs: readonly string[], terms: readonly string[]): 
   return { tier, hits, ...(evidence !== undefined ? { evidence } : {}), paragraphs: mentioned };
 }
 
+type QuestionRoute = RouteResult["byQuestion"][number];
+type RouteBody = ReadonlyArray<{ paragraphs: readonly string[] }>;
+
+/** One question through the paper: the whole body is read for it, and for it alone. */
+function routeQuestion(map: ReadingMap, sections: RouteBody, question: string): QuestionRoute {
+  const terms = specificTerms(question);
+  if (terms.length < MIN_SPECIFIC_TERMS) {
+    return { question, vague: true, sections: {} as Record<string, RouteSection> };
+  }
+  const routed: Record<string, RouteSection> = {};
+  map.sections.forEach((row, k) => {
+    routed[row.id] = routeSection(sections[k]?.paragraphs ?? [], terms);
+  });
+  return { question, vague: false, sections: routed };
+}
+
+function routeResult(byQuestion: QuestionRoute[]): RouteResult {
+  return { byQuestion, vague: byQuestion.length > 0 && byQuestion.every((entry) => entry.vague) };
+}
+
 /**
  * Route each question through the paper. `sections` is the rendered body the
  * page holds (`PaperReading.body`), index-aligned with `map.sections` — the
@@ -389,23 +409,49 @@ function routeSection(paragraphs: readonly string[], terms: readonly string[]): 
  * synchronous: nothing it is given changes, and the same input gives the
  * same result.
  */
-export function routeByQuestions(
-  map: ReadingMap,
-  sections: ReadonlyArray<{ paragraphs: readonly string[] }>,
-  questions: readonly string[],
-): RouteResult {
-  const byQuestion = questions.map((question) => {
-    const terms = specificTerms(question);
-    if (terms.length < MIN_SPECIFIC_TERMS) {
-      return { question, vague: true, sections: {} as Record<string, RouteSection> };
-    }
-    const routed: Record<string, RouteSection> = {};
-    map.sections.forEach((row, k) => {
-      routed[row.id] = routeSection(sections[k]?.paragraphs ?? [], terms);
-    });
-    return { question, vague: false, sections: routed };
-  });
-  return { byQuestion, vague: byQuestion.length > 0 && byQuestion.every((entry) => entry.vague) };
+export function routeByQuestions(map: ReadingMap, sections: RouteBody, questions: readonly string[]): RouteResult {
+  return routeResult(questions.map((question) => routeQuestion(map, sections, question)));
+}
+
+/**
+ * P7-13 (R11b): the most questions' routes kept for one body. A box holds five, and a question
+ * typed a few characters at a time passes through many texts; the least recently used leave first.
+ */
+export const ROUTE_CACHE_LIMIT = 24;
+
+/** Per body array, per map, per question text — all weakly held, so a paper that is gone takes its routes with it. */
+const routeCache = new WeakMap<object, WeakMap<object, Map<string, QuestionRoute>>>();
+
+/**
+ * P7-13 (R11b): `routeByQuestions` with each question's route remembered, keyed by (the body
+ * array, the map, the question's text). Routing is per question — the whole body is read for each
+ * — so typing in one of five questions used to cost five routes (98-116 ms on a paper of the
+ * owner's size, P7-02 §9(b)); here it costs the one that changed, and a repeat costs none. The
+ * answer is `routeByQuestions`'s, entry for entry (equal, and for a question seen before the same
+ * object — a route is read, never changed). `routeByQuestions` itself stays the pure uncached
+ * function; this one is for a caller that routes the same body again and again.
+ */
+export function routeByQuestionsCached(map: ReadingMap, sections: RouteBody, questions: readonly string[]): RouteResult {
+  let perMap = routeCache.get(sections);
+  if (!perMap) routeCache.set(sections, (perMap = new WeakMap()));
+  let routes = perMap.get(map);
+  if (!routes) perMap.set(map, (routes = new Map()));
+  const kept = routes;
+  return routeResult(
+    questions.map((question) => {
+      const hit = kept.get(question);
+      if (hit) {
+        // Used again: last in line to leave.
+        kept.delete(question);
+        kept.set(question, hit);
+        return hit;
+      }
+      const made = routeQuestion(map, sections, question);
+      kept.set(question, made);
+      if (kept.size > ROUTE_CACHE_LIMIT) kept.delete(kept.keys().next().value as string);
+      return made;
+    }),
+  );
 }
 
 

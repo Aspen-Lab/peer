@@ -58,6 +58,25 @@ export interface TermScope {
   sectionIds: readonly string[];
 }
 
+/**
+ * P7-13 (R11b): a scope named by WHICH sections are in it, as a string. `routeTermScope` returns a
+ * new `{ sectionIds }` object on every call, so a page that keyed the scan for the terms a paper
+ * defines on that object re-ran the five patterns over the scoped sections whenever the route was
+ * recomputed — on every keystroke in the question box. Keyed on this string, the scan runs again
+ * only when the set of sections it reads has changed. Order and repeats make no difference to the
+ * scan (it filters the body by membership), so none to the key; no scope, and a scope of nothing —
+ * which the default scope answers alike — are the empty string.
+ */
+export function termScopeKey(scope: TermScope | undefined): string {
+  const ids = [...new Set(scope?.sectionIds ?? [])].sort();
+  return ids.length > 0 ? JSON.stringify(ids) : "";
+}
+
+/** The scope a `termScopeKey` names; undefined for the empty key (the default scope then applies). */
+export function termScopeOfKey(key: string): TermScope | undefined {
+  return key === "" ? undefined : { sectionIds: JSON.parse(key) as string[] };
+}
+
 /** The document's sections as the body renders them (the abstract and empty
  *  sections are not part of it — `readableSections`). */
 export function termSectionsOfDocument(doc: ExtractedDocument): TermSection[] {
