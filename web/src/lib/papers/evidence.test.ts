@@ -97,6 +97,41 @@ describe("normalizeForMatch", () => {
       normalizeForMatch("learning rate of 4 e - 4"),
     );
   });
+
+  // P9-10 (cluster D): display text keeps ° × ± ≤ ≥, so the matcher is now the
+  // only place that folds them. A quote cached or paraphrased in the old ASCII
+  // alphabet ("275 degreesC", "+/-", "x", "<=") must still land on the same
+  // string as the paper's own symbol — this is the guard that held before the
+  // fold moved and must hold after it.
+  it("P9-10: folds ° × ± ≤ ≥ the same way as the old ASCII alphabet, on both sides", () => {
+    expect(normalizeForMatch("T = 275 °C")).toBe(normalizeForMatch("T = 275 degreesC"));
+    expect(normalizeForMatch("a 0° tilt")).toBe(normalizeForMatch("a 0 degrees tilt"));
+    expect(normalizeForMatch("(3 ± 0.2) × 10")).toBe(normalizeForMatch("(3 +/- 0.2) x 10"));
+    expect(normalizeForMatch("0 ≤ φ ≤ 360°")).toBe(normalizeForMatch("0 <= φ <= 360 degrees"));
+    expect(normalizeForMatch("a ≥ b")).toBe(normalizeForMatch("a >= b"));
+    expect(normalizeForMatch("T = 275 °C")).toBe("t = 275 degreesc");
+  });
+
+  it("P9-10: the comparison signs keep the spacing the old fold gave them", () => {
+    // The old fold ran before the cleaner's operator spacing, so "a≤b" and
+    // "a ≤ b" and "a <= b" all met at "a <= b".
+    expect(normalizeForMatch("a≤b")).toBe(normalizeForMatch("a <= b"));
+    expect(normalizeForMatch("a ≤ b")).toBe(normalizeForMatch("a≤b"));
+    expect(normalizeForMatch("a≥b")).toBe(normalizeForMatch("a >= b"));
+  });
+
+  it("P9-10: a degree sign that only NFKC reveals (℃, ℉) still folds", () => {
+    expect(normalizeForMatch("T = 275 ℃")).toBe(normalizeForMatch("T = 275 degreesC"));
+    expect(normalizeForMatch("T = 98 ℉")).toBe(normalizeForMatch("T = 98 degreesF"));
+  });
+
+  it("P9-10: a quote in the old ASCII alphabet still verifies against text that keeps the symbols", () => {
+    const corpus = "The films were grown at 275 °C with a gap of 0.5 mm ± 0.1 mm, and held 5 × 10 pellets per cell.";
+    const oldQuote = "The films were grown at 275 degreesC with a gap of 0.5 mm +/- 0.1 mm, and held 5 x 10 pellets per cell.";
+    expect(oldQuote.length).toBeGreaterThanOrEqual(40);
+    expect(evidenceSupported(oldQuote, corpus)).toBe(true);
+    expect(evidenceSupported(corpus, oldQuote)).toBe(true);
+  });
 });
 
 describe("evidenceSupported", () => {

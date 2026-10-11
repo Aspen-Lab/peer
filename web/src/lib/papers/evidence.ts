@@ -110,19 +110,41 @@ const HYPHENATED_WORD_BREAK = /([A-Za-z])-\s*([A-Za-z])/g;
 const ZERO_WIDTH_CHARS = /[​‌‍﻿]/g;
 
 /**
+ * The symbols display text keeps (P9-10, cluster D) and the ASCII words the
+ * matcher still reads them as. Before P9-10 the cleaner made this fold for
+ * every reader; now only the matcher does, so a quote cached or paraphrased
+ * in the old alphabet ("T = 275 degreesC", "3 +/- 0.2", "5 x 10", "a <= b")
+ * lands on the same string as the paper's own "T = 275 °C", "3 ± 0.2",
+ * "5 × 10", "a ≤ b". The comparison signs carry the spaces the old fold got
+ * from the cleaner's operator spacing ("a≤b", "a ≤ b" and "a <= b" all met at
+ * "a <= b"); `°` becomes " degrees" and the whitespace collapse below makes
+ * "275 °C" and "275°C" agree with "275 degreesC" exactly as before.
+ */
+function foldDisplaySymbols(s: string): string {
+  return s
+    .replace(/×/g, "x")
+    .replace(/±/g, "+/-")
+    .replace(/\s*≤\s*/g, " <= ")
+    .replace(/\s*≥\s*/g, " >= ")
+    .replace(/°/g, " degrees");
+}
+
+/**
  * Normalise for matching only — never for display. `cleanDisplayText` first,
  * so a quote that went through the sanitizer and a raw section text land in
- * the same alphabet (it already folds entities, mojibake, `×`, `±`, sub- and
- * superscripts). Then NFKC (ligatures `ﬁ` → `fi`), curly → straight quotes,
- * every dash → `-`, soft hyphens and zero-width characters gone (the latter
- * folded to a space, not deleted — 4-02), citation brackets and bracketed
- * author-year citations gone (P2-08b), both slash
- * characters gone (1-17), a hyphenated line-break re-joined (2-02),
+ * the same alphabet (it already folds entities, mojibake and the operator
+ * spacing; it keeps `° ± × ≤ ≥` and Unicode sub- and superscripts, which are
+ * the paper's own — P9-10). Then NFKC (ligatures `ﬁ` → `fi`, `²` → `2`,
+ * `℃` → `°C`), those symbols folded to the ASCII words a cached quote may
+ * still carry (`foldDisplaySymbols`, after NFKC so `℃` is folded too),
+ * curly → straight quotes, every dash → `-`, soft hyphens and zero-width
+ * characters gone (the latter folded to a space, not deleted — 4-02),
+ * citation brackets and bracketed author-year citations gone (P2-08b), both
+ * slash characters gone (1-17), a hyphenated line-break re-joined (2-02),
  * lowercase, whitespace collapsed.
  */
 export function normalizeForMatch(s: string): string {
-  return cleanDisplayText(s)
-    .normalize("NFKC")
+  return foldDisplaySymbols(cleanDisplayText(s).normalize("NFKC"))
     .replace(/[‘’‚‛]/g, "'")
     .replace(/[“”„‟]/g, '"')
     .replace(/[‐‑‒–—―−]/g, "-")

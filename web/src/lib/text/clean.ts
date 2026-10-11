@@ -27,12 +27,17 @@ const HTML_ENTITIES: Record<string, string> = {
   lsquo: "'",
   rdquo: '"',
   ldquo: '"',
-  times: "x",
-  plusmn: "+/-",
-  le: "<=",
-  ge: ">=",
-  micro: "micro",
-  deg: " degrees",
+  // P9-10 (cluster D): the entity names the symbol, so the symbol is what
+  // the reader gets. The ASCII alphabet ("x", "+/-", "<=", ">=", " degrees")
+  // is the evidence matcher's, not the display text's (evidence.ts folds it).
+  // `micro` is U+00B5; the Greek small letter mu (U+03BC) is the one the
+  // cleaner emits for it everywhere.
+  times: "×",
+  plusmn: "±",
+  le: "≤",
+  ge: "≥",
+  micro: "μ",
+  deg: "°",
 };
 
 const SUBSCRIPT_MAP: Record<string, string> = {
@@ -139,8 +144,8 @@ function normalizeLatex(text: string): string {
     .replace(/\\sigma\b/g, "sigma")
     .replace(/\\rightarrow\b/g, "->")
     .replace(/\\leftarrow\b/g, "<-")
-    .replace(/\\times\b/g, "x")
-    .replace(/\\pm\b/g, "+/-")
+    .replace(/\\times\b/g, "×")
+    .replace(/\\pm\b/g, "±")
     .replace(/\\cdot\b/g, ".")
     .replace(/[{}]/g, "");
 }
@@ -164,12 +169,13 @@ function normalizeUnicodeSymbols(text: string): string {
     // (display-only) removal `evidence.ts`'s FRACTION_SLASHES already does
     // for matching purposes (1-17) — this is the display-side counterpart.
     .replace(/\s*⁄\s*/g, "")
-    .replace(/×/g, "x")
-    .replace(/±/g, "+/-")
-    .replace(/≤/g, "<=")
-    .replace(/≥/g, ">=")
-    .replace(/µ/g, "micro")
-    .replace(/°/g, " degrees")
+    // P9-10 (cluster D): `° ± × ≤ ≥` stay. The text layer of a PDF carries
+    // them as real Unicode and the reader wants them as printed; the old
+    // ASCII fold ("275 degreesC", "x", "+/-", "<=") belongs to the evidence
+    // matcher alone (evidence.ts `normalizeForMatch`). U+00B5 MICRO SIGN is
+    // the one compatibility letter named here on purpose: it is the Greek
+    // small letter mu (U+03BC) in every font the reader sees.
+    .replace(/\u00B5/g, "\u03BC")
     .replace(/[₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎]/g, (c) => SUBSCRIPT_MAP[c] ?? c)
     .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾]/g, (c) => SUPERSCRIPT_MAP[c] ?? c);
 }
@@ -184,8 +190,8 @@ function repairCommonMojibake(text: string): string {
     .replace(/â€¦/g, "...")
     .replace(/â†’/g, "->")
     .replace(/â†\u0090/g, "<-")
-    .replace(/Â°/g, " degrees")
-    .replace(/Â±/g, "+/-")
+    .replace(/Â°/g, "°")
+    .replace(/Â±/g, "±")
     .replace(/Â·/g, ".")
     .replace(/Â/g, "");
 }
