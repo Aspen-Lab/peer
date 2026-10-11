@@ -172,3 +172,13 @@ describe("upload concept extraction quality (9-21)", () => {
     expect(concepts.some((c) => c.label.includes("lithium metal anode"))).toBe(true);
   });
 });
+
+describe("the extraction version keys the cached reading of an upload (P7-11)", () => {
+  // A laptop that pulled P7-10 and opened the owner's paper holds the text read
+  // at version 3: citation numbers glued to words, the date box in the
+  // Introduction, notation lifted out as equations. 4 retires it, so the paper
+  // is read again under the hygiene rules.
+  it("is past the reading that kept citation numbers, the date box and notation torn from sentences", () => {
+    expect(UPLOAD_CONCEPT_EXTRACTION_VERSION).toBeGreaterThanOrEqual(4);
+  });
+});

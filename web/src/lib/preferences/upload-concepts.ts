@@ -13,7 +13,11 @@ import { ABBREVIATION_GROUPS, canonicalize, isGenericTerm } from "@/lib/scoring/
 // of an upload's extracted text (`full-text.ts`, P0-02), so the bump also
 // retires every document the Python helper read.
 // 3 (P7-10): two-column papers are read column by column; text cached under 2 is scrambled and is re-read.
-export const UPLOAD_CONCEPT_EXTRACTION_VERSION = 3;
+// 4 (P7-11): the hygiene rules after the columns (no hyphen-ended or decimal-led "headings", no notation
+// lifted out of a sentence as an equation, the paragraph indent read against the usual left edge, the
+// received/accepted date box dropped, captions to 2,000 characters, citation superscripts dropped);
+// text cached under 3 still carries them and is re-read.
+export const UPLOAD_CONCEPT_EXTRACTION_VERSION = 4;
 
 // A conservative, local phrase extractor. No document text is sent to a model
 // for preference learning. References, author blocks and boilerplate are out.
