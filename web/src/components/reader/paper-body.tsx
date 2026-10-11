@@ -609,7 +609,9 @@ export function PaperBody({
           the count line that stood under this label are gone. */}
       {body.map((section, i) => (
         <Section
-          key={`${section.canonical}:${section.heading}`}
+          // P7-18 (F5): the id, unique by `withSectionIds`. `canonical:heading` collided on two sections
+          // with one heading ("Notes") and put the heading into the dev terminal with React's warning.
+          key={section.id ?? `${i}`}
           section={section}
           index={i}
           mark={sectionMark(route, section.id)}
