@@ -848,8 +848,18 @@ function mend(current: string, next: string, vocab: Vocabulary): string {
   return CLOSED_PREFIXES.has(l) && !vocab.prefixes.has(l) ? joined : kept;
 }
 
-/** Two lines of one paragraph, joined the way the page wrote them. */
+/** A line the page cut inside a token, not between two words (P9-09, cluster H): a unit or a plane
+ *  family at its slash or double bar ("mA/" + "cm2", "⟨110⟩||" + "ND"), a range or a compound at the
+ *  paper's own minus sign, U+2212 ("20−" + "30", "LiOH−" + "KOH"). A slash or a minus that stands
+ *  apart ("either A /" + "B", "a −" + "b") is a word of its own and keeps its space. */
+const CUT_TOKEN_END = /(?:\S[/\u2212]|\|\|)$/;
+/** A range cut at its dash: a digit, a hyphen or a dash, and a digit opening the next line ("20–" + "30"). */
+const RANGE_DASH_END = /\p{N}[-\u2010\u2011\u2013\u2014]$/u;
+
+/** Two lines of one paragraph, joined the way the page wrote them: a cut token with no space and its
+ *  mark kept, a hyphen by the document's words, anything else with a space. */
 function joinLines(current: string, next: string, vocab: Vocabulary): string {
+  if (CUT_TOKEN_END.test(current) || (RANGE_DASH_END.test(current) && /^\p{N}/u.test(next))) return `${current}${next}`;
   if (HYPHEN_END.test(current)) return mend(current, next, vocab);
   return `${current} ${next}`;
 }

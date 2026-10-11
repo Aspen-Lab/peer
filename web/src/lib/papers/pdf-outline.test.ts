@@ -235,6 +235,47 @@ describe("a hyphen at a line's end follows the document's own words (P9-09, clus
   });
 });
 
+// ── P9-09 (cluster H): no space where the page cut a token ─────────────────────────────────────────
+//
+// A line that ends in "/", in "||", in a minus sign (U+2212: the paper's own range mark) or in a dash
+// between digits was cut inside a token, not between two words: "mA/" + "cm2" is "mA/cm2", "20−" + "30"
+// is "20−30", and a range that ended in an en dash read "2030" once the dash was dropped. Every other
+// line end still takes a space.
+describe("a line cut at a slash, a double bar, a minus or a digit-dash joins with no space (P9-09, cluster H)", () => {
+  const two = (first: string, second: string) => joinProse([line(first, { y: 500 }), line(second, { y: 488 })]);
+
+  it("joins a unit cut at its slash", () => {
+    expect(two("The current density was 7 mA/", "cm2 or less.")).toBe("The current density was 7 mA/cm2 or less.");
+    expect(two("The ratio [Li+]/", "[Co2+] was held fixed.")).toBe("The ratio [Li+]/[Co2+] was held fixed.");
+    expect(two("Cycled at a rate of C/", "10 with a hold.")).toBe("Cycled at a rate of C/10 with a hold.");
+  });
+
+  it("joins a plane family cut at its double bar", () => {
+    expect(two("A texture along ⟨110⟩||", "ND was seen.")).toBe("A texture along ⟨110⟩||ND was seen.");
+  });
+
+  it("joins a range or a compound cut at the paper's minus sign", () => {
+    expect(two("A swing of 20−", "30 mA was applied.")).toBe("A swing of 20−30 mA was applied.");
+    expect(two("Values of 4.68−", "12.50 were found.")).toBe("Values of 4.68−12.50 were found.");
+    expect(two("A eutectic LiOH−", "KOH melt was used.")).toBe("A eutectic LiOH−KOH melt was used.");
+  });
+
+  it("keeps a range between digits whole when it was cut at an en dash or an em dash: never \"2030\"", () => {
+    expect(two("A swing of 20–", "30 mA was applied.")).toBe("A swing of 20–30 mA was applied.");
+    expect(two("A swing of 20—", "30 mA was applied.")).toBe("A swing of 20—30 mA was applied.");
+    expect(two("A swing of 20-", "30 mA was applied.")).toBe("A swing of 20-30 mA was applied.");
+  });
+
+  it("still puts a space after a slash that stands apart, a dash between words, a sentence end", () => {
+    expect(two("Either A /", "B was used.")).toBe("Either A / B was used.");
+    expect(two("The difference a −", "b was small.")).toBe("The difference a − b was small.");
+    expect(two("The film was grown.", "30 mA was applied.")).toBe("The film was grown. 30 mA was applied.");
+    expect(two("The cell takes typing —", "everything else is fixed.")).toBe("The cell takes typing — everything else is fixed.");
+    // A year range does not turn a dash after words into a glue: only a digit before the dash does.
+    expect(two("The result of the phase –", "30 mA was applied.")).toBe("The result of the phase – 30 mA was applied.");
+  });
+});
+
 describe("the whole reading", () => {
   const page = (n: number, rows: [string, Partial<PdfTextItem>?][]): PdfPageText => ({
     page: n,
