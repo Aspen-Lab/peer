@@ -606,6 +606,7 @@ function Reader({
   // page's own `isUploadId`. Its page keeps no "Not interested, then next":
   // no Skip button, no `x skip` in the legend, no `skip` for the keyboard,
   // no swipe-left. A public paper with an attached PDF keeps all four.
+  // P7-12 (R4): the same page offers no "Open the PDF" command and no `o` key either.
   const isUploadId = originalPaper.id.startsWith("upload:");
   const { paper, upload, ready, setUpload } = usePrivateSupplement(originalPaper);
   // UPLOAD-404 (§1bi.2): whether the server can even store a NEW private PDF
@@ -1170,7 +1171,7 @@ function Reader({
       like,
       undoOrToggleRead,
       ...(hasBody ? { read: readHere, ask: focusFirstEmptyQuestion, explain: openExplain } : {}),
-      open,
+      ...(isUploadId ? {} : { open }),
       copy,
       back,
     };
@@ -1385,7 +1386,10 @@ function Reader({
             ref={decisionRef}
             sentences={sentences}
             stage={model.stage}
-            source={reading.source}
+            // P7-12 (R4): the reader is already on the uploaded file's own page; its source is the
+            // private file route, so no "Open the PDF" command. `RecordBlock` keeps `reading.source`
+            // to dedupe its "Publisher" door against.
+            source={isUploadId ? null : reading.source}
             doi={paper.doi}
             isSaved={paper.isSaved}
             showAddKey={showAddKey}

@@ -193,7 +193,7 @@ describe("the explain key (P3-02b)", () => {
     expect(resolvePaperKey("E")).toBeNull();
   });
 
-  it("keeps it on every page: an upload's table drops skip and nothing else", () => {
+  it("keeps it on every page: an upload's table drops skip and open and nothing else", () => {
     expect(paperKeysFor({ upload: true }).map((entry) => entry.action)).toContain("explain");
     expect(paperKeysFor({ upload: false }).map((entry) => entry.action)).toContain("explain");
     expect(paperKeysFor({ upload: false })).toEqual(PAPER_KEYS);
@@ -278,6 +278,28 @@ describe("the keyboard layer and the question field (P1-03)", () => {
     mounted.unmount();
   });
 
+  // P7-12 (R4): an uploaded PDF's page registers no `open`. `o` and Enter resolve to `open`,
+  // find no handler, and are left alone — the event is not prevented, so a focused button or
+  // link still takes its own Enter — and nothing opens the file route.
+  it("leaves o and Enter unhandled on a page that registered no open, and runs open where one is registered", async () => {
+    const next = vi.fn();
+    registerReaderActions({ next });
+    const mounted = await hookRuntime.mount(() => KeyboardLayer());
+
+    for (const key of ["o", "Enter"]) {
+      const inert = press(key, new FakeElement("DIV"));
+      expect(inert.preventDefault).not.toHaveBeenCalled();
+    }
+    expect(next).not.toHaveBeenCalled();
+
+    const open = vi.fn();
+    registerReaderActions({ next, open });
+    const handled = press("o", new FakeElement("DIV"));
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(handled.preventDefault).toHaveBeenCalled();
+    mounted.unmount();
+  });
+
   // P1-08 (§1f.19): an uploaded PDF's page registers no `skip`. The layer
   // resolves `x` to `skip`, finds no handler, and leaves the key alone —
   // nothing runs, the event is not prevented, and no global key answers
@@ -302,13 +324,17 @@ describe("the keyboard layer and the question field (P1-03)", () => {
 
 // P1-08 (§1a.6, §1f.19): on a standalone uploaded PDF's page there is no
 // "Not interested, then next" — the one table loses that row there.
-describe("paperKeysFor (P1-08)", () => {
-  it("drops skip for an upload, and is the whole table otherwise", () => {
+// P7-12 (R4): nor an "Open the PDF" command, so no `o` / Enter row either.
+describe("paperKeysFor (P1-08, P7-12)", () => {
+  it("drops skip and open for an upload, and is the whole table otherwise", () => {
     const upload = paperKeysFor({ upload: true });
     expect(upload.map((entry) => entry.action)).not.toContain("skip");
     expect(upload.some((entry) => entry.keys.includes("x"))).toBe(false);
-    expect(upload).toEqual(PAPER_KEYS.filter((entry) => entry.action !== "skip"));
+    expect(upload.map((entry) => entry.action)).not.toContain("open");
+    expect(upload.some((entry) => entry.keys.includes("o") || entry.keys.includes("Enter"))).toBe(false);
+    expect(upload).toEqual(PAPER_KEYS.filter((entry) => entry.action !== "skip" && entry.action !== "open"));
     expect(paperKeysFor({ upload: false })).toEqual(PAPER_KEYS);
+    expect(paperKeysFor({ upload: false }).map((entry) => entry.action)).toContain("open");
   });
 
   it("leaves the help sheet as it was: it describes the reader's keys in general", () => {
