@@ -335,17 +335,23 @@ export function QuestionField({
   const [unsettled, setUnsettled] = useState<number | null>(null);
   const trackLine = (event: SettleEvent) => setUnsettled((current) => settleLine(current, event));
   const inputs = useRef<Array<HTMLTextAreaElement | null>>([]);
-  const pendingFocus = useRef<{ index: number; caretAtEnd: boolean } | null>(null);
+  // P9-11 (B P9-07): a request to focus a line belongs to the render that adds that line, so it
+  // travels with the lines as state set in the same batch — never as a ref that another render's
+  // effect can read and clear. (It was a ref read by an effect with no dependency: an Enter that
+  // landed after the page's debounced render had committed and before that commit's passive effects
+  // ran had its request read and cleared by the older commit's effect, which found no line yet; the
+  // render that added the line had nothing to focus, and the next question was typed onto the
+  // previous line.) An older commit's effect holds an older request and, its dependency unchanged,
+  // does not run again; a repeated request is a new object, so it fires again.
+  const [focusLine, setFocusLine] = useState<{ index: number; caretAtEnd: boolean } | null>(null);
 
   useEffect(() => {
-    const pending = pendingFocus.current;
-    if (!pending) return;
-    pendingFocus.current = null;
-    const input = inputs.current[pending.index];
+    if (!focusLine) return;
+    const input = inputs.current[focusLine.index];
     if (!input) return;
     input.focus();
-    if (pending.caretAtEnd) input.setSelectionRange(input.value.length, input.value.length);
-  });
+    if (focusLine.caretAtEnd) input.setSelectionRange(input.value.length, input.value.length);
+  }, [focusLine]);
 
   // P7-13 (R11a): every line grows or shrinks to its text — after each change of
   // the lines, and when the window is resized (the lines wrap differently).
@@ -397,7 +403,7 @@ export function QuestionField({
   const onChip = (chip: Chip) => {
     const filled = fillNextLine(lines, chip.text);
     if (filled.focus < 0) return;
-    pendingFocus.current = { index: filled.focus, caretAtEnd: true };
+    setFocusLine({ index: filled.focus, caretAtEnd: true });
     commit(filled.lines, nextGist(gist, filled.lines));
   };
 
@@ -457,7 +463,7 @@ export function QuestionField({
                 trackLine({ type: "enter", index });
                 const added = addLineAfter(lines, index);
                 if (added.lines.length !== lines.length) {
-                  pendingFocus.current = { index: added.focus, caretAtEnd: true };
+                  setFocusLine({ index: added.focus, caretAtEnd: true });
                   commit(added.lines, gist);
                 } else {
                   inputs.current[added.focus]?.focus();
