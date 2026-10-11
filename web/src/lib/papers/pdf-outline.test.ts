@@ -348,3 +348,214 @@ describe("captions across lines", () => {
     expect(prose).not.toContain("segmentation and classification");
   });
 });
+
+
+// P7-10 (the owner's R8): the line builder reads what a journal page prints.
+// Item-level fixtures, shaped like the runs pdf.js handed over for the
+// owner's two-column paper (a superscript is a run of its own, 4pt above its
+// line and two thirds its size; the publisher's footer is small print under
+// the last line of text; a run-in "ABSTRACT:" is a bold run ahead of the
+// abstract's words).
+
+/** Runs set one after another on a line, with no gap between them. */
+function chain(parts: [string, Partial<PdfTextItem>?][], at: { x?: number; y?: number } = {}): PdfTextItem[] {
+  let x = at.x ?? 100;
+  const y = at.y ?? 500;
+  return parts.map(([str, own]) => {
+    const run = item(str, { x, y, ...own });
+    x += run.width;
+    return run;
+  });
+}
+/** A superscript as pdf.js hands it over: two thirds the size, 4.4pt above the line. */
+const sup = (y = 500): Partial<PdfTextItem> => ({ height: 6.7, y: y + 4.4 });
+/** A subscript: two thirds the size, 2pt below the line. */
+const sub = (y = 500): Partial<PdfTextItem> => ({ height: 6.7, y: y - 2 });
+
+describe("superscripts and subscripts stay on their line (P7-10)", () => {
+  it("reads '1st, 20th' as one string, not as a row of 'st th' placed above the line", () => {
+    const page: PdfPageText = {
+      page: 1,
+      items: [
+        ...chain([["after the 1"], ["st", sup()], [", 20"], ["th", sup()], [" charge cycle"]]),
+        ...chain([["the next line of the paragraph"]], { y: 488 }),
+      ],
+    };
+    expect(linesOfPage(page).map((l) => l.text)).toEqual(["after the 1st, 20th charge cycle", "the next line of the paragraph"]);
+  });
+
+  it("folds a citation number into its line, at the line's own height and size", () => {
+    const page: PdfPageText = {
+      page: 1,
+      items: chain([["The cathode shape"], ["17", sup()], [" and the film"]]),
+    };
+    const lines = linesOfPage(page);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].text).toMatch(/^The cathode shape ?17 and the film$/);
+    expect(lines[0]).toMatchObject({ y: 500, size: 10 });
+  });
+
+  it("folds a subscript too", () => {
+    const page: PdfPageText = { page: 1, items: chain([["Films of TiO"], ["2", sub()], [" were grown on gold"]]) };
+    expect(linesOfPage(page).map((l) => l.text)).toEqual(["Films of TiO2 were grown on gold"]);
+  });
+
+  it("keeps a small line of its own where no line is near enough to own it", () => {
+    // 14pt under the line is a footnote, not a subscript.
+    const page: PdfPageText = {
+      page: 1,
+      items: [
+        ...chain([["The cathode shape was measured at room temperature"]]),
+        ...chain([["a note set small, a line below"]], { y: 486 }).map((r) => ({ ...r, height: 6.7 })),
+      ],
+    };
+    expect(linesOfPage(page).map((l) => l.text)).toEqual([
+      "The cathode shape was measured at room temperature",
+      "a note set small, a line below",
+    ]);
+  });
+});
+
+describe("margin print is not the paper's text (P7-10)", () => {
+  const prose = (y: number, text = "Recurrent neural networks have long been established in sequence modelling.") => item(text, { y });
+  const small = (text: string, y: number) => item(text, { y, height: 6.3 });
+
+  it("drops small print below a page's last full-size line and above its first, so a sentence crossing the page break is whole", () => {
+    // The publisher's copyright and DOI line is printed on page 1 only (no
+    // repetition marks it as furniture) and a library's download stamp on
+    // page 2 only; both used to land inside the sentence that crosses.
+    const outline = buildOutline([
+      {
+        page: 1,
+        items: [
+          item("A Paper About Sequence Models", { height: 17, y: 760 }),
+          item("1 Introduction", { y: 740 }),
+          ...[726, 714, 702, 690, 678].map((y) => prose(y)),
+          prose(666, "The recurrent models carry the sentence that"),
+          small("© 2026 Example Society https://doi.org/10.1000/example.2026", 34),
+        ],
+      },
+      {
+        page: 2,
+        items: [
+          small("Downloaded by a library on February 22, 2026", 790),
+          prose(740, "carries over to the next page and ends there."),
+          ...[728, 716, 704].map((y) => prose(y)),
+        ],
+      },
+    ]);
+    const text = (outline.sections ?? []).map((s) => s.text).join(" ");
+    expect(text).toContain("the sentence that carries over to the next page and ends there.");
+    expect(text).not.toContain("Example Society");
+    expect(text).not.toContain("Downloaded by");
+  });
+
+  it("keeps a line that is only a little smaller than the body: a 9pt caption-size line is not margin print", () => {
+    const outline = buildOutline([
+      {
+        page: 1,
+        items: [
+          item("A Paper About Sequence Models", { height: 17, y: 760 }),
+          item("1 Introduction", { y: 740 }),
+          ...[726, 714, 702, 690, 678, 666].map((y) => prose(y)),
+          item("Note: the cells were cycled at 25 C.", { y: 100, height: 9 }),
+        ],
+      },
+    ]);
+    expect((outline.sections ?? []).map((s) => s.text).join(" ")).toContain("the cells were cycled at 25 C.");
+  });
+});
+
+describe("a heading set over two lines is one heading (P7-10)", () => {
+  const prose = (y: number) => item("Recurrent neural networks have long been established in sequence modelling.", { y });
+  const heading = (text: string, y: number) => item(text, { y, height: 9.5, fontName: "display" });
+  const page = (rows: PdfTextItem[]): PdfPageText[] => [
+    { page: 1, items: [item("A Paper About Sequence Models", { height: 17, y: 760 }), item("1 Introduction", { y: 740 }), ...[726, 714, 702].map(prose), ...rows] },
+  ];
+
+  it("joins the second line of a heading to the first: same face and size, one leading below, not numbered", () => {
+    const outline = buildOutline(
+      page([heading("2.1. Slow Annealing Schedules for Quillwort Cathode", 680), heading("Films", 668.6), ...[656, 644, 632].map(prose)]),
+    );
+    expect(outline.sections?.map((s) => s.heading)).toEqual([
+      "1 Introduction",
+      "2.1. Slow Annealing Schedules for Quillwort Cathode Films",
+    ]);
+    expect(outline.sections?.[1].text).toMatch(/^Recurrent neural networks/);
+  });
+
+  it("does not join a numbered heading to the one above it", () => {
+    const outline = buildOutline(
+      page([heading("2.1 First Part", 680), heading("2.2 Second Part", 668.6), ...[656, 644, 632].map(prose)]),
+    );
+    expect(outline.sections?.map((s) => s.heading)).toEqual(["1 Introduction", "2.2 Second Part"]);
+  });
+
+  it("does not join two headings that have text between them", () => {
+    const outline = buildOutline(
+      page([heading("Growth Conditions", 680), ...[668, 656].map(prose), heading("Film Thickness", 644), ...[632, 620].map(prose)]),
+    );
+    expect(outline.sections?.map((s) => s.heading)).toEqual(["1 Introduction", "Growth Conditions", "Film Thickness"]);
+  });
+
+  it("does not join a heading to a second line set in another face or a line further below", () => {
+    const outline = buildOutline(
+      page([
+        heading("Growth Conditions", 680),
+        item("Annealing", { y: 668.6, height: 9.5, fontName: "another" }),
+        ...[656, 644].map(prose),
+        heading("Film Thickness", 600),
+        heading("Substrates", 560),
+        ...[548, 536].map(prose),
+      ]),
+    );
+    // "Growth Conditions" and "Film Thickness" have no text of their own, so they are not sections;
+    // neither was joined to the heading under it.
+    expect(outline.sections?.map((s) => s.heading)).toEqual(["1 Introduction", "Annealing", "Substrates"]);
+  });
+});
+
+describe("a run-in label is a heading of its own (P7-10)", () => {
+  it("splits 'ABSTRACT:' set in its own face from the words that follow it on the line", () => {
+    const page: PdfPageText = {
+      page: 1,
+      items: chain([["ABSTRACT:", { fontName: "label" }], [" Quillwort cathodes degrade through chemistry and strain together"]]),
+    };
+    const lines = linesOfPage(page);
+    expect(lines.map((l) => l.text)).toEqual(["ABSTRACT", "Quillwort cathodes degrade through chemistry and strain together"]);
+    expect(lines[0].font).toBe("label");
+    expect(lines[0].y).toBe(lines[1].y);
+  });
+
+  it("leaves a first run that is more than the label, or in the body's own face, in its line", () => {
+    const sameFace = chain([["Abstract:"], [" the same face as the words after it"]]);
+    expect(linesOfPage({ page: 1, items: sameFace }).map((l) => l.text)).toEqual(["Abstract: the same face as the words after it"]);
+    const more = chain([["Summary statistics", { fontName: "label" }], [" were computed over all of the cells"]]);
+    expect(linesOfPage({ page: 1, items: more }).map((l) => l.text)).toEqual(["Summary statistics were computed over all of the cells"]);
+  });
+
+  it("gives the abstract a heading to be found by, and keeps the cover above it out", () => {
+    const outline = buildOutline([
+      {
+        page: 1,
+        items: [
+          item("Quillwort Cathodes Under Chemistry and Strain", { height: 17, y: 760 }),
+          item("A. Author, B. Author", { y: 740, height: 11, fontName: "display" }),
+          ...chain([["ABSTRACT:", { fontName: "label" }], [" Quillwort cathodes fade through chemistry and strain together."]], { y: 700 }),
+          item("The two couple, and the coupling decides how long a cell lasts in use.", { y: 688 }),
+          item("1. INTRODUCTION", { y: 650 }),
+          item("Quillwort cathodes are an important class of cathode materials for small cells.", { y: 636 }),
+          item("They are used in cells of every size, from watches to cars and grid stores.", { y: 624 }),
+        ],
+      },
+    ]);
+    expect(outline.sections?.map((s) => [s.canonical, s.heading])).toEqual([
+      ["abstract", "ABSTRACT"],
+      ["introduction", "1. INTRODUCTION"],
+    ]);
+    expect(outline.sections?.[0].text).toBe(
+      "Quillwort cathodes fade through chemistry and strain together. The two couple, and the coupling decides how long a cell lasts in use.",
+    );
+    expect((outline.sections ?? []).map((s) => s.text).join(" ")).not.toContain("A. Author");
+  });
+});

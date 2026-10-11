@@ -22,7 +22,7 @@
 
 import { readFile } from "node:fs/promises";
 import { cleanDisplayText } from "@/lib/text/clean";
-import { buildOutline, linesOfPage, type PdfOutline, type PdfPageText } from "./pdf-outline";
+import { buildOutline, gutterPrior, linesOfPageWith, type PdfOutline, type PdfPageText } from "./pdf-outline";
 import { withInheritedBuckets, withSectionIds } from "./html-text";
 import type { ExtractedDocument, ExtractedSection, ExtractedFigureCaption } from "./html-text";
 
@@ -244,15 +244,19 @@ export async function extractPdfTextFromBytes(bytes: Buffer): Promise<PdfTextRes
   try {
     const pages = await readPages(bytes);
     // Page 1's lines as printed, joined with spaces, before any of them is set
-    // aside as the cover.
+    // aside as the cover. Read in the columns the outline reads them in (P7-10:
+    // the paper's own gutter, for a first page too sparse to show one), so a
+    // DOI or a title the search looks for is not welded to the other column's
+    // line beside it.
+    const prior = gutterPrior(pages);
     const page1Text = pages[0]
-      ? linesOfPage(pages[0])
+      ? linesOfPageWith(pages[0], prior)
           .map((line) => line.text)
           .join(" ")
           .replace(/\s+/g, " ")
           .trim()
       : "";
-    const outline = buildOutline(pages);
+    const outline = buildOutline(pages, prior);
     if (!outline.sections || outline.sections.length === 0) {
       return { ok: false, reason: outline.reason ?? "no-sections", page1Text: page1Text || undefined };
     }
