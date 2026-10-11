@@ -504,14 +504,15 @@ export function QuestionField({
       </ol>
       {/* P7-13 (R11c): below the lines, right-aligned (full width on a phone), in the label face.
           Not in the quiet box (no question, nothing focused) — unless a cleared box still has
-          something to send. Shown with no key too: it settles the ledger. */}
+          something to send. Shown with no key too: it settles the ledger. P7-18 (F6): a 44-px
+          target on touch, as the page's other commands are. */}
       {(chipsShown || unsent) && (
         <div className="mt-2 flex sm:justify-end">
           <button
             type="button"
             onClick={submit}
             disabled={!unsent}
-            className="annotation w-full rounded-full border border-border-strong px-3 py-1 text-heading transition-colors hover:bg-surface-hover disabled:opacity-50 sm:w-auto"
+            className="annotation w-full rounded-full border border-border-strong px-3 py-1 text-heading transition-colors hover:bg-surface-hover disabled:opacity-50 sm:w-auto [@media(hover:none)]:min-h-11"
           >
             {ASK.submit}
           </button>

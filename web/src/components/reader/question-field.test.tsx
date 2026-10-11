@@ -233,6 +233,14 @@ describe("QuestionField — the Submit button (P7-13, R11c)", () => {
     expect(html).toMatch(/<div class="[^"]*\bsm:justify-end\b[^"]*">\s*<button[^>]*>Submit<\/button>/);
   });
 
+  // P7-18 (F6, §1h.39 e): 26 px tall on a phone, beside Notes at 44 and the page's other commands
+  // (`[@media(hover:none)]:min-h-11`, the touch-target class reader-commands and reader-tabs carry).
+  it("is a 44-px target on touch, as the page's other controls are", () => {
+    useReadingQuestionsStore.getState().set(PAPER, ["How does LCO degrade?"], false, AT);
+
+    expect(button(render())).toMatch(/class="[^"]*\[@media\(hover:none\)\]:min-h-11(?:\s|")/);
+  });
+
   it("is enabled while the typed questions are not the settled ones", () => {
     useReadingQuestionsStore.getState().set(PAPER, ["How does LCO degrade?"], false, AT);
 
