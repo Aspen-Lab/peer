@@ -2,18 +2,20 @@
 
 // First-run onboarding plumbing.
 //
-// **A profile that has never been set up opens on /welcome, once.** (P7-16,
-// the owner's R12.) The first visit used to be the briefing alone, with a
-// sample feed and a setup strip above it (see `starter-strip.tsx` in
-// components/briefing) and no way into the walkthrough except a faint link in
-// that strip. A reader who ran Peer from GitHub never met the wizard and never
-// found where to put a key. So the gate sends a profile with nothing in it —
-// no onboarding stamp, no topic, project, challenge or key (see
-// lib/profile/first-visit.ts) — to /welcome, after the profile store has
-// hydrated and the first sync has settled, and records that it did
-// (`welcomeSkipped`), so it never happens a second time. The wizard's "Skip
-// setup" and its last step set the same flag; the strip's "Set up Peer" and
-// "Add a key" buttons stay as the way back.
+// **A profile that has never been set up opens on /welcome, once, from the
+// home page.** (P7-16, the owner's R12; P7-16c, §1h.35 (a).) The first visit
+// used to be the briefing alone, with a sample feed and a setup strip above it
+// (see `starter-strip.tsx` in components/briefing) and no way into the
+// walkthrough except a faint link in that strip. A reader who ran Peer from
+// GitHub never met the wizard and never found where to put a key. So the gate
+// sends a profile with nothing in it — no onboarding stamp, no topic, project,
+// challenge or key (see lib/profile/first-visit.ts) — from `/` to /welcome,
+// after the profile store has hydrated and the first sync has settled, and
+// records that it did (`welcomeSkipped`), so it never happens a second time.
+// Only `/`: a shared paper link, a search or any other route is a deep link,
+// and a deep link is never redirected. The wizard's "Skip setup" and its last
+// step set the same flag; the strip's "Set up Peer" and "Add a key" buttons
+// stay as the way back.
 //
 // Beside that, the backfill: a synced profile that already has topics is proof
 // of prior onboarding, so the local flag is written to match.
@@ -89,11 +91,12 @@ export function FirstRunGate() {
     if (!onboardedAt && topicsCount > 0) completeOnboarding();
   }, [settled, pathname, onboardedAt, topicsCount, completeOnboarding]);
 
-  // The first visit. Only once the profile is trustworthy — after local
-  // hydration AND the initial remote pull — because on the pre-sync default
-  // profile a returning reader looks exactly like a new one, and would be
-  // bounced into the wizard on a fresh-browser load. Nothing renders
-  // differently before that: this component renders nothing at all.
+  // The first visit, from the home page. Only once the profile is
+  // trustworthy — after local hydration AND the initial remote pull — because
+  // on the pre-sync default profile a returning reader looks exactly like a
+  // new one, and would be bounced into the wizard on a fresh-browser load.
+  // Nothing renders differently before that: this component renders nothing
+  // at all. On any other page it does nothing (and records nothing).
   const action = settled ? walkthroughAction(pathname, profile) : null;
 
   useEffect(() => {

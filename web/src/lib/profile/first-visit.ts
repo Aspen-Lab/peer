@@ -1,8 +1,15 @@
 // The first visit, as rules (P7-16, the owner's R12).
 //
-// A profile that has never been set up opens on the /welcome walkthrough once.
-// `components/first-run.tsx` is the gate that acts on this; the rules live here
-// so they can be read, and tested, with no React in the way.
+// A profile that has never been set up opens on the /welcome walkthrough once,
+// from the home page. `components/first-run.tsx` is the gate that acts on this;
+// the rules live here so they can be read, and tested, with no React in the way.
+//
+// **From the home page only** (P7-16c, §1h.35 (a)): a reader who opens a shared
+// paper link, a search or any other route is left where they are. A deep link
+// is somebody's answer to "where do you want to go", and a first-time visitor
+// who follows one is never pulled off it into a form. The reader who is
+// meant to meet the walkthrough is the one who opens Peer itself, and that is
+// `/`.
 //
 // "Never set up" means nothing at all: no onboarding stamp, no research topic,
 // no project or challenge, no model key, and the walkthrough has not already
@@ -37,23 +44,12 @@ export function hasBeenSetUp(profile: FirstVisitProfile): boolean {
 }
 
 /**
- * Where the walkthrough never takes the page over: the walkthrough's own
- * detour to the persona quiz, the sign-in pages, the privacy statement (which
- * must be readable before anything is set up) and anything under /api. A
- * prefix matches whole path segments, so `/privacy-notes` is an ordinary page.
- */
-const EXEMPT_PREFIXES = ["/persona", "/auth", "/privacy", "/api"];
-
-function isExempt(pathname: string): boolean {
-  return EXEMPT_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-}
-
-/**
  * What the first-run gate does on this page, once the profile can be trusted:
- *  - `"redirect"`: send the reader to /welcome, and record that it was done;
+ *  - `"redirect"`: the reader is on the home page (`/`, and only there): send
+ *    them to /welcome, and record that it was done;
  *  - `"record"`: the reader is on /welcome already — leave them there, and
  *    record that they have been shown it, so leaving does not bring them back;
- *  - `null`: nothing.
+ *  - `null`: nothing. Every other page, a deep link above all, is left alone.
  */
 export function walkthroughAction(
   pathname: string | null,
@@ -62,6 +58,6 @@ export function walkthroughAction(
   if (!pathname) return null;
   if (hasBeenSetUp(profile)) return null;
   if (pathname === "/welcome") return "record";
-  if (isExempt(pathname)) return null;
-  return "redirect";
+  if (pathname === "/") return "redirect";
+  return null;
 }

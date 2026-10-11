@@ -352,13 +352,14 @@ resolved for your deployment.
 First-run wizard at [`web/src/app/welcome/page.tsx`](web/src/app/welcome/page.tsx) —
 Apple-setup style, one idea per page: **basics → topics → work → radar → ai → data → persona**.
 
-- **A browser that has never been set up opens on it once.** `FirstRunGate`
+- **A browser that has never been set up opens on it once, from the home page.** `FirstRunGate`
   ([`first-run.tsx`](web/src/components/first-run.tsx)) sends a profile with nothing in it — no
   `onboardedAt`, no topic, project, challenge or model key, and `welcomeSkipped` unset
-  ([`lib/profile/first-visit.ts`](web/src/lib/profile/first-visit.ts)) — to `/welcome`, once the
-  profile has loaded, and records that it did, so it never opens by itself a second time. "Skip
-  setup →" and the last step set the same flag. Anyone with something set up goes straight to the
-  briefing.
+  ([`lib/profile/first-visit.ts`](web/src/lib/profile/first-visit.ts)) — from `/` to `/welcome`, once
+  the profile has loaded, and records that it did, so it never opens by itself a second time. Only
+  `/`: a shared paper link, a search or any other page is left where it is — a deep link is never
+  redirected. "Skip setup →" and the last step set the same flag. Anyone with something set up goes
+  straight to the briefing.
 - **The way back is on the home page.** Until a field is chosen the briefing is a sample, and the
   sample card carries **Set up Peer** (`/welcome`) and **Add a key** (`/welcome?step=ai`) buttons;
   after the first field a one-line "Add a key to turn on the model" row stays until a key exists

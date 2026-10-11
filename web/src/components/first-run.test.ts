@@ -4,9 +4,10 @@
 // This repo has no DOM and `react-dom/server` never runs effects, so the gate
 // runs on `test-support/hook-runtime` and the three things it reads — the
 // router, the profile store and the sync gate — are small stand-ins. The
-// decision itself (what counts as "set up", which pages are exempt) is proven
-// in `lib/profile/first-visit.test.ts`; this file proves the gate acts on it:
-// after hydration and sync, with `router.replace`, once.
+// decision itself (what counts as "set up", that only the home page opens the
+// walkthrough, P7-16c) is proven in `lib/profile/first-visit.test.ts`; this
+// file proves the gate acts on it: after hydration and sync, with
+// `router.replace`, once.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("react", async (importOriginal) => {
@@ -98,9 +99,28 @@ describe("FirstRunGate — a never-set-up profile opens on the walkthrough once 
     expect(world.profile.welcomeSkipped).toBe(true);
   });
 
-  it("sends a fresh profile on another page there too", async () => {
-    await open("/search");
+  // Re-aimed to §1h.35 (a) (P7-16c): this used to say a fresh profile on
+  // another page is sent to /welcome "there too". A deep link is never
+  // hijacked: nothing moves the reader, and nothing is recorded, so the
+  // walkthrough is still owed to the first time they reach the home page.
+  it.each(["/papers/abc", "/search", "/profile", "/data-sources"])(
+    "leaves a fresh profile on %s where it is: no redirect, no flag spent (§1h.35 (a))",
+    async (pathname) => {
+      await open(pathname);
+      expect(world.replace).not.toHaveBeenCalled();
+      expect(world.skipWelcome).not.toHaveBeenCalled();
+      expect(world.profile.welcomeSkipped).toBeUndefined();
+    },
+  );
+
+  it("a deep link first, the home page after: the walkthrough opens there, once (§1h.35 (a))", async () => {
+    await open("/papers/abc");
+    expect(world.replace).not.toHaveBeenCalled();
+    await open("/");
+    expect(world.replace).toHaveBeenCalledTimes(1);
     expect(world.replace).toHaveBeenCalledWith("/welcome");
+    await open("/");
+    expect(world.replace).toHaveBeenCalledTimes(1);
   });
 
   it("waits for the store to hydrate: nothing happens on the default profile of a first paint", async () => {

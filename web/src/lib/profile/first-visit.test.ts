@@ -4,8 +4,8 @@ import { hasBeenSetUp, walkthroughAction } from "./first-visit";
 
 // P7-16 (R12): a profile that has never been set up opens on the /welcome
 // walkthrough once. These are the rules, with no React in them: what counts as
-// "set up", which pages the walkthrough never takes over, and what the gate
-// does on the rest.
+// "set up", and what the gate does on a page. P7-16c (§1h.35 (a)): it opens by
+// itself from the home page only; a deep link is never redirected.
 
 const fresh: UserProfile = { ...defaultProfile };
 
@@ -53,12 +53,20 @@ describe("walkthroughAction — what the first-run gate does on a page", () => {
     expect(walkthroughAction("/", fresh)).toBe("redirect");
   });
 
-  it.each(["/search", "/profile", "/saved", "/papers/openalex:W1", "/changelog"])(
-    "sends a fresh profile on %s there too",
-    (pathname) => {
-      expect(walkthroughAction(pathname, fresh)).toBe("redirect");
-    },
-  );
+  // Re-aimed to §1h.35 (a) (P7-16c): this used to say a fresh profile is sent
+  // to the walkthrough "there too", from any page. A shared paper link, a
+  // search or any other route is left where it is; only "/" opens it.
+  it.each([
+    "/papers/abc",
+    "/papers/openalex:W1",
+    "/search",
+    "/profile",
+    "/saved",
+    "/data-sources",
+    "/changelog",
+  ])("leaves a fresh profile on %s where it is: a deep link is never redirected (§1h.35 (a))", (pathname) => {
+    expect(walkthroughAction(pathname, fresh)).toBeNull();
+  });
 
   it("does not move a reader who is already on /welcome; it only records that they have been shown it", () => {
     expect(walkthroughAction("/welcome", fresh)).toBe("record");
@@ -71,8 +79,15 @@ describe("walkthroughAction — what the first-run gate does on a page", () => {
     },
   );
 
-  it("matches whole path segments: /privacy-notes is an ordinary page", () => {
-    expect(walkthroughAction("/privacy-notes", fresh)).toBe("redirect");
+  // Re-aimed to §1h.35 (a) (P7-16c): this was "matches whole path segments:
+  // /privacy-notes is an ordinary page", true of the exempt list the home-only
+  // rule made unnecessary. What is left to prove is that only the path "/"
+  // itself opens the walkthrough, not a path that starts or looks like it.
+  it("only the path / itself opens it: /privacy-notes and the like are left where they are (§1h.35 (a))", () => {
+    for (const pathname of ["/privacy-notes", "/welcome-back", "/index"]) {
+      expect(walkthroughAction(pathname, fresh)).toBeNull();
+    }
+    expect(walkthroughAction("/", fresh)).toBe("redirect");
   });
 
   it("does nothing before the path is known", () => {
