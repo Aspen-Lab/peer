@@ -640,3 +640,33 @@ describe("a sentence with notation in it is not a display equation (P7-11)", () 
     expect(outline.sections?.[0].text).toContain("⟨003⟩||ND + ⟨101⟩||ND texture was observed in the films and the cells held their charge");
   });
 });
+
+describe("the paragraph indent is read against the section's usual left edge (P7-11)", () => {
+  const rows = (xs: number[]) => xs.map((x, i) => line(`line ${i + 1} of one paragraph that runs straight on`, { x, y: 700 - i * 12 }));
+  const paragraphs = (xs: number[]) => joinProse(rows(xs)).split("\n\n");
+
+  it("does not read every line as indented because one margin label stands further left", () => {
+    // Eleven lines: one at x = 20, ten at x = 72, no other break.
+    expect(paragraphs([20, ...Array<number>(10).fill(72)])).toHaveLength(1);
+  });
+
+  it("nor because one hanging line does, wherever it stands in the section", () => {
+    const xs = Array<number>(12).fill(72);
+    xs[6] = 30;
+    expect(paragraphs(xs)).toHaveLength(1);
+  });
+
+  it("still starts a paragraph at an indent", () => {
+    const xs = Array<number>(20).fill(72);
+    xs[5] = 84;
+    xs[12] = 84;
+    expect(paragraphs(xs)).toHaveLength(3);
+  });
+
+  it("keeps the minimum for a section of fewer than ten lines: too few to tell an outlier from an edge", () => {
+    // 9 and 10 lines read against x = 20, so each line past the first is an indent; 11 read against x = 72.
+    expect(paragraphs([20, ...Array<number>(8).fill(72)])).toHaveLength(9);
+    expect(paragraphs([20, ...Array<number>(9).fill(72)])).toHaveLength(10);
+    expect(paragraphs([20, ...Array<number>(10).fill(72)])).toHaveLength(1);
+  });
+});

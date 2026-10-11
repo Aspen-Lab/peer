@@ -139,6 +139,9 @@ const EQUATION_PROSE_WORDS = 3;
 /** A caption stops being a caption somewhere; past this it is the prose
  *  under the figure that never opened a gap. */
 const CAPTION_MAX = 700;
+/** The indent test reads a section's left edge as this quantile of its line
+ *  starts. */
+const LEFT_EDGE_QUANTILE = 0.1;
 /** A line at least this share of the body size is full-size: it bounds the
  *  page's text. */
 const FULL_SIZE_RATIO = 0.9;
@@ -688,7 +691,12 @@ export function joinProse(lines: PdfLine[]): string {
   // The line pitch, not the average gap: a section with one paragraph break
   // in three lines has a median that IS the break, and then nothing breaks.
   const pitch = gaps.length > 0 ? gaps[Math.floor(gaps.length * 0.25)] : 0;
-  const left = lines.length > 0 ? Math.min(...lines.map((l) => l.x)) : 0;
+  // The section's usual left edge: the 10th percentile of its line starts, not
+  // the leftmost one, so a margin label or one hanging line does not make every
+  // other line read as indented. Under ten lines that is the minimum: too few
+  // to tell an outlier from an edge.
+  const starts = lines.map((l) => l.x).sort((a, b) => a - b);
+  const left = starts.length > 0 ? starts[Math.floor(LEFT_EDGE_QUANTILE * (starts.length - 1))] : 0;
 
   for (const line of lines) {
     if (line.block) {
