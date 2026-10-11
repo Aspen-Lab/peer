@@ -84,7 +84,8 @@ describe("useReading with effects running — one reading request across two ope
     const second = await open(attached);
 
     expect(fetches).toHaveLength(1);
-    expect(fetches[0]).toContain("?upload=upload%3A0123456789abcdef");
+    // P8-04: `v` first, so the private request keeps its `upload` parameter after it.
+    expect(fetches[0]).toBe("/api/papers/openalex%3AW7000000002/reading?v=7&upload=upload%3A0123456789abcdef");
     expect(first.fromServer).toBe(true);
     expect(second.fromServer).toBe(true);
     expect(second.reading?.provenance.fullText).toBe("pdf");
@@ -99,10 +100,24 @@ describe("useReading with effects running — one reading request across two ope
     await open(standalone);
     await open(standalone);
     expect(fetches).toHaveLength(1);
-    expect(fetches[0]).toBe("/api/papers/upload%3Afedcba9876543210/reading");
+    expect(fetches[0]).toBe("/api/papers/upload%3Afedcba9876543210/reading?v=7");
 
     await open({ ...standalone, revision: 2 });
     expect(fetches).toHaveLength(2);
+  });
+
+  // P8-04: the route answers a public paper with `public, s-maxage=86400`, and the URL was the same for every
+  // version of the reading, so a shared cache went on serving a body of the old shape to a client that
+  // refuses it (and the reader got the abstract alone). The version in the URL changes the cache's key
+  // with it; the route ignores the parameter.
+  it("a public paper: the request carries the reading's version, so a shared cache keys on it (P8-04)", async () => {
+    serveReading("pdf");
+
+    await open(base);
+
+    expect(fetches).toEqual(["/api/papers/openalex%3AW7000000002/reading?v=7"]);
+    // The number is the one the hook accepts: the version of the reading the page builds.
+    expect(fetches[0]).toContain(`?v=${buildReading(base, null).version}`);
   });
 
   it("does not keep a private reading that came back without the full text (the timed-out answer)", async () => {

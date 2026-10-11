@@ -18,7 +18,16 @@ const STORAGE_KEY = "peer-reading-v2";
 const MAX_ENTRIES = 40;
 const TTL_MS = 24 * 60 * 60 * 1000;
 /** The shape both gates below accept. Typed from the document itself, so
- *  bumping `PaperReading["version"]` is the only edit a shape change needs. */
+ *  bumping `PaperReading["version"]` is the only edit a shape change needs.
+ *
+ *  It is also in the request's URL (`?v=`, below). The route answers a public
+ *  paper with `public, s-maxage=86400, stale-while-revalidate=604800`, and a
+ *  shared cache is keyed by the URL: with the same URL for every version, a
+ *  cache holding a body of the old shape went on serving it to a client that
+ *  refuses it, and the reader got the abstract alone for a day instead of the
+ *  old full reading (P8-04). The version in the URL moves the cache's key with
+ *  the bump, so an old body is never served to a newer client. The route
+ *  ignores the parameter. */
 const READING_VERSION: PaperReading["version"] = 7;
 
 type ReadingCache = Record<string, { reading: PaperReading; ts: number }>;
@@ -124,7 +133,8 @@ export function useReading(paper: Paper | undefined): {
     const controller = new AbortController();
     (async () => {
       try {
-        const res = await fetch(`/api/papers/${encodeURIComponent(paperId)}/reading${uploadId ? `?upload=${encodeURIComponent(uploadId)}` : ""}`, {
+        // `v` first, so a private request keeps its `upload` parameter after it.
+        const res = await fetch(`/api/papers/${encodeURIComponent(paperId)}/reading?v=${READING_VERSION}${uploadId ? `&upload=${encodeURIComponent(uploadId)}` : ""}`, {
           signal: controller.signal,
         });
         if (!res.ok) throw new Error(`reading HTTP ${res.status}`);

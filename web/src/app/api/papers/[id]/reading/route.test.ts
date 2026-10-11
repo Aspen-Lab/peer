@@ -155,6 +155,20 @@ describe("GET /api/papers/[id]/reading", () => {
     quiet.mockRestore();
   });
 
+  // P8-04: the client puts its reading version in the URL (`?v=`) so a shared cache never serves it an
+  // older shape. The route reads only `refresh` and `upload`; a `v` it does not know changes nothing.
+  it("ignores ?v= — an unknown version changes neither the answer nor its cache headers (P8-04)", async () => {
+    mocks.fetchPaperById.mockResolvedValue(zenodoItem);
+    mocks.getFullText.mockResolvedValue(zenodoFullText);
+
+    const plain = await call("openalex:W7208807247");
+    const versioned = await call("openalex:W7208807247", "?v=999");
+
+    expect(versioned.status).toBe(plain.status);
+    expect(versioned.headers.get("cache-control")).toBe(plain.headers.get("cache-control"));
+    expect({ ...(await versioned.json()), builtAt: undefined }).toEqual({ ...(await plain.json()), builtAt: undefined });
+  });
+
   it("skips the edge cache on ?refresh=1", async () => {
     mocks.fetchPaperById.mockResolvedValue(zenodoItem);
     mocks.getFullText.mockResolvedValue(zenodoFullText);
@@ -345,5 +359,22 @@ describe("GET /api/papers/[id]/reading — 9-14 (A9-13): the ?upload= supplement
     const res = await call("openalex:W7208807247", "?upload=upload:0000000000000006");
 
     expect(res.status).toBe(200);
+  });
+
+  // P8-04: the hook's request is `?v=<version>&upload=…`; `v` first does not hide `upload`.
+  it("reads the supplement when ?v= comes before ?upload=, and keeps the private headers (P8-04)", async () => {
+    mocks.fetchPaperById.mockResolvedValue(zenodoItem);
+    mocks.readUploadMeta.mockResolvedValue({
+      hash16: "0000000000000007", fileName: "paper.pdf", title: "A Real Uploaded Paper",
+      uploadedAt: "2026-09-15T00:00:00.000Z", textStatus: "ok", status: "ready", revision: 1,
+      paperIds: ["openalex:W7208807247"],
+    });
+    mocks.getFullText.mockResolvedValue(zenodoFullText);
+
+    const res = await call("openalex:W7208807247", "?v=7&upload=upload:0000000000000007");
+
+    expect(res.status).toBe(200);
+    expect(mocks.getFullText).toHaveBeenCalledWith({ paperId: "upload:0000000000000007" });
+    expect(res.headers.get("cache-control")).toContain("no-store");
   });
 });
