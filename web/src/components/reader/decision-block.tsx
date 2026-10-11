@@ -8,7 +8,7 @@
 //
 // The block only orders its parts: the commands are `ReaderCommands`, the
 // reading controls are `ReadingControls`, and this file keeps the sentence,
-// the DOI and the progress bar.
+// the DOI (a link to the journal's page, P7-12) and the progress bar.
 
 import Link from "next/link";
 import { ADD_KEY_HREF } from "@/lib/navigation/add-key-destination";
@@ -20,7 +20,7 @@ import type { PaperReading } from "@/lib/papers/reading";
 import { useSpread } from "./reader-layout";
 import { ReaderCommands } from "./reader-commands";
 import { ReadingControls } from "./reading-controls";
-import { BUTTON, DOI, PROGRESS_LABEL, progressSuffix } from "./copy";
+import { BUTTON, PROGRESS_LABEL, progressSuffix } from "./copy";
 
 /**
  * Touch room for a line of text that is a control, without moving the type:
@@ -32,6 +32,14 @@ const TOUCH_LINE =
   "[@media(hover:none)]:min-h-11 [@media(hover:none)]:items-center [@media(hover:none)]:-mt-px [@media(hover:none)]:-mb-[13px]";
 /** An inline link: vertical padding widens the hit area and leaves the line box alone. */
 const TOUCH_INLINE = "[@media(hover:none)]:py-3.5";
+
+/**
+ * P7-12 (R6): what a DOI looks like — `10.`, a registrant code of four to nine digits, a slash,
+ * and a suffix with no whitespace. An upload's DOI is read from page 1's text by a regex that
+ * stops only at whitespace or a quote, so the string may be over-captured; the link is drawn
+ * only for one that has this shape, and nothing is drawn for the rest.
+ */
+const DOI_SHAPE = /^10\.\d{4,9}\/\S+$/;
 
 export function DecisionBlock({
   ref,
@@ -47,7 +55,6 @@ export function DecisionBlock({
   onSkip,
   onCopy,
   onOpen,
-  onCopyDoi,
   uploadAction,
   uploadStatus,
 }: {
@@ -70,7 +77,6 @@ export function DecisionBlock({
   onSkip?: () => void;
   onCopy: () => void;
   onOpen: () => void;
-  onCopyDoi: () => void;
   uploadAction?: ReactNode;
   uploadStatus?: ReactNode;
 }) {
@@ -121,24 +127,26 @@ export function DecisionBlock({
 
       <ReadingControls />
 
-      {doi && (
-        <button
-          type="button"
-          onClick={onCopyDoi}
-          aria-label={DOI.copy(doi)}
+      {doi && DOI_SHAPE.test(doi) && (
+        // P7-12 (R6): the journal's own page, not a copy button. `doi.org` resolves
+        // the DOI with no model and no request from Peer.
+        <a
+          href={`https://doi.org/${doi}`}
+          target="_blank"
+          rel="noopener noreferrer"
           className={cn(
             // `xl:wrap-anywhere`: a 60-char DOI is ≈450px of 12.5px mono and
             // would overflow the spread's 320–360px panel; a phone has the full
-            // column and the DOI holds one line there as today. `text-left`:
-            // a button centres its text by default, so a wrapped DOI's
-            // second line would sit centred under a left-aligned first.
-            "flex text-left font-mono text-meta text-text-muted mt-3 hover:text-heading transition-colors xl:wrap-anywhere",
+            // column and the DOI holds one line there as today. `w-fit
+            // max-w-full`: the link is as wide as its text, so the empty
+            // space beside a short DOI is not part of the target.
+            "flex w-fit max-w-full font-mono text-meta text-text-muted mt-3 hover:text-heading transition-colors xl:wrap-anywhere",
             TOUCH_LINE,
           )}
         >
           <IconLink size={12} className="shrink-0 translate-y-[2px] mr-1.5" />
           doi:{doi}
-        </button>
+        </a>
       )}
 
       {stage && (

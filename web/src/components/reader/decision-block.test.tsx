@@ -31,19 +31,19 @@ import { ReaderCommands } from "./reader-commands";
 
 const NOOP = () => {};
 
-function renderDecisionBlock({ skip = true }: { skip?: boolean } = {}) {
+function renderDecisionBlock({ skip = true, doi }: { skip?: boolean; doi?: string } = {}) {
   return renderToStaticMarkup(
     createElement(DecisionBlock, {
       sentences: ["Read from the abstract."],
       stage: null,
       source: null,
+      ...(doi === undefined ? {} : { doi }),
       isSaved: false,
       showAddKey: false,
       onSave: NOOP,
       ...(skip ? { onSkip: NOOP } : {}),
       onCopy: NOOP,
       onOpen: NOOP,
-      onCopyDoi: NOOP,
     }),
   );
 }
@@ -146,5 +146,66 @@ describe("DecisionBlock — the Skip button (P1-08)", () => {
     expect(withSkip.classes).toContain("grid-cols-3");
     expect(withSkip.classes).not.toContain("grid-cols-2");
     expect(withSkip.buttons).toEqual(["Save", "Skip", "Copy"]);
+  });
+});
+
+// P7-12 (R6, the owner's review): the DOI is a link to the journal's page, not a button
+// that copies. `https://doi.org/<doi>` resolves to the publisher with no model and no
+// request from Peer; the same URL is built for a public paper in reading.ts. The link is
+// drawn only for a string that looks like a DOI, so an over-captured match from a PDF's
+// first page (the upload route's regex stops only at whitespace or a quote) never makes a
+// broken link.
+describe("DecisionBlock — the DOI (P7-12, R6)", () => {
+  const DOI_VALUE = "10.1021/jacs.5c15436";
+  const anchors = (html: string) => [...html.matchAll(/<a\b[^>]*>/g)].map((m) => m[0]);
+  const doiAnchors = (html: string) => anchors(html).filter((tag) => tag.includes("doi.org"));
+
+  it("is an <a> to https://doi.org/<doi> in a new tab, with rel noopener noreferrer", () => {
+    const html = renderDecisionBlock({ doi: DOI_VALUE });
+    const links = doiAnchors(html);
+    expect(links).toHaveLength(1);
+    expect(links[0]).toContain(`href="https://doi.org/${DOI_VALUE}"`);
+    expect(links[0]).toContain('target="_blank"');
+    expect(links[0]).toContain('rel="noopener noreferrer"');
+  });
+
+  it("keeps the icon, the mono face, the touch line and the wrap rule, and the text doi:<doi>", () => {
+    const html = renderDecisionBlock({ doi: DOI_VALUE });
+    const link = html.match(/<a\b[^>]*href="https:\/\/doi\.org\/[^"]*"[^>]*>((?:(?!<\/a>).)*)<\/a>/);
+    expect(link).not.toBeNull();
+    const [tag, inner] = [link![0], link![1]];
+    expect(tag).toContain("font-mono");
+    expect(tag).toContain("xl:wrap-anywhere");
+    expect(tag).toContain("[@media(hover:none)]:min-h-11");
+    expect(inner).toContain("<svg");
+    expect(inner.replace(/<svg\b.*?<\/svg>/g, "")).toBe(`doi:${DOI_VALUE}`);
+  });
+
+  it("has no copy control any more: no button names the DOI, nothing says Copy DOI", () => {
+    const html = renderDecisionBlock({ doi: DOI_VALUE });
+    const buttons = [...html.matchAll(/<button\b[^>]*>((?:(?!<\/button>).)*)<\/button>/g)].map((m) => m[0]);
+    expect(buttons.filter((button) => button.includes("doi") || button.includes(DOI_VALUE))).toEqual([]);
+    expect(html).not.toContain("Copy DOI");
+  });
+
+  it("draws nothing for a paper with no DOI", () => {
+    const html = renderDecisionBlock();
+    expect(doiAnchors(html)).toEqual([]);
+    expect(html).not.toContain("doi:");
+  });
+
+  it.each([
+    ["words, not a DOI", "not a doi"],
+    ["a registrant code too short", "10.12/short"],
+    ["no suffix", "10.1021"],
+    ["an empty suffix", "10.1021/"],
+    ["a space inside the suffix", "10.1021/jacs. 5c15436"],
+    ["a URL, not the bare DOI", "https://doi.org/10.1021/jacs.5c15436"],
+    ["a prefix before the 10.", "doi:10.1021/jacs.5c15436"],
+  ])("renders no link for a malformed DOI: %s", (_why, doi) => {
+    const html = renderDecisionBlock({ doi });
+    expect(doiAnchors(html)).toEqual([]);
+    expect(html).not.toContain("doi.org");
+    expect(html).not.toContain("doi:");
   });
 });

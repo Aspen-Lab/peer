@@ -1144,16 +1144,6 @@ function Reader({
       });
     decide();
   };
-  const copyDoi = () => {
-    const clip = clipboard();
-    if (!paper.doi || !clip) return;
-    clip
-      .writeText(paper.doi)
-      .then(() => showToast(TOAST.doi))
-      .catch(() => {
-        /* the clipboard refused; nothing to confirm */
-      });
-  };
   const back = () => {
     if (hasImmediateFeedHistoryEntry(window)) router.back();
     else router.push("/");
@@ -1397,7 +1387,6 @@ function Reader({
             onSkip={isUploadId ? undefined : skip}
             onCopy={copy}
             onOpen={decide}
-            onCopyDoi={copyDoi}
             onRead={hasBody ? readHere : undefined}
             readLabel={BODY.open}
             uploadAction={!paper.id.startsWith("upload:") && uploadsAvailable ? <UploadButton targetPaper={paper} onUploaded={setUpload} /> : undefined}

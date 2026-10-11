@@ -1,6 +1,6 @@
 "use client";
 
-// A short confirmation — "Copied · 1,240 words", "DOI copied" — in the same
+// A short confirmation — "Copied · 1,240 words" — in the same
 // pill as the undo toast, gone after a moment. It carries no control, so it
 // stays out of the way of the UndoToast when both are up.
 

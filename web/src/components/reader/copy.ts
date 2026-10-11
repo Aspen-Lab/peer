@@ -355,13 +355,7 @@ export const NEXT_ROW = {
   deepLink: "Today's briefing",
 };
 
-/** The DOI line is a button that copies; its visible text alone does not say so. */
-export const DOI = {
-  copy: (doi: string) => `Copy DOI ${doi}`,
-};
-
 export const TOAST = {
-  doi: "DOI copied",
   copied: (words: number) => `Copied · ${words.toLocaleString("en-US")} words`,
 };
 
