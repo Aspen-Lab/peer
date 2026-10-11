@@ -20,7 +20,11 @@ import { ABBREVIATION_GROUPS, canonicalize, isGenericTerm } from "@/lib/scoring/
 // 5 (P7-18): the end matter after the argument (associated content, author information, data availability ...)
 // is out of the sections, and a numbered subsection takes its parent's bucket even when the parent holds no
 // text of its own; text cached under 4 still carries the affiliation fragments and `body` for 2.x and 4.x.
-export const UPLOAD_CONCEPT_EXTRACTION_VERSION = 5;
+// 6 (P8-03): only a numbered line is a display equation in a PDF (an unnumbered symbol line stays in its
+// paragraph), and a glyph before an end-matter heading ("■ ACKNOWLEDGMENTS", "*sı Supporting Information")
+// no longer hides it; text cached under 5 still carries the fragments lifted out as "equations" and the
+// apparatus after a glyph-led heading.
+export const UPLOAD_CONCEPT_EXTRACTION_VERSION = 6;
 
 // A conservative, local phrase extractor. No document text is sent to a model
 // for preference learning. References, author blocks and boilerplate are out.

@@ -197,3 +197,13 @@ describe("the extraction version after the end matter and the bucket rules (P7-1
     expect(source).toContain("uploadDocKey(meta.ownerKey ?? \"\", hash16, meta.revision, UPLOAD_CONCEPT_EXTRACTION_VERSION)");
   });
 });
+
+describe("the extraction version after the numbered-equation and glyph rules (P8-03)", () => {
+  // A laptop that pulled P7-18 and opened the owner's paper holds the text read at version 5: nineteen
+  // sentence fragments lifted out as "equations", and an end-matter heading behind a box or bullet glyph
+  // ("■ ACKNOWLEDGMENTS") read as a section, with the apparatus after it. 6 retires it, and the paper is
+  // read again under the numbered-equation and glyph rules.
+  it("is past the reading that lifted unnumbered symbol lines as equations and missed a glyph-led end-matter heading", () => {
+    expect(UPLOAD_CONCEPT_EXTRACTION_VERSION).toBeGreaterThanOrEqual(6);
+  });
+});
