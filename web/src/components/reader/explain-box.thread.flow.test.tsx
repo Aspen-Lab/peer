@@ -130,6 +130,8 @@ async function scenario(initial: Props, steps: Step[]) {
 
 const wait = () => new Promise((resolve) => setTimeout(resolve, 5));
 const click = (tree: ReactNode) => (look(tree).button?.props.onClick as () => void)();
+/** The window's Close button (P8-06: the one thing that hides it; Escape clears its passage). */
+const closeOf = (tree: ReactNode) => look(tree).card?.props.onClose as () => void;
 const draft = (tree: ReactNode, text: string) => look(tree).thread?.onDraft(text);
 const send = (tree: ReactNode) => look(tree).thread?.onSend();
 const base = (over: Partial<Props> = {}): Props => ({
@@ -583,6 +585,8 @@ describe("ExplainBox — where the panel stands (P3-02b; P7-15, R7)", () => {
 
 describe("ExplainBox — Escape and the thread (P3-02b)", () => {
   it("Escape closes the box with a thread in it, and the thread stays the store's", async () => {
+    // P8-06: "closes" is the window that holds the passage; with a key and a body the empty state stands behind it
+    // (`look().card` is the window with a passage) — `explain-box.escape.flow.test.tsx` pins that.
     const run = await scenario(base({ cachedTurns: pairs(1) }), [
       (tree) => click(tree),
       () => {
@@ -641,13 +645,18 @@ describe("ExplainBox — the page keeps the dock's width clear while it is open 
     run.mounted.unmount();
   });
 
-  it("gives the width back when the box closes: Escape, the Close button, and leaving the page", async () => {
-    const closers: Array<[string, Step]> = [
-      ["Escape", () => escape()],
-      ["Close", (tree) => (look(tree).card?.props.onClose as () => void)()],
+  it("gives the width back when the box closes: Escape (no key), the Close button, and leaving the page", async () => {
+    // P8-06 (re-aimed, the manager's ruling on Escape): with a key and a body a window is always there, and
+    // Escape only clears its passage back to the empty state (`explain-box.escape.flow.test.tsx`); the width goes
+    // back with Close. Escape still closes, and still gives the width back, where no empty state stands behind the
+    // window: the Tier 0 definition of a reader with no key.
+    const defined = { ...first, passage: "The rafting ratio rose." };
+    const closers: Array<[string, Step, Props]> = [
+      ["Escape", () => escape(), base({ canAsk: false, terms: [term], target: defined, cached: undefined })],
+      ["Close", (tree) => (look(tree).card?.props.onClose as () => void)(), base()],
     ];
-    for (const [, close] of closers) {
-      const run = await scenario(base(), [(tree) => click(tree), close]);
+    for (const [, close, props] of closers) {
+      const run = await scenario(props, [(tree) => click(tree), close]);
       await wait();
       expect(run.last().card).toBeUndefined();
       expect(Object.fromEntries(root)).toEqual({});
@@ -724,11 +733,13 @@ describe("ExplainBox — the page keeps the dock's width clear while it is open 
     const narrow = { rect: { left: 300, top: 900, right: 380, bottom: 920 }, bounds: { left: 300, top: 900, right: 380, bottom: 920 } };
     const target: ExplainSelection = { ...first, measure: () => (root.has("--explain-dock") ? narrow : wide) };
     const buttonAt: Array<{ left?: number; top?: number }> = [];
+    // P8-06 (re-aimed): the dock closes with the Close button — Escape now clears the passage back to the empty
+    // state, which keeps the width reserved and so moves nothing.
     const run = await scenario(base({ target }), [
       (tree) => buttonAt.push(look(tree).button?.props.style as { left?: number; top?: number }),
       (tree) => click(tree),
       () => {},
-      () => escape(),
+      (tree) => closeOf(tree)(),
     ]);
     await wait();
     const style = run.last().button?.props.style as { left: number; top: number } | undefined;
@@ -770,18 +781,30 @@ describe("ExplainBox — the selection stays where it was on the screen across t
   });
 
   it("scrolls the page by how far the words moved when the dock opens, and back by as far when it closes", async () => {
-    const run = await scenario(base({ target: reflowing() }), [(tree) => click(tree), () => {}, () => escape()]);
+    // P8-06 (re-aimed): closes with the Close button (Escape keeps the width reserved: nothing moves).
+    const run = await scenario(base({ target: reflowing() }), [(tree) => click(tree), () => {}, (tree) => closeOf(tree)()]);
     await wait();
 
     expect(scrollBy.mock.calls).toEqual([[{ top: 800, behavior: "instant" }], [{ top: -800, behavior: "instant" }]]);
     run.mounted.unmount();
   });
 
+  it("Escape clears the passage and moves nothing: the width stays reserved, so there is no reflow to hold (P8-06)", async () => {
+    const run = await scenario(base({ target: reflowing() }), [(tree) => click(tree), () => {}, () => escape()]);
+    await wait();
+
+    // Only the first reflow (800, held at the mount, where the window first stood); none on Escape.
+    expect(scrollBy.mock.calls).toEqual([[{ top: 800, behavior: "instant" }]]);
+    expect(root.size).toBe(2);
+    run.mounted.unmount();
+  });
+
   it("does not scroll when the words did not move, and not for a selection it cannot measure", async () => {
-    const still = await scenario(base({ target: reflowing(300, 300) }), [(tree) => click(tree), () => {}, () => escape()]);
+    // P8-06 (re-aimed): closed with the Close button, as above.
+    const still = await scenario(base({ target: reflowing(300, 300) }), [(tree) => click(tree), () => {}, (tree) => closeOf(tree)()]);
     await wait();
     still.mounted.unmount();
-    const unmeasured = await scenario(base(), [(tree) => click(tree), () => {}, () => escape()]);
+    const unmeasured = await scenario(base(), [(tree) => click(tree), () => {}, (tree) => closeOf(tree)()]);
     await wait();
 
     expect(scrollBy).not.toHaveBeenCalled();
@@ -800,7 +823,8 @@ describe("ExplainBox — the selection stays where it was on the screen across t
 
   it("holds the NEW selection when the box closes with a new passage selected, not the one the box was opened for", async () => {
     // P8-02 (BACKLOG-31): a new selection no longer closes the dock — it stays open, so the closing that
-    // can meet a new selection is the reader's (Escape) with the next passage selected and not explained.
+    // can meet a new selection is the reader's (P8-06: the Close button; Escape only clears the passage) with the next
+    // passage selected and not explained.
     // The old words are 300 wide / 1,100 narrow; the new ones 500 wide / 650 narrow: closing moves them by 150.
     const old = reflowing();
     const next: ExplainSelection = { ...reflowing(500, 650), passage: "Specimens were machined from a single casting." };
@@ -812,7 +836,7 @@ describe("ExplainBox — the selection stays where it was on the screen across t
         ctx.rerender();
       },
       () => {},
-      () => escape(),
+      (tree) => closeOf(tree)(),
     ]);
     await wait();
 

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // selection closes" is amended for the dock only); "Explain this?" still stands at the new selection, and
 // pressing it — or `e` — takes the new passage into the same window: the previous passage's thread is
 // replaced (kept for its passage), with no close and reopen and no reflow, so the page's width stays clear
-// from the first open to the close. Escape and Close close it, and only then does the page get its width
+// from the first open to the close. Close closes it (P8-06: Escape clears the passage to the empty state), and only then does the page get its width
 // back; the card (640 to 1023 px) and the phone's sheet still close on a new selection. The box runs on the
 // minimal hook runtime (no DOM here); the element tree it returns is inspected and its handlers called.
 // Every text is invented.
@@ -352,15 +352,18 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     run.mounted.unmount();
   });
 
-  it("Escape closes it and gives the width back — only then — after two passages", async () => {
+  it("Close closes it and gives the width back — only then — after two passages", async () => {
+    // P8-06 (re-aimed): was "Escape closes it…". With a key and a body a window is always there: Escape clears the
+    // passage back to the empty state with the width still reserved (`explain-box.escape.flow.test.tsx`), and the
+    // width goes back with the Close button.
     const run = await scenario(base(), [
       (tree) => click(tree),
       selectNext(second, { cached: SECOND_ANSWER }),
       (tree) => click(tree),
-      () => {
+      (tree) => {
         expect(removeProperty).not.toHaveBeenCalled();
         expect(Object.fromEntries(root)).toEqual(RESERVED);
-        escape();
+        (look(tree).card?.props.onClose as () => void)();
       },
     ]);
     await wait();
@@ -369,6 +372,27 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     expect(removeProperty).toHaveBeenCalledWith("--explain-dock");
     expect(removeProperty).toHaveBeenCalledWith("--explain-dock-width");
     expect(Object.fromEntries(root)).toEqual({});
+    run.mounted.unmount();
+  });
+
+  it("Escape after two passages clears the window back to the empty state: the width stays reserved, nothing is taken off (P8-06)", async () => {
+    const kinds: string[] = [];
+    const run = await scenario(base(), [
+      (tree) => click(tree),
+      selectNext(second, { cached: SECOND_ANSWER }),
+      (tree) => click(tree),
+      () => escape(),
+      (tree) => kinds.push(look(tree).card ? "passage" : "empty-or-none"),
+    ]);
+    await wait();
+
+    // `look().card` is the window with a passage: after Escape there is none, but the window is still there — empty.
+    expect(kinds).toEqual(["empty-or-none"]);
+    expect(run.last().card).toBeUndefined();
+    // The selection that stands is offered again, as after a Close; the properties were never touched.
+    expect(run.last().button).toBeDefined();
+    expect(removeProperty).not.toHaveBeenCalled();
+    expect(Object.fromEntries(root)).toEqual(RESERVED);
     run.mounted.unmount();
   });
 

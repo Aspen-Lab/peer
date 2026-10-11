@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // P8-06 (the owner's "yes" of 16:4xZ 2026-10-11 to the empty-state question of §1h.41 (b); ruling §1h.45): from a
 // window of 1024 px, for a reader with a key, on a paper with a readable body, the explain window is THERE before
 // any text is selected, as an empty panel: the card's header and one line of copy, at the right edge, top 48, the
-// page keeping its 376 px clear from the first paint. Escape and Close hide it for the rest of the page visit (component
+// page keeping its 376 px clear from the first paint. Close hides it for the rest of the page visit (Escape never does — the
+// manager's ruling, pinned in `explain-box.escape.flow.test.tsx`; here: component
 // state; a reload shows it again) and the next "Explain this?" brings it back with that passage; the first Explain fills
 // it in place — nothing closes or reopens. With no key nothing stands (a locked block is never shown, §1b): the Tier 0
 // definition opens on a defined-term selection as before. The card (640 to 1023) and the sheet are unchanged.
@@ -172,7 +173,6 @@ const click = (tree: ReactNode) => (look(tree).button?.props.onClick as () => vo
 const close = (tree: ReactNode) => (look(tree).card?.props.onClose as () => void)();
 const draft = (tree: ReactNode, text: string) => look(tree).thread?.onDraft(text);
 const escapeEvent = () => ({ key: "Escape", preventDefault: vi.fn(), stopPropagation: vi.fn() });
-const escape = () => fire("keydown", escapeEvent());
 const pressOutside = () => fire("pointerdown", { target: { closest: () => null } });
 /** The reader selects `next` in the body (or nothing): the page hands the box a new target. */
 const selectNext =
@@ -289,36 +289,40 @@ describe("ExplainBox — the window is there before the first selection (P8-06, 
     run.mounted.unmount();
   });
 
-  it("Escape hides it for the rest of the visit, gives the width back, and is the window's (it goes no further)", async () => {
+  it("Escape does nothing to it (re-aimed, P8-06 ruling on Escape): it was \"hides it for the rest of the visit\"", async () => {
+    // The window the owner wants is always there: with the empty state showing the box listens for no key, so Escape
+    // is the page's. The seams — the lightbox, a term highlight, "back" — are in `explain-box.escape.flow.test.tsx`.
     const event = escapeEvent();
     const run = await scenario(base(), [() => fire("keydown", event)]);
+    await wait();
+
+    expect(run.looks.every((l) => l.empty)).toBe(true);
+    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    expect(removeProperty).not.toHaveBeenCalled();
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(event.stopPropagation).not.toHaveBeenCalled();
+    expect(listening("keydown")).toBe(0);
+    run.mounted.unmount();
+  });
+
+  it("the Close button hides it for the rest of the visit, gives the width back, and leaves no listener (re-aimed: was \"the same way\" as Escape)", async () => {
+    const run = await scenario(base(), [(tree) => close(tree)]);
     await wait();
 
     expect(run.last().card).toBeUndefined();
     expect(removeProperty).toHaveBeenCalledWith("--explain-dock");
     expect(removeProperty).toHaveBeenCalledWith("--explain-dock-width");
     expect(Object.fromEntries(root)).toEqual({});
-    expect(event.preventDefault).toHaveBeenCalledTimes(1);
-    expect(event.stopPropagation).toHaveBeenCalledTimes(1);
-    // …and with nothing showing the key is the page's again.
-    expect(listening("keydown")).toBe(0);
-    run.mounted.unmount();
-  });
-
-  it("the Close button hides it the same way", async () => {
-    const run = await scenario(base(), [(tree) => close(tree)]);
-    await wait();
-
-    expect(run.last().card).toBeUndefined();
-    expect(Object.fromEntries(root)).toEqual({});
     expect(removeProperty).toHaveBeenCalledTimes(2);
     expect(listening("keydown")).toBe(0);
+    expect(listening("resize")).toBe(0);
     run.mounted.unmount();
   });
 
   it("stays hidden: not for a resize, a selection that is not explained, or a window that was closed after an Explain", async () => {
+    // Re-aimed (P8-06 ruling on Escape): hidden with the Close button; Escape no longer hides.
     const run = await scenario(base(), [
-      () => escape(),
+      (tree) => close(tree),
       selectNext(first),
       // A selection gives a button, not the window back.
       (tree) => {
@@ -339,8 +343,8 @@ describe("ExplainBox — the window is there before the first selection (P8-06, 
     expect(Object.fromEntries(root)).toEqual({});
     run.mounted.unmount();
 
-    // A window that held a passage and was closed does not leave the empty state behind it.
-    const afterPassage = await scenario(base({ target: first }), [(tree) => click(tree), () => escape()]);
+    // A window that held a passage and was closed with Close does not leave the empty state behind it (Escape would).
+    const afterPassage = await scenario(base({ target: first }), [(tree) => click(tree), (tree) => close(tree)]);
     await wait();
     expect(afterPassage.last().card).toBeUndefined();
     expect(Object.fromEntries(root)).toEqual({});
@@ -348,7 +352,7 @@ describe("ExplainBox — the window is there before the first selection (P8-06, 
   });
 
   it("is component state, not stored: nothing is written or read, and a reload shows the empty panel again", async () => {
-    const hidden = await scenario(base(), [() => escape()]);
+    const hidden = await scenario(base(), [(tree) => close(tree)]);
     await wait();
     expect(hidden.last().card).toBeUndefined();
     hidden.mounted.unmount();
@@ -363,7 +367,7 @@ describe("ExplainBox — the window is there before the first selection (P8-06, 
   });
 
   it("a later selection's button brings it back with that passage — in the dock, the width reserved again", async () => {
-    const run = await scenario(base({ cached: FIRST_ANSWER }), [() => escape(), selectNext(first), (tree) => click(tree)]);
+    const run = await scenario(base({ cached: FIRST_ANSWER }), [(tree) => close(tree), selectNext(first), (tree) => click(tree)]);
     await wait();
 
     expect(run.last().empty).toBe(false);
@@ -377,7 +381,7 @@ describe("ExplainBox — the window is there before the first selection (P8-06, 
 
   it("`e` brings it back the same way, after it was hidden", async () => {
     const openRef: NonNullable<Props["openRef"]> = { current: null };
-    const run = await scenario(base({ openRef }), [() => escape(), selectNext(first), () => openRef.current?.()]);
+    const run = await scenario(base({ openRef }), [(tree) => close(tree), selectNext(first), () => openRef.current?.()]);
     await wait();
 
     expect(run.last().passage).toBe(first.passage);
@@ -518,13 +522,15 @@ describe("ExplainBox — the window is there before the first selection (P8-06, 
     expect(listening("resize")).toBe(0);
   });
 
-  it("listens only while it stands: the keydown and the resize are gone with it", async () => {
+  it("listens only while it stands, and for no key while it is empty: the resize is gone with it (re-aimed: the keydown was 1 here)", async () => {
     const run = await scenario(base(), [
       () => {
-        expect(listening("keydown")).toBe(1);
+        // The empty state watches the window's width and nothing else: Escape is the page's.
+        expect(listening("keydown")).toBe(0);
+        expect(listening("pointerdown")).toBe(0);
         expect(listening("resize")).toBe(1);
-        escape();
       },
+      (tree) => close(tree),
     ]);
     await wait();
 

@@ -47,9 +47,13 @@
 // same: at the right edge, top `DOCK_TOP_PX` until a passage is explained (then the paragraph's, above), and the
 // page keeps its 376 px clear from the MOUNT (`reserveDock`), not from the first open. The first Explain (the
 // button, or `e`) fills that same window in place — the empty state is replaced, nothing closes or reopens, the
-// properties are never taken off. Escape and Close hide the window — empty or holding a passage — for the rest of
-// the page visit (`hidden`: this component's state, not stored; the box is keyed by the paper, and a reload shows
-// the empty panel again) and the next "Explain this?" brings it back with that passage. `e` with nothing selected
+// properties are never taken off. Close hides the window — empty or holding a passage — for the rest of the page
+// visit (`hidden`: this component's state, not stored; the box is keyed by the paper, and a reload shows the empty
+// panel again) and the next "Explain this?" brings it back with that passage. ESCAPE never hides it (the manager's
+// ruling: the window is always there, so Escape must not fight the page): with a passage in the window it clears
+// the passage — the thread dropped as a Close used to drop it, the answer kept for the passage staying kept — and
+// the window goes back to the empty state, the width still reserved; with the empty state showing the box listens
+// for no key at all, so the figure lightbox, a term highlight and "back" act as before. `e` with nothing selected
 // and the empty state showing does nothing (there is no input to go to). WITHOUT A KEY nothing stands: a permanent
 // panel could only say what a key unlocks, and a locked block is never shown (§1b); the Tier 0 definition opens on
 // a defined-term selection as it always did, and stays open per P8-02. Below 1024 px — the card and the sheet —
@@ -730,7 +734,7 @@ export interface ExplainBoxProps {
 export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cachedTurns, onReply, onSayMore, onResetThread, openRef }: ExplainBoxProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [viewport, setViewport] = useState<Viewport>(currentViewport);
-  // P8-06: the reader hid the window (Escape, Close) — for the rest of this page visit. Component state, never
+  // P8-06: the reader hid the window (Close) — for the rest of this page visit. Component state, never
   // stored: the box is keyed by the paper, and a reload shows the empty panel again.
   const [hidden, setHidden] = useState(false);
   // A new selection closes the card and the sheet; one that merely went away does not (a click
@@ -752,7 +756,7 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   const hasBody = (reading.body?.length ?? 0) > 0;
   const standing = open === null && emptyDockStands({ canAsk, hasBody, hidden, width: viewport.width });
   const waiting = open === null && canAsk && hasBody && !hidden;
-  /** The reader hides the window: Escape and Close, whether it is empty or holds a passage. */
+  /** The reader hides the window for the visit: the Close button, whether it is empty or holds a passage. */
   const hide = () => {
     setSession(null);
     setHidden(true);
@@ -856,18 +860,21 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
     remeasure.current?.();
   }, [docked]);
 
-  // While the window is there — open on a passage, or (P8-06) standing empty: Escape hides it (and goes no further —
-  // the page's own Escape means "back"), and so does a press outside it — all but the dock's (above), which is the
-  // empty state's too. Hidden, the window stays so for the rest of the visit (`hidden`, as `hide` sets it).
-  const shown = open !== null || standing;
+  // While a window holds a passage: Escape clears it (and goes no further — the page's own Escape means "back"),
+  // and so does a press outside it — all but the dock's (above). P8-06 (the manager's ruling on Escape): the window
+  // the owner wants is ALWAYS there, so Escape clears the passage and no more: where an empty state stands (a key, a
+  // body, 1024 px) the window goes back to it, the width still reserved, the kept answer for the passage staying
+  // kept; and with the empty state itself showing there is NO listener here at all — Escape is the page's and its
+  // other handlers' (the figure lightbox, a term highlight, the help sheet, a field being edited, "back"), as it
+  // was before the window stood. Only Close hides the window for the visit (`hide`).
+  const isOpen = open !== null;
   useEffect(() => {
-    if (!shown) return;
+    if (!isOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
       setSession(null);
-      setHidden(true);
     };
     const onPointerDown = (event: PointerEvent) => {
       const node = event.target as Element | null;
@@ -884,7 +891,7 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
       document.removeEventListener("keydown", onKeyDown, true);
       document.removeEventListener("pointerdown", onPointerDown, true);
     };
-  }, [shown, docked]);
+  }, [isOpen, docked]);
 
   // The paper's own definition inside the open window's passage; and inside the new selection's, which
   // is what makes its button worth showing for a reader with no key.

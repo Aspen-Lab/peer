@@ -208,6 +208,8 @@ describe("ExplainBox — the click is the send (§1h.2)", () => {
 
 describe("ExplainBox — what closes it", () => {
   it("closes on Escape, and the key goes no further", async () => {
+    // P8-06: "closes" is the window that holds the passage — with a key and a body the empty state stands behind it
+    // (`look().card` is the window with a passage); `explain-box.escape.flow.test.tsx` pins that.
     const run = await scenario(base(), [
       (tree) => click(tree),
       () => {

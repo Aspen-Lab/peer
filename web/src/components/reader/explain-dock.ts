@@ -4,7 +4,8 @@
 // From a window of 1024 px the box is not a card at the selection but a window
 // fixed at the right edge of the screen: flush with the edge, 360 px wide, in the
 // margin the page keeps clear (below), scrolling inside. Once it is open it STAYS open across
-// selections (`explain-box.tsx`) until Escape or Close, and its top is level with the first line of
+// selections (`explain-box.tsx`) until Close (Escape clears its passage, P8-06, and with no empty state to go back to
+// closes it), and its top is level with the first line of
 // the PARAGRAPH the explained passage belongs to, measured again as the page scrolls and the window
 // resizes:
 //
@@ -21,8 +22,9 @@
 // It is the same dock: the right edge, 360 wide, its top at `DOCK_TOP_PX` until a passage is explained (then the
 // rule above — level with the paragraph), the page keeping `DOCK_RESERVE_PX` clear from the mount, not from the
 // first open. It holds the card's header and one line of copy (`EXPLAIN.empty`); the first Explain fills it in
-// place, nothing closes or reopens. Escape and Close hide it for the rest of the page visit (the box's state, not
-// stored; a reload shows it again) and the next "Explain this?" brings it back. Without a key nothing stands — a
+// place, nothing closes or reopens. Close hides it for the rest of the page visit (the box's state, not stored; a
+// reload shows it again) and the next "Explain this?" brings it back; Escape never hides it — it clears the passage
+// back to the empty state and, with the empty state showing, is the page's. Without a key nothing stands — a
 // permanent panel for a reader with none would be a locked block (§1b) — and below 1024 px nothing does: the card
 // and the sheet open on the reader's press only. `emptyDockStands` is that rule.
 //
@@ -56,7 +58,7 @@ export const DOCK_MIN_VISIBLE_PX = 160;
 /**
  * P8-06 (ruling §1h.45): whether the window stands EMPTY, before any passage is explained — a reader with a key
  * (`canAsk`), a paper with a readable body (`hasBody`: its Paper digestion tab exists, so there is text to select),
- * the dock's width (`width` ≥ `DOCK_MIN_VIEWPORT_PX`), and not yet hidden (`hidden`: Escape or Close, for the rest of
+ * the dock's width (`width` ≥ `DOCK_MIN_VIEWPORT_PX`), and not yet hidden (`hidden`: Close, for the rest of
  * the page visit). The box adds "and no passage is open" — an open window is its own. Without a key it is false:
  * the Tier 0 definition opens on a defined-term selection as it always did, and stays open once it has (P8-02).
  */
