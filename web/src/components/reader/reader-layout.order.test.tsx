@@ -64,8 +64,27 @@ describe("ReaderLayout, one column, a paper with no body (R2 + Q1)", () => {
 describe("ReaderLayout, one column, a paper with a body (R10)", () => {
   const html = tabbed(false);
 
-  it("plate, title, decision, the tab strip, the common blocks, the terms, then the active tab's blocks, Next", () => {
-    expect(ascending(order(html, ["PLATE", "TITLE", "DECISION", "TABS", "COMMON", "TERMS", "WORDS", "ADDITIONS", "NEXT"]))).toBe(true);
+  // P9-04 (X3), RE-AIMED: this test pinned plate, title, decision, TABS, common, terms, panel — the strip
+  // four screens above the panel it switches (on a phone the Map started at y 3,449). The strip now stands
+  // directly above its panel, after the blocks both tabs share and the terms.
+  it("plate, title, decision, the common blocks, the terms, the tab strip, then the active tab's blocks, Next (P9-04, X3)", () => {
+    expect(ascending(order(html, ["PLATE", "TITLE", "DECISION", "COMMON", "TERMS", "TABS", "WORDS", "ADDITIONS", "NEXT"]))).toBe(true);
+  });
+
+  it("the tab strip is the tabpanel's immediate previous sibling, with the terms before it (P9-04, X3)", () => {
+    expect(html).toContain('<i data-mark="TABS">TABS</i><div role="tabpanel"');
+    expect(at(html, "TERMS")).toBeLessThan(at(html, "TABS"));
+    expect(at(html, "COMMON")).toBeLessThan(at(html, "TERMS"));
+    // The spread keeps the strip in the panel beside the column, a remote control by design (P7-14, R10).
+    expect(tabbed(true)).not.toContain('<i data-mark="TABS">TABS</i><div role="tabpanel"');
+  });
+
+  it("the one-column tabpanel is its own block formatting context, so its box begins at the strip's foot and not a block's top gap below it (P9-04, X3)", () => {
+    const tag = /<div\b[^>]*role="tabpanel"[^>]*>/.exec(html)?.[0] ?? "";
+
+    expect(tag).toMatch(/class="[^"]*\bflow-root\b/);
+    // The spread's tabpanel is a flex column already (no collapse there); it does not take the class.
+    expect(/<div\b[^>]*role="tabpanel"[^>]*>/.exec(tabbed(true))?.[0] ?? "").not.toContain("flow-root");
   });
 
   it("puts the abstract after the decision and the questions, never before them (Q1)", () => {
@@ -186,6 +205,13 @@ describe("reader-layout.tsx source (P7-14)", () => {
     for (const later of ["{p.tabs}", "{common}", "{p.terms}", "{panel}"]) {
       expect(stacked.indexOf(later)).toBeGreaterThan(stacked.indexOf("{p.decision}"));
     }
+  });
+
+  // P9-04 (X3): the one-column return ends with the strip and the panel it labels, side by side.
+  it("one column: {p.tabs} stands directly before {panel}, after {common} and {p.terms}", () => {
+    expect(stacked.slice(stacked.indexOf("{p.tabs}") + "{p.tabs}".length, stacked.indexOf("{panel}")).trim()).toBe("");
+    expect(stacked.indexOf("{p.tabs}")).toBeGreaterThan(stacked.indexOf("{p.terms}"));
+    expect(stacked.indexOf("{p.terms}")).toBeGreaterThan(stacked.indexOf("{common}"));
   });
 
   it("the spread's panel: {p.decision} right after {p.title}, then {p.tabs}, then {p.terms}", () => {
