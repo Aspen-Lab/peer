@@ -620,18 +620,32 @@ export function captionOf(line: PdfLine): OutlineCaption | null {
   };
 }
 
+/**
+ * The section number a line opens with ("3.2.1", "10."), or null. A real one is
+ * one to three digits to a group and has no zero before its decimal point:
+ * "0.661) (Figure 4F…" is a measurement torn from a sentence and "2026 was the
+ * year" is a year, whatever capital letter follows them.
+ */
+function sectionNumberOf(text: string): RegExpMatchArray | null {
+  const numbered = text.match(NUMBERED_HEADING);
+  return numbered && !/^(?:0\.\d|\d{4,})/.test(numbered[1]) ? numbered : null;
+}
+
 /** The heading this line is, or nothing. */
 export function headingOf(line: PdfLine, body: { size: number; font: string }): string | null {
   const text = line.text.trim();
   if (text.length === 0 || text.length > HEADING_MAX) return null;
   if (CAPTION.test(text)) return null;
+  const numbered = sectionNumberOf(text);
   // A sentence that happens to be short is still a sentence.
-  if (/[.;,]$/.test(text) && !NUMBERED_HEADING.test(text)) return null;
+  if (/[.;,]$/.test(text) && !numbered) return null;
+  // An unnumbered line that ends on a hyphen is a line the page broke
+  // ("…at high super-"), not a heading.
+  if (/[-‐‑−]$/.test(text) && !numbered) return null;
   if (MATHS.test(text)) return null;
   // Letters, mostly: a row of symbols or figures is not a heading.
   const letters = (text.match(/[A-Za-z]/g) ?? []).length;
   if (letters < text.length * 0.5) return null;
-  const numbered = text.match(NUMBERED_HEADING);
   // "2.1 Constant velocity model" is a heading; "10 and the flow is clearly
   // laminar" is a line of prose that happens to start with a number.
   if (numbered && numbered[2].length >= 3 && /^[A-Z(]/.test(numbered[2])) return text;

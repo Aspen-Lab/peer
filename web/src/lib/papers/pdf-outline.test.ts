@@ -559,3 +559,40 @@ describe("a run-in label is a heading of its own (P7-10)", () => {
     expect((outline.sections ?? []).map((s) => s.text).join(" ")).not.toContain("A. Author");
   });
 });
+
+
+// P7-11 (the owner's R8, second half): small rules the owner's paper showed
+// once its columns were in order. Every line below is invented; the shapes are
+// the ones a real paper printed.
+
+describe("a line the page broke, or led by a decimal, is not a heading (P7-11)", () => {
+  it("refuses an unnumbered 'heading' that ends in a hyphen: it is a line that goes on", () => {
+    // Set in the other face, so only the hyphen keeps it from being a heading.
+    for (const dash of ["-", "‐", "‑", "−"]) {
+      expect(headingOf(line(`of the cathode film in Quillwort Cathodes at high super${dash}`, { font: "display" }), BODY)).toBeNull();
+    }
+    expect(headingOf(line("Growth Conditions at High Supersaturation", { font: "display" }), BODY)).toBe(
+      "Growth Conditions at High Supersaturation",
+    );
+  });
+
+  it("refuses a measurement or a year as a section number: a decimal with a leading zero, a first group of four digits", () => {
+    expect(headingOf(line("0.661) (Figure 4F shows the film thickness in the cell"), BODY)).toBeNull();
+    expect(headingOf(line("0.55 NA, yielding a spatial resolution of 589 nm"), BODY)).toBeNull();
+    expect(headingOf(line("2026 Annual Review of Cathode Materials"), BODY)).toBeNull();
+    expect(headingOf(line("1000 Cycles at Room Temperature"), BODY)).toBeNull();
+    // A sentence is a sentence even when a decimal opens it.
+    expect(headingOf(line("0.661) (Figure 4F shows the film."), BODY)).toBeNull();
+  });
+
+  it("still takes a real section number: one to three digits to a group", () => {
+    expect(headingOf(line("2.1. Electrochemically Tuned Growth"), BODY)).toBe("2.1. Electrochemically Tuned Growth");
+    expect(headingOf(line("4.5 Macrotexture Analysis"), BODY)).toBe("4.5 Macrotexture Analysis");
+    expect(headingOf(line("10. Conclusion"), BODY)).toBe("10. Conclusion");
+    expect(headingOf(line("100 Methods and Materials"), BODY)).toBe("100 Methods and Materials");
+  });
+
+  it("leaves a title set larger alone even when it opens with a year: it is a heading by its size, not by a number", () => {
+    expect(headingOf(line("2026 Roadmap for Cathodes", { size: 14 }), BODY)).toBe("2026 Roadmap for Cathodes");
+  });
+});
