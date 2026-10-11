@@ -116,11 +116,11 @@ PEER_PRIVATE_UPLOAD_DIR=/absolute/path/outside/the/repo
 **为什么没有"通用 API"了**：PR #33 把公司自己的模型 key 全部拿掉了。线上每一次模型调用都用读者自己的 key；服务器不持有任何模型 key；Vercel 构建时有一个守卫脚本，只要环境变量里出现 `GEMINI_API_KEY`、`GOOGLE_API_KEY`、`OPENAI_API_KEY`、`ANTHROPIC_API_KEY`、`QWEN_API_KEY`/`DASHSCOPE_API_KEY`、`DEEPSEEK_API_KEY`、`JEV_API_KEY`、`TAVILY_API_KEY`、`BRAVE_SEARCH_API_KEY`、`GOOGLE_VERTEX_*` 之一，构建就失败。唯一的例外：**本地 `next dev`** 仍然接受 `.env.local` 里的 provider key，方便开发——但别把它们放到 Vercel。
 
 **在应用里接 key 的步骤**（本地和线上一样）：
-1. 打开 **Profile** 页，找到 **"AI provider"** 这一行。
+1. 打开 **Profile** 页，点 **Edit** 进入编辑模式，找到 **"AI provider"** 这一行（这一行只在编辑模式里出现）。更快的入口：首页示例卡片（还没选领域时才有）上的 **"Add a key"** 按钮，会直接打开向导的 AI 这一步。
 2. 下拉选一个 provider：Google Gemini（推荐，性价比高）、OpenAI、Alibaba Qwen、Anthropic Claude、DeepSeek（无图片分析）。
 3. 在出现的输入框里粘贴你的 key（占位文字会写 "Gemini API key" / "OpenAI API key" 等）。key 只保存在**你这台浏览器**里，不会同步到 Peer 服务器（同步时会把它剥掉）。
 4. 把同一页的 **"Deep report"** 开关打开。这个开关控制论文正文是否发给模型：关着时只做摘要级报告，每段摘要、答案等都不会触发。
-5. 第一次打开 Peer 时的 `/welcome` 页也有同一组设置。
+5. `/welcome` 向导的 **AI** 这一步有同一组设置。一台从没设置过的浏览器（没有 topic、project、challenge、key，也没跳过过）第一次打开 Peer 时会自动进入 `/welcome`，**只自动进一次**：点 **"Skip setup →"** 或走完最后一步，都会记住"不要再自动打开"。之后想再进，用首页示例卡片上的 **"Set up Peer"** / **"Add a key"**，或 Profile 页的 **"Replay walkthrough"**。已经设置过任何东西的浏览器不会被带去 `/welcome`。
 6. 其它读者自带的 key：**Jev key**（论文筛选，在 Profile 的 Jev 一行）、**Tavily key**（职位/活动的网页发现）。
 
 **在 Vercel 预览上测**，还需要：

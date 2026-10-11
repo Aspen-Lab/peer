@@ -2,8 +2,10 @@
 //
 // The product used to open on a seven-step wizard: a first visitor saw a form,
 // not a paper, and had to describe their research before Peer would show them
-// what it does. Now the first visit is a briefing — a sample across a few broad
-// fields — and the setup happens against real papers, one choice at a time.
+// what it does. The wizard is still there (a never-set-up browser is sent to it
+// once, and can skip it), but a reader with nothing chosen sees a briefing — a
+// sample across a few broad fields — and the setup happens against real
+// papers, one choice at a time.
 //
 // These are deliberately broad and deliberately few. They are a SAMPLE, never
 // presented as "your briefing": the strip above the cards says so, and the

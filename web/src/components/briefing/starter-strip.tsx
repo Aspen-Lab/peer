@@ -4,10 +4,12 @@
 //
 // Peer used to open on a seven-step wizard: a first visitor described their
 // research to a form before seeing a single paper, and the one screen that
-// shows what the product *is* came last. The first visit is now a briefing —
-// a sample across a few broad fields (`lib/feed/starter-topics.ts`) — and this
-// strip sits above it and turns the sample into the reader's own briefing with
-// one tap.
+// shows what the product *is* came last. The wizard still opens once on a
+// browser that has never been set up (`FirstRunGate`, P7-16) and the reader can
+// skip it; wherever a reader is without having chosen a field, the page is a
+// briefing — a sample across a few broad fields (`lib/feed/starter-topics.ts`)
+// — and this strip sits above it and turns the sample into the reader's own
+// briefing with one tap.
 //
 // It says the papers below are a sample. Not saying so would be the dishonest
 // version of this idea: ten papers that look chosen for you, chosen for nobody.

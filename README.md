@@ -350,13 +350,24 @@ resolved for your deployment.
 ### Onboarding & persona quiz
 
 First-run wizard at [`web/src/app/welcome/page.tsx`](web/src/app/welcome/page.tsx) —
-Apple-setup style, one idea per page: **basics → topics → work → radar → ai → persona**.
+Apple-setup style, one idea per page: **basics → topics → work → radar → ai → data → persona**.
 
+- **A browser that has never been set up opens on it once.** `FirstRunGate`
+  ([`first-run.tsx`](web/src/components/first-run.tsx)) sends a profile with nothing in it — no
+  `onboardedAt`, no topic, project, challenge or model key, and `welcomeSkipped` unset
+  ([`lib/profile/first-visit.ts`](web/src/lib/profile/first-visit.ts)) — to `/welcome`, once the
+  profile has loaded, and records that it did, so it never opens by itself a second time. "Skip
+  setup →" and the last step set the same flag. Anyone with something set up goes straight to the
+  briefing.
+- **The way back is on the home page.** Until a field is chosen the briefing is a sample, and the
+  sample card carries **Set up Peer** (`/welcome`) and **Add a key** (`/welcome?step=ai`) buttons;
+  after the first field a one-line "Add a key to turn on the model" row stays until a key exists
+  or it is dismissed. Profile → "Replay walkthrough" opens the wizard again.
 - **Topics is the only gate** — the feed needs at least one required topic for a real first
   briefing. Everything else is skippable.
 - It writes straight to the shared **profile store** (same store and field components as
-  `/profile`), then marks `onboardedAt` and hands off to the feed with the coachmark tour
-  (`/?tour=1`, see [`onboarding-tour.tsx`](web/src/components/onboarding-tour.tsx)).
+  `/profile`), then marks `onboardedAt` and returns to the feed (`/?tour=1`; the coachmark tour
+  that query once opened has been removed, and nothing reads it now).
 - The optional **persona quiz** ([`/persona`](web/src/app/persona/page.tsx),
   [`lib/persona/`](web/src/lib/persona/)) maps reading style across five axes.
 
