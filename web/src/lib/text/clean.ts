@@ -73,38 +73,34 @@ const SUBSCRIPT_MAP: Record<string, string> = {
   "₎": ")",
 };
 
-const SUPERSCRIPT_MAP: Record<string, string> = {
-  "0": "0",
-  "1": "1",
-  "2": "2",
-  "3": "3",
-  "4": "4",
-  "5": "5",
-  "6": "6",
-  "7": "7",
-  "8": "8",
-  "9": "9",
-  "+": "+",
-  "-": "-",
-  "=": "=",
-  "(": "(",
-  ")": ")",
-  "⁰": "0",
-  "¹": "1",
-  "²": "2",
-  "³": "3",
-  "⁴": "4",
-  "⁵": "5",
-  "⁶": "6",
-  "⁷": "7",
-  "⁸": "8",
-  "⁹": "9",
-  "⁺": "+",
-  "⁻": "-",
-  "⁼": "=",
-  "⁽": "(",
-  "⁾": ")",
+// P9-10 (cluster G's gate): the cleaner used to run `.normalize("NFKC")`,
+// which flattens every Unicode super- and subscript (`cm²` -> `cm2`,
+// `Co(OH)₆⁴⁻` -> `Co(OH)64-`, `H₂O` -> `H2O`) and turns `½` into `1⁄2`, whose
+// slash the fraction-slash fold below then deletes (`12`). The PDF line
+// builder now writes exponents as Unicode, so the cleaner normalizes with NFC
+// (canonical composition only: `e` + U+0301 -> `é`, the Angstrom and Ohm
+// signs -> `Å` and `Ω`) and names, in the three constants below, the
+// compatibility folds it still wants.
+//
+// Ligatures: letters, as a reader would type them (U+FB05 is the long-s t
+// ligature; the long s is the letter `s`).
+const LIGATURES: Record<string, string> = {
+  "\uFB00": "ff",
+  "\uFB01": "fi",
+  "\uFB02": "fl",
+  "\uFB03": "ffi",
+  "\uFB04": "ffl",
+  "\uFB05": "st",
+  "\uFB06": "st",
 };
+// No-break, en/em/thin/hair/figure and the other fixed-width spaces, the
+// narrow no-break space, the medium mathematical space and the ideographic
+// space: one ordinary space (the `[ \t]+` collapse at the end of
+// `cleanDisplayText` then merges a run of them; U+200B stays out: it is not a
+// space but a zero-width mark, and the evidence matcher folds it itself).
+const SPACE_LIKE = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
+// Full-width ASCII forms (U+FF01-U+FF5E: `Ａ`, `１`, `（`, `，`): their ASCII twins.
+const FULLWIDTH_ASCII = /[\uFF01-\uFF5E]/g;
 
 function decodeHtmlEntities(text: string): string {
   return text
@@ -156,7 +152,13 @@ function toPlainSubscript(text: string): string {
 
 function normalizeUnicodeSymbols(text: string): string {
   return text
-    .normalize("NFKC")
+    .normalize("NFC")
+    .replace(/[\uFB00-\uFB06]/g, (c) => LIGATURES[c] ?? c)
+    .replace(SPACE_LIKE, " ")
+    .replace(FULLWIDTH_ASCII, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+    // NFKC also spelled the ellipsis out; the entity table (`hellip`) and the
+    // mojibake repair (`â€¦`) already do, so a raw U+2026 reads the same way.
+    .replace(/\u2026/g, "...")
     .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
     .replace(/[‐‑‒–—―−]/g, "-")
@@ -175,9 +177,7 @@ function normalizeUnicodeSymbols(text: string): string {
     // matcher alone (evidence.ts `normalizeForMatch`). U+00B5 MICRO SIGN is
     // the one compatibility letter named here on purpose: it is the Greek
     // small letter mu (U+03BC) in every font the reader sees.
-    .replace(/\u00B5/g, "\u03BC")
-    .replace(/[₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎]/g, (c) => SUBSCRIPT_MAP[c] ?? c)
-    .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾]/g, (c) => SUPERSCRIPT_MAP[c] ?? c);
+    .replace(/\u00B5/g, "\u03BC");
 }
 
 function repairCommonMojibake(text: string): string {
