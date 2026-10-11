@@ -224,7 +224,7 @@ describe("readingNote with the reader's questions (P2-05)", () => {
     };
     const reading = { ...buildReading(paper, null, new Date(NOW)), map };
     const sentences = describeAvailability({ reading, report: null, providerConfigured: true, profileHasProject: false, modelFailed: false });
-    const reportMd = readingToMarkdown(paper, reading, { forYourQuestions: ANSWERS }, sentences, new Date(NOW), QUESTIONS);
+    const reportMd = readingToMarkdown(paper, reading, { forYourQuestions: ANSWERS }, sentences, QUESTIONS);
     const quotes = note.blocks.filter((b) => b.type === "quote").slice(1);
     expect(quotes).toHaveLength(2);
     for (const quote of quotes) expect(reportMd).toContain(`> ${quote.text}`);

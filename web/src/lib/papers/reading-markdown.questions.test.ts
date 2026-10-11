@@ -122,17 +122,11 @@ function fixture(overrides: Partial<MarkdownReport> = {}): {
   return { reading, report, sentences };
 }
 
-/** The frontmatter block, `---` to `---`, as lines. */
-function frontmatter(md: string): string[] {
-  const end = md.indexOf("\n---\n", 4);
-  return md.slice(4, end).split("\n");
-}
-
 describe("readingToMarkdown with the reader's questions (P2-05)", () => {
   it("renders the For your questions block after the Decision line and before What it proposes, every string exact", () => {
     const { reading, report, sentences } = fixture({ forYourQuestions: ANSWERS });
 
-    const md = readingToMarkdown(normalPaper, reading, report, sentences, NOW, QUESTIONS);
+    const md = readingToMarkdown(normalPaper, reading, report, sentences, QUESTIONS);
 
     const decision = md.indexOf(sentences.join(" "));
     const start = md.indexOf("## For your questions");
@@ -150,7 +144,7 @@ describe("readingToMarkdown with the reader's questions (P2-05)", () => {
   it("puts the quoted evidence verbatim behind a > and Peer's own prose on lines of their own", () => {
     const { reading, report, sentences } = fixture({ forYourQuestions: ANSWERS });
 
-    const md = readingToMarkdown(normalPaper, reading, report, sentences, NOW, QUESTIONS);
+    const md = readingToMarkdown(normalPaper, reading, report, sentences, QUESTIONS);
     const block = md.slice(md.indexOf("## For your questions"), md.indexOf("## What it proposes")).split("\n");
 
     for (const answer of ANSWERS[0].answers) {
@@ -176,7 +170,7 @@ describe("readingToMarkdown with the reader's questions (P2-05)", () => {
     const page = html.replace(/<[^>]+>/g, "");
     const { reading, report, sentences } = fixture({ forYourQuestions: ANSWERS });
 
-    const md = readingToMarkdown(normalPaper, reading, report, sentences, NOW, QUESTIONS);
+    const md = readingToMarkdown(normalPaper, reading, report, sentences, QUESTIONS);
 
     expect(page).toContain(FOR_YOUR_QUESTIONS.heading);
     expect(md).toContain(`## ${FOR_YOUR_QUESTIONS.heading}`);
@@ -226,7 +220,7 @@ describe("readingToMarkdown with the reader's questions (P2-05)", () => {
     });
     const unmapped: PaperReading = { ...reading, map: undefined };
 
-    const md = readingToMarkdown(normalPaper, unmapped, report, sentences, NOW, ["Does it cover manufacturing cost?"]);
+    const md = readingToMarkdown(normalPaper, unmapped, report, sentences, ["Does it cover manufacturing cost?"]);
 
     const block = md.slice(md.indexOf("## For your questions"), md.indexOf("## What it proposes"));
     expect(block).toBe(
@@ -263,7 +257,7 @@ describe("readingToMarkdown with the reader's questions (P2-05)", () => {
     };
     const { reading, report, sentences } = fixture({ forYourQuestions: [entry] });
 
-    const md = readingToMarkdown(normalPaper, reading, report, sentences, NOW, [QUESTIONS[0]]);
+    const md = readingToMarkdown(normalPaper, reading, report, sentences, [QUESTIONS[0]]);
 
     const block = md.slice(md.indexOf("## For your questions"), md.indexOf("## What it proposes"));
     expect(block).toBe(
@@ -307,15 +301,18 @@ describe("readingToMarkdown with the reader's questions (P2-05)", () => {
       ],
     });
 
-    const md = readingToMarkdown(normalPaper, reading, report, sentences, NOW, ["Is it cheap?"]);
+    const md = readingToMarkdown(normalPaper, reading, report, sentences, ["Is it cheap?"]);
 
     expect(md).toContain("> It is cheap. — §Results and Discussion · p.3");
   });
 
   it("is absent when the report carries no forYourQuestions or an empty list — and the export is byte-identical to today's", () => {
-    // Pinned from the export as it stood before P2-05 (sha256 of the whole file
-    // with the one version-dependent line fixed). Any change to a report
-    // without questions turns this red.
+    // Pinned from the export as it stands after P7-12 (sha256 of the whole copy). It was pinned
+    // from the export as it stood before P2-05 until the owner ordered the front matter, the
+    // omissions list and the BibTeX block out (R3); the new value is that same text with those
+    // three removed and the one DOI line added under the title, derived from the old export by
+    // text surgery, not by running the new code. Any change to a report without questions turns
+    // this red.
     const { reading, report, sentences } = fixture();
     const deep: MarkdownReport = {
       ...report,
@@ -330,63 +327,103 @@ describe("readingToMarkdown with the reader's questions (P2-05)", () => {
       },
       nextStep: { text: "Re-run the docking analysis.", evidence: "Finally, a docking analysis indicates a binding pose.", evidenceWhere: "4 Results" },
     };
-    const digest = (md: string) =>
-      createHash("sha256")
-        .update(md.replace(/^peer_version: .*$/m, 'peer_version: "x"'))
-        .digest("hex");
+    const digest = (md: string) => createHash("sha256").update(md).digest("hex");
 
-    const today = readingToMarkdown(normalPaper, reading, deep, sentences, NOW);
+    const today = readingToMarkdown(normalPaper, reading, deep, sentences);
 
     expect(today).not.toContain("For your questions");
+    expect(today).not.toContain("Your questions");
     expect(today).not.toContain("questions:");
-    expect(digest(today)).toBe("ab33609238827d2aa5c952035a7d7e87b0d1d6eb8d4e074774f0ef43a2f26613");
+    expect(digest(today)).toBe("116dca21a29b6c2ccca8f5a268c98540f1e02fbadbb3725a3f253e12192730ff");
     // Empty list and no questions: the same bytes.
-    expect(readingToMarkdown(normalPaper, reading, { ...deep, forYourQuestions: [] }, sentences, NOW, [])).toBe(today);
-    expect(readingToMarkdown(normalPaper, reading, deep, sentences, NOW, [])).toBe(today);
+    expect(readingToMarkdown(normalPaper, reading, { ...deep, forYourQuestions: [] }, sentences, [])).toBe(today);
+    expect(readingToMarkdown(normalPaper, reading, deep, sentences, [])).toBe(today);
     // Without a report at all, too.
-    expect(readingToMarkdown(normalPaper, reading, null, sentences, NOW, [])).toBe(
-      readingToMarkdown(normalPaper, reading, null, sentences, NOW),
+    expect(readingToMarkdown(normalPaper, reading, null, sentences, [])).toBe(
+      readingToMarkdown(normalPaper, reading, null, sentences),
     );
   });
 });
 
-describe("the frontmatter's questions (P2-05)", () => {
-  it("lists the request's questions as a YAML list, between pages and generated, and omits the key otherwise", () => {
+// P7-12 (R3): the front matter is gone, and with it the `questions:` list that carried the settled
+// questions when no report answered them. A settled question must not vanish from the copy, so with
+// no "For your questions" block they print as a short "Your questions" list.
+describe("the settled questions when no report answers them (P7-12, R3)", () => {
+  it("prints them as ## Your questions, one bullet each, where the answers would stand", () => {
+    const { reading, sentences } = fixture();
+
+    const md = readingToMarkdown(normalPaper, reading, null, sentences, QUESTIONS);
+
+    const decision = md.indexOf(sentences.join(" "));
+    const start = md.indexOf("## Your questions");
+    expect(decision).toBeGreaterThan(-1);
+    expect(start).toBeGreaterThan(decision);
+    expect(md.slice(start)).toBe(
+      ["## Your questions", "", "- Does the method improve retention?", "- Does it discuss recycling?", ""].join("\n"),
+    );
+    expect(md.split("## Your questions")).toHaveLength(2);
+    expect(md).not.toContain("## For your questions");
+  });
+
+  it("stands before What it proposes, in the place of the answers, when a report without answers has sections", () => {
+    const { reading, report, sentences } = fixture();
+
+    const md = readingToMarkdown(normalPaper, reading, report, sentences, QUESTIONS);
+
+    const start = md.indexOf("## Your questions");
+    expect(start).toBeGreaterThan(md.indexOf(sentences.join(" ")));
+    expect(md.indexOf("## What it proposes")).toBeGreaterThan(start);
+    expect(md.slice(start, md.indexOf("## What it proposes"))).toBe(
+      ["## Your questions", "", "- Does the method improve retention?", "- Does it discuss recycling?", "", ""].join("\n"),
+    );
+  });
+
+  it("an empty list of answers counts as none", () => {
+    const { reading, report, sentences } = fixture({ forYourQuestions: [] });
+
+    const md = readingToMarkdown(normalPaper, reading, report, sentences, QUESTIONS);
+
+    expect(md).toContain("## Your questions");
+    expect(md).not.toContain("## For your questions");
+  });
+
+  it("is not printed beside the answers: the For your questions block already carries each question", () => {
     const { reading, report, sentences } = fixture({ forYourQuestions: ANSWERS });
 
-    const withQuestions = frontmatter(readingToMarkdown(normalPaper, reading, report, sentences, NOW, QUESTIONS));
-    const without = frontmatter(readingToMarkdown(normalPaper, reading, report, sentences, NOW, []));
-    const never = frontmatter(readingToMarkdown(normalPaper, reading, report, sentences, NOW));
+    const md = readingToMarkdown(normalPaper, reading, report, sentences, QUESTIONS);
 
-    const at = withQuestions.findIndex((line) => line.startsWith("questions:"));
-    expect(withQuestions[at]).toBe('questions: ["Does the method improve retention?", "Does it discuss recycling?"]');
-    expect(withQuestions[at - 1]).toMatch(/^pages: /);
-    expect(withQuestions[at + 1]).toMatch(/^generated: /);
-    // Nothing else in the frontmatter moved.
-    expect(withQuestions.filter((line) => !line.startsWith("questions:"))).toEqual(without);
-    expect(without.some((line) => line.startsWith("questions:"))).toBe(false);
-    expect(never).toEqual(without);
+    expect(md).toContain("## For your questions");
+    expect(md).not.toContain("## Your questions");
+    for (const question of QUESTIONS) expect(md.split(question).length - 1).toBeGreaterThanOrEqual(1);
   });
 
-  it("is independent of the block: questions with no report still list, a report's answers with no questions still render", () => {
+  it("is not printed when no question was settled; a blank one is left out", () => {
     const { reading, sentences } = fixture();
 
-    const noReport = readingToMarkdown(normalPaper, reading, null, sentences, NOW, QUESTIONS);
+    expect(readingToMarkdown(normalPaper, reading, null, sentences)).not.toContain("Your questions");
+    expect(readingToMarkdown(normalPaper, reading, null, sentences, [])).not.toContain("Your questions");
+    expect(readingToMarkdown(normalPaper, reading, null, sentences, ["  ", "\n"])).not.toContain("Your questions");
+    const md = readingToMarkdown(normalPaper, reading, null, sentences, ["", "Is it cheap?"]);
+    expect(md).toContain("## Your questions\n\n- Is it cheap?\n");
+  });
 
-    expect(frontmatter(noReport).some((line) => line.startsWith("questions:"))).toBe(true);
-    expect(noReport).not.toContain("## For your questions");
+  it("is independent of the answers block: a report's answers with no settled questions still render", () => {
+    const { reading, report, sentences } = fixture({ forYourQuestions: ANSWERS });
 
-    const { report } = fixture({ forYourQuestions: ANSWERS });
-    const noQuestions = readingToMarkdown(normalPaper, reading, report, sentences, NOW);
+    const noQuestions = readingToMarkdown(normalPaper, reading, report, sentences);
+
     expect(noQuestions).toContain("## For your questions");
-    expect(frontmatter(noQuestions).some((line) => line.startsWith("questions:"))).toBe(false);
+    expect(noQuestions).not.toContain("## Your questions");
   });
 
-  it("escapes quotes and backslashes, and keeps one question on one line", () => {
+  it("copies a question as the reader wrote it: no quoting or escaping, and one question on one line", () => {
     const { reading, sentences } = fixture();
 
-    const md = readingToMarkdown(normalPaper, reading, null, sentences, NOW, ['Why is "X" a\\b problem?', "Two\nlines\there?"]);
+    const md = readingToMarkdown(normalPaper, reading, null, sentences, ['Why is "X" a\\b problem?', "Two\nlines\there?"]);
 
-    expect(md).toContain('questions: ["Why is \\"X\\" a\\\\b problem?", "Two lines here?"]');
+    expect(md).toContain('- Why is "X" a\\b problem?\n');
+    expect(md).toContain("- Two lines here?\n");
+    expect(md).not.toContain("questions:");
+    expect(md).not.toContain("---");
   });
 });

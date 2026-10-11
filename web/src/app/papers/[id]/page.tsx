@@ -36,7 +36,6 @@ import { placeEvidence } from "@/lib/papers/evidence";
 import {
   PDF_NO_TEXT_MESSAGE,
   describeAvailability,
-  omittedForReader,
   sharedTerms,
   type AvailabilityReport,
   type PaperReading,
@@ -1127,12 +1126,12 @@ function Reader({
   const copy = () => {
     const clip = clipboard();
     if (!reading || !clip) return;
+    // P7-12: the notes only — the title, the DOI, the sections; no front matter, no omissions list.
     const markdown = readingToMarkdown(
       paper,
-      { ...reading, omitted: omittedForReader(reading, availability, profileHasProject) },
+      reading,
       report,
       sentences,
-      new Date(),
       // P2-05: the settled questions, never the gist; the report's answers ride in `report`.
       settledQuestions(asked),
     );
