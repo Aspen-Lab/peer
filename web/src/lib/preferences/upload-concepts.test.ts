@@ -182,3 +182,18 @@ describe("the extraction version keys the cached reading of an upload (P7-11)", 
     expect(UPLOAD_CONCEPT_EXTRACTION_VERSION).toBeGreaterThanOrEqual(4);
   });
 });
+
+describe("the extraction version after the end matter and the bucket rules (P7-18)", () => {
+  // A laptop that pulled P7-11 and opened the owner's paper holds the text read at version 4: the
+  // author-affiliation fragments as thirteen sections, and 2.1–2.5 and 4.1–4.5 filed `body`, so the
+  // page said "no methods section". 5 retires it, and the paper is read again under the new rules.
+  it("is past the reading that kept the end matter in the body and lost the subsections' buckets", () => {
+    expect(UPLOAD_CONCEPT_EXTRACTION_VERSION).toBeGreaterThanOrEqual(5);
+  });
+
+  it("is the number the server's cache of an upload's text is keyed by", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const source = await readFile(new URL("../papers/full-text.ts", import.meta.url), "utf8");
+    expect(source).toContain("uploadDocKey(meta.ownerKey ?? \"\", hash16, meta.revision, UPLOAD_CONCEPT_EXTRACTION_VERSION)");
+  });
+});
