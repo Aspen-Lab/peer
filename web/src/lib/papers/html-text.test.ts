@@ -255,6 +255,178 @@ describe("section ids — P0-01", () => {
   });
 });
 
+// P8-04 (BACKLOG-33): the same hole P7-18 closed in the PDF outline. A numbered heading that holds only its
+// subsections ("2 Results" followed at once by "2.1 …") was dropped by every HTML section build before
+// `withInheritedBuckets` could see it, so "2.1" never took `results`. Each build now tells one inheritor
+// every heading, text or not, and drops the empty ones after. One fixture per path: the pages are written
+// the way each host writes them, flat — a heading, then its words.
+describe("an empty numbered parent — every HTML extractor", () => {
+  interface Part {
+    heading: string;
+    text?: string;
+  }
+  interface HtmlPath {
+    name: string;
+    url: string;
+    source: ExtractedDocument["source"];
+    page: (parts: Part[]) => string;
+  }
+
+  /** How many numbers a heading carries: "2" is 1, "2.1" is 2, "2.1.1" is 3, "Results" is 0. */
+  const depthOf = (heading: string) => heading.match(/^(\d+(?:\.\d+)*)\s/)?.[1].split(".").length ?? 0;
+  /** h2 for a section, h3 for anything below it — the two levels the non-LaTeXML extractors read. */
+  const plainTag = (heading: string) => (depthOf(heading) > 1 ? "h3" : "h2");
+  const words = (text?: string) => (text ? `<p>${text}</p>` : "");
+
+  const PATHS: HtmlPath[] = [
+    {
+      name: "LaTeXML (arxiv.org/html)",
+      url: "https://arxiv.org/html/2609.02697",
+      source: "ar5iv",
+      page: (parts) =>
+        parts
+          .map(({ heading, text }) => {
+            const depth = Math.max(depthOf(heading), 1);
+            const tag = (["section", "subsection", "subsubsection"] as const)[depth - 1];
+            const level = depth + 1;
+            const numbered = heading.match(/^(\d+(?:\.\d+)*)\s+(.*)$/);
+            const inner = numbered ? `<span class="ltx_tag ltx_tag_${tag}">${numbered[1]} </span>${numbered[2]}` : heading;
+            return `<h${level} class="ltx_title ltx_title_${tag}">${inner}</h${level}>${text ? `<p class="ltx_p">${text}</p>` : ""}`;
+          })
+          .join("\n"),
+    },
+    {
+      name: "PMC",
+      url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC1/",
+      source: "pmc",
+      page: (parts) =>
+        parts
+          .map(({ heading, text }, i) => `<section id="sec${i + 1}"><${plainTag(heading)}>${heading}</${plainTag(heading)}>${words(text)}</section>`)
+          .join("\n"),
+    },
+    {
+      name: "bioRxiv (section blocks)",
+      url: "https://www.biorxiv.org/content/10.1101/2026.01.01.000001v1.full",
+      source: "biorxiv",
+      page: (parts) =>
+        `<article>${parts
+          .map(({ heading, text }, i) => `<div class="section" id="sec-${i + 1}"><${plainTag(heading)}>${heading}</${plainTag(heading)}>${words(text)}</div>`)
+          .join("\n")}</article>`,
+    },
+    {
+      name: "bioRxiv (heading walker, no section blocks)",
+      url: "https://www.biorxiv.org/content/10.1101/2026.01.01.000002v1.full",
+      source: "biorxiv",
+      page: (parts) => `<article>${parts.map(({ heading, text }) => `<${plainTag(heading)}>${heading}</${plainTag(heading)}>${words(text)}`).join("\n")}</article>`,
+    },
+    {
+      name: "generic",
+      url: "https://example.org/paper",
+      source: "generic-html",
+      page: (parts) => `<article>${parts.map(({ heading, text }) => `<${plainTag(heading)}>${heading}</${plainTag(heading)}>${words(text)}`).join("\n")}</article>`,
+    },
+  ];
+
+  const read = (path: HtmlPath, parts: Part[]) => chooseHtmlExtractor(path.url)(path.page(parts), path.url);
+  const shape = (doc: ExtractedDocument) => doc.sections.map((s) => [s.heading, s.canonical]);
+
+  describe.each(PATHS)("$name", (path) => {
+    it("gives a subsection the bucket of a numbered parent that holds no text of its own", () => {
+      const doc = read(path, [
+        { heading: "2 Results" },
+        { heading: "2.1 Growth", text: "Colonies doubled each day." },
+        { heading: "4 Methods" },
+        { heading: "4.1 Samples", text: "Samples were taken at dawn." },
+      ]);
+      expect(doc.source).toBe(path.source);
+      // The empty parents are no sections; their children carry what they stood for.
+      expect(shape(doc)).toEqual([
+        ["2.1 Growth", "results"],
+        ["4.1 Samples", "methods"],
+      ]);
+      expect(doc.sections.map((s) => s.text)).toEqual(["Colonies doubled each day.", "Samples were taken at dawn."]);
+      expect(doc.sections.map((s) => s.id)).toEqual(["s0", "s1"]);
+      // A second pass over what was kept finds nothing left to inherit, so the build needs no second pass.
+      expect(withInheritedBuckets(doc.sections).map((s) => s.canonical)).toEqual(doc.sections.map((s) => s.canonical));
+    });
+
+    it("lets a subsection that names a structural bucket keep it under an empty parent", () => {
+      const doc = read(path, [
+        { heading: "2 Results" },
+        { heading: "2.1 Growth", text: "Colonies doubled each day." },
+        { heading: "2.2 Limitations", text: "Only one strain was grown." },
+      ]);
+      expect(shape(doc)).toEqual([
+        ["2.1 Growth", "results"],
+        ["2.2 Limitations", "limitations"],
+      ]);
+    });
+
+    it("reaches a grandchild through two headings that hold no text", () => {
+      const doc = read(path, [
+        { heading: "2 Results" },
+        { heading: "2.1 Growth" },
+        { heading: "2.1.1 Dynamics", text: "The curve is steepest at noon." },
+      ]);
+      expect(shape(doc)).toEqual([["2.1.1 Dynamics", "results"]]);
+    });
+
+    it("leaves an unnumbered document alone", () => {
+      const doc = read(path, [
+        { heading: "Results" },
+        { heading: "Growth", text: "Colonies doubled each day." },
+        { heading: "Methods", text: "Samples were taken at dawn." },
+        { heading: "Sample notes", text: "Nothing else to add." },
+      ]);
+      expect(shape(doc)).toEqual([
+        ["Growth", "body"],
+        ["Methods", "methods"],
+        ["Sample notes", "body"],
+      ]);
+    });
+
+    it("treats a parent with text as it always has", () => {
+      const doc = read(path, [
+        { heading: "2 Results", text: "Three findings follow." },
+        { heading: "2.1 Growth", text: "Colonies doubled each day." },
+        // Its own heading says "method"; the parent says results, and a guess does not overrule it.
+        { heading: "2.2 Method details", text: "Counted by two people." },
+      ]);
+      expect(shape(doc)).toEqual([
+        ["2 Results", "results"],
+        ["2.1 Growth", "results"],
+        ["2.2 Method details", "results"],
+      ]);
+    });
+
+    it("still drops end matter, and an acknowledgments subsection with it", () => {
+      const doc = read(path, [
+        { heading: "2 Results", text: "Three findings follow." },
+        { heading: "2.1 Growth", text: "Colonies doubled each day." },
+        { heading: "3 Acknowledgments", text: "We thank the lab." },
+        { heading: "3.1 Funding", text: "Grant 12345." },
+      ]);
+      expect(shape(doc)).toEqual([
+        ["2 Results", "results"],
+        ["2.1 Growth", "results"],
+      ]);
+    });
+
+    it("does not let end matter hand its bucket down: a subsection under an empty one reads as it did before", () => {
+      // Not the question of this item (BACKLOG-33); pinned so the choice is a visible one.
+      const doc = read(path, [
+        { heading: "2 Results", text: "Three findings follow." },
+        { heading: "3 Acknowledgments" },
+        { heading: "3.1 Notes", text: "Nothing else to add." },
+      ]);
+      expect(shape(doc)).toEqual([
+        ["2 Results", "results"],
+        ["3.1 Notes", "body"],
+      ]);
+    });
+  });
+});
+
 describe("resolveBase", () => {
   it("prefers the page's own <base href>", () => {
     expect(resolveBase('<head><base href="/html/1706.03762/"></head>', "https://ar5iv.labs.arxiv.org/html/1706.03762"))

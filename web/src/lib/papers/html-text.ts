@@ -293,6 +293,34 @@ function shouldKeepSection(canonical: string): boolean {
   return canonical !== "references" && canonical !== "acknowledgments";
 }
 
+/**
+ * One document's sections, one heading at a time, in the order the page
+ * gives them — the HTML extractors' side of what P7-18 did for the PDF
+ * outline.
+ *
+ * P8-04 (BACKLOG-33): every build used to drop a heading with no text under
+ * it ("2 Results" followed at once by "2.1 Growth") before
+ * `withInheritedBuckets` ran over what was kept, so "2.1" never learned whose
+ * child it was and was filed `body`. The inheritor is told every heading
+ * first, text or not, and the empty ones are dropped after that. The returned
+ * function is made once per document — the numbering is that document's.
+ *
+ * End matter is judged as it always was, on the heading's own bucket, and it
+ * stays out of the numbering: it is no part of the argument, so a numbered
+ * subsection under it takes nothing from it and reads as it did before.
+ * Dropping or keeping such a subsection is not decided here.
+ */
+function sectionDrafter(): (heading: string, text: string) => DraftSection | null {
+  const inherit = bucketInheritor();
+  return (heading, text) => {
+    const own = canonicalizeHeading(heading);
+    if (!shouldKeepSection(own)) return null;
+    const canonical = inherit(heading, own);
+    if (!text) return null;
+    return { heading, canonical, text: capSection(text) };
+  };
+}
+
 function capSection(text: string): string {
   return text.length > MAX_SECTION_CHARS ? text.slice(0, MAX_SECTION_CHARS) : text;
 }
@@ -540,18 +568,17 @@ function extractLatexml(page: string, pageUrl?: string): ExtractedDocument {
     if (!heading) continue;
     heads.push({ index, end: index + match[0].length, heading });
   }
+  const draft = sectionDrafter();
   for (let i = 0; i < heads.length; i++) {
     const stop = i + 1 < heads.length ? heads[i + 1].index : bodyEnd;
     const text = stripTags(withoutCaptions(html.slice(heads[i].end, stop)));
-    if (!text) continue;
-    const canonical = canonicalizeHeading(heads[i].heading);
-    if (!shouldKeepSection(canonical)) continue;
-    sections.push({ heading: heads[i].heading, canonical, text: capSection(text) });
+    const section = draft(heads[i].heading, text);
+    if (section) sections.push(section);
   }
 
   return {
     title: extractTitleFromHtml(html),
-    sections: withSectionIds(trimToBudget(withInheritedBuckets(sections))),
+    sections: withSectionIds(trimToBudget(sections)),
     figureCaptions: collectCaptions(
       html,
       /<figcaption\b[^>]*class=["'][^"']*ltx_caption[^"']*["'][^>]*>([\s\S]*?)<\/figcaption>/gi,
@@ -577,6 +604,7 @@ function extractPmc(html: string, pageUrl?: string): ExtractedDocument {
   const sectionRe =
     /<section\b[^>]*(?:id=["']sec\d+[^"']*["']|class=["'][^"']*\b(?:sec|tsec|abstract)\b[^"']*["'])[^>]*>([\s\S]*?)<\/section>/gi;
 
+  const draft = sectionDrafter();
   for (const match of html.matchAll(sectionRe)) {
     const inner = match[1];
     // Skip nested sections inside an outer one (we'll catch them on their own
@@ -586,15 +614,13 @@ function extractPmc(html: string, pageUrl?: string): ExtractedDocument {
     const heading = oneLine(stripTags(headingMatch[1]));
     if (!heading) continue;
     const text = stripTags(withoutCaptions(inner.replace(headingMatch[0], " ")));
-    if (!text) continue;
-    const canonical = canonicalizeHeading(heading);
-    if (!shouldKeepSection(canonical)) continue;
-    sections.push({ heading, canonical, text: capSection(text) });
+    const section = draft(heading, text);
+    if (section) sections.push(section);
   }
 
   return {
     title: extractTitleFromHtml(html),
-    sections: withSectionIds(trimToBudget(withInheritedBuckets(sections))),
+    sections: withSectionIds(trimToBudget(sections)),
     // <figcaption> or <div class="caption"> containing <p>Fig N. text</p>
     figureCaptions: collectCaptions(html, /<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/gi, baseUrl),
     source: "pmc",
@@ -614,6 +640,7 @@ function extractBiorxiv(html: string, pageUrl?: string): ExtractedDocument {
   // it produces nothing.
   const found = Array.from(html.matchAll(sectionRe));
   if (found.length > 0) {
+    const draft = sectionDrafter();
     for (const match of found) {
       const inner = match[1];
       const headingMatch = inner.match(/<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>/i);
@@ -621,10 +648,8 @@ function extractBiorxiv(html: string, pageUrl?: string): ExtractedDocument {
       const heading = oneLine(stripTags(headingMatch[1]));
       if (!heading) continue;
       const text = stripTags(withoutCaptions(inner.replace(headingMatch[0], " ")));
-      if (!text) continue;
-      const canonical = canonicalizeHeading(heading);
-      if (!shouldKeepSection(canonical)) continue;
-      sections.push({ heading, canonical, text: capSection(text) });
+      const section = draft(heading, text);
+      if (section) sections.push(section);
     }
   } else {
     // Heading-based fallback over the whole article container.
@@ -637,7 +662,7 @@ function extractBiorxiv(html: string, pageUrl?: string): ExtractedDocument {
 
   return {
     title: extractTitleFromHtml(html),
-    sections: withSectionIds(trimToBudget(withInheritedBuckets(sections))),
+    sections: withSectionIds(trimToBudget(sections)),
     figureCaptions: collectCaptions(
       html,
       /<div\b[^>]*class=["'][^"']*\bfig-caption\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi,
@@ -677,16 +702,16 @@ function walkHeadings(html: string): DraftSection[] {
     }
     return sections;
   }
+  // The bioRxiv heading walker and the generic extractor both build here, so
+  // both take their numbering from this one inheritor.
+  const draft = sectionDrafter();
   for (let i = 0; i < matches.length; i++) {
     const start = matches[i].end;
     const stop = i + 1 < matches.length ? matches[i + 1].index : html.length;
     const slice = html.slice(start, stop);
     const text = stripTags(withoutCaptions(slice));
-    if (!text) continue;
-    const heading = matches[i].heading;
-    const canonical = canonicalizeHeading(heading);
-    if (!shouldKeepSection(canonical)) continue;
-    sections.push({ heading, canonical, text: capSection(text) });
+    const section = draft(matches[i].heading, text);
+    if (section) sections.push(section);
   }
   return sections;
 }
@@ -700,7 +725,7 @@ function extractGeneric(html: string, pageUrl?: string): ExtractedDocument {
   const sections = walkHeadings(body);
   return {
     title: extractTitleFromHtml(html),
-    sections: withSectionIds(trimToBudget(withInheritedBuckets(sections))),
+    sections: withSectionIds(trimToBudget(sections)),
     figureCaptions: collectCaptions(html, /<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/gi, baseUrl),
     source: "generic-html",
   };
