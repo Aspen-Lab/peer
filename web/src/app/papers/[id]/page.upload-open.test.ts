@@ -36,9 +36,10 @@ function openProblems(source: string): string[] {
   else if (/\bopen\b/.test(actions.replace(KEYBOARD, ""))) problems.push("open is registered with the keyboard outside its isUploadId guard");
 
   // The decision block's source command: one `source=` between `<DecisionBlock` and the next slot
-  // (`contents={`), and it is the guarded one.
+  // (`additions={` — P7-14 (R5) deleted the `contents={` slot that used to follow it), and it is
+  // the guarded one.
   const decision = text.indexOf("<DecisionBlock");
-  const decisionEnd = decision < 0 ? -1 : text.indexOf(" contents={", decision);
+  const decisionEnd = decision < 0 ? -1 : text.indexOf(" additions={", decision);
   const block = decision < 0 || decisionEnd < 0 ? "" : text.slice(decision, decisionEnd);
   if (!block) problems.push("the `<DecisionBlock` element moved");
   else {

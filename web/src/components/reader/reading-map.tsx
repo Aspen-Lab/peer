@@ -69,8 +69,7 @@ export function readingRoute(
   return asked.gist && asked.items.length === 0 ? gistRoute(map) : routeByQuestionsCached(map, reading.body ?? [], asked.items);
 }
 
-/** How deep the paper says this heading is ("3.2.1" is two levels in) —
- *  the same rule as the contents rail (`paper-contents.tsx`). */
+/** How deep the paper says this heading is ("3.2.1" is two levels in). */
 function depthOf(heading: string): number {
   const number = /^(\d+(?:\.\d+)*)\b/.exec(heading.trim());
   return number ? number[1].split(".").length - 1 : 0;
@@ -86,6 +85,7 @@ export function ReadingMapView({
   openRows = [],
   phoneOpen = false,
   gists,
+  source,
 }: {
   map: ReadingMap;
   /** The reader's questions routed through the paper (`readingRoute`), with
@@ -98,12 +98,19 @@ export function ReadingMapView({
   /** Peer's gist for a paragraph, `gists[sectionId][paragraphIndex]` (P3-03, from
    *  `useParagraphGuide`); absent until there is a guide, and for a paper with none. */
   gists?: ParagraphGuide["gists"];
+  /** P7-14 (R5): where the text was read from ("PDF", "arXiv HTML"), for the summary line —
+   *  the map is the paper's one contents list, so it says so once. Absent: the line has no
+   *  "Read from …" part. */
+  source?: string;
 }) {
   const [open, setOpen] = useState<ReadonlySet<number>>(() => new Set(openRows));
   const [shownOnPhone, setShownOnPhone] = useState(phoneOpen);
   if (map.sections.length === 0) return null;
   // Questions that point somewhere: an unmarked row then says so.
   const asked = routeAsksQuestions(route);
+  // P7-14 (R5): the words the rows add up to — the count the rail and the line under "The paper"
+  // used to state (§1f.3: a row's words are the body's own count, so the two agree).
+  const totalWords = map.sections.reduce((sum, row) => sum + row.words, 0);
 
   // A gist renders for a paragraph line of an open row that has one; the legend
   // under the heading is there when at least one does (the lines below use the same test).
@@ -135,7 +142,7 @@ export function ReadingMapView({
         <p className={["annotation mt-1 text-text-faint", shownOnPhone ? "" : "hidden sm:block"].join(" ").trim()}>{PEERS_READING}</p>
       )}
       <p className="annotation mt-2 flex items-baseline gap-3 text-text-faint">
-        <span>{MAP.summary(map.sections.length, map.totalMinutes)}</span>
+        <span>{MAP.summary(map.sections.length, map.totalMinutes, totalWords, source)}</span>
         <button
           type="button"
           aria-expanded={shownOnPhone}

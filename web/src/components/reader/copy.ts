@@ -152,8 +152,14 @@ export const STANDING = {
  */
 export const MAP = {
   heading: "Map",
-  summary: (sections: number, minutes: number) =>
-    `${sections} section${sections === 1 ? "" : "s"} \u00b7 about ${minutes} min`,
+  /** P7-14 (R5): the map is the paper's one contents list, so it also says where the text was
+   *  read from and how many words there are ("Read from PDF · 21 sections · 10,908 words · about
+   *  61 min"), which the rail and the count line under "The paper" used to say. With no word count
+   *  it is the short form. */
+  summary: (sections: number, minutes: number, words?: number, sourceLabel?: string) =>
+    words === undefined
+      ? `${sections} section${sections === 1 ? "" : "s"} \u00b7 about ${minutes} min`
+      : `${BODY.provenance(sourceLabel, sections, words)} \u00b7 about ${minutes} min`,
   show: "show map",
   hide: "hide map",
   roles: {

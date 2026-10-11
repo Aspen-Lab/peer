@@ -36,11 +36,35 @@ describe("ReadingMapView", () => {
   it("heads the table with the summary line", () => {
     const html = render();
 
+    // The short form (no word count) is what it was.
     expect(MAP.summary(3, 4)).toBe("3 sections · about 4 min");
     expect(MAP.summary(1, 1)).toBe("1 section · about 1 min");
     expect(html).toContain(MAP.heading);
-    expect(html).toContain(MAP.summary(3, 4));
-    expect(html.indexOf(MAP.summary(3, 4))).toBeLessThan(html.indexOf("1 Introduction"));
+    // P7-14 (R5): the rendered line also carries the words the map's rows add up to (400 + 150 + 90).
+    expect(html).toContain(MAP.summary(3, 4, 640));
+    expect(html.indexOf(MAP.summary(3, 4, 640))).toBeLessThan(html.indexOf("1 Introduction"));
+  });
+
+  // P7-14 (R5, the owner's review): the contents rail and the count line under "The paper" are gone,
+  // so the map's summary is the one place that says where the text was read from and how long it is.
+  it("says where the text was read from and how many words it has, once", () => {
+    expect(MAP.summary(21, 61, 10908, "PDF")).toBe("Read from PDF · 21 sections · 10,908 words · about 61 min");
+    expect(MAP.summary(1, 1, 120, "arXiv HTML")).toBe("Read from arXiv HTML · 1 section · 120 words · about 1 min");
+    expect(MAP.summary(2, 3, 1000)).toBe("2 sections · 1,000 words · about 3 min");
+
+    const html = render({ source: "PDF" });
+    expect(html).toContain("Read from PDF · 3 sections · 640 words · about 4 min");
+    expect(html.split("Read from").length - 1).toBe(1);
+    expect(render()).not.toContain("Read from");
+  });
+
+  it("is handed the reading's source label by the page, so 'Read from …' is said", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const page = readFileSync(resolve(process.cwd(), "src/app/papers/[id]/page.tsx"), "utf8").replace(/\s+/g, " ");
+    const mount = /<ReadingMapView [^>]*\/>/.exec(page)?.[0] ?? "";
+
+    expect(mount).toContain("source={reading.provenance.sourceLabel}");
   });
 
   it("lists every section: heading linked to its anchor, role tag, page and minutes, in order", () => {

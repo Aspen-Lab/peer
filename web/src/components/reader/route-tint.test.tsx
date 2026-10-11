@@ -8,7 +8,6 @@ import { GIST_QUESTION, gistRoute, routeByQuestions, type RouteResult } from "@/
 import type { Paper } from "@/types";
 import { ASK, EXPLAIN, FOR_YOUR_QUESTIONS, MAP, ROUTE, TERMS } from "./copy";
 import { HEADING_MARK, PaperBody, ROUTE_TINT, mergeQuestionRoute, questionRouteOverlay, sectionMark } from "./paper-body";
-import { PaperContents } from "./paper-contents";
 import { ReadingMapView, readingRoute } from "./reading-map";
 
 // P1-05 (§1f.13, §1f.14; blueprint §3.3 目录颜色): the route on the page.
@@ -150,15 +149,16 @@ describe("the Tier 2 question-answer overlay (P2-04)", () => {
     expect(mergeQuestionRoute(undefined, undefined)).toBeUndefined();
   });
 
-  it("feeds the one merged display route to contents, map, and body consumers, including the background token", () => {
+  it("feeds the one merged display route to the map and body consumers, including the background token", () => {
     const merged = mergeQuestionRoute(ROUTE_RESULT, questionRouteOverlay(answers));
-    // P2-04b (§1g.15): all three consumers take the one `DrawRoute`, so the
+    // P2-04b (§1g.15): the consumers take the one `DrawRoute`, so the
     // merged route goes in as it is — no `as RouteResult`; `tsc` is the proof.
-    const contents = renderToStaticMarkup(createElement(PaperContents, { reading, route: merged }));
+    // P7-14 (R5): the contents rail was the third consumer; the owner removed it, so the one
+    // list of the paper's sections that is tinted besides the body's own headings is the map.
     const mapHtml = renderToStaticMarkup(createElement(ReadingMapView, { map: reading.map!, route: merged }));
     const body = renderToStaticMarkup(createElement(PaperBody, { reading, route: merged }));
 
-    for (const html of [contents, mapHtml, body]) {
+    for (const html of [mapHtml, body]) {
       expect(html).toContain('data-route="background"');
       expect(html).toContain(ROUTE_TINT.background);
     }
@@ -221,19 +221,29 @@ describe("the route the page computes (§1f.13)", () => {
   });
 });
 
-describe("the contents rail and the body heading carry the mark", () => {
-  it("tints a contents row by its tier and titles it with the question numbers", () => {
-    const html = renderToStaticMarkup(createElement(PaperContents, { reading, route: ROUTE_RESULT }));
+// P7-14 (R5): the contents rail (`PaperContents`) is deleted — the owner's review found it a
+// second copy of the map's rows — so its two tint cases are re-aimed at the map's rows, which
+// carry the same mark: the tier as `data-route`, the question numbers as the `title`, and no
+// mark at all for a section no question mentions. (§1a.5 (d) named the rail as a tint surface;
+// the surfaces are the map's rows and lines and the body's headings now.)
+describe("the map's rows and the body heading carry the mark", () => {
+  const mapRow = (html: string, heading: string) => {
+    const at = html.indexOf(heading);
+    return html.slice(html.lastIndexOf("<div", at), at + heading.length);
+  };
 
-    expect(html).toMatch(/<a[^>]*data-route="read"[^>]*title="Q1, Q3"[^>]*>1 Introduction<\/a>/);
-    expect(html).toMatch(/<a[^>]*data-route="skim"[^>]*title="Q1"[^>]*>2 Methods<\/a>/);
-    expect(html).toMatch(/<a[^>]*data-route="skim"[^>]*title="Q3"[^>]*>3 Results<\/a>/);
+  it("tints a map row by its tier and titles it with the question numbers", () => {
+    const html = renderToStaticMarkup(createElement(ReadingMapView, { map: reading.map!, route: ROUTE_RESULT }));
+
+    expect(mapRow(html, "1 Introduction")).toMatch(/data-route="read"[^>]*title="Q1, Q3"/);
+    expect(mapRow(html, "2 Methods")).toMatch(/data-route="skim"[^>]*title="Q1"/);
+    expect(mapRow(html, "3 Results")).toMatch(/data-route="skim"[^>]*title="Q3"/);
     expect(html).toContain(ROUTE_TINT.read);
     expect(html).toContain(ROUTE_TINT.skim);
   });
 
-  it("leaves the contents untouched without a route, and for a section no question mentions", () => {
-    const plain = renderToStaticMarkup(createElement(PaperContents, { reading }));
+  it("leaves the map's rows untouched without a route, and for a section no question mentions", () => {
+    const plain = renderToStaticMarkup(createElement(ReadingMapView, { map: reading.map! }));
     expect(plain).not.toContain("data-route");
     expect(plain).not.toContain("title=");
     expect(plain).not.toContain("--color-route-");
@@ -242,9 +252,10 @@ describe("the contents rail and the body heading carry the mark", () => {
       byQuestion: [{ question: "q", vague: false, sections: { [ids[0]]: section("skim"), [ids[1]]: section("none") } }],
       vague: false,
     };
-    const html = renderToStaticMarkup(createElement(PaperContents, { reading, route: onlyFirst }));
+    const html = renderToStaticMarkup(createElement(ReadingMapView, { map: reading.map!, route: onlyFirst }));
     expect(html.match(/data-route=/g)).toHaveLength(1);
-    expect(html).toMatch(/<a href="#paper-section-1" class="[^"]*">2 Methods<\/a>/);
+    expect(mapRow(html, "2 Methods")).not.toContain("data-route");
+    expect(mapRow(html, "1 Introduction")).toContain('data-route="skim"');
   });
 
   it("marks the body's section headings and nothing else in the body", () => {

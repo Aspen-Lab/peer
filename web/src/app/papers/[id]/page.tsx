@@ -98,7 +98,6 @@ import { useReading } from "@/components/reader/use-reading";
 import { useParagraphGuide } from "@/components/reader/use-paragraph-guide";
 import { PaperNotes } from "@/components/notes/paper-notes";
 import { PAPER_BODY_ID } from "@/components/reader/paper-body";
-import { PaperContents } from "@/components/reader/paper-contents";
 import { QuestionField, focusFirstEmptyQuestion } from "@/components/reader/question-field";
 import { ReadingMapView, readingRoute } from "@/components/reader/reading-map";
 import { useDebouncedQuestions } from "@/components/reader/use-debounced-questions";
@@ -689,7 +688,7 @@ function Reader({
   const report = model.report;
   // P2-04: all route consumers receive this one display route. Tier 0 still
   // stands unchanged if there is no verified report/question overlay. P2-04b:
-  // the contents rail, the map and the body all take it as a `DrawRoute`
+  // the map and the body both take it as a `DrawRoute`
   // (the shared `RouteResult` contract is untouched), so no cast is needed.
   const route = useMemo(
     () => mergeQuestionRoute(tier0Route, questionRouteOverlay(report?.forYourQuestions)),
@@ -1361,7 +1360,7 @@ function Reader({
               {questionsHydrated && (
                 <QuestionField key={paper.id} paperId={paper.id} examples={examples} standing={profile.standingQuestions} vague={route?.vague ?? false} />
               )}
-              {reading.map && <ReadingMapView key={`map:${paper.id}`} map={reading.map} route={route} gists={paragraphGists} />}
+              {reading.map && <ReadingMapView key={`map:${paper.id}`} map={reading.map} route={route} gists={paragraphGists} source={reading.provenance.sourceLabel} />}
               <TermsStrip key={`terms:${paper.id}`} terms={terms} reading={reading} marked={markedTerm} onMark={markTerm} />
             </>
           ) : undefined
@@ -1404,7 +1403,6 @@ function Reader({
               }} /> : undefined}
           />
         }
-        contents={<PaperContents reading={reading} route={route} />}
         additions={
           <>
             {report?.forYourQuestions && <ForYourQuestions report={report} map={reading.map} />}

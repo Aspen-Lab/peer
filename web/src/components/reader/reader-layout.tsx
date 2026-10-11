@@ -27,9 +27,6 @@ interface ReaderLayoutProps {
   ask?: ReactNode;
   words: ReactNode;
   decision: ReactNode;
-  /** The paper's contents, in the panel under the decision — spread only;
-   *  below it the paper's own block prints the same list. */
-  contents?: ReactNode;
   additions: ReactNode;
   next: ReactNode;
 }
@@ -163,7 +160,6 @@ export function ReaderLayout(p: ReaderLayoutProps) {
         {p.title}
         {p.ask}
         {p.decision}
-        {p.contents}
       </div>
       <div className={COLUMN_CLASS}>
         <div className="reading-scaled" style={readingScaleStyle}>{p.words}</div>

@@ -244,7 +244,8 @@ describe("ReadingMapView — the mark once per map, under the heading (P3-05, O1
     expect(html.indexOf(legend)).toBeGreaterThan(html.indexOf(MAP.heading));
     // Directly under the heading: the next element after the heading's paragraph.
     expect(html.indexOf(legend)).toBe(html.indexOf("</p>", html.indexOf(MAP.heading)) + "</p>".length);
-    expect(html.indexOf(legend)).toBeLessThan(html.indexOf(escaped(MAP.summary(3, 3))));
+    // P7-14 (R5): the summary line also states the words the rows add up to (3 × 100).
+    expect(html.indexOf(legend)).toBeLessThan(html.indexOf(escaped(MAP.summary(3, 3, 300))));
   });
 
   it("prints none when no gist renders: no guide, an empty guide, gists for another paper, or for paragraphs with no line", () => {

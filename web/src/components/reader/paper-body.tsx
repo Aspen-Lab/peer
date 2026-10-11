@@ -11,9 +11,10 @@
 //
 // It sits last, under everything Peer has to say about the paper, because the
 // order of this page is decide-then-read: the claim, the abstract, the
-// blocks, and then — if you are still here — the paper. The contents strip is
-// the section list, which is also the honest statement of how much of the
-// paper Peer reached.
+// blocks, and then — if you are still here — the paper. (P7-14: on a paper
+// Peer has read in full the page has two tabs, and the body is the second,
+// "Paper digestion", under the map, which is the section list and the honest
+// statement of how much of the paper Peer reached.)
 //
 // The paper's own words, so: the reading serif, at the long measure. The headings
 // are the paper's too, so they are serif as well — the mono on this page is
@@ -30,18 +31,8 @@ import { paragraphKey } from "@/store/plain-rewrites";
 import { ASK, BODY, ROUTE } from "./copy";
 import { ParagraphPlainControl, PlainRewrite, plainOffered, type PlainView } from "./plain-button";
 
-function countWords(body: ReadingSection[]): number {
-  let words = 0;
-  for (const section of body) {
-    for (const paragraph of section.paragraphs) {
-      words += paragraph.split(/\s+/).length;
-    }
-  }
-  return words;
-}
-
-/** Each section is a destination: the contents rail beside the page jumps
- *  here, and `scroll-mt` keeps the heading clear of the sticky masthead. */
+/** Each section is a destination: the map's rows jump here, and `scroll-mt`
+ *  keeps the heading clear of the sticky masthead. */
 export function sectionAnchor(index: number): string {
   return `paper-section-${index}`;
 }
@@ -56,11 +47,12 @@ export function paragraphAnchor(sectionIndex: number, paragraphIndex: number): s
 //
 // The reader's questions, routed through the paper (`readingRoute` in
 // `reading-map.tsx`), mark a section by how it answers them: a light-green
-// tint behind its row in the contents rail, its heading here and its row in
-// the map. The mark is an attribute and a background — the paper itself is
+// tint behind its row in the map, its heading here and its paragraph lines in
+// the map (the contents rail that used to carry a third is gone, P7-14 R5).
+// The mark is an attribute and a background — the paper itself is
 // never hidden, collapsed, greyed, reordered or wrapped, whatever the route
 // says (blueprint §2 boundary 3). The tables live here, beside the anchors,
-// because the rail and the map already read those from this file.
+// because the map already reads those from this file.
 
 /** A route tier as the page draws it; `background` is Tier 2's (P2). */
 export type TintTier = RouteTier | "background";
@@ -105,8 +97,7 @@ export interface DisplayRoute {
   vague: boolean;
 }
 
-/** What every route consumer draws from — the contents rail, the map and the
- *  body: Tier 0's `RouteResult`, or `DisplayRoute` once Tier 2's marks are
+/** What every route consumer draws from — the map and the body: Tier 0's `RouteResult`, or `DisplayRoute` once Tier 2's marks are
  *  merged over it (P2-04b, §1g.15: a type-only widening — the three already
  *  handle the `background` tier at runtime — in place of a cast on the page). */
 export type DrawRoute = RouteResult | DisplayRoute;
@@ -158,12 +149,12 @@ function mergedSections(
   return merged;
 }
 
-/** One display route for all three consumers. Questions are paired by their
- * reader-owned text, retaining Tier 0's order/titles. P2-08b (§1g.19 c, F6): a
+/** One display route for both consumers (the map and the body; the contents rail was a
+ * third until P7-14). Questions are paired by their reader-owned text, retaining Tier 0's order/titles. P2-08b (§1g.19 c, F6): a
  * model entry whose question matches no live line — the reader has since
  * edited a question the report answered — is dropped, never appended: the live
  * lines are the questions there are, and an orphan would be a phantom "Q3" on
- * the rail, the map and the headings. With no live route there is nothing for
+ * the map and the headings. With no live route there is nothing for
  * a model entry to answer. No model data means the original Tier 0 route
  * object is returned unchanged. */
 export function mergeQuestionRoute(base: RouteResult | undefined, overlay: DisplayRoute | undefined): DrawRoute | undefined {
@@ -620,23 +611,15 @@ export function PaperBody({
   const body = reading.body ?? [];
   if (body.length === 0) return null;
 
-  const words = countWords(body);
-
   return (
     // `scroll-mt`: the masthead is sticky, and a heading scrolled to the
     // very top of the window lands under it.
     <div id={PAPER_BODY_ID} className="scroll-mt-20">
     <Band label={BODY.heading}>
-      {/* The contents: the sections Peer reached, in the paper's own order.
-          It doubles as the statement of what it did not reach — a paper whose
-          extractor found four headings says so here and nowhere else. */}
-      <p className="annotation text-text-faint mt-4 measure-mono xl:hidden">
-        {body.map((section) => section.heading).join(" · ")}
-      </p>
-      <p className="annotation text-text-faint mt-1.5">
-        {BODY.provenance(reading.provenance.sourceLabel, body.length, words)}
-      </p>
-
+      {/* P7-14 (R5): no contents here. The map is the paper's one contents
+          list — it names the sections Peer reached, where the text was read
+          from and how long it is — so the line that joined the headings and
+          the count line that stood under this label are gone. */}
       {body.map((section, i) => (
         <Section
           key={`${section.canonical}:${section.heading}`}
