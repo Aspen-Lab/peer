@@ -248,25 +248,45 @@ const STRONG_BUCKETS = new Set([
  * untouched.
  */
 export function withInheritedBuckets<T extends { heading: string; canonical: string }>(sections: T[]): T[] {
-  const byNumber = new Map<string, string>();
+  const inherit = bucketInheritor();
   return sections.map((section) => {
-    const number = headingNumber(section.heading);
-    if (!number) return section;
-    let canonical = section.canonical;
-    if (!STRONG_BUCKETS.has(canonical) && number.includes(".")) {
+    const canonical = inherit(section.heading, section.canonical);
+    return canonical === section.canonical ? section : { ...section, canonical };
+  });
+}
+
+/**
+ * The same inheritance, one heading at a time, in the document's order — for
+ * a caller that meets headings which never become a section.
+ *
+ * P7-18 (F3): a numbered heading that holds only its subsections ("2.
+ * RESULTS AND DISCUSSION", "4. EXPERIMENTAL SECTION" — the PDF outline writes
+ * no section for a heading with nothing under it) is still the document
+ * saying whose children "2.1" and "4.1" are. `withInheritedBuckets` only ever
+ * saw the sections that were written, so the subsections lost the bucket and
+ * a paper with a methods section read as having none. Tell the inheritor
+ * every heading, text or not; it answers with the bucket the heading takes.
+ */
+export function bucketInheritor(): (heading: string, canonical: string) => string {
+  const byNumber = new Map<string, string>();
+  return (heading, canonical) => {
+    const number = headingNumber(heading);
+    if (!number) return canonical;
+    let bucket = canonical;
+    if (!STRONG_BUCKETS.has(bucket) && number.includes(".")) {
       // The nearest numbered ancestor: "5.4.1" asks "5.4", then "5".
       const parts = number.split(".");
       for (let cut = parts.length - 1; cut > 0; cut--) {
         const parent = byNumber.get(parts.slice(0, cut).join("."));
         if (parent && parent !== "body") {
-          canonical = parent;
+          bucket = parent;
           break;
         }
       }
     }
-    byNumber.set(number, canonical);
-    return canonical === section.canonical ? section : { ...section, canonical };
-  });
+    byNumber.set(number, bucket);
+    return bucket;
+  };
 }
 
 function shouldKeepSection(canonical: string): boolean {

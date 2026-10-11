@@ -27,7 +27,7 @@
 // nothing, and says so, rather than inventing sections.
 import { blockMarker } from "@/lib/text/math";
 
-import { canonicalizeHeading } from "./html-text";
+import { bucketInheritor, canonicalizeHeading } from "./html-text";
 
 /** One run of text from the PDF's text layer. */
 export interface PdfTextItem {
@@ -861,7 +861,12 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
   let held: PdfLine[] = [];
   let done = false;
 
+  // P7-18 (F3): every heading takes its place in the numbering, a heading with nothing under it
+  // too ("2. RESULTS AND DISCUSSION" holds only its subsections and is no section), so "2.1 …"
+  // takes `results` from a parent that is not in the output.
+  const inherit = bucketInheritor();
   const flush = () => {
+    if (heading !== null) canonical = inherit(heading, canonical);
     const text = joinProse(held);
     if (text.trim().length > 0) {
       sections.push({ heading: heading ?? undefined, canonical, page, text });

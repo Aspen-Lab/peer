@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { blockMarker, inlineMath } from "@/lib/text/math";
 import {
+  bucketInheritor,
   canonicalizeHeading,
   chooseHtmlExtractor,
   looksLikeFullText,
@@ -111,6 +112,43 @@ describe("withInheritedBuckets", () => {
       section("Impact Statement", "body"),
     ]);
     expect(out.map((s) => s.canonical)).toEqual(["results", "body"]);
+  });
+});
+
+// P7-18 (F3): the PDF outline writes no section for a heading with nothing under it, so
+// "2. RESULTS AND DISCUSSION" never reached `withInheritedBuckets` and "2.1 …" was filed `body`. The
+// outline now tells every heading, text or not, to this one, in order.
+describe("bucketInheritor", () => {
+  it("carries a numbered heading's bucket to its subsections even when the heading was never made a section", () => {
+    const inherit = bucketInheritor();
+    expect(inherit("2. RESULTS AND DISCUSSION", "results")).toBe("results");
+    expect(inherit("2.1. Electrochemically Tuned Growth and Form of LiCoO2 Crystals", "body")).toBe("results");
+    expect(inherit("2.5. Crystal Tectonics Guided Electrochemomechanics", "body")).toBe("results");
+    expect(inherit("3. CONCLUSION", "conclusion")).toBe("conclusion");
+    expect(inherit("4. EXPERIMENTAL SECTION", "methods")).toBe("methods");
+    expect(inherit("4.1. Material Growth of Electrodeposited LiCoO2", "body")).toBe("methods");
+    expect(inherit("4.5. Macrotexture Analysis (X-ray Diffraction)", "body")).toBe("methods");
+  });
+
+  it("answers as withInheritedBuckets does over the same headings, one at a time", () => {
+    const list = [
+      ["5 Results", "results"],
+      ["5.1 Model Comparison Across Budgets", "methods"],
+      ["5.3 Limitations", "limitations"],
+      ["5.3.1 Hardware", "body"],
+      ["Impact Statement", "body"],
+    ] as const;
+    const inherit = bucketInheritor();
+    const one = list.map(([heading, canonical]) => inherit(heading, canonical));
+    const all = withInheritedBuckets(list.map(([heading, canonical]) => ({ heading, canonical }))).map((s) => s.canonical);
+    expect(one).toEqual(all);
+  });
+
+  it("starts each paper with an empty numbering", () => {
+    const first = bucketInheritor();
+    first("2. RESULTS", "results");
+    const second = bucketInheritor();
+    expect(second("2.1 Setup", "body")).toBe("body");
   });
 });
 

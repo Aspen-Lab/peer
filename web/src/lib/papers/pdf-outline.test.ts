@@ -1041,3 +1041,62 @@ describe("the end matter after the argument is not the paper's (P7-18, F2)", () 
     expect(textOf(after)).not.toContain("Notes the end matter holds");
   });
 });
+
+describe("a numbered subsection takes its parent's bucket, even when the parent has no text of its own (P7-18, F3)", () => {
+  // "2. RESULTS AND DISCUSSION" and "4. EXPERIMENTAL SECTION" hold only their subsections: the outline
+  // writes no section for a heading with nothing under it, so "2.1 …" and "4.1 …" were filed `body` —
+  // `withInheritedBuckets` runs on what the outline wrote and never saw the parent's number.
+  const sectionsOf = (rows: PageRow[]) => buildOutline(rowsPage(rows)).sections ?? [];
+  const bucketsOf = (rows: PageRow[]) => sectionsOf(rows).map((s) => [s.heading, s.canonical]);
+
+  it("files 2.1–2.5 under results and 4.1–4.5 under methods on the owner's paper's headings", () => {
+    const sections = sectionsOf(OWNER_PAPER);
+    const counts: Record<string, number> = {};
+    for (const s of sections) counts[s.canonical ?? "body"] = (counts[s.canonical ?? "body"] ?? 0) + 1;
+
+    expect(counts).toEqual({ abstract: 1, introduction: 1, results: 5, conclusion: 1, methods: 5 });
+    for (const s of sections) {
+      if (/^2\.\d/.test(s.heading ?? "")) expect(s.canonical).toBe("results");
+      if (/^4\.\d/.test(s.heading ?? "")) expect(s.canonical).toBe("methods");
+    }
+  });
+
+  it("reaches past every empty level: 5.1.1 under an empty 5.1 under an empty 5", () => {
+    const rows: PageRow[] = [
+      ["H", "ABSTRACT"], P, ["N", "1. INTRODUCTION"], P,
+      ["N", "5. EXPERIMENTS"], ["N", "5.1 Setup of the cells"], ["N", "5.1.1 Hardware used in the tests"], P,
+      ["N", "5.2 Cycling protocol"], P,
+    ];
+    expect(bucketsOf(rows)).toEqual([
+      ["ABSTRACT", "abstract"],
+      ["1. INTRODUCTION", "introduction"],
+      ["5.1.1 Hardware used in the tests", "results"],
+      ["5.2 Cycling protocol", "results"],
+    ]);
+  });
+
+  it("lets a subsection whose own heading names a strong bucket keep it", () => {
+    const rows: PageRow[] = [
+      ["H", "ABSTRACT"], P, ["N", "1. INTRODUCTION"], P,
+      ["N", "4. EXPERIMENTAL SECTION"], ["N", "4.1 Material growth"], P, ["N", "4.2 Limitations of the setup"], P,
+    ];
+    expect(bucketsOf(rows).slice(2)).toEqual([
+      ["4.1 Material growth", "methods"],
+      ["4.2 Limitations of the setup", "limitations"],
+    ]);
+  });
+
+  it("leaves a subsection with no numbered ancestor, an unnumbered paper and a sibling's number alone", () => {
+    const rows: PageRow[] = [
+      ["H", "Abstract"], P, ["H", "Introduction"], P,
+      ["N", "2.1 Something stands alone"], P,
+      ["H", "Methods"], P,
+    ];
+    expect(bucketsOf(rows)).toEqual([
+      ["Abstract", "abstract"],
+      ["Introduction", "introduction"],
+      ["2.1 Something stands alone", "body"],
+      ["Methods", "methods"],
+    ]);
+  });
+});

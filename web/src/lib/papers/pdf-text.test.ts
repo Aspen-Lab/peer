@@ -5,7 +5,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { minimalPdf, prose, type Run } from "./minimal-pdf.test-helper";
+import type { Paper } from "@/types";
 import { extractPdfTextFromPath, tryExtractPdfText } from "./pdf-text";
+import { buildReading, describeAvailability } from "./reading";
 
 // The smallest thing `downloadPdf` accepts as a PDF: the magic bytes.
 const PDF_BYTES = new TextEncoder().encode("%PDF-1.4\n%âã\n1 0 obj\n<< >>\nendobj\n");
@@ -404,3 +406,66 @@ describe.skipIf(!existsSync(SPEC_PDF))(
     }, 60_000);
   },
 );
+
+// P7-18 (F3, §1h.39 c): "2 Results and Discussion" and "4 Experimental Section" hold only their
+// subsections, so the outline writes no section for them — and "2.1 …" and "4.1 …", whose own words say
+// nothing, were filed `body`: no methods, no results, and the no-key Decision sentence said so.
+describe("extractPdfTextFromPath's buckets — subsections of a numbered heading that holds no text (P7-18, F3)", () => {
+  const emptyParents: Run[][] = [
+    [
+      ["Layered Cathode Films Grown By Electrodeposition", 72, 70, 18],
+      ["Abstract", 72, 110, 14],
+      ...prose(["We grow layered cathode films and follow the shape of their crystals under cycling."], 130),
+      ["1 Introduction", 72, 170, 11],
+      ...prose(["Layered oxides store most of the lithium in today's batteries and fail slowly with use."], 190),
+    ],
+    [
+      ["2 Results and Discussion", 72, 80, 11],
+      ["2.1 Growth of the crystals", 72, 100, 11],
+      ...prose(["The films grow as faceted crystals whose form follows the potential they are grown at."], 120),
+      ["2.2 Twinned interfaces", 72, 170, 11],
+      ...prose(["Neighbouring crystals meet at twin boundaries that carry the strain of cycling away."], 190),
+      ["3 Conclusion", 72, 240, 11],
+      ...prose(["The shape of the crystals sets how long the cathode lasts under repeated cycling."], 260),
+    ],
+    [
+      ["4 Experimental Section", 72, 80, 11],
+      ["4.1 Material growth", 72, 100, 11],
+      ...prose(["Films were grown on a gold substrate from a molten hydroxide bath held at a fixed potential."], 120),
+      ["4.2 Raman spectroscopy", 72, 170, 11],
+      ...prose(["Spectra were collected across the film with a laser focused to a spot under a micrometre."], 190),
+    ],
+  ];
+
+  it("files 2.1 and 2.2 under results and 4.1 and 4.2 under methods", async () => {
+    const result = await extractPdfTextFromPath(await onDisk("empty-parents.pdf", emptyParents));
+
+    expect(result.ok).toBe(true);
+    expect(result.doc?.sections.map((s) => [s.heading, s.canonical])).toEqual([
+      ["Abstract", "abstract"],
+      ["1 Introduction", "introduction"],
+      ["2.1 Growth of the crystals", "results"],
+      ["2.2 Twinned interfaces", "results"],
+      ["3 Conclusion", "conclusion"],
+      ["4.1 Material growth", "methods"],
+      ["4.2 Raman spectroscopy", "methods"],
+    ]);
+  });
+
+  it("no longer tells a reader with no key that the PDF has no methods section", async () => {
+    const result = await extractPdfTextFromPath(await onDisk("empty-parents-sentence.pdf", emptyParents));
+    const doc = result.doc;
+    expect(doc).toBeDefined();
+    const paper: Paper = {
+      id: "upload:0123456789abcdef", title: "Layered Cathode Films", authors: [], relevanceReason: "", venue: "", source: "other",
+      summaryIntro: "We grow layered cathode films and follow the shape of their crystals under cycling.",
+      summaryExperimentKeywords: [], summaryResultDiscussion: "", isSaved: false,
+    };
+    const reading = buildReading(paper, { status: "ok", doc, attempts: [] });
+
+    expect(reading.provenance.buckets).toEqual(expect.arrayContaining(["methods", "results"]));
+    const [sentence] = describeAvailability({ reading, report: null, providerConfigured: false, profileHasProject: false, modelFailed: false });
+    expect(sentence).toContain("Full text read: a 3-page PDF");
+    expect(sentence).not.toContain("no methods section");
+  });
+});
