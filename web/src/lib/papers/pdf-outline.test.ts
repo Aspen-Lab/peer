@@ -863,3 +863,181 @@ describe("a citation number is dropped, an exponent is kept (P7-11)", () => {
     expect(read([["1", sup()], ["Department of Materials Science"]])).toEqual(["1Department of Materials Science"]);
   });
 });
+
+// ── P7-18 (§1h.39 b, c): the end matter after the argument, and the subsections' buckets ────────────
+//
+// The owner's paper (a 19-page, two-column journal article) ends its argument at 4.5 and then prints
+// ASSOCIATED CONTENT, AUTHOR INFORMATION (with the authors' affiliations, set in italic blocks the
+// outline reads as headings) and Notes, before ACKNOWLEDGMENTS and REFERENCES. Rows are written as a
+// page of lines: ["H", text] a heading set larger, ["S", text] a sub-heading in another face (two
+// headings of one face and size, a leading apart, are one heading set over two lines), ["N", text] a
+// numbered heading in the body's size, ["I", text] a line in an italic face (an affiliation block),
+// ["P", text] a line of prose.
+
+type PageRow = ["H" | "S" | "N" | "I" | "P", string];
+const PROSE = "Recurrent neural networks have long been established in sequence modelling.";
+const P: PageRow = ["P", PROSE];
+const rowsPage = (rows: PageRow[]): PdfPageText[] => [
+  {
+    page: 1,
+    items: [
+      item("A Paper About Sequence Models", { height: 17, y: 790 }),
+      ...rows.map(([kind, text], i): PdfTextItem => {
+        const y = 770 - i * 14;
+        if (kind === "H") return item(text, { y, height: 12 });
+        if (kind === "S") return item(text, { y, height: 11, fontName: "display" });
+        if (kind === "I") return item(text, { y, fontName: "italic" });
+        return item(text, { y });
+      }),
+    ],
+  },
+];
+const headingsOf = (rows: PageRow[]) => buildOutline(rowsPage(rows)).sections?.map((s) => s.heading);
+const textOf = (rows: PageRow[]) => (buildOutline(rowsPage(rows)).sections ?? []).map((s) => s.text).join(" ");
+const marker = (text: string): PageRow => ["P", `${text} and nothing else follows from it in this test.`];
+
+/** The owner's paper, heading by heading (19 of them, as A counted), with the end matter's
+ *  sub-headings and affiliation blocks as the paper prints them. */
+const OWNER_PAPER: PageRow[] = [
+  ["H", "ABSTRACT"], P,
+  ["N", "1. INTRODUCTION"], P,
+  ["N", "2. RESULTS AND DISCUSSION"],
+  ["N", "2.1. Electrochemically Tuned Growth and Form of LiCoO2 Crystals"], P,
+  ["N", "2.2. Electrochemically Governed Crystal Morphogenesis during Growth"], P,
+  ["N", "2.3. Electrochemical Growth of Twinned, Coincident Site Lattice Interfaces"], P,
+  ["N", "2.4. Effect of Crystal Tectonics on Electrochemical Performance"], P,
+  ["N", "2.5. Crystal Tectonics Guided Electrochemomechanics"], P,
+  ["N", "3. CONCLUSION"], P,
+  ["N", "4. EXPERIMENTAL SECTION"],
+  ["N", "4.1. Material Growth of Electrodeposited LiCoO2"], P,
+  ["N", "4.2. Electrochemical Data Acquisition and Analysis"], P,
+  ["N", "4.3. EBSD Sample Preparation, Data Acquisition and Analysis"], P,
+  ["N", "4.4. Raman Spectroscopy"], P,
+  ["N", "4.5. Macrotexture Analysis and Construction of Predominance Diagrams"], P,
+  ["H", "ASSOCIATED CONTENT"],
+  ["S", "Supporting Information"], marker("The Supporting Information is available free of charge"),
+  ["H", "AUTHOR INFORMATION"],
+  ["S", "Corresponding Authors"],
+  ["I", "Paul V. Braun - Department of Materials Science and"],
+  ["I", "Urbana, Illinois 61801, United States; Materials Research"],
+  ["S", "Authors"],
+  ["I", "Arghya Patra - Department of Materials Science and"],
+  ["I", "Urbana, Illinois 61801, United States"],
+  ["S", "Notes"], marker("The authors declare no competing financial interest"),
+  ["H", "ACKNOWLEDGMENTS"], marker("The authors thank the funders"),
+  ["H", "REFERENCES"], marker("Smith, J. A paper. 2015"),
+];
+const BODY_HEADINGS = [
+  "ABSTRACT",
+  "1. INTRODUCTION",
+  "2.1. Electrochemically Tuned Growth and Form of LiCoO2 Crystals",
+  "2.2. Electrochemically Governed Crystal Morphogenesis during Growth",
+  "2.3. Electrochemical Growth of Twinned, Coincident Site Lattice Interfaces",
+  "2.4. Effect of Crystal Tectonics on Electrochemical Performance",
+  "2.5. Crystal Tectonics Guided Electrochemomechanics",
+  "3. CONCLUSION",
+  "4.1. Material Growth of Electrodeposited LiCoO2",
+  "4.2. Electrochemical Data Acquisition and Analysis",
+  "4.3. EBSD Sample Preparation, Data Acquisition and Analysis",
+  "4.4. Raman Spectroscopy",
+  "4.5. Macrotexture Analysis and Construction of Predominance Diagrams",
+];
+
+describe("the end matter after the argument is not the paper's (P7-18, F2)", () => {
+  it("ends the map after 4.5 on the owner's paper's heading list: associated content, author information and the affiliation blocks are out", () => {
+    expect(headingsOf(OWNER_PAPER)).toEqual(BODY_HEADINGS);
+    const text = textOf(OWNER_PAPER);
+    expect(text).not.toContain("Supporting Information is available");
+    expect(text).not.toContain("Urbana");
+    expect(text).not.toContain("Department of Materials");
+    expect(text).not.toContain("competing financial interest");
+    expect(text).not.toContain("Smith, J.");
+  });
+
+  const AFTER_THE_ARGUMENT: PageRow[] = [
+    ["H", "ABSTRACT"], P, ["N", "1. INTRODUCTION"], P, ["N", "2. METHODS"], P, ["N", "3. CONCLUSION"], P,
+  ];
+  it.each([
+    "ASSOCIATED CONTENT",
+    "Associated Content",
+    "AUTHOR INFORMATION",
+    "Author Information",
+    "Author Contributions",
+    "Author contribution",
+    "Supporting Information",
+    "Supporting Information Available",
+    "Conflicts of Interest",
+    "Conflict of Interest",
+    "Declaration of Competing Interest",
+    "Declaration of interests",
+    "Competing interests",
+    "Data availability",
+    "Data Availability Statement",
+    "5. Data availability",
+    "Funding",
+    "Funding Sources",
+    "6. Funding",
+  ])("%s, printed after the last numbered section, ends the argument and takes what follows with it", (heading) => {
+    const numbered = /^\d/.test(heading);
+    const rows: PageRow[] = [...AFTER_THE_ARGUMENT, numbered ? ["N", heading] : ["H", heading], marker("Under the end matter")];
+    expect(headingsOf(rows)).toEqual(["ABSTRACT", "1. INTRODUCTION", "2. METHODS", "3. CONCLUSION"]);
+    expect(textOf(rows)).not.toContain("Under the end matter");
+  });
+
+  it("takes everything from the first such heading on, sub-headings and text, to the references", () => {
+    const rows: PageRow[] = [...AFTER_THE_ARGUMENT, ["H", "AUTHOR INFORMATION"], ["S", "Funding"], marker("Funding text"), ["H", "Methods addendum"], marker("Addendum text")];
+    expect(headingsOf(rows)).toEqual(["ABSTRACT", "1. INTRODUCTION", "2. METHODS", "3. CONCLUSION"]);
+    expect(textOf(rows)).not.toMatch(/Funding text|Addendum text/);
+  });
+
+  // A template that prints Funding (or Data availability, Competing interests) on page 1 under the
+  // abstract must not end the argument there: P0-01's own comment names these as page-1 headings.
+  it("does not end anything at a Funding printed on page 1 under the abstract", () => {
+    const rows: PageRow[] = [
+      ["H", "ABSTRACT"], P,
+      ["H", "Funding"], marker("This work was supported by a grant"),
+      ["N", "1. INTRODUCTION"], P, ["N", "2. METHODS"], P, ["N", "3. CONCLUSION"], P,
+    ];
+    expect(headingsOf(rows)).toEqual(["ABSTRACT", "Funding", "1. INTRODUCTION", "2. METHODS", "3. CONCLUSION"]);
+    expect(textOf(rows)).toContain("This work was supported by a grant");
+  });
+
+  it.each(["Data availability", "Competing interests", "Conflicts of Interest", "Declaration of Competing Interest"])(
+    "does not end anything at %s printed on page 1 under the abstract either",
+    (heading) => {
+      const rows: PageRow[] = [
+        ["H", "ABSTRACT"], P,
+        ["H", heading], marker("Printed on the first page"),
+        ["N", "1. INTRODUCTION"], P, ["N", "2. METHODS"], P, ["N", "3. CONCLUSION"], P,
+      ];
+      expect(headingsOf(rows)).toEqual(["ABSTRACT", heading, "1. INTRODUCTION", "2. METHODS", "3. CONCLUSION"]);
+    },
+  );
+
+  it("leaves a Funding in a paper with no numbered sections where it is: there is no body's last section to stand after", () => {
+    const rows: PageRow[] = [["H", "Abstract"], P, ["H", "Introduction"], P, ["H", "Methods"], P, ["H", "Funding"], marker("Unnumbered funding text")];
+    expect(headingsOf(rows)).toEqual(["Abstract", "Introduction", "Methods", "Funding"]);
+  });
+
+  it("does not take a body section for end matter because its words begin like one", () => {
+    const rows: PageRow[] = [
+      ["H", "ABSTRACT"], P, ["N", "1. INTRODUCTION"], P,
+      ["N", "2. Notes on the method"], P,
+      ["N", "3. Supporting information retrieval"], P,
+      ["N", "4. CONCLUSION"], P,
+      // After the body's last numbered section, and still the paper's: not the heading "Funding".
+      ["H", "Funding models for research"], marker("Why a funder pays for a method"),
+    ];
+    expect(headingsOf(rows)).toEqual([
+      "ABSTRACT", "1. INTRODUCTION", "2. Notes on the method", "3. Supporting information retrieval",
+      "4. CONCLUSION", "Funding models for research",
+    ]);
+  });
+
+  it("keeps a plain Notes section of the body: Notes is end matter only where end matter has already begun", () => {
+    const rows: PageRow[] = [["H", "ABSTRACT"], P, ["N", "1. INTRODUCTION"], P, ["H", "Notes"], marker("Notes the body keeps"), ["N", "2. CONCLUSION"], P];
+    expect(headingsOf(rows)).toEqual(["ABSTRACT", "1. INTRODUCTION", "Notes", "2. CONCLUSION"]);
+    const after: PageRow[] = [...AFTER_THE_ARGUMENT, ["H", "ASSOCIATED CONTENT"], ["S", "Notes"], marker("Notes the end matter holds")];
+    expect(textOf(after)).not.toContain("Notes the end matter holds");
+  });
+});

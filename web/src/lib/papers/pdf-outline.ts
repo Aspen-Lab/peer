@@ -114,8 +114,37 @@ const TERMINAL = new Set(["references"]);
 const APPARATUS_HEADING =
   /^(?:(?:[A-Z]|[IVX]+|\d+)(?:\.\d+)*\.?\s+)?(?:acknowledge?ments?|appendix|appendices|supplementary\s+(?:materials?|information))\b/i;
 
-function endsTheArgument(heading: string, canonical: string): boolean {
-  return TERMINAL.has(canonical) || APPARATUS_HEADING.test(heading.trim());
+/** A section number in front of a heading's own words ("4.", "IV", "B.2"); case-sensitive, so the
+ *  "A" of "A funding model" is not one more than the article it is. */
+const SECTION_LEAD = /^(?:[A-Z]|[IVX]+|\d+)(?:\.\d+)*\.?\s+/;
+/**
+ * P7-18 (F2, §1h.39 b): the end matter a journal prints after the argument,
+ * matched on the heading's own words (numbered or not, any case). What these
+ * name is never the paper's argument, wherever the template puts it:
+ * "ASSOCIATED CONTENT" and its "Supporting Information", "AUTHOR INFORMATION"
+ * with the authors' affiliations under it, the author contributions. "Notes"
+ * is not in the list: it is end matter only because it stands after one of
+ * these, and everything after the first is out already.
+ */
+const END_MATTER_HEADING =
+  /^(?:associated\s+content|author\s+(?:information|contributions?)\b|supporting\s+information(?:\s+(?:available|statement))?\s*[:.]?\s*$)/i;
+/**
+ * The end-matter headings some templates print on page 1, under the abstract
+ * (P0-01's own comment names three of them). They end the argument only where
+ * they stand after the body's last numbered section; elsewhere they are a
+ * section like any other. "Funding" is the heading alone — "Funding models
+ * for research" is a body section.
+ */
+const END_MATTER_AFTER_BODY =
+  /^(?:funding(?:\s+(?:sources?|information|statement|support))?\s*[:.]?\s*$|conflicts?\s+of\s+interests?\b|declarations?\s+of\s+(?:competing\s+|conflicting\s+)?interests?\b|competing\s+(?:financial\s+)?interests?\b|data\s+availability\b)/i;
+
+/** Whether this heading, by its own words, is the paper's apparatus or end matter wherever it
+ *  stands (`afterBody` false) or once the body's last numbered section is behind it (true). */
+function endsTheArgument(heading: string, canonical: string, afterBody = false): boolean {
+  const text = heading.trim();
+  if (TERMINAL.has(canonical) || APPARATUS_HEADING.test(text)) return true;
+  const own = text.replace(SECTION_LEAD, "");
+  return END_MATTER_HEADING.test(own) || (afterBody && END_MATTER_AFTER_BODY.test(own));
 }
 /** The first of these ends the cover and starts the paper. */
 const FRONT_MATTER_END = new Set(["abstract", "introduction"]);
@@ -851,6 +880,18 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
   // Introduction). One such line is a sentence or a note, and stays.
   const dated = read.map((line) => PUBLICATION_DATE.test(line.text.trim()));
   const inDateBox = (i: number) => dated[i] && (dated[i - 1] === true || dated[i + 1] === true);
+  // P7-18 (F2): where the body's last numbered section stands. A heading that is end matter only
+  // after the body ("Funding": some templates print it on page 1, under the abstract) ends the
+  // argument only past this line; a paper with no numbered section has no such line, and there
+  // those headings stay sections, as they were.
+  let lastNumbered = -1;
+  for (let i = read.length - 1; i >= 0 && lastNumbered < 0; i--) {
+    const line = read[i];
+    if (isFurniture(line, furniture) || isMarginPrint(line) || inDateBox(i)) continue;
+    const head = headingOf(line, body);
+    // A numbered end-matter heading ("6. Funding", "7. Acknowledgements") is not the body's.
+    if (head && sectionNumberOf(head) && !endsTheArgument(head, canonicalizeHeading(head), true)) lastNumbered = i;
+  }
   let lastHeading: PdfLine | null = null;
 
   for (let i = 0; i < read.length; i++) {
@@ -889,8 +930,10 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
       lastHeading = line;
       canonical = canonicalizeHeading(heading);
       // The argument ends at the references, the acknowledgements or an
-      // appendix; what follows is apparatus.
-      if (endsTheArgument(heading, canonical)) done = true;
+      // appendix, or at the end matter a journal prints after it (associated
+      // content, author information, data availability, funding past the
+      // body ...); what follows is apparatus.
+      if (endsTheArgument(heading, canonical, lastNumbered >= 0 && i > lastNumbered)) done = true;
       continue;
     }
     lastHeading = null;
