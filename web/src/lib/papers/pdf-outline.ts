@@ -754,9 +754,123 @@ export function headingOf(line: PdfLine, body: { size: number; font: string }): 
   return text;
 }
 
+// ── Line ends: the document's own words decide a hyphen (P9-09, cluster C) ──────
+//
+// A line that ends in a hyphen is either a word the page broke ("archi-" / "tecture") or a compound
+// that happens to break at its own hyphen ("deposition-" / "rate-limiting"), and the line alone does
+// not say which. The document does: a paper that writes "cross-sectional" whole elsewhere has it with
+// its hyphen at a line's end too, one that writes "degradation" whole has "degra-" / "dation". The old
+// rule dropped every hyphen and glued the halves: right four times in five on the one real paper of
+// the set, and "deposition-rate-limiting" became "depositionrate-limiting".
+
+/** A real hyphen: U+002D, U+2010, U+2011, the soft hyphen. An en or em dash at a line's end is
+ *  punctuation, not a broken word, and keeps the space after it. */
+const HYPHEN_END = /[-\u2010\u2011\u00AD]$/;
+
+/** Prefixes English writes closed ("nanowire", "nonequilibrium"). Used only for a document that never
+ *  hyphenates the prefix itself: the one place the rule trusts an English prior over the page's words. */
+const CLOSED_PREFIXES = new Set([
+  "nano", "micro", "macro", "meso", "poly", "mono", "multi", "inter", "intra", "electro", "chemo",
+  "hetero", "homo", "semi", "ultra", "sub", "super", "hyper", "pseudo", "photo", "thermo", "non",
+]);
+
+/** What a document writes whole, in lower case: its words, its hyphenated compounds, and the
+ *  prefixes it hyphenates. A piece the page broke at a line's end is none of them. */
+export interface Vocabulary {
+  words: ReadonlySet<string>;
+  compounds: ReadonlySet<string>;
+  prefixes: ReadonlySet<string>;
+}
+
+const wordForm = (token: string) => token.toLowerCase().replace(/\u00AD/g, "").replace(/[\u2010\u2011]/g, "-");
+
+export function vocabularyOf(lines: readonly PdfLine[]): Vocabulary {
+  const words = new Set<string>();
+  const compounds = new Set<string>();
+  const prefixes = new Set<string>();
+  const broken = (line: PdfLine | undefined) => !!line && !line.block && HYPHEN_END.test(line.text.trimEnd());
+  lines.forEach((line, i) => {
+    if (line.block) return;
+    const tokens = line.text.split(/\s+/).filter(Boolean);
+    if (broken(line)) tokens.pop(); // the left piece of a word the page broke...
+    if (broken(lines[i - 1])) tokens.shift(); // ...and its right piece
+    for (const raw of tokens) {
+      const token = wordForm(raw.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ""));
+      // A hyphen left hanging inside a line ("nano- and microstructure") elides the second word; it
+      // says nothing about whether the paper hyphenates "nano" before "wire", so it is no prefix.
+      if (/^\p{L}+$/u.test(token)) {
+        words.add(token);
+      } else if (/^\p{L}+(?:-\p{L}+)+$/u.test(token)) {
+        const parts = token.split("-");
+        compounds.add(token);
+        for (const part of parts) words.add(part);
+        for (const part of parts.slice(0, -1)) prefixes.add(part);
+      }
+    }
+  });
+  return { words, compounds, prefixes };
+}
+
+/**
+ * `current` ends in a hyphen and `next` is the line that follows it: the two joined, by the first of
+ * these that applies. With no evidence in the document (a one-page upload has none) every word-based
+ * step falls to "join", which is what the old rule did, so a short text cannot get worse.
+ *
+ *  1. a digit before and a digit after is a range: keep the hyphen ("10-20");
+ *  2. the next line opens with a bracket, a symbol or a digit: keep it ("non-⟨003⟩||ND");
+ *  3. "and" / "or" after it is a suspended hyphen, as printed: keep it, and the space ("intra- and");
+ *  4. no letter before it: after a digit keep ("3-dimensional", "CO2-free"), after a bracket join ("(de)-");
+ *  5. the right token holds a digit, steps from lower to upper case twice (a formula), or opens with a
+ *     capital (a Title-Case compound): keep it ("Li-NixCoyMnzO2", "Lithium-Ion");
+ *  6. the joined form occurs whole in the document: join; the hyphenated form does: keep;
+ *  7. either half is not a word of the document: join (a fragment of a word);
+ *  8. a closed prefix the document never hyphenates: join ("nano-" + "wire");
+ *  9. else both halves are words of the paper and the joined form never occurs: keep, no space.
+ */
+function mend(current: string, next: string, vocab: Vocabulary): string {
+  const left = current.slice(0, -1);
+  const joined = `${left}${next}`;
+  const kept = `${left}-${next}`;
+  if (/\p{N}$/u.test(left) && /^\p{N}/u.test(next)) return kept;
+  if (!/^\p{L}/u.test(next)) return kept;
+  const right = /^\S+/.exec(next)?.[0].replace(/[^\p{L}\p{N}]+$/u, "") ?? "";
+  if (/^(?:and|or|nor)$/i.test(right)) return `${left}- ${next}`;
+  const leftWord = /\p{L}+$/u.exec(left)?.[0];
+  if (!leftWord) return /\p{N}$/u.test(left) ? kept : joined;
+  if (/\p{N}/u.test(right) || (right.match(/\p{Ll}\p{Lu}/gu) ?? []).length >= 2 || /^\p{Lu}/u.test(right)) return kept;
+  const l = wordForm(leftWord);
+  const whole = wordForm(right);
+  const leftToken = wordForm(/[\p{L}\u2010\u2011-]+$/u.exec(left)?.[0] ?? leftWord).replace(/^-+/, "");
+  if (vocab.words.has(leftToken + whole) || vocab.compounds.has(leftToken + whole)) return joined;
+  if (vocab.compounds.has(`${leftToken}-${whole}`)) return kept;
+  const r = /^\p{L}+/u.exec(whole)?.[0] ?? "";
+  if (!vocab.words.has(r) || !vocab.words.has(l)) return joined;
+  return CLOSED_PREFIXES.has(l) && !vocab.prefixes.has(l) ? joined : kept;
+}
+
+/** Two lines of one paragraph, joined the way the page wrote them. */
+function joinLines(current: string, next: string, vocab: Vocabulary): string {
+  if (HYPHEN_END.test(current)) return mend(current, next, vocab);
+  return `${current} ${next}`;
+}
+
+/** The parts of one caption (its first line, then the lines under it), folded the same way. */
+function foldLines(parts: readonly string[], vocab: Vocabulary): string {
+  let folded = "";
+  for (const part of parts) if (part) folded = folded ? joinLines(folded, part, vocab) : part;
+  return folded;
+}
+
+export interface JoinOptions {
+  /** The document's own words; found from `lines` when the caller has no more than these. */
+  vocab?: Vocabulary;
+}
+
 /** Lines of prose, joined the way the page breaks them: a hyphen at a line's
- *  end is a broken word, a change of rhythm or an indent starts a paragraph. */
-export function joinProse(lines: PdfLine[]): string {
+ *  end is a broken word or a compound's own (the document's words say which), a
+ *  change of rhythm or an indent starts a paragraph. */
+export function joinProse(lines: readonly PdfLine[], options: JoinOptions = {}): string {
+  const vocab = options.vocab ?? vocabularyOf(lines);
   const paragraphs: string[] = [];
   let current = "";
   let previous: PdfLine | null = null;
@@ -791,9 +905,7 @@ export function joinProse(lines: PdfLine[]): string {
       paragraphs.push(current.trim());
       current = "";
     }
-    if (!current) current = line.text;
-    else if (/[‐-―-]$/.test(current)) current = `${current.slice(0, -1)}${line.text}`;
-    else current = `${current} ${line.text}`;
+    current = current ? joinLines(current, line.text, vocab) : line.text;
     previous = line;
   }
   if (current.trim()) paragraphs.push(current.trim());
@@ -839,6 +951,8 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
   const body = bodyStyle(lines);
   const furniture = furnitureOf(lines, pages.length);
   const title = titleOf(lines, body);
+  // P9-09: the paper's own words, read once from every line, decide each hyphen a line ends in.
+  const vocab = vocabularyOf(lines);
 
   // A first page opens with names, affiliations and a preprint stamp — set
   // in their own sizes, so every one of them reads as a heading. The paper
@@ -864,7 +978,7 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
   const inherit = bucketInheritor();
   const flush = () => {
     if (heading !== null) canonical = inherit(heading, canonical);
-    const text = joinProse(held);
+    const text = joinProse(held, { vocab });
     if (text.trim().length > 0) {
       sections.push({ heading: heading ?? undefined, canonical, page, text });
     }
@@ -916,14 +1030,14 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
         previous = nextLine;
         i++;
       }
-      const full = [caption.caption ?? "", ...rest].join(" ").replace(/\s+/g, " ").trim().slice(0, CAPTION_MAX);
+      const full = foldLines([caption.caption ?? "", ...rest], vocab).replace(/\s+/g, " ").trim().slice(0, CAPTION_MAX);
       if (full.length > 0) figureCaptions.push({ ...caption, caption: full });
       continue;
     }
     const next = headingOf(line, body);
     if (next) {
       if (heading !== null && wrapsHeading(lastHeading, line, next)) {
-        heading = `${heading} ${next}`;
+        heading = joinLines(heading, next, vocab);
       } else {
         flush();
         heading = next;

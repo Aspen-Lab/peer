@@ -115,6 +115,126 @@ describe("prose", () => {
   });
 });
 
+// ── P9-09 (cluster C): a hyphen at a line's end is decided by the document's own words ───────────────
+//
+// Before this the hyphen was dropped and the next line glued on, whatever the halves were: right four
+// times in five on the one real paper of the set, and "deposition-" / "rate-limiting" became
+// "depositionrate-limiting". The words are invented (B P9-02, Appendix A); nothing is a paper's.
+describe("a hyphen at a line's end follows the document's own words (P9-09, cluster C)", () => {
+  /** Lines one pitch (12) apart, top first. */
+  const flow = (texts: string[], y0 = 700, step = 12): PdfLine[] => texts.map((text, i) => line(text, { y: y0 - i * step }));
+  const FILLER = "Quillwort cathodes were annealed in air before every measurement was taken.";
+  const filler = (y: number) => item(FILLER, { y });
+  const readOne = (items: PdfTextItem[]) =>
+    buildOutline([{ page: 1, items: [item("A Paper About Cathodes", { height: 17, y: 760 }), item("1 Methods", { y: 740 }), ...items] }]);
+
+  it("keeps the hyphen when both halves are words of the document and the joined form never occurs", () => {
+    const lines = flow([
+      "The pellet density was fixed and the ramp rate was slow.",
+      "A hold step follows the ramp. The rate was logged twice.",
+      "The furnace schedule sets the ramp-",
+      "rate limit for every run.",
+    ]);
+    expect(joinProse(lines)).toContain("sets the ramp-rate limit for every run.");
+  });
+
+  it("joins when the joined form occurs whole elsewhere", () => {
+    const lines = flow(["The film showed delamination at the corners.", "No more crack growth was seen after the delami-", "nation event."]);
+    expect(joinProse(lines)).toContain("after the delamination event.");
+  });
+
+  it("keeps the hyphen when the paper writes the compound whole elsewhere", () => {
+    const lines = flow(["A low-energy path was taken.", "The cells then followed a low-", "energy route to the end."]);
+    expect(joinProse(lines)).toContain("followed a low-energy route");
+  });
+
+  it("joins when the right half is not a word of the document", () => {
+    expect(joinProse(flow(["The two layers synergisti-", "cally control the crack."]))).toContain("synergistically control");
+  });
+
+  it("does not count the pieces of a broken word as words: a fragment at a line's end is not evidence", () => {
+    // "cally" is whole later in the text, and "synergisti" only at a line's end: the left half is no word.
+    const lines = flow(["The two layers synergisti-", "cally control the crack, and cally is not a word here."]);
+    expect(joinProse(lines)).toContain("synergistically control");
+  });
+
+  it("joins when there is no evidence at all: a short text keeps the old reading", () => {
+    expect(joinProse(flow(["The furnace sets the ramp-", "rate limit."]))).toContain("the ramprate limit.");
+  });
+
+  it("keeps the hyphen before a bracketed symbol or a digit", () => {
+    expect(joinProse(flow(["The condition holds for any non-", "⟨003⟩||ND film."]))).toContain("any non-⟨003⟩||ND film.");
+    expect(joinProse(flow(["The sample was labelled Type-", "2 and kept dry."]))).toContain("labelled Type-2 and");
+  });
+
+  it("keeps the hyphen of a Title-Case compound and of a formula", () => {
+    expect(joinProse(flow(["A review of Lithium-", "Ion cells."]))).toContain("Lithium-Ion cells.");
+    expect(joinProse(flow(["The doped Li-", "NixCoyMnzO2 (NMC) powders."]))).toContain("Li-NixCoyMnzO2 (NMC)");
+  });
+
+  it("keeps a range between digits whole: no glued number", () => {
+    expect(joinProse(flow(["The current was swept from 10-", "20 mA over the cycle."]))).toContain("from 10-20 mA");
+  });
+
+  it("keeps the hyphen after a digit or a formula too: 3-dimensional, CO2-free", () => {
+    expect(joinProse(flow(["A 3-", "dimensional lattice formed."]))).toContain("A 3-dimensional lattice");
+    expect(joinProse(flow(["The CO2-", "free route was used."]))).toContain("The CO2-free route");
+  });
+
+  it("joins after a bracket: no letters before the hyphen, the piece is a fragment", () => {
+    expect(joinProse(flow(["The (de)-", "intercalated phase formed."]))).toContain("The (de)intercalated phase");
+  });
+
+  it("joins a closed prefix when the document never hyphenates it", () => {
+    // Both halves are words of the document and "nanowire" never occurs whole: only the prefix says join.
+    const lines = flow(["Each nano structure was a thin wire in the array.", "The grown ZnO nano-", "wire arrays were rinsed."]);
+    expect(joinProse(lines)).toContain("ZnO nanowire arrays");
+  });
+
+  it("keeps a closed prefix's hyphen when the document hyphenates it itself", () => {
+    const lines = flow(["A nano-scale wire and a nano rod were grown.", "The grown ZnO nano-", "wire arrays were rinsed."]);
+    expect(joinProse(lines)).toContain("ZnO nano-wire arrays");
+  });
+
+  it("keeps the inner hyphen of the right half and joins the left: a word the page broke inside a compound", () => {
+    const lines = flow(["The crystallo-mechanical coupling was weak.", "It was a crys-", "tallo-mechanical effect."]);
+    expect(joinProse(lines)).toContain("It was a crystallo-mechanical effect.");
+  });
+
+  it("leaves a suspended hyphen as the paper printed it: intra- and intercrystal", () => {
+    expect(joinProse(flow(["Both intra-", "and intercrystal cracks were seen."]))).toContain("Both intra- and intercrystal cracks");
+  });
+
+  it("does not eat a dash that ends a line: only a hyphen is a broken word", () => {
+    expect(joinProse(flow(["The cell takes typing —", "everything else is fixed."]))).toContain("typing — everything");
+    expect(joinProse(flow(["The cell takes typing –", "everything else is fixed."]))).toContain("typing – everything");
+  });
+
+  it("mends a caption's broken words by the same rule", () => {
+    const outline = readOne([
+      filler(726), filler(714), filler(702),
+      item("The supersaturations stayed low through the first hour of growth in every run.", { y: 690 }),
+      item("Figure 1: Growth at high super-", { y: 650, fontName: "caption", height: 9 }),
+      item("saturations in the film and its low-", { y: 640, fontName: "caption", height: 9 }),
+      item("energy path under the low rate.", { y: 630, fontName: "caption", height: 9 }),
+      item("The energy of the path was low in every run of the sweep.", { y: 600 }),
+      filler(588), filler(576),
+    ]);
+    expect(outline.figureCaptions?.[0].caption).toBe("Growth at high supersaturations in the film and its low-energy path under the low rate.");
+  });
+
+  it("mends a wrapped heading by the same rule", () => {
+    const outline = readOne([
+      filler(726), filler(714),
+      item("The supersaturations stayed low through the first hour of growth in every run.", { y: 702 }),
+      item("2.1 Growth Under Super-", { y: 670, height: 14, fontName: "display" }),
+      item("saturations", { y: 654, height: 14, fontName: "display" }),
+      filler(630), filler(618), filler(606),
+    ]);
+    expect((outline.sections ?? []).map((s) => s.heading)).toContain("2.1 Growth Under Supersaturations");
+  });
+});
+
 describe("the whole reading", () => {
   const page = (n: number, rows: [string, Partial<PdfTextItem>?][]): PdfPageText => ({
     page: n,
