@@ -167,7 +167,9 @@ describe("readingToMarkdown with the reader's questions (P2-05)", () => {
         createElement(ForYourQuestions, { report: { forYourQuestions: ANSWERS } as Pick<PaperReport, "forYourQuestions">, map: MAP }),
       ),
     );
-    const page = html.replace(/<[^>]+>/g, "");
+    // P9-05 (X10): the page keeps "3 min" together on a no-break space so it never wraps apart; the
+    // export is portable Markdown and keeps the plain space. Same words, so the no-break space is read as a space here.
+    const page = html.replace(/<[^>]+>/g, "").replace(/\u00a0/g, " ");
     const { reading, report, sentences } = fixture({ forYourQuestions: ANSWERS });
 
     const md = readingToMarkdown(normalPaper, reading, report, sentences, QUESTIONS);

@@ -9,6 +9,9 @@ import { FOR_YOUR_QUESTIONS } from "./copy";
 import { EvidenceQuote, SectionLinks } from "./evidence-quote";
 import { ForYourQuestions } from "./for-your-questions";
 
+// P9-05 (X10): the minutes ride on a no-break space, so "3 min" never wraps apart.
+const NB = "\u00a0";
+
 const map: ReadingMap = {
   sections: [
     { id: "s1", heading: "1 Introduction", canonical: "introduction", role: "setup", page: 2, words: 260, minutes: 2, paragraphs: [] },
@@ -94,10 +97,9 @@ describe("ForYourQuestions (P2-04)", () => {
     expect(html).not.toContain("—");
     // Read next keeps both rows.
     expect(html).toContain("Read next");
-    expect(html).toContain("§2 Results · p.7 · 3 min");
+    expect(html).toContain(`§2 Results · p.7 · 3${NB}min`);
     expect(html).toContain("It reports the measured retention result.");
-    expect(html).toContain("§1 Introduction · p.2 · 2 min");
-    expect(html).toContain(">background<");
+    expect(html).toContain(`§1 Introduction · p.2 · 2${NB}min · background</p>`);
   });
 
   // P2-04b (§1g.15 finding 1): the sentence takes a period only when the
@@ -152,7 +154,7 @@ describe("ForYourQuestions (P2-04)", () => {
     // Both answers (both from "2 Results", page 7) carry it, once each.
     expect(html.match(/§2 Results<\/a> · p\.7<\/span>/g)).toHaveLength(2);
     // Read next keeps its own "§Heading · p.N · M min" label, which is not the attribution.
-    expect(html).toContain("§2 Results · p.7 · 3 min");
+    expect(html).toContain(`§2 Results · p.7 · 3${NB}min`);
   });
 
   it("takes the page from the answer, else from its section in the map, else none", () => {
@@ -195,14 +197,55 @@ describe("ForYourQuestions (P2-04)", () => {
     expect(quote({ where: "4 Discussion", page: 12 })).not.toContain("<a");
   });
 
+  // P9-05 (X10, the feature walk): a background item's meta line read "11 minbackground" — the role
+  // word was a separate span with no separator — and at 1440 it wrapped as "11 / min background".
+  // It is one string now, parts joined with " · ", the minutes on a no-break space, the role word
+  // only for a background item. (The DOM cannot measure a wrap; the no-break space is what pins it.)
+  it("joins the Read next meta line's parts with · in one string: §heading · p.N · N min · background, with no 'minbackground' (P9-05, X10)", () => {
+    const lines = (html: string) => [...html.matchAll(/<p class="[^"]*text-meta[^"]*">([^<]*)<\/p>/g)].map((match) => match[1]);
+    const html = render();
+
+    // The question's two surviving rows, in order: the answer row has no role word, the background row ends in it.
+    expect(lines(html)).toEqual([`§2 Results · p.7 · 3${NB}min`, `§1 Introduction · p.2 · 2${NB}min · background`]);
+    expect(html).not.toContain("minbackground");
+    expect(html.replace(NB, " ")).not.toMatch(/min\s*background/);
+    // The role word is not a span of its own any more.
+    expect(html).not.toContain("<span class=\"ml-2\">background</span>");
+    // The minutes never wrap apart: the space between the number and "min" is the no-break one.
+    for (const line of lines(html)) expect(line).toMatch(new RegExp(`\\d+${NB}min`));
+    expect(lines(html).join("")).not.toMatch(/\d min/);
+    // The page keeps its plain form: "p.7", no space, no no-break space.
+    expect(html).toContain("p.7 · 3");
+    expect(html).not.toMatch(/p\.[\s\u00a0]\d/);
+  });
+
+  it("puts the role word last on a background row whatever the row order, and an answer row never carries it (P9-05, X10)", () => {
+    const html = render({
+      forYourQuestions: [
+        {
+          question: "Does the method improve retention?",
+          verdict: "partly",
+          answers: [],
+          readNext: [
+            { sectionId: "s1", why: "It explains the comparison baseline.", kind: "background" },
+            { sectionId: "s2", why: "It reports the measured retention result.", kind: "answer" },
+          ],
+        },
+      ],
+    });
+    const lines = [...html.matchAll(/<p class="[^"]*text-meta[^"]*">([^<]*)<\/p>/g)].map((match) => match[1]);
+
+    expect(lines).toEqual([`§1 Introduction · p.2 · 2${NB}min · background`, `§2 Results · p.7 · 3${NB}min`]);
+    expect(lines[1]).not.toContain("background");
+  });
+
   it("resolves Read next against the map, including page, minutes, background and why, and silently drops an unknown id", () => {
     const html = render();
 
     expect(html).toContain("Read next");
-    expect(html).toContain("§2 Results · p.7 · 3 min");
+    expect(html).toContain(`§2 Results · p.7 · 3${NB}min`);
     expect(html).toContain("It reports the measured retention result.");
-    expect(html).toContain("§1 Introduction · p.2 · 2 min");
-    expect(html).toContain(">background<");
+    expect(html).toContain(`§1 Introduction · p.2 · 2${NB}min · background</p>`);
     expect(html).not.toContain("This must not render.");
   });
 

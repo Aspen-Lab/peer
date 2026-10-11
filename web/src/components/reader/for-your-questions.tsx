@@ -11,11 +11,16 @@ import { Band } from "@/components/ui/band";
 import { EvidenceQuote } from "./evidence-quote";
 import { FOR_YOUR_QUESTIONS } from "./copy";
 
-function readNextLabel(section: ReadingMapSection): string {
+/** P9-05 (X10): the whole meta line is one string — `§heading · p.N · N min`, then the role
+ * word for a background row — so no part can run into the next ("11 minbackground") and the
+ * line wraps only at a " · ". The minutes ride on a no-break space so "11" and "min" never
+ * wrap apart; the page keeps its plain `p.N`. */
+function readNextLabel(section: ReadingMapSection, kind: QuestionAnswers["readNext"][number]["kind"]): string {
   return [
     `§${section.heading}`,
     ...(typeof section.page === "number" ? [`p.${section.page}`] : []),
-    `${section.minutes} min`,
+    `${section.minutes}\u00a0min`,
+    ...(kind === "background" ? [FOR_YOUR_QUESTIONS.background] : []),
   ].join(" · ");
 }
 
@@ -84,10 +89,7 @@ export function ForYourQuestions({
                   <ul className="space-y-3">
                     {next.map(({ item, section }) => (
                       <li key={`${item.kind}:${item.sectionId}`}>
-                        <p className="font-mono text-meta text-text-muted">
-                          {readNextLabel(section)}
-                          {item.kind === "background" && <span className="ml-2">{FOR_YOUR_QUESTIONS.background}</span>}
-                        </p>
+                        <p className="font-mono text-meta text-text-muted">{readNextLabel(section, item.kind)}</p>
                         <p className="font-reading text-body-sm leading-[1.55] text-text reading-justify mt-1">{item.why}</p>
                       </li>
                     ))}
