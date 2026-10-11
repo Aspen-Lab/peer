@@ -267,6 +267,11 @@ export function continuesCaption(
  * and a sentence that happens to end in "(2020)" has no symbol and no such number. Where a numbered
  * equation is printed over several lines the number stands on the last one, and that line alone is
  * the equation.
+ *
+ * P9-09 (cluster F): the one exception to "a line of symbols is prose" is a stack — two or more short
+ * rows a fraction or a sum sets tighter than the page's leading, which `foldStacks` lifts as one whole
+ * unnumbered block (or rejoins to the sentence around it) before the paragraphs are read. A single line
+ * of symbols, and rows at the ordinary leading, stay prose exactly as above.
  */
 export function equationOf(line: PdfLine): OutlineEquation | null {
   const text = line.text.trim();
@@ -871,6 +876,95 @@ function foldLines(parts: readonly string[], vocab: Vocabulary): string {
   return folded;
 }
 
+// ── Stacked rows: an equation the page set over several tight lines (P9-09, cluster F) ──────────
+//
+// A fraction is set over three rows, centred, so every row is "indented" for the paragraph rule and opens a
+// paragraph of its own: on the one real paper, eleven scraps, none a sentence. The rows of such a stack are
+// short fragments set tighter than the page's leading (a fraction's bar needs no more room than its rows).
+// Two or more of them in a run are lifted as one unnumbered block when the stack stands between sentences,
+// and rejoin the sentence they interrupt when it goes on below them. This is the one exception to the cheap
+// rule of §1h.41 (c): a single line of symbols stays prose, and so does one line of prose, however short.
+
+/** A line `foldStacks` made out of rows the page set tighter than its leading: it carries on the sentence
+ *  before it, wherever those rows stood. */
+export interface FlowLine extends PdfLine {
+  continues?: true;
+}
+
+/** A row of a stack is at most this many characters: a fragment of notation, not a line of prose. */
+const STACK_ROW_MAX = 40;
+/** Rows of a stack are at most this share of the leading apart. */
+const STACK_TIGHT = 0.8;
+/** The leading is read from gaps of at least this share of the body size: tighter rows do not pull it down. */
+const LEADING_MIN_GAP = 0.6;
+/** What a text row set between a numerator and a denominator opens with ("× 100, and the share of…"): the
+ *  operator is what tells a fraction in a sentence from a label set above and below a prose row. */
+const STACK_OPERATOR = /^[×=+÷−·∑Σ/]/;
+
+/** The paper's leading: the median gap between consecutive same-page lines that are at least 0.6 of the
+ *  body size apart. 0 when there is nothing to measure. */
+export function leadingOf(lines: readonly PdfLine[], body: { size: number }): number {
+  const gaps: number[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i - 1].page !== lines[i].page) continue;
+    const gap = lines[i - 1].y - lines[i].y;
+    if (gap >= body.size * LEADING_MIN_GAP) gaps.push(gap);
+  }
+  if (gaps.length === 0) return 0;
+  gaps.sort((a, b) => a - b);
+  return gaps[Math.floor(gaps.length / 2)];
+}
+
+const isStackRow = (line: PdfLine) =>
+  !line.block && line.text.length <= STACK_ROW_MAX && !/\p{L}{4,}/u.test(line.text) && /[\p{L}\p{N}]/u.test(line.text);
+
+/**
+ * Two or more consecutive same-page rows, each a short fragment and each within 0.8 of the leading below
+ * the one before, are a stack. Between sentences (the line before ends one, or the line after opens with a
+ * capital) the rows become one block, `lift`ed through the caller's equation list: the rows stay rows, and
+ * the reader lifts the block out of its paragraph. Inside a sentence (the line before is unfinished and the
+ * line after opens in lower case) the rows are joined into it. A fragment row, a text row that opens with an
+ * operator and a fragment row, all tight, are a fraction set inside a sentence: `numerator / denominator`
+ * and the row's text, one line of that sentence. Anything else is left as the page set it.
+ */
+export function foldStacks(lines: readonly PdfLine[], leading: number, lift: (text: string) => string): FlowLine[] {
+  if (leading <= 0) return [...lines];
+  const tight = (a: PdfLine, b: PdfLine) => a.page === b.page && a.y > b.y && a.y - b.y <= STACK_TIGHT * leading;
+  const unfinished = (line: PdfLine | undefined): line is PdfLine => !!line && !line.block && !SENTENCE_END.test(line.text.trim());
+  const out: FlowLine[] = [];
+  for (let i = 0; i < lines.length; ) {
+    const before = out[out.length - 1];
+    let j = i;
+    if (isStackRow(lines[i])) while (j + 1 < lines.length && isStackRow(lines[j + 1]) && tight(lines[j], lines[j + 1])) j++;
+    if (j > i) {
+      const rows = lines.slice(i, j + 1);
+      const after = lines[j + 1]?.text.trim() ?? "";
+      const last = rows[rows.length - 1];
+      if (!unfinished(before) || /^\p{Lu}/u.test(after)) {
+        out.push({ ...rows[0], text: lift(rows.map((row) => row.text).join("\n")), y: last.y, block: true });
+      } else if (/^\p{Ll}/u.test(after)) {
+        out.push({ ...rows[0], text: rows.map((row) => row.text).join(" "), x: before.x, y: last.y, continues: true });
+      } else {
+        out.push(...rows);
+      }
+      i = j + 1;
+      continue;
+    }
+    const [numerator, row, denominator] = [lines[i], lines[i + 1], lines[i + 2]];
+    if (
+      unfinished(before) && isStackRow(numerator) && row && !row.block && !isStackRow(row) && STACK_OPERATOR.test(row.text) &&
+      denominator && isStackRow(denominator) && tight(numerator, row) && tight(row, denominator)
+    ) {
+      out.push({ ...row, text: `${numerator.text} / ${denominator.text} ${row.text}`, x: before.x, y: denominator.y, continues: true });
+      i += 3;
+      continue;
+    }
+    out.push(lines[i]);
+    i++;
+  }
+  return out;
+}
+
 /** A sentence ends at one of these, and a closing quote or bracket after it still ends it. */
 const SENTENCE_END = /[.!?:;]["')\]”’]*$/;
 /** A gap this many line pitches high is a float's, not a paragraph's (a real paragraph gap is 1.5-2). */
@@ -884,7 +978,7 @@ export interface JoinOptions {
 /** Lines of prose, joined the way the page breaks them: a hyphen at a line's
  *  end is a broken word or a compound's own (the document's words say which), a
  *  change of rhythm or an indent starts a paragraph. */
-export function joinProse(lines: readonly PdfLine[], options: JoinOptions = {}): string {
+export function joinProse(lines: readonly FlowLine[], options: JoinOptions = {}): string {
   const vocab = options.vocab ?? vocabularyOf(lines);
   const paragraphs: string[] = [];
   let current = "";
@@ -919,7 +1013,10 @@ export function joinProse(lines: readonly PdfLine[], options: JoinOptions = {}):
     // line below goes on in lower case, a digit or a bracket. A capital after it still breaks.
     const floatGap =
       bigGap && gap > pitch * FLOAT_GAP_PITCHES && current.trim() !== "" && !SENTENCE_END.test(current.trim()) && /^[\p{Ll}\p{N}([]/u.test(line.text);
-    const breaks = previous !== null && ((bigGap && !floatGap) || (samePage && line.x > left + 6) || previous?.block === true);
+    const breaks =
+      previous !== null &&
+      !line.continues &&
+      ((bigGap && !floatGap) || (samePage && line.x > left + 6) || previous?.block === true);
     if (breaks && current.trim()) {
       paragraphs.push(current.trim());
       current = "";
@@ -995,9 +1092,15 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
   // too ("2. RESULTS AND DISCUSSION" holds only its subsections and is no section), so "2.1 …"
   // takes `results` from a parent that is not in the output.
   const inherit = bucketInheritor();
+  // P9-09 (cluster F): the paper's leading, against which rows set tighter are a stack (an equation's rows).
+  const leading = leadingOf(read, body);
   const flush = () => {
     if (heading !== null) canonical = inherit(heading, canonical);
-    const text = joinProse(held, { vocab });
+    const lifted = foldStacks(held, leading, (rows) => {
+      equations.push({ text: rows });
+      return blockMarker(equations.length - 1);
+    });
+    const text = joinProse(lifted, { vocab });
     if (text.trim().length > 0) {
       sections.push({ heading: heading ?? undefined, canonical, page, text });
     }

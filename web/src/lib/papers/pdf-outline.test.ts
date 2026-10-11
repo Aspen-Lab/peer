@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { blockMarker } from "@/lib/text/math";
+import { sectionParagraphs } from "./reading-map";
 import {
   bodyStyle,
   buildOutline,
@@ -345,6 +346,123 @@ describe("a float's gap inside an unfinished sentence is not a paragraph break (
     expect(outline.figureCaptions).toHaveLength(1);
     expect(paragraphs.filter((p) => p.includes("expanded view of Figure"))).toHaveLength(1);
     expect(paragraphs.find((p) => p.includes("expanded view of Figure"))).toContain("Figure 2C(iii)) shows that");
+  });
+});
+
+// ── P9-09 (cluster F): an equation printed over stacked rows is one block, not a paragraph per row ───
+//
+// A fraction is set over three rows, centred, so every row is "indented" for the paragraph rule and opens
+// a paragraph of its own: eleven scraps on the owner's paper, none a sentence. The rows of such a stack
+// are short fragments set tighter than the page's leading; two or more of them in a run are lifted as one
+// unnumbered block (display), or rejoin the sentence they interrupt (inline, and the fraction set inside
+// a text row, the sandwich). This is the one exception to the cheap rule of §1h.41 (c): a single line of
+// symbols stays prose. The rows below are full-size so the tests do not depend on how scripts are folded.
+describe("stacked equation rows are one block, or rejoin their sentence (P9-09, cluster F)", () => {
+  const FILLER = "Quillwort cathodes were annealed in air before every measurement was taken.";
+  const filler = (y: number) => item(FILLER, { y });
+  const rows = (spec: [string, number, number][]) => spec.map(([text, x, y]) => item(text, { x, y }));
+  const read = (items: PdfTextItem[]) =>
+    buildOutline([{ page: 1, items: [item("A Paper About Cathodes", { height: 17, y: 760 }), item("1 Methods", { y: 740 }), ...items] }]);
+  const paragraphsOf = (outline: ReturnType<typeof buildOutline>) => (outline.sections?.[0].text ?? "").split("\n\n");
+
+  it("lifts a run of short symbol rows set tighter than the leading into one unnumbered block", () => {
+    const outline = read([
+      filler(726), filler(714), filler(702), filler(690), filler(678), filler(666),
+      item("The balance coefficient was obtained from the relation", { y: 654 }),
+      ...rows([["Q /Q", 160, 639], ["(ab) 0(ab)", 163, 634], ["BC =", 110, 629], ["(ab) 1", 122, 624], ["M Q /Q", 148, 619], ["m (ab) 0(ab)", 170, 614]]),
+      item("Here the symbols are defined as follows, with every term in kelvin.", { y: 599 }),
+      filler(587), filler(575), filler(563),
+    ]);
+    expect(outline.equations).toEqual([{ text: "Q /Q\n(ab) 0(ab)\nBC =\n(ab) 1\nM Q /Q\nm (ab) 0(ab)" }]);
+    const paragraphs = paragraphsOf(outline);
+    expect(paragraphs.filter((p) => p.length < 20 && p !== blockMarker(0))).toEqual([]);
+    const at = paragraphs.indexOf(blockMarker(0));
+    expect(paragraphs[at - 1]).toMatch(/obtained from the relation$/);
+    expect(paragraphs[at + 1]).toMatch(/^Here the symbols are defined/);
+    // The reader lifts it from its section: one equation after the sentence that led to it, no scraps.
+    const lifted = sectionParagraphs({ text: outline.sections?.[0].text ?? "" }, outline.equations ?? []);
+    expect(lifted.equations).toHaveLength(1);
+    expect(lifted.paragraphs.every((p) => p.length >= 20)).toBe(true);
+    expect(lifted.paragraphs[lifted.equations[0].after]).toMatch(/obtained from the relation$/);
+  });
+
+  it("lifts a stack after a finished sentence even when the text goes on in lower case", () => {
+    const outline = read([
+      filler(726), filler(714), filler(702), filler(690),
+      item("The balance coefficient follows from the relation below.", { y: 678 }),
+      ...rows([["Q /Q", 160, 663], ["(ab) 0", 163, 658]]),
+      item("where every term is in kelvin and the sweep was slow.", { y: 643 }),
+      filler(631), filler(619),
+    ]);
+    expect(outline.equations).toEqual([{ text: "Q /Q\n(ab) 0" }]);
+  });
+
+  it("folds rows set inside a sentence back into it: the sentence is unfinished and goes on in lower case", () => {
+    const outline = read([
+      filler(726), filler(714), filler(702), filler(690),
+      item("The coefficient is the ratio", { y: 678 }),
+      ...rows([["Q /Q", 160, 666], ["(ab) 0", 163, 661]]),
+      item("of the two quantities in every run of the sweep.", { y: 649 }),
+      filler(637), filler(625),
+    ]);
+    expect(outline.equations).toBeUndefined();
+    const paragraphs = paragraphsOf(outline);
+    const sentence = paragraphs.filter((p) => p.includes("The coefficient is the ratio"));
+    expect(sentence).toHaveLength(1);
+    expect(sentence[0]).toContain("The coefficient is the ratio Q /Q (ab) 0 of the two quantities in every run of the sweep.");
+  });
+
+  it("folds a fraction set inside a sentence (numerator above, denominator below the text row) back into it", () => {
+    const outline = read([
+      filler(726), filler(714), filler(702), filler(690),
+      item("The shares are calculated as", { y: 654 }),
+      item("P(ab )", { x: 104, y: 643 }),
+      item("× 100, and the quantitative share of each as a", { x: 178, y: 638 }),
+      item("m P(ab )", { x: 104, y: 631 }),
+      item("three-phase system is shown below.", { y: 619 }),
+      filler(607), filler(595),
+    ]);
+    const sentence = paragraphsOf(outline).filter((p) => p.includes("The shares are calculated as"));
+    expect(sentence).toHaveLength(1);
+    expect(sentence[0]).toContain(
+      "The shares are calculated as P(ab ) / m P(ab ) × 100, and the quantitative share of each as a three-phase system is shown below.",
+    );
+    expect(outline.equations).toBeUndefined();
+  });
+
+  it("leaves a script-like label around a prose row alone: the row must open with an operator", () => {
+    const outline = read([
+      filler(726), filler(714), filler(702), filler(690),
+      item("The labelled share f", { y: 654 }),
+      item("0−4", { x: 104, y: 643 }),
+      item("μm was observed at room temperature and held", { x: 104, y: 638 }),
+      item("8−15", { x: 104, y: 631 }),
+      item("for the whole of the sweep.", { y: 619 }),
+      filler(607), filler(595),
+    ]);
+    expect(outline.equations).toBeUndefined();
+    expect(paragraphsOf(outline).join(" ")).not.toContain(" / ");
+  });
+
+  it("leaves prose alone: short lines at the ordinary leading, and a table of numbers at it, are not stacks", () => {
+    const outline = read([
+      filler(726), filler(714),
+      item("of the", { y: 702 }), item("in a", { y: 690 }),
+      filler(678), filler(666),
+      item("0.12 0.34 0.56", { y: 654 }), item("0.21 0.43 0.65", { y: 642 }),
+      filler(630), filler(618),
+    ]);
+    expect(outline.equations).toBeUndefined();
+    expect(paragraphsOf(outline).join(" ")).toContain("of the in a");
+  });
+
+  it("does not take a tight pair of lines with a real word in them for a stack", () => {
+    const outline = read([
+      filler(726), filler(714), filler(702), filler(690),
+      item("Q /Q", { x: 160, y: 678 }), item("ratio", { x: 160, y: 673 }),
+      filler(661), filler(649), filler(637),
+    ]);
+    expect(outline.equations).toBeUndefined();
   });
 });
 
@@ -903,6 +1021,11 @@ describe("a sentence with notation in it is not a display equation (P7-11)", () 
 // "equations" were nineteen sentence fragments (notation torn from a sentence), none of them an equation,
 // and the one real equation of §4.5 was never one. A line is a display equation only when it ends in
 // "(n)" / "(3a)" and carries at least one maths symbol; everything else joins its paragraph as any line does.
+//
+// P9-09 (cluster F) makes the one exception: a stack of two or more short rows set tighter than the page's
+// leading (a fraction's numerator, bar and denominator) is lifted whole as an unnumbered block, or rejoins
+// its sentence; see "stacked equation rows" below. A single line of symbols, and rows at the ordinary
+// leading as in every test of this block, are prose as before.
 describe("only a numbered line is a display equation in a PDF (P8-03, BACKLOG-32)", () => {
   it("does not take an unnumbered line of symbols for an equation", () => {
     expect(equationOf(line("softmax(QK^T/√d_k)V"))).toBeNull();
@@ -953,6 +1076,8 @@ describe("only a numbered line is a display equation in a PDF (P8-03, BACKLOG-32
     expect(outline.sections?.[0].text).toContain("The attention is computed as softmax(QK^T/√d_k)V where the keys have size d.");
   });
 
+  // The rows here are at the ordinary leading (12), so they are not a stack (P9-09, cluster F): that is the
+  // exception, rows set tighter than the leading, and this remains the rule.
   it("leaves a whole unnumbered equation, printed over several lines, in its paragraph", () => {
     const outline = buildOutline(
       page([
