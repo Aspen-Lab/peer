@@ -532,6 +532,73 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     expect(run.last().button?.props.style).toEqual({ left: 460 - 60, top: 320 + 6 });
     run.mounted.unmount();
   });
+
+  // P9-03 (the feature walk's X13): the button stands beside the words, never on them. The body reports the
+  // selection's paragraph (P8-02), and with room to its right the button is in the gutter, level with the selection.
+  it("P9-03: with the paragraph reported, the new selection's button stands in the gutter beside it, level with the selection", async () => {
+    const paragraph = { left: 120, top: 560, right: 760, bottom: 860 };
+    const late: ExplainSelection = { ...second, paragraph };
+    const run = await scenario(base({ target: first }), [(tree) => click(tree), selectNext(late, { cached: undefined })]);
+    await wait();
+
+    // 1440 less the dock's 376: a 1,064 px window, 304 px of it right of the paragraph. The button's left is the
+    // paragraph's edge and the 6 px gap; its top is the selection's (600), not the 626 under the selection.
+    expect(run.last().passage).toBe(first.passage);
+    expect(run.last().button?.props.style).toEqual({ left: 760 + 6, top: 600 });
+    expect((run.last().button?.props.style as { left: number }).left).toBeGreaterThanOrEqual(paragraph.right);
+    run.mounted.unmount();
+  });
+
+  it("P9-03: with no key (no window open), the button stands in the gutter of the whole window", async () => {
+    const lateDefined: ExplainSelection = { ...second, passage: "The rafting ratio is the same in all bars.", paragraph: { left: 120, top: 560, right: 760, bottom: 860 } };
+    const run = await scenario(base({ target: lateDefined, canAsk: false, terms: [term], cached: undefined }), []);
+
+    expect(run.last().card).toBeUndefined();
+    expect(run.last().button?.props.style).toEqual({ left: 760 + 6, top: 600 });
+    run.mounted.unmount();
+  });
+
+  it("P9-03: a paragraph that leaves the dock-narrowed window less than 136 px keeps today's place under the selection's end", async () => {
+    stubWindow(1280, 800);
+    // 1280 − 376 = 904; the paragraph ends at 800: 104 px to its right.
+    const tight: ExplainSelection = { ...second, rect: { left: 700, top: 600, right: 780, bottom: 620 }, paragraph: { left: 120, top: 560, right: 800, bottom: 860 } };
+    const run = await scenario(base({ target: first }), [(tree) => click(tree), selectNext(tight, { cached: undefined })]);
+    await wait();
+    expect(run.last().button?.props.style).toEqual({ left: 780 - 60, top: 620 + 6 });
+    run.mounted.unmount();
+
+    // One pixel under the threshold's other side (904 − 136 = 768): the gutter.
+    const roomy: ExplainSelection = { ...tight, paragraph: { left: 120, top: 560, right: 768, bottom: 860 } };
+    const again = await scenario(base({ target: first }), [(tree) => click(tree), selectNext(roomy, { cached: undefined })]);
+    await wait();
+    expect(again.last().button?.props.style).toEqual({ left: 768 + 6, top: 600 });
+    again.mounted.unmount();
+  });
+
+  it("P9-03: the button follows its paragraph and selection as the page scrolls", async () => {
+    let shift = 0;
+    const moving: ExplainSelection = {
+      ...second,
+      paragraph: { left: 120, top: 560, right: 760, bottom: 860 },
+      measure: () => ({
+        rect: { left: 200, top: 600 - shift, right: 460, bottom: 620 - shift },
+        bounds: { left: 200, top: 600 - shift, right: 460, bottom: 620 - shift },
+        paragraph: { left: 120, top: 560 - shift, right: 760, bottom: 860 - shift },
+      }),
+    };
+    const run = await scenario(base(), [
+      (tree) => click(tree),
+      selectNext(moving, { cached: undefined }),
+      () => {
+        shift = 250;
+        fire("scroll", {});
+      },
+      () => {},
+    ]);
+    await wait();
+    expect(run.last().button?.props.style).toEqual({ left: 760 + 6, top: 350 });
+    run.mounted.unmount();
+  });
 });
 
 // ── Level with the explained paragraph's first line (P8-02) ─────────────────────────────────────────

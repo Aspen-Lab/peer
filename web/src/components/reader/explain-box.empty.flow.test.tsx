@@ -440,6 +440,22 @@ describe("ExplainBox — the window is there before the first selection (P8-06, 
     run.mounted.unmount();
   });
 
+  // P9-03: the button stands beside the words, never on them — in the gutter between the column and the dock.
+  it("P9-03: with the paragraph reported, the empty state's button stands in the gutter beside it, level with the selection", async () => {
+    // 1280 − 376 = 904; the paragraph ends at 760: 144 px to its right, room for the button and a margin each side.
+    const late: ExplainSelection = {
+      ...second,
+      rect: { left: 700, top: 600, right: 740, bottom: 620 },
+      bounds: { left: 700, top: 580, right: 740, bottom: 620 },
+      paragraph: { left: 120, top: 560, right: 760, bottom: 860 },
+    };
+    const run = await scenario(base({ target: late }), []);
+
+    expect(run.last().empty).toBe(true);
+    expect(run.last().button?.props.style).toEqual({ left: 760 + 6, top: 600 });
+    run.mounted.unmount();
+  });
+
   it("`e` with nothing selected and the empty state showing does nothing: there is no input to focus", async () => {
     const openRef: NonNullable<Props["openRef"]> = { current: null };
     const onAsk = vi.fn(async (): Promise<AskResult> => FIRST_ANSWER);

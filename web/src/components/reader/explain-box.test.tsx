@@ -303,6 +303,95 @@ describe("the pure rules", () => {
     }
   });
 
+  // P9-03 (the feature walk's X13: at 1440 the button stood at (535,317), 116 x 34, over the body text of the
+  // selected paragraph — the next line of the paragraph it was beside). A control stands beside the words, never on
+  // them: with the paragraph's box known and room to its right, the button stands in the gutter, level with the
+  // selection, and below the selection's end only where there is no gutter (a phone, a narrow window).
+  describe("placeButton: the gutter beside the paragraph (P9-03)", () => {
+    // The viewport the box passes while the dock stands: 1440 less the 376 px the page keeps clear.
+    const docked = { width: 1440 - 376, height: 1000 };
+    const paragraph = { left: 408, top: 280, right: 900, bottom: 540 };
+    const rect = { left: 600, top: 317, right: 700, bottom: 337 };
+
+    it("(a) stands in the gutter: 6 px right of the paragraph's edge, level with the selection", () => {
+      const at = placeButton(rect, docked, paragraph);
+
+      expect(at).toEqual({ left: 900 + 6, top: 317 });
+      // Beside the words, not on them: not one pixel of the button is within the paragraph's box.
+      expect(at.left).toBeGreaterThanOrEqual(paragraph.right);
+      // The same place whatever the selection's width or where in the line it ends.
+      expect(placeButton({ left: 410, top: 317, right: 430, bottom: 337 }, docked, paragraph)).toEqual({ left: 906, top: 317 });
+      expect(placeButton({ left: 410, top: 317, right: 898, bottom: 337 }, docked, paragraph)).toEqual({ left: 906, top: 317 });
+    });
+
+    it("(a) with no dock to narrow it, the same rule on the whole window (a reader with no key, a defined term)", () => {
+      expect(placeButton(rect, { width: 1440, height: 1000 }, paragraph)).toEqual({ left: 906, top: 317 });
+    });
+
+    it("(b) the top is held inside the window: a margin from the head, the button's foot a margin above the window's foot", () => {
+      // 1000 − 8 (margin) − 32 (the button's height) = 960.
+      expect(placeButton({ left: 600, top: 990, right: 700, bottom: 1010 }, docked, paragraph)).toEqual({ left: 906, top: 960 });
+      expect(placeButton({ left: 600, top: 960, right: 700, bottom: 980 }, docked, paragraph).top).toBe(960);
+      expect(placeButton({ left: 600, top: 959, right: 700, bottom: 979 }, docked, paragraph).top).toBe(959);
+      // A selection scrolled partly above the window's head.
+      expect(placeButton({ left: 600, top: -20, right: 700, bottom: 0 }, docked, paragraph)).toEqual({ left: 906, top: 8 });
+      // A window too short to hold the button: the head wins, as the card's does.
+      expect(placeButton({ left: 600, top: 30, right: 700, bottom: 50 }, { width: 1064, height: 30 }, paragraph).top).toBe(8);
+    });
+
+    it("(c) with no paragraph reported it is today's place: under where the selection ends, flipped above at the foot", () => {
+      const vp = { width: 1024, height: 768 };
+      expect(placeButton({ left: 300, top: 400, right: 420, bottom: 420 }, vp, undefined)).toEqual({ left: 360, top: 426 });
+      expect(placeButton(rect, docked, undefined)).toEqual(placeButton(rect, docked));
+      expect(placeButton(rect, docked)).toEqual({ left: 700 - 60, top: 337 + 6 });
+      expect(placeButton({ left: 300, top: 740, right: 420, bottom: 760 }, vp, undefined).top).toBe(740 - 6 - 32);
+    });
+
+    it("(d) a paragraph with less than 136 px (the button, a margin each side) to its right gets today's place; with exactly 136, the gutter", () => {
+      const noRoom = { left: 408, top: 280, right: 1064 - 135, bottom: 540 };
+      expect(placeButton(rect, docked, noRoom)).toEqual(placeButton(rect, docked));
+      expect(placeButton(rect, docked, noRoom)).toEqual({ left: 700 - 60, top: 337 + 6 });
+      // One pixel more room is the gutter, and it ends a margin and two pixels short of the window's edge.
+      const justRoom = { left: 408, top: 280, right: 1064 - 136, bottom: 540 };
+      const at = placeButton(rect, docked, justRoom);
+      expect(at).toEqual({ left: 1064 - 136 + 6, top: 317 });
+      expect(at.left + 120).toBeLessThanOrEqual(1064 - 8);
+      // A column flush with the window's edge, and a phone.
+      expect(placeButton(rect, docked, { left: 0, top: 280, right: 1064, bottom: 540 })).toEqual(placeButton(rect, docked));
+      const phone = { width: 390, height: 780 };
+      expect(placeButton({ left: 40, top: 300, right: 200, bottom: 320 }, phone, { left: 16, top: 250, right: 374, bottom: 600 })).toEqual(
+        placeButton({ left: 40, top: 300, right: 200, bottom: 320 }, phone),
+      );
+    });
+
+    it("for any paragraph, selection and window: in the gutter it never touches the paragraph and stays inside the window; without one it is today's place", () => {
+      let gutter = 0;
+      let fallback = 0;
+      for (const vp of [docked, { width: 1440, height: 900 }, { width: 904, height: 800 }, { width: 1024, height: 768 }, { width: 640, height: 700 }, { width: 390, height: 780 }]) {
+        for (const right of [300, 600, 760, 900, 1200]) {
+          for (const top of [-40, 8, 300, 760, 1200]) {
+            const box = { left: 100, top: top - 20, right, bottom: top + 400 };
+            const where = { left: 120, top, right: Math.min(right, 400), bottom: top + 20 };
+            const at = placeButton(where, vp, box);
+            if (vp.width - right >= 120 + 2 * 8) {
+              gutter += 1;
+              expect(at.left).toBeGreaterThanOrEqual(right);
+              expect(at.left + 120).toBeLessThanOrEqual(vp.width - 8);
+              expect(at.top).toBeGreaterThanOrEqual(8);
+              expect(at.top + 32).toBeLessThanOrEqual(vp.height - 8);
+            } else {
+              fallback += 1;
+              expect(at).toEqual(placeButton(where, vp));
+            }
+          }
+        }
+      }
+      // Both branches were exercised.
+      expect(gutter).toBeGreaterThan(20);
+      expect(fallback).toBeGreaterThan(20);
+    });
+  });
+
   it("placeCard: 360 px under the selection on a spread; the whole width under it on a phone", () => {
     const spread = placeCard({ left: 300, top: 400, right: 420, bottom: 420 }, { width: 1440, height: 900 });
     const phone = placeCard({ left: 40, top: 300, right: 200, bottom: 320 }, { width: 390, height: 780 });

@@ -6,7 +6,9 @@
 // conversation beside the text). The popover of P3-02 is this box's first state.
 //
 // The reader selects words of the body (`paper-body.tsx` reads the selection);
-// a small button appears just below them. Clicking it is the send: nothing goes
+// a small button appears beside them — P9-03: in the gutter right of the paragraph, level with
+// the selection, never over the paper's words; just below them where there is no gutter (a phone,
+// a narrow window; `placeButton`). Clicking it is the send: nothing goes
 // anywhere before it. The card then shows, in order,
 //
 //   - the passage's opening words, quoted from the paper with their section —
@@ -231,9 +233,23 @@ const PHONE_WIDTH = 640;
 
 const clamp = (value: number, low: number, high: number) => Math.min(Math.max(value, low), Math.max(low, high));
 
-/** The button: just below where the selection ends, centred on its end; above
- *  it when there is no room below; always inside the window. */
-export function placeButton(rect: ViewRect, viewport: Viewport): { left: number; top: number } {
+/**
+ * The button (P9-03, the owner's reading of the feature walk's X13: a control stands beside the words, never on
+ * them). With the paragraph's box known and room right of it for the button and a margin each side
+ * (`viewport.width − paragraph.right ≥ BUTTON_WIDTH + 2·BUTTON_MARGIN`; the viewport is already narrowed by the
+ * dock's reserve while the dock stands, so this is the gutter between the reading column and the dock), it stands
+ * in that gutter: `left = paragraph.right + BUTTON_GAP`, `top` level with `rect` (the line the selection ends on),
+ * both held inside the window. Without a gutter — a phone, a narrow window, a column flush with the edge, no
+ * paragraph reported — it is as it was: just below where the selection ends, centred on its end; above it when
+ * there is no room below; always inside the window.
+ */
+export function placeButton(rect: ViewRect, viewport: Viewport, paragraph?: ViewRect): { left: number; top: number } {
+  if (paragraph && viewport.width - paragraph.right >= BUTTON_WIDTH + 2 * BUTTON_MARGIN) {
+    return {
+      left: clamp(paragraph.right + BUTTON_GAP, BUTTON_MARGIN, viewport.width - BUTTON_WIDTH - BUTTON_MARGIN),
+      top: clamp(rect.top, BUTTON_MARGIN, viewport.height - BUTTON_HEIGHT - BUTTON_MARGIN),
+    };
+  }
   const left = clamp(rect.right - BUTTON_WIDTH / 2, BUTTON_MARGIN, viewport.width - BUTTON_WIDTH - BUTTON_MARGIN);
   const below = rect.bottom + BUTTON_GAP;
   const top = below + BUTTON_HEIGHT > viewport.height - BUTTON_MARGIN ? Math.max(BUTTON_MARGIN, rect.top - BUTTON_GAP - BUTTON_HEIGHT) : below;
@@ -1080,14 +1096,15 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   // The button beside the current selection — a locked block is not shown: with no key, only the paper's
   // own definition is worth a button. While the dock is open the page keeps its 376 px clear on the right,
   // and the button, which stands beside the words, never reaches into it.
-  const ask = next ? (
+  const askAt = next ? whereOf(next) : null;
+  const ask = next && askAt ? (
     <button
       type="button"
       data-explain-ask=""
       // The press must not take the selection with it: it is what is explained.
       onMouseDown={(event) => event.preventDefault()}
       onClick={() => start(next)}
-      style={placeButton(whereOf(next).rect, docked ? { width: viewport.width - DOCK_RESERVE_PX, height: viewport.height } : viewport)}
+      style={placeButton(askAt.rect, docked ? { width: viewport.width - DOCK_RESERVE_PX, height: viewport.height } : viewport, askAt.paragraph)}
       className="fixed z-[70] rounded-full border border-border-strong bg-surface px-3 py-2 font-mono text-caption text-heading shadow-card-hover transition-colors hover:bg-surface-hover"
     >
       {EXPLAIN.ask}
