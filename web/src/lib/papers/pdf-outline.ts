@@ -299,11 +299,26 @@ const GUTTER_BRIDGE_EM = 0.8;
 /** The label a paragraph can open with, set in a face of its own:
  *  "ABSTRACT: Quillwort cathodes degrade through…". */
 const RUN_IN_LABEL = /^(?:abstract|summary|synopsis|key\s*words?|highlights)\s*[:.—–-]?$/i;
+/** A script raised by more than this many points above its row's baseline is
+ *  a superscript. */
+const SUPERSCRIPT_RISE = 1;
+/** A citation number: digits, commas, dashes and spaces, led by a digit
+ *  ("12", "3−5", "5,6"), and no longer than this. A dash first is a negative
+ *  exponent ("s−1"), which no citation is. */
+const CITATION_MARK = /^\d[\d\s,\u2013\u2212-]*$/;
+const CITATION_MARK_MAX = 12;
+/** What a citation number stands after: the end of a clause or a bracket
+ *  ("materials.12", "films,3−5"), or a word of three letters or more
+ *  ("degradation17"). After a digit or a one- or two-letter unit ("10−3",
+ *  "cm2", "s−1") a raised digit is an exponent, and it is kept. */
+const CITED = /(?:[.,;)\]]|[A-Za-z]{3,})$/;
 
 /** One baseline's worth of runs. */
 interface Row {
   y: number;
   items: PdfTextItem[];
+  /** The scripts folded into the row from above its baseline: superscripts. */
+  raised?: Set<PdfTextItem>;
 }
 
 const median = (values: number[]): number =>
@@ -341,8 +356,10 @@ function rowsOf(items: PdfTextItem[], text: number): Row[] {
       if (rise < -SCRIPT_DROP || rise > SCRIPT_RISE) continue;
       if (!nearest || Math.abs(rise) < Math.abs(script.y - nearest.y)) nearest = row;
     }
-    if (nearest) nearest.items.push(script);
-    else place(script);
+    if (nearest) {
+      nearest.items.push(script);
+      if (script.y - nearest.y > SUPERSCRIPT_RISE) (nearest.raised ??= new Set()).add(script);
+    } else place(script);
   }
   // Down the page: PDF y grows upward.
   return rows.sort((a, b) => b.y - a.y);
@@ -352,14 +369,38 @@ function rowsOf(items: PdfTextItem[], text: number): Row[] {
 const longestRun = (runs: PdfTextItem[]): PdfTextItem =>
   runs.reduce((best, i) => (i.str.trim().length > best.str.trim().length ? i : best), runs[0]);
 
-/** Runs read left to right as one line. */
-function lineOf(page: number, y: number, runs: PdfTextItem[]): PdfLine | null {
+/**
+ * Runs read left to right as one line. A citation number raised above the line
+ * (`raised`) is left out when it stands after a word or the end of a clause —
+ * "…and other materials.12", "…grown on gold,3−5" — and kept where it is an
+ * exponent: it carries nothing a reader of the digest needs, and glued to the
+ * word before it, it reads as a digit in it. Raised runs that follow each
+ * other are one mark, however the PDF split it ("21", "−", "23").
+ */
+function lineOf(page: number, y: number, runs: PdfTextItem[], raised?: ReadonlySet<PdfTextItem>): PdfLine | null {
   // A PDF stores runs, not words: two runs set apart on the page are two
   // words even where neither carries a space ("Ashish Vaswani" and "Noam
   // Shazeer" arrived as one string until this gap was measured).
   let text = "";
   let cursor = Number.NaN;
-  for (const item of runs) {
+  let judged = -1;
+  for (let i = 0; i < runs.length; i++) {
+    const item = runs[i];
+    if (raised?.has(item) && i > judged) {
+      let end = i + 1;
+      while (end < runs.length && raised.has(runs[end])) end++;
+      const mark = runs.slice(i, end).map((run) => run.str).join("").trim();
+      const shape = mark.length <= CITATION_MARK_MAX && CITATION_MARK.test(mark);
+      if (shape && CITED.test(text.trimEnd())) {
+        const last = runs[end - 1];
+        // The space a raised run carried is the one the next word needs.
+        if (text && /\s$/.test(last.str) && !/\s$/.test(text)) text += " ";
+        cursor = last.x + (last.width || 0);
+        i = end - 1;
+        continue;
+      }
+      judged = end - 1;
+    }
     const gap = item.x - cursor;
     if (text && Number.isFinite(cursor) && gap > Math.max(1, item.height * 0.18) && !/\s$/.test(text)) {
       text += " ";
@@ -388,11 +429,11 @@ function linesOfRow(page: number, row: Row): PdfLine[] {
   const ordered = [...row.items].sort((a, b) => a.x - b.x);
   const [first, ...rest] = ordered;
   if (rest.length > 0 && RUN_IN_LABEL.test(first.str.trim()) && first.fontName !== longestRun(rest).fontName) {
-    const label = lineOf(page, row.y, [first]);
-    const words = lineOf(page, row.y, rest);
+    const label = lineOf(page, row.y, [first], row.raised);
+    const words = lineOf(page, row.y, rest, row.raised);
     if (label && words) return [{ ...label, text: label.text.replace(/[:.—–-]$/, "") }, words];
   }
-  const line = lineOf(page, row.y, ordered);
+  const line = lineOf(page, row.y, ordered, row.raised);
   return line ? [line] : [];
 }
 

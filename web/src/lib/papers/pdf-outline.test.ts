@@ -391,7 +391,21 @@ describe("superscripts and subscripts stay on their line (P7-10)", () => {
     };
     const lines = linesOfPage(page);
     expect(lines).toHaveLength(1);
-    expect(lines[0].text).toMatch(/^The cathode shape ?17 and the film$/);
+    // P7-11 (product call: drop, do not mark): the number folds into the line
+    // and is then left out of it, after a word, instead of reading "shape17".
+    // The same fold, kept as an exponent, is the next test.
+    expect(lines[0].text).toBe("The cathode shape and the film");
+    expect(lines[0]).toMatchObject({ y: 500, size: 10 });
+  });
+
+  it("folds an exponent into its line the same way, and keeps it (P7-11)", () => {
+    const page: PdfPageText = {
+      page: 1,
+      items: chain([["The diffusivity was 3 x 10"], ["12", sup()], [" and the film"]]),
+    };
+    const lines = linesOfPage(page);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].text).toMatch(/^The diffusivity was 3 x 10 ?12 and the film$/);
     expect(lines[0]).toMatchObject({ y: 500, size: 10 });
   });
 
@@ -774,5 +788,78 @@ describe("a figure caption may run to 2,000 characters (P7-11)", () => {
     const { outline, caption } = paperWithCaption(32);
     expect(caption.length).toBeGreaterThan(2000);
     expect(outline.figureCaptions?.[0].caption).toBe(caption.slice(0, 2000));
+  });
+});
+
+describe("a citation number is dropped, an exponent is kept (P7-11)", () => {
+  const read = (parts: [string, Partial<PdfTextItem>?][]) => linesOfPage({ page: 1, items: chain(parts) }).map((l) => l.text);
+
+  it("drops a number raised above a word that ends a sentence, a clause or a bracket: 'materials.12', 'films,3−5'", () => {
+    for (const [before, mark, after] of [
+      ["Quillwort cathodes are used in many small cells and other materials.", "12", " They also fade."],
+      ["Quillwort films were grown on gold,", "3−5", " and then annealed."],
+      ["Quillwort films were grown on gold (see below)", "4", " and then annealed."],
+      ["Quillwort films were grown on gold [Li]", "4", " and then annealed."],
+      ["Quillwort films were grown on gold;", "2,3", " they then fade."],
+      ["Quillwort films were grown on gold–silver", "5", " and then annealed."],
+    ] as const) {
+      expect(read([[before], [mark, sup()], [after]]), mark).toEqual([`${before}${after}`]);
+    }
+  });
+
+  it("drops a number raised above a word of three letters or more, with no mark before it", () => {
+    expect(read([["Quillwort cathode degradation"], ["17", sup()], [" is slow in cells."]])).toEqual(["Quillwort cathode degradation is slow in cells."]);
+    expect(read([["Quillwort cathode degradation"], ["17,18", sup()], [" is slow in cells."]])).toEqual(["Quillwort cathode degradation is slow in cells."]);
+  });
+
+  it("closes the gap the number leaves: the next word is a word of its own, not glued to the one before", () => {
+    // No space stored: the PDF only leaves a gap between the superscript and "They".
+    const runs = chain([["Quillwort cathodes are used in many small cells and other materials."], ["12", sup()]]);
+    const last = runs[runs.length - 1];
+    const items = [...runs, item("They also fade.", { x: last.x + last.width + 2.6 })];
+    expect(linesOfPage({ page: 1, items }).map((l) => l.text)).toEqual(["Quillwort cathodes are used in many small cells and other materials. They also fade."]);
+  });
+
+  it("drops a range the PDF stored as three raised runs, and keeps the word space a raised run carried", () => {
+    expect(read([["Quillwort cathodes degrade."], ["21", sup()], ["\u2212", sup()], ["23 ", sup()], ["They fade."]])).toEqual(["Quillwort cathodes degrade. They fade."]);
+    // "4 " ends in the space the next word needs: it is not glued to the one before.
+    expect(read([["Quillwort cathodes degrade,"], ["4 ", sup()], ["and then fade."]])).toEqual(["Quillwort cathodes degrade, and then fade."]);
+  });
+
+  it("keeps an exponent: a script after a digit, or after a one- or two-letter unit, stays glued", () => {
+    expect(read([["a rate of 5 x 10"], ["−3", sup()], [" per second"]])).toEqual(["a rate of 5 x 10−3 per second"]);
+    expect(read([["a diffusivity in cm"], ["2", sup()], [" per second"]])).toEqual(["a diffusivity in cm2 per second"]);
+    expect(read([["a rate in s"], ["−1", sup()], [" at room temperature"]])).toEqual(["a rate in s−1 at room temperature"]);
+    expect(read([["a current of 12.5 mA cm"], ["−2", sup()], [" was used"]])).toEqual(["a current of 12.5 mA cm−2 was used"]);
+    expect(read([["the fit gave R"], ["2", sup()], [" above 0.99"]])).toEqual(["the fit gave R2 above 0.99"]);
+    expect(read([["an area of 4 mm"], ["2", sup()], [" each"]])).toEqual(["an area of 4 mm2 each"]);
+    expect(read([["a capacity in mAh g"], ["−1", sup()], [" at C/10"]])).toEqual(["a capacity in mAh g−1 at C/10"]);
+  });
+
+  it("keeps a negative exponent after a long unit: a citation never opens with a minus", () => {
+    expect(read([["a rate in mol"], ["−1", sup()], [" of lithium"]])).toEqual(["a rate in mol−1 of lithium"]);
+    expect(read([["a rate in min"], ["-1", sup()], [" of lithium"]])).toEqual(["a rate in min-1 of lithium"]);
+  });
+
+  it("keeps a negative exponent the PDF stored as two raised runs, a sign and a digit", () => {
+    expect(read([["a rate in mol"], ["\u2212", sup()], ["1", sup()], [" of lithium"]])).toEqual(["a rate in mol\u22121 of lithium"]);
+    expect(read([["a rate of 5 x 10"], ["\u2212", sup()], ["12 ", sup()], ["per second"]])).toEqual(["a rate of 5 x 10\u221212 per second"]);
+  });
+
+  it("leaves a subscript, an ordinal and a mark that is not a citation number where they are", () => {
+    // Below the baseline: a subscript.
+    expect(read([["Films of TiO"], ["2", sub()], [" were grown."]])).toEqual(["Films of TiO2 were grown."]);
+    // Letters in it: an ordinal or a footnote letter.
+    expect(read([["after the 1"], ["st", sup()], [", 20"], ["th", sup()], [" cycle."]])).toEqual(["after the 1st, 20th cycle."]);
+    expect(read([["Quillwort films"], ["2a", sup()], [" were grown."]])).toEqual(["Quillwort films2a were grown."]);
+    // Raised by a point or less: on the line, not above it.
+    expect(read([["Quillwort cathodes degrade."], ["12", { height: 6.7, y: 500.8 }], [" They fade."]])).toEqual(["Quillwort cathodes degrade.12 They fade."]);
+    // Longer than a list of citations is.
+    expect(read([["Quillwort cathodes degrade."], ["1,2,3,4,5,6,7", sup()], [" They fade."]])).toEqual(["Quillwort cathodes degrade.1,2,3,4,5,6,7 They fade."]);
+    expect(read([["Quillwort cathodes degrade."], ["1,2,3,4,5,6", sup()], [" They fade."]])).toEqual(["Quillwort cathodes degrade. They fade."]);
+  });
+
+  it("keeps a number at the head of a line: nothing before it for it to be a citation of", () => {
+    expect(read([["1", sup()], ["Department of Materials Science"]])).toEqual(["1Department of Materials Science"]);
   });
 });

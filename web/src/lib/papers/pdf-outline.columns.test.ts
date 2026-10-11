@@ -228,3 +228,34 @@ describe("a first page too sparse to show a gutter of its own takes the paper's 
     expect(mentionsOf(result.page1Text ?? "").map((m) => token(m.page, m.side, m.n - 1))).toEqual(expected([[1, 6]]));
   });
 });
+
+// P7-11: a citation number is dropped in a real PDF too, in either column. The
+// runs are raised 4.4pt and set at 6.7pt, as a journal sets them, at the end of
+// lines that close on a word.
+describe("a citation number raised above a column's line is dropped with it (P7-11)", () => {
+  const cite = (page: number, side: Side, n: number, mark: string): Run => [
+    mark,
+    (side === "L" ? LEFT_X : RIGHT_X) + 232,
+    110 + n * 14 + (page === 2 && side === "R" ? 5 : 0) - 4.4,
+    6.7,
+  ];
+  const bytes = minimalPdf([
+    [...twoColumnPage(1, 24, 0, "columns"), cite(1, "L", 3, "73"), cite(1, "R", 9, "74,75")],
+    [...twoColumnPage(2, 24, 5, "columns"), cite(2, "L", 11, "88"), cite(2, "R", 20, "89–91")],
+  ]);
+
+  it("leaves none of the numbers in the text, and every printed line in it", async () => {
+    const result = await extractPdfTextFromBytes(bytes);
+    const text = (result.doc?.sections ?? []).map((s) => s.text).join("\n\n");
+    for (const mark of ["73", "74", "75", "88", "89", "91"]) expect(text, mark).not.toContain(mark);
+    expect(mentionsOf(text)).toHaveLength(96);
+  });
+
+  it("ends each of the four lines on its last word, not on the number", async () => {
+    const lines = (await readPages(bytes)).flatMap(linesOfPage);
+    const cited = lines.filter((line) => /^P1L04 |^P1R10 |^P2L12 |^P2R21 /.test(line.text));
+    expect(cited).toHaveLength(4);
+    for (const line of cited) expect(line.text, line.text).toMatch(/[a-z]$/);
+    expect(lines.filter((line) => tokensIn(line.text).length > 0)).toHaveLength(96);
+  });
+});
