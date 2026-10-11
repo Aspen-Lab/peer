@@ -56,6 +56,7 @@ export function DecisionBlock({
   onSkip,
   onCopy,
   onOpen,
+  notesAction,
   uploadAction,
   uploadStatus,
 }: {
@@ -78,6 +79,8 @@ export function DecisionBlock({
   onSkip?: () => void;
   onCopy: () => void;
   onOpen: () => void;
+  /** P7-14 (R9): the notes row in the command stack, which only a phone shows. */
+  notesAction?: ReactNode;
   uploadAction?: ReactNode;
   uploadStatus?: ReactNode;
 }) {
@@ -98,6 +101,7 @@ export function DecisionBlock({
         onSkip={onSkip}
         onCopy={onCopy}
         onOpen={onOpen}
+        notesAction={notesAction}
         uploadAction={uploadAction}
       />
 

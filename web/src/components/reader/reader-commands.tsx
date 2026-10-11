@@ -12,6 +12,7 @@
 //   [t] Read it here                    ← the first command, the accent
 //   [o] Open on arXiv                ↗  ← leaves the page
 //   [s] Save  ·  [x] Skip  ·  [c] Copy   ← the verdicts in one row; Skip only where the page gives it (P1-08)
+//   Notes                               ← a phone's way into the paper's notes (P7-14, R9; from md the page has a tab at the right edge)
 //   ↑  Upload full article PDF          ← where the reader brings the text
 
 import type { ReactNode } from "react";
@@ -43,6 +44,7 @@ export function ReaderCommands({
   onSkip,
   onCopy,
   onOpen,
+  notesAction,
   uploadAction,
 }: {
   onRead?: () => void;
@@ -55,6 +57,8 @@ export function ReaderCommands({
   onSkip?: () => void;
   onCopy: () => void;
   onOpen: () => void;
+  /** P7-14 (R9): the notes row a phone has in place of the right-edge tab (it hides itself from `md`). */
+  notesAction?: ReactNode;
   uploadAction?: ReactNode;
 }) {
   return (
@@ -133,6 +137,7 @@ export function ReaderCommands({
           {BUTTON.copy}
         </button>
       </div>
+      {notesAction}
       {uploadAction}
     </div>
   );

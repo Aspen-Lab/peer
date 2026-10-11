@@ -104,6 +104,7 @@ import { PAGE_CLASS, SPREAD_GRID } from "@/components/reader/spread";
 import { useReading } from "@/components/reader/use-reading";
 import { useParagraphGuide } from "@/components/reader/use-paragraph-guide";
 import { PaperNotes } from "@/components/notes/paper-notes";
+import { NotesButton } from "@/components/notes/notes-button";
 import { PAPER_BODY_ID } from "@/components/reader/paper-body";
 import { QuestionField, focusFirstEmptyQuestion } from "@/components/reader/question-field";
 import { ReadingMapView, readingRoute } from "@/components/reader/reading-map";
@@ -1403,6 +1404,9 @@ function Reader({
             onSkip={isUploadId ? undefined : skip}
             onCopy={copy}
             onOpen={decide}
+            // P7-14 (R9): a phone's way into the paper's notes — a row in the stack; from `md` the
+            // button is the tab at the window's right edge, mounted beside the explain box below.
+            notesAction={<NotesButton variant="row" paper={paper} questions={settledQuestions(asked)} forYourQuestions={report?.forYourQuestions} />}
             onRead={hasBody ? readHere : undefined}
             readLabel={BODY.open}
             uploadAction={!paper.id.startsWith("upload:") && uploadsAvailable ? <UploadButton targetPaper={paper} onUploaded={setUpload} /> : undefined}
@@ -1461,14 +1465,6 @@ function Reader({
         ) : (
           <>
             {!hasBody && answers}
-
-            {/* The reader's own notes on this paper, and the way into them —
-                first, because taking notes is what follows keeping it. */}
-            <PaperNotes
-              paper={paper}
-              questions={settledQuestions(asked)}
-              forYourQuestions={report?.forYourQuestions}
-            />
 
             {/* ── The report as it read before the rewrite, in its order ── */}
 
@@ -1599,6 +1595,10 @@ function Reader({
     <SectionLinks headings={bodyHeadings}>
       <ExplainBox key={paper.id} target={explainTarget} terms={terms} canAsk={providerConfigured} onAsk={askExplain} cached={explainCached} cachedTurns={explainKeptThread?.turns} onReply={replyExplain} onSayMore={moreExplain} onResetThread={resetExplain} column={measureBodyColumn} openRef={explainOpen} reading={reading} />
     </SectionLinks>
+    {/* P7-14 (R9): the notes, as a small tab fixed at the window's right edge (from `md`; a phone has
+        the row in the command stack instead). Beside the explain box, for the same reason: it is
+        placed in the window's pixels, which the zoom on the page container would scale. */}
+    <NotesButton variant="edge" paper={paper} questions={settledQuestions(asked)} forYourQuestions={report?.forYourQuestions} />
     </>
   );
 }

@@ -135,6 +135,9 @@ function tabProblems(source: string): string[] {
     if (!onSummary.includes(block)) problems.push(`${block} is not under Summary`);
     if (onDigestion.includes(block)) problems.push(`${block} is also under Paper digestion`);
   }
+  // R9: the notes are a button (the right-edge tab, and a row in the command stack on a phone), not a
+  // block of either tab: they are there under both.
+  if (onSummary.includes("<PaperNotes") || onDigestion.includes("<PaperNotes")) problems.push("the notes are a band in a tab again: they are a button, under both tabs");
 
   // The jumps into the body.
   has("const readHere = useCallback(() => reveal(scrollToBody), [reveal, scrollToBody]);", "\"Read it here\" / t no longer brings the body in from Summary first");
@@ -176,6 +179,13 @@ describe("the page's two tabs (P7-14, R10)", () => {
 
     expect(wrong).not.toBe(source);
     expect(tabProblems(wrong)).toEqual(expect.arrayContaining(["<PaperBody is also under Summary"]));
+  });
+
+  it("would notice the notes band put back among a tab's blocks (R9: it is a button now)", () => {
+    const wrong = source.replace("<InYourLibrary paper={paper} />", "<PaperNotes paper={paper} />\n<InYourLibrary paper={paper} />");
+
+    expect(wrong).not.toBe(source);
+    expect(tabProblems(wrong)).toEqual(["the notes are a band in a tab again: they are a button, under both tabs"]);
   });
 
   it("would notice the abstract shown on Paper digestion", () => {

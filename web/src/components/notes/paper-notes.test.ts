@@ -42,16 +42,43 @@ describe("PaperNotes — the questions go into the first note (P2-05)", () => {
     expect(paperNotes).toContain("readingNote(citableFromPaper(paper), { questions, forYourQuestions })");
   });
 
-  it("is mounted with the settled questions and the report's answers on the page that has a report", () => {
+  // P7-14 (R9, the owner's review): the notes entry is no longer a Band at the top of the column but a
+  // button — a small tab fixed at the viewport's right edge, and on a phone a row in the command stack.
+  // `open()` was extracted into `openPaperNotes` (the call above, unchanged), and the page mounts the
+  // button twice with the same two props: the settled questions and the report's answers (P2-05).
+  it("is mounted as the notes button, with the settled questions and the report's answers: at the right edge, and in the command stack for a phone", () => {
+    const flat = page.replace(/\s+/g, " ");
+    const mounts = [...flat.matchAll(/<NotesButton [^>]*\/>/g)].map((m) => m[0]);
+
+    expect(mounts).toHaveLength(2);
+    expect(mounts.map((m) => /variant="(edge|row)"/.exec(m)?.[1]).sort()).toEqual(["edge", "row"]);
+    for (const element of mounts) {
+      expect(element).toContain("paper={paper}");
+      expect(element).toContain("questions={settledQuestions(asked)}");
+      expect(element).toContain("forYourQuestions={report?.forYourQuestions}");
+    }
+  });
+
+  it("is no longer a band in the column: the page's additions mount no PaperNotes", () => {
     const additions = page.indexOf("additions={");
-    const mount = page.indexOf("<PaperNotes", additions);
-    const element = page.slice(mount, page.indexOf("/>", mount) + 2);
+    const next = page.indexOf(" next={", additions);
 
     expect(additions).toBeGreaterThan(-1);
-    expect(mount).toBeGreaterThan(additions);
-    expect(element).toContain("paper={paper}");
-    expect(element).toContain("questions={settledQuestions(asked)}");
-    expect(element).toContain("forYourQuestions={report?.forYourQuestions}");
+    expect(page.slice(additions, next)).not.toContain("<PaperNotes");
+    expect(page.slice(page.indexOf("export default function PaperReadingPage"))).not.toContain("<PaperNotes");
+  });
+
+  it("the edge tab stands beside the explain box, outside the zoomed container", () => {
+    const flat = page.replace(/\s+/g, " ");
+    const closed = flat.lastIndexOf("</PageContainer>");
+    const edge = flat.indexOf('<NotesButton variant="edge"');
+    const explain = flat.indexOf("<ExplainBox");
+
+    expect(closed).toBeGreaterThan(-1);
+    expect(explain).toBeGreaterThan(closed);
+    // Right after the explain box's own section links, and the last thing the page draws.
+    expect(edge).toBeGreaterThan(flat.indexOf("</SectionLinks>", explain));
+    expect(flat.slice(edge).replace(/<NotesButton [^>]*\/>/, "").trim().startsWith("</> );")).toBe(true);
   });
 
   it("is left as it was where the upload is unavailable: no questions field, no report there", () => {
@@ -60,7 +87,8 @@ describe("PaperNotes — the questions go into the first note (P2-05)", () => {
     const element = page.slice(mount, page.indexOf("/>", mount) + 2);
 
     expect(fallback).toBeGreaterThan(-1);
-    expect(mount).toBeLessThan(page.indexOf("additions={", fallback));
+    expect(mount).toBeGreaterThan(fallback);
+    expect(mount).toBeLessThan(page.indexOf("export default function PaperReadingPage"));
     expect(element).toBe("<PaperNotes paper={paper} />");
   });
 

@@ -231,15 +231,18 @@ describe("ForYourQuestions (P2-04)", () => {
     expect(proposal).toBeGreaterThan(additions);
   });
 
-  it("is not inside the tab's own blocks: the additions hold it only for a paper with no body, before the notes", () => {
+  it("is not inside the tab's own blocks: the additions hold it only for a paper with no body, first", () => {
     const source = readFileSync(resolve(process.cwd(), "src/app/papers/[id]/page.tsx"), "utf8");
     const additions = source.indexOf("additions={");
     const shown = source.indexOf("{!hasBody && answers}", additions);
-    const notes = source.indexOf("<PaperNotes", additions);
+    const proposal = source.indexOf("<ProposalBlock", additions);
 
     expect(additions).toBeGreaterThan(-1);
     expect(shown).toBeGreaterThan(additions);
-    expect(shown).toBeLessThan(notes);
+    // First in the summary's blocks: nothing but a comment between the branch and the answers (P7-14, R9: the
+    // notes band that used to follow them is a button at the right edge now, not a block here).
+    expect(source.slice(source.indexOf(") : (", additions), shown).replace(/\s+/g, " ").trim()).toBe(") : ( <>");
+    expect(shown).toBeLessThan(proposal);
     // Not under Paper digestion: the first branch of the additions never names it.
     const digestion = source.slice(additions, source.indexOf(") : (", additions));
     expect(digestion).not.toContain("answers");

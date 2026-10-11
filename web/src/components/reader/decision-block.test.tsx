@@ -277,3 +277,40 @@ describe("DecisionBlock — the command rows first (P7-14, R2)", () => {
     expect(between).not.toContain("<button");
   });
 });
+
+// P7-14 (R9): on a phone the notes are a row in the command stack (no fixed tab there): after the
+// verdict row, before the upload row, like the other commands — and before the sentence.
+describe("DecisionBlock — the notes row (P7-14, R9)", () => {
+  const html = renderToStaticMarkup(
+    createElement(DecisionBlock, {
+      sentences: ["SENTENCE-MARK."],
+      stage: null,
+      source: null,
+      isSaved: false,
+      showAddKey: false,
+      onSave: NOOP,
+      onSkip: NOOP,
+      onCopy: NOOP,
+      onOpen: NOOP,
+      notesAction: createElement("p", null, "NOTES-ROW"),
+      uploadAction: createElement("p", null, "UPLOAD-ROW"),
+    }),
+  );
+
+  it("stands in the command stack: after Save · Skip · Copy, before the upload row and the sentence", () => {
+    const at = (needle: string) => html.indexOf(needle);
+
+    expect(at(">Copy<")).toBeGreaterThan(-1);
+    expect(at("NOTES-ROW")).toBeGreaterThan(at(">Copy<"));
+    expect(at("UPLOAD-ROW")).toBeGreaterThan(at("NOTES-ROW"));
+    expect(at("SENTENCE-MARK")).toBeGreaterThan(at("UPLOAD-ROW"));
+  });
+
+  it("draws nothing for it when the page gives none", () => {
+    const without = renderToStaticMarkup(
+      createElement(DecisionBlock, { sentences: ["S."], stage: null, source: null, isSaved: false, showAddKey: false, onSave: NOOP, onCopy: NOOP, onOpen: NOOP }),
+    );
+
+    expect(without).not.toContain("NOTES-ROW");
+  });
+});

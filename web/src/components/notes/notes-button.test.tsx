@@ -1,0 +1,135 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+import { readingNote } from "@/lib/notes/templates";
+import type { Note } from "@/lib/notes/types";
+import type { Paper } from "@/types";
+import { NOTES_LABEL, NotesButtonView, notesLabel } from "./notes-button";
+import { openPaperNotes } from "./paper-notes";
+
+// P7-14 (R9, the owner's review): "Your notes" at the far right of the screen, as a button, not a band
+// at the top of the column. A small tab fixed at the viewport's right edge (from `md`; on a phone a
+// row in the command stack instead), labelled "Notes" — "Open your notes" once the paper has a note.
+// The page cannot mount here (router, stores), so the view is tested as markup, `openPaperNotes` as a
+// pure function with the router and the store stubbed, and the wiring in `paper-notes.test.ts`.
+
+const paper: Paper = {
+  id: "openalex:W1", title: "Seaweed mulch and soil water", authors: [], relevanceReason: "", venue: "", source: "other",
+  summaryIntro: "Seaweed mulch laid on terrace soil is tested against straw. A deeper layer keeps more soil water.",
+  summaryExperimentKeywords: [], summaryResultDiscussion: "", isSaved: false,
+};
+
+describe("the label", () => {
+  it("is Notes until the paper has a note, then Open your notes", () => {
+    expect(NOTES_LABEL).toEqual({ take: "Notes", open: "Open your notes" });
+    expect(notesLabel(false)).toBe("Notes");
+    expect(notesLabel(true)).toBe("Open your notes");
+  });
+});
+
+describe("NotesButtonView — the tab at the right edge", () => {
+  const edge = (has: boolean) => renderToStaticMarkup(createElement(NotesButtonView, { variant: "edge", has, onOpen: () => {} }));
+
+  it("is one button, fixed at the viewport's right edge, from md up and never on a phone", () => {
+    const html = edge(false);
+
+    expect(html.match(/<button\b/g)).toHaveLength(1);
+    expect(html).toContain('type="button"');
+    for (const cls of ["fixed", "right-0", "hidden", "md:flex"]) expect(html.split('"').some((attr) => attr.split(" ").includes(cls))).toBe(true);
+  });
+
+  it("stands clear of the upper right 400px, where the AI dock will sit", () => {
+    const html = edge(false);
+    const top = /top-\[([^\]]+)\]/.exec(html)?.[1] ?? "";
+
+    // At least 27rem (432px) from the top whatever the window's height, so a dock in the upper
+    // right 400px is never under it.
+    expect(top).toMatch(/max\(27rem,/);
+    expect(html).not.toMatch(/\btop-0\b|\btop-\d\b/);
+  });
+
+  it("says Notes, and Open your notes once there is a note; the label is vertical in the label face", () => {
+    expect(edge(false)).toContain(">Notes<");
+    expect(edge(true)).toContain(">Open your notes<");
+    expect(edge(false)).not.toContain("Open your notes");
+    expect(edge(false)).toContain("eyebrow");
+    expect(edge(false)).toContain("[writing-mode:vertical-rl]");
+  });
+
+  it("says what a first press does: it makes the paper's note from its card", () => {
+    expect(edge(false)).toMatch(/title="[^"]*note[^"]*"/i);
+  });
+});
+
+describe("NotesButtonView — the row in the command stack, for a phone", () => {
+  const row = (has: boolean) => renderToStaticMarkup(createElement(NotesButtonView, { variant: "row", has, onOpen: () => {} }));
+
+  it("is a full-width command row, hidden from md up (the tab is there instead), a touch target", () => {
+    const html = row(false);
+    const classes = (/class="([^"]*)"/.exec(html)?.[1] ?? "").split(" ");
+
+    expect(classes).toContain("w-full");
+    expect(classes).toContain("md:hidden");
+    expect(classes).not.toContain("fixed");
+    expect(html).toContain("[@media(hover:none)]:min-h-11");
+    expect(html).toContain("eyebrow");
+  });
+
+  it("has the same two labels", () => {
+    expect(row(false)).toContain(">Notes<");
+    expect(row(true)).toContain(">Open your notes<");
+  });
+});
+
+describe("openPaperNotes — the same open() as the band had (P2-05)", () => {
+  const stubs = (own?: Pick<Note, "id">) => {
+    const added: Note[] = [];
+    const pushed: string[] = [];
+    return { added, pushed, args: { own, add: (note: Note) => added.push(note), push: (href: string) => pushed.push(href) } };
+  };
+
+  it("with a note already made, goes to it and makes nothing", () => {
+    const { added, pushed, args } = stubs({ id: "n-1" });
+
+    openPaperNotes({ ...args, paper, questions: ["Does it hold?"] });
+
+    expect(added).toEqual([]);
+    expect(pushed).toEqual(["/notes/n-1"]);
+  });
+
+  it("without one, makes the paper's note from its card, abstract and settled questions, then goes to it", () => {
+    const { added, pushed, args } = stubs();
+
+    openPaperNotes({ ...args, paper, questions: ["Does a deeper layer keep more water?"], forYourQuestions: [] });
+
+    expect(added).toHaveLength(1);
+    expect(added[0].paperId).toBe(paper.id);
+    expect(added[0].title).toBe(paper.title);
+    expect(JSON.stringify(added[0].blocks)).toContain("Does a deeper layer keep more water?");
+    expect(pushed).toEqual([`/notes/${added[0].id}`]);
+  });
+
+  it("with no questions the note is the one the card alone makes", () => {
+    const { added, args } = stubs();
+
+    openPaperNotes({ ...args, paper });
+
+    const plain = readingNote({ id: paper.id, title: paper.title, authors: paper.authors, abstract: paper.summaryIntro } as never);
+    expect(added[0].blocks.map((b) => b.type)).toEqual(plain.blocks.map((b) => b.type));
+  });
+});
+
+describe("the source (P7-14, R9)", () => {
+  const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+
+  it("the band's open() is extracted, not rewritten: one readingNote call, in paper-notes.tsx", () => {
+    const notes = read("src/components/notes/paper-notes.tsx");
+    const button = read("src/components/notes/notes-button.tsx");
+
+    expect(notes.split("readingNote(").length - 1).toBe(1);
+    expect(button).not.toContain("readingNote(");
+    expect(button).toContain("usePaperNotes");
+  });
+});
