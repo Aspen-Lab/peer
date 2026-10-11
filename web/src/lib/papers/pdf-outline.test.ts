@@ -1320,6 +1320,127 @@ describe("a citation number is dropped, an exponent is kept (P7-11)", () => {
   });
 });
 
+// ── P9-08 (round P9, Theme 1; B P9-01 §2): a raised run joins its text row ───────────────────────────
+//
+// A journal PDF stores the space that follows a citation number or an exponent as a run of its own,
+// at the script's height and on the script's baseline (114 of the 578 script-size runs of the
+// owner's paper). That run used to be placed as if it were text: it opened a row at the script's
+// baseline, the script folded into that row at no distance instead of into the text row 4pt below,
+// and the raised-only row became a line of its own: read as an indent in `joinProse`, or, a lone
+// digit, thrown away as a folio. The fixtures of P7-10 and P7-11 never carried the run, which is how
+// the rule shipped green; `chainSpaced` is `chain` with it, so a later test cannot pass without it.
+
+/** What the PDF stores after a script: the space as a run of its own, at the script's height and baseline. */
+const spaceAfter = (run: PdfTextItem): PdfTextItem => item(" ", { x: run.x + run.width, y: run.y, height: run.height, width: 0.7 });
+
+/** `chain`, with that space run after the last run of every script, the runs after it moved on by its width. */
+function chainSpaced(parts: [string, Partial<PdfTextItem>?][], at: { x?: number; y?: number } = {}): PdfTextItem[] {
+  let x = at.x ?? 100;
+  const y = at.y ?? 500;
+  return parts.flatMap(([str, own], i) => {
+    const run = item(str, { x, y, ...own });
+    x += run.width;
+    // The space follows a script's last run, not a sign and the digit after it: "−" "1" " ".
+    if (run.height >= 8 || (parts[i + 1]?.[1]?.height ?? 10) < 8) return [run];
+    const space = spaceAfter(run);
+    x += space.width;
+    return [run, space];
+  });
+}
+
+describe("a raised run joins its text row, the space the PDF stores after it too (P9-08, cluster A)", () => {
+  const UPPER = "kinetics of the quillwort film are set by the grain size and by the";
+
+  it("a citation mid-line does not become a line of its own", () => {
+    const cited = chain([["grains part at the particle interfaces,"], ["10−15", sup(488.9)]], { y: 488.9 });
+    const last = cited[cited.length - 1];
+    const rest = chain([[" a process the field calls"]], { x: last.x + last.width + 0.7, y: 488.9 });
+    const lines = linesOfPage({ page: 1, items: [...chain([[UPPER]], { y: 500 }), ...cited, spaceAfter(last), ...rest] });
+    expect(lines.map((l) => l.text)).toEqual([UPPER, "grains part at the particle interfaces, a process the field calls"]);
+    // The old reading made a third line of the number, mid-line, which the paragraph rule read as an indent.
+    expect(joinProse(lines).split("\n\n")).toHaveLength(1);
+  });
+
+  it("an exponent keeps its place: a unit's exponent twice on one line, never '2 2' in front of it", () => {
+    const items = chainSpaced([["a current density from 15 mA/cm"], ["2", sup()], [" to 30 mA/cm"], ["2", sup()], [" at room temperature"]]);
+    expect(linesOfPage({ page: 1, items }).map((l) => l.text)).toEqual(["a current density from 15 mA/cm2 to 30 mA/cm2 at room temperature"]);
+  });
+
+  it("a lone raised digit is not thrown away as a folio", () => {
+    const prose = (y: number) => item("Recurrent neural networks have long been established in sequence modelling.", { y });
+    const page: PdfPageText = {
+      page: 1,
+      items: [
+        item("A Paper About Sequence Models", { height: 17, y: 760 }),
+        item("1 Introduction", { y: 740 }),
+        ...[726, 714, 702].map(prose),
+        ...chainSpaced([["The current was held at 7 mA/cm"], ["2", sup(690)], [" until the film was whole"]], { y: 690 }),
+        ...[678, 666].map(prose),
+      ],
+    };
+    // The lone "2" was a line of its own, and a line of one to four digits is a page number.
+    expect(linesOfPage(page).map((l) => l.text)).not.toContain("2");
+    const text = (buildOutline([page]).sections ?? []).map((s) => s.text).join(" ");
+    expect(text).toContain("The current was held at 7 mA/cm2 until the film was whole");
+  });
+
+  it("a script as high as the window reaches (7.25pt, the stacked label's charge) still belongs to its line", () => {
+    const items = chainSpaced([["the ion Co"], ["2+", { height: 6.7, y: 507.25 }], [" binds the film"]]);
+    expect(linesOfPage({ page: 1, items }).map((l) => l.text)).toEqual(["the ion Co2+ binds the film"]);
+  });
+
+  it("small print with no line near it keeps a line of its own, its space run with it", () => {
+    // 14pt under the line is a footnote, not a subscript: the run the PDF stores after it is the note's.
+    const note = chainSpaced([["a note set small, a line below", { height: 6.7 }]], { y: 486 });
+    const items = [...chain([["The cathode shape was measured at room temperature"]]), ...note];
+    expect(linesOfPage({ page: 1, items }).map((l) => l.text)).toEqual([
+      "The cathode shape was measured at room temperature",
+      "a note set small, a line below",
+    ]);
+  });
+
+  it("the space run after a subscript folds as it did", () => {
+    const items = chainSpaced([["Films of TiO"], ["2", sub()], [" were grown on gold"]]);
+    expect(linesOfPage({ page: 1, items }).map((l) => l.text)).toEqual(["Films of TiO2 were grown on gold"]);
+  });
+
+  // P7-11's table, row by row, with and without the run the PDF stores: the reading must not depend on it.
+  const DROPPED: [string, string, string][] = [
+    ["Quillwort cathodes are used in many small cells and other materials.", "12", " They also fade."],
+    ["Quillwort films were grown on gold,", "3−5", " and then annealed."],
+    ["Quillwort films were grown on gold (see below)", "4", " and then annealed."],
+    ["Quillwort films were grown on gold [Li]", "4", " and then annealed."],
+    ["Quillwort films were grown on gold;", "2,3", " they then fade."],
+    ["Quillwort films were grown on gold–silver", "5", " and then annealed."],
+    ["Quillwort cathode degradation", "17", " is slow in cells."],
+  ];
+  const KEPT: [string, string, string][] = [
+    ["a rate of 5 x 10", "−3", " per second"],
+    ["a diffusivity in cm", "2", " per second"],
+    ["a rate in s", "−1", " at room temperature"],
+    ["a current of 12.5 mA cm", "−2", " was used"],
+    ["the fit gave R", "2", " above 0.99"],
+    ["an area of 4 mm", "2", " each"],
+    ["a rate in mol", "−1", " of lithium"],
+    ["a rate in min", "-1", " of lithium"],
+  ];
+  describe.each([
+    ["without the space run", chain],
+    ["with the space run", chainSpaced],
+  ] as const)("P7-11's table %s", (_name, build) => {
+    const read = (parts: [string, Partial<PdfTextItem>?][]) => linesOfPage({ page: 1, items: build(parts) }).map((l) => l.text);
+    it.each(DROPPED)("drops %s + %s", (before, mark, after) => {
+      expect(read([[before], [mark, sup()], [after]])).toEqual([`${before}${after}`]);
+    });
+    it.each(KEPT)("keeps %s + %s", (before, mark, after) => {
+      expect(read([[before], [mark, sup()], [after]])).toEqual([`${before}${mark}${after}`]);
+    });
+    it("keeps a negative exponent stored as two raised runs, a sign and a digit", () => {
+      expect(read([["a rate in mol"], ["−", sup()], ["1", sup()], [" of lithium"]])).toEqual(["a rate in mol−1 of lithium"]);
+    });
+  });
+});
+
 // ── P7-18 (§1h.39 b, c): the end matter after the argument, and the subsections' buckets ────────────
 //
 // The owner's paper (a 19-page, two-column journal article) ends its argument at 4.5 and then prints

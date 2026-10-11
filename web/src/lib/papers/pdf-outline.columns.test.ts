@@ -259,3 +259,42 @@ describe("a citation number raised above a column's line is dropped with it (P7-
     expect(lines.filter((line) => tokensIn(line.text).length > 0)).toHaveLength(96);
   });
 });
+
+// P9-08 (B P9-01 §2.6): a journal PDF stores the space after a citation number as a run of its own,
+// 6.7pt high, on the number's baseline, between the number and the line's next word. That run used to
+// open a row of its own at the number's height (the number folded into it, 4.4pt above the line it
+// cites) and the number came out as a line of its own, or, a lone one, as a page number thrown away.
+// The four cites again, each mid-line now: the line's words, the number, its space run, the last word.
+describe("a citation number and the space the PDF stores after it are dropped with the line's own words (P9-08)", () => {
+  /** The line `token` opens, cut before its last word, with `mark` raised between the halves and a space run after it. */
+  const cited = (runs: Run[], token: string, mark: string): Run[] =>
+    runs.flatMap((run): Run[] => {
+      const [text, x, top, size] = run;
+      if (!text.startsWith(`${token} `)) return [run];
+      const cut = text.lastIndexOf(" ");
+      const at = x + cut * 4.1 + 1; // Helvetica at 10pt sets these lines about 4.1pt to the character
+      const after = at + mark.length * 3.7;
+      return [[text.slice(0, cut), x, top, size], [mark, at, top - 4.4, 6.7], [" ", after, top - 4.4, 6.7], [text.slice(cut + 1), after + 2.4, top, size]];
+    });
+  const bytes = minimalPdf([
+    cited(cited(twoColumnPage(1, 24, 0, "columns"), "P1L04", "73"), "P1R10", "74,75"),
+    cited(cited(twoColumnPage(2, 24, 5, "columns"), "P2L12", "88"), "P2R21", "89–91"),
+  ]);
+
+  it("leaves none of the numbers in the text, and every printed line in it", async () => {
+    const result = await extractPdfTextFromBytes(bytes);
+    const text = (result.doc?.sections ?? []).map((s) => s.text).join("\n\n");
+    for (const mark of ["73", "74", "75", "88", "89", "91"]) expect(text, mark).not.toContain(mark);
+    expect(mentionsOf(text)).toHaveLength(96);
+  });
+
+  it("reads each of the four lines whole, as printed, with no line of script size", async () => {
+    const lines = (await readPages(bytes)).flatMap(linesOfPage);
+    const texts = lines.map((line) => line.text);
+    for (const [page, side, n] of [[1, "L", 3], [1, "R", 9], [2, "L", 11], [2, "R", 20]] as const) {
+      expect(texts, token(page, side, n)).toContain(columnLine(page, side, n));
+    }
+    expect(lines.filter((line) => line.size < 8)).toEqual([]);
+    expect(lines.filter((line) => tokensIn(line.text).length > 0)).toHaveLength(96);
+  });
+});

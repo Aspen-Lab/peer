@@ -367,6 +367,14 @@ function usualHeight(items: PdfTextItem[]): number {
  * into the row it belongs to, not into a row of its own placed above it:
  * "after the 1st, 20th cycle" is one line, not "st th" over "after the 1 , 20
  * cycle". `text` is the page's usual text height; 0 turns the folding off.
+ *
+ * The space a journal PDF stores after a script is a run of its own, set at
+ * the script's height and on its baseline: it is a script too (P9-08). Placed
+ * as text it opened a row at the script's baseline, 4pt above the line the
+ * script belongs to, and the script folded into that row at no distance
+ * instead — a line of its own, read as an indent or thrown away as a folio.
+ * Only rows of full-size runs own a script; a script with none near it is
+ * small print (a footer, a note) and keeps the reading it always had.
  */
 function rowsOf(items: PdfTextItem[], text: number): Row[] {
   const rows: Row[] = [];
@@ -377,20 +385,38 @@ function rowsOf(items: PdfTextItem[], text: number): Row[] {
     else rows.push({ y: round(item.y), items: [item] });
   };
   for (const item of items) {
-    if (text > 0 && item.height < text * SCRIPT_RATIO && item.str.trim()) scripts.push(item);
+    if (text > 0 && item.height < text * SCRIPT_RATIO) scripts.push(item);
     else place(item);
   }
-  for (const script of scripts) {
+  /** The nearest of these rows the script sits within the window of. */
+  const ownerOf = (script: PdfTextItem, among: Row[]): Row | undefined => {
     let nearest: Row | undefined;
-    for (const row of rows) {
+    for (const row of among) {
       const rise = script.y - row.y;
       if (rise < -SCRIPT_DROP || rise > SCRIPT_RISE) continue;
       if (!nearest || Math.abs(rise) < Math.abs(script.y - nearest.y)) nearest = row;
     }
-    if (nearest) {
-      nearest.items.push(script);
-      if (script.y - nearest.y > SUPERSCRIPT_RISE) (nearest.raised ??= new Set()).add(script);
-    } else place(script);
+    return nearest;
+  };
+  const fold = (script: PdfTextItem, row: Row) => {
+    row.items.push(script);
+    if (script.y - row.y > SUPERSCRIPT_RISE) (row.raised ??= new Set()).add(script);
+  };
+  const base = rows.slice();
+  const small: PdfTextItem[] = [];
+  for (const script of scripts) {
+    const row = ownerOf(script, base);
+    if (row) fold(script, row);
+    else small.push(script);
+  }
+  // Small print: a space is placed as text was before, and the words that follow
+  // may join the rows made so far, small print's own among them.
+  for (const script of small) if (!script.str.trim()) place(script);
+  for (const script of small) {
+    if (!script.str.trim()) continue;
+    const row = ownerOf(script, rows);
+    if (row) fold(script, row);
+    else place(script);
   }
   // Down the page: PDF y grows upward.
   return rows.sort((a, b) => b.y - a.y);
