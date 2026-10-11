@@ -181,12 +181,14 @@ describe("reading order on a page set in two columns (P7-10)", () => {
     // the left column's tenth line runs 8pt on into the gutter, still a word space short of the right column
     const items = columns(20).map((i) => (i.x === LEFT.x && i.y === 700 - 9 * 12 ? { ...i, width: LEFT.edge - LEFT.x + 8 } : i));
     const lines = linesOfPage({ page: 1, items });
+    expect(lines).toHaveLength(40);
     expect(labels(lines).slice(0, 20).every((l) => l.startsWith("L"))).toBe(true);
     expect(labels(lines)[9]).toBe("L10");
   });
 
   it("gives the right column's lines the left column's indent, so prose is not broken into paragraphs by a column", () => {
     const lines = linesOfPage({ page: 1, items: columns(20) });
+    expect(lines).toHaveLength(40);
     expect(new Set(lines.map((l) => l.x))).toEqual(new Set([LEFT.x]));
   });
 });
