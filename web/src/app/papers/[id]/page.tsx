@@ -49,7 +49,7 @@ import {
 import { readingToMarkdown } from "@/lib/papers/reading-markdown";
 import type { Claim, PaperReport } from "@/lib/papers/report";
 import type { Route } from "next";
-import { aiAvailability } from "@/lib/feed/ai-tier";
+import { aiAvailability, explainWindowAvailable } from "@/lib/feed/ai-tier";
 import { useSyncGate } from "@/components/profile-sync";
 import { PaperPlate } from "@/components/cards/paper-plate";
 import { SwipeableCard } from "@/components/cards/swipe-card";
@@ -757,6 +757,9 @@ function Reader({
   const authOutcome = useSyncGate((s) => s.authOutcome);
   const aiMode = aiAvailability(profile, authOutcome);
   const providerConfigured = aiMode !== "none";
+  // P8-06: the always-on explain window is the one surface that does not wait for the sign-in check when the reader's key is
+  // their own local one — it is in the first paint, with its 376 px (`explainWindowAvailable`, `lib/feed/ai-tier.ts`).
+  const explainCanAsk = explainWindowAvailable(profile, authOutcome);
   // P3-03 (§1h.6; §1a.8): Peer's gist after each paragraph's opening in the map. One
   // small model call per paper — made once the reading has a body, kept in this browser
   // for a day, on the reader's own key — and absent without one. P3-05 (§1h.8 (1)): it
@@ -780,8 +783,8 @@ function Reader({
   // has selected (a target within one paragraph, once it holds still); the
   // box offers the button and, on the click — the only thing that sends —
   // asks for the explanation. One explanation is a small call, so a reader may
-  // ask whenever they have a model from anywhere (`providerConfigured`), deep
-  // reports on or not. The section's id is the id the server's own corpus gives
+  // ask whenever they have a model from anywhere (`explainCanAsk`: `providerConfigured`, and a
+  // local key before the sign-in check answers), deep reports on or not. The section's id is the id the server's own corpus gives
   // the section: `reading.body[k].id`, the one the browser already holds. A kept
   // answer is remembered per paper and passage, so the same passage opens at once.
   const [explainTarget, setExplainTarget] = useState<ExplainSelection | null>(null);
@@ -1592,7 +1595,7 @@ function Reader({
         inside the section links, so the quotes' "§Heading" is a link as
         everywhere. One per paper: a card never follows the reader to the next. */}
     <SectionLinks headings={bodyHeadings}>
-      <ExplainBox key={paper.id} target={explainTarget} terms={terms} canAsk={providerConfigured} onAsk={askExplain} cached={explainCached} cachedTurns={explainKeptThread?.turns} onReply={replyExplain} onSayMore={moreExplain} onResetThread={resetExplain} openRef={explainOpen} reading={reading} />
+      <ExplainBox key={paper.id} target={explainTarget} terms={terms} canAsk={explainCanAsk} onAsk={askExplain} cached={explainCached} cachedTurns={explainKeptThread?.turns} onReply={replyExplain} onSayMore={moreExplain} onResetThread={resetExplain} openRef={explainOpen} reading={reading} />
     </SectionLinks>
     {/* P7-14 (R9): the notes, as a small tab fixed at the window's right edge (from `md`; a phone has
         the row in the command stack instead). Beside the explain box, for the same reason: it is

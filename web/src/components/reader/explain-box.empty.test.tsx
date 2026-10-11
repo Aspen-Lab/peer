@@ -9,6 +9,8 @@ import { EXPLAIN } from "./copy";
 import { SectionLinks } from "./evidence-quote";
 import { ExplainBox, ExplainCard, type ExplainStatus, type ThreadView } from "./explain-box";
 import type { ExplainSelection } from "./paper-body";
+import { explainWindowAvailable } from "@/lib/feed/ai-tier";
+import { defaultProfile } from "@/types";
 
 // P8-06 (the owner's "yes" of 16:4xZ 2026-10-11; ruling §1h.45): the explain window is there before the first
 // selection, as an empty panel — the card's header (the "Explain this?" title and Close) and one line of copy in the
@@ -168,6 +170,14 @@ describe("ExplainBox — the first paint (P8-06, ruling §1h.45)", () => {
     expect(firstPaint(1280, { canAsk: false, terms: [rafting] })).toBe("");
     expect(firstPaint(1280, { reading: noBody })).toBe("");
     for (const width of [1023, 800, 640, 390]) expect(firstPaint(width), `${width} px`).toBe("");
+  });
+
+  it("is there for a reader's own key while the sign-in check has not answered (`unknown`), and for no key at all it is not", () => {
+    const local = { ...defaultProfile, feedAiProvider: "openai" as const, feedAiApiKey: "not-a-real-key" };
+    const none = { ...defaultProfile, feedAiProvider: "default" as const, feedAiApiKey: "" };
+
+    expect(firstPaint(1280, { canAsk: explainWindowAvailable(local, "unknown") })).toContain("data-explain-empty");
+    expect(firstPaint(1280, { canAsk: explainWindowAvailable(none, "unknown") })).toBe("");
   });
 
   it("stands beside the button of a selection that is already there — the window is not the button", () => {

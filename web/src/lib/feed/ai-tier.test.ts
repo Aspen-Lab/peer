@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { defaultProfile, type UserProfile } from "@/types";
 import { opportunityRequestBody, paperFeedRequestBody } from "@/store/feed";
 import type { AuthOutcome } from "@/components/profile-sync";
-import { aiAvailability, feedsUseAi, hasUserLlmOverride } from "./ai-tier";
+import { aiAvailability, explainWindowAvailable, feedsUseAi, hasUserLlmOverride } from "./ai-tier";
 
 /**
  * RULING 66a / 68a (round 25 C, item 2). **THE ONE PREDICATE, IN EVERY STATE,
@@ -115,6 +115,38 @@ describe("aiAvailability — the ONE predicate", () => {
     };
     for (const outcome of ALL_OUTCOMES) {
       expect(aiAvailability(orphan, outcome)).toBe("none");
+    }
+  });
+});
+
+// P8-06 (the manager's ruling on the first paint): the always-on explain window is the one surface that does not wait for
+// the sign-in check when the reader's key is their own local override. Everything else keeps `aiAvailability` (above).
+describe("explainWindowAvailable — the explain window's own question (P8-06)", () => {
+  it("a local key shows the window in the first paint: `unknown` is enough", () => {
+    expect(explainWindowAvailable(BYOK, "unknown")).toBe(true);
+    // …although the model predicate still says none for that moment, which is why the others do not change.
+    expect(aiAvailability(BYOK, "unknown")).toBe("none");
+    expect(feedsUseAi(BYOK, "unknown")).toBe(false);
+  });
+
+  it("with no local key there is no window, whatever the sign-in check says — Peer has no key to lend", () => {
+    for (const auth of ALL_OUTCOMES) expect(explainWindowAvailable(NO_KEY, auth), auth).toBe(false);
+  });
+
+  it("is `aiAvailability`'s answer in every settled state: a signed-in reader and an unconfigured copy have it, a confirmed sign-out has not", () => {
+    expect(explainWindowAvailable(BYOK, "signed-in")).toBe(true);
+    expect(explainWindowAvailable(BYOK, "unconfigured")).toBe(true);
+    expect(explainWindowAvailable(BYOK, "signed-out")).toBe(false);
+    for (const auth of ["signed-in", "signed-out", "unconfigured"] as const) {
+      expect(explainWindowAvailable(BYOK, auth), auth).toBe(aiAvailability(BYOK, auth) !== "none");
+    }
+  });
+
+  it("reads the local key as `hasUserLlmOverride` does: a provider and a non-blank key, both", () => {
+    expect(explainWindowAvailable({ ...BYOK, feedAiApiKey: "   " }, "unknown")).toBe(false);
+    expect(explainWindowAvailable({ ...BYOK, feedAiProvider: "default" }, "unknown")).toBe(false);
+    for (const profile of [BYOK, NO_KEY, { ...BYOK, feedAiApiKey: " " }, { ...BYOK, feedAiProvider: "default" as const }]) {
+      expect(explainWindowAvailable(profile, "unknown"), JSON.stringify([profile.feedAiProvider, Boolean(profile.feedAiApiKey?.trim())])).toBe(hasUserLlmOverride(profile));
     }
   });
 });

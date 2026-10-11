@@ -34,7 +34,12 @@ function explainProblems(source: string): string[] {
   if (!popover.includes("key={paper.id}")) problems.push("the popover is no longer keyed by the paper (a card must not follow the reader to the next one)");
   if (!popover.includes("target={explainTarget}")) problems.push("the popover is no longer handed the selection");
   if (!popover.includes("terms={terms}")) problems.push("the popover is no longer handed the page's terms");
-  if (!popover.includes("canAsk={providerConfigured}")) problems.push("a reader may ask only when `providerConfigured` says there is a model, not by any other test");
+  // P8-06 (re-aimed: was `canAsk={providerConfigured}`): the always-on window asks `explainWindowAvailable`, which is
+  // `aiAvailability`'s answer plus the reader's own local key while the sign-in check has not answered — so the window is in
+  // the first paint — and nothing else; the model predicate `providerConfigured` is not touched.
+  if (!popover.includes("canAsk={explainCanAsk}")) problems.push("a reader may ask only when `explainWindowAvailable` says there is a model (the model predicate, or a local key before the sign-in check answers), not by any other test");
+  if (!text.includes("const explainCanAsk = explainWindowAvailable(profile, authOutcome);")) problems.push("`explainCanAsk` is no longer `explainWindowAvailable(profile, authOutcome)`: a reader's own key waits for the sign-in check again");
+  if (!text.includes('const aiMode = aiAvailability(profile, authOutcome); const providerConfigured = aiMode !== "none";')) problems.push("the model predicate `providerConfigured` is no longer `aiAvailability`'s answer");
   if (/deepReportEnabled/.test(popover)) problems.push("asking one explanation is gated on deep reports being on");
   if (!popover.includes("onAsk={askExplain}")) problems.push("the popover is no longer handed `askExplain`");
   if (!popover.includes("cached={explainCached}")) problems.push("the popover is no longer handed the answer already kept");
@@ -108,14 +113,33 @@ describe("the page's Explain this? wiring (P3-02)", () => {
     ]);
   });
 
-  it("would notice a reader allowed to ask by another test than providerConfigured", () => {
-    const wrong = source.replace("canAsk={providerConfigured}", "canAsk={Boolean(profile.deepReportEnabled)}");
+  it("would notice a reader allowed to ask by another test than the explain window's own", () => {
+    const wrong = source.replace("canAsk={explainCanAsk}", "canAsk={Boolean(profile.deepReportEnabled)}");
 
     // The deep-report switch is the other test this guards against, so it trips both lines.
     expect(explainProblems(wrong)).toEqual([
-      "a reader may ask only when `providerConfigured` says there is a model, not by any other test",
+      "a reader may ask only when `explainWindowAvailable` says there is a model (the model predicate, or a local key before the sign-in check answers), not by any other test",
       "asking one explanation is gated on deep reports being on",
     ]);
+  });
+
+  it("would notice the window waiting for the sign-in check again (P8-06: a reader's own key is in the first paint)", () => {
+    // Back on `providerConfigured`, a local key is `none` until the check answers: the window and its 376 px come late.
+    const late = source.replace("canAsk={explainCanAsk}", "canAsk={providerConfigured}");
+    const widened = source.replace("const explainCanAsk = explainWindowAvailable(profile, authOutcome);", "const explainCanAsk = providerConfigured;");
+
+    expect(explainProblems(late)).toEqual([
+      "a reader may ask only when `explainWindowAvailable` says there is a model (the model predicate, or a local key before the sign-in check answers), not by any other test",
+    ]);
+    expect(explainProblems(widened)).toEqual([
+      "`explainCanAsk` is no longer `explainWindowAvailable(profile, authOutcome)`: a reader's own key waits for the sign-in check again",
+    ]);
+  });
+
+  it("would notice the model predicate itself being widened for the window's sake", () => {
+    const wrong = source.replace('const providerConfigured = aiMode !== "none";', 'const providerConfigured = aiMode !== "none" || hasUserLlmOverride(profile);');
+
+    expect(explainProblems(wrong)).toEqual(["the model predicate `providerConfigured` is no longer `aiAvailability`'s answer"]);
   });
 
   it("would notice the popover mounted inside the page container", () => {

@@ -23,6 +23,9 @@ import type { ExplainAnswer } from "@/lib/papers/explain";
 import type { PaperReading } from "@/lib/papers/reading";
 import type { PaperTerm } from "@/lib/papers/report";
 import type { ExplainTurn } from "@/store/explain-threads";
+import { explainWindowAvailable } from "@/lib/feed/ai-tier";
+import type { AuthOutcome } from "@/components/profile-sync";
+import { defaultProfile } from "@/types";
 import { EXPLAIN } from "./copy";
 import { ExplainBox, ExplainCard, type AskResult, type ThreadView } from "./explain-box";
 import type { ReplyResult } from "./explain-thread";
@@ -567,5 +570,82 @@ describe("ExplainBox — the window is there before the first selection (P8-06, 
     expect(run.looks.map(kind)).not.toContain("none");
     expect(removeProperty).not.toHaveBeenCalled();
     run.mounted.unmount();
+  });
+});
+
+// ── The first paint with a reader's own key (P8-06, the manager's ruling) ───────────────────────────────────────
+
+describe("ExplainBox — a reader's own key shows the window in the first paint, before the sign-in check answers", () => {
+  // What the page hands the box as `canAsk`: `explainWindowAvailable(profile, authOutcome)` (`page.explain.test.ts` pins the
+  // wiring). The sign-in check starts at "unknown"; with Supabase configured it answers a round trip after the first paint.
+  const LOCAL_KEY = { ...defaultProfile, feedAiProvider: "openai" as const, feedAiApiKey: "not-a-real-key" };
+  const NO_LOCAL_KEY = { ...defaultProfile, feedAiProvider: "default" as const, feedAiApiKey: "" };
+  const canAskFor = (profile: typeof LOCAL_KEY | typeof NO_LOCAL_KEY, auth: AuthOutcome) => explainWindowAvailable(profile, auth);
+  /** The sign-in check answers `auth`: the page's next render hands the box a new `canAsk`. */
+  const resolves =
+    (profile: typeof LOCAL_KEY | typeof NO_LOCAL_KEY, auth: AuthOutcome): Step =>
+    (_tree, ctx) => {
+      ctx.props = { ...ctx.props, canAsk: canAskFor(profile, auth) };
+      ctx.rerender();
+    };
+
+  it("`unknown` with a local key: the window stands at mount — the first render — with the page's width reserved", async () => {
+    const run = await scenario(base({ canAsk: canAskFor(LOCAL_KEY, "unknown") }), []);
+
+    expect(run.looks[0].empty).toBe(true);
+    expect(run.looks.every((l) => l.empty)).toBe(true);
+    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    expect(run.last().style).toEqual({ right: 0, width: 360, top: 48, maxHeight: 800 - 48 - 28 });
+    run.mounted.unmount();
+  });
+
+  it("`unknown` with no local key: nothing at mount, and nothing when the check answers either — Peer has no key to lend", async () => {
+    const run = await scenario(base({ canAsk: canAskFor(NO_LOCAL_KEY, "unknown") }), [
+      (tree) => {
+        expect(look(tree).card).toBeUndefined();
+        expect(setProperty).not.toHaveBeenCalled();
+      },
+      resolves(NO_LOCAL_KEY, "signed-in"),
+      (tree) => expect(look(tree).card).toBeUndefined(),
+      resolves(NO_LOCAL_KEY, "unconfigured"),
+    ]);
+    await wait();
+
+    expect(run.looks.every((l) => l.card === undefined)).toBe(true);
+    expect(setProperty).not.toHaveBeenCalled();
+    expect(listening("keydown")).toBe(0);
+    run.mounted.unmount();
+  });
+
+  it("the check answering signed-in or unconfigured changes nothing: the window that stood stands, with no property churn", async () => {
+    const run = await scenario(base({ canAsk: canAskFor(LOCAL_KEY, "unknown") }), [resolves(LOCAL_KEY, "signed-in"), resolves(LOCAL_KEY, "unconfigured")]);
+    await wait();
+
+    expect(run.looks.every((l) => l.empty)).toBe(true);
+    expect(setProperty).toHaveBeenCalledTimes(2);
+    expect(removeProperty).not.toHaveBeenCalled();
+    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    run.mounted.unmount();
+  });
+
+  it("a confirmed sign-out takes it away, and the width goes back (the server would refuse the call)", async () => {
+    const run = await scenario(base({ canAsk: canAskFor(LOCAL_KEY, "unknown") }), [resolves(LOCAL_KEY, "signed-out")]);
+    await wait();
+
+    expect(run.looks[0].empty).toBe(true);
+    expect(run.last().card).toBeUndefined();
+    expect(Object.fromEntries(root)).toEqual({});
+    expect(listening("resize")).toBe(0);
+    run.mounted.unmount();
+  });
+
+  it("a settled outcome gives the same first paint as `unknown` for a reader with a local key", async () => {
+    for (const auth of ["signed-in", "unconfigured"] as const) {
+      const run = await scenario(base({ canAsk: canAskFor(LOCAL_KEY, auth) }), []);
+
+      expect(run.looks[0].empty, auth).toBe(true);
+      expect(Object.fromEntries(root), auth).toEqual(RESERVED);
+      run.mounted.unmount();
+    }
   });
 });
