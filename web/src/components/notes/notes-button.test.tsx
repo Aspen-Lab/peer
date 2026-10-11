@@ -50,6 +50,17 @@ describe("NotesButtonView — the tab at the right edge", () => {
     expect(html).not.toMatch(/\btop-0\b|\btop-\d\b/);
   });
 
+  it("is as narrow as a line of type: in the vertical writing mode px pads the top and bottom, so the sides are py", () => {
+    const classes = (/class="([^"]*)"/.exec(edge(false))?.[1] ?? "").split(" ");
+
+    // 12px above and below the label, 4px at its sides: a tab about 25px wide, which does not reach into the
+    // page's own 24px side margin at a tablet's width (the first version, px-1 py-3, was 41px wide).
+    expect(classes).toContain("px-3");
+    expect(classes).toContain("py-1");
+    expect(classes).not.toContain("px-1");
+    expect(classes).not.toContain("py-3");
+  });
+
   it("says Notes, and Open your notes once there is a note; the label is vertical in the label face", () => {
     expect(edge(false)).toContain(">Notes<");
     expect(edge(true)).toContain(">Open your notes<");

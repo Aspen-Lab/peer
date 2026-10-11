@@ -63,8 +63,10 @@ export function NotesButtonView({
       title={has ? undefined : TAKE_TITLE}
       className={cn(
         // Fixed to the right edge, vertically from 27rem down (or the window's middle, if lower) — clear
-        // of the upper right 400px. The label runs down the tab, so it is as narrow as a line of type.
-        "fixed right-0 top-[max(27rem,50vh)] z-40 hidden md:flex items-center border border-r-0 border-border-strong bg-surface px-1 py-3 shadow-card",
+        // of the upper right 400px. The label runs down the tab (vertical writing mode), so it is as
+        // narrow as a line of type: in that mode `px` pads the tab's top and bottom (the inline axis)
+        // and `py` its two sides, and the tab must not reach into the page's own side margin (24px).
+        "fixed right-0 top-[max(27rem,50vh)] z-40 hidden md:flex items-center border border-r-0 border-border-strong bg-surface px-3 py-1 shadow-card",
         "eyebrow text-text-muted transition-colors hover:bg-surface-hover hover:text-heading [writing-mode:vertical-rl]",
       )}
     >
