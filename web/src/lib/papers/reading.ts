@@ -129,8 +129,16 @@ export interface PaperReading {
    * exactly as invisible as a missing field: 2 → 3 was a quote-selection
    * change with no new field, and without the bump every reader who had
    * opened the paper that day would have kept the worse one.
+   *
+   * 6 → 7 (P8-04): no field added. What a public paper's reading is built
+   * from changed — the PDF extractor's columns, hygiene rules and end matter
+   * (P7-10, P7-11, P7-18) and, with P8-04, a numbered HTML subsection taking
+   * its parent's bucket even when the parent holds no text — so the sections,
+   * the buckets and the findings / method chosen by them differ for papers
+   * already opened. A reading cached under 6, in the browser or on the route,
+   * is read again once.
    */
-  version: 6;
+  version: 7;
   paperId: string;
   builtAt: string;
   provenance: ReadingProvenance;
@@ -742,7 +750,7 @@ export function buildReading(
   omitted.push({ block: "nextStep", reason: "needs_key" });
 
   return {
-    version: 6,
+    version: 7,
     paperId: paper.id,
     builtAt: now.toISOString(),
     provenance,

@@ -295,7 +295,10 @@ describe("buildReading", () => {
     // 4 -> 5 (math rendering) is the one this merge keeps, since the
     // follow-up branch never touched that shape. P1-04 (§1e.9, §1f.12):
     // 5 -> 6 — body sections carry their id and the reading carries the map.
-    expect(reading.version).toBe(6);
+    // P8-04: 6 -> 7 — no field added; the sections and buckets a public
+    // paper's reading is built from changed (P7-10 / P7-11 / P7-18 for PDFs,
+    // P8-04 for HTML), so a reading cached under 6 is read again.
+    expect(reading.version).toBe(7);
     expect(reading.paperId).toBe("openalex:W7204479535");
     expect(reading.builtAt).toBe("2026-09-06T12:00:00.000Z");
     expect(reading.provenance).toEqual({
