@@ -45,7 +45,7 @@ behavior below, not the other way around):
 > provider's terms.
 >
 > I am authorized to upload, store and process this article in Peer, including with my AI
-> provider. Having subscription access alone may not grant these permissions.
+> provider.
 >
 > Only upload authorized copies. Peer does not bypass paywalls or share your PDF with other
 > readers.
