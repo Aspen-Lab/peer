@@ -670,3 +670,72 @@ describe("the paragraph indent is read against the section's usual left edge (P7
     expect(paragraphs([20, ...Array<number>(10).fill(72)])).toHaveLength(1);
   });
 });
+
+describe("the received / accepted date box is furniture (P7-11)", () => {
+  const prose = (y: number, text = "Recurrent neural networks have long been established in sequence modelling.") => item(text, { y });
+  // Set a point under the body, as a journal sets it: smaller, but not margin print.
+  const dated = (text: string, y: number) => item(text, { y, height: 9 });
+  const body = (outline: ReturnType<typeof buildOutline>) => (outline.sections ?? []).map((s) => s.text).join(" ");
+  const cover = [item("A Paper About Sequence Models", { height: 17, y: 760 }), item("1 Introduction", { y: 740 })];
+
+  it("drops a run of two or more such lines at the foot of a page, so the sentence that crosses the break is whole", () => {
+    const outline = buildOutline([
+      {
+        page: 1,
+        items: [
+          ...cover,
+          ...[726, 714, 702, 690, 678].map((y) => prose(y)),
+          prose(666, "The recurrent models carry the sentence that"),
+          dated("Received: January 24, 2026", 114),
+          dated("Revised: March 2, 2026", 103),
+          dated("Accepted: March 9, 2026", 92),
+          dated("Published: March 20, 2026", 81),
+        ],
+      },
+      { page: 2, items: [prose(740, "carries over to the next page and ends there."), ...[728, 716, 704].map((y) => prose(y))] },
+    ]);
+    expect(body(outline)).toContain("the sentence that carries over to the next page and ends there.");
+    expect(body(outline)).not.toMatch(/Received|Revised|Accepted|Published/);
+  });
+
+  it("drops it wherever it stands, inside the body too, in any case", () => {
+    const outline = buildOutline([
+      {
+        page: 1,
+        items: [
+          ...cover,
+          ...[726, 714, 702].map((y) => prose(y)),
+          dated("RECEIVED 24 January 2026", 678),
+          dated("accepted: 9 March 2026", 667),
+          ...[640, 628, 616].map((y) => prose(y)),
+        ],
+      },
+    ]);
+    expect(body(outline)).not.toMatch(/received|accepted/i);
+    expect(body(outline)).toContain("sequence modelling.");
+  });
+
+  it("keeps a single such line: one line is a sentence or a note, not a box", () => {
+    const outline = buildOutline([
+      { page: 1, items: [...cover, ...[726, 714, 702].map((y) => prose(y)), dated("Accepted: 12 May 2026", 678), ...[650, 638, 626].map((y) => prose(y))] },
+    ]);
+    expect(body(outline)).toContain("Accepted: 12 May 2026");
+  });
+
+  it("keeps body sentences that open with those words, even two in a row: no date follows the word", () => {
+    const outline = buildOutline([
+      {
+        page: 1,
+        items: [
+          ...cover,
+          ...[726, 714].map((y) => prose(y)),
+          prose(702, "Published data suggest that quillwort cells fade under fast charging."),
+          prose(690, "Accepted values for the rate were taken from the first study."),
+          ...[678, 666, 654].map((y) => prose(y)),
+        ],
+      },
+    ]);
+    expect(body(outline)).toContain("Published data suggest that quillwort cells fade under fast charging.");
+    expect(body(outline)).toContain("Accepted values for the rate were taken from the first study.");
+  });
+});

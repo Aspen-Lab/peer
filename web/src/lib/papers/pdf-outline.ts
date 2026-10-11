@@ -125,6 +125,14 @@ const FRONT_MATTER_END = new Set(["abstract", "introduction"]);
 const CAPTION = /^(fig(?:ure)?|table|scheme|chart)\s*\.?\s*(\d{1,3}|[IVXL]{1,5})\b\s*[.:—–-]?\s*(.*)$/i;
 const NUMBERED_HEADING = /^(\d+(?:\.\d+)*)\s*[.)]?\s+(\S.*)$/;
 const FOLIO = /^(page\s*)?\d{1,4}$/i;
+/** A line of the publication history a journal prints in a box on the first
+ *  page: "Received: January 24, 2026", "Accepted 9 March 2026" — one of those
+ *  words and a date. */
+const PUBLICATION_DATE = new RegExp(
+  "^(?:received|revised|accepted|published|available\\s+online|submitted)(?:\\s*:\\s*|\\s+)" +
+    "(?:\\d|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\.?\\s*\\d)",
+  "i",
+);
 /** A display equation is set apart like a heading and is not one: it carries
  *  operators, or the number the paper refers to it by. */
 const MATHS = /[=+×÷√∑∫∂≈≤≥∈±⟨⟩]|\(\d+\)\s*$/;
@@ -795,11 +803,17 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
   // resumes under the figure by the space above it.
   const pitch = linePitch(read);
   const isMarginPrint = marginPrintOf(lines, body);
+  // The Received / Revised / Accepted / Published box: two or more consecutive
+  // lines that each open with one of those words and a date are the journal's
+  // furniture, wherever they stand (on the owner's paper, inside the
+  // Introduction). One such line is a sentence or a note, and stays.
+  const dated = read.map((line) => PUBLICATION_DATE.test(line.text.trim()));
+  const inDateBox = (i: number) => dated[i] && (dated[i - 1] === true || dated[i + 1] === true);
   let lastHeading: PdfLine | null = null;
 
   for (let i = 0; i < read.length; i++) {
     const line = read[i];
-    if (isFurniture(line, furniture) || isMarginPrint(line)) continue;
+    if (isFurniture(line, furniture) || isMarginPrint(line) || inDateBox(i)) continue;
     const caption = captionOf(line);
     if (caption) {
       // A caption belongs to the figure pool, not to the prose it interrupts.
