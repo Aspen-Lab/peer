@@ -2,10 +2,10 @@
 
 // Arranges the reader's blocks — it renders none of them. Below xl the
 // children come back as a fragment, from xl they are placed on the spread:
-// plate, title and decision in the panel, the words, the additions and the
-// Next row in the column. The block order, strings and type are untouched;
-// only the place. The rail is not a block any more: position and the way
-// back live in the shell.
+// plate, title, decision and tab strip in the panel, the common blocks, the
+// active tab's blocks and the Next row in the column. The block order, strings
+// and type are untouched; only the place. The rail is not a block any more:
+// position and the way back live in the shell.
 //
 // P7-14 (R2, Q1): the decision block — the commands: "Read it here", Save,
 // Copy — follows the title in BOTH layouts, before the abstract and before
@@ -14,6 +14,14 @@
 // directly under the title and answered that the narrow layout is no
 // exception. The DOM order is the visual order.
 //
+// P7-14 (R10): a paper Peer has read in full has two tabs, "Summary" and
+// "Paper digestion". The page hands this file the strip (`tabs`), the blocks
+// both tabs share (`common`: "Before you read" and the answers) and the
+// terms; the active tab's blocks are `words` and `additions` as before, in
+// one tabpanel. `common` is built here from its slot alone and drawn BEFORE
+// the panel, outside it, in both layouts — it never reads the tab, so a
+// switch cannot remount the question field or lose what the reader typed.
+//
 // The structure is chosen in JS rather than with `display: contents` and
 // `order`, so what a screen reader announces is what the page shows. Crossing
 // 80rem remounts the blocks (the authors toggle resets); a window resize
@@ -21,19 +29,38 @@
 
 import { useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { fitZoom, READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
+import { TABPANEL_ID, tabId } from "./reader-tabs";
 import { COLUMN_CLASS, PANEL_CLASS, SPREAD_GRID, SPREAD_QUERY } from "./spread";
+import type { ReaderTab } from "./use-reader-tab";
+
+/** The id of the wrapper that holds the blocks both tabs share. */
+export const COMMON_ID = "reader-common";
+
+/** "Terms to know" in the spread's panel: a flex item that may shrink (to a floor) and
+ *  scrolls inside itself, so a panel pinned by its top never has the strip below the window. */
+const TERMS_PANEL_CLASS = "xl:min-h-[7rem] xl:shrink xl:overflow-y-auto xl:overflow-x-hidden";
 
 interface ReaderLayoutProps {
   /** From `useSpread()`; the page owns it so its own effects can depend on it. */
   spread: boolean;
   plate: ReactNode;
   title: ReactNode;
-  /** P1-03 (§1f.10): "Before you read" — the question field (and, from
-   *  P1-04, the map). P7-14 (R2): after the decision block, which follows
-   *  the title. */
-  ask?: ReactNode;
-  words: ReactNode;
+  /** The commands, then the sentence — straight after the title in both
+   *  layouts (P7-14, R2 + Q1). */
   decision: ReactNode;
+  /** P7-14 (R10): the Summary / Paper digestion strip, under the decision block.
+   *  Present only on a paper Peer has read in full; its presence is what makes
+   *  `words` and `additions` a tabpanel. */
+  tabs?: ReactNode;
+  /** The tab on show, for the tabpanel's label. */
+  tab?: ReaderTab;
+  /** "Terms to know": in the panel under the strip on the spread, after the
+   *  common blocks in one column. Shown under both tabs. */
+  terms?: ReactNode;
+  /** The blocks both tabs share ("Before you read" and the answers), above the
+   *  active tab's blocks in the column. Q6: one state, never remounted by a tab. */
+  common?: ReactNode;
+  words: ReactNode;
   additions: ReactNode;
   next: ReactNode;
 }
@@ -120,29 +147,55 @@ export function ReaderLayout(p: ReaderLayoutProps) {
   // (`globals.css`, `reader-panel`); it used to measure itself so that a panel
   // taller than the window could pin by its bottom and keep the decision in view.
 
+  const tabbed = p.tabs !== undefined && p.tabs !== null;
+  // Built from the slot alone — the tab is not read here, on purpose (see the header).
+  const common = p.common ? (
+    <div id={COMMON_ID} className="reading-scaled scroll-mt-20" style={readingScaleStyle}>{p.common}</div>
+  ) : null;
+  const blocks = (
+    <>
+      <div className="reading-scaled" style={readingScaleStyle}>{p.words}</div>
+      <div className="reading-scaled" style={readingScaleStyle}>{p.additions}</div>
+    </>
+  );
+
   if (!p.spread) {
     // One column: the blocks in reading order. `words` and `additions` each get
-    // a thin scale wrapper of their own — the question box and the decision
-    // between and before them are not scaled.
+    // a thin scale wrapper of their own — the decision and the strip are not scaled.
+    const panel = tabbed ? (
+      <div role="tabpanel" id={TABPANEL_ID} aria-labelledby={p.tab ? tabId(p.tab) : undefined} className="scroll-mt-20">{blocks}</div>
+    ) : (
+      blocks
+    );
     return (
       <>
         {p.plate}
         {p.title}
         {p.decision}
-        {p.ask}
-        <div className="reading-scaled" style={readingScaleStyle}>{p.words}</div>
-        <div className="reading-scaled" style={readingScaleStyle}>{p.additions}</div>
+        {p.tabs}
+        {common}
+        {p.terms}
+        {panel}
         {p.next}
       </>
     );
   }
 
+  // The same, in the column: a flex column, so the Next row can take the free space.
+  const panel = tabbed ? (
+    <div role="tabpanel" id={TABPANEL_ID} aria-labelledby={p.tab ? tabId(p.tab) : undefined} className="scroll-mt-20 xl:flex xl:flex-col">
+      {blocks}
+    </div>
+  ) : (
+    blocks
+  );
+
   return (
-    // S20: `--reading-scale` set here too, not only on the two `words`/
+    // S20: `--reading-scale` set here too, not only on the `words`/
     // `additions` wraps below — `grid-template-columns` (spread.ts) is a
     // regular property, not a custom one, so its own `var()` resolves fresh
     // per element from whatever is inherited AT THAT ELEMENT. The grid div
-    // is an ancestor of the two existing wraps, not a descendant, so it
+    // is an ancestor of the existing wraps, not a descendant, so it
     // needs the variable set on itself; `readingScaleStyle` is the same
     // constant those wraps already use, reused rather than duplicated.
     <div className={SPREAD_GRID} style={readingScaleStyle}>
@@ -154,11 +207,14 @@ export function ReaderLayout(p: ReaderLayoutProps) {
         {p.plate}
         {p.title}
         {p.decision}
-        {p.ask}
+        {p.tabs}
+        {/* The one block of the panel that gives when the window is short: it may shrink to
+            a few lines and scrolls inside itself (`reader-panel`, globals.css). */}
+        {p.terms && <div className={TERMS_PANEL_CLASS}>{p.terms}</div>}
       </div>
       <div className={COLUMN_CLASS}>
-        <div className="reading-scaled" style={readingScaleStyle}>{p.words}</div>
-        <div className="reading-scaled" style={readingScaleStyle}>{p.additions}</div>
+        {common}
+        {panel}
         {/* Takes the free space on a page shorter than the panel, so the row
             sits bottom-right level with the DOI line; on a long page it is
             simply last. Never at the top — full text arriving later must

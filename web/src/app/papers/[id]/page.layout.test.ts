@@ -9,7 +9,12 @@ import { describe, expect, it } from "vitest";
 // the test proves it would notice what it guards: green on the page, red on each.
 
 const source = readFileSync(resolve(process.cwd(), "src/app/papers/[id]/page.tsx"), "utf8");
-const text = (s: string) => s.replace(/\s+/g, " ");
+/** The source as one line of code: comments dropped, whitespace folded. */
+const text = (s: string) =>
+  s
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:"'`])\/\/[^\n]*/g, "$1")
+    .replace(/\s+/g, " ");
 
 /** What is wrong with the decided-read observer of a page `source`; empty when it is right. */
 function decidedProblems(source: string): string[] {
@@ -20,9 +25,13 @@ function decidedProblems(source: string): string[] {
   const block = start < 0 || end < 0 ? "" : code.slice(start, end);
   if (!block) return ["the decided-read observer moved"];
   // The decision follows the title in both layouts (R2), so it is on screen at open: the observer
-  // must not watch it when the abstract's footer exists, in one column or on the spread.
-  if (!block.includes("wordsEndRef.current ?? decisionRef.current")) problems.push("the observer no longer watches the abstract's footer before the decision block");
+  // must not watch it when something later on the page exists, in one column or on the spread.
+  // R10: on Paper digestion the abstract is not mounted; the end of the common blocks stands in.
+  if (!block.includes('const el = (hasBody && tab === "digestion" ? commonEndRef.current : wordsEndRef.current) ?? decisionRef.current;')) {
+    problems.push("the observer no longer watches the common blocks' end on Paper digestion, the abstract's footer on Summary, the decision block only without either");
+  }
   if (/spread \? \(?wordsEndRef/.test(block)) problems.push("the observer still chooses the abstract's footer by the layout: in one column it would watch the decision block, which is on screen at open");
+  if (!/\}, \[decide, spread, reading, tab, hasBody\]\);/.test(block)) problems.push("the observer is not re-armed when the tab changes (the footer it watches is on the other tab)");
   return problems;
 }
 
@@ -32,16 +41,180 @@ describe("the page's decided-read observer (P7-14, R2 / Q1)", () => {
   });
 
   it("would notice the one-column page watching the decision block again", () => {
-    const wrong = source.replace("const el = wordsEndRef.current ?? decisionRef.current;", "const el = spread ? (wordsEndRef.current ?? decisionRef.current) : decisionRef.current;");
+    const wrong = source.replace(
+      'const el = (hasBody && tab === "digestion" ? commonEndRef.current : wordsEndRef.current) ?? decisionRef.current;',
+      "const el = spread ? (wordsEndRef.current ?? decisionRef.current) : decisionRef.current;",
+    );
 
     expect(wrong).not.toBe(source);
     expect(decidedProblems(wrong)).toContain("the observer still chooses the abstract's footer by the layout: in one column it would watch the decision block, which is on screen at open");
   });
 
   it("would notice the observer watching the decision block first", () => {
-    const wrong = source.replace("wordsEndRef.current ?? decisionRef.current", "decisionRef.current ?? wordsEndRef.current");
+    const wrong = source.replace("wordsEndRef.current) ?? decisionRef.current;", "wordsEndRef.current) ?? decisionRef.current ?? wordsEndRef.current;").replace("(hasBody && tab ===", "decisionRef.current ?? (hasBody && tab ===");
 
     expect(wrong).not.toBe(source);
-    expect(decidedProblems(wrong)).toContain("the observer no longer watches the abstract's footer before the decision block");
+    expect(decidedProblems(wrong)).toHaveLength(1);
+  });
+
+  it("would notice the observer not re-armed by the tab", () => {
+    const wrong = source.replace("[decide, spread, reading, tab, hasBody]", "[decide, spread, reading]");
+
+    expect(wrong).not.toBe(source);
+    expect(decidedProblems(wrong)).toEqual(["the observer is not re-armed when the tab changes (the footer it watches is on the other tab)"]);
+  });
+});
+
+// ── R10: the two tabs ─────────────────────────────────────────────────────────────────────────
+
+/** The text of `source` between `from` and the first `to` after it (both included), or "". */
+function between(code: string, from: string, to: string): string {
+  const start = code.indexOf(from);
+  const end = start < 0 ? -1 : code.indexOf(to, start + from.length);
+  return start < 0 || end < 0 ? "" : code.slice(start, end + to.length);
+}
+const count = (code: string, needle: string) => code.split(needle).length - 1;
+
+/** What is wrong with the tab wiring of a page `source`; empty when it is right. */
+function tabProblems(source: string): string[] {
+  const code = text(source);
+  const problems: string[] = [];
+  const has = (needle: string, why: string) => {
+    if (!code.includes(needle)) problems.push(why);
+  };
+
+  // The state is the hook's: one call, a body to have tabs, the explain card cleared by every change.
+  has('from "@/components/reader/use-reader-tab"', "the tab hook is not imported");
+  has("const { tab, select: selectTab, reveal } = useReaderTab({ hasBody, onChange: clearExplain, atStart: startOfTab });", "the page no longer takes its tab from `useReaderTab`, with a body, the explain card cleared and a start of the tab");
+  if (count(code, "useReaderTab(") !== 1) problems.push("the page does not call `useReaderTab` exactly once");
+  has("const clearExplain = useCallback(() => selectExplain(null), [selectExplain]);", "a tab change no longer clears the open \"Explain this?\" card");
+  has('const digestion = hasBody && tab === "digestion";', "`digestion` is no longer \"a body, and its tab\"");
+
+  // The strip: only with a body, under the decision block (the layout places it).
+  has("tabs={hasBody ? <ReaderTabs tab={tab} onSelect={selectTab} /> : undefined}", "the strip is not drawn exactly when there is a body, from the hook's tab and pick");
+  has("tab={hasBody ? tab : undefined}", "the layout is not told the tab on show");
+
+  // Q6: ONE field and ONE set of answers, in the common slot, which does not read the tab.
+  const common = between(code, "common={", " words={");
+  if (!common) problems.push("the `common` slot moved");
+  else {
+    if (count(common, "<QuestionField") !== 1) problems.push("\"Before you read\" is not in the common slot exactly once");
+    if (!common.includes("<QuestionField key={paper.id} paperId={paper.id}")) problems.push("the question field is no longer keyed by the paper alone (a tab would remount it)");
+    if (count(code, "<QuestionField") !== 1) problems.push("the question field is mounted more than once on the page");
+    if (!common.includes("{answers}")) problems.push("the answers are not in the common slot");
+    if (!common.includes("ref={commonEndRef}")) problems.push("the common slot has no end for the decided-read observer");
+    if (/\btab\b|digestion|summary/i.test(common.replace(/summary-?[a-z]*/gi, "").replace(/Summary/g, ""))) problems.push("the common slot depends on the tab: a switch would remount the field or clear what was typed");
+    if (!common.startsWith("common={hasBody ?")) problems.push("the common slot is not drawn exactly when there is a body");
+  }
+  if (count(code, "<ForYourQuestions") !== 1) problems.push("the answers are not built exactly once");
+  has("const answers = report?.forYourQuestions ? <ForYourQuestions report={report} map={reading.map} /> : null;", "the answers block is not built from the report's forYourQuestions");
+  if (!code.includes("{!hasBody && answers}")) problems.push("a paper with no body no longer shows its answers first in the additions, as before");
+
+  // The strip of terms is under both tabs: its own slot.
+  const terms = between(code, "terms={ hasBody ?", " common={");
+  if (!terms) problems.push("the `terms` slot moved");
+  else {
+    if (count(terms, "<TermsStrip") !== 1) problems.push("\"Terms to know\" is not in the terms slot exactly once");
+    if (!terms.includes("reveal={reveal}")) problems.push("a click on a term cannot bring the body in from Summary");
+    if (/\btab\b|digestion/.test(terms)) problems.push("the terms slot depends on the tab: it is shown under both");
+  }
+
+  // The tab's own blocks: the abstract under Summary only; the map and the body under Digestion only.
+  const words = between(code, " words={", " additions={");
+  if (!/^ words=\{digestion \? null : \( <PaperWords/.test(words)) problems.push("the abstract is shown on Paper digestion, or the words slot moved");
+  const additions = between(code, " additions={", " next={");
+  const split = additions.indexOf(") : (");
+  const onDigestion = split < 0 ? "" : additions.slice(0, split);
+  const onSummary = split < 0 ? "" : additions.slice(split);
+  if (!additions.startsWith(" additions={digestion ? (")) problems.push("the additions are not chosen by the tab");
+  for (const block of ["<ReadingMapView", "<PaperBody"]) {
+    if (!onDigestion.includes(block)) problems.push(`${block} is not under Paper digestion`);
+    if (onSummary.includes(block)) problems.push(`${block} is also under Summary`);
+  }
+  for (const block of ["<ProposalBlock", "<ClaimList", "<GlanceBlock", "<RelatedBlock", "<RecordBlock", "<InYourLibrary"]) {
+    if (!onSummary.includes(block)) problems.push(`${block} is not under Summary`);
+    if (onDigestion.includes(block)) problems.push(`${block} is also under Paper digestion`);
+  }
+
+  // The jumps into the body.
+  has("const readHere = useCallback(() => reveal(scrollToBody), [reveal, scrollToBody]);", "\"Read it here\" / t no longer brings the body in from Summary first");
+  has("<SectionLinks headings={bodyHeadings} reveal={reveal}>", "the § links cannot bring the body in from Summary");
+
+  // The reveal of newly mounted blocks follows the tab.
+  has("useReveal([reading, report, spread, tab]);", "the blocks a tab mounts are not armed for their approach");
+  return problems;
+}
+
+describe("the page's two tabs (P7-14, R10)", () => {
+  it("is wired as the owner's answers say", () => {
+    expect(tabProblems(source)).toEqual([]);
+  });
+
+  it("would notice the question field mounted a second time (one per tab)", () => {
+    const wrong = source.replace("{answers}", "{answers}{tab === \"summary\" && <QuestionField key={paper.id} paperId={paper.id} examples={examples} standing={profile.standingQuestions} vague={false} />}");
+
+    expect(wrong).not.toBe(source);
+    expect(tabProblems(wrong)).toEqual(expect.arrayContaining(["the question field is mounted more than once on the page"]));
+  });
+
+  it("would notice the common slot reading the tab", () => {
+    const wrong = source.replace("{answers}", "{tab === \"digestion\" && answers}");
+
+    expect(wrong).not.toBe(source);
+    expect(tabProblems(wrong)).toEqual(expect.arrayContaining(["the common slot depends on the tab: a switch would remount the field or clear what was typed"]));
+  });
+
+  it("would notice the question field keyed by the tab", () => {
+    const wrong = source.replace("<QuestionField key={paper.id}", "<QuestionField key={`${paper.id}:${tab}`}");
+
+    expect(wrong).not.toBe(source);
+    expect(tabProblems(wrong)).toEqual(expect.arrayContaining(["the question field is no longer keyed by the paper alone (a tab would remount it)"]));
+  });
+
+  it("would notice the map or the body moved under Summary", () => {
+    const wrong = source.replace("<InYourLibrary paper={paper} />", "<PaperBody reading={reading} />\n<InYourLibrary paper={paper} />");
+
+    expect(wrong).not.toBe(source);
+    expect(tabProblems(wrong)).toEqual(expect.arrayContaining(["<PaperBody is also under Summary"]));
+  });
+
+  it("would notice the abstract shown on Paper digestion", () => {
+    const wrong = source.replace("words={digestion ? null : (", "words={(");
+
+    expect(wrong).not.toBe(source);
+    expect(tabProblems(wrong)).toEqual(expect.arrayContaining(["the abstract is shown on Paper digestion, or the words slot moved"]));
+  });
+
+  it("would notice the default tab or the tab strip's condition changed", () => {
+    const noBody = source.replace("tabs={hasBody ? <ReaderTabs", "tabs={<ReaderTabs");
+
+    expect(noBody).not.toBe(source);
+    expect(tabProblems(noBody)).toEqual(["the strip is not drawn exactly when there is a body, from the hook's tab and pick"]);
+  });
+
+  it("would notice 'Read it here' no longer bringing the body in", () => {
+    const wrong = source.replace("useCallback(() => reveal(scrollToBody), [reveal, scrollToBody])", "useCallback(() => scrollToBody(), [scrollToBody])");
+
+    expect(wrong).not.toBe(source);
+    expect(tabProblems(wrong)).toEqual(["\"Read it here\" / t no longer brings the body in from Summary first"]);
+  });
+
+  it("would notice the § links or the terms unable to switch tab", () => {
+    expect(tabProblems(source.replace("<SectionLinks headings={bodyHeadings} reveal={reveal}>", "<SectionLinks headings={bodyHeadings}>"))).toEqual(["the § links cannot bring the body in from Summary"]);
+    expect(tabProblems(source.replace(" reveal={reveal} />", " />"))).toEqual(["a click on a term cannot bring the body in from Summary"]);
+  });
+
+  it("would notice a tab change no longer clearing the explain card", () => {
+    const wrong = source.replace("onChange: clearExplain,", "");
+
+    expect(wrong).not.toBe(source);
+    expect(tabProblems(wrong)).toContain("the page no longer takes its tab from `useReaderTab`, with a body, the explain card cleared and a start of the tab");
+  });
+
+  it("would notice the revealed blocks no longer re-armed by the tab", () => {
+    const wrong = source.replace("useReveal([reading, report, spread, tab]);", "useReveal([reading, report, spread]);");
+
+    expect(wrong).not.toBe(source);
+    expect(tabProblems(wrong)).toEqual(["the blocks a tab mounts are not armed for their approach"]);
   });
 });

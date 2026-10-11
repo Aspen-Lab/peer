@@ -511,10 +511,11 @@ html[data-mode="dark"] {
 /* The reading spread's left panel (≥ xl), pinned by its top: the plate, the
    title, the decision block (the commands, then the sentence, the reading
    controls and the DOI), the Summary / Paper digestion tabs and the Terms
-   strip. P7-14 (R2): it is short now — the question box and the map moved to
-   the column — so it pins at `top: 4rem` and nothing measures it. (It used to
-   pin by its BOTTOM once it was taller than the window, so that the decision,
-   then at its end, stayed in view while the plate scrolled away.)
+   strip. P7-14 (R2): the question box and the map moved to the column, so the
+   panel pins at `top: 4rem` and nothing measures it. (It used to pin by its
+   BOTTOM once it was taller than the window, so that the decision, then at its
+   end, stayed in view while the plate scrolled away; that took a ResizeObserver
+   and `--panel-h`, and is gone.)
    4rem = the article's xl top padding, so the stuck position is the
    first-paint position and the panel never slides; the masthead is 48px
    and never taller (its scrolled state changes background only), so it is
@@ -522,22 +523,40 @@ html[data-mode="dark"] {
    other than visible silently kills the sticky — main, the article and the
    grid wrapper must keep it.
 
+   A panel pinned by its top has no way to show what is below the window, so
+   the panel is the window's height at most, and the one block that can give —
+   "Terms to know", a flex item that may shrink (reader-layout.tsx) — takes
+   what the plate, the title, the commands and the tabs leave and scrolls
+   inside itself; only when those alone are taller than the window (a short
+   window, a tall plate) does the panel scroll, with a thin bar. The 6px of
+   side padding, taken back by the negative margin, is the room the focus ring
+   (2px + 3px offset) needs inside the scroll port; it moves nothing.
+
    Ruling 19 (round 7, second pass): under Fit's whole-page `zoom`, a CSS
    length declared inside a zoomed ancestor is resolved in that ancestor's
    LOCAL (pre-zoom) space, then painted at `local × zoom` — so this panel's
    own `top` would drift to `4rem × zoom` on screen unless divided back
    down first (confirmed by execution: 4rem at zoom 1.8 painted at 115.2px,
-   not 64px, until divided). `--page-zoom` defaults to 1 (set on `page.tsx`'s
+   not 64px, until divided). `100vh`, `--legend-h` and the flat lengths DO
+   need dividing the same way. `--page-zoom` defaults to 1 (set on `page.tsx`'s
    `<PageContainer data-zoom-root>`, Fit off or not applicable) so this
    is byte-identical to the un-zoomed value whenever Fit is off. */
 :root {
-  /* `KeyLegend` is `h-[var(--legend-h)]`. */
+  /* `KeyLegend` is `h-[var(--legend-h)]`; the panel keeps clear of it. */
   --legend-h: 1.75rem;
 }
 
 @utility reader-panel {
   position: sticky;
   top: calc(4rem / var(--page-zoom, 1));
+  display: flex;
+  flex-direction: column;
+  max-height: calc((100vh - 4rem - var(--legend-h) - 1rem) / var(--page-zoom, 1));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  margin-inline: -6px;
+  padding-inline: 6px;
 }
 
 /* ── The measure ──────────────────────────────────────────────────────

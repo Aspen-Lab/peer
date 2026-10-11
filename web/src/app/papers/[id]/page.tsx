@@ -1,14 +1,20 @@
 "use client";
 
-// The reading surface — one paper, in a fixed order the reader learns once:
-// the plate and title, the abstract as written with the claim and the
-// numbers in ink, one sentence saying what Peer has and has not read, and
-// the decision. Below the decision, first the report as it read before the
-// 2026-09 rewrite — the proposal (what is new, folded in — S6), how it was
-// done, the results with their figures, a review's contents, a glance, and
-// today's related papers (components/reader/report-sections.tsx) — and under
-// that the blocks the rewrite added: where it is thin, the next step, the
-// paper itself. Both arrive after first paint and change nothing above.
+// The reading surface — one paper. Under the title come the decision (the
+// commands: read it here, open, save, skip, copy; then one sentence saying
+// what Peer has and has not read; the reading controls and the DOI), and — on
+// a paper Peer has read in full — two tabs. "Paper digestion" (the default):
+// the map and the paper itself. "Summary": the abstract as written with the
+// claim and the numbers in ink, then the report as it read before the 2026-09
+// rewrite — the proposal (what is new, folded in — S6), how it was done, the
+// results with their figures, a review's contents, a glance, and today's
+// related papers (components/reader/report-sections.tsx) — and under that the
+// blocks the rewrite added: where it is thin, the next step, the record, the
+// reader's library. "Before you read" and the answers to the reader's
+// questions stand above both tabs, one state, never remounted by a switch;
+// "Terms to know" stands in the panel under the tab strip. A paper with no
+// body has no tabs and is the page it was. Later-arriving content (the server
+// reading, a model report) changes nothing above it.
 //
 // The page holds the wiring — which paper, the store, the keys, the swipe,
 // when "read" happens — and the components in `components/reader/` hold the
@@ -87,6 +93,7 @@ import { NextRow } from "@/components/reader/next-row";
 import { LoadingMat } from "@/components/reader/loading-mat";
 import { ReaderToast, useReaderToast } from "@/components/reader/reader-toast";
 import {
+  COMMON_ID,
   ReaderLayout,
   usePageZoom,
   useResolvedReadingScale,
@@ -103,6 +110,8 @@ import { ReadingMapView, readingRoute } from "@/components/reader/reading-map";
 import { useDebouncedQuestions } from "@/components/reader/use-debounced-questions";
 import { TermsStrip } from "@/components/reader/terms-strip";
 import { SectionLinks } from "@/components/reader/evidence-quote";
+import { ReaderTabs, TABPANEL_ID } from "@/components/reader/reader-tabs";
+import { useReaderTab } from "@/components/reader/use-reader-tab";
 import { settledQuestions, useReadingQuestionsHydrated } from "@/store/reading-questions";
 import { explanationFor, passageHash, useExplainThreadsStore, type ExplainTurn } from "@/store/explain-threads";
 import { paragraphKey, usePlainRewritesStore } from "@/store/plain-rewrites";
@@ -665,8 +674,7 @@ function Reader({
   // settled ones only (never the gist).
   const { asked, byPaper: askedByPaper } = useDebouncedQuestions(paper.id);
   const model = useModelReport({ paper: ready ? paper : undefined, profile, questions: settledQuestions(asked) });
-  // Where Peer has read the paper, the text is already on the page — the
-  // command and the contents are ways down to it, not ways to open it.
+  // Where Peer has read the paper, the text is on the page (under "Paper digestion").
   const hasBody = (reading?.body?.length ?? 0) > 0;
   // P1-04 (§1f.12): a claim's "§Heading" links to the body section of that
   // name; the quotes read the headings from `SectionLinks` below.
@@ -675,16 +683,6 @@ function Reader({
   // holds — here, in the browser, from the `items` the page last read (P7-13:
   // up to 250 ms behind the typing).
   const tier0Route = useMemo(() => readingRoute(reading, asked), [reading, asked]);
-  const readHere = useCallback(() => {
-    const block = document.getElementById(PAPER_BODY_ID);
-    if (!block) return;
-    const top = block.getBoundingClientRect().top;
-    // Only where it is not already on the screen — scrolling to a block the
-    // reader is looking at throws the page for nothing.
-    if (top < 0 || top > window.innerHeight * 0.6) {
-      block.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, []);
   const report = model.report;
   // P2-04: all route consumers receive this one display route. Tier 0 still
   // stands unchanged if there is no verified report/question overlay. P2-04b:
@@ -874,6 +872,33 @@ function Reader({
   const explainOpen = useRef<(() => void) | null>(null);
   const openExplain = useCallback(() => explainOpen.current?.(), []);
 
+  // P7-14 (R10, the owner's review; Q5): a paper Peer has read in full has two tabs, "Summary" and
+  // "Paper digestion", and opens on the second. The tab is one state of the page: the hook holds
+  // it, and `reveal` is every jump into the paper's own text (below) — the body is under
+  // Paper digestion, so from Summary the tab is switched first and the jump follows. A change of
+  // tab closes an open "Explain this?" card (its selection lives in the body that goes), and a tab
+  // the reader picks starts at its start (`startOfTab`: the blocks both tabs share, or the panel,
+  // when they have scrolled off the top).
+  const clearExplain = useCallback(() => selectExplain(null), [selectExplain]);
+  const startOfTab = useCallback(() => {
+    const start = document.getElementById(COMMON_ID) ?? document.getElementById(TABPANEL_ID);
+    if (start && start.getBoundingClientRect().top < 0) start.scrollIntoView({ block: "start" });
+  }, []);
+  const { tab, select: selectTab, reveal } = useReaderTab({ hasBody, onChange: clearExplain, atStart: startOfTab });
+  const scrollToBody = useCallback(() => {
+    const block = document.getElementById(PAPER_BODY_ID);
+    if (!block) return;
+    const top = block.getBoundingClientRect().top;
+    // Only where it is not already on the screen — scrolling to a block the
+    // reader is looking at throws the page for nothing.
+    if (top < 0 || top > window.innerHeight * 0.6) {
+      block.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, []);
+  // Where Peer has read the paper, the text is already on the page — "Read it here" is a way down
+  // to it, not a way to open it; from Summary it brings the body in first.
+  const readHere = useCallback(() => reveal(scrollToBody), [reveal, scrollToBody]);
+
   // P4-01 (blueprint §3.6 ⑥; rulings §1h.12 (h); §3d 15): "Say it plainly". The body draws the
   // control under each paragraph the route marks read, and the rewrite beside a paragraph that
   // shows one — handed to it through one prop, and only for a reader with a model: without one the
@@ -1038,8 +1063,11 @@ function Reader({
   const decide = useCallback(() => markRead(paper.id, paper), [markRead, paper]);
   const decisionRef = useRef<HTMLDivElement>(null);
   const wordsEndRef = useRef<HTMLParagraphElement>(null);
+  // P7-14 (R10): the end of the blocks both tabs share. On Paper digestion the abstract is not on
+  // the page, so this stands in for its footer.
+  const commonEndRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const el = wordsEndRef.current ?? decisionRef.current;
+    const el = (hasBody && tab === "digestion" ? commonEndRef.current : wordsEndRef.current) ?? decisionRef.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
     let timer: number | undefined;
     const observer = new IntersectionObserver(
@@ -1068,8 +1096,9 @@ function Reader({
     };
     // `spread` re-runs the effect when the layout switches, so the observer
     // attaches to the remounted block; `reading` re-attaches when the words
-    // (and their footer) arrive or change.
-  }, [decide, spread, reading]);
+    // (and their footer) arrive or change; `tab` and `hasBody` choose which
+    // footer there is to watch.
+  }, [decide, spread, reading, tab, hasBody]);
 
   // The approach. One observer for every `[data-reveal]` in the scope below.
   // The deps are the two things that arrive after first paint — the server
@@ -1077,10 +1106,12 @@ function Reader({
   // blocks. `useReveal` reveals anything already on screen synchronously, so
   // neither page open nor the xl flip shows an animation.
   //
-  // Never make `decisionRef`'s or `wordsEndRef`'s block a `[data-reveal]`
-  // host: IntersectionObserver reports geometry, not opacity, so a paper
-  // would be marked read from a block sitting at opacity 0.
-  useReveal([reading, report, spread]);
+  // Never make `decisionRef`'s, `wordsEndRef`'s or `commonEndRef`'s block a
+  // `[data-reveal]` host: IntersectionObserver reports geometry, not opacity,
+  // so a paper would be marked read from a block sitting at opacity 0.
+  // P7-14 (R10): a tab mounts its blocks when it is picked, so the tab is one
+  // of the arrivals too.
+  useReveal([reading, report, spread, tab]);
 
   // ── Actions ──
   // One set for the keys, the buttons and the swipe.
@@ -1278,6 +1309,14 @@ function Reader({
   const plateIsFigure =
     Boolean(boundFigure?.imageUrl) ||
     (Boolean(resolvedFigure.imageUrl) && !resolvedFigure.hideFigure);
+  // P7-14 (R10): the answers to the reader's questions are one of the blocks both tabs share, so
+  // they are built once, here, and drawn in the common slot — with the field, above the tab's
+  // blocks. (A paper with no body has no tabs and no common slot: they stay first in its
+  // additions, as before.)
+  const answers = report?.forYourQuestions ? <ForYourQuestions report={report} map={reading.map} /> : null;
+  // Under "Paper digestion": the map and the body. Under "Summary" (and on a paper with no body,
+  // which has no tabs): the abstract and the report's blocks.
+  const digestion = hasBody && tab === "digestion";
   // Blocks that were not there at first paint fade in, staggered in order.
   let stagger = 0;
   const related = pickRelated(paper, feedPapers);
@@ -1304,12 +1343,12 @@ function Reader({
       data-zoom-root=""
       data-motion="reveal"
     >
-      {/* The blocks, in the spec's order; `ReaderLayout` places them — one
+      {/* The blocks, in reading order; `ReaderLayout` places them — one
           column below xl, the spread from it. Later-arriving content (the
           server reading, a model report) is `additions`: on the spread it
-          lands only in the right column, so nothing can move the decision;
-          in one column it is below the decision, as before. */}
-      <SectionLinks headings={bodyHeadings}>
+          lands only in the right column, so nothing can move the decision,
+          which follows the title in both layouts (P7-14, R2). */}
+      <SectionLinks headings={bodyHeadings} reveal={reveal}>
       <ReaderLayout
         spread={spread}
         plate={
@@ -1348,33 +1387,6 @@ function Reader({
           )
         }
         title={<TitleBlock paper={paper} recommendation={recommendation} now={now} />}
-        ask={
-          // P1-03 (§1f.10): only where Peer has the paper's text — without
-          // it there is nothing to point a question at, and the Decision
-          // block already says why. One field per paper.
-          // P1-04 (§1f.12): the map under it, from the reading the server
-          // built (absent without a body).
-          hasBody ? (
-            <>
-              {questionsHydrated && (
-                <QuestionField key={paper.id} paperId={paper.id} examples={examples} standing={profile.standingQuestions} vague={route?.vague ?? false} />
-              )}
-              {reading.map && <ReadingMapView key={`map:${paper.id}`} map={reading.map} route={route} gists={paragraphGists} source={reading.provenance.sourceLabel} />}
-              <TermsStrip key={`terms:${paper.id}`} terms={terms} reading={reading} marked={markedTerm} onMark={markTerm} />
-            </>
-          ) : undefined
-        }
-        words={
-          <PaperWords
-            endRef={wordsEndRef}
-            reading={reading}
-            marks={marks}
-            skim={report?.skim ?? []}
-            basis={report?.provenance.basis ?? null}
-            quotedSkim={quotedSkim}
-            scramble={shouldScrambleReport}
-          />
-        }
         decision={
           <DecisionBlock
             ref={decisionRef}
@@ -1402,9 +1414,53 @@ function Reader({
               }} /> : undefined}
           />
         }
-        additions={
+        // P7-14 (R10): the strip under the decision block, only on a paper Peer has read in full.
+        tabs={hasBody ? <ReaderTabs tab={tab} onSelect={selectTab} /> : undefined}
+        tab={hasBody ? tab : undefined}
+        // "Terms to know" stands in the panel under the strip, under both tabs; a click on a term
+        // brings the body in first when it is on the other tab (`reveal`).
+        terms={
+          hasBody ? (
+            <TermsStrip key={`terms:${paper.id}`} terms={terms} reading={reading} marked={markedTerm} onMark={markTerm} reveal={reveal} />
+          ) : undefined
+        }
+        // The blocks both tabs share (Q6): the question field (P1-03, §1f.10 — only where Peer has
+        // the paper's text; without it there is nothing to point a question at, and the Decision
+        // block already says why; one field per paper) and the answers. ONE element each, built here
+        // from nothing the tab changes, so switching never remounts the field or clears a question.
+        common={hasBody ? (
           <>
-            {report?.forYourQuestions && <ForYourQuestions report={report} map={reading.map} />}
+            {questionsHydrated && (
+              <QuestionField key={paper.id} paperId={paper.id} examples={examples} standing={profile.standingQuestions} vague={route?.vague ?? false} />
+            )}
+            {answers}
+            <div ref={commonEndRef} aria-hidden className="h-px" />
+          </>
+        ) : undefined}
+        words={digestion ? null : (
+          <PaperWords
+            endRef={wordsEndRef}
+            reading={reading}
+            marks={marks}
+            skim={report?.skim ?? []}
+            basis={report?.provenance.basis ?? null}
+            quotedSkim={quotedSkim}
+            scramble={shouldScrambleReport}
+          />
+        )}
+        additions={digestion ? (
+          <>
+            {/* P7-14 (R10): Paper digestion — the map (P1-04, §1f.12: from the reading the server
+                built, absent without a body) and under it the paper: everything the extractor
+                read. The map is the paper's one contents list (R5). */}
+            {reading.map && <ReadingMapView key={`map:${paper.id}`} map={reading.map} route={route} gists={paragraphGists} source={reading.provenance.sourceLabel} />}
+
+            {/* The paper, when Peer reached it. */}
+            <PaperBody reading={reading} route={route} termMark={termMark} plain={plainForBody} onSelect={selectExplain} />
+          </>
+        ) : (
+          <>
+            {!hasBody && answers}
 
             {/* The reader's own notes on this paper, and the way into them —
                 first, because taking notes is what follows keeping it. */}
@@ -1517,10 +1573,6 @@ function Reader({
               />
             )}
 
-            {/* The paper, when Peer reached it: everything the extractor
-                read, under everything Peer had to say about it. */}
-            <PaperBody reading={reading} route={route} termMark={termMark} plain={plainForBody} onSelect={selectExplain} />
-
             {/* Last, and always there: the facts that need no key. On a page with no model
                 page it is the only block under the abstract, which is the
                 point — the column used to end at the abstract's footer with
@@ -1533,7 +1585,7 @@ function Reader({
                 in air. */}
             <InYourLibrary paper={paper} />
           </>
-        }
+        )}
         next={<NextRow nav={nav} next={nextPaper} />}
       />
       </SectionLinks>

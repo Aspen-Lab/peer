@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { buildReading, type ReadingQuote } from "@/lib/papers/reading";
 import type { Claim } from "@/lib/papers/report";
-import { EvidenceQuote, SectionLinks, sectionHref } from "./evidence-quote";
+import { EvidenceQuote, SectionLinks, followSectionLink, sectionHref } from "./evidence-quote";
 import { PaperWords } from "./paper-words";
 import { QuoteList } from "./quote-list";
 
@@ -79,5 +79,74 @@ describe("the other attributions link to their section (P1-05)", () => {
     expect(words(HEADINGS)).toContain("— abstract");
     expect(words(HEADINGS).match(/<a /g)).toHaveLength(1);
     expect(words(null)).not.toContain("<a ");
+  });
+});
+
+// P7-14 (R10, the owner's review): on a full-text paper "Summary" does not carry the paper's own
+// text, so a "§Heading" link clicked there points at a section that is not on the page. The link
+// asks the page to bring the body in (`reveal`) and then goes to the section; with the body on
+// the page it is the browser's own anchor jump, as it was.
+describe("a § link when the body is on another tab (P7-14, R10)", () => {
+  const click = () => {
+    const seen = { prevented: 0 };
+    return { seen, event: { preventDefault: () => (seen.prevented += 1) } };
+  };
+  const target = () => {
+    const scrolled: unknown[] = [];
+    return { scrolled, element: { scrollIntoView: (options?: unknown) => scrolled.push(options) } };
+  };
+
+  it("leaves the click to the browser when the section is on the page, and does not reveal", () => {
+    const { event, seen } = click();
+    const { element, scrolled } = target();
+    let revealed = 0;
+
+    followSectionLink(event, "paper-section-1", () => (revealed += 1), () => element);
+
+    expect(seen.prevented).toBe(0);
+    expect(revealed).toBe(0);
+    expect(scrolled).toEqual([]);
+  });
+
+  it("stops the dead anchor when the section is not on the page, reveals the body, then scrolls to the section", () => {
+    const { event, seen } = click();
+    const { element, scrolled } = target();
+    let onPage = false;
+    const jobs: Array<() => void> = [];
+
+    followSectionLink(event, "paper-section-1", (run) => jobs.push(run), () => (onPage ? element : null));
+
+    expect(seen.prevented).toBe(1);
+    expect(jobs).toHaveLength(1);
+    expect(scrolled).toEqual([]);
+    // The page switches tab; the job runs once the section is mounted.
+    onPage = true;
+    jobs[0]();
+    expect(scrolled).toEqual([{ behavior: "smooth", block: "start" }]);
+  });
+
+  it("does nothing more than the browser would where there is no way to reveal (outside the reading page)", () => {
+    const { event, seen } = click();
+
+    followSectionLink(event, "paper-section-1", undefined, () => null);
+
+    expect(seen.prevented).toBe(0);
+  });
+
+  it("a section that never mounts costs nothing: the job finds no element and scrolls nowhere", () => {
+    const { event } = click();
+    const jobs: Array<() => void> = [];
+
+    followSectionLink(event, "paper-section-9", (run) => jobs.push(run), () => null);
+
+    expect(() => jobs[0]()).not.toThrow();
+  });
+
+  it("draws the same link whether or not the page can reveal", () => {
+    const quote = createElement(EvidenceQuote, { text: "Samples were held at fixed stress.", where: "2 Methods" });
+    const plain = renderToStaticMarkup(createElement(SectionLinks, { headings: HEADINGS }, quote));
+    const withReveal = renderToStaticMarkup(createElement(SectionLinks, { headings: HEADINGS, reveal: (run: () => void) => run() }, quote));
+
+    expect(withReveal).toBe(plain);
   });
 });

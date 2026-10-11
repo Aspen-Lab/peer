@@ -8,7 +8,7 @@ import type { PaperTerm } from "@/lib/papers/report";
 import type { Paper } from "@/types";
 import { PEERS_READING, TERMS } from "./copy";
 import { SectionLinks } from "./evidence-quote";
-import { TermsStrip, termButtonState } from "./terms-strip";
+import { TermsStrip, findInBody, termButtonState } from "./terms-strip";
 
 // P3-01 (ruling §1h.1; §3d 13): the strip "Terms to know" under the map — one
 // line per term, the paper's own definition as an attributed quote, Peer's
@@ -151,5 +151,40 @@ describe("TermsStrip — the click to highlight", () => {
     it("clears the mark when the marked term is clicked again, and does not scroll", () => {
       expect(termButtonState("QPU", "QPU")).toEqual({ next: null, scroll: false });
     });
+  });
+});
+
+// P7-14 (R10, the owner's review): the strip stands in the panel under both tabs, but the paper's
+// text only under "Paper digestion". A click on a term on Summary has to bring the body in before
+// it can scroll to the term's first use; with the body on the page it scrolls at once, as before.
+describe("finding a term when the body may be on another tab (P7-14, R10)", () => {
+  const hit = { sectionId: "s1", sectionIndex: 0, paragraphIndex: 1, offset: 0, length: 3 };
+
+  it("scrolls at once when the page has no way to reveal the body", () => {
+    const scrolled: unknown[] = [];
+
+    findInBody(hit, undefined, (at) => scrolled.push(at));
+
+    expect(scrolled).toEqual([hit]);
+  });
+
+  it("hands the scroll to the page's reveal, which runs it once the body is mounted — not before", () => {
+    const scrolled: unknown[] = [];
+    const jobs: Array<() => void> = [];
+
+    findInBody(hit, (run) => jobs.push(run), (at) => scrolled.push(at));
+
+    expect(scrolled).toEqual([]);
+    expect(jobs).toHaveLength(1);
+    jobs[0]();
+    expect(scrolled).toEqual([hit]);
+  });
+
+  it("a strip handed a reveal draws the same terms and buttons as one without", () => {
+    const terms: PaperTerm[] = [{ term: "QPU", definition: "A quantum processor.", evidence: SENTENCE, evidenceWhere: "2 Methods" }];
+    const draw = (extra: object) =>
+      renderToStaticMarkup(createElement(SectionLinks, { headings: ["1 Introduction", "2 Methods"] }, createElement(TermsStrip, { terms, reading, marked: null, onMark: () => {}, ...extra })));
+
+    expect(draw({ reveal: (run: () => void) => run() })).toBe(draw({}));
   });
 });

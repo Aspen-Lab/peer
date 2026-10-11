@@ -206,31 +206,44 @@ describe("ForYourQuestions (P2-04)", () => {
     expect(html).not.toContain("This must not render.");
   });
 
-  it("is placed at the top of ReaderLayout additions, after Decision and before notes and the proposal", () => {
-    const source = readFileSync(resolve(process.cwd(), "src/app/papers/[id]/page.tsx"), "utf8");
-    const additions = source.indexOf("additions={");
-    const questions = source.indexOf("<ForYourQuestions", additions);
-    const notes = source.indexOf("<PaperNotes", additions);
-    const proposal = source.indexOf("<ProposalBlock", additions);
-
-    expect(questions).toBeGreaterThan(additions);
-    expect(questions).toBeLessThan(notes);
-    expect(questions).toBeLessThan(proposal);
-  });
-
-  // P2-09 (§1g.14) had the quota notice first in the slot; the notice is gone with
-  // the allowance (P4-00), and ForYourQuestions is the first thing in it, before the notes.
-  it("is the first thing in the additions slot: ForYourQuestions, then PaperNotes", () => {
+  // P7-14 (R10, Q6): the answers are one of the blocks BOTH tabs share, so they are no longer the
+  // first thing in `additions` (which is the active tab's blocks): they are built once, as
+  // `answers`, and drawn in the layout's `common` slot, after "Before you read" and above the
+  // active tab's blocks — after the Decision block and before "What it proposes", as §3d 9 says,
+  // on either tab. A paper with no body has no tabs and no common slot, and keeps them first in
+  // its additions, as before.
+  it("is built once and drawn in the common slot: after Decision, after the question field, before the additions", () => {
     const source = readFileSync(resolve(process.cwd(), "src/app/papers/[id]/page.tsx"), "utf8");
     const decision = source.indexOf("decision={");
+    const common = source.indexOf("common={", decision);
+    const field = source.indexOf("<QuestionField", common);
+    const shown = source.indexOf("{answers}", common);
+    const additions = source.indexOf("additions={", common);
+    const proposal = source.indexOf("<ProposalBlock", additions);
+
+    expect(source.split("<ForYourQuestions").length - 1).toBe(1);
+    expect(source).toContain("const answers = report?.forYourQuestions ? <ForYourQuestions report={report} map={reading.map} /> : null;");
+    expect(decision).toBeGreaterThan(-1);
+    expect(common).toBeGreaterThan(decision);
+    expect(field).toBeGreaterThan(common);
+    expect(shown).toBeGreaterThan(field);
+    expect(additions).toBeGreaterThan(shown);
+    expect(proposal).toBeGreaterThan(additions);
+  });
+
+  it("is not inside the tab's own blocks: the additions hold it only for a paper with no body, before the notes", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/app/papers/[id]/page.tsx"), "utf8");
     const additions = source.indexOf("additions={");
-    const questions = source.indexOf("<ForYourQuestions", additions);
+    const shown = source.indexOf("{!hasBody && answers}", additions);
     const notes = source.indexOf("<PaperNotes", additions);
 
-    expect(decision).toBeGreaterThan(-1);
-    expect(additions).toBeGreaterThan(decision);
-    expect(questions).toBeGreaterThan(additions);
-    expect(questions).toBeLessThan(notes);
+    expect(additions).toBeGreaterThan(-1);
+    expect(shown).toBeGreaterThan(additions);
+    expect(shown).toBeLessThan(notes);
+    // Not under Paper digestion: the first branch of the additions never names it.
+    const digestion = source.slice(additions, source.indexOf(") : (", additions));
+    expect(digestion).not.toContain("answers");
+    expect(digestion).not.toContain("<ForYourQuestions");
     expect(source).not.toContain("QuotaNotice");
   });
 });

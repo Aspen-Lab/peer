@@ -93,6 +93,19 @@ export const BODY = {
 } as const;
 
 /**
+ * P7-14 (R10, the owner's review): the two tabs of a paper Peer has read in full. "Summary" is
+ * what Peer wrote about the paper (the skim or the abstract and the report's blocks); "Paper
+ * digestion" is Peer's reading aid for the paper's own text (the map and the body). The owner's
+ * words, as given.
+ */
+export const TABS = {
+  /** Names the strip for a screen reader. */
+  label: "Report view",
+  summary: "Summary",
+  digestion: "Paper digestion",
+} as const;
+
+/**
  * P1-03 (§1f.10): "Before you read" — the question field.
  *
  * P1-09 (user decision §1a.7, ruling §1f.20): the example tags come only from

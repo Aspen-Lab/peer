@@ -53,6 +53,20 @@ export function useEscapeToClear(active: boolean, onClear: () => void): void {
   }, [active, onClear]);
 }
 
+/**
+ * P7-14 (R10): go to the term's first use in the body. The body is under "Paper digestion"; from
+ * "Summary" the page's `reveal` brings it in first and runs the scroll once it is mounted. Without
+ * a `reveal` (the strip outside the tabbed page) the body is where it was and the scroll is now.
+ */
+export function findInBody(
+  hit: TermOccurrence,
+  reveal: ((run: () => void) => void) | undefined,
+  scroll: (hit: TermOccurrence) => void = scrollToOccurrence,
+): void {
+  if (reveal) reveal(() => scroll(hit));
+  else scroll(hit);
+}
+
 function scrollToOccurrence(hit: TermOccurrence): void {
   const target = document.getElementById(paragraphAnchor(hit.sectionIndex, hit.paragraphIndex));
   if (!target) return;
@@ -65,6 +79,7 @@ export function TermsStrip({
   reading,
   marked,
   onMark,
+  reveal,
 }: {
   terms: readonly PaperTerm[];
   /** The body the terms are looked up in, and the map their sections are named by. */
@@ -72,6 +87,9 @@ export function TermsStrip({
   /** The term whose first use is highlighted in the body, if any. */
   marked: string | null;
   onMark: (term: string | null) => void;
+  /** P7-14 (R10): the page's way to put the paper's own text on screen first — the strip is
+   *  shown under both tabs, the body only under "Paper digestion". */
+  reveal?: (run: () => void) => void;
 }) {
   const body = reading.body;
   const sections = useMemo(() => new Map((reading.map?.sections ?? []).map((section) => [section.id, section])), [reading.map]);
@@ -101,7 +119,7 @@ export function TermsStrip({
                   onClick={() => {
                     const { next, scroll } = termButtonState(marked, term.term);
                     onMark(next);
-                    if (scroll) scrollToOccurrence(hit);
+                    if (scroll) findInBody(hit, reveal);
                   }}
                   className="font-reading text-body font-medium text-heading underline decoration-border-strong decoration-1 underline-offset-4 transition-colors hover:decoration-heading aria-pressed:bg-[color:var(--color-term-mark)]"
                 >

@@ -10,14 +10,51 @@
 // that renders no body). The page provides the body's headings through
 // `SectionLinks`, so the lists that render quotes need no new prop.
 
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { MAP, attribution } from "./copy";
 import { sectionAnchor } from "./paper-body";
 
-const SectionHeadings = createContext<readonly string[] | null>(null);
+interface SectionLinkContext {
+  headings: readonly string[];
+  reveal?: (run: () => void) => void;
+}
 
-export function SectionLinks({ headings, children }: { headings: readonly string[]; children?: ReactNode }) {
-  return <SectionHeadings.Provider value={headings}>{children}</SectionHeadings.Provider>;
+const SectionHeadings = createContext<SectionLinkContext | null>(null);
+
+/**
+ * `reveal` (P7-14, R10): on a full-text paper the body is under "Paper digestion" and not mounted
+ * under "Summary", where most of these links are; the page hands in its way to switch tabs and
+ * run a jump once the body is on the page (`useReaderTab`'s `reveal`). Without it a link is the
+ * browser's own anchor, as it was.
+ */
+export function SectionLinks({
+  headings,
+  reveal,
+  children,
+}: {
+  headings: readonly string[];
+  reveal?: (run: () => void) => void;
+  children?: ReactNode;
+}) {
+  const value = useMemo(() => ({ headings, reveal }), [headings, reveal]);
+  return <SectionHeadings.Provider value={value}>{children}</SectionHeadings.Provider>;
+}
+
+/**
+ * The click on a "§Heading" link. With the section on the page it is left to the browser's anchor
+ * jump. With it not on the page — the body is under the other tab — the dead anchor is stopped, and
+ * the page's `reveal` brings the body in and then scrolls to the section.
+ */
+export function followSectionLink(
+  event: { preventDefault: () => void },
+  id: string,
+  reveal: ((run: () => void) => void) | undefined,
+  find: (id: string) => { scrollIntoView: (options?: ScrollIntoViewOptions) => void } | null = (target) =>
+    document.getElementById(target),
+): void {
+  if (!reveal || find(id)) return;
+  event.preventDefault();
+  reveal(() => find(id)?.scrollIntoView({ behavior: "smooth", block: "start" }));
 }
 
 /** The anchor of the first body section headed `where`, or null. */
@@ -32,11 +69,15 @@ export function sectionHref(where: string, headings: readonly string[]): string 
  *  page's body has one (P1-04), else as it was. P1-05 (the §1f.13
  *  amendment): the Tier 0 quotes and the skim's quoted evidence use it too. */
 export function SectionAttribution({ where, children }: { where: string; children: ReactNode }) {
-  const headings = useContext(SectionHeadings);
-  const href = headings ? sectionHref(where, headings) : null;
-  if (!href) return <>{children}</>;
+  const links = useContext(SectionHeadings);
+  const href = links ? sectionHref(where, links.headings) : null;
+  if (!links || !href) return <>{children}</>;
   return (
-    <a href={href} className="underline-offset-2 transition-colors hover:text-heading hover:underline">
+    <a
+      href={href}
+      onClick={(event) => followSectionLink(event, href.slice(1), links.reveal)}
+      className="underline-offset-2 transition-colors hover:text-heading hover:underline"
+    >
       {children}
     </a>
   );

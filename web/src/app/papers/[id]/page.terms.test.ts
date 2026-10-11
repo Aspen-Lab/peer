@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 // and the P2-05 / P2-09 wiring tests do — this reads the page's source and
 // holds each join to its shape: the terms come from the reading the page holds
 // through the route's own read and background sections, the model's `terms`
-// merge in after them, the strip stands under the map, and the body is handed
+// merge in after them, the strip stands in the panel (the map in the additions), and the body is handed
 // the first use of the term the reader clicked. The checker is also run on
 // mutated copies of the source, so the test proves it would notice what it
 // guards: green on the page, red on each.
@@ -32,12 +32,20 @@ function termsProblems(source: string): string[] {
   // between the term's mark and the selection — the same pin, the line as it now reads.
   has("<PaperBody reading={reading} route={route} termMark={termMark} plain={plainForBody} onSelect={selectExplain} />", "the body is no longer handed the clicked term's first use");
 
-  // The strip stands under the map, inside the `ask` slot, before the words.
+  // P7-14 (R5, R10): the strip stands in the panel, in the layout's own `terms` slot — under the
+  // decision block's tab strip and before the column's common blocks, so it is there under BOTH
+  // tabs — and the map is the first thing of Paper digestion, in the additions (it was under the
+  // question field in the `ask` slot, which is gone). The page's order of the two is the layout's.
+  const slot = text.indexOf("terms={ hasBody ?");
+  const common = text.indexOf("common={");
+  const additions = text.indexOf("additions={");
   const map = text.indexOf("<ReadingMapView");
   const strip = text.indexOf("<TermsStrip");
-  const words = text.indexOf("words={");
   if (map < 0 || strip < 0) problems.push("the map or the strip is no longer mounted");
-  else if (!(map < strip && strip < words)) problems.push("the strip no longer stands under the map, inside the ask slot");
+  else {
+    if (!(slot >= 0 && slot < strip && strip < common)) problems.push("the strip no longer stands in the panel's terms slot, under both tabs");
+    if (!(additions >= 0 && additions < map)) problems.push("the map is no longer in the additions, under Paper digestion");
+  }
   if (text.split("<TermsStrip").length - 1 !== 1) problems.push("the strip is not mounted exactly once");
   if (!/<TermsStrip [^>]*terms=\{terms\}/.test(text)) problems.push("the strip is no longer handed the merged terms");
   if (!/<TermsStrip [^>]*marked=\{markedTerm\} onMark=\{markTerm\}/.test(text)) problems.push("the strip no longer shares the marked term with the page");
@@ -60,11 +68,20 @@ describe("the page's Terms to know wiring (P3-01)", () => {
     ]);
   });
 
-  it("would notice the strip mounted above the map", () => {
+  it("would notice the strip moved into the additions, under one tab only", () => {
     const stripLine = /\s*<TermsStrip [^>]*\/>\n/.exec(source)![0];
     const moved = source.replace(stripLine, "\n").replace("{reading.map && <ReadingMapView", `${stripLine.trim()}\n{reading.map && <ReadingMapView`);
 
-    expect(termsProblems(moved)).toEqual(["the strip no longer stands under the map, inside the ask slot"]);
+    expect(moved).not.toBe(source);
+    expect(termsProblems(moved)).toEqual(["the strip no longer stands in the panel's terms slot, under both tabs"]);
+  });
+
+  it("would notice the map moved out of the additions, back into the panel", () => {
+    const mapLine = /\s*\{reading\.map && <ReadingMapView [^\n]*\n/.exec(source)![0];
+    const moved = source.replace(mapLine, "\n").replace("terms={\n", `terms={\n${mapLine.trim()}\n`);
+
+    expect(moved).not.toBe(source);
+    expect(termsProblems(moved)).toContain("the map is no longer in the additions, under Paper digestion");
   });
 
   it("would notice the body no longer handed the term's first use", () => {
