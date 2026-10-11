@@ -254,8 +254,11 @@ describe("equations", () => {
     });
   });
 
-  it("knows an unnumbered equation by what it is made of", () => {
-    expect(equationOf(line("L = −∑ y_i log p_i + λ‖w‖^2"))).toEqual({ text: "L = −∑ y_i log p_i + λ‖w‖^2" });
+  // P8-03 (BACKLOG-32), re-aimed: this test pinned "an unnumbered equation is known by what it is made of".
+  // The owner chose the cheap rule — only a numbered line is a display equation in a PDF — so the same
+  // line now stays prose.
+  it("does not take an unnumbered line of symbols for an equation", () => {
+    expect(equationOf(line("L = −∑ y_i log p_i + λ‖w‖^2"))).toBeNull();
   });
 
   it("refuses prose, a year in brackets, and a line too long to be one", () => {
@@ -618,13 +621,19 @@ describe("a sentence with notation in it is not a display equation (P7-11)", () 
     expect(equationOf(line("x_i = y + z_j for each cell term"))).toBeNull();
   });
 
-  it("counts words as letters only, four or more, set apart by spaces or a hyphen: two are still an equation", () => {
-    expect(equationOf(line("x_i = y + z_j for each term"))).toEqual({ text: "x_i = y + z_j for each term" });
-    // A function name fused to its brackets is not a word, however often it comes.
-    expect(equationOf(line("softmax(QK^T/√d_k)V + softmax(QK^T/√d_k)V"))).toEqual({ text: "softmax(QK^T/√d_k)V + softmax(QK^T/√d_k)V" });
-    // A word with a hyphen in it is its parts: "situ" is the third of three.
+  // P8-03 (BACKLOG-32), re-aimed: this test pinned the word count of the unnumbered branch ("two words are
+  // still an equation"). The branch is gone with the owner's cheap rule, so every one of these unnumbered
+  // lines is prose, however few its words; the same lines with a number are equations, words and all.
+  it("takes no unnumbered line for an equation, however few its words", () => {
+    expect(equationOf(line("x_i = y + z_j for each term"))).toBeNull();
+    expect(equationOf(line("softmax(QK^T/√d_k)V + softmax(QK^T/√d_k)V"))).toBeNull();
     expect(equationOf(line("⟨003⟩||ND and ⟨110⟩||ND, ex-situ, indicate localized"))).toBeNull();
-    expect(equationOf(line("⟨003⟩||ND and ⟨110⟩||ND, ex-situ, indicate"))).toEqual({ text: "⟨003⟩||ND and ⟨110⟩||ND, ex-situ, indicate" });
+    expect(equationOf(line("⟨003⟩||ND and ⟨110⟩||ND, ex-situ, indicate"))).toBeNull();
+    expect(equationOf(line("x_i = y + z_j for each term (4)"))).toEqual({ text: "x_i = y + z_j for each term", number: "(4)" });
+    expect(equationOf(line("⟨003⟩||ND and ⟨110⟩||ND, ex-situ, indicate (5)"))).toEqual({
+      text: "⟨003⟩||ND and ⟨110⟩||ND, ex-situ, indicate",
+      number: "(5)",
+    });
   });
 
   it("keeps a numbered line, words and all: a numbered display equation can carry words", () => {
@@ -652,6 +661,95 @@ describe("a sentence with notation in it is not a display equation (P7-11)", () 
     ]);
     expect(outline.equations).toBeUndefined();
     expect(outline.sections?.[0].text).toContain("⟨003⟩||ND + ⟨101⟩||ND texture was observed in the films and the cells held their charge");
+  });
+});
+
+// ── P8-03 (BACKLOG-32, §1h.41 c): only a numbered line is a display equation in a PDF ───────────────
+//
+// The owner chose the cheap rule, knowing it loses an unnumbered equation: on the owner's paper the
+// "equations" were nineteen sentence fragments (notation torn from a sentence), none of them an equation,
+// and the one real equation of §4.5 was never one. A line is a display equation only when it ends in
+// "(n)" / "(3a)" and carries at least one maths symbol; everything else joins its paragraph as any line does.
+describe("only a numbered line is a display equation in a PDF (P8-03, BACKLOG-32)", () => {
+  it("does not take an unnumbered line of symbols for an equation", () => {
+    expect(equationOf(line("softmax(QK^T/√d_k)V"))).toBeNull();
+    expect(equationOf(line("L = −∑ y_i log p_i + λ‖w‖^2"))).toBeNull();
+    // A table row of measurements: three symbols and no words.
+    expect(equationOf(line("0.12 ± 0.03   0.34 ± 0.05   0.56 ± 0.02"))).toBeNull();
+    expect(equationOf(line("0.12 0.34 0.56 0.78"))).toBeNull();
+  });
+
+  it("still takes a numbered line, with its number apart from its symbols", () => {
+    expect(equationOf(line("softmax(QK^T/√d_k)V (1)"))).toEqual({ text: "softmax(QK^T/√d_k)V", number: "(1)" });
+    expect(equationOf(line("σ = Σ w_i x_i (3a)"))).toEqual({ text: "σ = Σ w_i x_i", number: "(3a)" });
+    expect(equationOf(line("0.12 ± 0.03 (12)"))).toEqual({ text: "0.12 ± 0.03", number: "(12)" });
+  });
+
+  it("still takes a numbered line of words with one symbol", () => {
+    expect(equationOf(line("where η = 0.5 (2)"))).toEqual({ text: "where η = 0.5", number: "(2)" });
+  });
+
+  it("does not take a numbered line with no symbol, or a year in brackets", () => {
+    expect(equationOf(line("as set out in the second of the two cases (2)"))).toBeNull();
+    expect(equationOf(line("as shown by Vaswani et al. (2017)"))).toBeNull();
+  });
+
+  const page = (rows: [string, number][]): PdfPageText[] => [
+    {
+      page: 1,
+      items: [
+        item("A Paper About Cathode Texture", { height: 17, y: 700 }),
+        item("1 Introduction", { y: 680 }),
+        ...Array.from({ length: 6 }, (_, i) =>
+          item("Recurrent neural networks have long been established in sequence modelling and transduction.", { y: 666 - i * 12 }),
+        ),
+        ...rows.map(([text, y]) => item(text, { y })),
+      ],
+    },
+  ];
+
+  it("leaves an unnumbered symbol line in its paragraph, whatever its symbols", () => {
+    const outline = buildOutline(
+      page([
+        ["The attention is computed as", 590],
+        ["softmax(QK^T/√d_k)V", 578],
+        ["where the keys have size d.", 566],
+      ]),
+    );
+    expect(outline.equations).toBeUndefined();
+    expect(outline.sections?.[0].text).toContain("The attention is computed as softmax(QK^T/√d_k)V where the keys have size d.");
+  });
+
+  it("leaves a whole unnumbered equation, printed over several lines, in its paragraph", () => {
+    const outline = buildOutline(
+      page([
+        ["The loss is", 590],
+        ["L = −∑ y_i log p_i", 578],
+        ["+ λ‖w‖^2 + μ‖v‖^2", 566],
+        ["with both penalties small.", 554],
+      ]),
+    );
+    expect(outline.equations).toBeUndefined();
+    expect(outline.sections?.[0].text).toContain("The loss is L = −∑ y_i log p_i + λ‖w‖^2 + μ‖v‖^2 with both penalties small.");
+  });
+
+  // Where a numbered equation is printed over two lines the number stands on the last one, and that
+  // line alone is the equation: the line above it is prose. Recorded as built; the owner's rule was cheap.
+  it("takes the last line of a numbered equation printed over two lines, and leaves the first in the prose", () => {
+    const outline = buildOutline(
+      page([
+        ["The loss is", 590],
+        ["L = −∑ y_i log p_i", 578],
+        ["+ λ‖w‖^2 (4)", 566],
+        ["with the penalty small.", 554],
+      ]),
+    );
+    expect(outline.equations).toEqual([{ text: "+ λ‖w‖^2", number: "(4)" }]);
+    const paragraphs = (outline.sections?.[0].text ?? "").split("\n\n");
+    const at = paragraphs.indexOf(blockMarker(0));
+    expect(at).toBeGreaterThan(0);
+    expect(paragraphs[at - 1]).toMatch(/The loss is L = −∑ y_i log p_i$/);
+    expect(paragraphs[at + 1]).toMatch(/^with the penalty small\.$/);
   });
 });
 

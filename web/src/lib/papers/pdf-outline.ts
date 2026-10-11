@@ -74,8 +74,9 @@ export interface OutlineCaption {
   page?: number;
 }
 
-/** A display equation as the PDF printed it: one line of symbols, and the
- *  number the paper gave it. No TeX — a PDF has none. */
+/** A display equation as the PDF printed it: the numbered line of symbols, and
+ *  the number the paper gave it (P8-03: a PDF line is one only when numbered).
+ *  No TeX — a PDF has none. */
 export interface OutlineEquation {
   text: string;
   number?: string;
@@ -165,14 +166,12 @@ const PUBLICATION_DATE = new RegExp(
 /** A display equation is set apart like a heading and is not one: it carries
  *  operators, or the number the paper refers to it by. */
 const MATHS = /[=+×÷√∑∫∂≈≤≥∈±⟨⟩]|\(\d+\)\s*$/;
-/** What a display equation is made of. */
-const MATH_SYMBOL = /[=+×÷√∑∏∫∂≈≤≥∈∉±−·∞→←↔≡≠∇∆⊂⊆∪∩^_{}|]/g;
+/** What a display equation is made of: a numbered line needs one of these (no `g` flag: `test` on a
+ *  global pattern keeps its place from one call to the next). */
+const MATH_SYMBOL = /[=+×÷√∑∏∫∂≈≤≥∈∉±−·∞→←↔≡≠∇∆⊂⊆∪∩^_{}|]/;
 /** An equation is one printed line; past this it is a paragraph with an
  *  equals sign in it. */
 const EQUATION_MAX = 120;
-/** A line of this many real words is a sentence with notation in it, not an
- *  equation, whatever its symbols. */
-const EQUATION_PROSE_WORDS = 3;
 /** A caption stops being a caption somewhere; past this it is the prose
  *  under the figure that never opened a gap. With a page's columns kept apart
  *  a caption runs to its end, and a plate's runs to 1,754 characters. */
@@ -243,40 +242,26 @@ export function continuesCaption(
   return true;
 }
 
-/** How many real words a line holds: letters only, four or more, set apart by
- *  spaces or a hyphen ("texture", "observed", the "situ" of "ex-situ" — not the
- *  "softmax" of "softmax(QK^T/√d_k)V", which is fused to its brackets).
- *  Punctuation round a word is not part of it. */
-function realWords(text: string): number {
-  const edge = /^[.,;:!?'"\u2018\u2019\u201c\u201d()[\]]+|[.,;:!?'"\u2018\u2019\u201c\u201d()[\]]+$/g;
-  return text.split(/[\s\-\u2010\u2011]+/).filter((token) => /^[A-Za-z]{4,}$/.test(token.replace(edge, ""))).length;
-}
-
 /**
  * Whether a line is a display equation, printed on a line of its own.
  *
- * Numbered — ending in "(3)" — with a symbol anywhere (a numbered equation
- * can carry words: "where … (3)"); or unnumbered and made mostly of symbols:
- * at least three of them, fewer than three real words, and fewer than half its
- * characters in words of four letters or more. "softmax(QK^T/√d_k)V" passes;
- * "the loss is defined as follows" does not, and neither does a sentence
- * that happens to end in "(2020)", which has no symbol — nor a sentence with
- * notation in it, "⟨003⟩||ND + ⟨101⟩||ND texture was observed in the films",
- * which three words make prose whatever its symbols.
+ * P8-03 (BACKLOG-32, §1h.41 c): only when it is numbered — it ends in "(3)" or "(3a)" and carries
+ * at least one symbol anywhere (a numbered equation can carry words: "where η = 0.5 (2)"). The
+ * owner chose this cheap rule knowing it loses an unnumbered equation: a PDF has no TeX, and the
+ * rule that also took an unnumbered line of symbols (three of them, under three real words, under
+ * half its characters in words) lifted sentence fragments out of the owner's paper — nineteen of
+ * them, notation torn from the prose around it, a row of ranges — and none was an equation.
+ * An unnumbered line, symbols and all, is a line of prose and joins its paragraph as any line does;
+ * and a sentence that happens to end in "(2020)" has no symbol and no such number. Where a numbered
+ * equation is printed over several lines the number stands on the last one, and that line alone is
+ * the equation.
  */
 export function equationOf(line: PdfLine): OutlineEquation | null {
   const text = line.text.trim();
   if (!text || text.length > EQUATION_MAX) return null;
-  const symbols = (text.match(MATH_SYMBOL) ?? []).length;
   const numbered = /\((\d{1,3}[a-z]?)\)\s*$/.exec(text);
-  if (numbered && symbols >= 1) {
-    return { text: text.slice(0, numbered.index).trim(), number: `(${numbered[1]})` };
-  }
-  if (symbols < 3) return null;
-  if (realWords(text) >= EQUATION_PROSE_WORDS) return null;
-  const wordChars = (text.match(/[A-Za-z]{4,}/g) ?? []).join("").length;
-  if (wordChars / text.length >= 0.5) return null;
-  return { text };
+  if (!numbered || !MATH_SYMBOL.test(text)) return null;
+  return { text: text.slice(0, numbered.index).trim(), number: `(${numbered[1]})` };
 }
 
 function round(n: number): number {
