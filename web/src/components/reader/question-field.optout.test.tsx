@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // checkbox "Not for recommendations". Unticked by default (the question is the
 // reader's declared intent). The ledger hears of a paper's questions once per
 // settle — never per keystroke — and a ticked question's terms never enter it,
-// or leave it at once if they were in. No DOM: the field runs on the minimal hook
+// or leave it at once if they were in. P7-13 (R11c): a set settles when the reader presses
+// Submit (the blur + 1.5 s settle is gone), so the cases that left the box now submit. No DOM: the field runs on the minimal hook
 // runtime and its handlers are called on the elements it returns. Invented words.
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
@@ -25,7 +26,7 @@ const PAPER = "openalex:W7";
 const AT = "2026-10-07T00:00:00.000Z";
 const A = "Does annealing coarsen the grain boundaries?";
 const B = "Is the electrolyte stable against dendrites?";
-const IDLE = 15;
+const WAIT = 60;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 type Props = Record<string, unknown> & { children?: ReactNode };
@@ -37,13 +38,14 @@ function elements(node: ReactNode): ReactElement<Props>[] {
 }
 
 async function field() {
-  const mounted = await hookRuntime.mount(() => QuestionField({ paperId: PAPER, examples: [], idleMs: IDLE }));
+  const mounted = await hookRuntime.mount(() => QuestionField({ paperId: PAPER, examples: [] }));
   const all = elements(mounted.value);
   const inputs = all.filter((el) => "data-ask-line" in el.props);
   const boxes = all.filter((el) => el.type === "input" && el.props.type === "checkbox");
   const section = all.find((el) => el.type === "section")!;
   const leave = () => (section.props.onBlur as (e: unknown) => void)({ currentTarget: { contains: () => false }, relatedTarget: null });
-  return { mounted, inputs, boxes, all, leave };
+  const submit = () => (all.find((el) => el.type === "button" && el.props.children === ASK.submit)!.props.onClick as () => void)();
+  return { mounted, inputs, boxes, all, leave, submit };
 }
 
 const ledger = () => useProfileStore.getState().profile.preferenceLedger;
@@ -116,11 +118,14 @@ describe("the checkbox", () => {
     useReadingQuestionsStore.getState().set(PAPER, [A], false, AT, [A]);
     settleQuestions(PAPER);
     expect(terms()).toEqual([]);
-    const { boxes, leave, mounted } = await field();
+    const { boxes, leave, submit, mounted } = await field();
     (boxes[0].props.onChange as (e: unknown) => void)({ target: { checked: false } });
     expect(terms()).toEqual([]);
+    // Leaving the box lets nothing in; Submit does.
     leave();
-    await sleep(IDLE * 4);
+    await sleep(WAIT);
+    expect(terms()).toEqual([]);
+    submit();
     expect(terms()).toContain("annealing");
     mounted.unmount();
   });
@@ -135,27 +140,32 @@ describe("the checkbox", () => {
 });
 
 describe("what reaches the ledger, and when", () => {
-  it("never on a keystroke; once when the box settles", async () => {
+  it("never on a keystroke, nor on leaving the box; once when the reader submits", async () => {
     const record = vi.fn();
     useProfileStore.setState({ recordQuestionTerms: record });
     const { inputs, leave, mounted } = await field();
     for (const value of ["D", "Do", "Does annealing", A]) {
       (inputs[0].props.onChange as (e: unknown) => void)({ target: { value } });
     }
-    await sleep(IDLE * 4);
+    await sleep(WAIT);
     expect(record).not.toHaveBeenCalled();
     leave();
-    await sleep(IDLE * 4);
+    await sleep(WAIT);
+    expect(record).not.toHaveBeenCalled();
+    // The reader leaves the page and comes back: the typed set is still there, and Submit sends it.
+    mounted.unmount();
+    expect(record).not.toHaveBeenCalled();
+    const back = await field();
+    back.submit();
     expect(record).toHaveBeenCalledTimes(1);
     expect(record.mock.calls[0][0]).toBe(PAPER);
-    mounted.unmount();
+    back.mounted.unmount();
   });
 
   it("a ticked question's terms never enter; an unticked one's do", async () => {
     useReadingQuestionsStore.getState().set(PAPER, [A, B], false, AT, [A]);
-    const { leave, mounted } = await field();
-    leave();
-    await sleep(IDLE * 4);
+    const { submit, mounted } = await field();
+    submit();
     expect(terms()).toContain("electrolyte");
     expect(terms()).not.toContain("annealing");
     expect(terms()).not.toContain("grain");

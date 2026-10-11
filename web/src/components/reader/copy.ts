@@ -121,6 +121,9 @@ export const ASK = {
   remove: (n: number) => `Remove question ${n}`,
   /** The count a long question shows (P7-13: 500 is `MAX_QUESTION_CHARS`). */
   counter: (n: number) => `${n}/500`,
+  /** P7-13 (R11c): the button that sends the questions — the only thing that does,
+   *  besides Enter on an empty last line, a × and a tick. */
+  submit: "Submit",
   /** P5-02: the checkbox beside a question. Ticked, that question's words never
    *  enter what Peer learns for your feed. */
   notForRecs: "Not for recommendations",

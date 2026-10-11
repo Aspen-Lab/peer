@@ -22,6 +22,11 @@
 // through; it reads the store once, when it mounts (the page mounts it per
 // paper, after the stores have loaded).
 //
+// P7-13 (R11c, the owner's order): the reader says when the questions are done.
+// A Submit button settles them at once, as Enter on an empty last line, a × and a
+// tick do; leaving the box, a wait after leaving it and leaving the page settle
+// nothing any more.
+//
 // This project's tests have no DOM: what the field shows is tested by
 // rendering it, and what its handlers do through the pure functions below.
 
@@ -33,6 +38,7 @@ import {
   notForRecommendations,
   settledQuestions,
   useReadingQuestionsStore,
+  type PaperQuestions,
 } from "@/store/reading-questions";
 import { useProfileStore } from "@/store/profile";
 import { questionTerms } from "@/lib/preferences/question-terms";
@@ -206,18 +212,18 @@ export function vagueHintShown({
 }
 
 /**
- * P2-08b (§1g.18): the deep report is asked about the questions only when the
- * box has settled as a whole — focus left it (every line and control in it
- * counts as inside), or Enter was pressed on the line that ends it — and the
- * reader then stayed idle for `BOX_IDLE_MS`. A line finished by Enter, by
- * leaving it or by removing one settles nothing, nor does a keystroke, the
- * gist or a chip: five questions typed with Enter between them are one deep
- * report, not five. (P2-03's per-line settle gave the free Tier 0 route the
- * same moment; that route reads `items` live and never needed it.)
+ * P2-08b (§1g.18) timed the deep report's questions to the box as a whole; P7-13 (R11c, the
+ * owner's order) puts the reader in charge of it. A set is settled — and so asked about, on
+ * the reader's own key — only by what they do on purpose: the Submit button, Enter on the
+ * line that ends the box (below), a × or a tick. A line finished by Enter, by leaving it or by
+ * removing one settles nothing by itself, nor does a keystroke, the gist or a chip, nor does
+ * leaving the box (P2-08b's 1.5 s wait, `BOX_IDLE_MS`, is gone) or the page (P2-10's `pagehide`
+ * settle is gone): five questions typed with Enter between them are one deep report, and it
+ * goes out when the reader presses Submit.
  */
-export const BOX_IDLE_MS = 1500;
 
-/** `next` is the element that receives focus (null when none does). */
+/** `next` is the element that receives focus (null when none does). The box is
+ *  "focused" while focus is anywhere inside it; leaving it hides the chips. */
 export function leftTheBox(box: Node, next: EventTarget | null): boolean {
   return !box.contains(next as Node | null);
 }
@@ -253,6 +259,32 @@ export function settleQuestions(paperId: string): void {
 
 const sameQuestion = (a: string, b: string) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
 
+/** P7-13 (R11c): what the field last settled — the questions, and which of them were
+ *  marked "Not for recommendations" when they were. */
+export interface SettledSet {
+  questions: readonly string[];
+  marks: readonly string[];
+}
+
+/** The settled set of a stored entry; none for a paper that has no entry. */
+export function settledSetOf(entry: PaperQuestions | undefined): SettledSet {
+  return { questions: settledQuestions(entry), marks: entry?.settledNotForRecs ?? [] };
+}
+
+const sameList = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((q, i) => q === b[i]);
+
+/**
+ * P7-13 (R11c): whether Submit has anything to send — the box as it stands (the cleaned
+ * lines, and which of them are marked) is not the settled set. Spaces and case at the edges
+ * of a line change nothing; a mark moved does, because the ledger waits for it. A box cleared
+ * of everything that was settled has something to send too: the ledger still holds those words.
+ */
+export function hasNewQuestions(lines: readonly string[], marked: readonly string[], settled: SettledSet): boolean {
+  const questions = cleanQuestions(lines);
+  const marks = questions.filter((question) => marked.some((m) => sameQuestion(m, question)));
+  return !sameList(questions, settled.questions) || !sameList(marks, settled.marks);
+}
+
 /** The page's `q`: the first empty question line, else the last one. */
 export function focusFirstEmptyQuestion(): void {
   // By the mark, not the tag: a line is a textarea since P7-13.
@@ -266,11 +298,7 @@ export function QuestionField({
   examples,
   standing,
   vague = false,
-  idleMs = BOX_IDLE_MS,
 }: {
-  /** P2-08b (§1g.18): how long the reader stays idle, after the box settles,
-   *  before the questions settle. Tests pass a few milliseconds; the page nothing. */
-  idleMs?: number;
   paperId: string;
   /** P1-09 (§1f.20): the example tags, from the reader's earlier questions
    *  and profile only. */
@@ -290,12 +318,17 @@ export function QuestionField({
       lines: own && own.items.length > 0 ? [...own.items] : [""],
       gist: own?.gist ?? false,
       marked: own?.notForRecs ? [...own.notForRecs] : [],
+      settled: settledSetOf(own),
     };
   });
   const [lines, setLines] = useState<string[]>(initial.lines);
   const [gist, setGist] = useState(initial.gist);
   // P5-02: the questions (their text) marked "Not for recommendations".
   const [marked, setMarked] = useState<string[]>(initial.marked);
+  // P7-13 (R11c): what was last settled, to tell whether Submit has anything to send. It
+  // follows the settles this field makes; nothing else settles a paper's questions.
+  const [settled, setSettled] = useState<SettledSet>(initial.settled);
+  const unsent = hasNewQuestions(lines, marked, settled);
   const isMarked = (line: string) => marked.some((m) => sameQuestion(m, line));
   const [focused, setFocused] = useState(false);
   // P1-07 (§1f.18 a): the line being written, which the vague hint waits for.
@@ -326,49 +359,15 @@ export function QuestionField({
     return () => window.removeEventListener("resize", refit);
   }, []);
 
-  // P2-08b (§1g.18): the questions settle — what a deep report is asked about —
-  // when the box has settled as a whole and the reader has then been idle for
-  // `idleMs`; coming back into the box, or anything done in it, ends the wait.
-  const idle = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // P2-10 (§1g.21 (6)): the wait's `pagehide` listener, there only while the wait
-  // is pending.
-  const pageHide = useRef<(() => void) | null>(null);
-  const stopIdle = () => {
-    if (pageHide.current !== null) {
-      window.removeEventListener("pagehide", pageHide.current);
-      pageHide.current = null;
-    }
-    if (idle.current === null) return;
-    clearTimeout(idle.current);
-    idle.current = null;
+  // P7-13 (R11c): the reader says the questions are done — Submit, Enter on the line that
+  // ends the box, a × or a tick. The questions settle on the spot (the deep report is asked
+  // about them), the ledger hears of them, and the button knows what was sent.
+  const submit = () => {
+    settleQuestions(paperId);
+    setSettled(settledSetOf(useReadingQuestionsStore.getState().byPaper[paperId]));
   };
-  const settleBoxSoon = () => {
-    stopIdle();
-    // One settle for the three ways the wait can end: the timer, and — a reload
-    // or a closed tab, where React's cleanup below never runs — `pagehide`.
-    // Whichever comes first ends the other. Nothing is sent from here: the
-    // settled questions travel with the next open, as after in-app navigation.
-    const settleNow = () => {
-      stopIdle();
-      settleQuestions(paperId);
-    };
-    pageHide.current = settleNow;
-    window.addEventListener("pagehide", settleNow);
-    idle.current = setTimeout(settleNow, idleMs);
-  };
-  // §1g.21 (5): leaving the page mid-wait settles at once — the questions were
-  // finished; the reader just did not stay to see the answer.
-  useEffect(
-    () => () => {
-      if (idle.current === null) return;
-      stopIdle();
-      settleQuestions(paperId);
-    },
-    [paperId],
-  );
 
   const commit = (next: string[], nextGistValue: boolean, nextMarked: string[] = marked) => {
-    stopIdle();
     setLines(next);
     setGist(nextGistValue);
     setMarked(nextMarked);
@@ -387,7 +386,7 @@ export function QuestionField({
   const onMark = (index: number, on: boolean) => {
     const rest = marked.filter((m) => !sameQuestion(m, lines[index]));
     commit(lines, gist, on ? [...rest, lines[index].trim()] : rest);
-    if (on) settleQuestions(paperId);
+    if (on) submit();
     else syncQuestionTerms(paperId);
   };
 
@@ -413,15 +412,12 @@ export function QuestionField({
     <section
       aria-label={ASK.heading}
       className="mt-6"
-      onFocus={() => {
-        stopIdle();
-        setFocused(true);
-      }}
+      onFocus={() => setFocused(true)}
       onBlur={(event) => {
         // Focus moving to another line, chip or button of the box is not leaving it.
+        // Leaving it settles nothing (P7-13): the reader presses Submit.
         if (!leftTheBox(event.currentTarget, event.relatedTarget)) return;
         setFocused(false);
-        settleBoxSoon();
       }}
     >
       <label className="eyebrow inline-flex items-center gap-2 text-text-faint" htmlFor={`ask-${paperId}-0`}>
@@ -466,7 +462,7 @@ export function QuestionField({
                 } else {
                   inputs.current[added.focus]?.focus();
                 }
-                if (enterEndsTheBox(lines, index)) settleBoxSoon();
+                if (enterEndsTheBox(lines, index)) submit();
               }}
               className="min-w-0 flex-1 resize-none overflow-hidden border-b border-border bg-transparent py-1 font-reading text-body-sm text-text placeholder:text-text-faint focus:border-heading focus:outline-none"
             />
@@ -483,10 +479,9 @@ export function QuestionField({
                   setUnsettled(null);
                   commit(next, nextGist(gist, next));
                   // P5-04 (S3): deleting a question is a finished gesture, like a tick. The
-                  // focused button goes with the line, so no blur reaches the box and the wait
-                  // that `commit` stopped would never start again: the question's words stayed in
-                  // the ledger until the box was next left. Settle and sync now, so they go at once.
-                  settleQuestions(paperId);
+                  // focused button goes with the line, so no blur reaches the box: the question's
+                  // words would stay in the ledger. Settle and sync now, so they go at once.
+                  submit();
                 }}
                 className="annotation shrink-0 text-text-faint transition-colors hover:text-heading"
               >
@@ -507,6 +502,21 @@ export function QuestionField({
           </li>
         ))}
       </ol>
+      {/* P7-13 (R11c): below the lines, right-aligned (full width on a phone), in the label face.
+          Not in the quiet box (no question, nothing focused) — unless a cleared box still has
+          something to send. Shown with no key too: it settles the ledger. */}
+      {(chipsShown || unsent) && (
+        <div className="mt-2 flex sm:justify-end">
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!unsent}
+            className="annotation w-full rounded-full border border-border-strong px-3 py-1 text-heading transition-colors hover:bg-surface-hover disabled:opacity-50 sm:w-auto"
+          >
+            {ASK.submit}
+          </button>
+        </div>
+      )}
       {vagueHintShown({ vague, lines, unsettled }) && (
         <p role="status" className="annotation mt-2 text-text-muted">
           {ROUTE.vague}

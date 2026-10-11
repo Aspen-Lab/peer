@@ -5,12 +5,14 @@
 //
 // What A measured on the real counter: five questions typed with Enter between
 // them made six deep requests, four of them aborted in flight after the server
-// had already charged them. The ruling: the box settles as a whole (focus
-// leaves it, or Enter on an empty last line), after an idle wait; an in-flight
+// had already charged them. The ruling: the box settles as a whole; an in-flight
 // request is never aborted by a later set — it finishes and caches under its
 // own key, and one more goes out for the latest set. A "charge" below is one
 // deep request: it was counted once per deep request (§1g.4), and since P4-00 it
-// is what the reader's own provider bills them for. Every question is synthetic.
+// is what the reader's own provider bills them for. P7-13 (R11c, the owner's order):
+// the box settles when the reader presses Submit, or presses Enter on an empty last
+// line (or the last line of a full box) — no longer on leaving the box after an idle
+// wait, and no longer on `pagehide`. Every question is synthetic.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("react", async (importOriginal) => {
@@ -59,14 +61,14 @@ import type { ReactElement, ReactNode } from "react";
 import { hookRuntime } from "@/test-support/hook-runtime";
 import { defaultProfile, type Paper, type UserProfile } from "@/types";
 import { settledQuestions, useReadingQuestionsStore } from "@/store/reading-questions";
+import { ASK } from "./copy";
 import { QuestionField } from "./question-field";
 import { useModelReport } from "./use-model-report";
 
 /**
- * A `window` that holds the `pagehide` / `pageshow` listeners the field (while its idle
- * wait is pending) and the report hook (P3-05, from mount) add, in the order they were
- * added — as a browser fires them — and can fire an event. `count` is how many are
- * registered for a type.
+ * A `window` that holds the `pagehide` / `pageshow` listeners the report hook (P3-05, from
+ * mount) adds — the field adds none since P7-13 — in the order they were added, as a browser
+ * fires them, and can fire an event. `count` is how many are registered for a type.
  */
 function pageWindow() {
   const listeners = new Map<string, Set<() => void>>();
@@ -126,6 +128,8 @@ function elements(node: ReactNode): ReactElement<Props>[] {
 interface View {
   section: ReactElement<Props>;
   inputs: ReactElement<Props>[];
+  /** The Submit button of this render, if the box shows one. */
+  submit: ReactElement<Props> | undefined;
 }
 type Step = ((view: View) => void) | { wait: number };
 
@@ -144,6 +148,8 @@ const leave =
     (inputs[index].props.onBlur as () => void)();
     (section.props.onBlur as (event: unknown) => void)({ currentTarget: { contains: () => false }, relatedTarget: null });
   };
+/** P7-13 (R11c): the Submit button is pressed. */
+const submit: Step = (view) => (view.submit!.props.onClick as () => void)();
 const sleep = (ms: number): Step => ({ wait: ms });
 
 /**
@@ -152,7 +158,7 @@ const sleep = (ms: number): Step => ({ wait: ms });
  * says so. The field is rendered beside the hook as the page does, both on the
  * store's settled set.
  */
-async function session(script: Step[], idleMs: number) {
+async function session(script: Step[]) {
   const queued = [...script];
   const clock = { until: 0 };
   /** The field's handlers of the latest render: a step must call this render's closures. */
@@ -162,8 +168,12 @@ async function session(script: Step[], idleMs: number) {
       const [asked, setAsked] = useState(() => useReadingQuestionsStore.getState().byPaper[paper.id]);
       useEffect(() => useReadingQuestionsStore.subscribe((state) => setAsked(state.byPaper[paper.id])), []);
       const model = useModelReport({ paper, profile: reader, questions: settledQuestions(asked) });
-      const all = elements(QuestionField({ paperId: paper.id, examples: [], idleMs }));
-      latest.view = { section: all.find((el) => el.type === "section")!, inputs: all.filter((el) => "data-ask-line" in el.props) };
+      const all = elements(QuestionField({ paperId: paper.id, examples: [] }));
+      latest.view = {
+        section: all.find((el) => el.type === "section")!,
+        inputs: all.filter((el) => "data-ask-line" in el.props),
+        submit: all.find((el) => el.type === "button" && el.props.children === ASK.submit),
+      };
       const [tick, setTick] = useState(0);
       useEffect(() => {
         if (Date.now() < clock.until) {
@@ -202,10 +212,9 @@ const cachedKeys = () => Object.keys(JSON.parse(localStorage.getItem("peer-paper
 describe("the question box and the deep report (P2-08b, §1g.18)", () => {
   beforeEach(() => {
     vi.stubGlobal("localStorage", memoryStorage());
-    // P2-10 (§1g.21 (6)): the field listens for `pagehide` on `window` while its
-    // idle wait is pending, and (P3-05) the report hook for `pagehide` and `pageshow`
-    // from mount, so this window holds listeners and can fire an event (the flows
-    // above never fire one; the last test here does).
+    // P3-05: the report hook listens for `pagehide` and `pageshow` on `window` from
+    // mount, so this window holds listeners and can fire an event (the flows above
+    // never fire one; the last test here does).  P7-13: the field listens for none.
     page = pageWindow();
     vi.stubGlobal("window", page.win);
     net.calls.length = 0;
@@ -224,9 +233,9 @@ describe("the question box and the deep report (P2-08b, §1g.18)", () => {
       script.push(type(index, text));
       if (index < FIVE.length - 1) script.push(enter(index));
     });
-    script.push(leave(4), sleep(300));
+    script.push(submit, sleep(300));
 
-    await session(script, 25);
+    await session(script);
 
     // The open (no questions), and the one request for the five — never one per Enter.
     expect(net.calls.filter((call) => call.deep === true)).toHaveLength(2);
@@ -242,7 +251,7 @@ describe("the question box and the deep report (P2-08b, §1g.18)", () => {
     const beta = "Synthetic question about topic beta here?";
     const gamma = "Synthetic question about topic gamma here?";
 
-    await session([sleep(300), type(0, alpha), leave(0), sleep(50), type(0, beta), leave(0), sleep(50), type(0, gamma), leave(0), sleep(900)], 10);
+    await session([sleep(300), type(0, alpha), submit, sleep(50), type(0, beta), submit, sleep(50), type(0, gamma), submit, sleep(900)]);
 
     // The open, set alpha (in flight while beta and gamma settle), then gamma
     // alone: beta was superseded before anything was free to send it.
@@ -253,10 +262,13 @@ describe("the question box and the deep report (P2-08b, §1g.18)", () => {
     expect(cachedKeys()).toHaveLength(3);
   });
 
-  // §1g.21 (5), and the ruling's own done gesture: Enter on an empty last line.
-  it("Enter on an empty last line is the done gesture: the wait starts, and the questions settle", async () => {
-    await session([type(0, FIVE[0]), enter(0), enter(1), sleep(150)], 15);
+  // §1g.21 (5), and the ruling's own done gesture: Enter on an empty last line. P7-13 (§1h.29
+  // Q8): it still settles, and now at once — there is no wait after it.
+  it("Enter on an empty last line is the done gesture: the questions settle at once", async () => {
+    let atOnce: readonly string[] | undefined;
+    await session([type(0, FIVE[0]), enter(0), enter(1), () => (atOnce = settledOf()), sleep(150)]);
 
+    expect(atOnce).toEqual([FIVE[0]]);
     expect(settledOf()).toEqual([FIVE[0]]);
   });
 
@@ -268,44 +280,55 @@ describe("the question box and the deep report (P2-08b, §1g.18)", () => {
     });
     // The box is full: no empty line can exist to press Enter on.
     script.push(sleep(60));
-    await session(script, 15);
+    await session(script);
     expect(settledOf()).toBeUndefined();
 
     useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null });
-    await session([...script.slice(0, -1), enter(4), sleep(150)], 15);
+    await session([...script.slice(0, -1), enter(4), sleep(150)]);
     expect(settledOf()).toEqual(FIVE);
   });
 
-  // P3-05 (§1h.8 (2); A's P3-04 F2): the whole chain A measured, on the real field,
-  // store and hook. A reload inside the idle wait settles the questions on `pagehide`
-  // (P2-10), which re-keys the hook; the dying page must not send the report request
-  // for them (A saw two `fetch` calls in 6 of 6 runs). They travel when the page is
-  // shown again, as one request.
-  it("a reload inside the idle wait: the questions settle on pagehide, nothing is sent from the dying page, and pageshow sends the one request", async () => {
-    const seen: Array<{ calls: number; settled: readonly string[] | undefined }> = [];
-    const snap: Step = () => seen.push({ calls: net.calls.length, settled: settledOf() });
+  // P7-13 (R11c): the three ways the box used to settle by itself are gone — leaving it and
+  // waiting, a reload (`pagehide`) inside that wait, and leaving the page. A set typed and
+  // not submitted is sent by none of them. It stays in the store, unsent, and is still there
+  // to submit.
+  it("leaving the box and staying away sends nothing: only Submit asks the question", async () => {
+    await session([sleep(100), type(0, FIVE[0]), leave(0), sleep(400)]);
 
-    await session(
-      [
-        sleep(100), // the open's request ends
-        type(0, FIVE[0]),
-        leave(0), // the box settled as a whole: the idle wait is pending (and the field is listening)
-        () => page.fire("pagehide"),
-        sleep(80),
-        snap,
-        () => page.fire("pageshow"),
-        sleep(120),
-      ],
-      5_000,
-    );
+    expect(settledOf()).toBeUndefined();
+    expect(net.calls.map((call) => call.questions?.length ?? 0)).toEqual([0]);
+    expect(useReadingQuestionsStore.getState().byPaper[paper.id]?.items).toEqual([FIVE[0]]);
+  });
 
-    // The questions were settled by the pagehide; still only the open had been sent.
-    expect(seen).toEqual([{ calls: 1, settled: [FIVE[0]] }]);
-    // After pageshow, one request, with the question.
+  it("Submit sends the one request, with the question; a second Submit with nothing new sends nothing", async () => {
+    await session([sleep(100), type(0, FIVE[0]), submit, sleep(150), submit, sleep(150)]);
+
     expect(net.calls.map((call) => call.questions?.length ?? 0)).toEqual([0, 1]);
     expect(net.calls[1].questions).toEqual([FIVE[0]]);
     expect(net.calls.every((call) => !call.aborted)).toBe(true);
-    // Both listeners went with the page: the hook's on unmount, the field's with its wait.
+  });
+
+  it("a reload with a set typed and not submitted: pagehide settles nothing, nothing is sent from the dying page, pageshow sends nothing for it", async () => {
+    const seen: Array<{ calls: number; settled: readonly string[] | undefined; hide: number }> = [];
+    const snap: Step = () => seen.push({ calls: net.calls.length, settled: settledOf(), hide: page.count("pagehide") });
+
+    await session([
+      sleep(100), // the open's request ends
+      type(0, FIVE[0]),
+      leave(0),
+      () => page.fire("pagehide"),
+      sleep(80),
+      snap,
+      () => page.fire("pageshow"),
+      sleep(120),
+    ]);
+
+    // Only the report hook's own pagehide listener is registered; the pagehide settled nothing and sent nothing.
+    expect(seen).toEqual([{ calls: 1, settled: undefined, hide: 1 }]);
+    expect(net.calls.map((call) => call.questions?.length ?? 0)).toEqual([0]);
+    expect(useReadingQuestionsStore.getState().byPaper[paper.id]?.items).toEqual([FIVE[0]]);
+    expect(net.calls.every((call) => !call.aborted)).toBe(true);
+    // Both of the hook's listeners went with the page.
     expect([page.count("pagehide"), page.count("pageshow")]).toEqual([0, 0]);
   });
 });

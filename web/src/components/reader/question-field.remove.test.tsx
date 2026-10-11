@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // measured that the focused button is removed with the line, so no blur reached the box and the
 // idle wait that `commit` had stopped was never started again — five terms stayed in the ledger
 // (and, signed in, the account's copy) until the box was next focused and left. Clearing the
-// text with the keyboard never had the gap: the line is still focused, and leaving it is a blur.
+// text with the keyboard never had the gap: the line is still focused, and leaving it was a blur.
+// P7-13 (R11c): leaving the box settles nothing now (the owner took the blur + 1.5 s settle
+// away); clearing the text takes the words out when the reader presses Submit (or Enter on the
+// empty line), so the last describe here is rewritten to that gesture.
 // No DOM: the field runs on the minimal hook runtime and its handlers are called on the
 // elements it returns. Every question is invented.
 vi.mock("react", async (importOriginal) => {
@@ -27,7 +30,7 @@ const PAPER = "openalex:W88";
 const AT = "2026-10-07T00:00:00.000Z";
 const A = "Does annealing coarsen the grain boundaries?";
 const B = "Is the electrolyte stable against dendrites?";
-const IDLE = 15;
+const WAIT = 60;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 type Props = Record<string, unknown> & { children?: ReactNode };
@@ -38,15 +41,16 @@ function elements(node: ReactNode): ReactElement<Props>[] {
   return [element, ...elements(element.props.children)];
 }
 
-async function field(idleMs = IDLE) {
-  const mounted = await hookRuntime.mount(() => QuestionField({ paperId: PAPER, examples: [], idleMs }));
+async function field() {
+  const mounted = await hookRuntime.mount(() => QuestionField({ paperId: PAPER, examples: [] }));
   const all = elements(mounted.value);
   const inputs = all.filter((el) => "data-ask-line" in el.props);
   const remove = (n: number) => all.find((el) => el.type === "button" && el.props["aria-label"] === ASK.remove(n))!;
   const boxes = all.filter((el) => el.type === "input" && el.props.type === "checkbox");
   const section = all.find((el) => el.type === "section")!;
   const leave = () => (section.props.onBlur as (e: unknown) => void)({ currentTarget: { contains: () => false }, relatedTarget: null });
-  return { mounted, inputs, remove, boxes, leave };
+  const submit = () => (all.find((el) => el.type === "button" && el.props.children === ASK.submit)!.props.onClick as () => void)();
+  return { mounted, inputs, remove, boxes, leave, submit };
 }
 
 const ledger = () => useProfileStore.getState().profile.preferenceLedger;
@@ -85,7 +89,7 @@ describe("× takes a question's words out of the ledger at once (P5-04, S3)", ()
     expect(writes.count()).toBe(1);
     expect(fetched).not.toHaveBeenCalled();
     // Nothing more comes later: the settle was the gesture's own, no wait is pending.
-    await sleep(IDLE * 4);
+    await sleep(WAIT);
     expect(writes.count()).toBe(1);
     writes.stop();
     mounted.unmount();
@@ -120,7 +124,7 @@ describe("× takes a question's words out of the ledger at once (P5-04, S3)", ()
     const writes = ledgerWrites();
 
     leave();
-    await sleep(IDLE * 4);
+    await sleep(WAIT);
 
     expect(writes.count()).toBe(0);
     expect(terms()).toContain("electrolyte");
@@ -128,7 +132,9 @@ describe("× takes a question's words out of the ledger at once (P5-04, S3)", ()
     mounted.unmount();
   });
 
-  it("a × inside a pending wait ends it: the settle is the × itself, the wait does not settle again", async () => {
+  // P7-13: the wait that this once ended is gone; what stays is that a × after leaving the box
+  // is the one settle, and nothing settles again later.
+  it("a × after leaving the box: the settle is the × itself, nothing settles again", async () => {
     useReadingQuestionsStore.getState().set(PAPER, [A, B], false, AT);
     settleQuestions(PAPER);
     const { remove, leave, mounted } = await field();
@@ -136,7 +142,7 @@ describe("× takes a question's words out of the ledger at once (P5-04, S3)", ()
     const writes = ledgerWrites();
     (remove(2).props.onClick as () => void)();
     expect(terms()).not.toContain("electrolyte");
-    await sleep(IDLE * 4);
+    await sleep(WAIT);
     expect(writes.count()).toBe(1);
     writes.stop();
     mounted.unmount();
@@ -174,17 +180,21 @@ describe("× takes a question's words out of the ledger at once (P5-04, S3)", ()
   });
 });
 
-describe("clearing the text with the keyboard still takes the words out when the box is left", () => {
-  it("the line keeps focus, so leaving it is a blur: one write after the wait, none before", async () => {
+describe("clearing the text with the keyboard takes the words out when the reader submits (P7-13)", () => {
+  it("one write on Submit, none before — and none from leaving the box, which settles nothing", async () => {
     useReadingQuestionsStore.getState().set(PAPER, [A], false, AT);
     settleQuestions(PAPER);
-    const { inputs, leave, mounted } = await field();
+    const { inputs, leave, submit, mounted } = await field();
     const writes = ledgerWrites();
 
     (inputs[0].props.onChange as (e: unknown) => void)({ target: { value: "" } });
     expect(terms().length).toBeGreaterThan(0);
     leave();
-    await sleep(IDLE * 4);
+    await sleep(WAIT);
+    expect(terms().length).toBeGreaterThan(0);
+    expect(writes.count()).toBe(0);
+
+    submit();
 
     expect(terms()).toEqual([]);
     expect(writes.count()).toBe(1);

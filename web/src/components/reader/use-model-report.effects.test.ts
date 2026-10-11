@@ -409,11 +409,17 @@ describe("useModelReport with effects running — one report request across two 
 
   // P3-05 (§1h.8 (2); A's P3-04 F2): "nothing is sent from the unloading page"
   // (§1g.21 (6)) was pinned only on the question box's `pagehide` handler, which
-  // calls no `fetch`. The questions it settles re-key this hook, whose request
+  // calls no `fetch`. The questions it settled re-keyed this hook, whose request
   // effect then fetched from the dying page (two calls in 6 of 6 measured runs).
   // The hook now waits out an unloading page: `pagehide` sets it, `pageshow` (a
   // back/forward-cache restore) clears it, and the one request for the current key
   // goes out when it clears, the settled questions on it.
+  // P7-13 (R11c): the box no longer settles on `pagehide` (a set is sent only by
+  // Submit, Enter on an empty last line, a × or a tick), but the hook's guard is the
+  // hook's own and stays: a set that settles as the page unloads — a tick, a ×, a
+  // Submit pressed in the last moment — is still not sent from the dying page. These
+  // tests drive the hook with a settled set that changes while the page is hidden,
+  // whatever settled it.
   describe("nothing is sent from an unloading page (P3-05, §1g.21 (6))", () => {
     const FIRST = "synthetic first question";
     const SECOND = "synthetic second question";
@@ -461,7 +467,7 @@ describe("useModelReport with effects running — one report request across two 
         () => seen.push(net.streamCalls.length), // the open, finished
         () => page.fire("pagehide"),
         () => {
-          questions = [FIRST, SECOND]; // the box settles on pagehide: the hook is re-keyed
+          questions = [FIRST, SECOND]; // a settle lands as the page hides (a tick, a ×, Submit): the hook is re-keyed
         },
         { wait: 40 },
         () => seen.push(net.streamCalls.length), // nothing from the dying page

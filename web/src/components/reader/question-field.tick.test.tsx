@@ -25,6 +25,7 @@ import { defaultProfile } from "@/types";
 import { questionTermsOf } from "@/lib/preferences/ledger";
 import { useProfileStore } from "@/store/profile";
 import { useReadingQuestionsStore } from "@/store/reading-questions";
+import { ASK } from "./copy";
 import { QuestionField, settleQuestions } from "./question-field";
 
 const PAPER = "openalex:W616";
@@ -51,6 +52,8 @@ interface View {
   section: ReactElement<Props>;
   inputs: ReactElement<Props>[];
   boxes: ReactElement<Props>[];
+  /** The Submit button of this render. */
+  submit: ReactElement<Props> | undefined;
 }
 type Step = (view: View) => void;
 
@@ -58,8 +61,10 @@ const tick = (index: number, on = true): Step => ({ boxes }) =>
   (boxes[index].props.onChange as (e: unknown) => void)({ target: { checked: on } });
 const edit = (index: number, value: string): Step => ({ inputs }) =>
   (inputs[index].props.onChange as (e: unknown) => void)({ target: { value } });
+// P7-13 (R11c): the box settles when the reader presses Submit; leaving it settles nothing.
 const leave: Step = ({ section }) =>
   (section.props.onBlur as (e: unknown) => void)({ currentTarget: { contains: () => false }, relatedTarget: null });
+const submit: Step = ({ submit: button }) => (button!.props.onClick as () => void)();
 const wait = (ms: number): Step => {
   let until = 0;
   return () => {
@@ -71,16 +76,17 @@ const wait = (ms: number): Step => {
 class Wait extends Error {}
 
 /** One page open: the field, and a reader who does one thing per render round. */
-async function session(script: Step[], idleMs = 1500) {
+async function session(script: Step[]) {
   const queued = [...script];
   const latest: { view: View | null } = { view: null };
   const opened = await hookRuntime.mount(
     () => {
-      const all = elements(QuestionField({ paperId: PAPER, examples: [], idleMs }));
+      const all = elements(QuestionField({ paperId: PAPER, examples: [] }));
       latest.view = {
         section: all.find((el) => el.type === "section")!,
         inputs: all.filter((el) => "data-ask-line" in el.props),
         boxes: all.filter((el) => el.type === "input" && el.props.type === "checkbox"),
+        submit: all.find((el) => el.type === "button" && el.props.children === ASK.submit),
       };
       const [round, setRound] = useState(0);
       useEffect(() => {
@@ -210,12 +216,13 @@ describe("the two-list rule and the untick stand", () => {
       edit(1, B2),
       leave,
       wait(60),
+      submit,
       check(() => {
         expect(holds(ONLY_B)).toEqual([]);
         expect(holds(ONLY_B2)).toEqual([]);
         expect(holds(ONLY_A)).toHaveLength(ONLY_A.length);
       }),
-    ], 15);
+    ]);
   });
 
   it("an untick lets the words in when the questions next settle, never the old text of an edited question", async () => {
@@ -231,12 +238,18 @@ describe("the two-list rule and the untick stand", () => {
         expect(holds(ONLY_B)).toEqual([]);
         expect(holds(ONLY_B2)).toEqual([]);
       }),
+      // Leaving the box lets nothing in, however long the reader stays away; Submit does.
       leave,
       wait(60),
+      check(() => {
+        expect(holds(ONLY_B2)).toEqual([]);
+        expect(holds(ONLY_B)).toEqual([]);
+      }),
+      submit,
       check(() => {
         expect(holds(ONLY_B2)).toHaveLength(ONLY_B2.length);
         expect(holds(ONLY_B)).toEqual([]);
       }),
-    ], 15);
+    ]);
   });
 });

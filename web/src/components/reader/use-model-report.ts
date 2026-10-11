@@ -288,9 +288,10 @@ export function useModelReport({
   useEffect(() => () => flight.current?.controller.abort(), []);
 
   // P3-05 (§1h.8 (2); A's P3-04 F2; the invariant of §1g.21 (6)): nothing is sent
-  // from an unloading page. The question box settles its questions on `pagehide`,
-  // which re-keys this hook, and the request effect below used to fetch for the new
-  // key from the dying page (the browser cancels it; a request that does reach the
+  // from an unloading page. The question box used to settle its questions on `pagehide`
+  // (P7-13 took that away; a tick, a × or a Submit pressed as the page hides still
+  // settle), which re-keys this hook, and the request effect below used to fetch for
+  // the new key from the dying page (the browser cancels it; a request that does reach the
   // server runs on the reader's key and is answered into nowhere, and the next open asks again). So
   // `pagehide` marks the page as unloading and `pageshow` — a back/forward-cache
   // restore — clears it; while it is set the effect withholds the request, and when

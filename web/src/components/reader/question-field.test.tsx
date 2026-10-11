@@ -3,7 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it } from "vitest";
 import { buildReading } from "@/lib/papers/reading";
 import type { ExtractedDocument } from "@/lib/papers/html-text";
-import type { Paper } from "@/types";
+import { defaultProfile, type Paper } from "@/types";
+import { useProfileStore } from "@/store/profile";
 import { MAX_QUESTION_CHARS, useReadingQuestionsStore } from "@/store/reading-questions";
 import zenodoDocJson from "@/lib/papers/__fixtures__/zenodo-W7208807247.doc.json";
 import { ASK, ROUTE } from "./copy";
@@ -194,6 +195,63 @@ describe("QuestionField — the line is a growing textarea (P7-13, R11a)", () =>
     expect(first).toContain(`placeholder="${ASK.placeholder}"`);
     expect(second).not.toContain("placeholder=");
     expect(second).toContain(`aria-label="${ASK.line(2)}"`);
+  });
+});
+
+// P7-13 (R11c, the owner's R11; §1h.29 Q8): a Submit button settles the questions. Below the
+// lines and right-aligned (full width on a phone), in the label face; disabled when there is
+// nothing new to send; shown with no key too — it settles the ledger; and not in the quiet box
+// (no question, nothing focused), which stays one label and one line.
+describe("QuestionField — the Submit button (P7-13, R11c)", () => {
+  const AT = "2026-10-05T00:00:00.000Z";
+  const button = (html: string) => /<button[^>]*>Submit<\/button>/.exec(html)?.[0];
+  beforeEach(() => {
+    useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null });
+    useProfileStore.setState({ profile: { ...defaultProfile } });
+  });
+
+  it("is not in the quiet box: no question, nothing focused", () => {
+    expect(render()).not.toContain(ASK.submit);
+  });
+
+  it("shows under the lines of a question, before the hint and the chips, in the label face", () => {
+    useReadingQuestionsStore.getState().set(PAPER, ["How does LCO degrade?"], false, AT);
+    const html = render();
+
+    expect(button(html)).toBeDefined();
+    expect(html.indexOf(">Submit</button>")).toBeGreaterThan(html.indexOf("</ol>"));
+    expect(html.indexOf(">Submit</button>")).toBeLessThan(html.indexOf(ASK.hint));
+    expect(button(html)).toMatch(/class="[^"]*\bannotation\b/);
+    expect(button(html)).toContain('type="button"');
+  });
+
+  it("is full width on a phone and right-aligned from the sm breakpoint", () => {
+    useReadingQuestionsStore.getState().set(PAPER, ["How does LCO degrade?"], false, AT);
+    const html = render();
+
+    expect(button(html)).toMatch(/class="[^"]*\bw-full\b[^"]*\bsm:w-auto\b|class="[^"]*\bsm:w-auto\b[^"]*\bw-full\b/);
+    expect(html).toMatch(/<div class="[^"]*\bsm:justify-end\b[^"]*">\s*<button[^>]*>Submit<\/button>/);
+  });
+
+  it("is enabled while the typed questions are not the settled ones", () => {
+    useReadingQuestionsStore.getState().set(PAPER, ["How does LCO degrade?"], false, AT);
+
+    expect(button(render())).not.toContain('disabled=""');
+  });
+
+  it("is disabled when the cleaned items equal the settled set", () => {
+    useReadingQuestionsStore.getState().set(PAPER, ["How does LCO degrade?"], false, AT);
+    useReadingQuestionsStore.getState().settle(PAPER);
+
+    expect(button(render())).toContain('disabled=""');
+  });
+
+  it("shows with no key: it settles the ledger, which needs none", () => {
+    useReadingQuestionsStore.getState().set(PAPER, ["How does LCO degrade?"], false, AT);
+    const profile = useProfileStore.getState().profile;
+    expect(profile.feedAiApiKey ?? "").toBe("");
+
+    expect(button(render())).toBeDefined();
   });
 });
 

@@ -17,3 +17,18 @@ describe("ASK.counter — the count a long question shows", () => {
     expect(MAX_QUESTION_CHARS).toBe(500);
   });
 });
+
+// P7-13 (R11c, the owner's R11): the button that sends the questions. One word, in the
+// label face (the call site's `annotation` class), sentence case; Peer's other buttons in
+// the box say what they do the same way.
+describe("ASK.submit — the button that sends the questions", () => {
+  it("is Submit", () => {
+    expect(ASK.submit).toBe("Submit");
+  });
+
+  it("is sentence case, with no allowance, quota or plan, and no 'skip' or 'don't read'", () => {
+    expect(ASK.submit).not.toMatch(/^[A-Z ]+$/);
+    expect(ASK.submit).not.toMatch(/\ballowance\b|\bquota\b|\bused up\b|\bplan\b|\bupgrade\b|\bcredit/i);
+    expect(ASK.submit).not.toMatch(/\bskip\b|don.t read/i);
+  });
+});
