@@ -524,13 +524,15 @@ html[data-mode="dark"] {
    grid wrapper must keep it.
 
    A panel pinned by its top has no way to show what is below the window, so
-   the panel is the window's height at most, and the one block that can give —
-   "Terms to know", a flex item that may shrink (reader-layout.tsx) — takes
-   what the plate, the title, the commands and the tabs leave and scrolls
-   inside itself; only when those alone are taller than the window (a short
-   window, a tall plate) does the panel scroll, with a thin bar. The 6px of
-   side padding, taken back by the negative margin, is the room the focus ring
-   (2px + 3px offset) needs inside the scroll port; it moves nothing.
+   the panel is the window's height at most, and it scrolls as one (P9-04,
+   X2): nothing inside it scrolls on its own. "Terms to know" used to be a
+   flex item that shrank to a 112px window and scrolled inside itself (one of
+   eight terms in view, a scroll region inside the panel's own); it is an
+   ordinary block now, so when the blocks together are taller than the window
+   the panel scrolls, with a thin bar, and the last term is reached by
+   scrolling it. The 6px of side padding, taken back by the negative margin,
+   is the room the focus ring (2px + 3px offset) needs inside the scroll
+   port; it moves nothing.
 
    Ruling 19 (round 7, second pass): under Fit's whole-page `zoom`, a CSS
    length declared inside a zoomed ancestor is resolved in that ancestor's

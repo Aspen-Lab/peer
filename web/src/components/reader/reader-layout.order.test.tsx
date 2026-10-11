@@ -152,12 +152,19 @@ describe("ReaderLayout, the spread, a paper with a body (R10)", () => {
     expect(summary.chunk).toContain('data-mark="COMMON"');
   });
 
-  it("the terms stand in the one block of the panel that gives: a flex item that may shrink to a floor and scrolls inside itself", () => {
-    const wrapper = /<div class="([^"]*)"><i data-mark="TERMS">/.exec(html)?.[1] ?? "";
+  // P9-04 (X2): this test pinned the opposite — "the one block of the panel that gives", a flex item
+  // that shrank to a 7rem floor and scrolled inside itself, a 112-px window on one of eight terms inside
+  // the panel's own scroll region. The panel scrolls as one now; nothing the layout puts inside it does.
+  it("the terms stand in the panel as an ordinary block: nothing the layout adds inside the panel scrolls, shrinks or has a floor (P9-04, X2)", () => {
+    const panel = html.slice(html.indexOf("data-reader-panel"), columnAt);
+    const inside = panel.slice(panel.indexOf(">") + 1);
 
-    expect(wrapper.split(" ")).toEqual(expect.arrayContaining(["xl:shrink", "xl:overflow-y-auto", "xl:overflow-x-hidden", "xl:min-h-[7rem]"]));
-    // One column has no panel to give in: the terms are drawn as they are.
-    expect(tabbed(false)).not.toMatch(/<div class="[^"]*xl:shrink[^"]*"><i data-mark="TERMS">/);
+    expect(inside).toContain('data-mark="TERMS"');
+    // The panel's own tag carries `reader-panel` (sticky, window-high, overflow-y: auto); no other tag in it
+    // has a class that scrolls (`overflow-*`), gives (`shrink`) or keeps a floor (`min-h-*`, `max-h-*`).
+    expect(inside).not.toMatch(/class="[^"]*(?:overflow|shrink|min-h-|max-h-)[^"]*"/);
+    // One column has no panel to give in either: the terms are drawn as they are.
+    expect(tabbed(false)).not.toMatch(/class="[^"]*(?:overflow|shrink|min-h-)[^"]*"><i data-mark="TERMS">/);
   });
 
   it("an empty words slot (Paper digestion) leaves the additions where they were in the tabpanel", () => {
@@ -201,6 +208,14 @@ describe("reader-layout.tsx source (P7-14)", () => {
     const commonLine = source.slice(source.indexOf("const common = p.common ?"), source.indexOf(";", source.indexOf("const common = p.common ?")));
     expect(commonLine).not.toContain("p.tab");
     expect(commonLine).not.toContain("tabbed");
+  });
+
+  // P9-04 (X2): "Terms to know" lost its window of its own; the panel (`reader-panel`, globals.css) is the one
+  // scroll region, so the file names no class that would make a block inside it scroll, shrink or keep a floor.
+  it("gives the terms no window of their own: no wrapper class that scrolls, shrinks or keeps a floor (P9-04)", () => {
+    expect(source).not.toContain("TERMS_PANEL_CLASS");
+    expect(source).not.toMatch(/xl:(?:shrink|overflow-)|min-h-\[|max-h-\[/);
+    expect(spread.slice(spread.indexOf("{p.terms}") - 40, spread.indexOf("{p.terms}"))).not.toContain("<div");
   });
 
   it("has no rail slot, no ask slot, no panel-height variable and no ResizeObserver", () => {

@@ -22,6 +22,12 @@
 // the panel, outside it, in both layouts — it never reads the tab, so a
 // switch cannot remount the question field or lose what the reader typed.
 //
+// P9-04 (X2): the panel scrolls as one. "Terms to know" used to be the one block of the panel that
+// gave when the window was short — a flex item that shrank to a 7rem floor and scrolled inside itself,
+// so a reader on a 1440 x 1000 window saw one of eight terms in a 112-px window nested in the panel's
+// own scroll region. It is an ordinary block now: the panel, bounded by the window in `reader-panel`
+// (globals.css), is the one scroll region, and nothing inside it scrolls on its own.
+//
 // The structure is chosen in JS rather than with `display: contents` and
 // `order`, so what a screen reader announces is what the page shows. Crossing
 // 80rem remounts the blocks (the authors toggle resets); a window resize
@@ -35,10 +41,6 @@ import type { ReaderTab } from "./use-reader-tab";
 
 /** The id of the wrapper that holds the blocks both tabs share. */
 export const COMMON_ID = "reader-common";
-
-/** "Terms to know" in the spread's panel: a flex item that may shrink (to a floor) and
- *  scrolls inside itself, so a panel pinned by its top never has the strip below the window. */
-const TERMS_PANEL_CLASS = "xl:min-h-[7rem] xl:shrink xl:overflow-y-auto xl:overflow-x-hidden";
 
 interface ReaderLayoutProps {
   /** From `useSpread()`; the page owns it so its own effects can depend on it. */
@@ -208,9 +210,9 @@ export function ReaderLayout(p: ReaderLayoutProps) {
         {p.title}
         {p.decision}
         {p.tabs}
-        {/* The one block of the panel that gives when the window is short: it may shrink to
-            a few lines and scrolls inside itself (`reader-panel`, globals.css). */}
-        {p.terms && <div className={TERMS_PANEL_CLASS}>{p.terms}</div>}
+        {/* P9-04 (X2): the terms are an ordinary block. The panel scrolls as one
+            (`reader-panel`, globals.css); nothing inside it scrolls on its own. */}
+        {p.terms}
       </div>
       <div className={COLUMN_CLASS}>
         {common}
