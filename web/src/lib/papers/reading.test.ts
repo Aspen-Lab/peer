@@ -1,4 +1,5 @@
 import { placeFigures, pdfFigureUrl } from "./reading";
+import { buildOutline } from "./pdf-outline";
 import { blockMarker } from "@/lib/text/math";
 import { describe, expect, it } from "vitest";
 import type { Paper } from "@/types";
@@ -886,6 +887,42 @@ describe("placeFigures", () => {
     expect(placed[0].figures?.[0].imageUrl).toBeUndefined();
     expect(placeFigures([section("A", "Figure 1 is here.")], [cap(1, { page: 2 })], { paperId: "openalex:W1" })[0].figures?.[0].imageUrl)
       .toBe(pdfFigureUrl("openalex:W1", 2));
+  });
+
+  // P9-09 (cluster E): a figure set in the middle of a column used to cut, by its own height, the
+  // sentence that names it, and was filed after the first half. With the sentence whole the rule
+  // above ("after the paragraph that first names it") files it after the whole paragraph.
+  it("files a figure after the whole sentence that names it, not after the half its own gap used to leave (P9-09)", () => {
+    const run = (str: string, y: number, at: { fontName?: string; height?: number } = {}) => ({
+      str, height: 10, width: str.length * 4.6, fontName: "body", x: 100, y, ...at,
+    });
+    const filler = "Quillwort cathodes were annealed in air before every measurement was taken.";
+    const outline = buildOutline([
+      {
+        page: 1,
+        items: [
+          run("A Paper About Cathodes", 760, { height: 17 }),
+          run("1 Methods", 740),
+          run(filler, 726),
+          run(filler, 714),
+          run("An examination of the texture (Figure 1, expanded view of Figure", 702),
+          run("Figure 1: Texture through the thickness of the film.", 420, { fontName: "caption", height: 9 }),
+          run("2C(iii)) shows that the first region is random with small crystals.", 380),
+          run(filler, 368),
+          run(filler, 356),
+        ],
+      },
+    ]);
+    const paragraphs = (outline.sections?.[0].text ?? "").split("\n\n");
+    const captions = (outline.figureCaptions ?? []).map((c, i) => ({
+      ordinal: c.ordinal ?? i,
+      label: c.label ?? "",
+      caption: c.caption ?? "",
+      ...(typeof c.page === "number" ? { page: c.page } : {}),
+    }));
+    const placed = placeFigures([section("Methods", ...paragraphs)], captions, null);
+    const after = placed[0].figures?.[0].after ?? -1;
+    expect(paragraphs[after]).toContain("Figure 2C(iii)) shows that the first region is random with small crystals.");
   });
 
   it("places each figure once, and leaves a section without figures untouched", () => {

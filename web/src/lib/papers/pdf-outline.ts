@@ -871,6 +871,11 @@ function foldLines(parts: readonly string[], vocab: Vocabulary): string {
   return folded;
 }
 
+/** A sentence ends at one of these, and a closing quote or bracket after it still ends it. */
+const SENTENCE_END = /[.!?:;]["')\]”’]*$/;
+/** A gap this many line pitches high is a float's, not a paragraph's (a real paragraph gap is 1.5-2). */
+const FLOAT_GAP_PITCHES = 3;
+
 export interface JoinOptions {
   /** The document's own words; found from `lines` when the caller has no more than these. */
   vocab?: Vocabulary;
@@ -908,9 +913,13 @@ export function joinProse(lines: readonly PdfLine[], options: JoinOptions = {}):
     }
     const samePage = previous?.page === line.page;
     const gap = previous && samePage ? previous.y - line.y : 0;
-    const breaks =
-      previous !== null &&
-      ((pitch > 0 && samePage && gap > pitch * 1.6) || (samePage && line.x > left + 6) || previous?.block === true);
+    const bigGap = pitch > 0 && samePage && gap > pitch * 1.6;
+    // P9-09 (cluster E): a gap of more than three pitches is a float the page left in the column (a
+    // figure, a table, a box), not a paragraph, while the sentence above it is unfinished and the
+    // line below goes on in lower case, a digit or a bracket. A capital after it still breaks.
+    const floatGap =
+      bigGap && gap > pitch * FLOAT_GAP_PITCHES && current.trim() !== "" && !SENTENCE_END.test(current.trim()) && /^[\p{Ll}\p{N}([]/u.test(line.text);
+    const breaks = previous !== null && ((bigGap && !floatGap) || (samePage && line.x > left + 6) || previous?.block === true);
     if (breaks && current.trim()) {
       paragraphs.push(current.trim());
       current = "";

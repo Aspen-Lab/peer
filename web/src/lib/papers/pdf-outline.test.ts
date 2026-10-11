@@ -276,6 +276,78 @@ describe("a line cut at a slash, a double bar, a minus or a digit-dash joins wit
   });
 });
 
+// ── P9-09 (cluster E): a float's gap is not a paragraph break inside a sentence ───────────────────────
+//
+// The caption of a figure set in the middle of a column cuts nothing: it is taken out of the flow. What
+// cuts the sentence is the figure's own height, a gap of dozens of line pitches that the paragraph rule
+// read as a paragraph break; the figure was then filed after the first half, the one that names it.
+// A gap of more than three pitches is a float, not a paragraph, while the sentence above is unfinished
+// and the line below it goes on in lower case, a digit or a bracket. A capital still breaks.
+describe("a float's gap inside an unfinished sentence is not a paragraph break (P9-09, cluster E)", () => {
+  const flow = (texts: string[], y0: number, step = 12): PdfLine[] => texts.map((text, i) => line(text, { y: y0 - i * step }));
+  const sentenceCut = (after: string, gap = 300) => [
+    ...flow(["A closer look at the texture along the growth direction in the", "important film (Figure 5, expanded view of Figure"], 700),
+    ...flow([after, "is random with small crystals."], 676 - gap),
+  ];
+
+  it("keeps the sentence whole across a gap of many pitches", () => {
+    const paragraphs = joinProse(sentenceCut("4C(iii)) reveals that the orientation of the first region")).split("\n\n");
+    expect(paragraphs).toHaveLength(1);
+    expect(paragraphs[0]).toContain("expanded view of Figure 4C(iii)) reveals");
+  });
+
+  it("goes on across the gap at a lower-case letter, a digit or a bracket, and not at a capital", () => {
+    expect(joinProse(sentenceCut("and the orientation of the first region")).split("\n\n")).toHaveLength(1);
+    expect(joinProse(sentenceCut("(iii)) reveals the orientation of the first region")).split("\n\n")).toHaveLength(1);
+    expect(joinProse(sentenceCut("Raman maps then show that the first region")).split("\n\n")).toHaveLength(2);
+  });
+
+  it("still breaks after a finished sentence", () => {
+    const lines = [
+      ...flow(["A closer look at the texture along the growth direction.", "It is shown in Figure 5."], 700),
+      ...flow(["The orientation of the first region", "is random with small crystals."], 376),
+    ];
+    expect(joinProse(lines).split("\n\n")).toHaveLength(2);
+    // A closing quote or bracket after the full stop is still a finished sentence.
+    const quoted = [
+      ...flow(["A closer look at the texture along the growth direction.", "It is shown in the film (see Figure 5.)"], 700),
+      ...flow(["the orientation of the first region", "is random with small crystals."], 376),
+    ];
+    expect(joinProse(quoted).split("\n\n")).toHaveLength(2);
+  });
+
+  it("still breaks at an ordinary paragraph gap, two pitches, even when the line above has no full stop", () => {
+    const lines = [
+      ...flow(["The shares were weighed before each run of the", "annealing schedule described here"], 700),
+      ...flow(["particle size was logged for every pellet", "that went into the furnace."], 664),
+    ];
+    expect(joinProse(lines).split("\n\n")).toHaveLength(2);
+  });
+
+  it("end to end: a caption set in the column does not cut the paragraph, and stays in the figure pool", () => {
+    const outline = buildOutline([
+      {
+        page: 1,
+        items: [
+          item("A Paper About Cathodes", { height: 17, y: 760 }),
+          item("1 Methods", { y: 740 }),
+          item("Quillwort cathodes were annealed in air before every measurement was taken.", { y: 726 }),
+          item("Quillwort cathodes were annealed in air before every measurement was taken.", { y: 714 }),
+          item("An examination of the texture (Figure 1, expanded view of Figure", { y: 702 }),
+          item("Figure 1: Texture through the thickness of the film.", { y: 420, fontName: "caption", height: 9 }),
+          item("2C(iii)) shows that the first region is random with small crystals.", { y: 380 }),
+          item("Quillwort cathodes were annealed in air before every measurement was taken.", { y: 368 }),
+          item("Quillwort cathodes were annealed in air before every measurement was taken.", { y: 356 }),
+        ],
+      },
+    ]);
+    const paragraphs = (outline.sections?.[0].text ?? "").split("\n\n");
+    expect(outline.figureCaptions).toHaveLength(1);
+    expect(paragraphs.filter((p) => p.includes("expanded view of Figure"))).toHaveLength(1);
+    expect(paragraphs.find((p) => p.includes("expanded view of Figure"))).toContain("Figure 2C(iii)) shows that");
+  });
+});
+
 describe("the whole reading", () => {
   const page = (n: number, rows: [string, Partial<PdfTextItem>?][]): PdfPageText => ({
     page: n,
