@@ -131,3 +131,35 @@ describe("cleanDisplayText — scripts, ligatures, spaces and ½ (P9-10, G's gat
     expect(cleanDisplayText("Wait&hellip; what")).toBe("Wait... what");
   });
 });
+
+// P9-10, cluster H's second site (B P9-01 §6.1, B P9-02 §5 item 3; BACKLOG-19):
+// a capital and a digit a PDF spaced apart join only inside a formula word.
+describe("cleanDisplayText — the capital-and-digit join (P9-10, H; BACKLOG-19)", () => {
+  it("joins the tail of a formula word: CO 2 -> CO2", () => {
+    expect(cleanDisplayText("the CO 2 reduction")).toBe("the CO2 reduction");
+    expect(cleanDisplayText("emits CO 2.")).toBe("emits CO2.");
+    expect(cleanDisplayText("NH 3, SO 2 and NO 2")).toBe("NH3, SO2 and NO2");
+  });
+
+  it("keeps a stand-alone capital's space: A 3D", () => {
+    expect(cleanDisplayText("A 3D instantaneous view")).toBe("A 3D instantaneous view");
+    expect(cleanDisplayText("shows A 3D map")).toBe("shows A 3D map");
+  });
+
+  it("keeps a stand-alone capital's space before a decimal: A 0.25 mm", () => {
+    expect(cleanDisplayText("A 0.25 mm diameter wire")).toBe("A 0.25 mm diameter wire");
+  });
+
+  it("keeps a figure label apart: Figure S 1", () => {
+    expect(cleanDisplayText("see Figure S 1 and Table S 2")).toBe("see Figure S 1 and Table S 2");
+  });
+
+  it("keeps a type or class letter apart: Type A 2.5 mm", () => {
+    expect(cleanDisplayText("a Type A 2.5 mm cell")).toBe("a Type A 2.5 mm cell");
+  });
+
+  it("does not read WAS 0.4 as a formula, BACKLOG-19", () => {
+    expect(cleanDisplayText("WAS 0.4")).toBe("WAS 0.4");
+    expect(cleanDisplayText("the WAS 0.4 value, then WAS 0,4")).toBe("the WAS 0.4 value, then WAS 0,4");
+  });
+});

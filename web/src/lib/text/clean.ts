@@ -199,7 +199,12 @@ function repairCommonMojibake(text: string): string {
 function normalizeChemistryAndOperators(text: string): string {
   return text
     .replace(/\b([A-Z][a-z]?)\s+([a-z](?=[A-Z]))/g, "$1$2")
-    .replace(/([A-Z])\s+(\d)(?=\b|[A-Z),.:;])/g, "$1$2")
+    // The tail of a formula word that a PDF's script glyphs spaced out
+    // ("CO 2" -> "CO2"). P9-10 (cluster H; BACKLOG-19): it joins only when the
+    // capital follows a letter, so a stand-alone capital keeps its space
+    // ("A 3D", "A 0.25 mm", "Figure S 1", "Type A 2.5 mm"), and never when the
+    // digit opens a decimal ("WAS 0.4" is not the formula WAS0.4).
+    .replace(/(?<=[A-Za-z])([A-Z])\s+(\d)(?![.,]\d)(?=\b|[A-Z),.:;])/g, "$1$2")
     .replace(/\s*([<>]=?|=)\s*/g, " $1 ")
     .replace(/\s+([,.;:!?])/g, "$1")
     .replace(/([([{])\s+/g, "$1")
