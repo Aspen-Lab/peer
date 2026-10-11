@@ -29,6 +29,18 @@ describe("questionTerms", () => {
     expect(names([VAGUE])).toEqual(specificTerms(VAGUE));
   });
 
+  // P9-05 (X12): `questionTerms` calls `specificTerms`, so a function word is no more a ledger term
+  // than it is a tint's term — the same narrowing, one list.
+  it("leaves the function words out of the ledger as it leaves them out of the tints (P9-05, X12)", () => {
+    const question = "How does the film change after 80 cycles?";
+
+    expect(names([question])).toEqual(["film", "change", "cycles"]);
+    expect(names([question])).toEqual(specificTerms(question));
+    for (const word of ["after", "before", "during", "between", "within", "through", "across", "against", "among", "without", "also", "only", "very", "more", "most", "less", "than", "then", "when", "where", "while", "however", "therefore", "which", "whose"]) {
+      expect(names([`film ${word} cycles`]), word).toEqual(["film", "cycles"]);
+    }
+  });
+
   it("is lower case, one word each, and never carries the question's text", () => {
     const terms = names([GRAIN]);
     for (const term of terms) {

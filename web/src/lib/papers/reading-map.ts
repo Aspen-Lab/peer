@@ -327,16 +327,66 @@ const ROUTE_STOPLIST: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * `tokenize`'s own stoplist, copied: `lib/scoring/tokenize.ts` keeps `STOPWORDS` module-private
+ * and `lib/scoring/` is not modified here (P9-05). It is already gone from every token
+ * `specificTerms` sees; it is listed so `FUNCTION_WORDS` is a superset of it by construction, and
+ * `reading-map.test.ts` fails the day the source list gains a word this copy lacks.
+ */
+const TOKENIZE_STOPWORDS: readonly string[] = [
+  "the", "a", "an", "of", "is", "are", "was", "were", "be", "been", "being",
+  "and", "or", "but", "for", "nor", "so", "yet", "to", "from", "in", "on",
+  "at", "by", "with", "as", "into", "onto", "upon", "over", "under",
+  "this", "that", "these", "those", "it", "its", "their", "there",
+  "we", "our", "you", "your", "they", "them", "he", "she", "him", "her",
+  "have", "has", "had", "do", "does", "did", "can", "could", "may", "might",
+  "shall", "should", "will", "would", "must", "not", "no",
+  "paper", "study", "work", "propose", "show", "present", "using", "based",
+];
+
+/**
+ * P9-05 (X12): the function words a question holds, `tokenize`'s list lacking most of them. A tint's fact counts a term in the
+ * body ("mentions film ×7, after ×2, change ×1"), and a preposition or an adverb counted there
+ * says nothing about what the reader asked. A function word is never a term:
+ * - prepositions: "after", "before", "during", "between", "within", "through", "across",
+ *   "against", "among", "without" ("under" is in `tokenize`'s list);
+ * - auxiliaries: "does", "did", "could", "would", "should", "might", "must" (all in
+ *   `tokenize`'s list; named so the rule reads whole);
+ * - determiners and pronouns: "which", "what", "whose" ("these", "those", "their", "there" are
+ *   in `tokenize`'s list);
+ * - adverbs and connectives: "also", "only", "very", "more", "most", "less", "than", "then",
+ *   "when", "where", "while", "however", "therefore".
+ * A content word stays, "change" included: a verb a reader asks about is a term.
+ */
+const FUNCTION_WORDS_BEYOND_TOKENIZE: readonly string[] = [
+  "after", "before", "during", "between", "within", "through", "across", "against", "among", "without",
+  "does", "did", "could", "would", "should", "might", "must",
+  "these", "those", "their", "there", "which", "what", "whose",
+  "also", "only", "very", "more", "most", "less", "than", "then", "when", "where", "while", "however", "therefore",
+];
+
+/** Compared on the canonical form, like `ROUTE_STOPLIST`. */
+export const FUNCTION_WORDS: ReadonlySet<string> = new Set([...TOKENIZE_STOPWORDS, ...FUNCTION_WORDS_BEYOND_TOKENIZE]);
+
+/**
  * §1f.6: the question's tokens (`tokenize`: lower-cased, stopwords and short
- * tokens already gone), one per canonical form, without the generic ones and
- * without `ROUTE_STOPLIST` (P1-02b). Each is kept as the reader typed it.
+ * tokens already gone), one per canonical form, without the generic ones, without
+ * `ROUTE_STOPLIST` (P1-02b) and without `FUNCTION_WORDS` (P9-05). Each is kept as the
+ * reader typed it.
  */
 export function specificTerms(question: string): string[] {
   const seen = new Set<string>();
   const terms: string[] = [];
   for (const token of tokenize(question)) {
     const canonical = canonicalize(token);
-    if (!canonical || seen.has(canonical) || isGenericTerm(token) || ROUTE_STOPLIST.has(canonical)) continue;
+    if (
+      !canonical ||
+      seen.has(canonical) ||
+      isGenericTerm(token) ||
+      ROUTE_STOPLIST.has(canonical) ||
+      FUNCTION_WORDS.has(canonical)
+    ) {
+      continue;
+    }
     seen.add(canonical);
     terms.push(token);
   }

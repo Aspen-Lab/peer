@@ -1,10 +1,13 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { Paper } from "@/types";
 import { blockMarker } from "@/lib/text/math";
 import { withSectionIds, type DraftSection, type ExtractedDocument } from "./html-text";
 import type { FullTextResult } from "./full-text";
 import { buildReading } from "./reading";
-import { buildReadingMap, gistRoute, openingOf, routeByQuestions, specificTerms, type ReadingMap } from "./reading-map";
+import { ROUTE } from "@/components/reader/copy";
+import { buildReadingMap, FUNCTION_WORDS, gistRoute, openingOf, routeByQuestions, specificTerms, type ReadingMap } from "./reading-map";
 import { isBoilerplate, splitSentences } from "./skim";
 import arxivHtmlDocJson from "./__fixtures__/arxiv-2609.02697.doc.json";
 import arxivPdfDocJson from "./__fixtures__/arxiv-2609.02113.doc.json";
@@ -599,6 +602,77 @@ describe("specificTerms — the example templates' words (P1-09b)", () => {
     expect(specificTerms("How does this relate to sulfide electrolytes?")).toEqual(["sulfide", "electrolytes"]);
     expect(specificTerms("What does it say about grain boundaries?")).toEqual(["grain", "boundaries"]);
     expect(specificTerms("Could I use impedance spectroscopy here?")).toEqual(["impedance", "spectroscopy"]);
+  });
+});
+
+// P9-05 (X12, the feature walk): a function word is never a term. The tints' facts read
+// "read · mentions film ×7, after ×2, change ×1" for "How does the film change after 80 cycles?":
+// `specificTerms` dropped only the generic words and `ROUTE_STOPLIST`, so a preposition ("after"),
+// an adverb ("also", "however") and the like became a term and was counted in the body. The
+// words are compared on the canonical form, against `FUNCTION_WORDS`; a content word stays,
+// "change" included — a verb a reader asks about is a term.
+describe("specificTerms — a function word is never a term (P9-05, X12)", () => {
+  const PREPOSITIONS = ["after", "before", "during", "between", "within", "under", "through", "across", "against", "among", "without"];
+  const AUXILIARIES = ["does", "did", "could", "would", "should", "might", "must"];
+  const DETERMINERS = ["these", "those", "their", "there", "which", "what", "whose"];
+  const ADVERBS = ["also", "only", "very", "more", "most", "less", "than", "then", "when", "where", "while", "however", "therefore"];
+
+  it("reads 'How does the film change after 80 cycles?' as film, change, cycles, in that order", () => {
+    const terms = specificTerms("How does the film change after 80 cycles?");
+
+    expect(terms).toEqual(["film", "change", "cycles"]);
+    for (const word of ["after", "does", "how"]) expect(terms).not.toContain(word);
+  });
+
+  it.each([
+    ["prepositions", PREPOSITIONS],
+    ["auxiliaries", AUXILIARIES],
+    ["determiners and pronouns", DETERMINERS],
+    ["adverbs", ADVERBS],
+  ])("drops every one of the %s, alone and between two content words", (_group, group) => {
+    for (const word of group) {
+      expect(specificTerms(word), word).toEqual([]);
+      expect(specificTerms(`film ${word} cycles`), word).toEqual(["film", "cycles"]);
+      // Compared on the canonical form: capitals and a trailing mark do not let one through.
+      expect(specificTerms(`film ${word.toUpperCase()}, cycles`), word).toEqual(["film", "cycles"]);
+    }
+    expect(specificTerms(group.join(" "))).toEqual([]);
+  });
+
+  it("keeps the content words of a question, the verb a reader asks about included", () => {
+    expect(specificTerms("change film cycles degrade increase")).toEqual(["change", "film", "cycles", "degrade", "increase"]);
+    for (const word of ["change", "film", "cycles", "degrade", "increase"]) expect(FUNCTION_WORDS.has(word), word).toBe(false);
+  });
+
+  it("is the union of tokenize's own stoplist and the words it lacks: every word tokenize drops is in FUNCTION_WORDS, and every listed word is", () => {
+    // `lib/scoring/tokenize.ts` does not export `STOPWORDS` and is not modified here, so the list is
+    // copied into `reading-map.ts`; this reads the source and fails the day the two lists drift.
+    const source = readFileSync(resolve(process.cwd(), "src/lib/scoring/tokenize.ts"), "utf8");
+    const body = /const STOPWORDS = new Set\(\[([\s\S]*?)\]\);/.exec(source)?.[1] ?? "";
+    const stopwords = [...body.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+
+    expect(stopwords.length).toBeGreaterThan(60);
+    for (const word of stopwords) expect(FUNCTION_WORDS.has(word), `tokenize's stopword ${word}`).toBe(true);
+    for (const word of [...PREPOSITIONS, ...AUXILIARIES, ...DETERMINERS, ...ADVERBS]) expect(FUNCTION_WORDS.has(word), word).toBe(true);
+  });
+
+  it("counts only the content words in the body: the tint's facts have no 'after'", () => {
+    const paperDoc = doc([
+      { canonical: "results", text: "The film thins after 80 cycles. The film change is small after the first cycles. After that the film holds." },
+    ]);
+    const result = route(paperDoc, ["How does the film change after 80 cycles?"]);
+    const section = result.byQuestion[0].sections.s0;
+
+    expect(result.byQuestion[0].vague).toBe(false);
+    expect(section.hits).toEqual([{ term: "film", count: 3 }, { term: "cycles", count: 2 }, { term: "change", count: 1 }]);
+    expect(ROUTE.mentions(section.hits)).toBe("mentions film ×3, cycles ×2, change ×1");
+    expect(ROUTE.mentions(section.hits)).not.toContain("after");
+  });
+
+  it("calls a question of function words only vague, and keeps the content words around them", () => {
+    expect(specificTerms("What happens after the cycles?")).toEqual(["happens", "cycles"]);
+    expect(specificTerms("Only after, however, and also within?")).toEqual([]);
+    expect(route(doc([{ text: "The film cracks after cycling." }]), ["Only after, however, and also within?"]).byQuestion[0].vague).toBe(true);
   });
 });
 
