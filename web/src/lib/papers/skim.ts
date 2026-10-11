@@ -123,6 +123,45 @@ export function splitSentences(text: string): string[] {
   return out;
 }
 
+/** The most an upload keeps of its abstract (`summaryIntro`), in characters. */
+export const ABSTRACT_LINE_MAX = 1_200;
+
+/**
+ * The abstract line an upload stores and the reading page sets as its
+ * abstract: the abstract's whole sentences, as many as fit in `max`
+ * characters, so it ends where a sentence ends — never inside a word or a
+ * number ("0.5": the splitter needs whitespace after the period, `Fig.` and
+ * `et al.` are not ends). An abstract that fits comes back as it is.
+ *
+ * P7-18 (F1): this was `text.slice(0, 400)`, and a 2,064-character abstract
+ * reached the page as two sentences, the second ending "…enabling study and co".
+ *
+ * A first sentence that is alone longer than `max` is cut at the last space
+ * that leaves room for an ellipsis, and says so with "…". (An unbroken token
+ * with no space in the window is cut at the window's edge; no abstract is one,
+ * but a garbled extraction can be.)
+ */
+export function abstractLine(text: string, max: number = ABSTRACT_LINE_MAX): string {
+  if (text.length <= max) return text;
+  const sentences = splitSentences(text);
+  let line = "";
+  for (const sentence of sentences) {
+    const next = line ? `${line} ${sentence}` : sentence;
+    if (next.length > max) break;
+    line = next;
+  }
+  if (line) return line;
+  // Room for the ellipsis: the window is one character short of `max`.
+  const first = sentences[0] ?? text;
+  const window = first.slice(0, max - 1);
+  const atWordEnd = /\s/.test(first.charAt(max - 1));
+  const kept = (atWordEnd ? window : window.replace(/\s+\S*$/, ""))
+    .replace(/[\s,;:]+$/, "")
+    // A cut that fell between the halves of a surrogate pair keeps neither.
+    .replace(/[\uD800-\uDBFF]$/, "");
+  return `${kept}…`;
+}
+
 /** Field-not-paper openers; exported so the reading never quotes one. */
 export function isBoilerplate(sentence: string): boolean {
   return BOILERPLATE.some((re) => re.test(sentence));

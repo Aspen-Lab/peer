@@ -247,7 +247,7 @@ const UPLOAD_TEXT =
 
 // §1h.12 (b), §1h.13 (c) (P4-02b, A's P4-02 §5): a saved upload is a saved paper, and its record goes to /api/saved.
 const UPLOAD_SAVED_TEXT =
-  "When you are signed in and save an uploaded paper, its record — its title, an excerpt of its abstract up to 400 characters, its keywords, its DOI, its page count and the link to its file — goes to Peer's server with your other saved papers, against your account; the paper's body text and any plain rewrite do not.";
+  "When you are signed in and save an uploaded paper, its record — its title, an excerpt of its abstract up to 1,200 characters, its keywords, its DOI, its page count and the link to its file — goes to Peer's server with your other saved papers, against your account; the paper's body text and any plain rewrite do not.";
 
 describe("/privacy — a saved upload's record (P4-02b, §1h.12 (b))", () => {
   const html = renderToStaticMarkup(createElement(PrivacyPage));
@@ -285,8 +285,10 @@ describe("/privacy — a saved upload's record (P4-02b, §1h.12 (b))", () => {
     expect(fn).toContain("pageCount: meta.pageCount,");
     expect(fn).toContain("linkPaper: `/api/papers/upload/${meta.hash16}/file`,");
     expect(fn).not.toMatch(/sections|fullText|body\b/);
-    // The excerpt is the abstract cut at 400 characters.
-    expect(read("src/app/api/papers/upload/route.ts")).toContain("summaryIntro: abstractSection ? abstractSection.text.slice(0, 400) : undefined,");
+    // The excerpt is the abstract's whole sentences up to 1,200 characters (P7-18, F1: it was the first
+    // 400, cut inside a word; the sentence above and the line below say the new number).
+    expect(read("src/app/api/papers/upload/route.ts")).toContain("summaryIntro: abstractSection ? abstractLine(abstractSection.text) : undefined,");
+    expect(read("src/lib/papers/skim.ts")).toContain("export const ABSTRACT_LINE_MAX = 1_200;");
   });
 
   it("leaves a plain rewrite out: the rewrite store is not read by the saving code", () => {

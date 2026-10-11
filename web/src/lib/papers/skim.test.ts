@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   QUANTITY_STRICT,
+  abstractLine,
   pickSkimMarks,
   pickSkimSentence,
   scoreSentence,
@@ -126,6 +127,61 @@ describe("splitSentences", () => {
       "We compare X-ray vs. cryo-EM maps.",
       "Then we stop.",
     ]);
+  });
+});
+
+// P7-18 (F1, §1h.39 a): the line an upload keeps of its abstract.
+describe("abstractLine", () => {
+  const parts = [
+    "Fig. 3 shows 0.5 mm of growth.",
+    "The films then crack.",
+    "As Smith et al. found, creep follows.",
+    "The end.",
+  ];
+  const text = parts.join(" ");
+
+  it("is the abstract itself when it fits, untouched", () => {
+    expect(abstractLine(text, 1_200)).toBe(text);
+    expect(abstractLine("", 1_200)).toBe("");
+    expect(abstractLine("x".repeat(500), 1_200)).toBe("x".repeat(500));
+    // Exactly at the limit still fits.
+    expect(abstractLine(text, text.length)).toBe(text);
+  });
+
+  it("keeps whole sentences up to the limit and stops on a sentence end", () => {
+    const two = `${parts[0]} ${parts[1]}`;
+    expect(abstractLine(text, two.length)).toBe(two);
+    expect(abstractLine(text, two.length + 5)).toBe(two);
+    // One character short of two sentences: the first alone.
+    expect(abstractLine(text, two.length - 1)).toBe(parts[0]);
+  });
+
+  it("does not take an abbreviation or a decimal for a sentence end", () => {
+    // 'et al.' is inside a sentence: with room for only 20 characters the first sentence is too long
+    // and is cut at a space with an ellipsis; "Smith et al." is not a line of its own.
+    const line = abstractLine("Smith et al. found creep. Another sentence here.", 20);
+    expect(line).toBe("Smith et al. found…");
+    expect(abstractLine("Fig. 3 shows 0.5 mm of growth. More.", 31)).toBe("Fig. 3 shows 0.5 mm of growth.");
+  });
+
+  it("cuts a first sentence that alone is too long at the last space, with an ellipsis", () => {
+    const long = `${"alpha beta gamma delta ".repeat(10).trim()}.`; // 230 characters
+    const line = abstractLine(long, 100);
+    expect(line.endsWith("…")).toBe(true);
+    expect(line.length).toBeLessThanOrEqual(100);
+    const kept = line.slice(0, -1);
+    expect(long.startsWith(kept)).toBe(true);
+    // The text goes on with a space: no word was cut; and none is left before the ellipsis.
+    expect(long.charAt(kept.length)).toBe(" ");
+    expect(kept.endsWith(" ")).toBe(false);
+  });
+
+  it("cuts exactly at the limit when the character after the cut is a space", () => {
+    expect(abstractLine("aaaa bbbb cccc dddd.", 15)).toBe("aaaa bbbb cccc…");
+  });
+
+  it("falls back to a hard cut with an ellipsis when the sentence is one unbroken token", () => {
+    expect(abstractLine("z".repeat(300), 100)).toBe(`${"z".repeat(99)}…`);
   });
 });
 

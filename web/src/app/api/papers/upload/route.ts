@@ -16,6 +16,7 @@ import { createHash } from "node:crypto";
 import { hostedUploadsEnabled, ownedUpload, PRIVATE_UPLOAD_HEADERS, sameOriginUploadRequest, UPLOAD_RIGHTS_VERSION, uploadOwner } from "@/lib/papers/upload-access";
 import { extractUploadConcepts, matchUploadedPaper, UPLOAD_CONCEPT_EXTRACTION_VERSION, type PaperMatchBand } from "@/lib/preferences/upload-concepts";
 import { extractPdfTextFromBytes } from "@/lib/papers/pdf-text";
+import { abstractLine } from "@/lib/papers/skim";
 import {
   attachUpload,
   attachedUploadHash,
@@ -293,7 +294,9 @@ async function handleUpload(req: Request, staged: StagedRef): Promise<Response> 
     title,
     doi,
     pageCount: doc?.pageCount,
-    summaryIntro: abstractSection ? abstractSection.text.slice(0, 400) : undefined,
+    // P7-18 (F1): the abstract's whole sentences, up to 1,200 characters — it was the first 400,
+    // cut inside a word.
+    summaryIntro: abstractSection ? abstractLine(abstractSection.text) : undefined,
     uploadedAt: new Date().toISOString(),
     // A2-02 (2-05): "empty" covers both a failed extraction (`doc` is
     // undefined) and a successful-but-textless one (`doc.sections` is a
