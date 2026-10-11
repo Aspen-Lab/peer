@@ -163,3 +163,25 @@ describe("cleanDisplayText — the capital-and-digit join (P9-10, H; BACKLOG-19)
     expect(cleanDisplayText("the WAS 0.4 value, then WAS 0,4")).toBe("the WAS 0.4 value, then WAS 0,4");
   });
 });
+
+// P9-10: braces are LaTeX's grouping, stripped only from LaTeX.
+describe("cleanDisplayText — braces stay outside LaTeX (P9-10)", () => {
+  it("keeps the braces of a plane family", () => {
+    expect(cleanDisplayText("the {003} plane")).toBe("the {003} plane");
+    expect(cleanDisplayText("{003}")).toBe("{003}");
+    expect(cleanDisplayText("{110} ≫ {101}")).toBe("{110} ≫ {101}");
+    expect(cleanDisplayText("{110} ≫ {101} > {104} ≫ {003}")).toBe("{110} ≫ {101} > {104} ≫ {003}");
+  });
+
+  it("still strips the braces of a LaTeX command", () => {
+    expect(cleanDisplayText("\\mathbf{x}")).toBe("x");
+    expect(cleanDisplayText("\\text{rate} of $\\mathrm{Li}_{2}$O")).toBe("rate of Li2O");
+    // The gate is the whole text: once a backslash command is there, the
+    // leftover grouping braces of the same text go with it, as before.
+    expect(cleanDisplayText("{ab} and \\mathbf{x}")).toBe("ab and x");
+  });
+
+  it("still folds the subscript and superscript groups LaTeX writes without a backslash", () => {
+    expect(cleanDisplayText("H_{2}O and x^{3}")).toBe("H2O and x(3)");
+  });
+});

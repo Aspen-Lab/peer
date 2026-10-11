@@ -123,7 +123,12 @@ function stripHtmlTags(text: string): string {
 }
 
 function normalizeLatex(text: string): string {
-  return text
+  // P9-10: the last step below, stripping every `{` and `}`, is LaTeX's
+  // grouping. It runs only when the text carries a LaTeX command (a
+  // backslash); a paper's plane families `{003}` and `{110} ≫ {101}` are
+  // text and keep their braces.
+  const isLatex = text.includes("\\");
+  const out = text
     .replace(/\$_\{([^}]*)\}\$/g, (_, s: string) => toPlainSubscript(s))
     .replace(/\$\^\{([^}]*)\}\$/g, (_, s: string) => `(${s})`)
     .replace(/_\{([^}]*)\}/g, "$1")
@@ -142,8 +147,8 @@ function normalizeLatex(text: string): string {
     .replace(/\\leftarrow\b/g, "<-")
     .replace(/\\times\b/g, "×")
     .replace(/\\pm\b/g, "±")
-    .replace(/\\cdot\b/g, ".")
-    .replace(/[{}]/g, "");
+    .replace(/\\cdot\b/g, ".");
+  return isLatex ? out.replace(/[{}]/g, "") : out;
 }
 
 function toPlainSubscript(text: string): string {
