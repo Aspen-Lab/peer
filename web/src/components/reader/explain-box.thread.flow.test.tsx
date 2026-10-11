@@ -66,6 +66,7 @@ interface Look {
   status: string | null;
   thread: ThreadView | undefined;
   style: Record<string, number | undefined> | undefined;
+  dock: boolean;
 }
 const look = (tree: ReactNode): Look => {
   const all = elements(tree);
@@ -76,6 +77,7 @@ const look = (tree: ReactNode): Look => {
     status: card ? (card.props.status as { kind: string }).kind : null,
     thread: card?.props.thread as ThreadView | undefined,
     style: card?.props.style as Look["style"],
+    dock: card?.props.dock === true,
   };
 };
 
@@ -485,31 +487,49 @@ describe("ExplainBox — openRef: e opens the box as the button does (P3-02b)", 
   });
 });
 
-describe("ExplainBox — where the panel stands (P3-02b)", () => {
-  it("beside the text on the spread when the column leaves 376 px: 360 wide, at the selection's top", async () => {
+describe("ExplainBox — where the panel stands (P3-02b; P7-15, R7)", () => {
+  // P7-15 (R7, Q4): from 1024 px the box is the dock at the window's right edge, wherever the
+  // selection is and whatever the text column does; the card remains between 640 and 1024.
+  it("the dock on a window of 1440: flush right, 360 wide, under the masthead and above the legend", async () => {
     stubWindow(1440, 900);
-    const run = await scenario(base({ column: () => ({ right: 1000 }) }), [(tree) => click(tree)]);
+    const run = await scenario(base(), [(tree) => click(tree)]);
     await wait();
 
-    expect(run.last().style).toMatchObject({ left: 1016, width: 360, top: 380 });
+    expect(run.last().style).toMatchObject({ right: 0, width: 360, top: 48, bottom: 28, maxHeight: 900 - 48 - 28 });
+    expect(run.last().style?.left).toBeUndefined();
+    expect(run.last().dock).toBe(true);
     run.mounted.unmount();
   });
 
-  it("where the first card stood when the column leaves no room, or when none is given", async () => {
-    stubWindow(1440, 900);
-    const expected = placeCard(first.bounds, { width: 1440, height: 900 });
-    for (const column of [() => ({ right: 1200 }), undefined, () => null]) {
-      const run = await scenario(base({ column }), [(tree) => click(tree)]);
-      await wait();
+  it("the dock at 1280 and at 1920 too, and where the selection is changes nothing", async () => {
+    for (const [width, height] of [[1280, 800], [1920, 1080]]) {
+      stubWindow(width, height);
+      for (const target of [first, { ...first, bounds: { left: width - 300, top: height - 40, right: width - 20, bottom: height - 10 } }]) {
+        const run = await scenario(base({ target }), [(tree) => click(tree)]);
+        await wait();
 
-      expect(run.last().style).toMatchObject({ left: expected.left, width: expected.width });
-      run.mounted.unmount();
+        expect(run.last().style).toMatchObject({ right: 0, width: 360, top: 48, bottom: 28, maxHeight: height - 76 });
+        expect(run.last().dock).toBe(true);
+        run.mounted.unmount();
+      }
     }
+  });
+
+  it("where the first card stood below 1024 px: under the selection, not the dock", async () => {
+    stubWindow(800, 900);
+    const expected = placeCard(first.bounds, { width: 800, height: 900 });
+    const run = await scenario(base(), [(tree) => click(tree)]);
+    await wait();
+
+    expect(run.last().style).toMatchObject({ left: expected.left, width: expected.width });
+    expect(run.last().style?.right).toBeUndefined();
+    expect(run.last().dock).toBe(false);
+    run.mounted.unmount();
   });
 
   it("a bottom sheet on a phone: the whole width, on the bottom edge, at most 60% of the height", async () => {
     stubWindow(390, 844);
-    const run = await scenario(base({ column: () => ({ right: 100 }) }), [(tree) => click(tree)]);
+    const run = await scenario(base(), [(tree) => click(tree)]);
     await wait();
 
     const style = run.last().style;

@@ -354,67 +354,110 @@ describe("the Send button (P3-02b)", () => {
   });
 });
 
+// ── The dock (P7-15, R7) ────────────────────────────────────────────────
+
+describe("ExplainCard — as the dock (P7-15, R7)", () => {
+  const cardClass = (html: string) => /data-explain-card=""[^>]*class="([^"]*)"/.exec(html)?.[1] ?? "";
+  const controlsClass = (html: string) => /<div[^>]*data-explain-controls=""[^>]*class="([^"]*)"/.exec(html)?.[1] ?? "";
+
+  it("is marked as the dock, and is a window-high column: flush with the edge, a line on its left only", () => {
+    const html = card({ dock: true, thread: view({ turns }) });
+    const cls = cardClass(html);
+
+    expect(html).toContain('data-explain-dock=""');
+    expect(html).not.toContain("data-explain-sheet");
+    expect(cls).toMatch(/\bfixed\b/);
+    expect(cls).toMatch(/\bz-\[70\]/);
+    expect(cls).toMatch(/\boverflow-y-auto\b/);
+    expect(cls).toMatch(/\bflex\b/);
+    expect(cls).toMatch(/\bflex-col\b/);
+    // The masthead's and the legend's own lines stand above and below it: no border on top or bottom, none on the right.
+    expect(cls).toMatch(/\bborder-y-0\b/);
+    expect(cls).toMatch(/\bborder-r-0\b/);
+  });
+
+  it("keeps the input at the dock's foot when the thread is short: the controls row takes the free space above it", () => {
+    const row = controlsClass(card({ dock: true, thread: view({ turns }) }));
+
+    expect(row).toMatch(/\bmt-auto\b/);
+    expect(row).toMatch(/\bsticky\b/);
+    expect(row).toMatch(/-bottom-4/);
+    expect(row).not.toMatch(/\bmt-4\b/);
+  });
+
+  it("is not marked as the dock when it is the card or the sheet, and those keep their classes", () => {
+    const plain = card({ thread: view({ turns }) });
+    const sheet = card({ sheet: true, thread: view({ turns }) });
+
+    expect(plain).not.toContain("data-explain-dock");
+    expect(sheet).not.toContain("data-explain-dock");
+    expect(cardClass(plain)).toMatch(/\brounded-lg\b/);
+    expect(cardClass(plain)).toMatch(/\bshadow-card-hover\b/);
+    expect(cardClass(plain)).not.toMatch(/\bflex-col\b/);
+    expect(cardClass(sheet)).toMatch(/\brounded-t-lg\b/);
+    expect(controlsClass(plain)).toMatch(/\bmt-4\b/);
+    expect(controlsClass(plain)).not.toMatch(/\bmt-auto\b/);
+  });
+});
+
 // ── Where it stands ─────────────────────────────────────────────────────
 
-describe("placePanel (P3-02b)", () => {
+describe("placePanel (P3-02b; P7-15, R7)", () => {
   const bounds = { left: 120, top: 300, right: 520, bottom: 330 };
   const spread = { width: 1440, height: 900 };
 
-  it("stands beside the text on the spread: 360 wide, to the right of the column, its top at the selection's", () => {
-    const place = placePanel(bounds, spread, { right: 1000 });
+  // P7-15 (R7, Q4): from 1024 px the conversation is a dock fixed at the window's right edge, not a
+  // panel at the selection. The rectangle is the window's: flush right, 360 wide, its top under the
+  // 48 px masthead and its bottom above the 28 px foot legend; it scrolls inside. Nothing about the
+  // selection or the text column enters it (the page makes room for it, commit 2).
+  it("is a dock at the window's right edge from 1024 px: 360 wide, under the masthead, above the legend", () => {
+    for (const [width, height] of [[1024, 768], [1280, 800], [1440, 900], [1920, 1080]]) {
+      const place = placePanel(bounds, { width, height });
 
-    expect(place.kind).toBe("side");
-    expect(place).toMatchObject({ left: 1016, width: 360, top: 300 });
-    expect(place.bottom).toBeUndefined();
-    expect(place.maxHeight).toBe(900 - 300 - 12);
-  });
-
-  it("needs 376 px of room right of the column — and takes P3-02's place when it has less", () => {
-    expect(placePanel(bounds, spread, { right: 1440 - 376 }).kind).toBe("side");
-    const tight = placePanel(bounds, spread, { right: 1440 - 375 });
-
-    expect(tight.kind).toBe("card");
-    expect(tight).toMatchObject(placeCard(bounds, spread));
-  });
-
-  it("is P3-02's place with no column to measure", () => {
-    expect(placePanel(bounds, spread, null)).toMatchObject({ kind: "card", ...placeCard(bounds, spread) });
-  });
-
-  it("keeps the panel inside the viewport: its top clamped to the margin above and to a usable height below", () => {
-    const high = placePanel({ ...bounds, top: -400, bottom: -370 }, spread, { right: 1000 });
-    const low = placePanel({ ...bounds, top: 880, bottom: 900 }, spread, { right: 1000 });
-
-    expect(high.top).toBe(12);
-    expect(high.maxHeight).toBe(900 - 12 - 12);
-    expect(low.top).toBeLessThanOrEqual(900 - 12 - 280);
-    expect(low.maxHeight).toBeGreaterThanOrEqual(280);
-    for (const place of [high, low]) {
-      expect((place.top ?? 0) + place.maxHeight).toBeLessThanOrEqual(900 - 12 + 0.001);
-      expect((place.left ?? 0) + place.width).toBeLessThanOrEqual(1440);
+      expect(place.kind).toBe("dock");
+      expect(place).toMatchObject({ right: 0, width: 360, top: 48, bottom: 28, maxHeight: height - 48 - 28 });
+      expect(place.left).toBeUndefined();
     }
   });
 
-  it("is P3-02's place between 640 and 1024, column or not", () => {
+  it("does not depend on where the selection is: the same rectangle for a selection high, low or at the right edge", () => {
+    const wanted = placePanel(bounds, spread);
+
+    for (const other of [{ left: 20, top: -400, right: 90, bottom: -370 }, { left: 900, top: 880, right: 1400, bottom: 900 }, { left: 1000, top: 10, right: 1430, bottom: 40 }]) {
+      expect(placePanel(other, spread)).toEqual(wanted);
+    }
+  });
+
+  it("is the window's height less the masthead and the legend, and never negative", () => {
+    expect(placePanel(bounds, { width: 1280, height: 800 }).maxHeight).toBe(800 - 48 - 28);
+    expect(placePanel(bounds, { width: 1280, height: 60 }).maxHeight).toBe(0);
+  });
+
+  it("starts at 1024 exactly: at 1023 it is P3-02's card, at 1024 the dock", () => {
+    expect(placePanel(bounds, { width: 1023, height: 800 }).kind).toBe("card");
+    expect(placePanel(bounds, { width: 1024, height: 800 }).kind).toBe("dock");
+  });
+
+  it("is P3-02's place between 640 and 1024", () => {
     for (const width of [640, 800, 1023]) {
       const viewport = { width, height: 800 };
 
-      expect(placePanel(bounds, viewport, { right: 100 })).toMatchObject({ kind: "card", ...placeCard(bounds, viewport) });
+      expect(placePanel(bounds, viewport)).toMatchObject({ kind: "card", ...placeCard(bounds, viewport) });
     }
-    expect(placePanel(bounds, { width: 1024, height: 800 }, { right: 600 }).kind).toBe("side");
   });
 
   it("is a bottom sheet below 640: full width, on the bottom edge, at most 60% of the height", () => {
     const phone = { width: 390, height: 844 };
-    const place = placePanel({ left: 20, top: 200, right: 360, bottom: 240 }, phone, { right: 100 });
+    const place = placePanel({ left: 20, top: 200, right: 360, bottom: 240 }, phone);
 
     expect(place.kind).toBe("sheet");
     expect(place).toMatchObject({ left: 0, width: 390, bottom: 0 });
     expect(place.top).toBeUndefined();
+    expect(place.right).toBeUndefined();
     expect(place.maxHeight).toBeLessThanOrEqual(0.6 * 844);
     expect(place.maxHeight).toBeGreaterThan(0.55 * 844);
-    expect(placePanel(bounds, { width: 639, height: 700 }, null).kind).toBe("sheet");
-    expect(placePanel(bounds, { width: 640, height: 700 }, null).kind).toBe("card");
+    expect(placePanel(bounds, { width: 639, height: 700 }).kind).toBe("sheet");
+    expect(placePanel(bounds, { width: 640, height: 700 }).kind).toBe("card");
   });
 
   it("changes placeCard not at all: P3-02's rule is still its own", () => {

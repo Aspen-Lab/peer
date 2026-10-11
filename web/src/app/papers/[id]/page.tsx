@@ -59,7 +59,6 @@ import { PaperWords } from "@/components/reader/paper-words";
 import {
   PaperBody,
   mergeQuestionRoute,
-  measureBodyColumn,
   questionRouteOverlay,
   sameSelection,
   type ExplainSelection,
@@ -1593,7 +1592,7 @@ function Reader({
         inside the section links, so the quotes' "§Heading" is a link as
         everywhere. One per paper: a card never follows the reader to the next. */}
     <SectionLinks headings={bodyHeadings}>
-      <ExplainBox key={paper.id} target={explainTarget} terms={terms} canAsk={providerConfigured} onAsk={askExplain} cached={explainCached} cachedTurns={explainKeptThread?.turns} onReply={replyExplain} onSayMore={moreExplain} onResetThread={resetExplain} column={measureBodyColumn} openRef={explainOpen} reading={reading} />
+      <ExplainBox key={paper.id} target={explainTarget} terms={terms} canAsk={providerConfigured} onAsk={askExplain} cached={explainCached} cachedTurns={explainKeptThread?.turns} onReply={replyExplain} onSayMore={moreExplain} onResetThread={resetExplain} openRef={explainOpen} reading={reading} />
     </SectionLinks>
     {/* P7-14 (R9): the notes, as a small tab fixed at the window's right edge (from `md`; a phone has
         the row in the command stack instead). Beside the explain box, for the same reason: it is

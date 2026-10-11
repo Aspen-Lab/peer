@@ -62,12 +62,13 @@ function explainProblems(source: string): string[] {
   has("useExplainThreadsStore((s) => s.byPaper[paper.id])", "the kept answers are no longer this paper's");
 
   // P3-02b (ruling §1h.3): the thread. The box is handed the way to reply, the
-  // thread kept for the passage, the way to drop a full one, the text column's
-  // measure and the ref the `e` key opens it through.
+  // thread kept for the passage, the way to drop a full one and the ref the `e` key
+  // opens it through. (P7-15: no longer the text column's measure — the box is a dock
+  // at the window's edge, and the page makes room for it.)
   if (!popover.includes("onReply={replyExplain}")) problems.push("the box is no longer handed `replyExplain` (a reader cannot send a follow-up)");
   if (!popover.includes("cachedTurns={explainKeptThread?.turns}")) problems.push("the box is no longer handed the thread kept for the passage");
   if (!popover.includes("onResetThread={resetExplain}")) problems.push("the box can no longer drop a full thread when the passage is opened again");
-  if (!popover.includes("column={measureBodyColumn}")) problems.push("the box is no longer handed the text column's measure");
+  if (popover.includes("column=")) problems.push("the box is handed a text-column measure that the dock does not use");
   if (!popover.includes("openRef={explainOpen}")) problems.push("the box is no longer handed the ref `e` opens it through");
 
   // The reply: the component's own request with the reader's own key; the pair joins the store
@@ -158,12 +159,12 @@ describe("the page's Explain this? wiring (P3-02)", () => {
     ]);
   });
 
-  it("would notice the full-thread drop and the column measure and the ref gone", () => {
+  it("would notice the full-thread drop and the ref gone, and a text-column measure handed back to the box", () => {
     expect(explainProblems(source.replace(" onResetThread={resetExplain}", ""))).toEqual([
       "the box can no longer drop a full thread when the passage is opened again",
     ]);
-    expect(explainProblems(source.replace(" column={measureBodyColumn}", ""))).toEqual([
-      "the box is no longer handed the text column's measure",
+    expect(explainProblems(source.replace(" openRef={explainOpen}", " column={measureColumn} openRef={explainOpen}"))).toEqual([
+      "the box is handed a text-column measure that the dock does not use",
     ]);
     expect(explainProblems(source.replace(" openRef={explainOpen}", ""))).toEqual([
       "the box is no longer handed the ref `e` opens it through",

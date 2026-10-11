@@ -38,9 +38,10 @@
 // fill the thread (it is dropped when the passage is opened again). `openRef`
 // hands the page an `open` function: the `e` key does what the button does.
 //
-// Positioned `fixed` from the selection's rectangle, measured again as the page
-// scrolls: beside the text column on the spread, where P3-02 put the card
-// between 640 and 1024, a bottom sheet on a phone (`placePanel`).
+// Where it stands (`placePanel`): P7-15 (the owner's R7): from a window of 1024 px a dock
+// fixed at the right edge of the screen — flush with it, 360 px wide, from under the masthead to
+// above the foot legend, scrolling inside (`explain-dock.ts`); between 640 and 1024 the card
+// P3-02 put under the selection, measured again as the page scrolls; a bottom sheet on a phone.
 //
 // P3-02c (ruling §1h.4 amendment; user decision §1a.11): at the start of the
 // control row, a small toggle "Search the web" — off whenever the box opens or a
@@ -75,6 +76,7 @@ import type { PaperTerm } from "@/lib/papers/report";
 import { MAX_EXPLAIN_MESSAGE_CHARS, threadFull, type ExplainTurn } from "@/store/explain-threads";
 import type { Paper, UserProfile } from "@/types";
 import { EXPLAIN, PEERS_READING } from "./copy";
+import { DOCK_BOTTOM_PX, DOCK_MIN_VIEWPORT_PX, DOCK_TOP_PX, DOCK_WIDTH_PX } from "./explain-dock";
 import { EvidenceQuote } from "./evidence-quote";
 import {
   asItems,
@@ -219,47 +221,35 @@ export function placeCard(
   return { left, width, maxHeight, bottom: Math.min(viewport.height - rect.top + CARD_GAP, viewport.height - CARD_MARGIN - maxHeight) };
 }
 
-/** The text column's right edge, in the viewport's coordinates (P3-02b). */
-export interface ColumnEdge {
-  right: number;
-}
-
 export interface Place {
-  /** `side`: beside the text column; `card`: P3-02's place; `sheet`: a phone's bottom sheet. */
-  kind: "side" | "card" | "sheet";
-  left: number;
+  /** `dock`: the window at the right edge (P7-15); `card`: P3-02's place; `sheet`: a phone's bottom sheet. */
+  kind: "dock" | "card" | "sheet";
+  left?: number;
+  /** The dock stands against the window's right edge: `right`, not a `left` computed from a width that
+   *  counts the scrollbar the fixed box does not stand under. */
+  right?: number;
   width: number;
   top?: number;
   bottom?: number;
   maxHeight: number;
 }
 
-/** From here up the box may stand beside the text. */
-const SPREAD_WIDTH = 1024;
-/** The panel's width and the gap to the column: the room it needs to its right. */
-const SIDE_GAP = 16;
-const SIDE_ROOM = CARD_WIDTH + SIDE_GAP;
-/** The least the side panel may be tall: it is moved up rather than made shorter. */
-const PANEL_MIN_HEIGHT = 280;
 /** A phone's sheet takes at most this share of the window's height. */
 const SHEET_SHARE = 0.6;
 
 /**
- * Where the box stands (P3-02b). On a spread (1024 and up) with at least 376 px
- * between the text column's right edge and the window's: a panel 360 px wide,
- * 16 px right of the column, its top at the selection's top and clamped inside
- * the window, as tall as the room under it (the thread scrolls inside, the
- * input is pinned at its foot). Below 640: a sheet — the window's width, on its
- * bottom edge, at most 60% of its height. Everywhere else P3-02's place
- * (`placeCard`), under or above the selection, unchanged.
+ * Where the box stands. From a window of 1024 px: the dock (P7-15, R7) — the window's right edge,
+ * 360 px wide, its top under the masthead and its bottom above the foot legend, so as tall as the
+ * window less the two; the thread scrolls inside and the input is pinned at its foot. Nothing of
+ * the selection or the text enters it. Below 640: a sheet — the window's width, on its bottom edge, at most 60% of its
+ * height. Between the two P3-02's place (`placeCard`), under or above the selection, unchanged.
  */
-export function placePanel(bounds: ViewRect, viewport: Viewport, column: ColumnEdge | null): Place {
+export function placePanel(bounds: ViewRect, viewport: Viewport): Place {
   if (viewport.width < PHONE_WIDTH) {
     return { kind: "sheet", left: 0, width: viewport.width, bottom: 0, maxHeight: Math.floor(viewport.height * SHEET_SHARE) };
   }
-  if (viewport.width >= SPREAD_WIDTH && column !== null && viewport.width - column.right >= SIDE_ROOM) {
-    const top = clamp(bounds.top, CARD_MARGIN, viewport.height - CARD_MARGIN - PANEL_MIN_HEIGHT);
-    return { kind: "side", left: column.right + SIDE_GAP, width: CARD_WIDTH, top, maxHeight: viewport.height - top - CARD_MARGIN };
+  if (viewport.width >= DOCK_MIN_VIEWPORT_PX) {
+    return { kind: "dock", right: 0, width: DOCK_WIDTH_PX, top: DOCK_TOP_PX, bottom: DOCK_BOTTOM_PX, maxHeight: Math.max(0, viewport.height - DOCK_TOP_PX - DOCK_BOTTOM_PX) };
   }
   return { kind: "card", ...placeCard(bounds, viewport) };
 }
@@ -440,6 +430,7 @@ export function ExplainCard({
   style,
   thread,
   sheet,
+  dock,
   cardRef,
   inputRef,
 }: {
@@ -457,6 +448,9 @@ export function ExplainCard({
   thread?: ThreadView;
   /** A phone's bottom sheet, flush with the screen's foot and sides: square corners all round, as the page's cards (the theme's radius scale is 0, so the card's `rounded-*` classes draw nothing; P3-02d). */
   sheet?: boolean;
+  /** P7-15: the dock at the window's right edge. A window-high column: a line on its left only (the
+   *  masthead's and the legend's own lines stand above and below it), the controls pinned at its foot. */
+  dock?: boolean;
   /** The card itself — the one thing that scrolls, and what the sheet's height is read from. */
   cardRef?: Ref<HTMLDivElement>;
   inputRef?: Ref<HTMLTextAreaElement>;
@@ -470,9 +464,12 @@ export function ExplainCard({
       aria-label={EXPLAIN.card}
       data-explain-card=""
       {...(sheet ? { "data-explain-sheet": "" } : {})}
+      {...(dock ? { "data-explain-dock": "" } : {})}
       ref={cardRef}
       style={style}
-      className={`fixed z-[70] overflow-y-auto border border-border-strong bg-surface p-4 shadow-card-hover ${sheet ? "rounded-t-lg border-b-0" : "rounded-lg"}`}
+      className={`fixed z-[70] overflow-y-auto border border-border-strong bg-surface p-4 ${
+        dock ? "flex flex-col border-y-0 border-r-0" : `shadow-card-hover ${sheet ? "rounded-t-lg border-b-0" : "rounded-lg"}`
+      }`}
     >
       {/* The card is what scrolls; its passage stays at the top and its input at the foot (sticky,
           offset by the card's own padding, which a sticky box would otherwise stop short of). */}
@@ -493,7 +490,7 @@ export function ExplainCard({
       )}
 
       {canAsk && status.kind !== "none" && (
-        <div role="status" aria-live="polite" className="mt-4 space-y-4">
+        <div role="status" aria-live="polite" className={`mt-4 space-y-4 ${dock ? "mb-4" : ""}`}>
           {status.kind === "loading" && <p className="annotation text-text-faint">{EXPLAIN.loading}</p>}
           {status.kind === "unavailable" && <p className="annotation text-text-faint">{EXPLAIN.unavailable}</p>}
           {status.kind === "not_in_paper" && <p className="annotation text-text-faint">{EXPLAIN.notInPaper}</p>}
@@ -538,7 +535,7 @@ export function ExplainCard({
         // small toggle, on a line of its own so the input keeps the card's width.
         <div
           data-explain-controls=""
-          className={`sticky -bottom-4 -mx-4 -mb-4 mt-4 flex flex-wrap items-end gap-2 border-t border-border bg-surface p-3 ${sheet ? "pb-[max(0.75rem,env(safe-area-inset-bottom))]" : ""}`}
+          className={`sticky -bottom-4 -mx-4 -mb-4 ${dock ? "mt-auto" : "mt-4"} flex flex-wrap items-end gap-2 border-t border-border bg-surface p-3 ${sheet ? "pb-[max(0.75rem,env(safe-area-inset-bottom))]" : ""}`}
         >
           {asking.search && (
             <div data-explain-search="" className="w-full">
@@ -653,15 +650,13 @@ export interface ExplainBoxProps {
   onSayMore?: (target: SelectionTarget, thread: readonly ExplainTurn[], message: string) => Promise<ReplyResult>;
   /** Called when a passage whose thread is full is opened again: the page drops that thread. */
   onResetThread?: (target: SelectionTarget) => void;
-  /** Where the text column's right edge is now (measured as the selection is). */
-  column?: () => ColumnEdge | null;
   /** Filled with the box's `open`, which does what the button's click does on the
    *  current selection — the page's `e` key calls it. With the box already open
    *  it moves to the input instead. */
   openRef?: { current: (() => void) | null };
 }
 
-export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cachedTurns, onReply, onSayMore, onResetThread, column, openRef }: ExplainBoxProps) {
+export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cachedTurns, onReply, onSayMore, onResetThread, openRef }: ExplainBoxProps) {
   const [session, setSession] = useState<Session | null>(null);
   // A new selection closes the card; one that merely went away does not (a click
   // in the card collapses it). Derived, so the stale card never paints.
@@ -923,7 +918,7 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
     );
   }
 
-  const place = placePanel(where.bounds, viewport, column?.() ?? null);
+  const place = placePanel(where.bounds, viewport);
   const heading = reading.body[open.selection.sectionIndex]?.heading ?? "";
   const threadView: ThreadView | undefined =
     canAsk && onReply && open.status.kind === "answer"
@@ -957,13 +952,16 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
       onClose={() => setSession(null)}
       thread={threadView}
       sheet={place.kind === "sheet"}
+      dock={place.kind === "dock"}
       cardRef={cardRef}
       inputRef={inputRef}
       style={{
-        left: place.left,
+        ...(place.left !== undefined ? { left: place.left } : {}),
+        ...(place.right !== undefined ? { right: place.right } : {}),
         width: place.width,
         maxHeight: place.maxHeight,
-        ...(place.top !== undefined ? { top: place.top } : { bottom: place.bottom }),
+        ...(place.top !== undefined ? { top: place.top } : {}),
+        ...(place.bottom !== undefined ? { bottom: place.bottom } : {}),
       }}
     />
   );
