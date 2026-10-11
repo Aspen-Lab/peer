@@ -238,6 +238,9 @@ describe("ExplainBox — what closes it", () => {
   });
 
   it("closes on a press outside the card, and not on one inside it", async () => {
+    // P7-15 (R7): a window of 1024 px or more now gets the dock, which a press outside does not close
+    // (the next test); this is the card's rule, between 640 and 1024 — the same assertions, at 900 px.
+    vi.stubGlobal("window", { ...recorder(), innerWidth: 900, innerHeight: 800, requestAnimationFrame: (fn: () => void) => setTimeout(fn, 0), cancelAnimationFrame: (id: number) => clearTimeout(id) });
     const inside = { target: { closest: (selector: string) => (selector.includes("data-explain-card") ? {} : null) } };
     const outside = { target: { closest: () => null } };
     const run = await scenario(base(), [(tree) => click(tree), () => fire("pointerdown", inside), () => fire("pointerdown", outside)]);
@@ -247,6 +250,20 @@ describe("ExplainBox — what closes it", () => {
     const opened = run.looks.map((l) => Boolean(l.card));
     expect(opened.lastIndexOf(true)).toBeGreaterThan(opened.indexOf(true));
     expect(run.last().card).toBeUndefined();
+    run.mounted.unmount();
+  });
+
+  it("the dock stays open on a press outside it, in the card's place a press would close it (P7-15)", async () => {
+    // Closing the dock gives the page its width back, so the text reflows. On a press that would
+    // happen before the press had chosen its word (measured in a browser: a double-click on one
+    // word selected another). The dock closes with Escape, Close, or a new selection.
+    const inside = { target: { closest: (selector: string) => (selector.includes("data-explain-card") ? {} : null) } };
+    const outside = { target: { closest: () => null } };
+    const run = await scenario(base(), [(tree) => click(tree), () => fire("pointerdown", inside), () => fire("pointerdown", outside), () => fire("pointerdown", outside)]);
+    await wait();
+
+    expect(run.last().card).toBeDefined();
+    expect(run.last().status).toBe("answer");
     run.mounted.unmount();
   });
 

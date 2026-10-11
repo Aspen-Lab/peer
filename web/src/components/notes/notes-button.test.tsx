@@ -37,7 +37,19 @@ describe("NotesButtonView — the tab at the right edge", () => {
 
     expect(html.match(/<button\b/g)).toHaveLength(1);
     expect(html).toContain('type="button"');
-    for (const cls of ["fixed", "right-0", "hidden", "md:flex"]) expect(html.split('"').some((attr) => attr.split(" ").includes(cls))).toBe(true);
+    // P7-15: `right-0` became the dock's width with a fallback of 0px — the same edge when no dock is open.
+    for (const cls of ["fixed", "right-[var(--explain-dock-width,0px)]", "hidden", "md:flex"]) expect(html.split('"').some((attr) => attr.split(" ").includes(cls))).toBe(true);
+  });
+
+  it("stands beside the AI dock when one is open, not under it: its right edge is the dock's left edge", () => {
+    const html = edge(false);
+
+    // The dock is `z-[70]` and the tab `z-40`, so a tab left at `right: 0` would be hidden by it.
+    // `--explain-dock-width` is set on the document's root while the dock is open (explain-dock.ts) and is
+    // not set otherwise, when the fallback puts the tab on the window's edge as before.
+    expect(html).toContain("right-[var(--explain-dock-width,0px)]");
+    expect(html).not.toMatch(/\bright-0\b/);
+    expect(html).toContain("z-40");
   });
 
   it("stands clear of the upper right 400px, where the AI dock will sit", () => {

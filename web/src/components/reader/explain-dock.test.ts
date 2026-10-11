@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { placeCard } from "./explain-box";
-import { DOCK_BOTTOM_PX, DOCK_MIN_VIEWPORT_PX, DOCK_TOP_PX, DOCK_WIDTH_PX } from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_GAP_PX, DOCK_MIN_VIEWPORT_PX, DOCK_RESERVE_PX, DOCK_TOP_PX, DOCK_VAR, DOCK_WIDTH_PX, DOCK_WIDTH_VAR, reserveDock } from "./explain-dock";
 
 // P7-15 (the owner's R7): the dock's rectangle is built from three numbers that the shell owns —
 // the masthead's height above it, the foot legend's below it, and the width of the card it
@@ -36,5 +36,54 @@ describe("the dock's rectangle against the shell that frames it", () => {
     expect(placeCard({ left: 300, top: 400, right: 420, bottom: 420 }, { width: 1000, height: 900 }).width).toBe(DOCK_WIDTH_PX);
     expect(DOCK_WIDTH_PX).toBe(360);
     expect(DOCK_MIN_VIEWPORT_PX).toBe(64 * REM_PX);
+  });
+});
+
+// ── The page makes room (P7-15, R7 / Q4) ──────────────────────────────────
+
+describe("what the page keeps clear while the dock is open", () => {
+  it("is the dock and a 16 px gap: 376 px, named for the page's CSS and for the notes tab", () => {
+    expect(DOCK_GAP_PX).toBe(16);
+    expect(DOCK_RESERVE_PX).toBe(DOCK_WIDTH_PX + DOCK_GAP_PX);
+    expect(DOCK_RESERVE_PX).toBe(376);
+    expect(DOCK_VAR).toBe("--explain-dock");
+    expect(DOCK_WIDTH_VAR).toBe("--explain-dock-width");
+  });
+
+  it("is written on the document's root as two custom properties, and taken off again by what it returns", () => {
+    const style = { setProperty: vi.fn(), removeProperty: vi.fn() };
+    const release = reserveDock({ style });
+
+    expect(style.setProperty).toHaveBeenCalledWith("--explain-dock", "376px");
+    expect(style.setProperty).toHaveBeenCalledWith("--explain-dock-width", "360px");
+    expect(style.removeProperty).not.toHaveBeenCalled();
+    release();
+    expect(style.removeProperty).toHaveBeenCalledWith("--explain-dock");
+    expect(style.removeProperty).toHaveBeenCalledWith("--explain-dock-width");
+  });
+
+  it("does nothing, and fails at nothing, where there is no root to write to", () => {
+    for (const root of [null, undefined, {}, { style: undefined }]) {
+      expect(() => reserveDock(root as never)()).not.toThrow();
+    }
+  });
+});
+
+describe("the page's width is kept at <main>, in CSS", () => {
+  const css = read("src/app/globals.css");
+
+  it("the shell's <main> is the class the rule names", () => {
+    expect(read("src/app/layout.tsx")).toMatch(/<main className="[^"]*\bpeer-main-content\b[^"]*">/);
+  });
+
+  it("<main> pads its right side by the reserved width, none when nothing is open", () => {
+    const rule = /\.peer-main-content\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+
+    expect(rule).toMatch(new RegExp(`padding-right:\\s*var\\(${DOCK_VAR},\\s*0px\\);`));
+  });
+
+  it("the custom property the rule reads is the one the dock writes", () => {
+    expect(css).toContain(`var(${DOCK_VAR}, 0px)`);
+    expect(read("src/components/notes/notes-button.tsx")).toContain(`var(${DOCK_WIDTH_VAR},0px)`);
   });
 });

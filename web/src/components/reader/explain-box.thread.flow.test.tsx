@@ -588,3 +588,217 @@ describe("ExplainBox — Escape and the thread (P3-02b)", () => {
     run.mounted.unmount();
   });
 });
+
+// ── The page makes room (P7-15, R7 / Q4) ────────────────────────────────
+
+describe("ExplainBox — the page keeps the dock's width clear while it is open (P7-15)", () => {
+  let root: Map<string, string>;
+  const stubRoot = () => {
+    root = new Map();
+    const style = { setProperty: (name: string, value: string) => void root.set(name, value), removeProperty: (name: string) => void root.delete(name) };
+    vi.stubGlobal("document", { ...recorder(), documentElement: { style } });
+  };
+  const escape = () => {
+    for (const listener of listeners.get("keydown") ?? []) listener({ key: "Escape", preventDefault: vi.fn(), stopPropagation: vi.fn() });
+  };
+  const resizeTo = (width: number, height: number) => {
+    stubWindow(width, height);
+    for (const listener of listeners.get("resize") ?? []) listener({});
+  };
+  const RESERVED = { "--explain-dock": "376px", "--explain-dock-width": "360px" };
+
+  beforeEach(() => {
+    stubRoot();
+    stubWindow(1440, 900);
+  });
+
+  it("reserves nothing while only the button stands, and 376 px once the box is open as a dock", async () => {
+    let before: Record<string, string> = { unset: "yes" };
+    const run = await scenario(base(), [
+      (tree) => {
+        before = Object.fromEntries(root);
+        expect(look(tree).button).toBeDefined();
+        click(tree);
+      },
+    ]);
+    await wait();
+
+    expect(before).toEqual({});
+    expect(run.last().dock).toBe(true);
+    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    run.mounted.unmount();
+  });
+
+  it("gives the width back when the box closes: Escape, the Close button, and leaving the page", async () => {
+    const closers: Array<[string, Step]> = [
+      ["Escape", () => escape()],
+      ["Close", (tree) => (look(tree).card?.props.onClose as () => void)()],
+    ];
+    for (const [, close] of closers) {
+      const run = await scenario(base(), [(tree) => click(tree), close]);
+      await wait();
+      expect(run.last().card).toBeUndefined();
+      expect(Object.fromEntries(root)).toEqual({});
+      run.mounted.unmount();
+    }
+
+    const open = await scenario(base(), [(tree) => click(tree)]);
+    await wait();
+    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    open.mounted.unmount();
+    expect(Object.fromEntries(root)).toEqual({});
+  });
+
+  it("keeps it for the Tier 0 definition card as well, which is the dock too", async () => {
+    const target = { ...first, passage: "The rafting ratio rose." };
+    const run = await scenario(base({ canAsk: false, terms: [term], target, cached: undefined }), [(tree) => click(tree)]);
+    await wait();
+
+    expect(run.last().status).toBe("none");
+    expect(run.last().dock).toBe(true);
+    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    run.mounted.unmount();
+  });
+
+  it("reserves nothing for the card (640 to 1023 px) or the phone's sheet: those stand over the page, as before", async () => {
+    for (const [width, height] of [[800, 900], [390, 844]]) {
+      stubWindow(width, height);
+      const run = await scenario(base(), [(tree) => click(tree)]);
+      await wait();
+
+      expect(run.last().card).toBeDefined();
+      expect(run.last().dock).toBe(false);
+      expect(Object.fromEntries(root)).toEqual({});
+      run.mounted.unmount();
+    }
+  });
+
+  it("follows the window across 1024 px while the box is open: the width goes with the dock and comes back with it", async () => {
+    const seen: Array<{ dock: boolean; root: Record<string, string> }> = [];
+    const snap = (tree: ReactNode) => seen.push({ dock: look(tree).dock, root: Object.fromEntries(root) });
+    const run = await scenario(base(), [
+      (tree) => click(tree),
+      (tree) => snap(tree),
+      () => resizeTo(800, 900),
+      (tree) => {
+        snap(tree);
+        resizeTo(1280, 800);
+      },
+      (tree) => snap(tree),
+      () => resizeTo(1023, 800),
+      (tree) => {
+        snap(tree);
+        resizeTo(1024, 800);
+      },
+      (tree) => snap(tree),
+    ]);
+    await wait();
+
+    expect(seen).toEqual([
+      { dock: true, root: RESERVED },
+      { dock: false, root: {} },
+      { dock: true, root: RESERVED },
+      { dock: false, root: {} },
+      { dock: true, root: RESERVED },
+    ]);
+    run.mounted.unmount();
+  });
+
+  it("reads where the selection is again after the page has reflowed: once the dock opens, and once it closes", async () => {
+    const measure = vi.fn(() => ({ rect: first.rect, bounds: first.bounds }));
+    const target: ExplainSelection = { ...first, measure };
+    const counts: number[] = [];
+    const run = await scenario(base({ target }), [
+      (tree) => click(tree),
+      () => {},
+      () => {
+        counts.push(measure.mock.calls.length);
+        escape();
+      },
+    ]);
+    await wait();
+    counts.push(measure.mock.calls.length);
+
+    // Nothing was read before the dock opened; the dock's opening read it once, its closing once more.
+    expect(counts[0]).toBeGreaterThanOrEqual(1);
+    expect(counts[1]).toBeGreaterThan(counts[0]);
+    expect(run.last().card).toBeUndefined();
+    run.mounted.unmount();
+  });
+});
+
+// The reflow moves the words. A selection deep in a paper sits hundreds of pixels lower (or higher) once
+// the column is narrower (or wide again): measured in a browser at 1280, a selection at the middle of the
+// window went to 1,095 px — below the window — when the dock opened, and the browser's own scroll
+// anchoring had moved the page by only 82. So the box holds the selection where it was on the screen:
+// it reads the selection's top, changes the layout, reads it again and scrolls the page by the
+// difference, all before the next paint.
+describe("ExplainBox — the selection stays where it was on the screen across the reflow (P7-15)", () => {
+  let root: Map<string, string>;
+  /** A selection whose top depends on the layout: 300 in the wide page, 1,100 once the dock's width is kept clear. */
+  const reflowing = (wide = 300, narrow = 1100): ExplainSelection => ({
+    ...first,
+    measure: () => {
+      const top = root.has("--explain-dock") ? narrow : wide;
+      return { rect: { ...first.rect, top, bottom: top + 20 }, bounds: { ...first.bounds, top, bottom: top + 20 } };
+    },
+  });
+  const escape = () => {
+    for (const listener of listeners.get("keydown") ?? []) listener({ key: "Escape", preventDefault: vi.fn(), stopPropagation: vi.fn() });
+  };
+
+  beforeEach(() => {
+    root = new Map();
+    const style = { setProperty: (name: string, value: string) => void root.set(name, value), removeProperty: (name: string) => void root.delete(name) };
+    vi.stubGlobal("document", { ...recorder(), documentElement: { style } });
+    stubWindow(1280, 800);
+  });
+
+  it("scrolls the page by how far the words moved when the dock opens, and back by as far when it closes", async () => {
+    const run = await scenario(base({ target: reflowing() }), [(tree) => click(tree), () => {}, () => escape()]);
+    await wait();
+
+    expect(scrollBy.mock.calls).toEqual([[{ top: 800, behavior: "instant" }], [{ top: -800, behavior: "instant" }]]);
+    run.mounted.unmount();
+  });
+
+  it("does not scroll when the words did not move, and not for a selection it cannot measure", async () => {
+    const still = await scenario(base({ target: reflowing(300, 300) }), [(tree) => click(tree), () => {}, () => escape()]);
+    await wait();
+    still.mounted.unmount();
+    const unmeasured = await scenario(base(), [(tree) => click(tree), () => {}, () => escape()]);
+    await wait();
+
+    expect(scrollBy).not.toHaveBeenCalled();
+    unmeasured.mounted.unmount();
+  });
+
+  it("gives the width back without scrolling when the reader leaves the paper with the dock open", async () => {
+    const run = await scenario(base({ target: reflowing() }), [(tree) => click(tree)]);
+    await wait();
+    scrollBy.mockClear();
+    run.mounted.unmount();
+
+    expect(root.size).toBe(0);
+    expect(scrollBy).not.toHaveBeenCalled();
+  });
+
+  it("holds the NEW selection when a new passage closes the box, not the one the box was opened for", async () => {
+    // The old words are 300 wide / 1,100 narrow; the new ones 500 wide / 650 narrow: closing moves them by 150.
+    const old = reflowing();
+    const next: ExplainSelection = { ...reflowing(500, 650), passage: "Specimens were machined from a single casting." };
+    const run = await scenario(base({ target: old }), [
+      (tree) => click(tree),
+      () => {},
+      (_tree, ctx) => {
+        ctx.props = { ...ctx.props, target: next };
+        ctx.rerender();
+      },
+    ]);
+    await wait();
+
+    // 800 on opening (the old words); on closing, the new words' own 650 -> 500, not the old ones' 1,100 -> 300.
+    expect(scrollBy.mock.calls).toEqual([[{ top: 800, behavior: "instant" }], [{ top: -150, behavior: "instant" }]]);
+    run.mounted.unmount();
+  });
+});

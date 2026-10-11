@@ -27,7 +27,11 @@
 // An answer already kept for the passage opens at once with no request, with the
 // thread that followed it. Escape, a press outside the card, or a new selection
 // closes it; a selection that merely goes away (a click in the card collapses
-// it) does not. Nothing here links off the page.
+// it) does not. P7-15: the dock is not closed by a press outside it — closing it gives
+// the page its width back, and a page that reflows on the press moves the word under the
+// pointer before the press has chosen it (measured: a double-click on one word selected
+// another); it closes with Escape, Close, or a new selection, as a reader's own docked
+// window does. Nothing here links off the page.
 //
 // P3-02b: under the first answer, the thread — the reader's messages under
 // "You", Peer's replies under "Peer" (a verified quote through `EvidenceQuote`,
@@ -67,7 +71,7 @@
 // turn and replaces nothing. It waits while a request is in flight and at the full thread,
 // as a send does; what the reader was typing stays.
 
-import { useEffect, useRef, useState, type CSSProperties, type Ref } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type Ref } from "react";
 import { hasUserLlmOverride } from "@/lib/feed/ai-tier";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import type { ExplainAnswer, ExplainItem } from "@/lib/papers/explain";
@@ -76,7 +80,7 @@ import type { PaperTerm } from "@/lib/papers/report";
 import { MAX_EXPLAIN_MESSAGE_CHARS, threadFull, type ExplainTurn } from "@/store/explain-threads";
 import type { Paper, UserProfile } from "@/types";
 import { EXPLAIN, PEERS_READING } from "./copy";
-import { DOCK_BOTTOM_PX, DOCK_MIN_VIEWPORT_PX, DOCK_TOP_PX, DOCK_WIDTH_PX } from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_MIN_VIEWPORT_PX, DOCK_TOP_PX, DOCK_WIDTH_PX, reserveDock } from "./explain-dock";
 import { EvidenceQuote } from "./evidence-quote";
 import {
   asItems,
@@ -674,6 +678,8 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   const wasPending = useRef(false);
   /** The kind of pointer that went down on the toggle, until the click that follows reads it. */
   const pointer = useRef<string | null>(null);
+  /** Reads where the selection is again, on the next frame (below); null with no selection. */
+  const remeasure = useRef<(() => void) | null>(null);
 
   // Where the selection is, measured again as the page scrolls or resizes.
   useEffect(() => {
@@ -681,24 +687,67 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
     let frame: number | undefined;
     const update = () => {
       frame = undefined;
-      setViewport(currentViewport());
+      // The same size is the same state: a scroll frame that moved nothing renders nothing.
+      const size = currentViewport();
+      setViewport((previous) => (previous.width === size.width && previous.height === size.height ? previous : size));
       const where = anchor.measure?.();
       if (where) setMeasured({ of: anchor, where });
     };
     const onMove = () => {
       if (frame === undefined) frame = window.requestAnimationFrame(update);
     };
+    remeasure.current = onMove;
     window.addEventListener("scroll", onMove, true);
     window.addEventListener("resize", onMove);
     return () => {
+      if (remeasure.current === onMove) remeasure.current = null;
       window.removeEventListener("scroll", onMove, true);
       window.removeEventListener("resize", onMove);
       if (frame !== undefined) window.cancelAnimationFrame(frame);
     };
   }, [anchor]);
 
+  // P7-15 (R7, Q4): while the box stands as the dock the page keeps its width clear (`reserveDock`),
+  // so the text reflows beside it instead of running under it, and gives the width back when the box
+  // closes or the window narrows below the dock's. The reflow moves the words — a selection deep in a
+  // paper lands hundreds of pixels lower in a narrower column — so, before the next paint, the box
+  // reads where the selection's top is, changes the layout, reads it again and scrolls the page by the
+  // difference: the words stay where the reader's eyes are, and the highlight (the browser's own
+  // selection, which the reflow does not touch) and the button follow them.
+  const docked = open !== null && viewport.width >= DOCK_MIN_VIEWPORT_PX;
+  const reserved = useRef<(() => void) | null>(null);
+  useLayoutEffect(() => {
+    if (!docked && reserved.current === null) return;
+    const before = anchor?.measure?.()?.bounds.top;
+    if (docked) reserved.current = reserveDock(typeof document === "undefined" ? null : document.documentElement);
+    else {
+      reserved.current?.();
+      reserved.current = null;
+    }
+    const after = before === undefined ? undefined : anchor?.measure?.()?.bounds.top;
+    if (before !== undefined && after !== undefined && Math.abs(after - before) >= 1) window.scrollBy({ top: after - before, behavior: "instant" });
+    // `anchor` is read as it is when `docked` changes: the new selection, when a new passage closed the box.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docked]);
+  // Leaving the paper with the dock open gives the width back — and scrolls nothing: the next page is not this one's.
+  useLayoutEffect(
+    () => () => {
+      reserved.current?.();
+      reserved.current = null;
+    },
+    [],
+  );
+  // Once the page has settled after either change, where the selection is gets read again, for the button
+  // (after the effect above that follows the selection, so that a new passage's own measure is the one called).
+  const dockedBefore = useRef(false);
+  useEffect(() => {
+    if (dockedBefore.current === docked) return;
+    dockedBefore.current = docked;
+    remeasure.current?.();
+  }, [docked]);
+
   // While the card is open: Escape closes it (and goes no further — the page's
-  // own Escape means "back"), and so does a press outside it.
+  // own Escape means "back"), and so does a press outside it — all but the dock's (above).
   const isOpen = open !== null;
   useEffect(() => {
     if (!isOpen) return;
@@ -715,7 +764,7 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
         if (!node.closest("[data-explain-search]")) setSession((current) => (current !== null && current.tip ? { ...current, tip: false } : current));
         return;
       }
-      setSession(null);
+      if (!docked) setSession(null);
     };
     document.addEventListener("keydown", onKeyDown, true);
     document.addEventListener("pointerdown", onPointerDown, true);
@@ -723,7 +772,7 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
       document.removeEventListener("keydown", onKeyDown, true);
       document.removeEventListener("pointerdown", onPointerDown, true);
     };
-  }, [isOpen]);
+  }, [isOpen, docked]);
 
   const term = anchor ? definingTerm(terms, anchor.passage) : null;
   const asked = (selection: ExplainSelection): SelectionTarget => ({ sectionIndex: selection.sectionIndex, paragraphIndex: selection.paragraphIndex, passage: selection.passage });
