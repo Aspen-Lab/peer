@@ -23,6 +23,7 @@ import {
   SELECTION_DEBOUNCE_MS,
   paragraphAnchor,
   readSelection,
+  sameSelection,
   selectionTarget,
   type ExplainSelection,
   type SelectionLike,
@@ -82,15 +83,18 @@ interface StubElement {
   tag: string;
   inBody: boolean;
   closest(selector: string): StubElement | null;
+  /** A real element has one; a stand-in has it only when a test gives it a box (P8-02). */
+  getBoundingClientRect?(): Rect;
 }
 
-function element(tag: string, id: string, parent: StubElement | null, inBody = true): StubElement {
+function element(tag: string, id: string, parent: StubElement | null, inBody = true, box?: Rect | (() => Rect)): StubElement {
   const self: StubElement = {
     id,
     nodeType: 1,
     parentElement: parent,
     tag,
     inBody,
+    ...(box ? { getBoundingClientRect: () => (typeof box === "function" ? box() : box) } : {}),
     closest(selector) {
       if (selector === BODY_SELECTOR) return inBody ? self : null;
       if (selector === "p") {
@@ -104,9 +108,9 @@ function element(tag: string, id: string, parent: StubElement | null, inBody = t
 }
 
 /** A paragraph as the body renders it: its anchor `div` holding the `<p>`. */
-function paragraph(k: number, i: number, inBody = true) {
+function paragraph(k: number, i: number, inBody = true, box?: Rect | (() => Rect)) {
   const host = element("div", paragraphAnchor(k, i), null, inBody);
-  const p = element("p", "", host, inBody);
+  const p = element("p", "", host, inBody, box);
   return { host, p, text: { nodeType: 3, parentElement: p } };
 }
 
@@ -117,10 +121,10 @@ interface StubNode {
 
 function range(
   source: Rect[] | (() => Rect[]),
-  over: { start?: StubNode; end?: StubNode; endOffset?: number; hasFormula?: boolean } = {},
+  over: { start?: StubNode; end?: StubNode; endOffset?: number; hasFormula?: boolean; box?: Rect | (() => Rect) } = {},
 ) {
   const rects = () => (typeof source === "function" ? source() : source);
-  const one = paragraph(1, 2);
+  const one = paragraph(1, 2, true, over.box);
   const made = {
     startContainer: over.start ?? one.text,
     endContainer: over.end ?? one.text,
@@ -137,7 +141,7 @@ const TWO_LINES: Rect[] = [{ left: 100, top: 200, right: 160, bottom: 220 }, { l
 
 /** The DOM's selection, with its range's two ends in the given nodes. */
 function selection(
-  over: { start?: StubNode; end?: StubNode; endOffset?: number; text?: string; rects?: Rect[] | (() => Rect[]); hasFormula?: boolean; isCollapsed?: boolean; rangeCount?: number } = {},
+  over: { start?: StubNode; end?: StubNode; endOffset?: number; text?: string; rects?: Rect[] | (() => Rect[]); hasFormula?: boolean; isCollapsed?: boolean; rangeCount?: number; box?: Rect | (() => Rect) } = {},
 ): SelectionLike {
   const made = range(over.rects ?? TWO_LINES, over);
   return {
@@ -147,6 +151,23 @@ function selection(
     getRangeAt: () => made,
   };
 }
+
+describe("sameSelection — a selection that has not changed is not a new one (P8-02: the paragraph's box counts)", () => {
+  const box = { left: 120, top: 150, right: 760, bottom: 420 };
+
+  it("is the same for one read twice, with or without the paragraph's box", () => {
+    expect(sameSelection(readSelection(selection({ box })), readSelection(selection({ box })))).toBe(true);
+    expect(sameSelection(readSelection(selection()), readSelection(selection()))).toBe(true);
+    expect(sameSelection(null, null)).toBe(true);
+    expect(sameSelection(readSelection(selection()), null)).toBe(false);
+  });
+
+  it("is a different one when the paragraph's box moved or appeared, though the selection's lines did not", () => {
+    expect(sameSelection(readSelection(selection({ box })), readSelection(selection({ box: { ...box, top: 100 } })))).toBe(false);
+    expect(sameSelection(readSelection(selection({ box })), readSelection(selection()))).toBe(false);
+    expect(sameSelection(readSelection(selection()), readSelection(selection({ box })))).toBe(false);
+  });
+});
 
 describe("readSelection — what the page's selection is", () => {
   it("is the target with where it ends on screen: its last line", () => {
@@ -171,6 +192,49 @@ describe("readSelection — what the page's selection is", () => {
     expect(again?.rect).toEqual({ left: 10, top: 100, right: 90, bottom: 120 });
     expect(again?.bounds).toEqual({ left: 10, top: 100, right: 90, bottom: 120 });
     expect(read?.rect.top).toBe(300);
+  });
+
+  // P8-02 (BACKLOG-31): the explain window stands level with the first line of the PARAGRAPH the
+  // explained passage belongs to, so the selection reports the paragraph's own box (the `<p>`, which
+  // the body renders as the first child of the paragraph's anchor) beside its lines, and again when
+  // measured again. Nothing else is added to what is reported.
+  it("also gives the paragraph's own box, whose top is the paragraph's first line, not the selection's", () => {
+    const box = { left: 120, top: 150, right: 760, bottom: 420 };
+    const read = readSelection(selection({ box }));
+
+    expect(read?.paragraph).toEqual(box);
+    // The words picked are lower down in it.
+    expect(read?.bounds.top).toBe(200);
+    expect(read?.rect).toEqual({ left: 40, top: 224, right: 120, bottom: 244 });
+  });
+
+  it("measures the paragraph's box again with the selection, after the page has scrolled", () => {
+    let box = { left: 120, top: 150, right: 760, bottom: 420 };
+    const read = readSelection(selection({ box: () => box }));
+    box = { left: 120, top: -90, right: 760, bottom: 180 };
+
+    expect(read?.measure?.()?.paragraph).toEqual({ left: 120, top: -90, right: 760, bottom: 180 });
+    // The first reading stays as it was.
+    expect(read?.paragraph?.top).toBe(150);
+  });
+
+  it("is the paragraph the selection starts in, for a triple click that ends at the start of the next one", () => {
+    const a = paragraph(1, 2, true, { left: 120, top: 100, right: 760, bottom: 300 });
+    const b = paragraph(1, 3, true, { left: 120, top: 316, right: 760, bottom: 500 });
+    const read = readSelection(selection({ start: a.text, end: b.p as never, endOffset: 0, text: "A whole paragraph of the paper, in one go.\n\n" }));
+
+    expect(read).toMatchObject({ paragraphIndex: 2 });
+    expect(read?.paragraph).toEqual({ left: 120, top: 100, right: 760, bottom: 300 });
+  });
+
+  it("reports no paragraph box where the element cannot give one — and is still the selection", () => {
+    const read = readSelection(selection());
+
+    expect(read).toMatchObject({ sectionIndex: 1, paragraphIndex: 2, passage: "the rafting ratio" });
+    expect(read).not.toHaveProperty("paragraph");
+    expect(read?.measure?.()).not.toHaveProperty("paragraph");
+    // …nor one with no size at all (a paragraph that is not laid out).
+    expect(readSelection(selection({ box: { left: 0, top: 0, right: 0, bottom: 0 } }))).not.toHaveProperty("paragraph");
   });
 
   it("measures null once the kept range has no size (it scrolled out of the document)", () => {

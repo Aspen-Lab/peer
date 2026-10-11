@@ -50,9 +50,13 @@
 // hands the page an `open` function: the `e` key does what the button does.
 //
 // Where it stands (`placePanel`): P7-15 (the owner's R7): from a window of 1024 px a dock
-// fixed at the right edge of the screen — flush with it, 360 px wide, from under the masthead to
-// above the foot legend, scrolling inside (`explain-dock.ts`); between 640 and 1024 the card
-// P3-02 put under the selection, measured again as the page scrolls; a bottom sheet on a phone.
+// fixed at the right edge of the screen — flush with it, 360 px wide, scrolling inside
+// (`explain-dock.ts`); between 640 and 1024 the card P3-02 put under the selection, measured
+// again as the page scrolls; a bottom sheet on a phone. P8-02 (the owner: "level with the first
+// line of the selected paragraph"): the dock's TOP is level with the first line of the PARAGRAPH
+// of the passage it explains (`ExplainSelection.paragraph`, from `paper-body.tsx`), held between
+// the masthead's foot and 160 px above the legend and measured again as the page scrolls; its
+// height is its content. It moves when the next passage is explained, not on a mere selection.
 // The selection is measured again as the page scrolls for two things now: the open window's
 // passage (where the window stands) and, while the dock is open, the NEW selection (where its
 // button stands — kept clear of the dock's 376 px).
@@ -90,7 +94,7 @@ import type { PaperTerm } from "@/lib/papers/report";
 import { MAX_EXPLAIN_MESSAGE_CHARS, threadFull, type ExplainTurn } from "@/store/explain-threads";
 import type { Paper, UserProfile } from "@/types";
 import { EXPLAIN, PEERS_READING } from "./copy";
-import { DOCK_BOTTOM_PX, DOCK_MIN_VIEWPORT_PX, DOCK_RESERVE_PX, DOCK_TOP_PX, DOCK_WIDTH_PX, reserveDock } from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_RESERVE_PX, DOCK_TOP_PX, DOCK_WIDTH_PX, reserveDock } from "./explain-dock";
 import { EvidenceQuote } from "./evidence-quote";
 import {
   asItems,
@@ -236,7 +240,8 @@ export function placeCard(
 }
 
 export interface Place {
-  /** `dock`: the window at the right edge (P7-15); `card`: P3-02's place; `sheet`: a phone's bottom sheet. */
+  /** `dock`: the window at the right edge (P7-15), level with its paragraph (P8-02), with a `top` and a
+   *  `maxHeight` and no `bottom` — its height is its content; `card`: P3-02's place; `sheet`: a phone's bottom sheet. */
   kind: "dock" | "card" | "sheet";
   left?: number;
   /** The dock stands against the window's right edge: `right`, not a `left` computed from a width that
@@ -253,17 +258,22 @@ const SHEET_SHARE = 0.6;
 
 /**
  * Where the box stands. From a window of 1024 px: the dock (P7-15, R7) — the window's right edge,
- * 360 px wide, its top under the masthead and its bottom above the foot legend, so as tall as the
- * window less the two; the thread scrolls inside and the input is pinned at its foot. Nothing of
- * the selection or the text enters it. Below 640: a sheet — the window's width, on its bottom edge, at most 60% of its
+ * 360 px wide, and (P8-02, BACKLOG-31) its top level with the first line of the explained passage's
+ * PARAGRAPH: `top = clamp(paragraphTop, DOCK_TOP_PX, height − DOCK_BOTTOM_PX − DOCK_MIN_VISIBLE_PX)`,
+ * so never above the masthead's foot and never so low that less than 160 px of it shows above the foot
+ * legend. Its height is its content, at most the room from its top down to the legend (`maxHeight`);
+ * the thread scrolls inside and the input is pinned at its foot. The words of the selection do not enter
+ * it — `bounds` only does where the body reported no paragraph (the selection's own first line then).
+ * Below 640: a sheet — the window's width, on its bottom edge, at most 60% of its
  * height. Between the two P3-02's place (`placeCard`), under or above the selection, unchanged.
  */
-export function placePanel(bounds: ViewRect, viewport: Viewport): Place {
+export function placePanel(bounds: ViewRect, viewport: Viewport, paragraphTop?: number): Place {
   if (viewport.width < PHONE_WIDTH) {
     return { kind: "sheet", left: 0, width: viewport.width, bottom: 0, maxHeight: Math.floor(viewport.height * SHEET_SHARE) };
   }
   if (viewport.width >= DOCK_MIN_VIEWPORT_PX) {
-    return { kind: "dock", right: 0, width: DOCK_WIDTH_PX, top: DOCK_TOP_PX, bottom: DOCK_BOTTOM_PX, maxHeight: Math.max(0, viewport.height - DOCK_TOP_PX - DOCK_BOTTOM_PX) };
+    const top = clamp(paragraphTop ?? bounds.top, DOCK_TOP_PX, viewport.height - DOCK_BOTTOM_PX - DOCK_MIN_VISIBLE_PX);
+    return { kind: "dock", right: 0, width: DOCK_WIDTH_PX, top, maxHeight: Math.max(0, viewport.height - top - DOCK_BOTTOM_PX) };
   }
   return { kind: "card", ...placeCard(bounds, viewport) };
 }
@@ -462,8 +472,9 @@ export function ExplainCard({
   thread?: ThreadView;
   /** A phone's bottom sheet, flush with the screen's foot and sides: square corners all round, as the page's cards (the theme's radius scale is 0, so the card's `rounded-*` classes draw nothing; P3-02d). */
   sheet?: boolean;
-  /** P7-15: the dock at the window's right edge. A window-high column: a line on its left only (the
-   *  masthead's and the legend's own lines stand above and below it), the controls pinned at its foot. */
+  /** P7-15: the dock at the window's right edge. A column against it: a line on its left, top and bottom and none
+   *  on the right; P8-02: as tall as its content, level with its paragraph, so it stands free of the masthead
+   *  and the legend (it was a window-high column with a line on its left only), the controls pinned at its foot. */
   dock?: boolean;
   /** The card itself — the one thing that scrolls, and what the sheet's height is read from. */
   cardRef?: Ref<HTMLDivElement>;
@@ -482,7 +493,7 @@ export function ExplainCard({
       ref={cardRef}
       style={style}
       className={`fixed z-[70] overflow-y-auto border border-border-strong bg-surface p-4 ${
-        dock ? "flex flex-col border-y-0 border-r-0" : `shadow-card-hover ${sheet ? "rounded-t-lg border-b-0" : "rounded-lg"}`
+        dock ? "flex flex-col border-r-0" : `shadow-card-hover ${sheet ? "rounded-t-lg border-b-0" : "rounded-lg"}`
       }`}
     >
       {/* The card is what scrolls; its passage stays at the top and its input at the foot (sticky,
@@ -998,7 +1009,8 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   ) : null;
   if (!open) return ask;
 
-  const place = placePanel(whereOf(open.selection).bounds, viewport);
+  const placedAt = whereOf(open.selection);
+  const place = placePanel(placedAt.bounds, viewport, placedAt.paragraph?.top);
   const heading = reading.body[open.selection.sectionIndex]?.heading ?? "";
   const threadView: ThreadView | undefined =
     canAsk && onReply && open.status.kind === "answer"

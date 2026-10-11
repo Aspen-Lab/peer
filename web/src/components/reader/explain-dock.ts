@@ -1,8 +1,19 @@
-// The "Explain this?" conversation as a dock (P7-15; the owner's R7, ruling Q4).
+// The "Explain this?" conversation as a dock (P7-15; the owner's R7, ruling Q4) that stays open and
+// stands level with the paragraph it explains (P8-02; BACKLOG-31, the owner's words, ruling §1h.41 (b)).
 //
 // From a window of 1024 px the box is not a card at the selection but a window
-// fixed at the right edge of the screen: flush with the edge, 360 px wide, its
-// top under the masthead and its bottom above the foot legend, scrolling inside.
+// fixed at the right edge of the screen: flush with the edge, 360 px wide, in the
+// margin the page keeps clear (below), scrolling inside. Once it is open it STAYS open across
+// selections (`explain-box.tsx`) until Escape or Close, and its top is level with the first line of
+// the PARAGRAPH the explained passage belongs to, measured again as the page scrolls and the window
+// resizes:
+//
+//   top = clamp(paragraphTop, DOCK_TOP_PX, windowHeight − DOCK_BOTTOM_PX − DOCK_MIN_VISIBLE_PX)
+//
+// so it never stands above the masthead's foot (it stays there while the paragraph is scrolled
+// above it) and never so low that less than `DOCK_MIN_VISIBLE_PX` of it shows above the foot legend.
+// Its height is its content, at most what is left between its top and the legend; it scrolls inside.
+// It moves when the next passage is explained, not on a mere selection of it.
 // Plain module, no directive: the placement (`explain-box.tsx`) and the pins on
 // the shell's own heights read the numbers from one place.
 //
@@ -18,11 +29,17 @@ export const DOCK_MIN_VIEWPORT_PX = 1024;
 /** The dock's width: also the card's. */
 export const DOCK_WIDTH_PX = 360;
 
-/** The dock's top: the sticky masthead's height (`h-12`). */
+/** The dock's highest top: the sticky masthead's height (`h-12`). Its top is level with its paragraph's
+ *  (P8-02) and never above this. */
 export const DOCK_TOP_PX = 48;
 
 /** The dock's bottom edge stands this far above the window's: the foot legend's height (`--legend-h`). */
 export const DOCK_BOTTOM_PX = 28;
+
+/** P8-02: the dock's top stands no lower than this much of it still shows above the foot legend (its lowest
+ *  top is the window's height less `DOCK_BOTTOM_PX` less this), so a paragraph far down the screen never
+ *  leaves a window too short to read. */
+export const DOCK_MIN_VISIBLE_PX = 160;
 
 // ── Making room ───────────────────────────────────────────────────────────
 //

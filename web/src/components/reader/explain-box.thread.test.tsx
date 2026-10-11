@@ -15,6 +15,7 @@ import {
   type ExplainStatus,
   type ThreadView,
 } from "./explain-box";
+import { DOCK_MIN_VISIBLE_PX } from "./explain-dock";
 import { firstAnswerMessage, keyToSend, requestReply } from "./explain-thread";
 
 // P3-02b (ruling §1h.3; §3d 14): the thread under the first answer, the input
@@ -360,7 +361,9 @@ describe("ExplainCard — as the dock (P7-15, R7)", () => {
   const cardClass = (html: string) => /data-explain-card=""[^>]*class="([^"]*)"/.exec(html)?.[1] ?? "";
   const controlsClass = (html: string) => /<div[^>]*data-explain-controls=""[^>]*class="([^"]*)"/.exec(html)?.[1] ?? "";
 
-  it("is marked as the dock, and is a window-high column: flush with the edge, a line on its left only", () => {
+  // P8-02: the dock is level with its paragraph and as tall as its content, so it no longer spans the masthead's
+  // foot to the legend's top; it carries its own top and bottom lines (it was "a line on its left only").
+  it("is marked as the dock, a column against the right edge: a line on its left, top and bottom, none on the right", () => {
     const html = card({ dock: true, thread: view({ turns }) });
     const cls = cardClass(html);
 
@@ -371,8 +374,9 @@ describe("ExplainCard — as the dock (P7-15, R7)", () => {
     expect(cls).toMatch(/\boverflow-y-auto\b/);
     expect(cls).toMatch(/\bflex\b/);
     expect(cls).toMatch(/\bflex-col\b/);
-    // The masthead's and the legend's own lines stand above and below it: no border on top or bottom, none on the right.
-    expect(cls).toMatch(/\bborder-y-0\b/);
+    // Level with its paragraph it stands free of the masthead and the legend: its own line on top and at the foot,
+    // and none on the right, where it meets the screen's edge.
+    expect(cls).not.toMatch(/\bborder-(y|t|b)-0\b/);
     expect(cls).toMatch(/\bborder-r-0\b/);
   });
 
@@ -407,30 +411,74 @@ describe("placePanel (P3-02b; P7-15, R7)", () => {
   const spread = { width: 1440, height: 900 };
 
   // P7-15 (R7, Q4): from 1024 px the conversation is a dock fixed at the window's right edge, not a
-  // panel at the selection. The rectangle is the window's: flush right, 360 wide, its top under the
-  // 48 px masthead and its bottom above the 28 px foot legend; it scrolls inside. Nothing about the
-  // selection or the text column enters it (the page makes room for it, commit 2).
-  it("is a dock at the window's right edge from 1024 px: 360 wide, under the masthead, above the legend", () => {
+  // panel at the selection: flush right, 360 wide, scrolling inside, the page keeping its width clear.
+  // P8-02 (BACKLOG-31): its top is level with the first line of the explained passage's PARAGRAPH,
+  // clamped to the band between the 48 px masthead's foot and the 28 px foot legend less 160 px; its
+  // height is its content, at most what is left below the top. The selection's own words do not enter it.
+  it("is a dock at the window's right edge from 1024 px: 360 wide, its top the paragraph's, no bottom of its own", () => {
     for (const [width, height] of [[1024, 768], [1280, 800], [1440, 900], [1920, 1080]]) {
-      const place = placePanel(bounds, { width, height });
+      const place = placePanel(bounds, { width, height }, 300);
 
       expect(place.kind).toBe("dock");
-      expect(place).toMatchObject({ right: 0, width: 360, top: 48, bottom: 28, maxHeight: height - 48 - 28 });
+      expect(place).toEqual({ kind: "dock", right: 0, width: 360, top: 300, maxHeight: height - 300 - 28 });
       expect(place.left).toBeUndefined();
+      expect(place.bottom).toBeUndefined();
     }
   });
 
-  it("does not depend on where the selection is: the same rectangle for a selection high, low or at the right edge", () => {
-    const wanted = placePanel(bounds, spread);
+  it("does not depend on where the selection's words are once the paragraph is known: the same rectangle for a selection high, low or at the right edge", () => {
+    const wanted = placePanel(bounds, spread, 410);
 
     for (const other of [{ left: 20, top: -400, right: 90, bottom: -370 }, { left: 900, top: 880, right: 1400, bottom: 900 }, { left: 1000, top: 10, right: 1430, bottom: 40 }]) {
-      expect(placePanel(other, spread)).toEqual(wanted);
+      expect(placePanel(other, spread, 410)).toEqual(wanted);
     }
   });
 
-  it("is the window's height less the masthead and the legend, and never negative", () => {
-    expect(placePanel(bounds, { width: 1280, height: 800 }).maxHeight).toBe(800 - 48 - 28);
-    expect(placePanel(bounds, { width: 1280, height: 60 }).maxHeight).toBe(0);
+  it("stands at the paragraph's top when it lies inside the band: from 48 to the window's height less 28 and less 160", () => {
+    const viewport = { width: 1440, height: 900 };
+
+    expect(placePanel(bounds, viewport, 48)).toMatchObject({ top: 48, maxHeight: 900 - 48 - 28 });
+    expect(placePanel(bounds, viewport, 49.5)).toMatchObject({ top: 49.5, maxHeight: 900 - 49.5 - 28 });
+    expect(placePanel(bounds, viewport, 400)).toMatchObject({ top: 400, maxHeight: 472 });
+    expect(placePanel(bounds, viewport, 900 - 28 - 160)).toMatchObject({ top: 712, maxHeight: 160 });
+  });
+
+  it("stays under the masthead while the paragraph is scrolled above it", () => {
+    const viewport = { width: 1440, height: 900 };
+
+    expect(placePanel(bounds, viewport, 47)).toMatchObject({ top: 48, maxHeight: 900 - 48 - 28 });
+    expect(placePanel(bounds, viewport, -1200)).toMatchObject({ top: 48, maxHeight: 824 });
+  });
+
+  it("stands no lower than leaves 160 px of it above the legend while the paragraph is further down", () => {
+    const viewport = { width: 1440, height: 900 };
+
+    expect(DOCK_MIN_VISIBLE_PX).toBe(160);
+    expect(placePanel(bounds, viewport, 713)).toMatchObject({ top: 712, maxHeight: 160 });
+    expect(placePanel(bounds, viewport, 5000)).toMatchObject({ top: 900 - 28 - 160, maxHeight: 160 });
+    // A shorter window moves the limit with it.
+    expect(placePanel(bounds, { width: 1280, height: 600 }, 5000)).toMatchObject({ top: 600 - 28 - 160, maxHeight: 160 });
+  });
+
+  it("is the window's height less the masthead and the legend when the paragraph is above, and never negative", () => {
+    expect(placePanel(bounds, { width: 1280, height: 800 }, 0).maxHeight).toBe(800 - 48 - 28);
+    expect(placePanel(bounds, { width: 1280, height: 60 }, 0).maxHeight).toBe(0);
+    // A window too short for the band: the top is the masthead's foot, whatever the paragraph does.
+    expect(placePanel(bounds, { width: 1280, height: 200 }, 150)).toMatchObject({ top: 48, maxHeight: 200 - 48 - 28 });
+    expect(placePanel(bounds, { width: 1280, height: 100 }, 5000)).toMatchObject({ top: 48, maxHeight: 24 });
+  });
+
+  it("has no paragraph to be level with only where the body reported none: the selection's own first line then", () => {
+    const place = placePanel({ left: 120, top: 333, right: 520, bottom: 363 }, spread);
+
+    expect(place).toMatchObject({ kind: "dock", top: 333, right: 0, width: 360, maxHeight: 900 - 333 - 28 });
+  });
+
+  it("leaves the card and the sheet alone: the paragraph enters neither", () => {
+    for (const paragraphTop of [undefined, 0, 400, 5000]) {
+      expect(placePanel(bounds, { width: 800, height: 900 }, paragraphTop)).toMatchObject({ kind: "card", ...placeCard(bounds, { width: 800, height: 900 }) });
+      expect(placePanel(bounds, { width: 390, height: 844 }, paragraphTop)).toEqual(placePanel(bounds, { width: 390, height: 844 }));
+    }
   });
 
   it("starts at 1024 exactly: at 1023 it is P3-02's card, at 1024 the dock", () => {

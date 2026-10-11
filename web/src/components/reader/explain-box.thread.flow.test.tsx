@@ -493,25 +493,29 @@ describe("ExplainBox — openRef: e opens the box as the button does (P3-02b)", 
 describe("ExplainBox — where the panel stands (P3-02b; P7-15, R7)", () => {
   // P7-15 (R7, Q4): from 1024 px the box is the dock at the window's right edge, wherever the
   // selection is and whatever the text column does; the card remains between 640 and 1024.
-  it("the dock on a window of 1440: flush right, 360 wide, under the masthead and above the legend", async () => {
+  // P8-02 (BACKLOG-31): the dock's top is level with the explained paragraph's first line (the selection
+  // reports the paragraph's box), no longer the masthead's foot for every selection; its height is its
+  // content. These two were "top 48, bottom 28" for any selection and are re-aimed to the new rule; the
+  // clamp, the scroll and the move on the next passage are in `explain-box.dock.flow.test.tsx`.
+  it("the dock on a window of 1440: flush right, 360 wide, its top the paragraph's, no bottom of its own", async () => {
     stubWindow(1440, 900);
-    const run = await scenario(base(), [(tree) => click(tree)]);
+    const run = await scenario(base({ target: { ...first, paragraph: { left: 120, top: 260, right: 760, bottom: 520 } } }), [(tree) => click(tree)]);
     await wait();
 
-    expect(run.last().style).toMatchObject({ right: 0, width: 360, top: 48, bottom: 28, maxHeight: 900 - 48 - 28 });
-    expect(run.last().style?.left).toBeUndefined();
+    expect(run.last().style).toEqual({ right: 0, width: 360, top: 260, maxHeight: 900 - 260 - 28 });
     expect(run.last().dock).toBe(true);
     run.mounted.unmount();
   });
 
-  it("the dock at 1280 and at 1920 too, and where the selection is changes nothing", async () => {
+  it("the dock at 1280 and at 1920 too, and where the selection's words are within the paragraph changes nothing", async () => {
     for (const [width, height] of [[1280, 800], [1920, 1080]]) {
       stubWindow(width, height);
-      for (const target of [first, { ...first, bounds: { left: width - 300, top: height - 40, right: width - 20, bottom: height - 10 } }]) {
+      const paragraph = { left: 120, top: 300, right: 760, bottom: 600 };
+      for (const target of [{ ...first, paragraph }, { ...first, paragraph, bounds: { left: width - 300, top: height - 40, right: width - 20, bottom: height - 10 } }]) {
         const run = await scenario(base({ target }), [(tree) => click(tree)]);
         await wait();
 
-        expect(run.last().style).toMatchObject({ right: 0, width: 360, top: 48, bottom: 28, maxHeight: height - 76 });
+        expect(run.last().style).toEqual({ right: 0, width: 360, top: 300, maxHeight: height - 300 - 28 });
         expect(run.last().dock).toBe(true);
         run.mounted.unmount();
       }

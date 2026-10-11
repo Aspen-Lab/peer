@@ -23,7 +23,7 @@ import type { PaperReading } from "@/lib/papers/reading";
 import type { PaperTerm } from "@/lib/papers/report";
 import type { ExplainTurn } from "@/store/explain-threads";
 import { EXPLAIN } from "./copy";
-import { ExplainBox, ExplainCard, type AskResult, type ThreadView } from "./explain-box";
+import { ExplainBox, ExplainCard, placeCard, type AskResult, type ThreadView } from "./explain-box";
 import type { ReplyResult } from "./explain-thread";
 import type { ExplainSelection } from "./paper-body";
 
@@ -501,5 +501,151 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     expect(run.last().passage).toBe(first.passage);
     expect(run.last().button?.props.style).toEqual({ left: 460 - 60, top: 320 + 6 });
     run.mounted.unmount();
+  });
+});
+
+// ── Level with the explained paragraph's first line (P8-02) ─────────────────────────────────────────
+
+/** A selection whose paragraph begins `top` px from the top of the window (its own words lie lower in it). */
+const inParagraph = (selection: ExplainSelection, top: number): ExplainSelection => ({ ...selection, paragraph: { left: 120, top, right: 760, bottom: top + 260 } });
+
+describe("ExplainBox — the window stands level with the explained paragraph's first line (P8-02, BACKLOG-31)", () => {
+  it("its top is the paragraph's top; its right edge is flush, it is 360 wide, and its height is its content", async () => {
+    const run = await scenario(base({ target: inParagraph(first, 400) }), [(tree) => click(tree)]);
+    await wait();
+
+    // No `bottom`: the window is as tall as what it holds, at most what is left below its top.
+    expect(run.last().style).toEqual({ right: 0, width: 360, top: 400, maxHeight: 900 - 400 - 28 });
+    expect(run.last().dock).toBe(true);
+    run.mounted.unmount();
+  });
+
+  it("is the PARAGRAPH's top, not the first line of the words picked: those lie lower in a long paragraph", async () => {
+    // `first.bounds.top` is 380: the picked words. The paragraph began at 250.
+    const run = await scenario(base({ target: inParagraph(first, 250) }), [(tree) => click(tree)]);
+    await wait();
+
+    expect(run.last().style?.top).toBe(250);
+    run.mounted.unmount();
+  });
+
+  it("is the same for the Tier 0 definition, which is the dock too", async () => {
+    const target = inParagraph({ ...first, passage: "The rafting ratio rose." }, 330);
+    const run = await scenario(base({ canAsk: false, terms: [term], target, cached: undefined }), [(tree) => click(tree)]);
+    await wait();
+
+    expect(run.last().status).toBe("none");
+    expect(run.last().style).toMatchObject({ right: 0, top: 330, maxHeight: 900 - 330 - 28 });
+    run.mounted.unmount();
+  });
+
+  it("stays under the masthead while the paragraph is scrolled above it, and 160 px above the legend while it is far below", async () => {
+    const above = await scenario(base({ target: inParagraph(first, -700) }), [(tree) => click(tree)]);
+    await wait();
+    expect(above.last().style).toMatchObject({ top: 48, maxHeight: 900 - 48 - 28 });
+    above.mounted.unmount();
+
+    const below = await scenario(base({ target: inParagraph(first, 4000) }), [(tree) => click(tree)]);
+    await wait();
+    expect(below.last().style).toMatchObject({ top: 900 - 28 - 160, maxHeight: 160 });
+    below.mounted.unmount();
+  });
+
+  it("does not move on a mere selection of the next passage — it moves when that passage is explained", async () => {
+    const tops: Array<number | undefined> = [];
+    const run = await scenario(base({ target: inParagraph(first, 400) }), [
+      (tree) => click(tree),
+      selectNext(inParagraph(second, 620), { cached: SECOND_ANSWER }),
+      // Selected, not explained: the window is still the first passage's, at the first paragraph's top.
+      (tree) => tops.push(look(tree).style?.top),
+      (tree) => click(tree),
+      // Explained: the same window, now level with the second paragraph.
+      (tree) => tops.push(look(tree).style?.top),
+    ]);
+    await wait();
+
+    expect(tops).toEqual([400, 620]);
+    expect(run.last().passage).toBe(second.passage);
+    expect(removeProperty).not.toHaveBeenCalled();
+    run.mounted.unmount();
+  });
+
+  it("follows the paragraph as the page scrolls, and holds the clamp", async () => {
+    let paragraphTop = 400;
+    const moving: ExplainSelection = {
+      ...inParagraph(first, 400),
+      measure: () => ({ rect: first.rect, bounds: first.bounds, paragraph: { left: 120, top: paragraphTop, right: 760, bottom: paragraphTop + 260 } }),
+    };
+    const tops: Array<number | undefined> = [];
+    const scrollTo = (top: number): Step => () => {
+      paragraphTop = top;
+      fire("scroll", {});
+    };
+    const record: Step = (tree) => tops.push(look(tree).style?.top);
+    const run = await scenario(base({ target: moving }), [
+      (tree) => click(tree),
+      record,
+      scrollTo(300),
+      record,
+      scrollTo(-250),
+      record,
+      scrollTo(5000),
+      record,
+      scrollTo(520),
+      record,
+    ]);
+    await wait();
+
+    // Opened where the paragraph was read; then wherever the page puts it, held between 48 and 712 (900 − 28 − 160).
+    expect(tops).toEqual([400, 300, 48, 712, 520]);
+    run.mounted.unmount();
+  });
+
+  it("follows the window as it is resized: the limit above the legend moves with its height", async () => {
+    const paragraphTop = 500;
+    const moving: ExplainSelection = {
+      ...inParagraph(first, 500),
+      measure: () => ({ rect: first.rect, bounds: first.bounds, paragraph: { left: 120, top: paragraphTop, right: 760, bottom: paragraphTop + 260 } }),
+    };
+    const styles: Array<Look["style"]> = [];
+    const run = await scenario(base({ target: moving }), [
+      (tree) => click(tree),
+      () => {
+        stubWindow(1440, 600);
+        fire("resize", {});
+      },
+      (tree) => styles.push(look(tree).style),
+    ]);
+    await wait();
+
+    // 600 − 28 − 160 = 412 is as low as it may stand; the paragraph at 500 is lower; the height is what is left of it.
+    expect(styles).toEqual([{ right: 0, width: 360, top: 412, maxHeight: 160 }]);
+    run.mounted.unmount();
+  });
+
+  it("falls back on the selection's own first line where the body reported no paragraph", async () => {
+    const run = await scenario(base({ target: first }), [(tree) => click(tree)]);
+    await wait();
+
+    expect(first.paragraph).toBeUndefined();
+    expect(run.last().style).toEqual({ right: 0, width: 360, top: first.bounds.top, maxHeight: 900 - first.bounds.top - 28 });
+    run.mounted.unmount();
+  });
+
+  it("is only the dock's: the card (640 to 1023 px) and the phone's sheet keep their places", async () => {
+    stubWindow(800, 900);
+    const card = await scenario(base({ target: inParagraph(first, 400) }), [(tree) => click(tree)]);
+    await wait();
+    expect(card.last().dock).toBe(false);
+    expect(card.last().style?.right).toBeUndefined();
+    expect(card.last().style).toMatchObject(placeCard(first.bounds, { width: 800, height: 900 }));
+    card.mounted.unmount();
+
+    stubWindow(390, 844);
+    const sheet = await scenario(base({ target: inParagraph(first, 400) }), [(tree) => click(tree)]);
+    await wait();
+    expect(sheet.last().style).toMatchObject({ left: 0, width: 390, bottom: 0 });
+    expect(sheet.last().style?.top).toBeUndefined();
+    sheet.mounted.unmount();
   });
 });

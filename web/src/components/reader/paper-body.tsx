@@ -268,10 +268,13 @@ export interface ViewRect {
 
 /** Where a selection is on screen: `rect`, where it ends (the last line the
  *  words reach — what the button stands under), and `bounds`, the whole of it
- *  (what the card stands clear of). */
+ *  (what the card stands clear of). `paragraph` (P8-02) is the box of the paragraph's
+ *  own `<p>`: its top is the paragraph's first line, which the explain window stands level
+ *  with. Absent only where the element cannot give a box (the selection is still read). */
 export interface ViewRects {
   rect: ViewRect;
   bounds: ViewRect;
+  paragraph?: ViewRect;
 }
 
 /** A target with where it is on screen, and how to look again after a scroll. */
@@ -297,6 +300,7 @@ export function selectionTarget(input: {
 }
 
 const sameRect = (a: ViewRect, b: ViewRect) => a.left === b.left && a.top === b.top && a.right === b.right && a.bottom === b.bottom;
+const sameOptionalRect = (a: ViewRect | undefined, b: ViewRect | undefined) => (a === undefined || b === undefined ? a === b : sameRect(a, b));
 
 /** Whether two selections are the same one, so the page does not re-render for
  *  a selection that has not changed (every `selectionchange` is not a change). */
@@ -307,7 +311,8 @@ export function sameSelection(a: ExplainSelection | null, b: ExplainSelection | 
     a.paragraphIndex === b.paragraphIndex &&
     a.passage === b.passage &&
     sameRect(a.rect, b.rect) &&
-    sameRect(a.bounds, b.bounds)
+    sameRect(a.bounds, b.bounds) &&
+    sameOptionalRect(a.paragraph, b.paragraph)
   );
 }
 
@@ -316,6 +321,7 @@ interface ElementLike {
   id: string;
   parentElement: ElementLike | null;
   closest(selector: string): ElementLike | null;
+  getBoundingClientRect?(): ViewRect;
 }
 interface NodeLike {
   nodeType: number;
@@ -337,15 +343,16 @@ export interface SelectionLike {
   getRangeAt(index: number): RangeLike;
 }
 
-/** The id of the paragraph (the element `paragraphAnchor` names) that holds
- *  `node`, when it is inside the paper's body — each holds exactly one `<p>`, so
- *  text in an equation or a caption beside it is in none. */
-function paragraphIdOf(node: NodeLike | null): string | null {
+/** The paragraph (the element `paragraphAnchor` names) that holds `node`, when it is inside the
+ *  paper's body — each holds exactly one `<p>`, so text in an equation or a caption beside it is in
+ *  none — with its id and that `<p>`, whose box is the paragraph's (P8-02). */
+function paragraphOf(node: NodeLike | null): { id: string; text: ElementLike } | null {
   if (!node) return null;
   const element = node.nodeType === 1 ? (node as unknown as ElementLike) : node.parentElement;
-  const host = element?.closest("p")?.parentElement ?? null;
-  if (!host || host.closest(`#${PAPER_BODY_ID}`) === null) return null;
-  return PARAGRAPH_ANCHOR.test(host.id) ? host.id : null;
+  const text = element?.closest("p") ?? null;
+  const host = text?.parentElement ?? null;
+  if (!text || !host || host.closest(`#${PAPER_BODY_ID}`) === null) return null;
+  return PARAGRAPH_ANCHOR.test(host.id) ? { id: host.id, text } : null;
 }
 
 const hasSize = (rect: ViewRect) => rect.right - rect.left > 0 || rect.bottom - rect.top > 0;
@@ -353,8 +360,9 @@ const plain = (rect: ViewRect): ViewRect => ({ left: rect.left, top: rect.top, r
 
 /** Where a range is on screen: its last line with a width — a range that ends
  *  at the start of the next block ends with one that has none — and the box of
- *  all its lines. Null when it has no size at all (off screen). */
-function measureRange(range: RangeLike): ViewRects | null {
+ *  all its lines. Null when it has no size at all (off screen). With the paragraph's `<p>`
+ *  (P8-02), also its box, read again each time. */
+function measureRange(range: RangeLike, paragraph?: ElementLike): ViewRects | null {
   const rects = Array.from(range.getClientRects());
   const sized = rects.filter((rect) => rect.right - rect.left > 0);
   const last = sized.length > 0 ? sized[sized.length - 1] : rects.length > 0 ? rects[rects.length - 1] : range.getBoundingClientRect();
@@ -366,7 +374,8 @@ function measureRange(range: RangeLike): ViewRects | null {
     right: Math.max(...lines.map((rect) => rect.right)),
     bottom: Math.max(...lines.map((rect) => rect.bottom)),
   };
-  return { rect: plain(last), bounds };
+  const box = paragraph?.getBoundingClientRect?.();
+  return { rect: plain(last), bounds, ...(box && hasSize(box) ? { paragraph: plain(box) } : {}) };
 }
 
 /** What the page's selection is, as an `ExplainSelection`, or null: nothing
@@ -377,8 +386,9 @@ export function readSelection(selection: SelectionLike | null): ExplainSelection
   // The selection's own range changes as the selection does; this one is ours.
   const range = selection.getRangeAt(0).cloneRange();
   const text = selection.toString();
-  const startId = paragraphIdOf(range.startContainer);
-  let endId = paragraphIdOf(range.endContainer);
+  const start = paragraphOf(range.startContainer);
+  const startId = start?.id ?? null;
+  let endId = paragraphOf(range.endContainer)?.id ?? null;
   // A triple click selects a paragraph, and the browser ends it at offset 0 of
   // the NEXT one: the words are all the first paragraph's. A drag that really
   // runs on into another paragraph carries a break inside its words.
@@ -386,9 +396,9 @@ export function readSelection(selection: SelectionLike | null): ExplainSelection
   const target = selectionTarget({ anchorParagraphId: startId, focusParagraphId: endId, text });
   if (!target) return null;
   if (range.cloneContents().querySelector(FORMULA_SELECTOR)) return null;
-  const where = measureRange(range);
+  const where = measureRange(range, start?.text);
   if (!where) return null;
-  return { ...target, ...where, measure: () => measureRange(range) };
+  return { ...target, ...where, measure: () => measureRange(range, start?.text) };
 }
 
 /**

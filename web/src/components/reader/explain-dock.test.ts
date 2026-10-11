@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { placeCard } from "./explain-box";
-import { DOCK_BOTTOM_PX, DOCK_GAP_PX, DOCK_MIN_VIEWPORT_PX, DOCK_RESERVE_PX, DOCK_TOP_PX, DOCK_VAR, DOCK_WIDTH_PX, DOCK_WIDTH_VAR, reserveDock } from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_GAP_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_RESERVE_PX, DOCK_TOP_PX, DOCK_VAR, DOCK_WIDTH_PX, DOCK_WIDTH_VAR, reserveDock } from "./explain-dock";
 
 // P7-15 (the owner's R7): the dock's rectangle is built from three numbers that the shell owns —
 // the masthead's height above it, the foot legend's below it, and the width of the card it
@@ -36,6 +36,13 @@ describe("the dock's rectangle against the shell that frames it", () => {
     expect(placeCard({ left: 300, top: 400, right: 420, bottom: 420 }, { width: 1000, height: 900 }).width).toBe(DOCK_WIDTH_PX);
     expect(DOCK_WIDTH_PX).toBe(360);
     expect(DOCK_MIN_VIEWPORT_PX).toBe(64 * REM_PX);
+  });
+
+  it("never stands so low that less than 160 px of it shows above the legend (P8-02)", () => {
+    // The window is level with its paragraph (`placePanel`), and the paragraph may be anywhere on the page:
+    // its top is held between the masthead's foot and this much above the legend.
+    expect(DOCK_MIN_VISIBLE_PX).toBe(160);
+    expect(DOCK_TOP_PX + DOCK_MIN_VISIBLE_PX + DOCK_BOTTOM_PX).toBe(236);
   });
 });
 
