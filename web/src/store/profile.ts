@@ -182,9 +182,24 @@ interface ProfileState {
   updateJevApiKey: (value: string) => void;
   updateDeepReportEnabled: (value: boolean) => void;
   updateColorTheme: (theme: ColorTheme) => void;
-  /** Mark first-run onboarding complete (defaults to now). */
+  /**
+   * Mark first-run onboarding complete (defaults to now). Skipping the wizard,
+   * finishing it and choosing a field on the home page all end here, so it also
+   * sets `welcomeSkipped`: the walkthrough does not open on its own again.
+   */
   completeOnboarding: (at?: string) => void;
-  /** Clear the onboarding flag so the welcome flow shows again (replay / dev). */
+  /**
+   * Record that the first-visit walkthrough has been dealt with — nothing else.
+   * `FirstRunGate` calls it when it sends a never-set-up profile to /welcome
+   * (and when the reader opens /welcome themselves), so the redirect fires once
+   * per browser however the reader leaves the wizard.
+   */
+  skipWelcome: () => void;
+  /**
+   * Clear the onboarding flag so the welcome flow shows again (replay / dev).
+   * `welcomeSkipped` stays: a replay is the reader's own call and must not
+   * re-arm the first-visit redirect.
+   */
   resetOnboarding: () => void;
   /** Replace local state with a server snapshot. Undefined fields keep local values. */
   hydrateFromRemote: (remote: Partial<UserProfile>) => void;
@@ -771,10 +786,16 @@ export const useProfileStore = create<ProfileState>()(
           // promoteSearchInputs only acts when the snapshot has never held real
           // inputs, so this cannot bypass the day-lock for a returning user.
           profile: promoteSearchInputs(
-            { ...s.profile, onboardedAt: at ?? new Date().toISOString() },
+            {
+              ...s.profile,
+              onboardedAt: at ?? new Date().toISOString(),
+              welcomeSkipped: true,
+            },
             new Date(),
           ),
         })),
+      skipWelcome: () =>
+        set((s) => ({ profile: { ...s.profile, welcomeSkipped: true } })),
       resetOnboarding: () =>
         set((s) => ({ profile: { ...s.profile, onboardedAt: null } })),
 

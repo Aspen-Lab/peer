@@ -588,14 +588,28 @@ export interface UserProfile {
   colorTheme: ColorTheme;
   /**
    * ISO timestamp of when the user completed (or skipped) the first-run
-   * onboarding wizard. `null` means they have never been through it, which is
-   * what gates the welcome flow. Local-only for now (persisted to localStorage
-   * via the zustand store, NOT synced to the Supabase profile row), so a fresh
-   * browser re-shows onboarding — and clearing localStorage fully resets it,
-   * which keeps local dev testing simple. See `web/supabase/` for the optional
-   * migration to make this cross-device later.
+   * onboarding wizard. `null` means they have never been through it. Local-only
+   * for now (persisted to localStorage via the zustand store, NOT synced to the
+   * Supabase profile row), so a fresh browser re-shows onboarding — and
+   * clearing localStorage fully resets it, which keeps local dev testing
+   * simple. See `web/supabase/` for the optional migration to make this
+   * cross-device later.
+   *
+   * It is not what keeps the walkthrough from opening a second time —
+   * `welcomeSkipped` is: "Replay walkthrough" clears this on purpose.
    */
   onboardedAt?: string | null;
+  /**
+   * True once the first-visit walkthrough has been dealt with: the first-run
+   * gate sent the reader to /welcome (or they opened it), or they skipped it,
+   * finished it or chose a field on the home page. `FirstRunGate` sends a
+   * profile that has never been set up to /welcome only while this is unset,
+   * so the walkthrough opens on its own once per browser. Local-only, exactly
+   * like `onboardedAt`: persisted with the profile in localStorage, no server
+   * column. Left out of `defaultProfile` on purpose — absent reads as false,
+   * and a profile stored before this field existed needs no migration.
+   */
+  welcomeSkipped?: boolean;
 }
 
 export const defaultProfile: UserProfile = {
