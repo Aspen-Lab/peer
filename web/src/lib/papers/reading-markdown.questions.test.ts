@@ -427,3 +427,55 @@ describe("the settled questions when no report answers them (P7-12, R3)", () => 
     expect(md).not.toContain("---");
   });
 });
+
+// P9-06: the paper's words in an answer print on one line, as everywhere else in the copy. Invented text.
+describe("readingToMarkdown prints an answer's quote and a heading on one line (P9-06)", () => {
+  it("evidence with line breaks, and a section heading that wrapped, stay on their own lines", () => {
+    const map: ReadingMap = {
+      sections: [
+        { id: "s1", heading: "2 Results\nof the anneal", canonical: "results", role: "evidence", page: 7, words: 460, minutes: 3, paragraphs: [] },
+      ],
+      totalMinutes: 3,
+    };
+    const answers: MarkdownQuestionAnswers[] = [
+      {
+        question: "Does annealing sharpen the peak?",
+        verdict: "answered",
+        answers: [
+          {
+            text: "Peer says the peak sharpened.",
+            evidence: "The peak sharpened\nby 40 %\n\nafter annealing.",
+            evidenceWhere: "2 Results\nof the anneal",
+            sectionId: "s1",
+            page: 7,
+          },
+        ],
+        readNext: [{ sectionId: "s1", why: "It reports the measured\nchange.", kind: "answer" }],
+      },
+    ];
+    const { reading, report, sentences } = fixture({ forYourQuestions: answers });
+
+    const md = readingToMarkdown(normalPaper, { ...reading, map }, report, sentences);
+
+    const block = md.slice(md.indexOf("## For your questions"), md.indexOf("## What it proposes"));
+    expect(block).toBe(
+      [
+        "## For your questions",
+        "",
+        "**Does annealing sharpen the peak?**",
+        "",
+        "Answered",
+        "",
+        "Peer says the peak sharpened.",
+        "",
+        "> The peak sharpened by 40 % after annealing. \u2014 \u00A72 Results of the anneal \u00B7 p.7",
+        "",
+        FOR_YOUR_QUESTIONS.readNext,
+        "",
+        "- \u00A72 Results of the anneal \u00B7 p.7 \u00B7 3 min \u2014 It reports the measured change.",
+        "",
+        "",
+      ].join("\n"),
+    );
+  });
+});

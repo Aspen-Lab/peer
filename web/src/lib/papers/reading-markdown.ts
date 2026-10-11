@@ -80,7 +80,7 @@ const HEADING: Record<Exclude<ReadingBlock, "skim">, string> = {
 };
 
 function quoteLine(quote: ReadingQuote): string {
-  return `> ${quote.text} — ${quoteAttribution(quote.from)}`;
+  return `> ${oneLine(`${quote.text} — ${quoteAttribution(quote.from)}`)}`;
 }
 
 /** A quote's words with where they came from: "<sentence> — §Heading", and
@@ -88,13 +88,15 @@ function quoteLine(quote: ReadingQuote): string {
  *  every other quote has no page and reads as it always did). */
 function evidenceText(claim: Omit<MarkdownClaim, "text"> & { page?: number }): string | null {
   if (!claim.evidence) return null;
+  const quote = oneLine(claim.evidence);
+  if (!quote) return null;
   const where = claim.evidenceWhere
     ? claim.evidenceWhere === "abstract"
       ? "abstract"
       : `§${displayHeading(claim.evidenceWhere)}`
     : null;
-  if (!where) return claim.evidence;
-  return `${claim.evidence} — ${where}${typeof claim.page === "number" ? ` · ${MAP.page(claim.page)}` : ""}`;
+  if (!where) return quote;
+  return oneLine(`${quote} — ${where}${typeof claim.page === "number" ? ` · ${MAP.page(claim.page)}` : ""}`);
 }
 
 function evidenceLine(claim: Omit<MarkdownClaim, "text"> & { page?: number }): string | null {
@@ -112,7 +114,13 @@ function spaced(groups: string[][]): string[] {
   return groups.flatMap((group, i) => (i < groups.length - 1 ? [...group, ""] : group));
 }
 
-/** One line: runs of whitespace (a newline in a typed question) become a space. */
+/**
+ * One line: runs of whitespace become a space, the ends are trimmed. The paper's text reaches the
+ * writer with the line breaks of its text layer inside it (a PDF abstract's `⟨003⟩` at a line end;
+ * the page's `<p>` collapses them, Markdown does not), and so does a typed question. Everything the
+ * writer prints of the paper's words goes through this, so a paragraph stays one block and a `**`
+ * never opens on a line break (P9-06).
+ */
 function oneLine(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
@@ -173,7 +181,7 @@ export function questionEntryLines(entry: MarkdownQuestionAnswers, map?: Reading
         MAP.minutes(section.minutes),
         ...(item.kind === "background" ? [FOR_YOUR_QUESTIONS.background] : []),
       ].join(" · ");
-      return [`${label} — ${item.why}`];
+      return [oneLine(`${label} — ${item.why}`)];
     }),
   };
 }
@@ -199,16 +207,23 @@ function questionGroups(entries: readonly MarkdownQuestionAnswers[], map?: Readi
 function abstractParagraphs(reading: PaperReading): string[] {
   const { sentences, introCount, marks } = reading.abstract;
   const inked = new Set(marks);
+  // P9-06: a sentence is one line before the bold wrap goes on — a break inside it (or at its
+  // ends) would split the paragraph, or leave the `**` opening on a line break, where it is not bold.
+  // A sentence with nothing left in it is not printed, marked or not.
   const render = (from: number, to: number) =>
     sentences
       .slice(from, to)
-      .map((sentence, offset) => (inked.has(from + offset) ? `**${sentence}**` : sentence))
+      .flatMap((sentence, offset) => {
+        const words = oneLine(sentence);
+        if (!words) return [];
+        return [inked.has(from + offset) ? `**${words}**` : words];
+      })
       .join(" ");
   const paragraphs: string[] = [];
   const split = Math.min(Math.max(introCount, 0), sentences.length);
   if (split > 0) paragraphs.push(render(0, split));
   if (split < sentences.length) paragraphs.push(render(split, sentences.length));
-  return paragraphs;
+  return paragraphs.filter(Boolean);
 }
 
 /** The heading over the reader's settled questions when no report answers them (P7-12). */
@@ -235,9 +250,9 @@ export function readingToMarkdown(
   questions: readonly string[] = [],
 ): string {
   const asked = questions.map(oneLine).filter(Boolean);
-  const doi = paper.doi?.trim();
+  const doi = oneLine(paper.doi ?? "");
 
-  const lines: string[] = [`# ${paper.title}`, ""];
+  const lines: string[] = [`# ${oneLine(paper.title)}`, ""];
   if (doi) lines.push(`DOI: ${doi}`, "");
 
   const skim = report?.skim?.filter((claim) => claim.text) ?? [];
@@ -254,7 +269,7 @@ export function readingToMarkdown(
     for (const paragraph of paragraphs) lines.push(paragraph, "");
     lines.push("*From the abstract · claim and numbers in ink*", "");
   } else if (reading.provenance.tldr) {
-    lines.push(reading.provenance.tldr, "");
+    lines.push(oneLine(reading.provenance.tldr), "");
     lines.push("*TLDR by Semantic Scholar — machine-written, not the authors' words*", "");
   }
 
