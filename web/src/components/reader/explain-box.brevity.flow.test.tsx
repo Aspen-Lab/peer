@@ -372,6 +372,10 @@ describe("ExplainBox — Say more (P3-07)", () => {
         ctx.props = { ...ctx.props, target: second, cached: undefined };
         ctx.rerender();
       },
+      // P8-02: from 1024 px a new selection leaves the window open on its passage; "moved on" is the
+      // press on the next passage's button (at the card's width the box has closed and the button
+      // opens the second the same way).
+      (tree) => click(tree),
     ]);
     await wait();
     resolve(LONG);

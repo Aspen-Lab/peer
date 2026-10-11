@@ -293,7 +293,10 @@ describe("ExplainBox — the thread is the reader's to send (P3-02b)", () => {
     run.mounted.unmount();
   });
 
-  it("does not show a reply that arrives after the reader has moved on, and starts nothing again", async () => {
+  it("does not show a reply that arrives after the reader has moved on, and starts nothing again (the card, 640 to 1023 px)", async () => {
+    // P8-02: at 900 px, where a new selection still closes the box; from 1024 px the dock stays and "moved
+    // on" is the press on the next passage — that version is in `explain-box.dock.flow.test.tsx`.
+    stubWindow(900, 900);
     let resolve!: (value: ReplyResult) => void;
     const onReply = vi.fn(() => new Promise<ReplyResult>((r) => (resolve = r)));
     const run = await scenario(base({ onReply }), [
@@ -786,7 +789,9 @@ describe("ExplainBox — the selection stays where it was on the screen across t
     expect(scrollBy).not.toHaveBeenCalled();
   });
 
-  it("holds the NEW selection when a new passage closes the box, not the one the box was opened for", async () => {
+  it("holds the NEW selection when the box closes with a new passage selected, not the one the box was opened for", async () => {
+    // P8-02 (BACKLOG-31): a new selection no longer closes the dock — it stays open, so the closing that
+    // can meet a new selection is the reader's (Escape) with the next passage selected and not explained.
     // The old words are 300 wide / 1,100 narrow; the new ones 500 wide / 650 narrow: closing moves them by 150.
     const old = reflowing();
     const next: ExplainSelection = { ...reflowing(500, 650), passage: "Specimens were machined from a single casting." };
@@ -797,6 +802,8 @@ describe("ExplainBox — the selection stays where it was on the screen across t
         ctx.props = { ...ctx.props, target: next };
         ctx.rerender();
       },
+      () => {},
+      () => escape(),
     ]);
     await wait();
 

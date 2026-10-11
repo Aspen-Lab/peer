@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // click outside and a new selection close it; an answer for a passage the
 // reader has since left is not shown. The popover runs on the minimal hook
 // runtime (no DOM here); its own handlers are called on the element tree it
-// returns, and the window's listeners are a recorded stand-in.
+// returns, and the window's listeners are a recorded stand-in. P8-02: from 1024 px a new selection no
+// longer closes the box (it is the dock, which stays); the card's rule is pinned here at 900 px.
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { hookRuntime } = await import("@/test-support/hook-runtime");
@@ -267,7 +268,11 @@ describe("ExplainBox — what closes it", () => {
     run.mounted.unmount();
   });
 
-  it("closes when the reader selects something else", async () => {
+  it("closes when the reader selects something else (the card, 640 to 1023 px)", async () => {
+    // P8-02 (BACKLOG-31): from 1024 px a new selection no longer closes the box — the dock stays and takes the
+    // next passage in (`explain-box.dock.flow.test.tsx`). This is the card's rule, between 640 and 1024,
+    // unchanged: the same assertions, at 900 px.
+    vi.stubGlobal("window", { ...recorder(), innerWidth: 900, innerHeight: 800, requestAnimationFrame: (fn: () => void) => setTimeout(fn, 0), cancelAnimationFrame: (id: number) => clearTimeout(id) });
     const run = await scenario(base(), [
       (tree) => click(tree),
       (_tree, ctx) => {
@@ -298,7 +303,10 @@ describe("ExplainBox — what closes it", () => {
     run.mounted.unmount();
   });
 
-  it("does not show an answer that arrives after the reader has moved on", async () => {
+  it("does not show an answer that arrives after the reader has moved on (the card, 640 to 1023 px)", async () => {
+    // P8-02: at 900 px, where a new selection still closes the box. The dock's own version — the answer
+    // for a passage the window has left — is in `explain-box.dock.flow.test.tsx`.
+    vi.stubGlobal("window", { ...recorder(), innerWidth: 900, innerHeight: 800, requestAnimationFrame: (fn: () => void) => setTimeout(fn, 0), cancelAnimationFrame: (id: number) => clearTimeout(id) });
     let resolve!: (value: AskResult) => void;
     const onAsk = vi.fn(() => new Promise<AskResult>((r) => (resolve = r)));
     const run = await scenario(base({ onAsk }), [
