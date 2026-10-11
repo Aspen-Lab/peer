@@ -139,10 +139,22 @@ const END_MATTER_HEADING =
 const END_MATTER_AFTER_BODY =
   /^(?:funding(?:\s+(?:sources?|information|statement|support))?\s*[:.]?\s*$|conflicts?\s+of\s+interests?\b|declarations?\s+of\s+(?:competing\s+|conflicting\s+)?interests?\b|competing\s+(?:financial\s+)?interests?\b|data\s+availability\b)/i;
 
+/**
+ * P8-03 (BACKLOG-34, §1h.41 c): what a template prints in front of a heading's own words — a box,
+ * a bullet, an asterisk ("■ ACKNOWLEDGMENTS", "• References") — is a run of characters that are
+ * neither letters nor digits; a digit is a section number, which `SECTION_LEAD` strips after it
+ * ("■ 5. Funding" still reads as numbered). Behind such a run an icon font's own letters can
+ * stand, up to three, lower case, apart from the words: the "sı" of "*sı Supporting Information"
+ * (the journal's Supporting Information icon, which the text layer gives as two letters). Without
+ * a glyph in front, a heading that starts with a letter is read as it is.
+ */
+const GLYPH_LEAD = /^[^\p{L}\p{N}]+(?:\p{Ll}{1,3}\s+)?/u;
+
 /** Whether this heading, by its own words, is the paper's apparatus or end matter wherever it
- *  stands (`afterBody` false) or once the body's last numbered section is behind it (true). */
+ *  stands (`afterBody` false) or once the body's last numbered section is behind it (true). A glyph
+ *  in front of the words is not part of them: glyphs first, then the section number. */
 function endsTheArgument(heading: string, canonical: string, afterBody = false): boolean {
-  const text = heading.trim();
+  const text = heading.trim().replace(GLYPH_LEAD, "");
   if (TERMINAL.has(canonical) || APPARATUS_HEADING.test(text)) return true;
   const own = text.replace(SECTION_LEAD, "");
   return END_MATTER_HEADING.test(own) || (afterBody && END_MATTER_AFTER_BODY.test(own));

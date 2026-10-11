@@ -1140,6 +1140,78 @@ describe("the end matter after the argument is not the paper's (P7-18, F2)", () 
   });
 });
 
+// ── P8-03 (BACKLOG-34, §1h.41 c): a glyph in front of an end-matter heading ──────────────────────────
+//
+// A template sets a box, a bullet or an icon in front of some end-matter headings, and the extracted
+// line reads "■ ACKNOWLEDGMENTS" or "*sı Supporting Information" (an icon font's two letters after the
+// asterisk): the heading matches were anchored at its first character, so the glyph hid the heading and
+// the argument went on into the apparatus. The match is on the heading's own words.
+describe("a glyph before an end-matter heading does not hide it (P8-03, BACKLOG-34)", () => {
+  const BODY_ROWS: PageRow[] = [
+    ["H", "ABSTRACT"], P, ["N", "1. INTRODUCTION"], P, ["N", "2. METHODS"], P, ["N", "3. CONCLUSION"], P,
+  ];
+  const BODY_HEADINGS_ONLY = ["ABSTRACT", "1. INTRODUCTION", "2. METHODS", "3. CONCLUSION"];
+
+  it.each([
+    "■ ACKNOWLEDGMENTS",
+    "■ Acknowledgements",
+    "* Acknowledgments",
+    "• Appendix A Proofs",
+    "*sı Supporting Information",
+    "* Supporting Information",
+    "▪ ASSOCIATED CONTENT",
+    "■ AUTHOR INFORMATION",
+    "• Author Contributions",
+    "■ Data availability",
+    "■ 5. Funding",
+    "• Funding",
+    "• References",
+  ])("%s, printed after the last numbered section, ends the argument and takes what follows with it", (heading) => {
+    const rows: PageRow[] = [...BODY_ROWS, ["H", heading], marker("Under the glyph heading")];
+    expect(headingsOf(rows)).toEqual(BODY_HEADINGS_ONLY);
+    expect(textOf(rows)).not.toContain("Under the glyph heading");
+  });
+
+  it("takes a Notes after such a heading out with the rest, as it does after a plain one", () => {
+    for (const glyphHeading of ["■ ACKNOWLEDGMENTS", "*sı Supporting Information", "• Appendix A"]) {
+      const rows: PageRow[] = [...BODY_ROWS, ["H", glyphHeading], ["S", "Notes"], marker("Notes behind the glyph")];
+      expect(textOf(rows)).not.toContain("Notes behind the glyph");
+      expect(headingsOf(rows)).toEqual(BODY_HEADINGS_ONLY);
+    }
+  });
+
+  it("reads the glyph first and the section number second: a numbered Funding behind a glyph is still the numbered one", () => {
+    // Funding is end matter only after the body's last numbered section; page 1, under the abstract, it is a section.
+    const early: PageRow[] = [
+      ["H", "ABSTRACT"], P,
+      ["H", "■ Funding"], marker("Printed on the first page"),
+      ["N", "1. INTRODUCTION"], P, ["N", "2. METHODS"], P, ["N", "3. CONCLUSION"], P,
+    ];
+    expect(headingsOf(early)).toEqual(["ABSTRACT", "■ Funding", "1. INTRODUCTION", "2. METHODS", "3. CONCLUSION"]);
+    expect(textOf(early)).toContain("Printed on the first page");
+    const late: PageRow[] = [...BODY_ROWS, ["H", "■ 6. Funding"], marker("Under the numbered glyph heading")];
+    expect(textOf(late)).not.toContain("Under the numbered glyph heading");
+  });
+
+  it("leaves a heading that merely starts with a letter, or a body heading behind a glyph, as it was", () => {
+    const rows: PageRow[] = [
+      ["H", "ABSTRACT"], P, ["N", "1. INTRODUCTION"], P,
+      ["H", "■ Supporting information retrieval"], marker("Retrieval text"),
+      ["H", "• Notes on the method"], marker("Method notes text"),
+      ["N", "2. CONCLUSION"], P,
+      ["H", "Supporting information retrieval again"], marker("Still the paper's"),
+    ];
+    expect(headingsOf(rows)).toEqual([
+      "ABSTRACT", "1. INTRODUCTION", "■ Supporting information retrieval", "• Notes on the method",
+      "2. CONCLUSION", "Supporting information retrieval again",
+    ]);
+    expect(textOf(rows)).toContain("Still the paper's");
+    // The icon's letters are dropped only behind a glyph: without one, "sı Supporting Information" is just a heading.
+    const bare: PageRow[] = [...BODY_ROWS, ["H", "sı Supporting Information"], marker("Bare icon text")];
+    expect(headingsOf(bare)).toEqual([...BODY_HEADINGS_ONLY, "sı Supporting Information"]);
+  });
+});
+
 describe("a numbered subsection takes its parent's bucket, even when the parent has no text of its own (P7-18, F3)", () => {
   // "2. RESULTS AND DISCUSSION" and "4. EXPERIMENTAL SECTION" hold only their subsections: the outline
   // writes no section for a heading with nothing under it, so "2.1 …" and "4.1 …" were filed `body` —
