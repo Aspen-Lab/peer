@@ -12,7 +12,8 @@ import { ABBREVIATION_GROUPS, canonicalize, isGenericTerm } from "@/lib/scoring/
 // these concepts come from changed. The same number keys the server's cache
 // of an upload's extracted text (`full-text.ts`, P0-02), so the bump also
 // retires every document the Python helper read.
-export const UPLOAD_CONCEPT_EXTRACTION_VERSION = 2;
+// 3 (P7-10): two-column papers are read column by column; text cached under 2 is scrambled and is re-read.
+export const UPLOAD_CONCEPT_EXTRACTION_VERSION = 3;
 
 // A conservative, local phrase extractor. No document text is sent to a model
 // for preference learning. References, author blocks and boilerplate are out.
