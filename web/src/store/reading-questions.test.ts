@@ -41,8 +41,8 @@ describe("reading questions store (P1-03)", () => {
     storage.items.clear();
   });
 
-  it("keeps up to five trimmed, non-empty, distinct questions of at most 200 characters", () => {
-    const long = "x".repeat(250);
+  it("keeps up to five trimmed, non-empty, distinct questions of at most 500 characters", () => {
+    const long = "x".repeat(550);
     useReadingQuestionsStore.getState().set(
       "openalex:W1",
       ["  How does LCO degrade?  ", "", "how does lco DEGRADE?", "   ", "Why 4.5 V?", long, "Q4", "Q5", "Q6"],
@@ -57,7 +57,8 @@ describe("reading questions store (P1-03)", () => {
       updatedAt: AT,
     });
     expect(MAX_QUESTIONS).toBe(5);
-    expect(MAX_QUESTION_CHARS).toBe(200);
+    // P7-13 (R11a, §1h.29 Q7): 200 rose to 500, through this one constant.
+    expect(MAX_QUESTION_CHARS).toBe(500);
   });
 
   it("remembers which paper was asked last", () => {

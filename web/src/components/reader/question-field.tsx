@@ -4,8 +4,10 @@
 // §1f.10; blueprint §3.1 ① 问).
 //
 // Asked per paper, and it may be left empty: with no question it is one
-// quiet line — a label and an input — and nothing else, and the page below
+// quiet line — a label and a box — and nothing else, and the page below
 // is the page it was. Up to five questions, one per line; Enter adds a line.
+// P7-13 (R11a): a line is a textarea that grows with its text, and takes 500
+// characters (`MAX_QUESTION_CHARS`), so a long question is read whole.
 // The chips are suggestions, shown while the field has focus or holds a
 // question, and they only ever fill a line when clicked — never by
 // themselves. P1-09 (§1a.7, §1f.20): they are the reader's own — questions
@@ -36,8 +38,34 @@ import { useProfileStore } from "@/store/profile";
 import { questionTerms } from "@/lib/preferences/question-terms";
 import { ASK, ROUTE, STANDING } from "./copy";
 
-/** Past this many characters a line shows its count. */
-const COUNTER_FROM = 160;
+/** Past this many characters a line shows its count (P7-13: 400 of the 500). */
+const COUNTER_FROM = 400;
+
+/**
+ * P7-13 (R11a): a pasted line break becomes a space. A line of the box is one
+ * question; an `<input>` stripped a newline on its own, a textarea keeps it.
+ */
+export function oneLine(text: string): string {
+  return text.replace(/\s*[\r\n\u2028\u2029]+\s*/g, " ");
+}
+
+/**
+ * P7-13 (R11a): the line's height follows its content, as the explain box's
+ * input does (`explain-box.tsx`). Reset to `auto` first so it can shrink, then
+ * take `scrollHeight` plus the border the box adds around it. A box that is not
+ * laid out (hidden, `scrollHeight` 0) keeps the height it had.
+ */
+export function fitHeight(el: HTMLTextAreaElement | null | undefined): void {
+  if (!el?.style) return;
+  const before = el.style.height;
+  el.style.height = "auto";
+  const content = el.scrollHeight;
+  if (!content) {
+    el.style.height = before;
+    return;
+  }
+  el.style.height = `${content + (el.offsetHeight - el.clientHeight)}px`;
+}
 
 /** An example tag: a click puts `text` on the next empty line. */
 export interface Chip {
@@ -227,7 +255,8 @@ const sameQuestion = (a: string, b: string) => a.trim().toLocaleLowerCase() === 
 
 /** The page's `q`: the first empty question line, else the last one. */
 export function focusFirstEmptyQuestion(): void {
-  const inputs = Array.from(document.querySelectorAll<HTMLInputElement>("input[data-ask-line]"));
+  // By the mark, not the tag: a line is a textarea since P7-13.
+  const inputs = Array.from(document.querySelectorAll<HTMLTextAreaElement>("[data-ask-line]"));
   const target = inputs.find((input) => input.value.trim() === "") ?? inputs[inputs.length - 1];
   target?.focus();
 }
@@ -272,7 +301,7 @@ export function QuestionField({
   // P1-07 (§1f.18 a): the line being written, which the vague hint waits for.
   const [unsettled, setUnsettled] = useState<number | null>(null);
   const trackLine = (event: SettleEvent) => setUnsettled((current) => settleLine(current, event));
-  const inputs = useRef<Array<HTMLInputElement | null>>([]);
+  const inputs = useRef<Array<HTMLTextAreaElement | null>>([]);
   const pendingFocus = useRef<{ index: number; caretAtEnd: boolean } | null>(null);
 
   useEffect(() => {
@@ -284,6 +313,18 @@ export function QuestionField({
     input.focus();
     if (pending.caretAtEnd) input.setSelectionRange(input.value.length, input.value.length);
   });
+
+  // P7-13 (R11a): every line grows or shrinks to its text — after each change of
+  // the lines, and when the window is resized (the lines wrap differently).
+  useEffect(() => {
+    inputs.current.forEach(fitHeight);
+  }, [lines]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const refit = () => inputs.current.forEach(fitHeight);
+    window.addEventListener("resize", refit);
+    return () => window.removeEventListener("resize", refit);
+  }, []);
 
   // P2-08b (§1g.18): the questions settle — what a deep report is asked about —
   // when the box has settled as a whole and the reader has then been idle for
@@ -390,13 +431,13 @@ export function QuestionField({
       <ol className="mt-2 space-y-1">
         {lines.map((line, index) => (
           <li key={index} className={line.trim() !== "" ? "flex flex-wrap items-baseline gap-2" : "flex items-baseline gap-2"}>
-            <input
+            <textarea
               id={`ask-${paperId}-${index}`}
               ref={(el) => {
                 inputs.current[index] = el;
               }}
               data-ask-line=""
-              type="text"
+              rows={1}
               value={line}
               maxLength={MAX_QUESTION_CHARS}
               placeholder={index === 0 ? ASK.placeholder : undefined}
@@ -404,12 +445,13 @@ export function QuestionField({
               onFocus={() => trackLine({ type: "focus", index })}
               onBlur={() => trackLine({ type: "blur", index })}
               onChange={(event) => {
+                const text = oneLine(event.target.value);
                 const next = [...lines];
-                next[index] = event.target.value;
+                next[index] = text;
                 trackLine({ type: "change", index });
                 // A ticked line stays ticked as the reader edits it.
                 const carried = isMarked(lines[index])
-                  ? [...marked.filter((m) => !sameQuestion(m, lines[index])), event.target.value.trim()]
+                  ? [...marked.filter((m) => !sameQuestion(m, lines[index])), text.trim()]
                   : marked;
                 commit(next, nextGist(gist, next), carried);
               }}
@@ -426,7 +468,7 @@ export function QuestionField({
                 }
                 if (enterEndsTheBox(lines, index)) settleBoxSoon();
               }}
-              className="min-w-0 flex-1 border-b border-border bg-transparent py-1 font-reading text-body-sm text-text placeholder:text-text-faint focus:border-heading focus:outline-none"
+              className="min-w-0 flex-1 resize-none overflow-hidden border-b border-border bg-transparent py-1 font-reading text-body-sm text-text placeholder:text-text-faint focus:border-heading focus:outline-none"
             />
             {line.length > COUNTER_FROM && (
               <span className="annotation shrink-0 text-text-faint">{ASK.counter(line.length)}</span>

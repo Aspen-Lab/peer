@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { buildReading } from "@/lib/papers/reading";
 import type { ExtractedDocument } from "@/lib/papers/html-text";
 import type { Paper } from "@/types";
-import { useReadingQuestionsStore } from "@/store/reading-questions";
+import { MAX_QUESTION_CHARS, useReadingQuestionsStore } from "@/store/reading-questions";
 import zenodoDocJson from "@/lib/papers/__fixtures__/zenodo-W7208807247.doc.json";
 import { ASK, ROUTE } from "./copy";
 import { PaperBody } from "./paper-body";
@@ -42,12 +42,14 @@ function render(paperId = PAPER, examples: typeof EXAMPLES = []): string {
 describe("QuestionField — what it shows", () => {
   beforeEach(() => useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null }));
 
-  it("with no questions, is one quiet line: the label and an empty input, nothing else", () => {
+  it("with no questions, is one quiet line: the label and an empty textarea, nothing else", () => {
     const html = render();
 
     expect(html).toContain(ASK.heading);
     expect(html).toContain(`placeholder="${ASK.placeholder}"`);
-    expect(html.match(/<input/g)).toHaveLength(1);
+    // P7-13 (R11a): the line is a textarea that grows, no longer an input.
+    expect(html.match(/<textarea/g)).toHaveLength(1);
+    expect(html).not.toContain("<input");
     expect(html).not.toContain("<button");
     expect(html).not.toContain(ASK.hint);
     expect(html).not.toContain(ASK.chips.gist);
@@ -62,7 +64,7 @@ describe("QuestionField — what it shows", () => {
     });
     const html = render();
 
-    expect(html).toContain('value="How does LCO degrade?"');
+    expect(html).toContain(">How does LCO degrade?</textarea>");
     expect(html).toContain(`aria-label="${ASK.remove(1)}"`);
     expect(html).toContain(ASK.hint);
     expect(html).toContain(ASK.chips.gist);
@@ -107,20 +109,91 @@ describe("QuestionField — what it shows", () => {
     const html = render();
 
     expect(html).toMatch(/aria-pressed="true"[^>]*>Just get the gist</);
-    expect(html).not.toContain('value="Just get the gist"');
+    expect(html).not.toMatch(/<textarea[^>]*>Just get the gist<\/textarea>/);
   });
 
-  it("counts characters only past 160", () => {
-    const line = "q".repeat(170);
+  // P7-13 (R11a, §1h.29 Q7): 200 rose to 500, and the counter moved from 160 to 400.
+  it("counts characters only past 400", () => {
+    const line = "q".repeat(450);
     useReadingQuestionsStore.setState({
       byPaper: { [PAPER]: { items: ["Short.", line], gist: false, updatedAt: "2026-10-05T00:00:00.000Z" } },
       lastPaperId: PAPER,
     });
     const html = render();
 
-    expect(html).toContain(ASK.counter(170));
+    expect(html).toContain(ASK.counter(450));
     expect(html).not.toContain(ASK.counter(6));
-    expect(html).toContain('maxLength="200"');
+    expect(html).toContain('maxLength="500"');
+  });
+
+  it("shows no count at 400 or below, and one from 401", () => {
+    const show = (length: number) => {
+      useReadingQuestionsStore.setState({
+        byPaper: { [PAPER]: { items: ["q".repeat(length)], gist: false, updatedAt: "2026-10-05T00:00:00.000Z" } },
+        lastPaperId: PAPER,
+      });
+      return render();
+    };
+
+    // What the old threshold (160) and the old limit (200) would have shown is shown no more.
+    expect(show(170)).not.toContain(ASK.counter(170));
+    expect(show(300)).not.toContain(ASK.counter(300));
+    expect(show(400)).not.toContain(ASK.counter(400));
+    expect(show(401)).toContain(ASK.counter(401));
+    expect(show(500)).toContain("500/500");
+  });
+});
+
+// P7-13 (R11a, the owner's R11): the line is a box that grows with its text, so a long
+// question is read whole instead of scrolling sideways in an input. jsdom has no layout, so
+// "grows" is pinned by what the element is — a `<textarea rows="1">` with the app's own
+// limit, whose height `fitHeight` (question-field.grow.test.tsx) sets from its content — and
+// "whole" by its content being the whole stored question.
+describe("QuestionField — the line is a growing textarea (P7-13, R11a)", () => {
+  beforeEach(() => useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null }));
+  const tags = (html: string) => html.match(/<textarea[^>]*>/g) ?? [];
+
+  it("each line is a one-row textarea carrying the data-ask-line mark, the id and the shared limit", () => {
+    useReadingQuestionsStore.setState({
+      byPaper: { [PAPER]: { items: ["First question here?", "Second question here?"], gist: false, updatedAt: "2026-10-05T00:00:00.000Z" } },
+      lastPaperId: PAPER,
+    });
+    const html = render();
+
+    expect(tags(html)).toHaveLength(2);
+    tags(html).forEach((tag, index) => {
+      expect(tag).toContain('rows="1"');
+      expect(tag).toContain('data-ask-line=""');
+      expect(tag).toContain(`id="ask-${PAPER}-${index}"`);
+      expect(tag).toContain(`maxLength="${MAX_QUESTION_CHARS}"`);
+      expect(tag).not.toContain("type=");
+    });
+    // The line of a question is no longer an input; the only inputs are the checkboxes.
+    expect(html.match(/<input[^>]*data-ask-line/g)).toBeNull();
+  });
+
+  it("a 300-character question is kept whole by the store and shown whole in its line", () => {
+    const question = Array.from({ length: 50 }, (_, i) => `word${String(i).padStart(2, "0")}`).join(" ").slice(0, 300).trim();
+    expect(question.length).toBeGreaterThan(290);
+    useReadingQuestionsStore.getState().set(PAPER, [question], false, "2026-10-05T00:00:00.000Z");
+
+    expect(useReadingQuestionsStore.getState().byPaper[PAPER].items).toEqual([question]);
+    const html = render();
+    expect(html).toContain(`>${question}</textarea>`);
+    // 300 is under the counter's threshold: the reader sees the text, not a count.
+    expect(html).not.toContain(ASK.counter(question.length));
+  });
+
+  it("the placeholder stays on the first line only", () => {
+    useReadingQuestionsStore.setState({
+      byPaper: { [PAPER]: { items: ["First question here?", "Second question here?"], gist: false, updatedAt: "2026-10-05T00:00:00.000Z" } },
+      lastPaperId: PAPER,
+    });
+    const [first, second] = tags(render());
+
+    expect(first).toContain(`placeholder="${ASK.placeholder}"`);
+    expect(second).not.toContain("placeholder=");
+    expect(second).toContain(`aria-label="${ASK.line(2)}"`);
   });
 });
 

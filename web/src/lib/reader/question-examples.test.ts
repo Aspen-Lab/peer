@@ -98,15 +98,15 @@ describe("exampleQuestions — from the reader's profile", () => {
     ]);
   });
 
-  it("cuts an example to the question line's 200 characters, and skips an empty field", () => {
+  it("cuts an example to the question line's 500 characters, and skips an empty field", () => {
     const [group] = exampleQuestions({
-      profile: { ...empty, researchTopics: ["x".repeat(300), "  "], preferredMethods: [""] },
+      profile: { ...empty, researchTopics: ["x".repeat(600), "  "], preferredMethods: [""] },
       byPaper: {},
       paperId: PAPER,
     });
 
     expect(group.items).toHaveLength(1);
-    expect(group.items[0].length).toBe(200);
+    expect(group.items[0].length).toBe(500);
     expect(group.items[0].startsWith("What does it say about xxx")).toBe(true);
   });
 

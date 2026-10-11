@@ -366,8 +366,8 @@ describe("the question pass, Pass 1q (§1g.1, §3d 10)", () => {
     expect(relevant[7]).toEqual({ text: sentences[7], sectionId: "s3" });
   });
 
-  it("caps the questions defensively: at most five, trimmed, empties dropped, 200 characters each", async () => {
-    const long = `Why ${"really ".repeat(60)}does it crack?`;
+  it("caps the questions defensively: at most five, trimmed, empties dropped, 500 characters each", async () => {
+    const long = `Why ${"really ".repeat(100)}does it crack?`;
     const stub = countingProvider();
     await generateDeepReport({
       paper,
@@ -379,7 +379,7 @@ describe("the question pass, Pass 1q (§1g.1, §3d 10)", () => {
     const asked = stub.last("pass2")!.prompt.readerQuestions as string[];
     expect(asked).toHaveLength(5);
     expect(asked[0]).toBe("Does it crack?");
-    expect(asked[1]).toHaveLength(200);
+    expect(asked[1]).toHaveLength(500);
     expect(asked).not.toContain("");
     expect(asked).not.toContain("Q6 about time?");
   });

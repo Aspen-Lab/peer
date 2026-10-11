@@ -2,7 +2,7 @@
 
 // P5-01 (blueprint P5): the Profile page's editor for the standing questions —
 // the few questions a reader brings to most papers. Add, edit, remove; up to
-// five, 200 characters each, empty lines dropped when the reader leaves the
+// five, 500 characters each (P7-13), empty lines dropped when the reader leaves the
 // field. The typed words are the reader's own: reading face. Peer's words (the
 // hint, the add control) are in the label face, like the question box on a
 // paper. The list lives in the profile store, in this browser only.
@@ -17,7 +17,7 @@ import { MAX_QUESTION_CHARS, MAX_QUESTIONS, cleanQuestions } from "@/store/readi
 import { ASK, STANDING } from "@/components/reader/copy";
 
 /** Past this many characters a line shows its count (as on a paper's question box). */
-const COUNTER_FROM = 160;
+const COUNTER_FROM = 400;
 
 /** The add control: one empty line after a filled last line, within the limit. */
 export function addDraft(lines: readonly string[]): string[] {

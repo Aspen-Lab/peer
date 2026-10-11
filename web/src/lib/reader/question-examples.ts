@@ -114,7 +114,7 @@ export function exampleQuestions({
   paperId: string;
 }): ExampleGroup[] {
   const seen = new Set<string>();
-  /** Adds `text` (cut to a question line's 200 characters) unless it is
+  /** Adds `text` (cut to a question line's 500 characters, `MAX_QUESTION_CHARS`) unless it is
    *  empty, already offered, or the list is full; true when it was added. */
   const offer = (list: string[], max: number, text: string): boolean => {
     if (list.length >= max) return false;

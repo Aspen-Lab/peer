@@ -52,11 +52,13 @@ interface ExtendedRequest extends PaperReportRequest {
 // ── Helpers ──────────────────────────────────────────────────────────
 
 const MAX_REQUEST_QUESTIONS = 5;
-const MAX_REQUEST_QUESTION_CHARS = 200;
+/** P7-13 (R11a): 500, the same value as `MAX_QUESTION_CHARS` in `store/reading-questions.ts`
+ *  (a route does not import the browser store, so it keeps its own copy). */
+const MAX_REQUEST_QUESTION_CHARS = 500;
 
 /**
  * P2-03 (§1g.11 d): the questions as the deep report may use them — an array
- * of strings, each trimmed, non-empty, at most 200 characters, distinct
+ * of strings, each trimmed, non-empty, at most 500 characters (P7-13), distinct
  * case-insensitively, at most five. Anything else is ignored rather than
  * refused: a malformed list is no reason to withhold the report.
  */

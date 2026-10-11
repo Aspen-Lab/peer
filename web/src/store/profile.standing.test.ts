@@ -23,12 +23,12 @@ describe("profile.standingQuestions — the setter", () => {
     expect(useProfileStore.getState().profile.standingQuestions).toEqual(INVENTED);
   });
 
-  it("keeps at most five, each at most 200 characters, distinct without regard to case", () => {
-    const long = "x".repeat(260);
+  it("keeps at most five, each at most 500 characters, distinct without regard to case", () => {
+    const long = "x".repeat(560);
     useProfileStore.getState().updateStandingQuestions([long, "a?", "A?", "b?", "c?", "d?", "e?", "f?"]);
     const kept = useProfileStore.getState().profile.standingQuestions!;
     expect(kept).toHaveLength(5);
-    expect(kept[0]).toHaveLength(200);
+    expect(kept[0]).toHaveLength(500);
     expect(kept.slice(1)).toEqual(["a?", "b?", "c?", "d?"]);
   });
 

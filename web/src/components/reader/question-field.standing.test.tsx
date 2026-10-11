@@ -126,9 +126,11 @@ describe("QuestionField — never filled in", () => {
 
   it("opening a paper with standing questions leaves the box empty, stores nothing and sends nothing", () => {
     const html = render({ standing: STANDING_Q, examples: EXAMPLES });
-    expect(html.match(/<input/g)).toHaveLength(1);
-    expect(html).toContain('value=""');
-    for (const q of STANDING_Q) expect(html).not.toContain(`value="${q}"`);
+    // P7-13: the line is a textarea; empty, it has no text between its tags.
+    expect(html.match(/<textarea/g)).toHaveLength(1);
+    expect(html).toContain("></textarea>");
+    expect(html).not.toMatch(/<textarea[^>]*>[^<]+<\/textarea>/);
+    for (const q of STANDING_Q) expect(html).not.toContain(`>${q}</textarea>`);
     expect(useReadingQuestionsStore.getState().byPaper).toEqual({});
     expect(fetchSpy).not.toHaveBeenCalled();
   });

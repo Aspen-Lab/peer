@@ -96,14 +96,14 @@ describe("the report route and the reader's questions (P2-03)", () => {
   });
 
   it.each(TRANSPORTS)("cleans malformed questions or ignores them, and never answers 400 (%s)", async (accept) => {
-    const long = `Why ${"x".repeat(300)}`;
+    const long = `Why ${"x".repeat(600)}`;
     const cases: Array<[unknown, string[]]> = [
       ["Does tungsten delay rafting?", []],
       [[1, 2, 3], []],
       [{ 0: "Not an array" }, []],
       [null, []],
       [["Q1?", "Q2?", "Q3?", "Q4?", "Q5?", "Q6?", "Q7?"], ["Q1?", "Q2?", "Q3?", "Q4?", "Q5?"]],
-      [[long], [long.slice(0, 200)]],
+      [[long], [long.slice(0, 500)]],
       [["Does tungsten delay rafting?", "does TUNGSTEN delay rafting?", "  ", 7, "Why?"], ["Does tungsten delay rafting?", "Why?"]],
     ];
     for (const [questions, expected] of cases) {

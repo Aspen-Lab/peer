@@ -111,7 +111,7 @@ interface ProfileState {
   updateSchool: (school: string) => void;
   updateCurrentProject: (text: string) => void;
   updateCurrentChallenges: (text: string) => void;
-  /** P5-01: the reader's standing questions, cleaned like any question (trimmed, distinct, five of 200). */
+  /** P5-01: the reader's standing questions, cleaned like any question (trimmed, distinct, five of 500 since P7-13). */
   updateStandingQuestions: (questions: readonly string[]) => void;
   recordPaperPreference: (
     paper: Paper,

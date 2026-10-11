@@ -64,7 +64,9 @@ const MAX_RELEVANT_PER_QUESTION = 8;
 const MAX_SENTENCE_CHARS = 360;
 /** Defensive: the route caps the questions first (P2-03, §1g.4). */
 const MAX_QUESTIONS = 5;
-const MAX_QUESTION_CHARS = 200;
+/** P7-13 (R11a): 500, the same value as `MAX_QUESTION_CHARS` in `store/reading-questions.ts`
+ *  (this module stays free of the browser store, so it keeps its own copy). */
+const MAX_QUESTION_CHARS = 500;
 /** §1g.4: the server's memory of Pass 1 and Pass 1q. */
 const CACHE_TTL_MS = 60 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 32;
@@ -538,7 +540,7 @@ async function runQuestionPass(args: {
   return out;
 }
 
-/** §1g.1 / P2-03: trimmed, empties dropped, at most five of at most 200 characters. */
+/** §1g.1 / P2-03: trimmed, empties dropped, at most five of at most 500 characters (P7-13). */
 function cleanQuestions(questions: readonly string[] | undefined): string[] {
   return (questions ?? [])
     .map((question) => (typeof question === "string" ? question.trim() : ""))

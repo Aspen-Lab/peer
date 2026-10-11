@@ -7,7 +7,7 @@ import { STANDING } from "@/components/reader/copy";
 import { StandingQuestionsField, addDraft, dropEmptyDrafts, removeDraft } from "./standing-questions-field";
 
 // P5-01 (brief commit 1): the Profile page's editor for the standing questions — add, edit, remove,
-// up to five, 200 characters, empty lines dropped. The reading face for the typed words, the
+// up to five, 500 characters (P7-13), empty lines dropped. The reading face for the typed words, the
 // label face for Peer's. The questions below are invented.
 
 const INVENTED = ["Which cohort was studied, and how large was it?", "Are negative findings reported?"];
@@ -46,7 +46,7 @@ describe("StandingQuestionsField — what it shows", () => {
     expect(html.match(/<input/g)).toHaveLength(2);
     expect(html).toContain(`value="${INVENTED[0]}"`);
     expect(html).toContain(`value="${INVENTED[1]}"`);
-    expect(html).toContain('maxLength="200"');
+    expect(html).toContain('maxLength="500"');
     expect(html).toContain(`aria-label="${STANDING.line(1)}"`);
     expect(html).toContain(`aria-label="${STANDING.remove(2)}"`);
     expect(html).toMatch(/<input[^>]*class="[^"]*font-reading/);

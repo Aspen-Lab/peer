@@ -18,7 +18,12 @@ import { persist } from "zustand/middleware";
 
 export const READING_QUESTIONS_STORAGE_KEY = "peer-reading-questions-v1";
 export const MAX_QUESTIONS = 5;
-export const MAX_QUESTION_CHARS = 200;
+/** P7-13 (R11a; the owner's R11, §1h.29 Q7): 500, up from 200. The one shared constant: the
+ *  field's `maxLength`, the Profile's standing questions and `cleanQuestions` read it. Two
+ *  server-side files keep a copy with the same value (`lib/papers/deep-report.ts`,
+ *  `app/api/papers/report/route.ts`, each naming this item) and `ASK.counter` carries it in
+ *  words (`components/reader/copy.ts`). */
+export const MAX_QUESTION_CHARS = 500;
 /** The most papers whose questions are kept; the oldest go first. */
 export const MAX_QUESTION_PAPERS = 200;
 
@@ -72,7 +77,7 @@ interface ReadingQuestionsState {
    *  last paper" chips on the next one. */
   lastPaperId: string | null;
   /** Trims, drops empty lines, de-duplicates case-insensitively, keeps at
-   *  most five of at most 200 characters, stamps `updatedAt` and
+   *  most five of at most `MAX_QUESTION_CHARS` (500), stamps `updatedAt` and
    *  `lastPaperId`. Nothing left and no gist: the paper is forgotten. */
   set: (
     paperId: string,

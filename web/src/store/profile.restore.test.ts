@@ -5,7 +5,7 @@ import { PROFILE_EXPORT_FORMAT, exportProfileDocument, parseExportedProfile } fr
 
 // P5-04 (N6, §1h.15 (f)): a backup file is the reader's own, but also a file anyone can edit, so a
 // restore cleans the standing questions the way the setter does: trimmed, no empty line, no
-// duplicate, at most five, each at most 200 characters. A measured that taking the cleaning out of
+// duplicate, at most five, each at most 500 characters (P7-13: 200 rose to 500). A measured that taking the cleaning out of
 // `parseExportedProfile` left the whole suite green (the editor and the chip group clean what they
 // read, so no bound was lost on screen). The questions are invented.
 
@@ -18,16 +18,16 @@ describe("restoring a backup cleans the standing questions", () => {
     parseExportedProfile({ format: PROFILE_EXPORT_FORMAT, profile: { ...exportProfileDocument(defaultProfile).profile, standingQuestions: six } })
       ?.standingQuestions;
 
-  it("six lines, one of 201 characters and one a duplicate, load as five cleaned", () => {
+  it("six lines, one of 501 characters and one a duplicate, load as five cleaned", () => {
     expect(six).toHaveLength(MAX_QUESTIONS + 1);
-    expect(six[2]).toHaveLength(201);
+    expect(six[2]).toHaveLength(501);
     const cleaned = restored();
     expect(cleaned).toHaveLength(MAX_QUESTIONS);
     expect(cleaned).toEqual([Q(1), Q(2), "x".repeat(MAX_QUESTION_CHARS), Q(3), Q(4)]);
     expect(new Set(cleaned?.map((q) => q.toLocaleLowerCase())).size).toBe(cleaned?.length);
   });
 
-  it("a line of 201 characters is cut to 200, not dropped", () => {
+  it("a line of 501 characters is cut to 500, not dropped", () => {
     expect(restored()?.some((q) => q.length === MAX_QUESTION_CHARS)).toBe(true);
     expect(restored()?.every((q) => q.length <= MAX_QUESTION_CHARS)).toBe(true);
   });
