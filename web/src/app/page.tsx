@@ -35,6 +35,7 @@ import { useSyncGate } from "@/components/profile-sync";
 import { AUTH_SETTLE_TIMEOUT_MS } from "@/lib/auth-settle-timeout";
 import { FeedTile } from "@/components/cards/feed-tile";
 import { StarterStrip } from "@/components/briefing/starter-strip";
+import { KeyHint } from "@/components/briefing/key-hint";
 import { STARTER_TOPICS, STARTER_TOPICS_KEY } from "@/lib/feed/starter-topics";
 import { SearchBox } from "@/components/briefing/search-box";
 import { UploadButton } from "@/components/briefing/upload-button";
@@ -336,8 +337,10 @@ function DailyBriefingPage() {
         <ReadingStrip papers={papers} readerTopics={starter ? [] : profile.researchTopics} />
       )}
 
-      {/* Setup, above the papers it is about — and only until it is done. */}
-      {starter && <StarterStrip />}
+      {/* Setup, above the papers it is about — and only until it is done. Then
+          one line is left in its place about the one thing the card also
+          carried, a key, until there is one or the reader sends it away. */}
+      {starter ? <StarterStrip /> : <KeyHint />}
 
       {/* The deck already says what is being looked for. */}
       {papersLoading && papers.length === 0 && <LoadingSkeleton label={null} />}

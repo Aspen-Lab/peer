@@ -16,6 +16,12 @@
 // — the reader has told Peer what they work on, which is the only thing the
 // wizard actually needed — and `completeOnboarding` promotes it into the
 // active search inputs immediately, so the next load is already theirs.
+//
+// The longer setup is two buttons, not a sentence with a link in it (P7-16):
+// "Set up Peer" opens the walkthrough and "Add a key" opens it on the key step.
+// A grey 11.5px "is here." was the only way in, and a reader who ran Peer from
+// GitHub never found where a key goes. Once a field is chosen this card is gone
+// and `KeyHint` (`key-hint.tsx`) keeps the key one line on the page.
 
 import { useState } from "react";
 import Link from "next/link";
@@ -26,6 +32,15 @@ import { cardShell } from "@/components/ui/card-shell";
 import { IconArrowRight } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { STARTER } from "@/lib/briefing/copy";
+import { ADD_KEY_HREF } from "@/lib/navigation/add-key-destination";
+
+/** The hairline both the fields and the two buttons are drawn in. */
+const HAIRLINE = cn(
+  "h-10 items-center gap-3 px-2.5 text-meta text-text-muted sm:px-3 sm:text-body-sm",
+  "shadow-[inset_0_0_0_1px_var(--color-border-strong)] transition-colors",
+  "hover:bg-bg-secondary/70 hover:text-heading hover:shadow-[inset_0_0_0_1px_var(--color-text-faint)]",
+  "active:bg-bg-secondary",
+);
 
 /**
  * A field to choose: the same hairline chip as the search page's starts
@@ -34,12 +49,10 @@ import { STARTER } from "@/lib/briefing/copy";
  * Here the mark is an arrow at the far edge: a tap here is a commitment, the
  * briefing reloads on it.
  */
-const CHOICE = cn(
-  "group/choice flex h-10 w-full items-center justify-between gap-3 px-2.5 text-left text-meta text-text-muted sm:px-3 sm:text-body-sm",
-  "shadow-[inset_0_0_0_1px_var(--color-border-strong)] transition-colors",
-  "hover:bg-bg-secondary/70 hover:text-heading hover:shadow-[inset_0_0_0_1px_var(--color-text-faint)]",
-  "active:bg-bg-secondary",
-);
+const CHOICE = cn("group/choice flex w-full justify-between text-left", HAIRLINE);
+
+/** The longer setup's two doors: the same hairline as a field, as links. */
+const ACTION = cn("group/action inline-flex shrink-0 [@media(hover:none)]:h-11", HAIRLINE);
 
 export function StarterStrip() {
   const updateTopics = useProfileStore((s) => s.updateTopics);
@@ -72,15 +85,25 @@ export function StarterStrip() {
         <div className="flex flex-col">
           <p className="font-sans text-body-lg leading-[1.55] text-text measure-ui">{STARTER.line}</p>
           {/* On the bottom edge from lg, level with the field on the right. */}
-          <p className="annotation text-text-faint text-pretty mt-4 lg:mt-auto lg:pt-6">
-            {STARTER.rest}{" "}
-            <Link
-              href="/welcome"
-              className="underline decoration-border-strong underline-offset-4 hover:text-heading transition-colors "
-            >
-              {STARTER.restLink}
-            </Link>
-          </p>
+          <div className="mt-4 lg:mt-auto lg:pt-6">
+            <p className="annotation text-text-faint text-pretty">{STARTER.rest}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Link href="/welcome" className={ACTION}>
+                <span>{STARTER.setup}</span>
+                <IconArrowRight
+                  size={12}
+                  className="shrink-0 text-text-faint transition-colors group-hover/action:text-accent"
+                />
+              </Link>
+              <Link href={ADD_KEY_HREF} className={ACTION}>
+                <span>{STARTER.addKey}</span>
+                <IconArrowRight
+                  size={12}
+                  className="shrink-0 text-text-faint transition-colors group-hover/action:text-accent"
+                />
+              </Link>
+            </div>
+          </div>
         </div>
 
         <div>
