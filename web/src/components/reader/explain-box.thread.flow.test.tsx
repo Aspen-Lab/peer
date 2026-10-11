@@ -704,25 +704,28 @@ describe("ExplainBox — the page keeps the dock's width clear while it is open 
     run.mounted.unmount();
   });
 
-  it("reads where the selection is again after the page has reflowed: once the dock opens, and once it closes", async () => {
-    const measure = vi.fn(() => ({ rect: first.rect, bounds: first.bounds }));
-    const target: ExplainSelection = { ...first, measure };
-    const counts: number[] = [];
+  it("reads where the selection is after the page has reflowed, so the button stands by the words again once the dock closes", async () => {
+    // What the page captured when the selection was made (`first.rect`: right 420, bottom 420) is not
+    // where the words stand once the dock has come and gone: after the reflow they are at right 700,
+    // bottom 500 in the wide page. The button must follow the measure, not the first capture.
+    const wide = { rect: { left: 560, top: 480, right: 700, bottom: 500 }, bounds: { left: 560, top: 480, right: 700, bottom: 500 } };
+    const narrow = { rect: { left: 300, top: 900, right: 380, bottom: 920 }, bounds: { left: 300, top: 900, right: 380, bottom: 920 } };
+    const target: ExplainSelection = { ...first, measure: () => (root.has("--explain-dock") ? narrow : wide) };
+    const buttonAt: Array<{ left?: number; top?: number }> = [];
     const run = await scenario(base({ target }), [
+      (tree) => buttonAt.push(look(tree).button?.props.style as { left?: number; top?: number }),
       (tree) => click(tree),
       () => {},
-      () => {
-        counts.push(measure.mock.calls.length);
-        escape();
-      },
+      () => escape(),
     ]);
     await wait();
-    counts.push(measure.mock.calls.length);
+    const style = run.last().button?.props.style as { left: number; top: number } | undefined;
 
-    // Nothing was read before the dock opened; the dock's opening read it once, its closing once more.
-    expect(counts[0]).toBeGreaterThanOrEqual(1);
-    expect(counts[1]).toBeGreaterThan(counts[0]);
+    // Before the dock the button is where the first capture put it: just below its end, centred on it.
+    expect(buttonAt[0]).toEqual({ left: 420 - 60, top: 420 + 6 });
+    // After the dock closed it is below the words' end where the measure says they are.
     expect(run.last().card).toBeUndefined();
+    expect(style).toEqual({ left: 700 - 60, top: 500 + 6 });
     run.mounted.unmount();
   });
 });
