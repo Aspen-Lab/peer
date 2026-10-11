@@ -147,7 +147,10 @@ export function ReadingMapView({
           type="button"
           aria-expanded={shownOnPhone}
           onClick={() => setShownOnPhone((shown) => !shown)}
-          className="underline-offset-2 transition-colors hover:text-heading hover:underline sm:hidden"
+          // P9-05 (X14): at 390 px the summary sentence and this button share one flex line, and the
+          // button wrapped to "hide / map". It is a single unbreakable, unshrinkable label; the
+          // summary span beside it is what wraps.
+          className="shrink-0 whitespace-nowrap underline-offset-2 transition-colors hover:text-heading hover:underline sm:hidden"
         >
           {shownOnPhone ? MAP.hide : MAP.show}
         </button>

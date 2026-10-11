@@ -127,6 +127,27 @@ describe("ReadingMapView", () => {
     expect(expanded).not.toMatch(/class="hidden sm:block"/);
   });
 
+  // P9-05 (X14, the feature walk): at 390 px the button shared a flex line with the summary sentence
+  // and wrapped to "hide / map". The button is one unbreakable, unshrinkable word pair; the summary
+  // span is the part that may wrap. The DOM cannot measure a wrap, so this pins the classes that
+  // prevent it, on both states of the button.
+  it("keeps the show/hide button on one line: whitespace-nowrap and shrink-0 in both states, the summary span left free to wrap (P9-05, X14)", () => {
+    for (const [html, label] of [[render(), MAP.show], [render({ phoneOpen: true }), MAP.hide]] as const) {
+      const button = new RegExp(`<button\\b[^>]*class="([^"]*)"[^>]*>${label}</button>`).exec(html);
+      const classes = (button?.[1] ?? "").split(/\s+/);
+
+      expect(button, `the ${label} button`).not.toBeNull();
+      expect(classes).toContain("whitespace-nowrap");
+      expect(classes).toContain("shrink-0");
+      // Still the phone-only control it was.
+      expect(classes).toContain("sm:hidden");
+      // The summary sentence beside it is not the nowrap one: it is the part that wraps.
+      const summary = /<span([^>]*)>(?:Read from [^<]*|\d+ sections?[^<]*)<\/span><button/.exec(html);
+      expect(summary, "the summary span").not.toBeNull();
+      expect(summary?.[1] ?? "").not.toContain("whitespace-nowrap");
+    }
+  });
+
   it("renders nothing for a map with no sections", () => {
     expect(render({ map: { sections: [], totalMinutes: 0 } })).toBe("");
   });
