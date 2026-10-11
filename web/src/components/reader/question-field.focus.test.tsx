@@ -262,3 +262,24 @@ describe("Enter hands the focus to the line it adds, whatever the page's render 
     r.unmount();
   });
 });
+
+describe("a request to focus a line fires once (P9-11)", () => {
+  it("a reader who goes back to line 1 after Enter keeps the focus there through the next renders", () => {
+    // The request lives in state now; an effect with no dependency would read it after EVERY render and pull
+    // the focus back to the line Enter had opened, whatever the reader did since. It is keyed on the request.
+    const r = reader();
+    r.click(0);
+    r.type(Q1);
+    r.enter();
+    expect(r.active).toBe(1);
+    r.click(0); // the reader goes back to line 1 to add a few words
+    r.pageRenders();
+    r.effectsRun();
+    r.type(" Or does it not?");
+    r.pageRenders();
+    r.effectsRun();
+    expect(r.active).toBe(0);
+    expect(r.lines()).toEqual([`${Q1} Or does it not?`, ""]);
+    r.unmount();
+  });
+});
