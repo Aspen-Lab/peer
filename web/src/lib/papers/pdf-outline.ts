@@ -145,8 +145,9 @@ const EQUATION_MAX = 120;
  *  equation, whatever its symbols. */
 const EQUATION_PROSE_WORDS = 3;
 /** A caption stops being a caption somewhere; past this it is the prose
- *  under the figure that never opened a gap. */
-const CAPTION_MAX = 700;
+ *  under the figure that never opened a gap. With a page's columns kept apart
+ *  a caption runs to its end, and a plate's runs to 1,754 characters. */
+const CAPTION_MAX = 2000;
 /** The indent test reads a section's left edge as this quantile of its line
  *  starts. */
 const LEFT_EDGE_QUANTILE = 0.1;

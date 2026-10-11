@@ -739,3 +739,40 @@ describe("the received / accepted date box is furniture (P7-11)", () => {
     expect(body(outline)).toContain("Accepted values for the rate were taken from the first study.");
   });
 });
+
+describe("a figure caption may run to 2,000 characters (P7-11)", () => {
+  const filler = (y: number) => item("Recurrent neural networks have long been established in sequence modelling and transduction.", { y });
+  /** A figure caption of `lines` printed lines in a face of its own, under six lines of prose, with prose again below it. */
+  const paperWithCaption = (lines: number) => {
+    const words = Array.from({ length: lines }, (_, i) => `line ${String(i + 1).padStart(2, "0")} of a long caption that runs on and on, as a plate's caption does`);
+    const outline = buildOutline([
+      {
+        page: 1,
+        items: [
+          item("A Paper", { height: 17, y: 760 }),
+          item("1 Introduction", { y: 740 }),
+          ...[726, 714, 702, 690, 678, 666].map(filler),
+          ...words.map((text, i) => item(i === 0 ? `Figure 1: ${text}` : text, { y: 640 - i * 12, fontName: "caption" })),
+          ...[640 - lines * 12 - 8, 640 - lines * 12 - 20, 640 - lines * 12 - 32].map(filler),
+        ],
+      },
+    ]);
+    return { outline, caption: words.join(" ") };
+  };
+
+  it("runs a caption of fifteen hundred characters to its end", () => {
+    const { outline, caption } = paperWithCaption(22);
+    expect(caption.length).toBeGreaterThan(1400);
+    expect(caption.length).toBeLessThan(2000);
+    expect(outline.figureCaptions).toHaveLength(1);
+    expect(outline.figureCaptions?.[0].caption).toBe(caption);
+    // None of it is left in the prose.
+    expect((outline.sections ?? []).map((s) => s.text).join(" ")).not.toContain("runs on and on");
+  });
+
+  it("stops a caption at 2,000 characters: past that it is the prose under the figure", () => {
+    const { outline, caption } = paperWithCaption(32);
+    expect(caption.length).toBeGreaterThan(2000);
+    expect(outline.figureCaptions?.[0].caption).toBe(caption.slice(0, 2000));
+  });
+});
