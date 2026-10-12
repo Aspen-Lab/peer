@@ -312,10 +312,21 @@ export function buttonStyle(place: ButtonPlace): CSSProperties {
   return "top" in place ? { left: place.left, top: place.top } : { right: `calc(100% - ${place.edge}px)`, bottom: place.bottom };
 }
 
+/**
+ * P9-50 rule 1 (A P9-W3's N7): where the card's room begins. From 768 px the masthead (`hidden md:grid sticky top-0 h-12`,
+ * `MASTHEAD_MIN_VIEWPORT_PX`) stands over the page, and the card (`fixed z-[70]`) over the masthead (`z-50`): a thread grown by replies,
+ * placed above a low selection, climbed to 12 px at 768 × 1000 and covered the masthead's mark, its "←" and WRITE. Its head there is the
+ * masthead's foot, `DOCK_TOP_PX` — the dock's own clamp (`placePanel`), and the masthead's measured bottom at 768, 900 and 1023 px with a
+ * mouse and with touch: it is `h-12` at every width of the card range and wraps nowhere (`explain-dock.test.ts` holds `h-12` against the
+ * number) — so a taller thread scrolls inside the card, as the dock's does. Under 768 px there is no masthead (the top of the page is the
+ * page's own) and the head stays the card's margin.
+ */
+const cardHead = (viewport: Viewport) => (viewport.width >= MASTHEAD_MIN_VIEWPORT_PX ? DOCK_TOP_PX : CARD_MARGIN);
+
 /** The card: 360 px wide under the whole selection on a spread, the window's
  *  width less a margin on a phone; above it when there is more room there than
  *  below — it never covers the words it explains. Its height is bounded by the
- *  room it has, and it scrolls inside. */
+ *  room it has, and it scrolls inside. P9-50: never above the masthead's foot (`cardHead`). */
 export function placeCard(
   rect: ViewRect,
   viewport: Viewport,
@@ -323,14 +334,17 @@ export function placeCard(
   const phone = viewport.width < PHONE_WIDTH;
   const width = phone ? viewport.width - 2 * CARD_MARGIN : CARD_WIDTH;
   const left = phone ? CARD_MARGIN : clamp(rect.left, CARD_MARGIN, viewport.width - CARD_WIDTH - CARD_MARGIN);
-  const roomBelow = viewport.height - rect.bottom - CARD_GAP - CARD_MARGIN;
-  const roomAbove = rect.top - CARD_GAP - CARD_MARGIN;
+  const head = cardHead(viewport);
+  // Under the selection: from its last line, and — for a selection scrolled up under the masthead — no higher than the masthead's foot.
+  const topBelow = Math.max(rect.bottom + CARD_GAP, head);
+  const roomBelow = viewport.height - topBelow - CARD_MARGIN;
+  const roomAbove = rect.top - CARD_GAP - head;
   if (roomBelow >= CARD_ROOM || roomBelow >= roomAbove) {
     const maxHeight = Math.max(roomBelow, CARD_MIN_HEIGHT);
-    return { left, width, maxHeight, top: Math.min(rect.bottom + CARD_GAP, viewport.height - CARD_MARGIN - maxHeight) };
+    return { left, width, maxHeight, top: Math.min(topBelow, viewport.height - CARD_MARGIN - maxHeight) };
   }
   const maxHeight = Math.max(roomAbove, CARD_MIN_HEIGHT);
-  return { left, width, maxHeight, bottom: Math.min(viewport.height - rect.top + CARD_GAP, viewport.height - CARD_MARGIN - maxHeight) };
+  return { left, width, maxHeight, bottom: Math.min(viewport.height - rect.top + CARD_GAP, viewport.height - head - maxHeight) };
 }
 
 export interface Place {
