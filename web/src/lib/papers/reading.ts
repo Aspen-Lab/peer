@@ -696,10 +696,20 @@ export function placeFigures(
   });
 }
 
+/**
+ * `options.figuresFrom` is the id of the PDF the figure pictures are drawn
+ * from; it defaults to the paper's own id. A supplement reading — a public
+ * paper with the reader's own PDF attached — takes its captions and their
+ * pages from the attached text, so it names the upload here: a picture URL
+ * for the public paper would render that paper's PDF at the attached
+ * document's page numbers, which may be another version, or no PDF at all
+ * (P9-42, §1h.67). The reading is still the paper's (`paperId`).
+ */
 export function buildReading(
   paper: Paper,
   fullText: FullTextResult | null,
   now: Date = new Date(),
+  options: { figuresFrom?: string } = {},
 ): PaperReading {
   const intro = paper.summaryIntro?.trim() ?? "";
   const discussion = paper.summaryResultDiscussion?.trim() ?? "";
@@ -714,7 +724,7 @@ export function buildReading(
   // map row k is body section k.
   const rendered = doc ? readableSections(doc) : [];
   const body = doc
-    ? placeFigures(readableBody(rendered), doc.figureCaptions, doc.source === "pdf" ? { paperId: paper.id } : null)
+    ? placeFigures(readableBody(rendered), doc.figureCaptions, doc.source === "pdf" ? { paperId: options.figuresFrom || paper.id } : null)
     : [];
   // P1-04 (§1f.12): the map is computed here, where the document is — the
   // browser never holds it — and only when there is a body to map.

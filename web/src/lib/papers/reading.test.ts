@@ -1035,10 +1035,8 @@ describe("buildReading — where the figure pictures are drawn from (P9-42)", ()
     ...reading,
     body: reading.body.map((s) => ({ ...s, figures: s.figures?.map((f) => ({ ...f, imageUrl: undefined })) })),
   });
-  // Red first: the head's `buildReading` has no fourth argument, so the call is typed loosely here;
-  // the fix commit types it and this wrapper goes.
   const supplement = (options: { figuresFrom?: string }, fullText = attachedText(), paper: Paper = normalPaper) =>
-    (buildReading as unknown as (p: Paper, f: FullTextResult | null, n: Date, o: typeof options) => PaperReading)(paper, fullText, NOW, options);
+    buildReading(paper, fullText, NOW, options);
 
   it("draws a supplement reading's pictures from the attached upload — every URL names the upload, the page and the number", () => {
     const reading = supplement({ figuresFrom: UPLOAD });

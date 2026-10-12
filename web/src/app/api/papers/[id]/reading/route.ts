@@ -135,7 +135,13 @@ export async function GET(
     if (!stillCurrent || stillCurrent.revision !== startRevision) {
       return NextResponse.json({ error: "Upload no longer available" }, { status: 410, headers: PRIVATE_UPLOAD_HEADERS });
     }
-    return NextResponse.json(buildReading(paper, fullText), { headers: PRIVATE_UPLOAD_HEADERS });
+    // P9-42 (§1h.67): the captions and their pages were read from the attached
+    // PDF, so its figure pictures are drawn from it too — `supplement` is the
+    // canonical `upload:<hash16>` (`bareUploadId` accepted it), the same id the
+    // text was read from. The figure-image route answers it to its owner only.
+    return NextResponse.json(buildReading(paper, fullText, new Date(), { figuresFrom: supplement }), {
+      headers: PRIVATE_UPLOAD_HEADERS,
+    });
   }
 
   const fullText = await fullTextWithin(
