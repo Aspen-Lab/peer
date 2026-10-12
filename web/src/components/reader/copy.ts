@@ -443,17 +443,3 @@ export const UPLOAD_RETRY_EMPTY_MESSAGE = "Could not load this paper right now."
  *  all) — same word `BRIEFING_EMPTY.error.retry` already uses on the home
  *  page's own error state, for the same action in the reader's voice. */
 export const RETRY_LABEL = "Try again";
-
-/** ≤140 chars under the plate, when the resolver returned a caption. */
-export const CAPTION_CHARS = 140;
-
-export function plateCaption(caption: string | null | undefined): string | null {
-  const text = caption?.replace(/\s+/g, " ").trim();
-  if (!text) return null;
-  if (text.length <= CAPTION_CHARS) return text;
-  // At the character it fell on: "…seed samples (top row), sh…". A caption is
-  // prose, and prose breaks at a word.
-  const cut = text.slice(0, CAPTION_CHARS - 1);
-  const lastSpace = cut.lastIndexOf(" ");
-  return `${(lastSpace > CAPTION_CHARS / 2 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
-}
