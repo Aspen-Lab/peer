@@ -8,7 +8,11 @@
 // The reader selects words of the body (`paper-body.tsx` reads the selection);
 // a small button appears beside them — P9-03: in the gutter right of the paragraph, level with
 // the selection, never over the paper's words; just below them where there is no gutter (a phone,
-// a narrow window; `placeButton`). Clicking it is the send: nothing goes
+// a narrow window; `placeButton`) — P9-03b (ruling §1h.49): but only where no window stands. While
+// a window stands (from 1024 px: a reader with a key, a Tier 0 definition window) there is no room
+// beside the column for a floating control (24 px of it at every width from 1024 to ~1700, measured),
+// so the window carries the control itself, in its header (`ExplainCard`'s `onExplain`), and follows
+// the selection (below). Clicking it is the send: nothing goes
 // anywhere before it. The card then shows, in order,
 //
 //   - the passage's opening words, quoted from the paper with their section —
@@ -36,7 +40,8 @@
 // §1h.41 (b), which amends §1h.3's "a new selection closes" for the dock only): nor is it closed
 // by a new selection. Once the window is open it stays, with the page's width kept clear, until
 // Escape or Close — the one thing that gives the width back. A new selection gets its own
-// "Explain this?" button beside the words as before; pressing it, or `e`, takes that passage into
+// "Explain this?" control — P9-03b: in the window's header while the window stands, the floating
+// button beside the words only where none does; pressing it, or `e`, takes that passage into
 // THE SAME window: the session is replaced in place (never null in between, so `reserveDock`'s
 // properties are not taken off and put on again and the page does not reflow), the previous
 // passage's thread staying the store's, kept for its passage. `e` on the open window with the
@@ -46,10 +51,10 @@
 // readable body, from 1024 px, the window is present from the body's first paint — before any selection, as an
 // empty panel (`emptyDockStands`, `ExplainCard`'s `empty`): the card's header (the title "Explain this?" and Close)
 // and one line of label-face copy (`EXPLAIN.empty`), no input, no quote, no "You" / "Peer". It is the dock all the
-// same: at the right edge, top `DOCK_TOP_PX` until a passage is explained (then the paragraph's, above), and the
-// page keeps its 376 px clear from the MOUNT (`reserveDock`), not from the first open. The first Explain (the
-// button, or `e`) fills that same window in place — the empty state is replaced, nothing closes or reopens, the
-// properties are never taken off. Close hides the window — empty or holding a passage — for the rest of the page
+// same: at the right edge, top `DOCK_TOP_PX` until a passage is selected (then the selected paragraph's, P9-03b,
+// below), and the page keeps its 376 px clear from the MOUNT (`reserveDock`), not from the first open. The first
+// Explain (the header control, or `e`) fills that same window in place — the empty state is replaced, nothing closes
+// or reopens, the properties are never taken off. Close hides the window — empty or holding a passage — for the rest of the page
 // visit (`hidden`: this component's state, not stored; the box is keyed by the paper, and a reload shows the empty
 // panel again) and the next "Explain this?" brings it back with that passage. ESCAPE never hides it (the manager's
 // ruling: the window is always there, so Escape must not fight the page): with a passage in the window it clears
@@ -63,6 +68,19 @@
 // watches the window's width (a resize alone), to give the page its width back below 1024 and to take it again
 // from there; it is the page that clears a selection on a change of tab (`clearExplain`), which touches neither
 // the empty state nor an open window.
+//
+// P9-03b (ruling §1h.49; the owner's words, "level with the first line of the SELECTED paragraph"): while a window
+// stands from 1024 px, it follows the selection. When a selection is offered — the settled selection the page hands the
+// box, after its debounce, not one still being dragged — in a paragraph other than the one the window stands at, the
+// window moves to that paragraph's first line (`placePanel`'s clamp, as for the explained one), with no close and no
+// reflow: `--explain-dock` is never taken off, the content is unchanged by the move (the open thread of the passage
+// explained earlier, or the empty state), and explaining the offered passage replaces the thread in place as before.
+// The window stays level with the last selection it followed when that selection goes away (a click in the window
+// collapses it — the window must not jump from under the pointer), and goes back to the explained paragraph when the
+// reader selects that passage again. While the offered selection is not the passage the window explains, the window's
+// header shows "Explain this?" (`onExplain`, `data-explain-ask`), which does what the floating button did (`start`).
+// The floating button is rendered only where no window stands: the card range (640–1023 px), the phone's sheet, a
+// reader with no key and no definition, a window hidden with Close.
 //
 // P3-02b: under the first answer, the thread — the reader's messages under
 // "You", Peer's replies under "Peer" (a verified quote through `EvidenceQuote`,
@@ -80,10 +98,10 @@
 // line of the selected paragraph"): the dock's TOP is level with the first line of the PARAGRAPH
 // of the passage it explains (`ExplainSelection.paragraph`, from `paper-body.tsx`), held between
 // the masthead's foot and 160 px above the legend and measured again as the page scrolls; its
-// height is its content. It moves when the next passage is explained, not on a mere selection.
-// The selection is measured again as the page scrolls for two things now: the open window's
-// passage (where the window stands) and, while the dock is open, the NEW selection (where its
-// button stands — kept clear of the dock's 376 px).
+// height is its content. P9-03b: it is level with the SELECTED paragraph's first line — the one the
+// reader last selected, which is the explained one until another is selected (it no longer waits for
+// the next passage to be explained). The selections measured again as the page scrolls are the open
+// window's passage and the one the window stands level with (`stand`).
 //
 // P3-02c (ruling §1h.4 amendment; user decision §1a.11): at the start of the
 // control row, a small toggle "Search the web" — off whenever the box opens or a
@@ -118,7 +136,7 @@ import type { PaperTerm } from "@/lib/papers/report";
 import { MAX_EXPLAIN_MESSAGE_CHARS, threadFull, type ExplainTurn } from "@/store/explain-threads";
 import type { Paper, UserProfile } from "@/types";
 import { EXPLAIN, PEERS_READING } from "./copy";
-import { DOCK_BOTTOM_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_RESERVE_PX, DOCK_TOP_PX, DOCK_WIDTH_PX, emptyDockStands, reserveDock } from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_TOP_PX, DOCK_WIDTH_PX, emptyDockStands, reserveDock } from "./explain-dock";
 import { EvidenceQuote } from "./evidence-quote";
 import {
   asItems,
@@ -296,8 +314,9 @@ const SHEET_SHARE = 0.6;
 
 /**
  * Where the box stands. From a window of 1024 px: the dock (P7-15, R7) — the window's right edge,
- * 360 px wide, and (P8-02, BACKLOG-31) its top level with the first line of the explained passage's
- * PARAGRAPH: `top = clamp(paragraphTop, DOCK_TOP_PX, height − DOCK_BOTTOM_PX − DOCK_MIN_VISIBLE_PX)`,
+ * 360 px wide, and (P8-02, BACKLOG-31; P9-03b) its top level with the first line of the PARAGRAPH it
+ * stands at — the selected one, the explained one until another is selected —
+ * `top = clamp(paragraphTop, DOCK_TOP_PX, height − DOCK_BOTTOM_PX − DOCK_MIN_VISIBLE_PX)`,
  * so never above the masthead's foot and never so low that less than 160 px of it shows above the foot
  * legend. Its height is its content, at most the room from its top down to the legend (`maxHeight`);
  * the thread scrolls inside and the input is pinned at its foot. The words of the selection do not enter
@@ -509,6 +528,7 @@ export function ExplainCard({
   sheet,
   dock,
   empty,
+  onExplain,
   cardRef,
   inputRef,
 }: {
@@ -534,6 +554,11 @@ export function ExplainCard({
    *  (the title "Explain this?" in place of the passage's quote, and Close) and, under it, the one line `EXPLAIN.empty`
    *  in the label face; no definition, no answer, no input, no thread, whatever else it is handed. */
   empty?: boolean;
+  /** P9-03b (ruling §1h.49): a selection is on offer that this window does not explain — the header's "Explain this?"
+   *  control, which takes it into the window (the box's `start`). Not rendered without it. In the empty state it stands
+   *  where the title is (the same words); with a passage, under the quote. It does not take the selection with its press
+   *  (`onMouseDown` is cancelled), as the floating button never did. */
+  onExplain?: () => void;
   /** The card itself — the one thing that scrolls, and what the sheet's height is read from. */
   cardRef?: Ref<HTMLDivElement>;
   inputRef?: Ref<HTMLTextAreaElement>;
@@ -541,6 +566,18 @@ export function ExplainCard({
   const asking = !empty && canAsk && status.kind === "answer" ? thread : undefined;
   const full = asking ? threadFull(asking.turns) : false;
   const sendBlocked = (asking?.pending ?? false) || full;
+  const askControl = onExplain ? (
+    <button
+      type="button"
+      data-explain-ask=""
+      // The press must not take the selection with it: it is what is explained.
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onExplain}
+      className="rounded-full border border-border-strong bg-surface px-3 py-1 font-mono text-caption text-heading transition-colors hover:bg-surface-hover"
+    >
+      {EXPLAIN.ask}
+    </button>
+  ) : null;
   return (
     <div
       role="dialog"
@@ -561,10 +598,12 @@ export function ExplainCard({
         <div className="min-w-0 flex-1">
           {empty ? (
             // P8-06: nothing is explained yet, so the header holds the window's title where the passage's quote goes.
-            <p className="font-mono text-caption text-heading">{EXPLAIN.ask}</p>
+            // P9-03b: with a selection on offer the control stands there instead — the same words, now a button.
+            (askControl ?? <p className="font-mono text-caption text-heading">{EXPLAIN.ask}</p>)
           ) : (
             <EvidenceQuote text={previewOf(passage)} where={heading} />
           )}
+          {!empty && askControl && <div className="mt-2">{askControl}</div>}
         </div>
         <button type="button" onClick={onClose} className="annotation shrink-0 text-text-faint transition-colors hover:text-heading">
           {EXPLAIN.close}
@@ -753,6 +792,9 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   // P8-06: the reader hid the window (Close) — for the rest of this page visit. Component state, never
   // stored: the box is keyed by the paper, and a reload shows the empty panel again.
   const [hidden, setHidden] = useState(false);
+  // P9-03b: the last settled selection the reader made — what the window stands level with once the selection itself
+  // has gone away (a click in the window collapses it; the window must not jump back from under the pointer).
+  const [followed, setFollowed] = useState<ExplainSelection | null>(null);
   // A new selection closes the card and the sheet; one that merely went away does not (a click
   // in the card collapses it). P8-02: the dock, from 1024 px, is not closed by a new selection — it
   // stays, and the reader takes the new passage into it with the button or `e`. Derived, so the
@@ -766,6 +808,10 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   const placed = open?.selection ?? null;
   const offered = target !== null && target.passage !== placed?.passage ? target : null;
   const anchor = placed ?? target;
+  // P9-03b: the selection the window stands level with: the settled one, else the last one it followed (derived while
+  // rendering, like `stale`, so the move is in the same paint as the selection).
+  if (target !== null && target !== followed) setFollowed(target);
+  const stand = target ?? followed;
   // P8-06: with nothing open, the window may still STAND, empty — for a reader with a key, on a paper with a body,
   // from 1024 px, until it is hidden. `waiting` is the same without the width: the cases in which it could stand
   // once the window is wide enough, so that its width is watched.
@@ -789,9 +835,10 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   const remeasure = useRef<(() => void) | null>(null);
 
   // Where the selections are, measured again as the page scrolls or resizes: the one the window
-  // explains, and the one the button stands at (the same one while nothing is open).
+  // explains, and the one it stands level with (which is where the control, and the floating button
+  // where no window stands, are for the offered one: the same selection while nothing is open).
   useEffect(() => {
-    const watched = [placed, offered].filter((selection): selection is ExplainSelection => selection !== null);
+    const watched = [...new Set([placed, stand])].filter((selection): selection is ExplainSelection => selection !== null);
     if (watched.length === 0) return;
     let frame: number | undefined;
     const update = () => {
@@ -817,7 +864,7 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
       window.removeEventListener("resize", onMove);
       if (frame !== undefined) window.cancelAnimationFrame(frame);
     };
-  }, [placed, offered]);
+  }, [placed, stand]);
 
   // P8-06: the empty state is present with no selection at all, so nothing above is watching the window. While it
   // could stand (a key, a body, nothing open, not hidden) a resize alone is watched, for its width: below 1024 px the
@@ -1093,10 +1140,11 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   /** Where `selection` is now: as it was last measured, else as it was read. */
   const whereOf = (selection: ExplainSelection): ViewRects => measured.find((one) => one.of === selection)?.where ?? selection;
 
-  // The button beside the current selection — a locked block is not shown: with no key, only the paper's
-  // own definition is worth a button. While the dock is open the page keeps its 376 px clear on the right,
-  // and the button, which stands beside the words, never reaches into it.
-  const askAt = next ? whereOf(next) : null;
+  // The control for the current selection — a locked block is not shown: with no key, only the paper's own definition
+  // is worth one. P9-03b (ruling §1h.49): while a window stands from 1024 px it is the window's (`onExplain`, in its
+  // header); this floating button, which stands beside the words, is rendered only where no window does.
+  const askAt = next && !docked ? whereOf(next) : null;
+  const explainNext = next && docked ? () => start(next) : undefined;
   const ask = next && askAt ? (
     <button
       type="button"
@@ -1104,39 +1152,42 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
       // The press must not take the selection with it: it is what is explained.
       onMouseDown={(event) => event.preventDefault()}
       onClick={() => start(next)}
-      style={placeButton(askAt.rect, docked ? { width: viewport.width - DOCK_RESERVE_PX, height: viewport.height } : viewport, askAt.paragraph)}
+      style={placeButton(askAt.rect, viewport, askAt.paragraph)}
       className="fixed z-[70] rounded-full border border-border-strong bg-surface px-3 py-2 font-mono text-caption text-heading shadow-card-hover transition-colors hover:bg-surface-hover"
     >
       {EXPLAIN.ask}
     </button>
   ) : null;
+  // P9-03b: where the window stands level with: the selection it follows (`stand`), measured as of now.
+  const standAt = stand ? whereOf(stand) : null;
   if (!open) {
     if (!standing) return ask;
-    // P8-06: the empty state — the dock at its highest top, with the card's header and its one line. It is the same
-    // `ExplainCard` at the same place in the tree as the window below, so the first Explain fills this very element.
+    // P8-06: the empty state — the dock at its highest top until something is selected (P9-03b: then level with the
+    // selected paragraph), with the card's header and its one line. It is the same `ExplainCard` at the same place in
+    // the tree as the window below, so the first Explain fills this very element.
     return (
-      <>
-        <ExplainCard
-          empty
-          passage=""
-          heading=""
-          term={null}
-          termWhere={null}
-          canAsk={canAsk}
-          status={{ kind: "none" }}
-          onClose={hide}
-          dock
-          cardRef={cardRef}
-          inputRef={inputRef}
-          style={styleOf(placePanel(NO_BOUNDS, viewport, DOCK_TOP_PX))}
-        />
-        {ask}
-      </>
+      <ExplainCard
+        empty
+        passage=""
+        heading=""
+        term={null}
+        termWhere={null}
+        canAsk={canAsk}
+        status={{ kind: "none" }}
+        onClose={hide}
+        onExplain={explainNext}
+        dock
+        cardRef={cardRef}
+        inputRef={inputRef}
+        style={styleOf(standAt ? placePanel(standAt.bounds, viewport, standAt.paragraph?.top) : placePanel(NO_BOUNDS, viewport, DOCK_TOP_PX))}
+      />
     );
   }
 
   const placedAt = whereOf(open.selection);
-  const place = placePanel(placedAt.bounds, viewport, placedAt.paragraph?.top);
+  // The dock stands level with the selected paragraph; the card and the sheet with the passage they explain.
+  const levelWith = docked && standAt ? standAt : placedAt;
+  const place = placePanel(levelWith.bounds, viewport, levelWith.paragraph?.top);
   const heading = reading.body[open.selection.sectionIndex]?.heading ?? "";
   const threadView: ThreadView | undefined =
     canAsk && onReply && open.status.kind === "answer"
@@ -1169,6 +1220,7 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
         canAsk={canAsk}
         status={open.status}
         onClose={hide}
+        onExplain={explainNext}
         thread={threadView}
         sheet={place.kind === "sheet"}
         dock={place.kind === "dock"}

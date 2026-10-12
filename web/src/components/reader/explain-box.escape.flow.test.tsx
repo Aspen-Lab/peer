@@ -195,7 +195,14 @@ async function scenario(initial: Props, steps: Step[], extra?: () => void) {
 }
 
 const wait = () => new Promise((resolve) => setTimeout(resolve, 5));
-const click = (tree: ReactNode) => (look(tree).button?.props.onClick as () => void)();
+// P9-03b (re-aimed helper): press "Explain this?" wherever it stands — the floating button where no window stands, the
+// window's header control (`onExplain`) where one does (a reader with a key has the empty window from 1024 px). It was
+// the floating button alone; every assertion of the tests that use it is as it was.
+const click = (tree: ReactNode) => {
+  const pressIt = (look(tree).button?.props.onClick as (() => void) | undefined) ?? (elements(tree).find((el) => el.type === ExplainCard)?.props.onExplain as (() => void) | undefined);
+  if (!pressIt) throw new Error("no Explain this? control is standing");
+  pressIt();
+};
 const close = (tree: ReactNode) => (look(tree).card?.props.onClose as () => void)();
 const draft = (tree: ReactNode, text: string) => look(tree).thread?.onDraft(text);
 
@@ -236,6 +243,40 @@ describe("Escape with the empty state showing (P8-06, the manager's ruling)", ()
     expect(removeProperty).not.toHaveBeenCalled();
     expect(event.preventDefault).not.toHaveBeenCalled();
     expect(event.stopPropagation).not.toHaveBeenCalled();
+    run.mounted.unmount();
+  });
+
+  // Ruling §1h.51 (a), from A P8-05's finding F1: while the empty window stands (no thread open) the box does not consume
+  // Escape, so the page's own handlers — the Keyboard-shortcuts dialog's close, a term highlight's clear — see that same
+  // key and the dialog never needs a second press. The head already passed it through (the box registers its Escape only
+  // while a passage is in the window: the two tests above and "registers its own Escape only while…" below); this pins
+  // it for the empty window that carries the P9-03b control, which is what a selection on offer makes of it.
+  it("P9-03b: the empty window that carries the control still leaves Escape to the page: no listener of the box's, the event untouched, the page's handlers each see it", async () => {
+    const pageSaw = { documentCapture: vi.fn(), windowBubble: vi.fn() };
+    let event!: KeyEvent;
+    const run = await scenario(base({ target: first }), [
+      (tree) => {
+        // A selection is on offer, so the window shows the control…
+        expect(look(tree).empty).toBe(true);
+        expect(look(tree).card?.props.onExplain).toBeTypeOf("function");
+        // …and the box has no key listener at all; two stand-ins for the page's: a dialog's (document, capture) and the keyboard layer's (window, bubble).
+        expect(listening("keydown")).toBe(0);
+        document.addEventListener("keydown", pageSaw.documentCapture as never, true);
+        window.addEventListener("keydown", pageSaw.windowBubble as never);
+        event = press("Escape");
+      },
+    ]);
+    await wait();
+
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(event.stopPropagation).not.toHaveBeenCalled();
+    expect(pageSaw.documentCapture).toHaveBeenCalledTimes(1);
+    expect(pageSaw.windowBubble).toHaveBeenCalledTimes(1);
+    // The window stays, empty, with the control and the width.
+    expect(run.looks.every((l) => l.empty)).toBe(true);
+    expect(run.last().card?.props.onExplain).toBeTypeOf("function");
+    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    expect(removeProperty).not.toHaveBeenCalled();
     run.mounted.unmount();
   });
 
@@ -364,8 +405,10 @@ describe("Escape with a passage in the window (P8-06, the manager's ruling)", ()
     expect(setProperty).toHaveBeenCalledTimes(2);
     expect(Object.fromEntries(root)).toEqual(RESERVED);
     expect(scrollBy).not.toHaveBeenCalled();
-    // …and the selection that stands is offered again by its button.
-    expect(run.last().button).toBeDefined();
+    // …and the selection that stands is offered again — P9-03b (re-aimed): by the empty window's header control, not a
+    // floating button.
+    expect(run.last().card?.props.onExplain).toBeTypeOf("function");
+    expect(run.last().button).toBeUndefined();
     run.mounted.unmount();
     release();
   });

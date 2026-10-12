@@ -129,7 +129,14 @@ async function scenario(initial: Props, steps: Step[]) {
 }
 
 const wait = () => new Promise((resolve) => setTimeout(resolve, 5));
-const click = (tree: ReactNode) => (look(tree).button?.props.onClick as () => void)();
+// P9-03b (re-aimed helper): press "Explain this?" wherever it stands — the floating button where no window stands, the
+// window's header control (`onExplain`) where one does (a reader with a key has the empty window from 1024 px). It was
+// the floating button alone; every assertion of the tests that use it is as it was.
+const click = (tree: ReactNode) => {
+  const press = (look(tree).button?.props.onClick as (() => void) | undefined) ?? (elements(tree).find((el) => el.type === ExplainCard)?.props.onExplain as (() => void) | undefined);
+  if (!press) throw new Error("no Explain this? control is standing");
+  press();
+};
 /** The window's Close button (P8-06: the one thing that hides it; Escape clears its passage). */
 const closeOf = (tree: ReactNode) => look(tree).card?.props.onClose as () => void;
 const draft = (tree: ReactNode, text: string) => look(tree).thread?.onDraft(text);
@@ -725,17 +732,17 @@ describe("ExplainBox — the page keeps the dock's width clear while it is open 
     run.mounted.unmount();
   });
 
-  it("reads where the selection is after the page has reflowed, so the button stands by the words again once the dock closes", async () => {
+  it("reads where the selection is after the page has reflowed, so the button stands by the words again once the dock closes (re-aimed, P9-03b: a reader with no key — the Tier 0 definition window is the dock that comes and goes; a key reader's window stands from the mount, with no floating button beside it)", async () => {
     // What the page captured when the selection was made (`first.rect`: right 420, bottom 420) is not
     // where the words stand once the dock has come and gone: after the reflow they are at right 700,
     // bottom 500 in the wide page. The button must follow the measure, not the first capture.
     const wide = { rect: { left: 560, top: 480, right: 700, bottom: 500 }, bounds: { left: 560, top: 480, right: 700, bottom: 500 } };
     const narrow = { rect: { left: 300, top: 900, right: 380, bottom: 920 }, bounds: { left: 300, top: 900, right: 380, bottom: 920 } };
-    const target: ExplainSelection = { ...first, measure: () => (root.has("--explain-dock") ? narrow : wide) };
+    const target: ExplainSelection = { ...first, passage: "The rafting ratio rose.", measure: () => (root.has("--explain-dock") ? narrow : wide) };
     const buttonAt: Array<{ left?: number; top?: number }> = [];
     // P8-06 (re-aimed): the dock closes with the Close button — Escape now clears the passage back to the empty
     // state, which keeps the width reserved and so moves nothing.
-    const run = await scenario(base({ target }), [
+    const run = await scenario(base({ target, canAsk: false, terms: [term], cached: undefined }), [
       (tree) => buttonAt.push(look(tree).button?.props.style as { left?: number; top?: number }),
       (tree) => click(tree),
       () => {},

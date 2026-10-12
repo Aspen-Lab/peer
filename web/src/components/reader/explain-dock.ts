@@ -1,12 +1,13 @@
 // The "Explain this?" conversation as a dock (P7-15; the owner's R7, ruling Q4) that stays open and
-// stands level with the paragraph it explains (P8-02; BACKLOG-31, the owner's words, ruling §1h.41 (b)).
+// stands level with the paragraph it explains (P8-02; BACKLOG-31, the owner's words, ruling §1h.41 (b)) — P9-03b
+// (ruling §1h.49): level with the SELECTED paragraph, and carrying the "Explain this?" control itself.
 //
 // From a window of 1024 px the box is not a card at the selection but a window
 // fixed at the right edge of the screen: flush with the edge, 360 px wide, in the
 // margin the page keeps clear (below), scrolling inside. Once it is open it STAYS open across
 // selections (`explain-box.tsx`) until Close (Escape clears its passage, P8-06, and with no empty state to go back to
 // closes it), and its top is level with the first line of
-// the PARAGRAPH the explained passage belongs to, measured again as the page scrolls and the window
+// the PARAGRAPH it stands at (below: the selected one), measured again as the page scrolls and the window
 // resizes:
 //
 //   top = clamp(paragraphTop, DOCK_TOP_PX, windowHeight − DOCK_BOTTOM_PX − DOCK_MIN_VISIBLE_PX)
@@ -14,12 +15,16 @@
 // so it never stands above the masthead's foot (it stays there while the paragraph is scrolled
 // above it) and never so low that less than `DOCK_MIN_VISIBLE_PX` of it shows above the foot legend.
 // Its height is its content, at most what is left between its top and the legend; it scrolls inside.
-// It moves when the next passage is explained, not on a mere selection of it.
+// P9-03b (ruling §1h.49; the owner: "level with the first line of the SELECTED paragraph"): `paragraphTop` is that of
+// the paragraph the reader last selected — the explained one until another is selected. When a selection is offered
+// (settled, never during a drag) in another paragraph the window moves there at once, with no close and no reflow
+// (the properties below are never taken off) and its content unchanged; the "Explain this?" control is in its header
+// while the selection is not the passage it explains. The floating button stands only where no window does.
 //
 // P8-06 (the owner's "yes" of 16:4xZ 2026-10-11 to "is the window already there, as an empty panel, before any
 // text is selected?"; ruling §1h.45): for a reader with a key, on a paper with a readable body, from the same
 // 1024 px, the window is there from the body's first paint — before anything is selected, let alone explained.
-// It is the same dock: the right edge, 360 wide, its top at `DOCK_TOP_PX` until a passage is explained (then the
+// It is the same dock: the right edge, 360 wide, its top at `DOCK_TOP_PX` until a passage is selected (then the
 // rule above — level with the paragraph), the page keeping `DOCK_RESERVE_PX` clear from the mount, not from the
 // first open. It holds the card's header and one line of copy (`EXPLAIN.empty`); the first Explain fills it in
 // place, nothing closes or reopens. Close hides it for the rest of the page visit (the box's state, not stored; a

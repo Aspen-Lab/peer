@@ -123,7 +123,14 @@ async function scenario(initial: Props, steps: Array<(tree: ReactNode, ctx: { pr
   return { looks, mounted, last: () => looks[looks.length - 1] };
 }
 
-const click = (tree: ReactNode) => (look(tree).button?.props.onClick as () => void)();
+// P9-03b (re-aimed helper): press "Explain this?" wherever it stands — the floating button where no window stands, the
+// window's header control (`onExplain`) where one does (a reader with a key has the empty window from 1024 px). It was
+// the floating button alone; every assertion of the tests that use it is as it was.
+const click = (tree: ReactNode) => {
+  const press = (look(tree).button?.props.onClick as (() => void) | undefined) ?? (elements(tree).find((el) => el.type === ExplainCard)?.props.onExplain as (() => void) | undefined);
+  if (!press) throw new Error("no Explain this? control is standing");
+  press();
+};
 const base = (over: Partial<Props> = {}): Props => ({ target: first, terms: [], canAsk: true, onAsk: vi.fn(async (): Promise<AskResult> => answer), reading, ...over });
 const wait = () => new Promise((resolve) => setTimeout(resolve, 5));
 
@@ -135,7 +142,9 @@ describe("ExplainBox — the click is the send (§1h.2)", () => {
     const run = await scenario(base({ onAsk }), [
       (tree) => {
         expect(onAsk).not.toHaveBeenCalled();
-        expect(look(tree).button).toBeDefined();
+        // P9-03b (re-aimed): at 1280 a reader with a key has the empty window from the mount, which carries the control;
+        // the floating button stands only where no window does (the card range, tested in `explain-box.dock.flow`).
+        expect(look(tree).button ?? elements(tree).find((el) => el.type === ExplainCard)?.props.onExplain).toBeDefined();
         seen.push(look(tree).status);
       },
       (tree) => click(tree),

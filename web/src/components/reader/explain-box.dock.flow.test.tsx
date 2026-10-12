@@ -69,7 +69,10 @@ function elements(node: ReactNode): ReactElement<Props2>[] {
 }
 
 interface Look {
+  /** The floating "Explain this?" button — the one that stands beside the words where no window stands. */
   button: ReactElement<Props2> | undefined;
+  /** P9-03b: the window's own control — the "Explain this?" in its header (`onExplain`), with the empty window too. */
+  explain: (() => void) | undefined;
   card: ReactElement<Props2> | undefined;
   status: string | null;
   /** The passage the window explains. */
@@ -89,6 +92,7 @@ const look = (tree: ReactNode): Look => {
   const status = card?.props.status as { kind: string; answer?: ExplainAnswer } | undefined;
   return {
     button: all.find((el) => el.type === "button" && el.props.children === EXPLAIN.ask),
+    explain: all.find((el) => el.type === ExplainCard)?.props.onExplain as (() => void) | undefined,
     card,
     status: status?.kind ?? null,
     passage: (card?.props.passage as string | undefined) ?? null,
@@ -160,7 +164,14 @@ async function scenario(initial: Props, steps: Step[]) {
 }
 
 const wait = () => new Promise((resolve) => setTimeout(resolve, 5));
-const click = (tree: ReactNode) => (look(tree).button?.props.onClick as () => void)();
+// P9-03b (re-aimed helper): press "Explain this?" wherever it stands — the floating button where no window stands, the
+// window's header control where one does (a reader with a key has the empty window from 1024 px). It was the button alone.
+const click = (tree: ReactNode) => {
+  const at = look(tree);
+  const press = (at.button?.props.onClick as (() => void) | undefined) ?? at.explain;
+  if (!press) throw new Error("no Explain this? control is standing");
+  press();
+};
 const draft = (tree: ReactNode, text: string) => look(tree).thread?.onDraft(text);
 const send = (tree: ReactNode) => look(tree).thread?.onSend();
 const escape = () => fire("keydown", { key: "Escape", preventDefault: vi.fn(), stopPropagation: vi.fn() });
@@ -189,7 +200,7 @@ const base = (over: Partial<Props> = {}): Props => ({
 });
 
 describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-31)", () => {
-  it("a new selection does not close it: the window stays on its passage, and the new selection gets its button", async () => {
+  it("a new selection does not close it: the window stays on its passage, and the new selection gets its control (re-aimed, P9-03b: in the window's header, not a floating button)", async () => {
     const run = await scenario(base(), [(tree) => click(tree), selectNext(second, { cached: undefined }), () => pressOutside()]);
     await wait();
 
@@ -198,10 +209,11 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     expect(run.last().passage).toBe(first.passage);
     expect(run.last().status).toBe("answer");
     expect(run.last().dock).toBe(true);
-    // The button is the new selection's: below its end, centred on it.
-    expect(run.last().button).toBeDefined();
-    expect(run.last().button?.props.style).toEqual({ left: 460 - 60, top: 620 + 6 });
-    // The page's width stays clear, and a press on that button (outside the dock) closes nothing.
+    // P9-03b (re-aimed): the control is the new selection's, in the window's header; there is no floating button to
+    // stand below the selection's end (it was {left: 400, top: 626} here), and the window is level with the new selection.
+    expect(run.last().explain).toBeTypeOf("function");
+    expect(run.last().button).toBeUndefined();
+    // The page's width stays clear, and a press on that control (inside the dock) closes nothing.
     expect(Object.fromEntries(root)).toEqual(RESERVED);
     run.mounted.unmount();
   });
@@ -389,8 +401,10 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     // `look().card` is the window with a passage: after Escape there is none, but the window is still there — empty.
     expect(kinds).toEqual(["empty-or-none"]);
     expect(run.last().card).toBeUndefined();
-    // The selection that stands is offered again, as after a Close; the properties were never touched.
-    expect(run.last().button).toBeDefined();
+    // The selection that stands is offered again — P9-03b (re-aimed): by the empty window that stays, in its header, not by
+    // a floating button; the properties were never touched.
+    expect(run.last().explain).toBeTypeOf("function");
+    expect(run.last().button).toBeUndefined();
     expect(removeProperty).not.toHaveBeenCalled();
     expect(Object.fromEntries(root)).toEqual(RESERVED);
     run.mounted.unmount();
@@ -421,14 +435,16 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     run.mounted.unmount();
   });
 
-  it("from 1024 px only: a new selection still closes the card (640 to 1023) and the phone's sheet, and leaves its own button", async () => {
+  it("from 1024 px only: a new selection still closes the card (640 to 1023) and the phone's sheet, and leaves its own button (re-aimed, P9-03b: at 1024 the control is the window's, below it the floating button)", async () => {
     for (const [width, height, stays] of [[1024, 800, true], [1023, 800, false], [800, 900, false], [640, 900, false], [390, 844, false]] as const) {
       stubWindow(width, height);
       const run = await scenario(base(), [(tree) => click(tree), selectNext(second, { cached: undefined })]);
       await wait();
 
       expect(run.last().card !== undefined, `${width} px`).toBe(stays);
-      expect(run.last().button !== undefined, `${width} px`).toBe(true);
+      // The control stands in one place only: the window's header where the window stays, the floating button where it closed.
+      expect(run.last().explain !== undefined, `${width} px`).toBe(stays);
+      expect(run.last().button !== undefined, `${width} px`).toBe(!stays);
       run.mounted.unmount();
     }
   });
@@ -495,7 +511,7 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     run.mounted.unmount();
   });
 
-  it("keeps the new selection's button clear of the window: it never stands under the 376 px the page leaves free", async () => {
+  it("keeps the new selection's control clear of the window: no floating button stands under the 376 px the page leaves free (re-aimed, P9-03b: the window carries it)", async () => {
     stubWindow(1280, 800);
     const late: ExplainSelection = { ...second, rect: { left: 700, top: 600, right: 1000, bottom: 620 }, bounds: { left: 700, top: 580, right: 1000, bottom: 620 } };
     // P8-06 (re-aimed): "no window yet" is now the reader with no key, whose Tier 0 definition opens on the press
@@ -509,17 +525,18 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
 
     const opened = await scenario(base({ target: first }), [(tree) => click(tree), selectNext(late, { cached: undefined })]);
     await wait();
-    // The window open: 1280 − 376 − 120 − 8 at the furthest right.
-    expect(opened.last().button?.props.style).toEqual({ left: 1280 - 376 - 120 - 8, top: 620 + 6 });
+    // The window open: P9-03b (re-aimed) — there is no floating button to keep out of it (it stood at 1280 − 376 − 120 − 8
+    // at the furthest right); the control is the window's.
+    expect(opened.last().button).toBeUndefined();
+    expect(opened.last().explain).toBeTypeOf("function");
     opened.mounted.unmount();
   });
 
-  it("measures the new selection again as the page scrolls, for its button", async () => {
+  it("measures the new selection again as the page scrolls, for its button (re-aimed, P9-03b: in the card range, where a floating button still stands)", async () => {
+    stubWindow(800, 900);
     let rect = { left: 200, top: 600, right: 460, bottom: 620 };
     const moving: ExplainSelection = { ...second, measure: () => ({ rect, bounds: rect }) };
-    const run = await scenario(base(), [
-      (tree) => click(tree),
-      selectNext(moving, { cached: undefined }),
+    const run = await scenario(base({ target: moving, cached: undefined }), [
       () => {
         rect = { left: 200, top: 300, right: 460, bottom: 320 };
         fire("scroll", {});
@@ -528,23 +545,21 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     ]);
     await wait();
 
-    expect(run.last().passage).toBe(first.passage);
     expect(run.last().button?.props.style).toEqual({ left: 460 - 60, top: 320 + 6 });
     run.mounted.unmount();
   });
 
   // P9-03 (the feature walk's X13): the button stands beside the words, never on them. The body reports the
   // selection's paragraph (P8-02), and with room to its right the button is in the gutter, level with the selection.
-  it("P9-03: with the paragraph reported, the new selection's button stands in the gutter beside it, level with the selection", async () => {
-    const paragraph = { left: 120, top: 560, right: 760, bottom: 860 };
+  it("P9-03: with the paragraph reported, the new selection's button stands in the gutter beside it, level with the selection (re-aimed, P9-03b: in the card range, where a floating button still stands; with a window open it is the window's control)", async () => {
+    stubWindow(800, 900);
+    const paragraph = { left: 120, top: 560, right: 600, bottom: 860 };
     const late: ExplainSelection = { ...second, paragraph };
-    const run = await scenario(base({ target: first }), [(tree) => click(tree), selectNext(late, { cached: undefined })]);
-    await wait();
+    const run = await scenario(base({ target: late, cached: undefined }), []);
 
-    // 1440 less the dock's 376: a 1,064 px window, 304 px of it right of the paragraph. The button's left is the
-    // paragraph's edge and the 6 px gap; its top is the selection's (600), not the 626 under the selection.
-    expect(run.last().passage).toBe(first.passage);
-    expect(run.last().button?.props.style).toEqual({ left: 760 + 6, top: 600 });
+    // 800 px, no window: 200 px right of the paragraph. The button's left is the paragraph's edge and the 6 px gap; its
+    // top is the selection's (600), not the 626 under the selection.
+    expect(run.last().button?.props.style).toEqual({ left: 600 + 6, top: 600 });
     expect((run.last().button?.props.style as { left: number }).left).toBeGreaterThanOrEqual(paragraph.right);
     run.mounted.unmount();
   });
@@ -558,37 +573,34 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     run.mounted.unmount();
   });
 
-  it("P9-03: a paragraph that leaves the dock-narrowed window less than 136 px keeps today's place under the selection's end", async () => {
-    stubWindow(1280, 800);
-    // 1280 − 376 = 904; the paragraph ends at 800: 104 px to its right.
-    const tight: ExplainSelection = { ...second, rect: { left: 700, top: 600, right: 780, bottom: 620 }, paragraph: { left: 120, top: 560, right: 800, bottom: 860 } };
-    const run = await scenario(base({ target: first }), [(tree) => click(tree), selectNext(tight, { cached: undefined })]);
-    await wait();
-    expect(run.last().button?.props.style).toEqual({ left: 780 - 60, top: 620 + 6 });
+  it("P9-03: a paragraph that leaves the window less than 136 px keeps today's place under the selection's end (re-aimed, P9-03b: the card range, no dock to narrow the window)", async () => {
+    stubWindow(800, 900);
+    // The paragraph ends at 700: 100 px to its right.
+    const tight: ExplainSelection = { ...second, rect: { left: 500, top: 600, right: 640, bottom: 620 }, paragraph: { left: 120, top: 560, right: 700, bottom: 860 } };
+    const run = await scenario(base({ target: tight, cached: undefined }), []);
+    expect(run.last().button?.props.style).toEqual({ left: 640 - 60, top: 620 + 6 });
     run.mounted.unmount();
 
-    // One pixel under the threshold's other side (904 − 136 = 768): the gutter.
-    const roomy: ExplainSelection = { ...tight, paragraph: { left: 120, top: 560, right: 768, bottom: 860 } };
-    const again = await scenario(base({ target: first }), [(tree) => click(tree), selectNext(roomy, { cached: undefined })]);
-    await wait();
-    expect(again.last().button?.props.style).toEqual({ left: 768 + 6, top: 600 });
+    // One pixel on the threshold's other side (800 − 136 = 664): the gutter.
+    const roomy: ExplainSelection = { ...tight, paragraph: { left: 120, top: 560, right: 664, bottom: 860 } };
+    const again = await scenario(base({ target: roomy, cached: undefined }), []);
+    expect(again.last().button?.props.style).toEqual({ left: 664 + 6, top: 600 });
     again.mounted.unmount();
   });
 
-  it("P9-03: the button follows its paragraph and selection as the page scrolls", async () => {
+  it("P9-03: the button follows its paragraph and selection as the page scrolls (re-aimed, P9-03b: the card range)", async () => {
+    stubWindow(800, 900);
     let shift = 0;
     const moving: ExplainSelection = {
       ...second,
-      paragraph: { left: 120, top: 560, right: 760, bottom: 860 },
+      paragraph: { left: 120, top: 560, right: 600, bottom: 860 },
       measure: () => ({
         rect: { left: 200, top: 600 - shift, right: 460, bottom: 620 - shift },
         bounds: { left: 200, top: 600 - shift, right: 460, bottom: 620 - shift },
-        paragraph: { left: 120, top: 560 - shift, right: 760, bottom: 860 - shift },
+        paragraph: { left: 120, top: 560 - shift, right: 600, bottom: 860 - shift },
       }),
     };
-    const run = await scenario(base(), [
-      (tree) => click(tree),
-      selectNext(moving, { cached: undefined }),
+    const run = await scenario(base({ target: moving, cached: undefined }), [
       () => {
         shift = 250;
         fire("scroll", {});
@@ -596,7 +608,7 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
       () => {},
     ]);
     await wait();
-    expect(run.last().button?.props.style).toEqual({ left: 760 + 6, top: 350 });
+    expect(run.last().button?.props.style).toEqual({ left: 600 + 6, top: 350 });
     run.mounted.unmount();
   });
 });
@@ -648,20 +660,21 @@ describe("ExplainBox — the window stands level with the explained paragraph's 
     below.mounted.unmount();
   });
 
-  it("does not move on a mere selection of the next passage — it moves when that passage is explained", async () => {
+  it("moves on a mere selection of the next passage, and explaining it leaves the window where it is (re-aimed, P9-03b: was \"does not move on a mere selection — it moves when that passage is explained\")", async () => {
     const tops: Array<number | undefined> = [];
     const run = await scenario(base({ target: inParagraph(first, 400) }), [
       (tree) => click(tree),
       selectNext(inParagraph(second, 620), { cached: SECOND_ANSWER }),
-      // Selected, not explained: the window is still the first passage's, at the first paragraph's top.
+      // Selected, not explained: P9-03b (re-aimed) — the window is still the first passage's, but level with the SELECTED
+      // paragraph (it stayed at the first paragraph's top, 400, until the passage was explained).
       (tree) => tops.push(look(tree).style?.top),
       (tree) => click(tree),
-      // Explained: the same window, now level with the second paragraph.
+      // Explained: the same window, where it already stood.
       (tree) => tops.push(look(tree).style?.top),
     ]);
     await wait();
 
-    expect(tops).toEqual([400, 620]);
+    expect(tops).toEqual([620, 620]);
     expect(run.last().passage).toBe(second.passage);
     expect(removeProperty).not.toHaveBeenCalled();
     run.mounted.unmount();
@@ -744,5 +757,342 @@ describe("ExplainBox — the window stands level with the explained paragraph's 
     expect(sheet.last().style).toMatchObject({ left: 0, width: 390, bottom: 0 });
     expect(sheet.last().style?.top).toBeUndefined();
     sheet.mounted.unmount();
+  });
+});
+
+// ── The window follows the selected paragraph and carries the control (P9-03b) ──────────────────────
+//
+// The owner's words, "level with the first line of the SELECTED paragraph" (被选中的文字段落), and the ruling §1h.49 (a): no
+// gutter exists beside the column while the dock stands (P9-03's measurement), so while a window stands it moves to the
+// paragraph of the selection on offer — the settled selection, never the one still being dragged — keeps what it holds, and
+// carries the "Explain this?" control in its header; the floating button stands only where no window does.
+
+const B_TOP = 620;
+const paraA = (): ExplainSelection => inParagraph(first, 400);
+const paraB = (): ExplainSelection => inParagraph(second, B_TOP);
+
+describe("ExplainBox — the window follows the selected paragraph's first line (P9-03b, ruling §1h.49)", () => {
+  it("moves to the paragraph of a selection offered elsewhere, with no close and no reflow, and keeps the thread it holds", async () => {
+    const kept = pairs(1);
+    const seen: Array<{ top: number | undefined; passage: string | null; turns: ExplainTurn[] | undefined; status: string | null }> = [];
+    const note: Step = (tree) => seen.push({ top: look(tree).style?.top, passage: look(tree).passage, turns: look(tree).thread?.turns as ExplainTurn[] | undefined, status: look(tree).status });
+    const run = await scenario(base({ target: paraA(), cachedTurns: kept }), [
+      (tree) => click(tree),
+      note,
+      selectNext(paraB(), { cached: SECOND_ANSWER, cachedTurns: [] }),
+      note,
+    ]);
+    await wait();
+
+    // Level with A's first line, then with B's — and the window still holds A's passage, answer and thread.
+    expect(seen).toEqual([
+      { top: 400, passage: first.passage, turns: kept, status: "answer" },
+      { top: B_TOP, passage: first.passage, turns: kept, status: "answer" },
+    ]);
+    expect(run.last().style).toEqual({ right: 0, width: 360, top: B_TOP, maxHeight: 900 - B_TOP - 28 });
+    // Never a render without the window from its first opening on; the page's width never given back, nothing scrolled.
+    expect(fromOpen(run.looks).every((l) => l.card !== undefined)).toBe(true);
+    expect(setProperty).toHaveBeenCalledTimes(2);
+    expect(removeProperty).not.toHaveBeenCalled();
+    expect(scrollBy).not.toHaveBeenCalled();
+    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    run.mounted.unmount();
+  });
+
+  it("is the paragraph's first line, not the selected words': those lie lower in a long paragraph", async () => {
+    // `second.bounds.top` is 580: the picked words. The paragraph began at 500.
+    const run = await scenario(base({ target: paraA() }), [(tree) => click(tree), selectNext(inParagraph(second, 500), { cached: SECOND_ANSWER })]);
+    await wait();
+
+    expect(run.last().style?.top).toBe(500);
+    run.mounted.unmount();
+  });
+
+  it("falls back on the selection's own first line where the body reported no paragraph", async () => {
+    const run = await scenario(base({ target: paraA() }), [(tree) => click(tree), selectNext(second, { cached: SECOND_ANSWER })]);
+    await wait();
+
+    expect(second.paragraph).toBeUndefined();
+    expect(run.last().style?.top).toBe(second.bounds.top);
+    run.mounted.unmount();
+  });
+
+  it("is held between the masthead and 160 px above the legend, as the explained paragraph's is", async () => {
+    const tops: Array<number | undefined> = [];
+    const note: Step = (tree) => tops.push(look(tree).style?.top);
+    const run = await scenario(base({ target: paraA() }), [
+      (tree) => click(tree),
+      selectNext(inParagraph(second, 4000), { cached: SECOND_ANSWER }),
+      note,
+      selectNext(inParagraph(second, -700), { cached: SECOND_ANSWER }),
+      note,
+    ]);
+    await wait();
+
+    expect(tops).toEqual([900 - 28 - 160, 48]);
+    run.mounted.unmount();
+  });
+
+  it("does not move for a selection in the paragraph it is already level with", async () => {
+    const tops: Array<number | undefined> = [];
+    const same = { ...inParagraph(second, 400), passage: "A different passage of the same paragraph." };
+    const run = await scenario(base({ target: paraA() }), [(tree) => click(tree), selectNext(same, { cached: undefined }), (tree) => tops.push(look(tree).style?.top)]);
+    await wait();
+
+    expect(tops).toEqual([400]);
+    run.mounted.unmount();
+  });
+
+  it("stays where it moved when the selection goes away (a click in the window collapses it): it does not jump back to the explained paragraph", async () => {
+    const tops: Array<number | undefined> = [];
+    const note: Step = (tree) => tops.push(look(tree).style?.top);
+    const run = await scenario(base({ target: paraA() }), [(tree) => click(tree), selectNext(paraB(), { cached: SECOND_ANSWER }), note, selectNext(null), note]);
+    await wait();
+
+    expect(tops).toEqual([B_TOP, B_TOP]);
+    expect(run.last().passage).toBe(first.passage);
+    expect(run.last().explain).toBeUndefined();
+    run.mounted.unmount();
+  });
+
+  it("goes back to the explained paragraph when the reader selects its passage again", async () => {
+    const tops: Array<number | undefined> = [];
+    const note: Step = (tree) => tops.push(look(tree).style?.top);
+    const run = await scenario(base({ target: paraA() }), [
+      (tree) => click(tree),
+      selectNext(paraB(), { cached: SECOND_ANSWER }),
+      note,
+      selectNext({ ...paraA(), rect: { left: 310, top: 410, right: 430, bottom: 430 } }, { cached: FIRST_ANSWER }),
+      note,
+    ]);
+    await wait();
+
+    expect(tops).toEqual([B_TOP, 400]);
+    expect(run.last().explain).toBeUndefined();
+    run.mounted.unmount();
+  });
+
+  it("follows the paragraph it moved to as the page scrolls", async () => {
+    let shift = 0;
+    const moving: ExplainSelection = {
+      ...paraB(),
+      measure: () => ({
+        rect: { left: 200, top: 600 - shift, right: 460, bottom: 620 - shift },
+        bounds: { left: 100, top: 580 - shift, right: 460, bottom: 620 - shift },
+        paragraph: { left: 120, top: B_TOP - shift, right: 760, bottom: B_TOP + 260 - shift },
+      }),
+    };
+    const tops: Array<number | undefined> = [];
+    const note: Step = (tree) => tops.push(look(tree).style?.top);
+    const run = await scenario(base({ target: paraA() }), [
+      (tree) => click(tree),
+      selectNext(moving, { cached: SECOND_ANSWER }),
+      note,
+      () => {
+        shift = 250;
+        fire("scroll", {});
+      },
+      note,
+    ]);
+    await wait();
+
+    expect(tops).toEqual([B_TOP, B_TOP - 250]);
+    run.mounted.unmount();
+  });
+
+  it("a Tier 0 window (no key) follows a selection too, whether or not the paper defines something in it", async () => {
+    const definedA = inParagraph({ ...first, passage: "The rafting ratio rose." }, 330);
+    const definedB = inParagraph({ ...second, passage: "The rafting ratio is the same in all bars." }, 560);
+    const plainC = inParagraph({ ...second, passage: "Specimens were machined from a single casting." }, 700);
+    const tops: Array<number | undefined> = [];
+    const note: Step = (tree) => tops.push(look(tree).style?.top);
+    const run = await scenario(base({ canAsk: false, terms: [term], target: definedA, cached: undefined }), [
+      (tree) => click(tree),
+      note,
+      selectNext(definedB),
+      note,
+      selectNext(plainC),
+      (tree) => {
+        tops.push(look(tree).style?.top);
+        // It has nothing to offer for a passage the paper does not define: the window moves, the control does not appear.
+        expect(look(tree).explain).toBeUndefined();
+        expect(look(tree).passage).toBe(definedA.passage);
+      },
+    ]);
+    await wait();
+
+    expect(tops).toEqual([330, 560, 700]);
+    expect(removeProperty).not.toHaveBeenCalled();
+    run.mounted.unmount();
+  });
+});
+
+describe("ExplainBox — the window carries the Explain this? control (P9-03b, ruling §1h.49)", () => {
+  it("shows it while a selection is offered that is not the passage the window explains; the floating button is not rendered", async () => {
+    const run = await scenario(base({ target: paraA() }), [
+      (tree) => {
+        // Before anything is explained the empty window stands: the control is its, and the floating button is not.
+        expect(look(tree).explain).toBeDefined();
+        expect(look(tree).button).toBeUndefined();
+        click(tree);
+      },
+      (tree) => {
+        // A is the window's: nothing on offer.
+        expect(look(tree).explain).toBeUndefined();
+        expect(look(tree).button).toBeUndefined();
+      },
+      selectNext(paraB(), { cached: SECOND_ANSWER }),
+    ]);
+    await wait();
+
+    expect(run.last().passage).toBe(first.passage);
+    expect(run.last().explain).toBeTypeOf("function");
+    expect(run.last().button).toBeUndefined();
+    run.mounted.unmount();
+  });
+
+  it("pressing it explains the offered passage in the same window: no close, no intermediate null, the width never given back", async () => {
+    let resolve!: (value: AskResult) => void;
+    const onAsk = vi.fn(() => new Promise<AskResult>((r) => (resolve = r)));
+    const loading: Array<{ passage: string | null; status: string | null; top: number | undefined }> = [];
+    const run = await scenario(base({ target: paraA() }), [
+      (tree) => click(tree),
+      selectNext(paraB(), { cached: undefined, onAsk }),
+      (tree) => look(tree).explain?.(),
+      (tree) => {
+        loading.push({ passage: look(tree).passage, status: look(tree).status, top: look(tree).style?.top });
+        resolve(SECOND_ANSWER);
+      },
+    ]);
+    await wait();
+
+    // B is the window's at once, waiting for its answer, level with B's paragraph where it already stood.
+    expect(loading).toEqual([{ passage: second.passage, status: "loading", top: B_TOP }]);
+    expect(run.last().passage).toBe(second.passage);
+    expect(run.last().status).toBe("answer");
+    expect(run.last().meaning).toBe(SECOND_ANSWER.meaning);
+    expect(onAsk).toHaveBeenCalledTimes(1);
+    expect(onAsk).toHaveBeenCalledWith(expect.objectContaining({ passage: second.passage, sectionIndex: 1, paragraphIndex: 0 }));
+    expect(fromOpen(run.looks).every((l) => l.passage !== null)).toBe(true);
+    expect(run.last().explain).toBeUndefined();
+    expect(run.last().style?.top).toBe(B_TOP);
+    expect(setProperty).toHaveBeenCalledTimes(2);
+    expect(removeProperty).not.toHaveBeenCalled();
+    expect(scrollBy).not.toHaveBeenCalled();
+    run.mounted.unmount();
+  });
+
+  it("shows none for the passage the window explains, even selected again with other measures", async () => {
+    const run = await scenario(base({ target: paraA() }), [(tree) => click(tree), selectNext({ ...paraA(), rect: { left: 301, top: 401, right: 421, bottom: 421 } }, { cached: FIRST_ANSWER })]);
+    await wait();
+
+    expect(run.last().passage).toBe(first.passage);
+    expect(run.last().explain).toBeUndefined();
+    expect(run.last().button).toBeUndefined();
+    expect(run.last().style?.top).toBe(400);
+    run.mounted.unmount();
+  });
+
+  it("`e` takes the offered selection into the window, which already stands level with it", async () => {
+    const openRef: NonNullable<Props["openRef"]> = { current: null };
+    const run = await scenario(base({ openRef, target: paraA() }), [() => openRef.current?.(), selectNext(paraB(), { cached: SECOND_ANSWER }), () => openRef.current?.()]);
+    await wait();
+
+    expect(run.last().passage).toBe(second.passage);
+    expect(run.last().style?.top).toBe(B_TOP);
+    expect(removeProperty).not.toHaveBeenCalled();
+    run.mounted.unmount();
+  });
+
+  it("is the window's whatever its width from 1024 px: no floating Explain button at 1024, 1280, 1440 or 1920, with a passage open or the window empty", async () => {
+    for (const [width, height] of [[1024, 768], [1280, 800], [1440, 900], [1920, 1080]] as const) {
+      stubWindow(width, height);
+      // The empty window, a selection on offer.
+      const empty = await scenario(base({ target: paraB() }), []);
+      expect(empty.last().button, `${width} px, empty`).toBeUndefined();
+      expect(empty.last().explain, `${width} px, empty`).toBeTypeOf("function");
+      empty.mounted.unmount();
+
+      // A passage open, another on offer.
+      const open = await scenario(base({ target: paraA() }), [(tree) => click(tree), selectNext(paraB(), { cached: SECOND_ANSWER })]);
+      await wait();
+      expect(open.last().button, `${width} px, open`).toBeUndefined();
+      expect(open.last().explain, `${width} px, open`).toBeTypeOf("function");
+      open.mounted.unmount();
+
+      // Tier 0: a window open on a definition, another defined passage on offer.
+      const tier0 = await scenario(base({ canAsk: false, terms: [term], target: inParagraph({ ...first, passage: "The rafting ratio rose." }, 330), cached: undefined }), [
+        (tree) => click(tree),
+        selectNext(inParagraph({ ...second, passage: "The rafting ratio is the same in all bars." }, 560)),
+      ]);
+      await wait();
+      expect(tier0.last().button, `${width} px, Tier 0`).toBeUndefined();
+      expect(tier0.last().explain, `${width} px, Tier 0`).toBeTypeOf("function");
+      tier0.mounted.unmount();
+    }
+  });
+
+  it("Escape clears the passage and the empty window that stays carries the control for the selection still standing; Close then gives the floating button back", async () => {
+    const run = await scenario(base({ target: paraA() }), [
+      (tree) => click(tree),
+      selectNext(paraB(), { cached: SECOND_ANSWER }),
+      () => escape(),
+      (tree) => {
+        // P8-06: the window goes back to the empty state, the width still reserved; the selection is still on offer — as the window's control.
+        expect(look(tree).card).toBeUndefined();
+        expect(look(tree).explain).toBeTypeOf("function");
+        expect(look(tree).button).toBeUndefined();
+        expect(removeProperty).not.toHaveBeenCalled();
+        expect(Object.fromEntries(root)).toEqual(RESERVED);
+        // The empty window has followed the selection too.
+        expect((elements(tree).find((el) => el.type === ExplainCard)?.props.style as { top: number }).top).toBe(B_TOP);
+      },
+    ]);
+    await wait();
+    run.mounted.unmount();
+
+    // Hidden with Close: no window stands, so the floating button does.
+    const closed = await scenario(base({ target: paraA() }), [(tree) => click(tree), (tree) => (look(tree).card?.props.onClose as () => void)()]);
+    await wait();
+    expect(closed.last().card).toBeUndefined();
+    expect(closed.last().explain).toBeUndefined();
+    expect(closed.last().button).toBeDefined();
+    closed.mounted.unmount();
+  });
+});
+
+describe("ExplainBox — the floating button stands only where no window does (P9-03b, ruling §1h.49)", () => {
+  it("is there in the card range and on the phone, and not the window's control", async () => {
+    for (const [width, height] of [[1023, 800], [900, 900], [800, 900], [640, 900], [390, 844]] as const) {
+      stubWindow(width, height);
+      const run = await scenario(base({ target: paraA() }), []);
+
+      expect(run.last().button, `${width} px`).toBeDefined();
+      expect(run.last().card, `${width} px`).toBeUndefined();
+      expect(run.last().explain, `${width} px`).toBeUndefined();
+      run.mounted.unmount();
+    }
+  });
+
+  it("stays the card's and the sheet's button after they open: a new selection closes them and leaves it", async () => {
+    for (const [width, height] of [[900, 900], [390, 844]] as const) {
+      stubWindow(width, height);
+      const run = await scenario(base({ target: paraA() }), [(tree) => click(tree), selectNext(paraB(), { cached: undefined })]);
+      await wait();
+
+      expect(run.last().card, `${width} px`).toBeUndefined();
+      expect(run.last().button, `${width} px`).toBeDefined();
+      expect(run.last().explain, `${width} px`).toBeUndefined();
+      run.mounted.unmount();
+    }
+  });
+
+  it("is there with no key and no window, for a passage the paper defines, from 1024 px as well", async () => {
+    const run = await scenario(base({ canAsk: false, terms: [term], target: inParagraph({ ...first, passage: "The rafting ratio rose." }, 330), cached: undefined }), []);
+
+    expect(run.last().card).toBeUndefined();
+    expect(run.last().button).toBeDefined();
+    expect(run.last().explain).toBeUndefined();
+    run.mounted.unmount();
   });
 });

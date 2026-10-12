@@ -116,7 +116,14 @@ async function scenario(initial: Props, steps: Step[]) {
 }
 
 const wait = () => new Promise((resolve) => setTimeout(resolve, 5));
-const click = (tree: ReactNode) => (look(tree).button?.props.onClick as () => void)();
+// P9-03b (re-aimed helper): press "Explain this?" wherever it stands — the floating button where no window stands, the
+// window's header control (`onExplain`) where one does (a reader with a key has the empty window from 1024 px). It was
+// the floating button alone; every assertion of the tests that use it is as it was.
+const click = (tree: ReactNode) => {
+  const press = (look(tree).button?.props.onClick as (() => void) | undefined) ?? (elements(tree).find((el) => el.type === ExplainCard)?.props.onExplain as (() => void) | undefined);
+  if (!press) throw new Error("no Explain this? control is standing");
+  press();
+};
 const draft = (tree: ReactNode, text: string) => look(tree).thread?.onDraft(text);
 const send = (tree: ReactNode) => look(tree).thread?.onSend();
 const sayMore = (tree: ReactNode) => look(tree).thread?.onSayMore?.();

@@ -117,6 +117,74 @@ describe("ExplainCard — the empty state (P8-06)", () => {
   });
 });
 
+// ── The control in the window's header (P9-03b, ruling §1h.49) ─────────────────────────────────────────
+
+describe("ExplainCard — the \"Explain this?\" control in the window's header (P9-03b)", () => {
+  const control = (html: string) => html.match(/<button[^>]*data-explain-ask=""[^>]*>[^<]*<\/button>/g) ?? [];
+
+  it("is not there unless a selection is on offer: the empty state and the card with a passage are as they were", () => {
+    expect(markup()).not.toContain("data-explain-ask");
+    expect(markup({ empty: undefined, passage: PASSAGE, heading: "2 Methods", status: { kind: "answer", answer }, thread: view })).not.toContain("data-explain-ask");
+  });
+
+  it("in the empty state it is the header's one button besides Close, in the title's place, and the hint line stays", () => {
+    const html = markup({ onExplain: () => {} });
+
+    expect(control(html)).toHaveLength(1);
+    expect(control(html)[0]).toContain('type="button"');
+    expect(control(html)[0]).toContain(`>${EXPLAIN.ask}</button>`);
+    // Two buttons — the control and Close — and one paragraph, the hint line; the title is not said twice.
+    expect(html.split("<button")).toHaveLength(3);
+    expect(html.split("<p")).toHaveLength(2);
+    expect(html.split(`>${EXPLAIN.ask}<`)).toHaveLength(2);
+    expect(html).toContain(`>${EXPLAIN.empty}</p>`);
+    // The control, then Close, then the line; the window is still named for what it is.
+    expect(html.indexOf("data-explain-ask")).toBeLessThan(html.indexOf(`>${EXPLAIN.close}<`));
+    expect(html.indexOf(`>${EXPLAIN.close}<`)).toBeLessThan(html.indexOf(`>${EXPLAIN.empty}<`));
+    expect(html).toContain(`aria-label="${EXPLAIN.ask}"`);
+    expect(html).toContain("data-explain-empty");
+  });
+
+  it("with a passage it stands in the header under the quote, above the answer, and the quote and Close stay", () => {
+    const html = markup({ empty: undefined, passage: PASSAGE, heading: "2 Methods", status: { kind: "answer", answer }, thread: view, onExplain: () => {} });
+
+    expect(control(html)).toHaveLength(1);
+    expect(html.indexOf("The rafting ratio rose from 0.2 to 0.7")).toBeLessThan(html.indexOf("data-explain-ask"));
+    expect(html.indexOf("data-explain-ask")).toBeLessThan(html.indexOf(`>${EXPLAIN.close}<`));
+    expect(html.indexOf(`>${EXPLAIN.close}<`)).toBeLessThan(html.indexOf(answer.meaning));
+    expect(html).toContain("<textarea");
+  });
+
+  it("is a pill in the label face that does not take the selection (it is not a floating box: no fixed position, no place of its own)", () => {
+    for (const html of [markup({ onExplain: () => {} }), markup({ empty: undefined, passage: PASSAGE, heading: "2 Methods", status: { kind: "answer", answer }, onExplain: () => {} })]) {
+      const [button] = control(html);
+      expect(button).toMatch(/class="[^"]*font-mono[^"]*"/);
+      expect(button).toMatch(/class="[^"]*rounded-full[^"]*"/);
+      expect(button).not.toMatch(/\bfixed\b/);
+      expect(button).not.toContain("style=");
+    }
+  });
+
+  it("presses through `onExplain` and holds the selection by cancelling the mouse-down", () => {
+    const element = createElement(ExplainCard, { passage: "", heading: "", term: null, termWhere: null, canAsk: true, status: { kind: "none" } as ExplainStatus, onClose: () => {}, dock: true, empty: true, onExplain: () => {} });
+    const found: Array<{ onClick?: () => void; onMouseDown?: (event: { preventDefault: () => void }) => void }> = [];
+    const walk = (node: unknown): void => {
+      if (Array.isArray(node)) return node.forEach(walk);
+      if (!node || typeof node !== "object" || !("props" in node)) return;
+      const props = (node as { props: Record<string, unknown> }).props;
+      if (props["data-explain-ask"] !== undefined) found.push(props as never);
+      walk(props.children);
+    };
+    walk((element.type as unknown as (props: unknown) => unknown)(element.props));
+
+    expect(found).toHaveLength(1);
+    const prevented = { preventDefault: vi.fn() };
+    found[0].onMouseDown?.(prevented);
+    expect(prevented.preventDefault).toHaveBeenCalledTimes(1);
+    expect(found[0].onClick).toBeTypeOf("function");
+  });
+});
+
 // ── The first paint: what the box renders before anything has run (P8-06) ───────────────────────
 
 const SENTENCE = "We define the rafting ratio as the fraction of the gauge length covered by plates.";
@@ -187,6 +255,26 @@ describe("ExplainBox — the first paint (P8-06, ruling §1h.45)", () => {
     expect(html).toContain("data-explain-ask");
     // The button is the one with the press: the card's title is not a second one.
     expect(html.split("<button")).toHaveLength(3);
+  });
+
+  it("P9-03b: the window carries the control of a selection that is already there; no floating button is rendered beside it", () => {
+    for (const width of [1024, 1280, 1920]) {
+      const html = firstPaint(width, { target: picked });
+
+      expect(html.split("data-explain-ask"), `${width} px`).toHaveLength(2);
+      // In the window's header: after the window opens, with no place of its own.
+      expect(html.indexOf("data-explain-ask"), `${width} px`).toBeGreaterThan(html.indexOf("data-explain-card"));
+      expect(html, `${width} px`).not.toMatch(/data-explain-ask=""[^>]*style=/);
+      expect(html, `${width} px`).not.toContain("fixed z-[70] rounded-full");
+    }
+  });
+
+  it("P9-03b: where no window stands the floating button does — no key and a defined term, from 1024 px as well as below it", () => {
+    const html = firstPaint(1280, { canAsk: false, terms: [rafting], target: { ...picked, passage: "The rafting ratio rose." } });
+
+    expect(html.split("data-explain-ask")).toHaveLength(2);
+    expect(html).toMatch(/data-explain-ask=""[^>]*style=/);
+    for (const width of [1023, 800, 390]) expect(firstPaint(width, { target: picked }), `${width} px`).toMatch(/data-explain-ask=""[^>]*style=/);
   });
 
   it("does not have the Tier 0 window in it: no key, a defined term selected — only the button, until it is pressed", () => {
