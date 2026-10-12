@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { placeCard } from "./explain-box";
-import { DOCK_BOTTOM_PX, DOCK_GAP_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_RESERVE_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_VAR, DOCK_WIDTH_PX, DOCK_WIDTH_VAR, emptyDockStands, reserveDock } from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_GAP_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_RESERVE_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_VAR, DOCK_WIDTH_PX, DOCK_WIDTH_VAR, MASTHEAD_MIN_VIEWPORT_PX, emptyDockStands, reserveDock } from "./explain-dock";
 
 // P7-15 (the owner's R7): the dock's rectangle is built from three numbers that the shell owns —
 // the masthead's height above it, the foot legend's below it, and the width of the card it
@@ -20,6 +20,15 @@ describe("the dock's rectangle against the shell that frames it", () => {
 
     expect(bar).not.toBeNull();
     expect(Number(bar![1]) * SPACING_UNIT_PX).toBe(DOCK_TOP_PX);
+  });
+
+  it("the masthead shows from Tailwind's `md` (48rem): `hidden md:grid` on the same bar — the gutter button keeps below it only from there (P9-17)", () => {
+    const masthead = read("src/components/shell/masthead.tsx");
+    const bar = /className="([^"]*\bsticky top-0\b[^"]*)"/.exec(masthead);
+
+    expect(bar).not.toBeNull();
+    expect(bar![1].split(/\s+/)).toEqual(expect.arrayContaining(["hidden", "md:grid"]));
+    expect(MASTHEAD_MIN_VIEWPORT_PX).toBe(48 * REM_PX);
   });
 
   it("its bottom stands above the foot legend: `--legend-h` is 1.75rem and the legend is that tall", () => {

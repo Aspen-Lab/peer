@@ -20,6 +20,7 @@ import {
   termSource,
   type ExplainStatus,
 } from "./explain-box";
+import { DOCK_TOP_PX, MASTHEAD_MIN_VIEWPORT_PX } from "./explain-dock";
 import type { ExplainSelection } from "./paper-body";
 
 // P3-02 (ruling §1h.2; §3d 14): the button beside a selected passage and the
@@ -341,14 +342,44 @@ describe("the pure rules", () => {
       expect(at(990)).toEqual({ left: 906, top: 960 });
       expect(at(960).top).toBe(960);
       expect(at(959).top).toBe(959);
-      // A selection scrolled partly above the window's head: its first line is above it, its last is not.
-      expect(at(-20)).toEqual({ left: 906, top: 8 });
-      expect(at(-60).top).toBe(8);
+      // A selection scrolled partly above the window's head: its first line is above it, its last is not. Re-aimed, P9-17:
+      // the head is the masthead's foot and a margin (56) from 768 px, where the masthead shows, was the window's own 8.
+      expect(at(-20)).toEqual({ left: 906, top: 56 });
+      expect(at(-60).top).toBe(56);
       // A window too short to hold the button: the head wins, as the card's does.
-      expect(at(30, { width: 1064, height: 30 }).top).toBe(8);
+      expect(at(30, { width: 1064, height: 30 }).top).toBe(56);
       // With no `bounds` the clamps are the selection's own line, as they were.
       expect(placeButton({ left: 600, top: 990, right: 700, bottom: 1010 }, docked, paragraph)).toEqual({ left: 906, top: 960 });
-      expect(placeButton({ left: 600, top: -20, right: 700, bottom: 0 }, docked, paragraph)).toEqual({ left: 906, top: 8 });
+      expect(placeButton({ left: 600, top: -20, right: 700, bottom: 0 }, docked, paragraph)).toEqual({ left: 906, top: 56 });
+    });
+
+    // P9-17 (ruling §1h.56; A P9-R2 F4): the masthead is `hidden md:grid sticky top-0 z-50 h-12` and the button `fixed z-[70]`, so
+    // a long paragraph straddling the head of the window put the button over the masthead's right side from 768 px (the
+    // gutter is 161 px at 800 and 211 px at 900): its head is the masthead's foot and a margin.
+    it("(e) never stands in the masthead from 768 px: its top is held 8 px below the masthead's foot", () => {
+      // A's scratch: 800 x 900, the paragraph's right edge at 639, the selection's first line 120 px above the window.
+      const paragraph800 = { left: 44, top: -300, right: 639, bottom: 420 };
+      const first = { left: 60, top: -120, right: 600, bottom: 200 };
+      const at800 = placeButton({ left: 300, top: 176, right: 420, bottom: 200 }, { width: 800, height: 900 }, paragraph800, first);
+
+      expect(at800.left).toBeGreaterThanOrEqual(paragraph800.right);
+      expect(at800.top).toBeGreaterThanOrEqual(DOCK_TOP_PX);
+      expect(at800).toEqual({ left: 645, top: DOCK_TOP_PX + 8 });
+      // The measure's case: 900 x 900, a paragraph straddling the head.
+      const at900 = placeButton({ left: 300, top: 176, right: 420, bottom: 200 }, { width: 900, height: 900 }, { left: 44, top: -300, right: 689, bottom: 420 }, first);
+      expect(at900.top).toBeGreaterThanOrEqual(56);
+      // The boundary is the masthead's own: Tailwind's `md`, 768 px.
+      expect(MASTHEAD_MIN_VIEWPORT_PX).toBe(768);
+      const atWidth = (width: number) => placeButton({ left: 300, top: 176, right: 420, bottom: 200 }, { width, height: 900 }, { left: 44, top: -300, right: width - 200, bottom: 420 }, first).top;
+      // Under 768 px there is no masthead (`hidden md:grid`): the window's own margin, as before.
+      expect(atWidth(767)).toBe(8);
+      expect(atWidth(768)).toBe(56);
+      expect(atWidth(1064)).toBe(56);
+      // Below the head it is untouched: a first line at 56 or lower is where it was; one at 40 is moved down to 56.
+      const line = (top: number) => placeButton({ left: 300, top, right: 420, bottom: top + 20 }, { width: 900, height: 900 }, { left: 44, top: top - 20, right: 689, bottom: 420 }, { left: 60, top, right: 600, bottom: 200 }).top;
+      expect(line(56)).toBe(56);
+      expect(line(300)).toBe(300);
+      expect(line(40)).toBe(56);
     });
 
     it("(c) with no paragraph reported it is today's place: under where the selection ends, flipped above at the foot", () => {
@@ -397,10 +428,12 @@ describe("the pure rules", () => {
               gutter += 1;
               expect(at.left).toBeGreaterThanOrEqual(right);
               expect(at.left + 120).toBeLessThanOrEqual(vp.width - 8);
-              expect(at.top).toBeGreaterThanOrEqual(8);
+              // P9-17: from 768 px the head is the masthead's foot and a margin, below it the window's own margin.
+              const head = vp.width >= 768 ? 56 : 8;
+              expect(at.top).toBeGreaterThanOrEqual(head);
               expect(at.top + 32).toBeLessThanOrEqual(vp.height - 8);
               // Level with the first line wherever it fits in the window.
-              if (whole.top >= 8 && whole.top + 32 <= vp.height - 8) expect(at.top).toBe(whole.top);
+              if (whole.top >= head && whole.top + 32 <= vp.height - 8) expect(at.top).toBe(whole.top);
             } else {
               fallback += 1;
               expect(at).toEqual(placeButton(where, vp));

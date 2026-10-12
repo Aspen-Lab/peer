@@ -56,6 +56,11 @@ export const DOCK_WIDTH_PX = 360;
  *  (P8-02) and never above this. */
 export const DOCK_TOP_PX = 48;
 
+/** P9-17 (A P9-R2 F4): the masthead is `hidden md:grid sticky top-0 h-12`, so it is there only from Tailwind's `md`, 48rem, and
+ *  the 48 px of `DOCK_TOP_PX` are the page's head only from this width. The floating button (`fixed z-[70]`, above the
+ *  masthead's `z-50`) keeps below them from here; under it the window's own margin is its head. */
+export const MASTHEAD_MIN_VIEWPORT_PX = 768;
+
 /** The dock's bottom edge stands this far above the window's: the foot legend's height (`--legend-h`). */
 export const DOCK_BOTTOM_PX = 28;
 

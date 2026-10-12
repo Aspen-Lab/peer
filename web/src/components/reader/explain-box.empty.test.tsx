@@ -127,22 +127,40 @@ describe("ExplainCard — the \"Explain this?\" control in the window's header (
     expect(markup({ empty: undefined, passage: PASSAGE, heading: "2 Methods", status: { kind: "answer", answer }, thread: view })).not.toContain("data-explain-ask");
   });
 
-  it("in the empty state it is the header's one button besides Close, in the title's place, and the hint line stays", () => {
+  it("in the empty state it is the header's one button besides Close, beside the title, and the hint line stays (re-aimed, P9-17 ruling §1h.57: was \"in the title's place\", the title said once; the owner rejected departure d)", () => {
     const html = markup({ onExplain: () => {} });
 
     expect(control(html)).toHaveLength(1);
     expect(control(html)[0]).toContain('type="button"');
     expect(control(html)[0]).toContain(`>${EXPLAIN.ask}</button>`);
-    // Two buttons — the control and Close — and one paragraph, the hint line; the title is not said twice.
+    // Two buttons — the control and Close — and two paragraphs, the title and the hint line: "Explain this?" is the window's
+    // title AND the control's words, as the owner wants it ("together with the window's title").
     expect(html.split("<button")).toHaveLength(3);
-    expect(html.split("<p")).toHaveLength(2);
-    expect(html.split(`>${EXPLAIN.ask}<`)).toHaveLength(2);
+    expect(html.split("<p")).toHaveLength(3);
+    expect(html.split(`>${EXPLAIN.ask}<`)).toHaveLength(3);
+    expect(html).toContain(`>${EXPLAIN.ask}</p>`);
     expect(html).toContain(`>${EXPLAIN.empty}</p>`);
-    // The control, then Close, then the line; the window is still named for what it is.
+    // The title, then the control, then Close, then the line; the window is still named for what it is.
+    expect(html.indexOf(`>${EXPLAIN.ask}</p>`)).toBeLessThan(html.indexOf("data-explain-ask"));
     expect(html.indexOf("data-explain-ask")).toBeLessThan(html.indexOf(`>${EXPLAIN.close}<`));
     expect(html.indexOf(`>${EXPLAIN.close}<`)).toBeLessThan(html.indexOf(`>${EXPLAIN.empty}<`));
     expect(html).toContain(`aria-label="${EXPLAIN.ask}"`);
     expect(html).toContain("data-explain-empty");
+  });
+
+  // P9-17 (ruling §1h.57; the owner: "应该是和浮动ai窗口一起放入" — it goes in together with the window's title): the empty window shows
+  // both, in one row, the control wrapping under the title only where the 360 px window cannot hold the two on one line.
+  it("the empty window shows both the title and the control when a selection is offered: one row that wraps, the title first", () => {
+    const html = markup({ onExplain: () => {} });
+
+    expect(html).toMatch(new RegExp(`<p class="[^"]*font-mono[^"]*">${EXPLAIN.ask.replace("?", "\\?")}</p>`));
+    expect(control(html)).toHaveLength(1);
+    const row = /<div class="([^"]*)"><p [^>]*>Explain this\?<\/p><button[^>]*data-explain-ask=""/.exec(html);
+    expect(row, "the title and the control are siblings in one container").not.toBeNull();
+    expect(row![1].split(/\s+/)).toEqual(expect.arrayContaining(["flex", "flex-wrap", "items-center"]));
+    // Without a selection on offer the title stands alone, as it did.
+    expect(markup()).not.toContain("data-explain-ask");
+    expect(markup()).toContain(`>${EXPLAIN.ask}</p>`);
   });
 
   it("with a passage it stands in the header under the quote, above the answer, and the quote and Close stay", () => {
@@ -162,6 +180,16 @@ describe("ExplainCard — the \"Explain this?\" control in the window's header (
       expect(button).toMatch(/class="[^"]*rounded-full[^"]*"/);
       expect(button).not.toMatch(/\bfixed\b/);
       expect(button).not.toContain("style=");
+    }
+  });
+
+  // P9-17 (A P9-R2 F5): the control is the only way in on a tablet of 1024 px or more with a key; the floating button it replaced
+  // was 34 px tall, this one 26. The shell gives its touch controls `[@media(hover:none)]:min-h-11` (`notes-button.tsx`, the
+  // masthead's links): 44 px where there is no hover, nothing where there is.
+  it("is a touch target where there is no hover: `[@media(hover:none)]:min-h-11`, in the empty state and with a passage (P9-17)", () => {
+    for (const html of [markup({ onExplain: () => {} }), markup({ empty: undefined, passage: PASSAGE, heading: "2 Methods", status: { kind: "answer", answer }, thread: view, onExplain: () => {} })]) {
+      const [button] = control(html);
+      expect(button).toMatch(/class="[^"]*\[@media\(hover:none\)\]:min-h-11[^"]*"/);
     }
   });
 

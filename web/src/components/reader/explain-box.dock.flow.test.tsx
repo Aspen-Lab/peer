@@ -1107,3 +1107,170 @@ describe("ExplainBox — the floating button stands only where no window does (P
     run.mounted.unmount();
   });
 });
+
+// ── The header control hands the focus to the window (P9-17, ruling §1h.56; A P9-R2 F5) ───────────────────────────
+//
+// Pressing the control makes the offered selection the window's passage, so `next` becomes null and the control unmounts
+// (`explainNext = next && docked ? …`): a keyboard reader's focus, which stood on it, fell to `<body>`. The floating button
+// did the same, but it was transient; the window is not. There is no DOM here: the box finds the card, its input and the
+// document's `activeElement` through refs and the document, so the test stands in for the three and says what the browser
+// would have done (`focus()` moves `activeElement`).
+
+describe("ExplainBox — the header control hands the focus to the window (P9-17)", () => {
+  /** The card, the control inside it, the follow-up input once a thread has one, and the page — as far as the box looks. */
+  function fakeDom() {
+    const page = { name: "body" };
+    const outside = { name: "a link elsewhere on the page" };
+    const focus: { current: unknown } = { current: page };
+    const control = { name: "control" };
+    const input = { name: "input", focus: vi.fn(() => void (focus.current = input)) };
+    const card = {
+      name: "card",
+      focus: vi.fn(() => void (focus.current = card)),
+      contains: (node: unknown) => node === card || node === control || node === input,
+      getBoundingClientRect: () => ({ height: 360 }),
+      scrollTop: 0,
+      scrollHeight: 360,
+    };
+    vi.stubGlobal("document", {
+      ...recorder(),
+      documentElement: { style: { setProperty, removeProperty } },
+      get activeElement() {
+        return focus.current;
+      },
+    });
+    /** The refs the box hands the card, pointed at the stand-ins (a browser attaches them at commit). */
+    const attach = (tree: ReactNode, withInput: boolean) => {
+      const element = elements(tree).find((el) => el.type === ExplainCard);
+      (element?.props.cardRef as { current: unknown }).current = card;
+      (element?.props.inputRef as { current: unknown }).current = withInput ? input : null;
+    };
+    return { page, outside, focus, control, input, card, attach };
+  }
+  const pending = () => vi.fn(() => new Promise<AskResult>(() => {}));
+
+  it("moves into the follow-up input when the window holds a thread with one: the keyboard's press leaves the focus in the window, not on <body>", async () => {
+    const dom = fakeDom();
+    const run = await scenario(base({ target: paraA() }), [
+      (tree) => click(tree),
+      selectNext(paraB(), { cached: SECOND_ANSWER, cachedTurns: [] }),
+      (tree) => {
+        dom.attach(tree, true);
+        dom.focus.current = dom.control; // Tab to the control
+        look(tree).explain?.(); // Enter
+      },
+    ]);
+    await wait();
+
+    expect(run.last().passage).toBe(second.passage);
+    expect(run.last().explain).toBeUndefined();
+    expect(dom.focus.current).toBe(dom.input);
+    expect(dom.focus.current).not.toBe(dom.page);
+    expect(dom.input.focus).toHaveBeenCalledTimes(1);
+    expect(dom.card.focus).not.toHaveBeenCalled();
+    run.mounted.unmount();
+  });
+
+  it("moves to the card itself when the window has no input yet (the answer is on its way): inside the window, not on <body>", async () => {
+    const dom = fakeDom();
+    const onAsk = pending();
+    const run = await scenario(base({ target: paraA(), cached: undefined, onAsk }), [
+      (tree) => {
+        // The empty window carries the control; the first Explain fills it in place.
+        dom.attach(tree, false);
+        dom.focus.current = dom.control;
+        look(tree).explain?.();
+      },
+    ]);
+    await wait();
+
+    expect(run.last().status).toBe("loading");
+    expect(dom.focus.current).toBe(dom.card);
+    expect(dom.card.focus).toHaveBeenCalledTimes(1);
+    expect(dom.input.focus).not.toHaveBeenCalled();
+    expect(dom.card.contains(dom.focus.current)).toBe(true);
+    run.mounted.unmount();
+  });
+
+  it("does the same for a window that holds the paper's own definition and no input at all (no key)", async () => {
+    const dom = fakeDom();
+    const definedA = inParagraph({ ...first, passage: "The rafting ratio rose." }, 330);
+    const definedB = inParagraph({ ...second, passage: "The rafting ratio is the same in all bars." }, 440);
+    const run = await scenario(base({ canAsk: false, terms: [term], target: definedA, cached: undefined }), [
+      (tree) => click(tree),
+      selectNext(definedB),
+      (tree) => {
+        dom.attach(tree, false);
+        dom.focus.current = dom.control;
+        look(tree).explain?.();
+      },
+    ]);
+    await wait();
+
+    expect(run.last().passage).toBe(definedB.passage);
+    expect(dom.focus.current).toBe(dom.card);
+    run.mounted.unmount();
+  });
+
+  it("keeps a reader who was typing in the window's input inside it when the press replaces the thread", async () => {
+    const dom = fakeDom();
+    const run = await scenario(base({ target: paraA() }), [
+      (tree) => click(tree),
+      selectNext(paraB(), { cached: undefined, onAsk: pending() }),
+      (tree) => {
+        dom.attach(tree, false); // the answer is on its way: the new passage's window has no input yet
+        dom.focus.current = dom.input; // the reader's focus was in the input of the thread that is being replaced
+        look(tree).explain?.();
+      },
+    ]);
+    await wait();
+
+    expect(dom.focus.current).toBe(dom.card);
+    expect(dom.card.focus).toHaveBeenCalledTimes(1);
+    run.mounted.unmount();
+  });
+
+  it("takes nothing from a reader whose focus is not in the window: a mouse press (the control cancels the mouse-down) or a press while the focus is elsewhere on the page", async () => {
+    for (const where of ["page", "outside"] as const) {
+      const dom = fakeDom();
+      const run = await scenario(base({ target: paraA() }), [
+        (tree) => click(tree),
+        selectNext(paraB(), { cached: SECOND_ANSWER, cachedTurns: [] }),
+        (tree) => {
+          dom.attach(tree, true);
+          dom.focus.current = dom[where];
+          look(tree).explain?.();
+        },
+      ]);
+      await wait();
+
+      expect(run.last().passage, where).toBe(second.passage);
+      expect(dom.focus.current, where).toBe(dom[where]);
+      expect(dom.input.focus, where).not.toHaveBeenCalled();
+      expect(dom.card.focus, where).not.toHaveBeenCalled();
+      run.mounted.unmount();
+    }
+  });
+
+  it("is asked once per press: a later answer, a reply or a new selection does not pull the focus back into the window", async () => {
+    const dom = fakeDom();
+    const run = await scenario(base({ target: paraA() }), [
+      (tree) => click(tree),
+      selectNext(paraB(), { cached: SECOND_ANSWER, cachedTurns: [] }),
+      (tree) => {
+        dom.attach(tree, true);
+        dom.focus.current = dom.control;
+        look(tree).explain?.();
+      },
+      () => {
+        dom.focus.current = dom.outside; // the reader goes back to the page…
+      },
+      selectNext(paraA(), { cached: FIRST_ANSWER }), // …and selects the first passage again
+    ]);
+    await wait();
+
+    expect(dom.input.focus).toHaveBeenCalledTimes(1);
+    expect(dom.focus.current).toBe(dom.outside);
+    run.mounted.unmount();
+  });
+});

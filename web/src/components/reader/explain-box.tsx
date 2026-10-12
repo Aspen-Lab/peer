@@ -49,8 +49,11 @@
 //
 // P8-06 (the owner's "yes" of 16:4xZ 2026-10-11, ruling §1h.45): for a reader WITH A KEY, on a paper with a
 // readable body, from 1024 px, the window is present from the body's first paint — before any selection, as an
-// empty panel (`emptyDockStands`, `ExplainCard`'s `empty`): the card's header (the title "Explain this?" and Close)
-// and one line of label-face copy (`EXPLAIN.empty`), no input, no quote, no "You" / "Peer". It is the dock all the
+// empty panel (`emptyDockStands`, `ExplainCard`'s `empty`): the card's header (the title "Explain this?" and Close
+// — P9-03b; ruling §1h.57, the owner rejecting P9-03b's departure that put the control in the title's place: with a
+// selection on offer the control stands BESIDE the title, in the same row — wrapping under it only where the 360 px
+// window cannot hold the two — the hint line staying under both) and one line of label-face copy (`EXPLAIN.empty`),
+// no input, no quote, no "You" / "Peer". It is the dock all the
 // same: at the right edge, top `DOCK_TOP_PX` until a passage is selected (then the selected paragraph's, P9-03b,
 // below), and the page keeps its 376 px clear from the MOUNT (`reserveDock`), not from the first open. The first
 // Explain (the header control, or `e`) fills that same window in place — the empty state is replaced, nothing closes
@@ -137,7 +140,7 @@ import type { PaperTerm } from "@/lib/papers/report";
 import { MAX_EXPLAIN_MESSAGE_CHARS, threadFull, type ExplainTurn } from "@/store/explain-threads";
 import type { Paper, UserProfile } from "@/types";
 import { EXPLAIN, PEERS_READING } from "./copy";
-import { DOCK_BOTTOM_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_WIDTH_PX, emptyDockStands, reserveDock } from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_WIDTH_PX, MASTHEAD_MIN_VIEWPORT_PX, emptyDockStands, reserveDock } from "./explain-dock";
 import { EvidenceQuote } from "./evidence-quote";
 import {
   asItems,
@@ -259,15 +262,18 @@ const clamp = (value: number, low: number, high: number) => Math.min(Math.max(va
  * right of it for the button and a margin each side (`viewport.width − paragraph.right ≥ BUTTON_WIDTH + 2·BUTTON_MARGIN`),
  * it stands in that gutter: `left = paragraph.right + BUTTON_GAP`, `top` level with the selection's FIRST line (the
  * owner's "first line"; `bounds.top` — `bounds` is the whole selection, and defaults to `rect`, for a selection of one
- * line), both held inside the window. Without a gutter — a phone, a narrow window, a column flush with the edge, no
+ * line), both held inside the window — P9-17 (ruling §1h.56): its head is the masthead's foot and a margin from 768 px, where
+ * the masthead shows (a long paragraph straddling the head of the window put the button over it), the margin alone
+ * under it. Without a gutter — a phone, a narrow window, a column flush with the edge, no
  * paragraph reported — it is as it was: just below where the selection ENDS (`rect`, the last line), centred on its
  * end; above it when there is no room below; always inside the window.
  */
 export function placeButton(rect: ViewRect, viewport: Viewport, paragraph?: ViewRect, bounds: ViewRect = rect): { left: number; top: number } {
   if (paragraph && viewport.width - paragraph.right >= BUTTON_WIDTH + 2 * BUTTON_MARGIN) {
+    const head = viewport.width >= MASTHEAD_MIN_VIEWPORT_PX ? DOCK_TOP_PX + BUTTON_MARGIN : BUTTON_MARGIN;
     return {
       left: clamp(paragraph.right + BUTTON_GAP, BUTTON_MARGIN, viewport.width - BUTTON_WIDTH - BUTTON_MARGIN),
-      top: clamp(bounds.top, BUTTON_MARGIN, viewport.height - BUTTON_HEIGHT - BUTTON_MARGIN),
+      top: clamp(bounds.top, head, viewport.height - BUTTON_HEIGHT - BUTTON_MARGIN),
     };
   }
   const left = clamp(rect.right - BUTTON_WIDTH / 2, BUTTON_MARGIN, viewport.width - BUTTON_WIDTH - BUTTON_MARGIN);
@@ -556,13 +562,16 @@ export function ExplainCard({
    *  and the legend (it was a window-high column with a line on its left only), the controls pinned at its foot. */
   dock?: boolean;
   /** P8-06 (ruling §1h.45): the window's EMPTY state — there before anything is explained. The same frame and header
-   *  (the title "Explain this?" in place of the passage's quote, and Close) and, under it, the one line `EXPLAIN.empty`
-   *  in the label face; no definition, no answer, no input, no thread, whatever else it is handed. */
+   *  (the title "Explain this?" in place of the passage's quote — and, with `onExplain`, the control beside the title —
+   *  and Close) and, under it, the one line `EXPLAIN.empty` in the label face; no definition, no answer, no input, no
+   *  thread, whatever else it is handed. */
   empty?: boolean;
   /** P9-03b (ruling §1h.49): a selection is on offer that this window does not explain — the header's "Explain this?"
    *  control, which takes it into the window (the box's `start`). Not rendered without it. In the empty state it stands
-   *  where the title is (the same words); with a passage, under the quote. It does not take the selection with its press
-   *  (`onMouseDown` is cancelled), as the floating button never did. */
+   *  beside the title in the same row (P9-17, ruling §1h.57: "together with the window's title"; it wraps under the title only
+   *  where the window is too narrow for both); with a passage, under the quote. It does not take the selection with its press
+   *  (`onMouseDown` is cancelled), as the floating button never did. P9-17: it is 44 px tall where there is no hover, and
+   *  pressed with the focus inside the window it hands the focus on as it goes (the box: the input, else `cardRef`). */
   onExplain?: () => void;
   /** The card itself — the one thing that scrolls, and what the sheet's height is read from. */
   cardRef?: Ref<HTMLDivElement>;
@@ -578,7 +587,9 @@ export function ExplainCard({
       // The press must not take the selection with it: it is what is explained.
       onMouseDown={(event) => event.preventDefault()}
       onClick={onExplain}
-      className="rounded-full border border-border-strong bg-surface px-3 py-1 font-mono text-caption text-heading transition-colors hover:bg-surface-hover"
+      // P9-17: a touch target where there is no hover, as the shell's own (`notes-button.tsx`, the masthead's links) — it is the
+      // only way in on a tablet of 1024 px or more with a key.
+      className="rounded-full border border-border-strong bg-surface px-3 py-1 font-mono text-caption text-heading transition-colors hover:bg-surface-hover [@media(hover:none)]:min-h-11"
     >
       {EXPLAIN.ask}
     </button>
@@ -592,19 +603,29 @@ export function ExplainCard({
       {...(dock ? { "data-explain-dock": "" } : {})}
       {...(empty ? { "data-explain-empty": "" } : {})}
       ref={cardRef}
+      // P9-17: the container can take the focus (never in the tab order): the control that unmounts when it is pressed hands the
+      // focus to it, or to the input, so it never falls to <body>. It is no control, so it draws no ring.
+      tabIndex={-1}
       style={style}
-      className={`fixed z-[70] overflow-y-auto border border-border-strong bg-surface p-4 ${
+      className={`fixed z-[70] overflow-y-auto border border-border-strong bg-surface p-4 outline-none ${
         dock ? "flex flex-col border-r-0" : `shadow-card-hover ${sheet ? "rounded-t-lg border-b-0" : "rounded-lg"}`
       }`}
     >
       {/* The card is what scrolls; its passage stays at the top and its input at the foot (sticky,
           offset by the card's own padding, which a sticky box would otherwise stop short of). */}
-      <div className="sticky -top-4 z-10 -mx-4 -mt-4 flex items-start justify-between gap-3 border-b border-border bg-surface px-4 pb-3 pt-4">
+      <div className={`sticky -top-4 z-10 -mx-4 -mt-4 flex ${empty ? "items-center" : "items-start"} justify-between gap-3 border-b border-border bg-surface px-4 pb-3 pt-4`}>
         <div className="min-w-0 flex-1">
           {empty ? (
             // P8-06: nothing is explained yet, so the header holds the window's title where the passage's quote goes.
-            // P9-03b: with a selection on offer the control stands there instead — the same words, now a button.
-            (askControl ?? <p className="font-mono text-caption text-heading">{EXPLAIN.ask}</p>)
+            // P9-03b / P9-17 (ruling §1h.57): with a selection on offer the control stands beside it, in one row.
+            askControl ? (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <p className="font-mono text-caption text-heading">{EXPLAIN.ask}</p>
+                {askControl}
+              </div>
+            ) : (
+              <p className="font-mono text-caption text-heading">{EXPLAIN.ask}</p>
+            )
           ) : (
             <EvidenceQuote text={previewOf(passage)} where={heading} />
           )}
@@ -833,6 +854,9 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   const cardRef = useRef<HTMLDivElement | null>(null);
   const live = useRef<Session | null>(null);
   const refocus = useRef(false);
+  /** P9-17: the header control was pressed with the focus inside the window; the window's passage changes and the control goes
+   *  with it, so the focus is handed on once it has (the effect below). */
+  const handOff = useRef(false);
   const wasPending = useRef(false);
   /** The kind of pointer that went down on the toggle, until the click that follows reads it. */
   const pointer = useRef<string | null>(null);
@@ -1114,6 +1138,15 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
     const card = cardRef.current;
     if (card) card.scrollTop = 0;
   }, [passageOpen]);
+  // P9-17 (A P9-R2 F5): pressing the header control from the keyboard makes the offered selection the window's passage, so the control
+  // is removed — with the focus on it, which would fall to <body>. The press said the focus was in the window; the passage it took in
+  // is open now: the focus goes to the follow-up input when the thread has one, else to the card itself. A press with the
+  // focus elsewhere (the mouse's: the control cancels its mouse-down) is not asked to move anything.
+  useEffect(() => {
+    if (!handOff.current || passageOpen === undefined) return;
+    handOff.current = false;
+    (inputRef.current ?? cardRef.current)?.focus();
+  }, [passageOpen]);
   useEffect(() => {
     const card = cardRef.current;
     if (card && turnCount > 0) card.scrollTop = card.scrollHeight;
@@ -1149,7 +1182,15 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   // is worth one. P9-03b (ruling §1h.49): while a window stands from 1024 px it is the window's (`onExplain`, in its
   // header); this floating button, which stands beside the words, is rendered only where no window does.
   const askAt = next && !docked ? whereOf(next) : null;
-  const explainNext = next && docked ? () => start(next) : undefined;
+  const explainNext =
+    next && docked
+      ? () => {
+          const card = cardRef.current;
+          const active = typeof document === "undefined" ? null : document.activeElement;
+          handOff.current = Boolean(card && active && card.contains(active));
+          start(next);
+        }
+      : undefined;
   const ask = next && askAt ? (
     <button
       type="button"
