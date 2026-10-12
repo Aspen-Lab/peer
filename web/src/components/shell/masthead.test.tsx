@@ -254,3 +254,34 @@ describe("below lg the position text drops, the arrows stay and name it (P9-40, 
     expect(html).not.toContain("w-px");
   });
 });
+
+describe("on a touch tablet below lg the hairlines are 4px either side, so the 44px targets fit at 768 (P9-40, step 3)", () => {
+  // Measured after steps 1 and 2: with a mouse the cells fit from 768, and on touch from 820, but at 768 the touch
+  // tablet's `?` still ended at 781px, 13px past the window (44px arrows, a 44px `?`). Five hairlines are visible
+  // in the bar below lg, 17px each with their 8px margins; at 4px a side they are 9px, 37px less in all, and the `?`
+  // ends at 744px, inside the bar's 24px margin. A mouse is not asked for it: its cells fit already.
+  const BRIEFING = ["openalex:W1", "openalex:W2", "openalex:W3", "openalex:W4", "openalex:W5"];
+  const hairlines = () => {
+    papers = BRIEFING.map((id) => ({ id }));
+    return (render().match(/<span aria-hidden="true" class="[^"]*\bw-px\b[^"]*">/g) ?? []).map(classes);
+  };
+
+  it("gives every hairline that shows below lg a 4px margin where there is no hover, and keeps 8px otherwise", () => {
+    const shown = hairlines().filter((c) => !c.includes("hidden"));
+
+    // The rail's one (the other goes with the position text) and the nav's four: Main | Search | Saved | Profile | ?.
+    expect(shown).toHaveLength(5);
+    for (const c of shown) {
+      expect(c).toContain("mx-2");
+      expect(c).toContain("[@media(hover:none)]:max-lg:mx-1");
+    }
+  });
+
+  it("leaves the hairline that comes in from lg as it was: 8px, drawn from lg only", () => {
+    const fromLg = hairlines().filter((c) => c.includes("hidden"));
+
+    expect(fromLg).toHaveLength(1);
+    expect(fromLg[0]).toEqual(expect.arrayContaining(["mx-2", "lg:block"]));
+    expect(fromLg[0]).not.toContain("[@media(hover:none)]:max-lg:mx-1");
+  });
+});
