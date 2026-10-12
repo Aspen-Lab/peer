@@ -316,3 +316,169 @@ describe("ReadingMapView — the background mark's fact line (P2-04b)", () => {
     expect(render({ route: skim })).not.toContain(ROUTE.backgroundWhy);
   });
 });
+
+// P9-51 (F08; the owner's first report: the map gives each section's heading, page, word count, minutes and
+// role): the row said its page and its minutes and left the words to the summary line. Now each row says its
+// words — `p.N · W words · N min` — and, as in P9-22's rule, each part is a span of its own that carries its
+// own separator, so a wrap never leaves a line ending on "·". The row's words are the count its minutes come
+// from (`row.words`), and the rows' words are the ones the summary line adds up. The DOM cannot measure a wrap:
+// these pin the text, the parts and the classes that prevent a bad break; the pixels are in the checkpoint.
+
+/** What the row's meta is made of: the markup between the heading link and the row's closing tag. */
+const metaMarkup = (html: string, heading: string) => {
+  const at = html.indexOf(`>${heading}</a>`);
+  const after = html.indexOf("</a>", at) + "</a>".length;
+  return html.slice(after, html.indexOf("</div>", after));
+};
+/** The row's meta as a reader or a copy gets it: the text, the tags removed. */
+const metaText = (html: string, heading: string) => metaMarkup(html, heading).replace(/<[^>]*>/g, "");
+/** The parts, in order: [name, text]. */
+const metaParts = (html: string, heading: string) =>
+  [...metaMarkup(html, heading).matchAll(/<span data-meta-part="([a-z]+)"[^>]*>([^<]*)<\/span>/g)].map((m) => [m[1], m[2]] as const);
+
+const wordsMap: ReadingMap = {
+  sections: [
+    { id: "w1", heading: "1 Introduction", canonical: "introduction", role: "setup", page: 1, words: 1234, minutes: 6, paragraphs: [] },
+    { id: "w2", heading: "2.1 Samples", canonical: "methods", role: "method", page: 12, words: 1, minutes: 1, paragraphs: [] },
+    { id: "w3", heading: "Problem Statement", canonical: "body", role: "body", words: 90, minutes: 1, paragraphs: [] },
+    { id: "w4", heading: "Appendix", canonical: "body", role: "body", words: 0, minutes: 0, paragraphs: [] },
+    { id: "w5", heading: "3 Results", canonical: "results", role: "evidence", page: 4, words: 12345, minutes: 54, paragraphs: [] },
+  ],
+  totalMinutes: 62,
+};
+const renderWords = (props: Partial<Parameters<typeof ReadingMapView>[0]> = {}) =>
+  renderToStaticMarkup(createElement(ReadingMapView, { map: wordsMap, ...props }));
+
+describe("ReadingMapView — each row says its words (P9-51, F08)", () => {
+  it("says the section's words between its page and its minutes, as the summary line formats them", () => {
+    const html = renderWords();
+
+    expect(metaText(html, "1 Introduction")).toBe("setup · p.1 · 1,234 words · 6 min");
+    expect(metaText(html, "3 Results")).toBe("evidence · p.4 · 12,345 words · 54 min");
+    // The unplaced section has no role and no page: the words open its meta and nothing stands before them.
+    expect(metaText(html, "Problem Statement")).toBe("90 words · 1 min");
+  });
+
+  it("says '1 word', not '1 words', and gives a section with no words its '0 words' and no minutes", () => {
+    const html = renderWords();
+
+    expect(metaText(html, "2.1 Samples")).toBe("method · p.12 · 1 word · 1 min");
+    expect(metaText(html, "Appendix")).toBe("0 words");
+  });
+
+  it("is the same number the minutes come from: the row's words, whole, with the thousands as the summary line writes them", () => {
+    const html = renderWords({ source: "PDF" });
+    const written = (n: number) => `${n.toLocaleString("en-US")} words`;
+
+    expect(MAP.summary(2, 3, 1234)).toContain("1,234 words");
+    for (const row of wordsMap.sections.filter((r) => r.words > 1)) expect(metaText(html, row.heading)).toContain(written(row.words));
+  });
+
+  it("adds up, over twelve rows, to the words the summary line states", () => {
+    const rows: ReadingMap["sections"] = Array.from({ length: 12 }, (_, i) => ({
+      id: `t${i}`, heading: `${i + 1} Section ${i + 1}`, canonical: "body", role: "body", ...(i % 3 === 0 ? {} : { page: i + 1 }),
+      words: 137 * (i + 1) + (i === 5 ? 1 : 0), minutes: Math.max(1, Math.ceil((137 * (i + 1)) / 230)), paragraphs: [],
+    }));
+    const html = renderToStaticMarkup(createElement(ReadingMapView, { map: { sections: rows, totalMinutes: 40 }, source: "PDF" }));
+    const stated = Number(/([\d,]+) words · about/.exec(html)?.[1].replace(/,/g, ""));
+    const said = rows.map((row) => Number(/([\d,]+) words?/.exec(metaText(html, row.heading))?.[1].replace(/,/g, "")));
+
+    expect(said).toHaveLength(12);
+    expect(said.every((n) => Number.isFinite(n))).toBe(true);
+    expect(said.reduce((sum, n) => sum + n, 0)).toBe(stated);
+    expect(stated).toBe(rows.reduce((sum, row) => sum + row.words, 0));
+  });
+
+  // The row's spans used to run together in the text (`setupp.14 min`): the flex gap spaced them, not a space.
+  it("reads, to a screen reader and a copy, as the words in order with their separators and spaces", () => {
+    const html = renderWords();
+
+    expect(metaText(html, "1 Introduction")).not.toMatch(/setupp\.|p\.\d\d* ?\d+ words|words\d/);
+    expect(metaText(html, "1 Introduction")).toMatch(/^setup · p\.1 · 1,234 words · 6 min$/);
+    for (const row of wordsMap.sections) {
+      expect(metaMarkup(html, row.heading)).not.toMatch(/&nbsp;|<br|<wbr| |​|aria-/);
+    }
+  });
+
+  it("puts each part in a span of its own, with the separator as the first word of every part but the first", () => {
+    const html = renderWords();
+
+    expect(metaParts(html, "1 Introduction")).toEqual([["role", "setup"], ["page", "· p.1"], ["words", "· 1,234 words"], ["minutes", "· 6 min"]]);
+    expect(metaParts(html, "Problem Statement")).toEqual([["words", "90 words"], ["minutes", "· 1 min"]]);
+    expect(metaParts(html, "Appendix")).toEqual([["words", "0 words"]]);
+    for (const row of wordsMap.sections) {
+      const parts = metaParts(html, row.heading);
+      expect(parts.length, row.heading).toBeGreaterThanOrEqual(1);
+      parts.forEach(([, text], index) => {
+        // No part ends on a separator or a space; none but the first starts with anything but "· ".
+        expect(text, `${row.heading}: ${text}`).not.toMatch(/[·\s]$/);
+        if (index > 0) expect(text.startsWith("· ")).toBe(true);
+        else expect(text.startsWith("·")).toBe(false);
+      });
+    }
+  });
+
+  it("keeps each part whole (whitespace-nowrap) and joins two parts with one plain space that stands outside both", () => {
+    const html = renderWords();
+    const markup = metaMarkup(html, "1 Introduction");
+    const classes = [...markup.matchAll(/<span data-meta-part="[a-z]+"[^>]*class="([^"]*)"/g)].map((m) => m[1].split(/\s+/));
+
+    expect(classes).toHaveLength(4);
+    for (const each of classes) expect(each).toContain("whitespace-nowrap");
+    // The only break the row has between parts is the plain space between two spans.
+    expect(markup.split("</span> <span data-meta-part=")).toHaveLength(4);
+    expect(markup.replace(/<span data-meta-part="[a-z]+"[^>]*>[^<]*<\/span>/g, "|").replace(/<[^>]*>/g, "")).toBe("| | | |");
+  });
+
+  it("states the words on a row the same with a row open and with the table shown on a phone", () => {
+    const base = metaText(renderWords(), "1 Introduction");
+
+    expect(base).toBe("setup · p.1 · 1,234 words · 6 min");
+    expect(metaText(renderWords({ openRows: [0] }), "1 Introduction")).toBe(base);
+    expect(metaText(renderWords({ phoneOpen: true }), "1 Introduction")).toBe(base);
+  });
+});
+
+describe("ReadingMapView — the map's toggles are touch targets (P9-51, N5)", () => {
+  const TOUCH = "[@media(hover:none)]:min-h-11";
+  const classesOf = (html: string, pattern: RegExp) => (pattern.exec(html)?.[1] ?? "").split(/\s+/).filter(Boolean);
+
+  it("makes 'show map' and 'hide map' 44 px tall where there is no hover, the visible text unchanged", () => {
+    for (const [html, label] of [[render(), MAP.show], [render({ phoneOpen: true }), MAP.hide]] as const) {
+      const classes = classesOf(html, new RegExp(`<button\\b[^>]*class="([^"]*)"[^>]*>${label}</button>`));
+
+      expect(classes, `the ${label} button`).toContain(TOUCH);
+      // The visible text is the label and nothing else.
+      expect(html).toMatch(new RegExp(`<button[^>]*>${label}</button>`));
+    }
+  });
+
+  it("makes each row's fold toggle ('+' / '−') 44 px tall where there is no hover, its glyph and its name unchanged", () => {
+    const opened = render({ openRows: [0] });
+    const toggles = [...opened.matchAll(/<button\b[^>]*aria-label="((?:Show|Hide) how the paragraphs of [^"]*)"[^>]*class="([^"]*)"[^>]*>([^<]*)<\/button>/g)];
+
+    expect(toggles.map((m) => m[3]).sort()).toEqual(["+", "−"].sort());
+    for (const [, name, classes] of toggles) expect(classes.split(/\s+/), name).toContain(TOUCH);
+  });
+
+  it("leaves the mouse's boxes alone: the floor is behind hover:none, never a bare min-h-11", () => {
+    for (const html of [render(), render({ phoneOpen: true }), render({ openRows: [0] })]) {
+      const buttons = [...html.matchAll(/<button\b[^>]*class="([^"]*)"/g)].map((m) => m[1].split(/\s+/));
+
+      expect(buttons.length).toBeGreaterThan(0);
+      for (const classes of buttons) {
+        expect(classes).not.toContain("min-h-11");
+        expect(classes.filter((c) => /^min-h-/.test(c) && !c.startsWith("["))).toEqual([]);
+      }
+    }
+  });
+
+  it("is still the same toggles: 'show map' / 'hide map' is the phone's control, each fold keeps its name and aria-expanded", () => {
+    const html = render({ openRows: [0] });
+
+    expect(html).toMatch(/aria-expanded="false"[^>]*>show map<\/button>/);
+    expect(html).toContain(`aria-label="${MAP.closeLines("1 Introduction")}"`);
+    expect(html).toContain(`aria-label="${MAP.openLines("2.1 Samples")}"`);
+    expect(html.match(/aria-expanded="(?:true|false)"/g)).toHaveLength(3);
+  });
+});
