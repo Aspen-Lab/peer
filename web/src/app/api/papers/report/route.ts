@@ -512,7 +512,10 @@ function streamReport(
         });
         const figurePool = await figurePoolPromise;
         const bound = await bindFiguresToReport({
-          paper: { title: body.paper.title },
+          // P9-53: the id the text and the pool were read with, so a PDF's
+          // figure is bound by the figure-image route's URL (an upload's: its
+          // owner's only) and the stream does not carry its bytes.
+          paper: { title: body.paper.title, id: body.paper.fullTextUploadId ?? body.paper.id },
           report: deep,
           captions: fullText.doc.figureCaptions,
           provider,
@@ -692,7 +695,8 @@ async function handlePost(req: NextRequest) {
       }
 
       const bound = await bindFiguresToReport({
-        paper: { title: body.paper.title },
+        // P9-53: as in the stream above.
+        paper: { title: body.paper.title, id: body.paper.fullTextUploadId ?? body.paper.id },
         report: deep,
         captions: fullText.doc.figureCaptions,
         provider,
