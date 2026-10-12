@@ -219,9 +219,23 @@ describe("/privacy — Who else sees a request names the gist pass (P3-05)", () 
     expect(entry).not.toContain("when a model report is written");
   });
 
+  // RE-AIMED (§1c, P9-60, BACKLOG-51): this test pinned "Tavily sees your search
+  // terms only if you add a Tavily key yourself." as part of "the rest of the
+  // paragraph". The owner ruled (2026-10-12, §1h.76 (d)) that the sentence goes: no
+  // screen takes a Tavily key and no paper source uses it. The test still pins the
+  // sentences that stay, in order, and now also that the paragraph reads whole where
+  // the sentence was (no double space, no dangling join).
   it("keeps the rest of the paragraph it sits in", () => {
-    expect(entry).toContain("Tavily sees your search terms only if you add a Tavily key yourself.");
+    expect(entry).toContain("Jev sees those papers and your project text only if you add a Jev key yourself.");
     expect(entry).toContain("Resend sends the email digest if you turn one on.");
+    expect(entry).toContain(
+      "to write the one-line gists in the paper&#x27;s map. Jev sees those papers and your project text only if you add a Jev key yourself. Resend sends the email digest if you turn one on.",
+    );
+    expect(entry).not.toMatch(/ {2}/);
+  });
+
+  it("names no search product Peer does not use (P9-60): no rendered /privacy text says Tavily", () => {
+    expect(html.match(/.{0,40}tavily.{0,40}/gi) ?? []).toEqual([]);
   });
 
   it("names the two things that switch a deep report on, as the report's own predicate reads them", () => {
