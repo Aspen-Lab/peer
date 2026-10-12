@@ -23,7 +23,7 @@ import {
   termSource,
   type ExplainStatus,
 } from "./explain-box";
-import { DOCK_BOTTOM_PX, DOCK_TOP_PX, MASTHEAD_MIN_VIEWPORT_PX, THUMB_BAR_PX, legendHeightPx } from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_TOP_PX, MASTHEAD_MIN_VIEWPORT_PX, legendHeightPx } from "./explain-dock";
 import type { ExplainSelection } from "./paper-body";
 
 // P3-02 (ruling §1h.2; §3d 14): the button beside a selected passage and the
@@ -148,17 +148,21 @@ describe("ExplainBox — the floating button where no gutter stands stands on th
     return { html, style };
   };
   const paragraphAt = (right: number): ExplainSelection => ({ ...selection, paragraph: { left: 16, top: 300, right, bottom: 640 } });
-  const BAR_LIFT = `calc(${THUMB_BAR_PX}px + env(safe-area-inset-bottom) + 8px)`;
 
-  it("on a phone and under 768 px it is a pill 8 px above the thumb bar's top edge, its right edge on the column's", () => {
+  // Re-aimed, P9-41 (§1h.66; was: "on a phone and under 768 px it is a pill 8 px above the thumb bar's top edge, its right edge on the
+  // column's"): that pill still covered 1,790 to 2,473 px² of the words that scroll under it (P9-20's checkpoint §5 a). Under 768 px the
+  // control is the thumb bar's own cell (`thumb-bar.tsx`, `thumb-bar.test.tsx`), so the box draws nothing there — for a reader with a key
+  // and for a Tier 0 definition alike, with or without a gutter — and publishes the offer to the bar (`explain-box.bar.flow.test.tsx`).
+  it("under 768 px there is no floating pill at all: the thumb bar holds the control (re-aimed, P9-41: was a pill 8 px above the bar)", () => {
     for (const [width, right] of [[390, 374], [640, 624], [700, 684], [767, 751]] as const) {
-      const { html, style } = at(width, { target: paragraphAt(right) });
+      const cases: Partial<PopoverProps>[] = [{ target: paragraphAt(right) }, { target: paragraphAt(right - 300) }, { target: selection }, { target: paragraphAt(right), canAsk: false, terms: [rafting] }];
+      for (const over of cases) {
+        const { html } = at(width, over);
 
-      expect(html, `${width} px`).toContain(">Explain this?<");
-      expect(style, `${width} px`).toContain(`right:calc(100% - ${right}px)`);
-      expect(style, `${width} px`).toContain(`bottom:${BAR_LIFT}`);
-      // Not under the selection (`selection.rect.bottom` + 6 was the old top): no `top`, no `left`.
-      expect(style, `${width} px`).not.toMatch(/(?:^|;)(?:top|left):/);
+        expect(html, `${width} px`).toBe("");
+        expect(html, `${width} px`).not.toContain("data-explain-ask");
+        expect(html, `${width} px`).not.toContain(">Explain this?<");
+      }
     }
   });
 
@@ -182,11 +186,48 @@ describe("ExplainBox — the floating button where no gutter stands stands on th
     expect(style).not.toContain("right:");
   });
 
-  it("is the same pill wherever in the page the selection is: its place does not read the selection's rectangles", () => {
-    const high: ExplainSelection = { ...paragraphAt(374), rect: { left: 40, top: 40, right: 100, bottom: 60 }, bounds: { left: 16, top: 20, right: 374, bottom: 60 } };
-    const low: ExplainSelection = { ...paragraphAt(374), rect: { left: 40, top: 700, right: 300, bottom: 720 }, bounds: { left: 16, top: 640, right: 374, bottom: 720 } };
+  it("is the same pill wherever in the page the selection is: its place does not read the selection's rectangles (re-aimed, P9-41: at 800 px, the legend's pill — at 390 px there is no pill to place)", () => {
+    const high: ExplainSelection = { ...paragraphAt(700), rect: { left: 40, top: 40, right: 100, bottom: 60 }, bounds: { left: 16, top: 20, right: 700, bottom: 60 } };
+    const low: ExplainSelection = { ...paragraphAt(700), rect: { left: 40, top: 700, right: 300, bottom: 720 }, bounds: { left: 16, top: 640, right: 700, bottom: 720 } };
 
-    expect(at(390, { target: high }).style).toBe(at(390, { target: low }).style);
+    expect(at(800, { target: high }).style).toContain("right:calc(100% - 700px)");
+    expect(at(800, { target: high }).style).toBe(at(800, { target: low }).style);
+  });
+});
+
+// P9-41 (§1h.66; C P9-20's checkpoint §7, §8 item 1): the pill that stays — from 768 px, where the foot legend is the furniture and a
+// column with no gutter leaves it nowhere else — is a 44 px touch target where there is no hover (P9-23's rule), as the window's own
+// header control is (P9-17). Only the legend's pill: the gutter pill's clamps assume the 32 px `BUTTON_HEIGHT` (a taller one would be
+// pushed past the window's foot), and with a mouse nothing about either pill changes.
+describe("ExplainBox — the pill from 768 px is a 44 px touch target where there is no hover (P9-41, §1h.66)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const TOUCH = "[@media(hover:none)]:min-h-11";
+  const pillAt = (width: number, right: number, over: Partial<PopoverProps> = {}) => {
+    vi.stubGlobal("window", { innerWidth: width, innerHeight: 844 });
+    const html = render({ target: { ...selection, paragraph: { left: 16, top: 300, right, bottom: 640 } }, ...over });
+    const tag = /<button[^>]*data-explain-ask[^>]*>/.exec(html)?.[0] ?? "";
+    return { tag, tokens: (/\bclass="([^"]*)"/.exec(tag)?.[1] ?? "").split(/\s+/).filter(Boolean) };
+  };
+
+  it("the legend's pill (no gutter) carries the touch class: 44 px tall under hover:none, from 768 px up", () => {
+    for (const width of [768, 800, 1000]) {
+      const { tag, tokens } = pillAt(width, width - 100);
+
+      expect(tag, `${width} px`).not.toBe("");
+      expect(tokens, `${width} px`).toContain(TOUCH);
+    }
+    // A Tier 0 definition's pill is the same control.
+    expect(pillAt(800, 700, { canAsk: false, terms: [rafting] }).tokens).toContain(TOUCH);
+  });
+
+  it("the gutter pill is untouched: beside the words, its class list as it was — the touch class is the legend pill's alone", () => {
+    const gutter = pillAt(800, 600);
+    const legend = pillAt(800, 700);
+
+    expect(gutter.tag).not.toBe("");
+    expect(gutter.tokens).not.toContain(TOUCH);
+    // The two pills are one control: the legend's is the gutter's with the touch class added, nothing else differs.
+    expect(legend.tokens.filter((token) => token !== TOUCH)).toEqual(gutter.tokens);
   });
 });
 
@@ -512,11 +553,12 @@ describe("the pure rules", () => {
       expect(at.left + 120).toBeLessThanOrEqual(1064 - 8);
       // A column flush with the window's edge: the pill's right edge is held a margin inside it.
       expect(placeButton(rect, docked, { left: 0, top: 280, right: 1064, bottom: 540 })).toEqual({ edge: 1064 - 8, bottom: `${DOCK_BOTTOM_PX + 8}px` });
-      // A phone: no gutter at 390 px (16 px to the column's right), so the thumb bar's strip, its right edge on the column's.
-      const phone = { width: 390, height: 780 };
-      expect(placeButton({ left: 40, top: 300, right: 200, bottom: 320 }, phone, { left: 16, top: 250, right: 374, bottom: 600 })).toEqual({
-        edge: 374,
-        bottom: `calc(${THUMB_BAR_PX}px + env(safe-area-inset-bottom) + 8px)`,
+      // A phone: no gutter at 390 px (16 px to the column's right) — and, re-aimed, P9-41, no pill either: the box does not ask for a
+      // place under 768 px (the thumb bar holds the control; `ExplainBox — under 768 px there is no floating pill at all`), so the
+      // pure function is pinned only where it is asked: a column that leaves the legend's strip at 768.
+      expect(placeButton({ left: 40, top: 300, right: 200, bottom: 320 }, { width: 768, height: 780 }, { left: 16, top: 250, right: 752, bottom: 600 })).toEqual({
+        edge: 752,
+        bottom: `${DOCK_BOTTOM_PX + 8}px`,
       });
     });
 
@@ -566,14 +608,16 @@ describe("the pure rules", () => {
     const column = (width: number) => ({ left: 16, top: 250, right: width - 16, bottom: 900 });
     const where = { left: 40, top: 300, right: 200, bottom: 320 };
 
-    it("under 768 px it is 8 px above the thumb bar's top edge: the bar's 56 px and the safe area, then the margin", () => {
-      for (const width of [390, 480, 640, 700, 767]) {
-        expect(placeButton(where, { width, height: 844 }, column(width)), `${width} px`).toEqual({
-          edge: width - 16,
-          bottom: `calc(${THUMB_BAR_PX}px + env(safe-area-inset-bottom) + 8px)`,
-        });
+    // Re-aimed, P9-41 (§1h.66; was: "under 768 px it is 8 px above the thumb bar's top edge: the bar's 56 px and the safe area, then the
+    // margin"): the bar branch of the place is gone with the pill it placed — under 768 px the bar holds the control as a cell, so there is
+    // no place to compute. What stays is the legend's strip, at every width the box asks (768 and up).
+    it("the thumb bar's strip is gone from the place: at no width does the lift name the bar or the safe area — only the legend's strip (re-aimed, P9-41)", () => {
+      for (const width of [390, 480, 640, 700, 767, 768, 1024, 1440]) {
+        const place = placeButton(where, { width, height: 844 }, column(width));
+
+        expect("top" in place, `${width} px`).toBe(false);
+        expect((place as { bottom: string }).bottom, `${width} px`).toBe(`${DOCK_BOTTOM_PX + 8}px`);
       }
-      expect(THUMB_BAR_PX).toBe(56);
     });
 
     it("from 768 px it is 8 px above the foot legend's top edge (the legend's 28 px, then the margin)", () => {
@@ -586,18 +630,21 @@ describe("the pure rules", () => {
       }
     });
 
-    it("the breakpoint is the masthead's and the shell's `md`: 767 is the bar's, 768 the legend's", () => {
+    it("the breakpoint is the masthead's and the shell's `md`: 767 is the bar's (the box draws no pill), 768 the legend's pill (re-aimed, P9-41: was pure placement on both sides)", () => {
       expect(MASTHEAD_MIN_VIEWPORT_PX).toBe(768);
-      expect((placeButton(where, { width: 767, height: 844 }, column(767)) as { bottom: string }).bottom).toContain("env(safe-area-inset-bottom)");
-      expect((placeButton(where, { width: 768, height: 844 }, { left: 16, top: 250, right: 760, bottom: 900 }) as { bottom: string }).bottom).toBe("36px");
+      const target: ExplainSelection = { ...selection, paragraph: { left: 16, top: 250, right: 700, bottom: 900 } };
+      vi.stubGlobal("window", { innerWidth: 767, innerHeight: 844 });
+      expect(render({ target })).toBe("");
+      vi.stubGlobal("window", { innerWidth: 768, innerHeight: 844 });
+      expect(render({ target })).toContain(">Explain this?<");
+      expect(placeButton(where, { width: 768, height: 844 }, { left: 16, top: 250, right: 760, bottom: 900 })).toEqual({ edge: 760, bottom: "36px" });
+      vi.unstubAllGlobals();
     });
 
     it("the legend's strip is the legend's own height as Fit scales it (P9-20, BACKLOG-42): 8 px above 28 × zoom", () => {
       const viewport = { width: 1000, height: 900, legend: legendHeightPx(1.378) };
 
       expect(placeButton(where, viewport, { left: 16, top: 250, right: 900, bottom: 900 })).toEqual({ edge: 900, bottom: `${legendHeightPx(1.378) + 8}px` });
-      // Under 768 px the bar is the thumb bar, whatever the legend (it is hidden there).
-      expect((placeButton(where, { ...viewport, width: 700 }, column(700)) as { bottom: string }).bottom).toContain("env(safe-area-inset-bottom)");
     });
 
     it("buttonStyle: a gutter place is its corner; a furniture place is its right edge and its lift, `fixed` in the window's own pixels", () => {

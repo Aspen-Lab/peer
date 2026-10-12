@@ -545,9 +545,12 @@ describe("ExplainBox — where the panel stands (P3-02b; P7-15, R7)", () => {
     run.mounted.unmount();
   });
 
+  // Re-aimed, P9-41 (§1h.66): the two phone tests below open the sheet through the thumb bar's cell — which calls the page's `explain`
+  // action, the box's `openRef` — since no floating pill stands under 768 px.
   it("a bottom sheet on a phone: the whole width, on the bottom edge, at most 60% of the height", async () => {
     stubWindow(390, 844);
-    const run = await scenario(base(), [(tree) => click(tree)]);
+    const openRef = { current: null as (() => void) | null };
+    const run = await scenario(base({ openRef }), [() => openRef.current?.()]);
     await wait();
 
     const style = run.last().style;
@@ -559,8 +562,9 @@ describe("ExplainBox — where the panel stands (P3-02b; P7-15, R7)", () => {
 
   it("on a phone, scrolls the page so the selection stays above the sheet as the sheet grows", async () => {
     stubWindow(390, 844);
-    const run = await scenario(base(), [
-      (tree) => click(tree),
+    const openRef = { current: null as (() => void) | null };
+    const run = await scenario(base({ openRef }), [
+      () => openRef.current?.(),
       (tree) => {
         const cardRef = look(tree).card?.props.cardRef as { current: unknown };
         cardRef.current = { getBoundingClientRect: () => ({ height: 500 }) };

@@ -504,9 +504,10 @@ describe("Escape where no empty state stands (unchanged)", () => {
     run.mounted.unmount();
   });
 
-  it("the sheet (under 640 px): closes, with no window behind it", async () => {
+  it("the sheet (under 640 px): closes, with no window behind it (re-aimed, P9-41: opened by the thumb bar's cell — the page's `explain` action, the box's `openRef` — not a floating pill)", async () => {
     stubWindow(390, 844);
-    const run = await scenario(base({ target: first }), [(tree) => click(tree), () => press("Escape")]);
+    const openRef = { current: null as (() => void) | null };
+    const run = await scenario(base({ target: first, openRef }), [() => openRef.current?.(), () => press("Escape")]);
     await wait();
 
     expect(run.last().card).toBeUndefined();

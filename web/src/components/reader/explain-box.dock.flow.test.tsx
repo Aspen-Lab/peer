@@ -555,11 +555,15 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     run.mounted.unmount();
   });
 
-  it("P9-20: on the furniture the button does not move as the page scrolls: it stands put while the selection stands, and goes with it", async () => {
-    stubWindow(390, 844);
+  // Re-aimed, P9-41 (§1h.66): at 390 px, where this test stood the pill above the thumb bar, there is no pill now (the bar holds the
+  // control: `explain-box.bar.flow.test.tsx`). The claim it pins — a pill on the page's furniture does not move with the scroll — is
+  // the legend's, from 768 px, where a column with no gutter (the paragraph's right edge at 700, 100 px of room under the 136 a
+  // pill needs) leaves it nowhere else.
+  it("P9-20: on the furniture the button does not move as the page scrolls: it stands put while the selection stands, and goes with it (re-aimed, P9-41: the legend's pill at 800 px)", async () => {
+    stubWindow(800, 844);
     let rect = { left: 40, top: 600, right: 300, bottom: 620 };
     // The column's right edge is the pill's; the body reports it again with each measure, and it does not move with the scroll.
-    const paragraphAt = () => ({ left: 16, top: rect.top - 20, right: 374, bottom: rect.top + 240 });
+    const paragraphAt = () => ({ left: 16, top: rect.top - 20, right: 700, bottom: rect.top + 240 });
     const moving: ExplainSelection = { ...second, paragraph: paragraphAt(), measure: () => ({ rect, bounds: rect, paragraph: paragraphAt() }) };
     const styles: unknown[] = [];
     const run = await scenario(base({ target: moving, cached: undefined }), [
@@ -578,7 +582,7 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     await wait();
     styles.push(run.last().button?.props.style);
 
-    const pill = { right: "calc(100% - 374px)", bottom: "calc(56px + env(safe-area-inset-bottom) + 8px)" };
+    const pill = { right: "calc(100% - 700px)", bottom: "36px" };
     expect(styles.length).toBeGreaterThanOrEqual(3);
     expect(styles.every((style) => JSON.stringify(style) === JSON.stringify(pill))).toBe(true);
     run.mounted.unmount();
@@ -798,8 +802,10 @@ describe("ExplainBox — the window stands level with the explained paragraph's 
     expect(card.last().style).toMatchObject(placeCard(first.bounds, { width: 800, height: 900 }));
     card.mounted.unmount();
 
+    // Re-aimed, P9-41: at 390 px the control is the thumb bar's cell, which calls the page's `explain` action — the box's `openRef`.
     stubWindow(390, 844);
-    const sheet = await scenario(base({ target: inParagraph(first, 400) }), [(tree) => click(tree)]);
+    const openRef = { current: null as (() => void) | null };
+    const sheet = await scenario(base({ target: inParagraph(first, 400), openRef }), [() => openRef.current?.()]);
     await wait();
     expect(sheet.last().style).toMatchObject({ left: 0, width: 390, bottom: 0 });
     expect(sheet.last().style?.top).toBeUndefined();

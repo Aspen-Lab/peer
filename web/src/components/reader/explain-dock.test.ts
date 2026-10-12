@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { placeCard } from "./explain-box";
-import { DOCK_BOTTOM_PX, DOCK_GAP_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_RESERVE_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_VAR, DOCK_WIDTH_PX, DOCK_WIDTH_VAR, MASTHEAD_MIN_VIEWPORT_PX, PAGE_ZOOM_ROOT, PAGE_ZOOM_VAR, THUMB_BAR_PX, emptyDockStands, legendHeightPx, reserveDock } from "./explain-dock";
+import * as dock from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_GAP_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_RESERVE_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_VAR, DOCK_WIDTH_PX, DOCK_WIDTH_VAR, MASTHEAD_MIN_VIEWPORT_PX, PAGE_ZOOM_ROOT, PAGE_ZOOM_VAR, emptyDockStands, legendHeightPx, reserveDock } from "./explain-dock";
 
 // P7-15 (the owner's R7): the dock's rectangle is built from three numbers that the shell owns —
 // the masthead's height above it, the foot legend's below it, and the width of the card it
@@ -41,26 +42,30 @@ describe("the dock's rectangle against the shell that frames it", () => {
     expect(legend).toContain("h-[var(--legend-h)]");
   });
 
-  it("the page's bottom furniture swaps at `md`: the phone's thumb bar (`md:hidden`, 56 px) under 768 px, the foot legend (`hidden md:flex`) from it — the floating control stands above whichever shows (P9-20, X13)", () => {
+  // Re-aimed, P9-41 (§1h.66; was: "the page's bottom furniture swaps at `md`: the phone's thumb bar (`md:hidden`, 56 px) under 768 px, the
+  // foot legend (`hidden md:flex`) from it — the floating control stands above whichever shows (P9-20, X13)", which also held a copy of the
+  // bar's 56 px against the bar): under 768 px the control no longer stands above the bar, it is a cell in it, so this file keeps no copy of
+  // the bar's height (`THUMB_BAR_PX` is the bar's own, which `page.tsx` reads from it). The swap itself still decides where the control is —
+  // the bar's cell under 768 px, the pill above the legend from it — so it is pinned against both components, and against the cell.
+  it("the page's bottom furniture swaps at `md`: the phone's thumb bar (`md:hidden`) under 768 px holds the control as a cell, the foot legend (`hidden md:flex`) from it has the pill above it (re-aimed, P9-41)", () => {
     const bar = read("src/components/shell/thumb-bar.tsx");
     const legend = read("src/components/reader/key-legend.tsx");
-    const exported = /export const THUMB_BAR_PX = (\d+);/.exec(bar);
     const nav = /<nav[^>]*className="([^"]*\bfixed\b[^"]*)"/.exec(bar);
     const strip = /className="([^"]*\bfixed\b[^"]*\bbottom-0\b[^"]*)"/.exec(legend);
 
-    // The bar's height is the one copied here; its cells are `h-14` (14 × 4 px).
-    expect(exported).not.toBeNull();
-    expect(Number(exported![1])).toBe(THUMB_BAR_PX);
-    expect(14 * SPACING_UNIT_PX).toBe(THUMB_BAR_PX);
-    expect(bar).toContain("grid grid-cols-4 h-14");
-    expect(bar).toContain("calc(${THUMB_BAR_PX}px + env(safe-area-inset-bottom))");
     // The bar is there under `md`, fixed to the window's foot; the legend from `md`, fixed to the same edge.
     expect(nav).not.toBeNull();
     expect(nav![1].split(/\s+/)).toEqual(expect.arrayContaining(["md:hidden", "fixed", "bottom-0"]));
     expect(strip).not.toBeNull();
     expect(strip![1].split(/\s+/)).toEqual(expect.arrayContaining(["hidden", "md:flex", "fixed", "bottom-0"]));
-    // `md` is 48rem: the masthead's own breakpoint, the one the control's furniture swaps at.
+    // `md` is 48rem: the masthead's own breakpoint, the one the control's place swaps at.
     expect(MASTHEAD_MIN_VIEWPORT_PX).toBe(48 * REM_PX);
+    // The cell is the bar's: it is drawn in the bar's file, under the bar's `md:hidden`, as a `min-h-11` (44 px) target that calls the
+    // page's `explain` action; and the box keeps no copy of the bar's height any more — there is nothing above the bar to clear.
+    expect(bar).toContain("data-explain-ask");
+    expect(bar).toContain("readerActions()?.explain?.()");
+    expect(bar).toMatch(/className="[^"]*\bmin-h-11\b[^"]*"[^>]*>\s*\{EXPLAIN\.ask\}/);
+    expect(dock).not.toHaveProperty("THUMB_BAR_PX");
   });
 
   // P9-20 (BACKLOG-42): the legend is scaled by Fit's zoom and the box is not. The reserve is the legend's height on screen, so the
