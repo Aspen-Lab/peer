@@ -130,9 +130,22 @@ function foldDisplaySymbols(s: string): string {
 }
 
 /**
- * Normalise for matching only — never for display. `cleanDisplayText` first,
- * so a quote that went through the sanitizer and a raw section text land in
- * the same alphabet (it already folds entities, mojibake and the operator
+ * The Unicode subscripts the PDF line builder writes for a lowered run of digits (`LiCoO₂`,
+ * `Li₁₋ₓCoO₂`, P9-14): U+2080-U+2089 `₀-₉`, `₊ ₋ ₌ ₍ ₎` (U+208A-U+208E) and `ₓ` (U+2093). A model
+ * quotes the plain forms, `LiCoO2`, `Li1-xCoO2`. NFKC folds most of them too, but it runs after
+ * `cleanDisplayText`, which spaces a plain `=` ("T0 = 1") and leaves a `₌` alone ("T0=1"). They are
+ * folded first, so both spellings go through the one pipeline and meet.
+ */
+const SUBSCRIPTS = /[\u2080-\u208E\u2093]/g;
+const SUBSCRIPT_PLAIN = "0123456789+-=()";
+function foldSubscripts(s: string): string {
+  return s.replace(SUBSCRIPTS, (c) => (c === "\u2093" ? "x" : SUBSCRIPT_PLAIN[c.charCodeAt(0) - 0x2080]));
+}
+
+/**
+ * Normalise for matching only — never for display. The Unicode subscripts are folded to their plain
+ * forms (P9-14), then `cleanDisplayText`, so a quote that went through the sanitizer and a raw
+ * section text land in the same alphabet (it already folds entities, mojibake and the operator
  * spacing; it keeps `° ± × ≤ ≥` and Unicode sub- and superscripts, which are
  * the paper's own — P9-10). Then NFKC (ligatures `ﬁ` → `fi`, `²` → `2`,
  * `℃` → `°C`), those symbols folded to the ASCII words a cached quote may
@@ -144,7 +157,7 @@ function foldDisplaySymbols(s: string): string {
  * lowercase, whitespace collapsed.
  */
 export function normalizeForMatch(s: string): string {
-  return foldDisplaySymbols(cleanDisplayText(s).normalize("NFKC"))
+  return foldDisplaySymbols(cleanDisplayText(foldSubscripts(s)).normalize("NFKC"))
     .replace(/[‘’‚‛]/g, "'")
     .replace(/[“”„‟]/g, '"')
     .replace(/[‐‑‒–—―−]/g, "-")

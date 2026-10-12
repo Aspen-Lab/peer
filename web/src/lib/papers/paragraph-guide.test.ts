@@ -346,6 +346,13 @@ describe("groundedGist — two content words shared with the paragraph", () => {
     expect(groundedGist("Blades lengthen under steady load.", INTRO_A)).toBe(true);
   });
 
+  it("reads a formula with subscripts and its plain spelling as the same word (P9-14)", () => {
+    const paragraph = "Quillwort films of Li\u2081\u208B\u2093CoO\u2082 held their capacity while the CoO\u2082 layers swelled slightly.";
+    expect(groundedGist("The Li1-xCoO2 films held their capacity.", paragraph)).toBe(true);
+    expect(groundedGist("The LiCoO2 layers swelled slightly.", paragraph)).toBe(true);
+    expect(groundedGist("The CoO2 layers swelled slightly.", "Quillwort films of Li1-xCoO2 held their capacity while the CoO2 layers swelled slightly.")).toBe(true);
+  });
+
   it("is false with one shared content word, and false with none", () => {
     expect(groundedGist("Blades are cheap to make.", INTRO_A)).toBe(false);
     expect(groundedGist("Stocks fell after the earnings call.", INTRO_A)).toBe(false);

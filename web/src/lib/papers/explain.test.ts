@@ -2275,3 +2275,48 @@ describe("the displayed quote is shown to its sentence boundaries (P4-04)", () =
     expect(answerOf(head, doc).here.peer).toBeUndefined();
   });
 });
+
+// P9-14: the PDF line builder writes a lowered run of digits with the Unicode subscripts; the passage a
+// reader selects, the term a model names and the quote a model types are the plain forms. Invented text.
+describe("a formula written with subscripts is found by its plain spelling, and the other way round (P9-14)", () => {
+  const formulaDoc: ExtractedDocument = {
+    source: "pdf",
+    pageCount: 1,
+    figureCaptions: [],
+    sections: [
+      {
+        id: "s0",
+        heading: "1 Results",
+        canonical: "results",
+        page: 1,
+        text: "Quillwort films of Li₁₋ₓCoO₂ held their capacity over forty cycles.\n\nThe CoO₂ layers swelled by about two percent at the top of charge.",
+      },
+    ],
+  };
+  const row = (term: string): ExplainItem => ({ term, here: "means this here", read: "read it so" });
+
+  it("locatePassage finds the paragraph for a passage typed with plain digits, and for one typed with subscripts", () => {
+    expect(locatePassage(formulaDoc, "Quillwort films of Li1-xCoO2 held their capacity")).toMatchObject({ sectionId: "s0", paragraphIndex: 0 });
+    expect(locatePassage(formulaDoc, "The CoO2 layers swelled")).toMatchObject({ sectionId: "s0", paragraphIndex: 1 });
+    expect(locatePassage(formulaDoc, "The CoO₂ layers swelled")).toMatchObject({ sectionId: "s0", paragraphIndex: 1 });
+  });
+
+  it("the term table keeps a row whose term is the plain spelling, and drops one with another digit", () => {
+    const located = locatePassage(formulaDoc, "The CoO2 layers swelled")!;
+    const scope = { passage: "The CoO2 layers swelled", located };
+    expect(groundExplainItems([row("CoO2"), row("Li1-xCoO2"), row("CoO3")], formulaDoc, scope).map((item) => item.term)).toEqual(["CoO2", "Li1-xCoO2"]);
+    expect(groundExplainItems([row("CoO₂")], formulaDoc, scope).map((item) => item.term)).toEqual(["CoO₂"]);
+  });
+
+  it("verifyExplainAnswer keeps a quote typed with plain digits against a body set with subscripts", () => {
+    const quote = "Quillwort films of Li1-xCoO2 held their capacity over forty cycles.";
+    const answer: ExplainAnswer = { meaning: "A film that holds charge.", here: { text: "It says the films held up.", evidence: quote } };
+    const verified = verifyExplainAnswer(answer, formulaDoc);
+    // The quote is held, and shown in the paper's own characters.
+    expect(verified.here).toMatchObject({ evidence: "Quillwort films of Li\u2081\u208B\u2093CoO\u2082 held their capacity over forty cycles.", evidenceWhere: "1 Results", sectionId: "s0", page: 1 });
+    expect(verified.here.peer).toBeUndefined();
+    // And one digit off is not the paper's sentence: the quote goes, Peer's own reading stands.
+    const off = verifyExplainAnswer({ ...answer, here: { ...answer.here, evidence: quote.replace("CoO2", "CoO3") } }, formulaDoc);
+    expect(off.here.peer).toBe(true);
+  });
+});

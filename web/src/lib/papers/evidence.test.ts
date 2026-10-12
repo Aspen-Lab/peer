@@ -156,6 +156,54 @@ describe("normalizeForMatch", () => {
   });
 });
 
+// P9-14: the PDF line builder writes a lowered run of digits with the Unicode subscript characters
+// (`LiCoO₂`, `Li₁₋ₓCoO₂`). A model quotes the plain forms (`LiCoO2`, `Li1-xCoO2`), and the matcher
+// is what lets the two meet, in either direction. Subscript characters are spelled by code point.
+describe("normalizeForMatch — subscript characters meet their plain forms (P9-14)", () => {
+  const SUB = (plain: string): string =>
+    [...plain]
+      .map((c) => ({ "0": "\u2080", "1": "\u2081", "2": "\u2082", "3": "\u2083", "4": "\u2084", "5": "\u2085", "6": "\u2086", "7": "\u2087", "8": "\u2088", "9": "\u2089", "+": "\u208A", "-": "\u208B", "=": "\u208C", "(": "\u208D", ")": "\u208E", x: "\u2093" })[c] ?? c)
+      .join("");
+
+  it("folds ₀-₉ ₊ ₋ ₌ ₍ ₎ ₓ to their plain forms, so a formula typed either way is one string", () => {
+    expect(normalizeForMatch("LiCoO\u2082")).toBe(normalizeForMatch("LiCoO2"));
+    expect(normalizeForMatch("Li\u2081\u208B\u2093CoO\u2082")).toBe(normalizeForMatch("Li1-xCoO2"));
+    expect(normalizeForMatch("Li\u2081\u208B\u2093CoO\u2082")).toBe(normalizeForMatch("Li1\u2212xCoO2"));
+    expect(normalizeForMatch("M\u2081\u208A\u2093O, T\u2080\u208C\u2081, a\u208D\u2082\u208E b")).toBe(normalizeForMatch("M1+xO, T0=1, a(2) b"));
+    for (const plain of ["H2O", "O2", "Li4Ti5O12", "Ca3(PO4)2", "Li1-xCoO2", "M1+x", "x0=9"]) {
+      expect(normalizeForMatch(SUB(plain)), plain).toBe(normalizeForMatch(plain));
+    }
+  });
+
+  it("keeps the fold to the lowered forms: a superscript is not a subscript, and a plain digit is not touched", () => {
+    expect(normalizeForMatch("Co\u00B2\u207A")).toBe(normalizeForMatch("Co2+"));
+    expect(normalizeForMatch("Figure 2")).toBe("figure 2");
+    expect(normalizeForMatch("LiCoO\u2082")).not.toBe(normalizeForMatch("LiCoO3"));
+  });
+
+  it("a quote typed with plain digits verifies against a body set with subscripts, and the other way round", () => {
+    const body = "Films of Li\u2081\u208B\u2093CoO\u2082 were cycled at C/10 and held a capacity of 140 mAh/g across all of the cells.";
+    const quote = "Films of Li1-xCoO2 were cycled at C/10 and held a capacity of 140 mAh/g across all of the cells.";
+    expect(quote.length).toBeGreaterThanOrEqual(40);
+    expect(evidenceSupported(quote, body)).toBe(true);
+    expect(evidenceSupported(body, quote)).toBe(true);
+    // A quote that differs in one digit is still not the paper's sentence.
+    expect(evidenceSupported(quote.replace("CoO2", "CoO3"), body)).toBe(false);
+  });
+
+  it("locateSection finds the section whichever way the formula is typed", () => {
+    const small: ExtractedDocument = {
+      source: "pdf",
+      figureCaptions: [],
+      sections: [
+        { id: "s0", heading: "Methods", canonical: "methods", text: "We cycled twelve Li\u2081\u208B\u2093CoO\u2082 cells at three charge rates for one month." },
+      ],
+    };
+    expect(locateSection("We cycled twelve Li1-xCoO2 cells at three charge rates for one month.", sectionCorpus(small))).toBe("s0");
+    expect(locateSection("We cycled twelve Li\u2081\u208B\u2093CoO\u2082 cells at three charge rates for one month.", sectionCorpus(small))).toBe("s0");
+  });
+});
+
 describe("evidenceSupported", () => {
   const corpus = abstract;
 

@@ -94,6 +94,15 @@ describe("cleanDisplayText — scripts, ligatures, spaces and ½ (P9-10, G's gat
     expect(cleanDisplayText("s⁻¹ and a 2⁺ charge, x⁽ⁿ⁾, y₍ₘ₎, z⁼")).toBe("s⁻¹ and a 2⁺ charge, x⁽ⁿ⁾, y₍ₘ₎, z⁼");
   });
 
+  // P9-14: the line builder writes a lowered run of digits as subscripts; both cleaners keep them.
+  it("keeps the subscripts of a formula the PDF line builder wrote: LiCoO₂, Li₁₋ₓCoO₂, CoO₂⁻, I₀(hkl)", () => {
+    for (const text of ["LiCoO\u2082", "Li\u2081\u208B\u2093CoO\u2082 films", "the CoO\u2082\u207B ion", "measured I\u2080(hkl): standard", "Ca\u2083(PO\u2084)\u2082 and M\u2081\u208A\u2093O"]) {
+      expect(cleanDisplayText(text), text).toBe(text);
+      expect(cleanPaperText(text), text).toBe(text);
+    }
+    expect(cleanDisplayText("LiCoO\u2082")).toBe("LiCoO₂");
+  });
+
   it("keeps ½ (and the other vulgar fractions): no 12", () => {
     expect(cleanDisplayText("½")).toBe("½");
     expect(cleanDisplayText("a ½ cup and ¾ of it")).toBe("a ½ cup and ¾ of it");
