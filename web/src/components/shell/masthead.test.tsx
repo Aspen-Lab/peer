@@ -217,8 +217,9 @@ describe("below lg the position text drops, the arrows stay and name it (P9-40, 
 
     expect(prevTag).toContain(prev);
     expect(nextTag).toContain(next);
-    expect(n === 1 ? prevTag : nextTag).toContain("disabled");
-    expect(n === 1 ? nextTag : prevTag).not.toContain("disabled");
+    // The attribute, not the word: every step button carries the `disabled:` utility classes.
+    expect(n === 1 ? prevTag : nextTag).toContain(' disabled=""');
+    expect(n === 1 ? nextTag : prevTag).not.toContain(' disabled=""');
   });
 
   it("draws the position text from lg only: the 'N of M' span is hidden below it, as is the hairline after it", () => {

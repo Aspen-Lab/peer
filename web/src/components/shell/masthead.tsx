@@ -60,6 +60,9 @@ const WORDMARK_CLASS =
  *  is ruled — the band's rule, the key's, the plate's edge. */
 const RULE = <span aria-hidden className="mx-2 block h-3 w-px bg-border-strong" />;
 
+/** The same hairline, drawn from `lg` only: it goes with the position text it follows. */
+const RULE_FROM_LG = <span aria-hidden className="mx-2 hidden h-3 w-px bg-border-strong lg:block" />;
+
 /**
  * The registration mark, in the bar's size: four 1px corners around a plate.
  * The graph puts it on the node being pointed at and a card grows it under
@@ -269,6 +272,8 @@ function Numeral({ children }: { children: React.ReactNode }) {
 }
 
 function RailLine({ nav, onBack }: { nav: PaperNav; onBack: () => void }) {
+  // "2 of 5", as the rail's text says it: the arrows' names carry it, since the text goes below `lg`.
+  const position = `${nav.index + 1} of ${nav.total}`;
   return (
     <>
       <BackToFeedLink
@@ -297,14 +302,20 @@ function RailLine({ nav, onBack }: { nav: PaperNav; onBack: () => void }) {
       {railHasPosition(nav) && (
         <>
           {RULE}
-          <span className="tabular-nums">
+          {/* Below `lg` the text and the hairline after it drop (P9-40, step 2
+              of ruling §1h.64 (a)): with the wordmark as its mark a mouse fits
+              from 768, but a touch tablet's 44px arrows and 44px `?` still
+              need 844px. The arrows stay, the real prev / next buttons, and
+              their names carry the position the text said. */}
+          <span className="hidden lg:inline tabular-nums">
             <Numeral>{nav.index + 1}</Numeral> of <Numeral>{nav.total}</Numeral>
           </span>
-          {RULE}
+          {RULE_FROM_LG}
           <span className="inline-flex items-center gap-1.5">
             <StepButton
               cap="k"
               label="Previous paper"
+              position={position}
               arrow="←"
               disabled={!nav.prevId}
               onClick={() => readerActions()?.prev?.()}
@@ -312,6 +323,7 @@ function RailLine({ nav, onBack }: { nav: PaperNav; onBack: () => void }) {
             <StepButton
               cap="j"
               label="Next paper"
+              position={position}
               arrow="→"
               disabled={!nav.nextId}
               onClick={() => readerActions()?.next?.()}
@@ -331,12 +343,15 @@ function RailLine({ nav, onBack }: { nav: PaperNav; onBack: () => void }) {
 function StepButton({
   cap,
   label,
+  position,
   arrow,
   disabled,
   onClick,
 }: {
   cap: string;
   label: string;
+  /** Where you are ("2 of 5"): part of the name, so it is said when the rail's text is not drawn. */
+  position: string;
   arrow: string;
   disabled: boolean;
   onClick: () => void;
@@ -346,7 +361,7 @@ function StepButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      aria-label={label}
+      aria-label={`${label}, ${position}`}
       title={`${label} (${cap})`}
       className="inline-flex items-center justify-center rounded-md transition-[opacity,transform,scale] disabled:opacity-40 active:scale-[0.95] disabled:active:scale-100 [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
     >
