@@ -130,6 +130,24 @@ describe("legacy event and job ledger entries are deleted, never kept without th
     expect(cleanPreferenceLedger(stored)).toEqual({});
   });
 
+  it("deletes an entry stored under a job| record key even when its own key field is a plain key", () => {
+    // Without the origin and with a plain `key`, this would be read as a paper
+    // entry for the concept; the record key is the only trace of where it came from.
+    const stored = {
+      [`job|${ml.key}`]: {
+        key: ml.key,
+        label: ml.label,
+        source: "openalex_topic",
+        positive: 3,
+        negative: 0,
+        lastSeenAt: T0,
+      },
+    } as unknown as PreferenceLedger;
+
+    expect(cleanPreferenceLedger(stored)).toEqual({});
+    expect(scorePreferenceMatch(paperWith([ml]), prepareLedger(stored), [], { now: T0_MS }).boost).toBe(0);
+  });
+
   it("every write starts from a clean ledger: a like and a lean carry no legacy entry forward", () => {
     const stored = { ...paperLedger(), ...legacyEntries("job", ml), ...legacyEntries("event", ml) };
 
