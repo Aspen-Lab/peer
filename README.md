@@ -54,7 +54,7 @@ Peer is a self-hosted **information agent**. The user declares who they are and 
 they care about (topics, current project, open challenges, advisor, preferred journals),
 and Peer fetches from academic sources, scores every candidate against that profile,
 removes duplicates, and surfaces a short daily briefing of the most relevant papers
-(plus events and jobs). Named after the Greek messenger god — it is the user's personal
+(papers only: jobs and events were removed). Named after the Greek messenger god — it is the user's personal
 messenger for their field.
 
 There are **two surfaces in one repo**. They are *parallel implementations of the same
@@ -387,7 +387,7 @@ and fire-and-forget cloud sync:
 - [`profile.ts`](web/src/store/profile.ts) — the user profile (topics, knobs, keys, ledger,
   digest prefs, theme, onboarding flag). `hydrateFromRemote` merges a server snapshot
   (undefined fields keep local values). Persisted under `peer-profile`.
-- [`feed.ts`](web/src/store/feed.ts) — papers/events/jobs, loading, read items, AI-search toggle.
+- [`feed.ts`](web/src/store/feed.ts) — papers (jobs and events were removed), loading, read items, AI-search toggle.
 - [`ui.ts`](web/src/store/ui.ts) — transient UI state.
 
 Sync components: `profile-sync.tsx`, `feed-sync.tsx`, `theme-sync.tsx`.
@@ -403,7 +403,7 @@ Supabase SQL editor). All tables are **RLS-scoped to `auth.uid()`**. Tables:
 | Table | Purpose |
 | --- | --- |
 | `profiles` | All user profile fields + feed knobs + digest prefs + `preference_ledger` + theme. Auto-created on signup; `updated_at` auto-touched. |
-| `saved_items` | Unified saved papers/events/jobs. `payload` is a full snapshot so links survive source decay. |
+| `saved_items` | Saved papers (jobs and events were removed; the `item_kind` check still allows the old kinds). `payload` is a full snapshot so links survive source decay. |
 | `read_items` | One row per (user, item) — powers the reading calendar/streak. |
 | `feedback_events` | Append-only signal stream (`liked` / `saved` / `notInterested` / `moreLikeThis`). |
 | `briefing_deliveries` | One row per scheduled digest run; drives the in-app "past briefings" inbox. Written by the cron with the service role (bypasses RLS). |
