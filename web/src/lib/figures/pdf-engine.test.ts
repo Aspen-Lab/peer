@@ -3,6 +3,7 @@
 // paper is never a fixture and no image of it is anywhere in the repository.
 
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import nextConfig from "../../../next.config";
 import {
   CHART_CAPTION,
   PANEL_ONE,
@@ -274,5 +275,15 @@ describe("extractPdfFigures: MuPDF objects and concurrency", () => {
     // so its chart is not rendered and page 4 is not opened.
     expect(figures.map((f) => f.page)).toEqual([2]);
     expect(reason).toMatch(/stopped reading this PDF after 25 s, with 1 figure found so far/);
+  });
+});
+
+describe("the deployment: next.config.ts", () => {
+  it("keeps mupdf external, so the tracer ships the package and its .wasm as files", () => {
+    expect(nextConfig.serverExternalPackages).toEqual(["mupdf"]);
+  });
+
+  it("no longer traces the Python helper into any function", () => {
+    expect(JSON.stringify(nextConfig.outputFileTracingIncludes ?? {})).not.toContain("extract_pdf_figures");
   });
 });
