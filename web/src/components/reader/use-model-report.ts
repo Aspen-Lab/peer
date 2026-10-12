@@ -28,6 +28,20 @@ const STORAGE_KEY = "peer-paper-report-v7";
 /** The cache the old page kept, with its fabricated fallbacks inside. */
 const LEGACY_STORAGE_KEYS = ["peer-paper-report-cache-v3", "peer-paper-report-v4", "peer-paper-report-v5", "peer-paper-report-v6"];
 const MAX_ENTRIES = 40;
+/**
+ * P9-48 rule 2 (A's P9-W3 §4, §6 item 1): the most the cache may take of the
+ * origin's `localStorage`, in characters of its serialized text — a budget as
+ * well as the count above, because the count says nothing of size. A browser
+ * gives one origin about 5 M characters in all (5.24 M in the browser of A's
+ * walk), and the feed, the profile with the key a reader stored, the reading
+ * preferences, the question store and the reading cache share it; the cache
+ * alone filled it at four entries and a quota error, swallowed, was all that
+ * stood between it and them. A report without its figure (rule 1) is a few KB
+ * to some tens of KB — `REPORT_CAPS` bounds every field — so 1.5 M holds the
+ * forty the count allows with room to spare, yet is under a third of the
+ * smallest quota, and the quota error stops being the only limit.
+ */
+export const REPORT_CACHE_BUDGET_CHARS = 1_500_000;
 // A deep report stays well past a session; an abstract-tier one expires
 // sooner so a transient failure (paywall flap, model hiccup) self-heals on
 // the next open without manual action.
@@ -64,10 +78,11 @@ function isFigureData(url: unknown): boolean {
  * `data:` URL (1.08 M characters for one), on the proposal and on any key
  * result, and the cache stored it once per cache key, so a handful of question
  * sets filled the origin's `localStorage`. Each such URL is dropped from the
- * stored copy: the field is absent, the state `figure-binding` leaves where no
- * picture was attached, while `figureLabel`, `figureCaption` and
- * `figureSource` (a few words) stay. The report in memory is untouched, so
- * this visit still draws the figure it was handed.
+ * stored copy: the field is absent — a label with no image, which the client
+ * answers with the figure resolver (`BindArgs.figurePool` in figure-binding) —
+ * while `figureLabel`, `figureCaption` and `figureSource` (a few words) stay.
+ * The report in memory is untouched, so this visit still draws the figure it
+ * was handed.
  *
  * A reload then draws what the page draws for a report with no bound figure:
  * the plate asks the figure resolver (`/api/figure`, which the page runs anyway
@@ -129,22 +144,51 @@ export function rememberReport(key: string, report: PaperReport): void {
   writeCached(key, report);
 }
 
+/** What one entry takes of the serialized cache, `"key":{…},` — the comma
+ *  is counted with it, so the whole is `1 + Σ entryChars` (`{`, the entries, `}`). */
+function entryChars(key: string, entry: CachedReport): number {
+  return JSON.stringify(key).length + 1 + JSON.stringify(entry).length + 1;
+}
+
+/**
+ * Cache `report` under `key`: without its figures (rule 1), and under the
+ * budget (rule 2) — before the write, the oldest entries are evicted until the
+ * cache and the new entry fit `REPORT_CACHE_BUDGET_CHARS` and `MAX_ENTRIES`;
+ * an entry that alone is over the budget is not cached, and the log carries its
+ * length and nothing of it (the paper's words, its key and its project are the
+ * reader's). The entry being replaced is not counted twice, and the new entry
+ * is never the one evicted.
+ */
 function writeCached(key: string, report: PaperReport): void {
   if (!key || typeof window === "undefined") return;
   try {
-    // P9-48 rule 1: the new report, and every report an earlier build cached
-    // with its figure inside, go back without the figure — an old cache is
-    // rewritten as small as a new one, and its reports are kept.
-    const cache: ReportCache = {};
-    for (const [k, entry] of Object.entries({ ...readCache(), [key]: { report, savedAt: Date.now() } })) {
-      if (entry?.report && typeof entry.report === "object") cache[k] = { ...entry, report: withoutFigureData(entry.report) };
+    const fresh: CachedReport = { report: withoutFigureData(report), savedAt: Date.now() };
+    const freshChars = entryChars(key, fresh);
+    if (1 + freshChars > REPORT_CACHE_BUDGET_CHARS) {
+      console.warn("[report-cache] a report over the cache budget was not cached:", freshChars, "characters, budget", REPORT_CACHE_BUDGET_CHARS);
+      return;
     }
-    const pruned = Object.fromEntries(
-      Object.entries(cache)
-        .sort((a, b) => (b[1].savedAt ?? 0) - (a[1].savedAt ?? 0))
-        .slice(0, MAX_ENTRIES),
-    );
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(pruned));
+    // Every other entry, oldest first (ties keep the order they were written
+    // in). A cache an earlier build wrote may hold figures by value: they go
+    // here too, so an old cache is rewritten as small as a new one and its
+    // reports are kept rather than evicted.
+    const older = Object.entries(readCache())
+      .flatMap(([k, entry]) => {
+        if (k === key || !entry?.report || typeof entry.report !== "object") return [];
+        const kept: CachedReport = { ...entry, report: withoutFigureData(entry.report) };
+        return [{ key: k, entry: kept, chars: entryChars(k, kept) }];
+      })
+      .sort((a, b) => (a.entry.savedAt ?? 0) - (b.entry.savedAt ?? 0));
+    let total = 1 + freshChars + older.reduce((n, e) => n + e.chars, 0);
+    let evicted = 0;
+    while (evicted < older.length && (older.length - evicted + 1 > MAX_ENTRIES || total > REPORT_CACHE_BUDGET_CHARS)) {
+      total -= older[evicted].chars;
+      evicted += 1;
+    }
+    const cache: ReportCache = {};
+    for (const e of older.slice(evicted)) cache[e.key] = e.entry;
+    cache[key] = fresh;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cache));
   } catch {
     // Cache failures never block reading the report.
   }

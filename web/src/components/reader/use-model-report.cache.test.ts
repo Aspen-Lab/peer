@@ -50,7 +50,7 @@ import { hookRuntime } from "@/test-support/hook-runtime";
 import { captureConsole } from "@/test-support/console-capture";
 import { defaultProfile, type Paper, type UserProfile } from "@/types";
 import { emptyReport, type PaperReport } from "@/lib/papers/report";
-import { buildReportKey, rememberReport, useModelReport, withoutFigureData } from "./use-model-report";
+import { buildReportKey, REPORT_CACHE_BUDGET_CHARS, rememberReport, useModelReport, withoutFigureData } from "./use-model-report";
 
 const STORAGE_KEY = "peer-paper-report-v7";
 /** The ceiling the brief names for the cache's budget (rule 2: "≤ 1.5 M characters"). */
@@ -327,6 +327,61 @@ describe("the report cache has a character budget, not only a count (P9-48 rule 
     }
   });
 
+  it("the budget is a named constant, within the ceiling, that holds the count's forty reports with room", () => {
+    expect(REPORT_CACHE_BUDGET_CHARS).toBeLessThanOrEqual(CEILING);
+    // forty reports of 25 KB (REPORT_CAPS bounds every field) are a million characters
+    expect(REPORT_CACHE_BUDGET_CHARS).toBeGreaterThan(40 * 25_000);
+  });
+
+  it("counts the serialized cache exactly: an entry that makes the text the budget is cached, one character more is not", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(Date.UTC(2026, 9, 12, 12, 0, 0)));
+    rememberReport(keyFor(["probe"]), report("probe"));
+    const bare = localStorage.getItem(STORAGE_KEY)!.length;
+    localStorage.removeItem(STORAGE_KEY);
+    const room = REPORT_CACHE_BUDGET_CHARS - bare;
+
+    rememberReport(keyFor(["probe"]), report("probe", {}, "w".repeat(room)));
+    expect(localStorage.getItem(STORAGE_KEY)!.length).toBe(REPORT_CACHE_BUDGET_CHARS);
+
+    localStorage.removeItem(STORAGE_KEY);
+    const log = captureConsole();
+    try {
+      rememberReport(keyFor(["probe"]), report("probe", {}, "w".repeat(room + 1)));
+      expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    } finally {
+      log.restore();
+    }
+  });
+
+  it("never evicts the entry it is writing, even when every entry was written in the same millisecond", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(Date.UTC(2026, 9, 12, 12, 0, 0)));
+    const sets = ["one", "two", "three", "four", "five"];
+    for (const set of sets) {
+      rememberReport(keyFor([set]), report(set, {}, "w".repeat(400_000)));
+      expect(Object.keys(storedCache())).toContain(keyFor([set]));
+      expect(localStorage.getItem(STORAGE_KEY)!.length).toBeLessThanOrEqual(CEILING);
+    }
+    // the oldest written went first
+    expect(Object.keys(storedCache())).not.toContain(keyFor(["one"]));
+  });
+
+  it("still keeps at most forty entries when they are small", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    for (let i = 0; i < 43; i++) {
+      vi.setSystemTime(new Date(Date.UTC(2026, 9, 12, 12, 0, i)));
+      rememberReport(keyFor([`q${i}`]), report(`q${i}`));
+    }
+
+    const kept = Object.keys(storedCache());
+    expect(kept).toHaveLength(40);
+    expect(kept).not.toContain(keyFor(["q0"]));
+    expect(kept).not.toContain(keyFor(["q2"]));
+    expect(kept).toContain(keyFor(["q3"]));
+    expect(kept).toContain(keyFor(["q42"]));
+  });
+
   it("an entry that fits but replaces its own key counts once, not twice", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     for (let i = 0; i < 6; i++) {
@@ -345,8 +400,11 @@ describe("six question sets with a 1.08 M figure, then a 50 k profile write, on 
   const sets: string[][] = [[], ["Does tungsten delay rafting?"], ["Why 1100 C?"], ["How was the creep rate measured?"], ["Is the alloy cast or wrought?"], ["What limits the study?"]];
 
   it("every write lands, no reload asks the model again, and the origin keeps room for the rest", async () => {
-    // The rest of the origin — the feed, the preferences, the question store — 0.6 M characters.
-    const origin = quotaStorage(QUOTA, { "peer-feed": "f".repeat(600_000) });
+    // The rest of the origin — the feed, the preferences, the question store —
+    // 0.65 M characters: the walk's browser left 0.8 M of 5.24 M with four entries in, and
+    // on this 5 M stub four entries (4.33 M) and 0.65 M leave room for neither a fifth nor
+    // a 50 k profile write, which is what the head did.
+    const origin = quotaStorage(QUOTA, { "peer-feed": "f".repeat(650_000) });
     vi.stubGlobal("localStorage", origin.storage);
     net.report = (body) => report(`set ${JSON.stringify(body.questions ?? [])}`, { proposal: dataUrl() });
 
