@@ -34,7 +34,7 @@ import { RestoreFromBackup } from "@/components/profile/restore-backup";
 import { useProfileSyncStatus, useSyncGate } from "@/components/profile-sync";
 import { useFeedSyncStatus } from "@/components/feed-sync";
 import { VersionLine } from "@/components/shell/version-line";
-import { AiKeyFields } from "@/components/profile/ai-setup";
+import { AiKeyFields, FEED_AI_PROVIDER_OPTIONS, providerShortLabel } from "@/components/profile/ai-setup";
 import { JevSetup } from "@/components/profile/jev-setup";
 import { Toggle } from "@/components/ui/toggle";
 import { FEED_EMPTY_REASON_CODES } from "@/lib/feed/types";
@@ -369,6 +369,28 @@ export default function ProfilePage() {
 
 // ── View mode: editorial dashboard ─────────────────────────────
 
+/**
+ * P9-24 (§1h.57; the key session's K1 note, A P9-W2's P9-KEY check): the one line the view mode prints about the AI
+ * setup. The Edit form shows the provider and the key, but the view mode printed neither, so the page read the same
+ * with a key saved and without one.
+ *
+ * With a key saved (`hasUserLlmOverride`: a provider other than "default" and a key that is not blank) it names the
+ * provider and says the key is on this device. Otherwise it is the Profile's own label for the default provider, the
+ * same words the Edit form's select shows for "no key": Peer then reads without a model. **It never prints any part of
+ * the key** — not the last four characters, not its length. The key is read here only as that yes/no answer, never as
+ * a string, so nothing of it can reach the markup; a test renders the view with a 40-character key and looks for every
+ * 4-character piece of it.
+ */
+function aiSetupLine(profile: UserProfile): string {
+  if (hasUserLlmOverride(profile)) {
+    return `${providerShortLabel(profile.feedAiProvider)} · key saved on this device`;
+  }
+  return (
+    FEED_AI_PROVIDER_OPTIONS.find((option) => option.value === "default")?.label ??
+    "No AI key — Peer works without one"
+  );
+}
+
 export function DashboardView({
   profile,
   displayName,
@@ -454,6 +476,19 @@ export function DashboardView({
           <SignalRow tone="tag" icon={<IconHash />} label="Explore" items={profile.softTopics ?? []} />
           <SignalRow tone="link" icon={<IconBook size={13} strokeWidth={1.9} />} label="Journals" items={profile.preferredJournals ?? []} />
         </div>
+      </div>
+
+      <div className="h-px bg-border/70 mx-7" />
+
+      {/* ── AI setup (P9-24): one plain line, no control. The page's Edit button is where the provider and the key are changed. ── */}
+      <div className="px-7 py-5">
+        <SectionHeader label="AI setup" />
+        <p className="mt-3 flex items-center gap-2 text-caption text-text-muted">
+          <span className={`inline-flex items-center justify-center w-5 h-5 rounded-md ${toneBadge("neutral")}`}>
+            <IconKey />
+          </span>
+          <span>{aiSetupLine(profile)}</span>
+        </p>
       </div>
 
     </div>
