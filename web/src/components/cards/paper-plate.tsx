@@ -81,6 +81,83 @@ export function leadFigurePending(
 const FIGURE_BOX =
   "tile-cover cropmarks [--cm-inset:6px] [--cm-c:var(--plate-ink-faint)] overflow-hidden aspect-[16/9] @container";
 
+// ── The lead picture's caption (P9-49, N8) ──────────────────────────────────────────────────────────
+//
+// A sentence or nothing. The head cut every caption to 140 characters with an ellipsis written after the
+// cut, so a caption whose cut fell on a full stop read "…films.…", and — under the spread's two-line clamp —
+// a no-key page showed the paper's page-1 graphic with the abstract's own block ("ABSTRACT: …") for a
+// caption, stopped mid-sentence. The figure engine pairs a graphic with the nearest block of text when no
+// "Figure N" is near it (`pdf-engine.ts`, `bestCaptionForRegion`), and on a page 1 that block is often the
+// abstract. It is not the picture's caption, and the plate then has none (the feed's tile has none either;
+// its title is the line under it).
+
+/** The room under the plate, in characters: the head's `CAPTION_CHARS`. */
+export const LEAD_CAPTION_CHARS = 140;
+
+const squeeze = (text: string | null | undefined): string => (text ?? "").replace(/\s+/g, " ").trim();
+
+/**
+ * Is this block the paper's abstract, not a caption? It opens with the word "Abstract" in any case
+ * ("ABSTRACT: …", "Abstract. …", "abstract — …"), or it is the reading's abstract itself (`abstract`, when
+ * the caller has it): its first 80 characters stand in the abstract's text.
+ */
+export function isAbstractBlock(caption: string | null | undefined, abstract?: string | null): boolean {
+  const text = squeeze(caption);
+  if (!text) return false;
+  if (/^abstract\b/i.test(text)) return true;
+  const own = squeeze(abstract).toLowerCase();
+  const probe = text.toLowerCase().slice(0, 80);
+  return own.length >= 40 && probe.length >= 40 && own.includes(probe);
+}
+
+/** Words that end in a stop without ending a sentence. */
+const ABBREVIATION = /^(?:fig|figs|eq|eqs|ref|refs|sec|secs|tab|no|nos|vs|cf|al|approx|ca|dr|mr|mrs|ms|prof|st|vol|pp|resp|e\.g|i\.e)$/i;
+/** The word in front of a figure's number: "Figure 4", "Fig. 2", "Table 1". */
+const LABEL_WORD = /^(?:fig|figs|figure|figures|table|tab|panel|plate|scheme|eq|eqs|equation|sec|section|ref)$/i;
+
+/** Where the sentences of `text` end: the index just after each real stop (and the quotes or brackets closing on it). */
+function sentenceEnds(text: string): number[] {
+  const ends: number[] = [];
+  const stop = /[.!?]["'”’)\]]*(?=\s+[A-Z0-9"“'‘(\[])/g;
+  for (let hit = stop.exec(text); hit; hit = stop.exec(text)) {
+    const words = text.slice(0, hit.index).split(" ");
+    const word = words[words.length - 1] ?? "";
+    const before = (words[words.length - 2] ?? "").replace(/[.:]+$/, "");
+    if (ABBREVIATION.test(word)) continue; // "Fig.", "et al.", "e.g.", "vs."
+    if (/^[A-Z]$/.test(word)) continue; // an initial: "J. R. Okafor"
+    if (/^\d+[a-z]?$/.test(word) && LABEL_WORD.test(before)) continue; // the label: "Figure 4."
+    ends.push(hit.index + hit[0].length);
+  }
+  return ends;
+}
+
+/**
+ * The caption the reading page sets under its lead picture: whole, or absent.
+ *
+ *  - An abstract block (`isAbstractBlock`) is never a caption: null.
+ *  - A caption that fits the room is returned as it is, white space made single.
+ *  - A longer one is cut where a sentence ends — the longest run of whole sentences that fits — and not
+ *    otherwise marked: the stop is the end. A leading "Figure 4." is a label, not a sentence.
+ *  - If one sentence is longer than the room it is cut at a word, with one ellipsis and no stop or comma
+ *    in front of it (never "films.…").
+ */
+export function leadCaption(caption: string | null | undefined, abstract?: string | null): string | null {
+  const text = squeeze(caption);
+  if (!text || isAbstractBlock(text, abstract)) return null;
+  if (text.length <= LEAD_CAPTION_CHARS) return text;
+  let whole = 0;
+  for (const end of sentenceEnds(text)) {
+    if (end > LEAD_CAPTION_CHARS) break;
+    whole = end;
+  }
+  if (whole > 0) return text.slice(0, whole);
+  const room = text.slice(0, LEAD_CAPTION_CHARS - 1);
+  // The next character decides whether the room ends on a word's end or inside a word.
+  const at = /\s/.test(text[LEAD_CAPTION_CHARS - 1] ?? "") ? room.length : room.lastIndexOf(" ");
+  const cut = at > LEAD_CAPTION_CHARS / 2 ? room.slice(0, at) : room;
+  return `${cut.replace(/[\s,;:.!?\-–—(\[]+$/, "")}…`;
+}
+
 /**
  * The plate — the card's visual element, present on every card at the same
  * offset and the same 16:9 ratio.
@@ -103,6 +180,7 @@ export function PaperPlate({
   className,
   lightbox = false,
   lead = false,
+  abstract,
 }: {
   paper: Paper;
   terms?: string[];
@@ -126,6 +204,11 @@ export function PaperPlate({
    * lands. The briefing feed's tiles (`feed-tile.tsx`) do not pass this and are drawn exactly as before.
    */
   lead?: boolean;
+  /**
+   * P9-49 (N8): the reading's abstract, for the lead picture only. A block of the figure engine's that is the
+   * abstract is not the picture's caption — not under it, not in its alt, not in the lightbox.
+   */
+  abstract?: string | null;
 }) {
   // The same args as the card, so the page and the card read one cache entry.
   const resolved = useResolvedFigure({
@@ -139,7 +222,9 @@ export function PaperPlate({
   // the same as being able to show it — biorxiv answers 401 for every one.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const src = bound?.imageUrl ?? resolved.imageUrl;
-  const caption = bound ? (bound.caption ?? null) : resolved.caption;
+  const rawCaption = bound ? (bound.caption ?? null) : resolved.caption;
+  // P9-49 (N8): on the lead picture an abstract block is no caption (the feed's tiles are unchanged).
+  const caption = lead && isAbstractBlock(rawCaption, abstract) ? null : rawCaption;
   // `hideFigure` is the resolver's verdict on its own candidate; a bound figure
   // was chosen by the report, so the verdict does not apply to it.
   const showFigure =

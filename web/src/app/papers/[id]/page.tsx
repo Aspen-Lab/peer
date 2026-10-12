@@ -52,7 +52,7 @@ import type { Claim, PaperReport } from "@/lib/papers/report";
 import type { Route } from "next";
 import { aiAvailability, explainWindowAvailable } from "@/lib/feed/ai-tier";
 import { useSyncGate } from "@/components/profile-sync";
-import { PaperPlate, leadFigurePending } from "@/components/cards/paper-plate";
+import { PaperPlate, leadCaption, leadFigurePending } from "@/components/cards/paper-plate";
 import { SwipeableCard } from "@/components/cards/swipe-card";
 import { useResolvedFigure } from "@/components/paper-figure";
 import { TitleBlock } from "@/components/reader/title-block";
@@ -135,7 +135,6 @@ import {
   UPLOAD_RETRY_EMPTY_MESSAGE,
   UPLOAD_TRANSIENT_MESSAGE,
   UPLOAD_UNAVAILABLE_MESSAGE,
-  plateCaption,
   sharedTermsLine,
 } from "@/components/reader/copy";
 
@@ -1019,12 +1018,16 @@ function Reader({
         caption: report.whatItProposes.figureCaption ?? null,
       }
     : null;
-  const caption = plateCaption(
+  // P9-49 (N8): a sentence or nothing — never the abstract's own block (the figure engine pairs a
+  // page-1 graphic with the nearest text), never a cut that ends on a stop and an ellipsis.
+  const abstractText = reading?.abstract.sentences.join(" ");
+  const caption = leadCaption(
     boundFigure
       ? boundFigure.caption
       : resolvedFigure.imageUrl && !resolvedFigure.hideFigure
         ? resolvedFigure.caption
         : null,
+    abstractText,
   );
   // P9-49 (N6): the figure is still on its way (the route has not answered, the report has bound
   // nothing). The plate's slot is held, with the card shell that frames it, so the title does not
@@ -1379,15 +1382,16 @@ function Reader({
                 imageAlt={caption ? "" : undefined}
                 lightbox
                 lead
+                abstract={abstractText}
               />
             </SwipeableCard>
             {caption && (
-              // Two lines in the spread's panel — the plate is the figure, the
-              // caption names it; the whole caption is the tooltip and the
-              // lightbox's.
+              // The plate is the figure, the caption names it: a sentence or nothing
+              // (`leadCaption`), so it is never clamped to a cut — it takes the lines it
+              // needs. The lightbox has the figure's whole caption.
               <figcaption
                 title={caption}
-                className="font-reading text-body-sm text-text-muted mt-2 xl:line-clamp-2"
+                className="font-reading text-body-sm text-text-muted mt-2"
               >
                 {caption}
               </figcaption>
