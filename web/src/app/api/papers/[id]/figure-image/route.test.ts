@@ -75,9 +75,9 @@ const PAGES: FigurePage[] = [
   {
     text: [
       ["Figure 3. The wide panel of a two-figure page.", 100, 262, 9],
-      ["Figure 4. The narrow panel of a two-figure page.", 100, 462, 9],
+      ["Figure 4. The narrow panel of a two-figure page.", 100, 492, 9],
     ],
-    shapes: [...panel(100, 80, 370, 160), ...panel(100, 330, 250, 110)],
+    shapes: [...panel(100, 80, 370, 160), ...panel(100, 330, 250, 140)],
   },
   { text: [...prose, ["Figure 5. A synthetic vector bar chart.", 72, 440, 9]], shapes: barChart(110, 250) },
 ];
