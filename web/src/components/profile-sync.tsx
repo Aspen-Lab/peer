@@ -163,7 +163,7 @@ export function remoteProfilePayload(profile: UserProfile): Partial<UserProfile>
     feedAiApiKey,
     jevApiKey,
     standingQuestions,
-    ...fields
+    ...rest
   } = profile;
   void tavilyEnabled;
   void tavilyApiKey;
@@ -175,9 +175,9 @@ export function remoteProfilePayload(profile: UserProfile): Partial<UserProfile>
   // P5-01: the reader's standing questions never leave the browser either — /privacy's "Your
   // questions" entry says so and pins this line.
   void standingQuestions;
-  const rest = stripLegacyOpportunityFields(stripCredentialFields(fields));
+  const fields = stripLegacyOpportunityFields(stripCredentialFields(rest));
   const feedIntent = profileFeedIntentCard(profile);
-  return feedIntent ? { ...rest, feedIntent } : rest;
+  return feedIntent ? { ...fields, feedIntent } : fields;
 }
 
 /**
