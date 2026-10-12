@@ -7,6 +7,13 @@ export type PaperSource = "arxiv" | "neurIPS" | "iclr" | "icml" | "chi" | "other
 
 export type ItemFeedback = "liked" | "saved" | "notInterested" | "moreLikeThis";
 
+/**
+ * Where a ledger concept came from. The last members (`job_tag`,
+ * `event_topic`, `opportunity_facet`) belong to the stopped events and jobs
+ * feeds: nothing writes them now, and the ledger deletes the entries that were
+ * recorded from those feeds when it is cleaned. They stay in the union so a
+ * stored ledger or a backup file that names them is still a valid value.
+ */
 export type PreferenceConceptSource =
   | "openalex_topic"
   | "openalex_keyword"
@@ -41,9 +48,6 @@ export interface PreferenceConcept {
   extractionVersion?: number;
 }
 
-/** Which feed surface a piece of feedback came from. */
-export type FeedItemKind = "paper" | "event" | "job";
-
 export interface PreferenceLedgerEntry extends PreferenceConcept {
   uploads?: Record<string, { at: string; weight: number }>;
   /**
@@ -58,20 +62,13 @@ export interface PreferenceLedgerEntry extends PreferenceConcept {
   lastPositiveAt?: string;
   lastNegativeAt?: string;
   /**
-   * Positive evidence inferred from a facet selection. Kept separate from
-   * explicit save/like evidence so scoring can cap and decay it independently.
+   * Positive evidence inferred from a facet selection of the stopped events and
+   * jobs feeds. Nothing writes it and nothing scores it any more; the ledger
+   * still carries it through cleaning on an entry that holds it.
    */
   facetPositive?: number;
   lastFacetAt?: string;
   lastSeenAt: string;
-  /**
-   * The surface the feedback was recorded from. Ledger influence is
-   * directional: paper feedback informs events (strongly) and jobs
-   * (moderately), event feedback informs jobs (weakly), and job/event
-   * feedback never flows back into paper scoring. Entries without an
-   * origin are legacy paper entries.
-   */
-  origin?: FeedItemKind;
   /**
    * Set by a deliberate lean the reader made on a term — "more of this",
    * "less of this" from the reading graph — rather than evidence inferred from
@@ -163,207 +160,6 @@ export interface Paper {
    */
   preferenceSignalsRecordedAt?: string;
   extractionVersion?: number;
-}
-
-// ── Event ──
-
-export type EventType =
-  | "conference"
-  | "workshop"
-  | "seminar"
-  | "meetup"
-  | "job-fair"
-  | "career-fair"
-  | "summit"
-  | "expo"
-  | "hackathon";
-
-// B2-09. Kept beside the union like `careerStages` / `industryPreferences`
-// below — the event report needs the actual runtime values to tell a real
-// EventType apart from prose that merely looks like one.
-export const eventTypes: EventType[] = [
-  "conference",
-  "workshop",
-  "seminar",
-  "meetup",
-  "job-fair",
-  "career-fair",
-  "summit",
-  "expo",
-  "hackathon",
-];
-
-export interface OpportunityPlace {
-  city?: string;
-  region?: string;
-  country?: string;
-}
-
-export type OpportunityFormat = "in-person" | "online" | "hybrid";
-
-export interface OpportunityFacetCounts {
-  location: Record<string, number>;
-  month: Record<string, number>;
-  format: Record<OpportunityFormat, number>;
-}
-
-export interface OpportunityFacetSelection {
-  /** OR within a group; different groups combine with AND. */
-  location?: string[];
-  month?: string[];
-  format?: OpportunityFormat[];
-}
-
-export interface EventFee {
-  label: string;
-  standard?: string;
-  student?: string;
-  online?: string;
-  deadline?: string;
-}
-
-export interface EventOrg {
-  name: string;
-  descriptor?: string;
-  relevance?: string;
-  atEvent?: string;
-}
-
-export interface EventPerson {
-  name: string;
-  role?: string;
-  institution?: string;
-  /**
-   * B2-16 / Ruling 13. The short "why glance at this one" line —
-   * `EventOrg.descriptor`'s equivalent. Plate 03's examples ("2 papers in
-   * your feed", "Matches a topic you typed") are both Tier 0, computed
-   * locally in `events/[id]/page.tsx` alongside `relevance`; this field lets
-   * a future extraction source it directly the same way org descriptors are,
-   * without a render-layer change.
-   */
-  descriptor?: string;
-  relevance?: string;
-  speaking?: string;
-}
-
-export interface Event {
-  id: string;
-  name: string;
-  type: EventType;
-  date: string;
-  endDate?: string;
-  location: string;
-  place?: OpportunityPlace;
-  isOnline: boolean;
-  deadline?: string;
-  registrationDeadline?: string;
-  fees?: EventFee[];
-  activities?: string[];
-  organisations?: EventOrg[];
-  people?: EventPerson[];
-  travelGrant?: string;
-  invitationLetter?: boolean;
-  expectedSize?: number;
-  shortDescription: string;
-  /** A source-owned summary that may be stated in an event report. */
-  reportSummary?: {
-    text: string;
-    authority: "source-record" | "page-owned";
-  };
-  relevanceReason: string;
-  /** Shown separately when weak facet history materially changed rank. */
-  facetPreferenceReason?: string;
-  linkRegistration?: string;
-  linkOfficial?: string;
-  relevanceScore?: number;
-  isSaved?: boolean;
-  feedback?: ItemFeedback;
-  preferenceSignals?: PreferenceConcept[];
-  // Detailed-card fields (additive for cross-branch merge safety).
-  rank?: string;
-  tags?: string[];
-  matchedTerms?: string[];
-  locationFit?: number;
-}
-
-// ── Job ──
-
-export type RoleKind =
-  | "internship"
-  | "phd-position"
-  | "postdoc"
-  | "staff"
-  | "faculty";
-
-export interface Job {
-  id: string;
-  roleTitle: string;
-  companyOrLab?: string;
-  location: string;
-  place?: OpportunityPlace;
-  isRemote: boolean;
-  /**
-   * B2-06. Plate 02 needs a three-state work mode (LOCATION tile's sub-line,
-   * subtitle's third segment); `isRemote` alone cannot express "hybrid".
-   * Additive beside `isRemote` — every existing reader of `isRemote` (feed,
-   * filters, scoring) is unchanged. Only ever set from a signal the posting
-   * actually gives (an explicit "hybrid" / "on-site" mention, or `isRemote`
-   * itself); `undefined` when the posting states neither, never a guess.
-   */
-  workMode?: "on-site" | "hybrid" | "remote";
-  keyRequirements: string[];
-  matchReason: string;
-  /** Shown separately when weak facet history materially changed rank. */
-  facetPreferenceReason?: string;
-  linkPosting?: string;
-  postedDate?: string;
-  applicationDeadline?: string;
-  startDate?: string;
-  /**
-   * B3-06 / Ruling 20. Plate 02's STARTS tile sub-line ("flexible") --
-   * whether the posting itself says the start date can move. Additive;
-   * `undefined` unless the posting states it explicitly, never inferred
-   * from silence, exactly like `workMode` (B2-06).
-   */
-  startDateFlexible?: boolean;
-  contractLength?: string;
-  applicationMaterials?: string[];
-  /**
-   * V26-J06 / Ruling 74. Plate 02's `ELIGIBILITY` row — the posting's own
-   * clause about who may apply. Never derived from `keyRequirements` (Peer's
-   * own skills list) and never from LLM enrichment.
-   */
-  eligibility?: string;
-  /**
-   * V26-J06 / Ruling 74. Plate 02's `TEAM` row, NAME HALF ONLY. The plate
-   * also carries a headcount (`, 14 researchers`); no honest source for it
-   * exists on the no-LLM path, so its absence is an ACCEPTED, NAMED COST
-   * under Ruling 74 and must not be "fixed" by inventing a number.
-   */
-  team?: string;
-  roleKind?: RoleKind;
-  visa?: {
-    state: "sponsors" | "not-stated" | "wont-sponsor";
-    evidence?: string;
-    country?: string;
-  };
-  relevanceScore?: number;
-  isSaved?: boolean;
-  feedback?: ItemFeedback;
-  preferenceSignals?: PreferenceConcept[];
-  // Detailed-card fields (additive for cross-branch merge safety).
-  salary?: {
-    min: number;
-    max: number;
-    currency: string;
-    period: "hour" | "month" | "year";
-  };
-  salaryIsEstimated?: boolean;
-  employmentType?: string;
-  sourceId?: string;
-  summary?: string;
-  matchedTerms?: string[];
-  locationFit?: number;
 }
 
 // ── User Profile ──

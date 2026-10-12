@@ -55,4 +55,39 @@ describe("what the stopped jobs and events feeds left in the shared definitions 
     expect(exists("src/lib/opportunities/salary.ts")).toBe(false);
     expect(exists("src/lib/opportunities/salary.test.ts")).toBe(false);
   });
+
+  it("the shared types name no event, no job, no listing facet and no feed-item kind", () => {
+    const source = read("src/types/index.ts");
+    for (const name of [
+      "interface Event",
+      "interface Job",
+      "EventType",
+      "eventTypes",
+      "EventFee",
+      "EventOrg",
+      "EventPerson",
+      "RoleKind",
+      "OpportunityPlace",
+      "OpportunityFormat",
+      "OpportunityFacetCounts",
+      "OpportunityFacetSelection",
+      "FeedItemKind",
+    ]) {
+      expect(source, name).not.toContain(name);
+    }
+  });
+
+  it("a ledger entry has no origin field, and still names the concept sources a stored entry may carry", () => {
+    const source = read("src/types/index.ts");
+    const entry = source.slice(
+      source.indexOf("export interface PreferenceLedgerEntry"),
+      source.indexOf("export type PreferenceLedger ="),
+    );
+    expect(entry).not.toMatch(/\borigin\??:/);
+    // Entries in a reader's stored ledger, or in a backup file, may carry them;
+    // dropping a member would make the type refuse what is already stored.
+    for (const member of ["job_tag", "event_topic", "opportunity_facet"]) {
+      expect(source, member).toContain(`"${member}"`);
+    }
+  });
 });
