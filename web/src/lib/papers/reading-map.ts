@@ -11,7 +11,9 @@
 //
 // Nothing here is inferred beyond the document's own evidence: the role is a
 // reader's name for the bucket the heading already has; the opening line is
-// the paragraph's own sentence, cut only at a word boundary, never rewritten.
+// the paragraph's own first sentence, whole — or, when that sentence is too
+// long for a row's fold, cut at a word boundary and marked with one "…" —
+// never rewritten.
 
 import { tokenize } from "@/lib/scoring/tokenize";
 import { canonicalize, isGenericTerm, termMatches, termOccurrences } from "@/lib/scoring/term-expand";
@@ -106,10 +108,11 @@ export type ReadingRole = "setup" | "method" | "evidence" | "interpretation" | "
 export interface ReadingMapParagraph {
   /** The paragraph's index in the body section — `ReadingSection.paragraphs[index]`. */
   index: number;
-  /** The first non-boilerplate sentence and, while needed, its following
-   *  sentences. It is cut at a word boundary to ≤160 characters only when
-   *  that first sentence itself is too long; always a verbatim paragraph
-   *  substring, or null when no non-boilerplate sentence exists. */
+  /** The first non-boilerplate sentence, whole, and, while it is short, the
+   *  sentences that follow it (≤ 400 characters in all). A first sentence
+   *  longer than that is cut at a word boundary and ends in one "…" (P9-56):
+   *  a verbatim paragraph substring, plus that mark when it is cut. Null when
+   *  no non-boilerplate sentence exists. */
   opening: string | null;
 }
 
@@ -152,7 +155,15 @@ export function roleOf(canonical: string): ReadingRole {
 /** Words per minute for a dense paper (the blueprint's conservative rate). */
 const WORDS_PER_MINUTE = 180;
 const OPENING_MIN = 40;
-const OPENING_MAX = 160;
+/**
+ * The longest opening line, in characters: a first sentence of this length or less is shown whole, and a longer
+ * one is cut with a "…" (`cutFirstSentence`), so a cut line never reads as a finished one (P9-56, N9; ruling
+ * §1h.73 (b)). It was 160, and 39 of the 53 lines on the owner's paper were cut mid-sentence with no mark.
+ * 400 because that paper puts 92 % of its first sentences under it (56 of the 61 long paragraphs; median 207,
+ * p90 372, max 735), so nine lines in ten are whole sentences, and because an opening is read inside a row's
+ * fold: a longer one would turn the map from a list of lines into a page of text.
+ */
+const OPENING_MAX = 400;
 
 /** §1f.3: the same count the contents rail shows (`paper-contents.tsx`). */
 function wordCount(paragraph: string): number {
@@ -173,28 +184,47 @@ function sentenceSourceSpan(paragraph: string, sentence: string, from: number): 
   return [start, start + match[0].length];
 }
 
-/** The first sentence may exceed the opening cap; keep a whole final word
- * when one fits, as before, while returning the original source slice. */
-function cutFirstSentence(paragraph: string, start: number, end: number): string {
-  if (end - start <= OPENING_MAX) return paragraph.slice(start, end);
-  const maximum = start + OPENING_MAX;
-  for (let index = maximum; index > start; index--) {
-    if (/\s/.test(paragraph[index])) return paragraph.slice(start, index);
+/**
+ * A first sentence longer than `OPENING_MAX`, cut where the reader can see it is cut — the lead caption's rule
+ * (`leadCaption`, P9-49): at the last whole word, with one "…" and no stop, comma, colon or dash in front of it,
+ * so "films.…" never stands for a finished sentence. The line, mark included, is at most `OPENING_MAX`
+ * characters: the room is one short, for the mark. What stands before the mark is the paragraph's own text; the
+ * stop of an abbreviation ("et al.") that the cut lands on goes like any other.
+ */
+function cutFirstSentence(paragraph: string, start: number): string {
+  const room = start + OPENING_MAX - 1;
+  // Cut at the last white space the room reaches, the room's own last character included: a space there means
+  // the room already ends on a word's end. An unbroken run (a URL) has no space before the cap; the cut is then
+  // hard, and still marked.
+  let cut = room;
+  for (let index = room; index > start; index--) {
+    if (/\s/.test(paragraph[index])) {
+      cut = index;
+      break;
+    }
   }
-  // A single unbroken run (for example, a URL) has no word boundary before
-  // the cap. A hard cut is still an exact paragraph substring.
-  return paragraph.slice(start, maximum);
+  const kept = paragraph
+    .slice(start, cut)
+    .replace(/[\s,;:.!?\-–—(\[]+$/, "")
+    // A hard cut between the halves of a surrogate pair keeps neither.
+    .replace(/[\uD800-\uDBFF]$/, "");
+  // A run of nothing but marks has nothing to show before the "…": show the room as it stands.
+  return `${kept || paragraph.slice(start, room)}…`;
 }
 
 /**
  * §1f.21 (P1-10): start with the paragraph's first non-boilerplate sentence,
  * then extend through following complete sentences only until it reaches 40
- * characters or the next sentence would exceed 160. The span comes directly
+ * characters or the next sentence would exceed 400. The span comes directly
  * from the paragraph: separators are preserved and sentence strings are never
  * joined. A later long sentence therefore cannot replace a short opening.
  * A sentence the source lookup cannot place ends the growth (P1-09b item 4):
  * before the opening has started there is nothing to show, so null; after,
  * the opening found so far stands.
+ *
+ * P9-56 (N9): a first sentence of at most 400 characters is the opening,
+ * whole; a longer one is cut at a word with one "…" (`cutFirstSentence`).
+ * The only text the opening holds that the paragraph does not is that mark.
  */
 export function openingOf(paragraph: string): string | null {
   let cursor = 0;
@@ -214,7 +244,7 @@ export function openingOf(paragraph: string): string | null {
       if (isBoilerplate(sentence)) continue;
       start = sentenceStart;
       end = sentenceEnd;
-      if (end - start > OPENING_MAX) return cutFirstSentence(paragraph, start, end);
+      if (end - start > OPENING_MAX) return cutFirstSentence(paragraph, start);
       continue;
     }
 
