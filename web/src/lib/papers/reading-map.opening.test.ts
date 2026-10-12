@@ -61,11 +61,13 @@ describe("rule 1: the opening is the paragraph's first sentence, whole, when it 
 
   it("grows a short first sentence by whole sentences up to 400 characters, and not one character past", () => {
     const first = "Short opening explains context.";
-    const fits = `${"x".repeat(400 - first.length - 2)}.`;
-    const over = `${"x".repeat(400 - first.length - 1)}.`;
+    // Capitalised: a lower-case start would be read as a continuation of the first sentence (`splitSentences`).
+    const fits = `X${"x".repeat(400 - first.length - 3)}.`;
+    const over = `X${"x".repeat(400 - first.length - 2)}.`;
 
     expect(`${first} ${fits}`).toHaveLength(400);
     expect(`${first} ${over}`).toHaveLength(401);
+    expect(splitSentences(`${first} ${over}`)).toEqual([first, over]);
     expect(openingOf(`${first} ${fits} ${SECOND}`)).toBe(`${first} ${fits}`);
     // One character over: the later sentence is left out whole, and the short one stands alone, unmarked.
     expect(openingOf(`${first} ${over} ${SECOND}`)).toBe(first);
