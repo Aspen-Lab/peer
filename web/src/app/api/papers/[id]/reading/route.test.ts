@@ -379,3 +379,66 @@ describe("GET /api/papers/[id]/reading — 9-14 (A9-13): the ?upload= supplement
     expect(res.headers.get("cache-control")).toContain("no-store");
   });
 });
+
+// P9-42 (§1h.67): a supplement reading takes its captions and their pages from the reader's own
+// attached PDF, so its figure pictures come from that PDF too — the URL names the upload, and the
+// figure-image route answers it to its owner only. The public reading keeps the public id.
+describe("GET /api/papers/[id]/reading — P9-42 (§1h.67): a supplement's figure pictures come from the owner's attached PDF", () => {
+  beforeEach(() => {
+    mocks.fetchPaperById.mockReset();
+    mocks.getFullText.mockReset();
+    mocks.readUploadMeta.mockReset();
+  });
+
+  /** The text of a PDF with a "Figure 2" caption on page 3 (the Zenodo fixture's body, one caption added). */
+  const picturedText: FullTextResult = {
+    ...zenodoFullText,
+    doc: {
+      ...zenodoDoc,
+      figureCaptions: [{ ordinal: 1, label: "Figure 2", caption: "Embedding dimension against accuracy.", page: 3, at: 0.5 }],
+    },
+  };
+  const figureUrls = (body: { body: { figures?: { imageUrl?: string }[] }[] }) =>
+    body.body.flatMap((section) => section.figures ?? []).map((figure) => figure.imageUrl);
+  const meta = (hash16: string, extra: Record<string, unknown> = {}) => ({
+    hash16, fileName: "paper.pdf", title: "A Real Uploaded Paper",
+    uploadedAt: "2026-09-15T00:00:00.000Z", textStatus: "ok", status: "ready", revision: 1, ...extra,
+  });
+
+  it("names the attached upload in every figure picture's URL on the ?upload= branch — never the public paper", async () => {
+    mocks.fetchPaperById.mockResolvedValue(zenodoItem);
+    mocks.readUploadMeta.mockResolvedValue(meta("0000000000000008", { paperIds: ["openalex:W7208807247"] }));
+    mocks.getFullText.mockResolvedValue(picturedText);
+
+    const res = await call("openalex:W7208807247", "?upload=upload:0000000000000008");
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toContain("no-store");
+    const body = await res.json();
+    expect(figureUrls(body)).toEqual(["/api/papers/upload%3A0000000000000008/figure-image?page=3&fig=2"]);
+    expect(JSON.stringify(body)).not.toContain("openalex%3AW7208807247/figure-image");
+    // Still the public paper's reading: its id, and the captions read from the attached text.
+    expect(body.paperId).toBe("openalex:W7208807247");
+    expect(mocks.getFullText).toHaveBeenCalledWith({ paperId: "upload:0000000000000008" });
+  });
+
+  it("keeps the public paper's id in the picture URLs of the plain branch", async () => {
+    mocks.fetchPaperById.mockResolvedValue(zenodoItem);
+    mocks.getFullText.mockResolvedValue(picturedText);
+
+    const res = await call("openalex:W7208807247");
+
+    expect(res.status).toBe(200);
+    expect(figureUrls(await res.json())).toEqual(["/api/papers/openalex%3AW7208807247/figure-image?page=3&fig=2"]);
+  });
+
+  it("keeps an upload's own reading naming itself", async () => {
+    mocks.readUploadMeta.mockResolvedValue(meta("0000000000000009"));
+    mocks.getFullText.mockResolvedValue(picturedText);
+
+    const res = await call("upload:0000000000000009");
+
+    expect(res.status).toBe(200);
+    expect(figureUrls(await res.json())).toEqual(["/api/papers/upload%3A0000000000000009/figure-image?page=3&fig=2"]);
+  });
+});

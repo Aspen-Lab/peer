@@ -1008,6 +1008,68 @@ describe("placeFigures", () => {
 });
 
 
+// P9-42 (§1h.67): a supplement reading is a public paper's record with the text of the reader's own
+// attached PDF. Its captions and their pages come from that PDF, so its pictures have to be drawn
+// from it too: a URL that names the public paper would render another version's page, or none.
+describe("buildReading — where the figure pictures are drawn from (P9-42)", () => {
+  const UPLOAD = "upload:0123456789abcdef";
+  const ATTACHED_LINK = { url: "/api/papers/upload/0123456789abcdef/file", kind: "pdf" as const, label: "upload" as const, rank: 0 };
+  const PUBLIC_URL = "/api/papers/openalex%3AW7204479535/figure-image?page=3&fig=2";
+  const UPLOAD_URL = "/api/papers/upload%3A0123456789abcdef/figure-image?page=3&fig=2";
+
+  /** The text of the attached PDF: a "Figure 2" caption on page 3. */
+  const attachedText = (source: ExtractedDocument["source"] = "pdf"): FullTextResult =>
+    fullTextOk(
+      {
+        ...docWith(
+          [{ id: "s0", heading: "1 Results", canonical: "results", text: "Figure 2 shows the creep rate against boundary density." }],
+          [{ ordinal: 1, label: "Figure 2", caption: "Creep rate against boundary density.", page: 3, at: 0.5 }],
+        ),
+        source,
+        pageCount: 8,
+      },
+      ATTACHED_LINK,
+    );
+  const urlsOf = (reading: PaperReading) => reading.body.flatMap((s) => s.figures ?? []).map((f) => f.imageUrl);
+  const withoutUrls = (reading: PaperReading) => ({
+    ...reading,
+    body: reading.body.map((s) => ({ ...s, figures: s.figures?.map((f) => ({ ...f, imageUrl: undefined })) })),
+  });
+  // Red first: the head's `buildReading` has no fourth argument, so the call is typed loosely here;
+  // the fix commit types it and this wrapper goes.
+  const supplement = (options: { figuresFrom?: string }, fullText = attachedText(), paper: Paper = normalPaper) =>
+    (buildReading as unknown as (p: Paper, f: FullTextResult | null, n: Date, o: typeof options) => PaperReading)(paper, fullText, NOW, options);
+
+  it("draws a supplement reading's pictures from the attached upload — every URL names the upload, the page and the number", () => {
+    const reading = supplement({ figuresFrom: UPLOAD });
+
+    expect(urlsOf(reading)).toEqual([UPLOAD_URL]);
+    // The reading is still the public paper's: only where its pictures come from moved.
+    expect(reading.paperId).toBe(normalPaper.id);
+  });
+
+  it("keeps the paper's own id for the pictures when no source is named, as before", () => {
+    expect(urlsOf(buildReading(normalPaper, attachedText(), NOW))).toEqual([PUBLIC_URL]);
+    expect(urlsOf(supplement({}))).toEqual([PUBLIC_URL]);
+    expect(urlsOf(supplement({ figuresFrom: undefined }))).toEqual([PUBLIC_URL]);
+  });
+
+  it("changes the picture URLs and nothing else in the reading", () => {
+    expect(withoutUrls(supplement({ figuresFrom: UPLOAD }))).toEqual(withoutUrls(buildReading(normalPaper, attachedText(), NOW)));
+  });
+
+  it("does not offer a picture to a body that did not come from a PDF, whatever source is named", () => {
+    expect(urlsOf(supplement({ figuresFrom: UPLOAD }, attachedText("generic-html")))).toEqual([undefined]);
+  });
+
+  it("leaves an upload's own reading byte-identical: it draws from itself with or without the option", () => {
+    const uploadPaper = { ...normalPaper, id: UPLOAD } as Paper;
+    const alone = buildReading(uploadPaper, attachedText(), NOW);
+    expect(urlsOf(alone)).toEqual([UPLOAD_URL]);
+    expect(JSON.stringify(supplement({ figuresFrom: UPLOAD }, attachedText(), uploadPaper))).toBe(JSON.stringify(alone));
+  });
+});
+
 describe("equations in the body", () => {
   it("stands a lifted equation after the paragraph it followed, and drops the marker", () => {
     const doc = docWith([
