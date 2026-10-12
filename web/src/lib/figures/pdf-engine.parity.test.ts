@@ -8,7 +8,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it } from "vitest";
 import { fixtures, pngInfo } from "./figure-pdf.test-helper";
 import { extractPdfFigures } from "./pdf-engine";
 
@@ -46,23 +46,23 @@ async function helperRun(name: string, pdf: Uint8Array): Promise<{ figures: Help
   return JSON.parse(await readFile(output, "utf8"));
 }
 
-describe.skipIf(!hasPyMuPdf)("the WASM engine against the PyMuPDF helper, on invented PDFs", () => {
+// One test, not one per PDF: where pymupdf is absent this is one skip, not six.
+it.skipIf(!hasPyMuPdf)("finds what the PyMuPDF helper finds on every invented PDF", async () => {
   for (const [name, pdf] of Object.entries(fixtures)) {
-    it(`finds what the helper finds: ${name}`, async () => {
-      const [helper, engine] = await Promise.all([
-        helperRun(name, pdf),
-        extractPdfFigures(pdf, { maxPages: 24, maxFigures: 12 }),
-      ]);
-      expect(engine.figures.map((f) => [f.ordinal, f.page, f.kind, f.caption])).toEqual(
-        helper.figures.map((f) => [f.ordinal, f.page, f.kind, f.caption ?? ""]),
-      );
-      expect(engine.reason).toBe(helper.reason);
-      helper.figures.forEach((figure, i) => {
-        const theirs = pngInfo(Buffer.from(figure.dataBase64, "base64"));
-        const ours = pngInfo(engine.figures[i].png);
-        expect(Math.abs(ours.width - theirs.width), `${name} #${i} width`).toBeLessThanOrEqual(2);
-        expect(Math.abs(ours.height - theirs.height), `${name} #${i} height`).toBeLessThanOrEqual(2);
-      });
+    const [helper, engine] = await Promise.all([
+      helperRun(name, pdf),
+      extractPdfFigures(pdf, { maxPages: 24, maxFigures: 12 }),
+    ]);
+    expect(
+      engine.figures.map((f) => [f.ordinal, f.page, f.kind, f.caption]),
+      name,
+    ).toEqual(helper.figures.map((f) => [f.ordinal, f.page, f.kind, f.caption ?? ""]));
+    expect(engine.reason, name).toBe(helper.reason);
+    helper.figures.forEach((figure, i) => {
+      const theirs = pngInfo(Buffer.from(figure.dataBase64, "base64"));
+      const ours = pngInfo(engine.figures[i].png);
+      expect(Math.abs(ours.width - theirs.width), `${name} #${i} width`).toBeLessThanOrEqual(2);
+      expect(Math.abs(ours.height - theirs.height), `${name} #${i} height`).toBeLessThanOrEqual(2);
     });
   }
-});
+}, 120_000); // six interpreter starts, one per invented PDF

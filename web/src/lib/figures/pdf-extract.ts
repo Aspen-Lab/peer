@@ -1,20 +1,12 @@
 // Adapted from DeerFlow's MIT-licensed PDF-first retrieval approach.
 // See docs/THIRD_PARTY_NOTICES.md.
 
-import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { promisify } from "node:util";
+import { readFile } from "node:fs/promises";
 import { classifyHardAccessStatus } from "@/lib/papers/paywall-status";
 import { cleanDisplayText } from "@/lib/text/clean";
-
-const execFileAsync = promisify(execFile);
+import { extractPdfFigures, MAX_PDF_BYTES } from "./pdf-engine";
 
 const FETCH_TIMEOUT_MS = 10_000;
-const MAX_PDF_BYTES = 18_000_000;
-const MAX_STDIO_BYTES = 10_000_000;
 const MAX_PDF_PAGES = 24;
 const MAX_PDF_FIGURES = 12;
 const FETCH_VERSION = "2026-05-01-pdf-vision";
@@ -46,41 +38,6 @@ export interface PdfAttemptResult {
   status: "candidates" | "paywalled" | "no_figures" | "source_unavailable";
   candidates: PdfFigureCandidate[];
   reason?: string;
-}
-
-interface PdfExtractorFigure {
-  ordinal?: number;
-  page?: number;
-  caption?: string | null;
-  dataBase64?: string;
-  mimeType?: string;
-}
-
-interface PdfExtractorOutput {
-  figures?: PdfExtractorFigure[];
-  reason?: string;
-}
-
-function resolveHelperScript(): string | null {
-  const candidates = [
-    path.join(
-      /*turbopackIgnore: true*/ process.cwd(),
-      "scripts",
-      "extract_pdf_figures.py",
-    ),
-    path.join(
-      /*turbopackIgnore: true*/ process.cwd(),
-      "web",
-      "scripts",
-      "extract_pdf_figures.py",
-    ),
-  ];
-
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) return candidate;
-  }
-
-  return null;
 }
 
 function paywallReason(url: string): string {
@@ -166,65 +123,8 @@ async function fetchPdfResponse(url: string): Promise<Response | null> {
   }
 }
 
-function supportedMimeType(mimeType?: string | null): mimeType is "image/png" {
-  return mimeType === "image/png";
-}
-
 function decodePreview(bytes: Buffer): string {
   return bytes.toString("utf-8", 0, Math.min(bytes.byteLength, 25_000));
-}
-
-async function runExtractor(pdfPath: string): Promise<PdfExtractorOutput | null> {
-  const helperScript = resolveHelperScript();
-  if (!helperScript) return null;
-
-  const runners = [
-    { command: process.env.PYTHON_BIN || "python", args: [] as string[] },
-    { command: "py", args: ["-3"] },
-  ];
-
-  // The helper writes JSON to a unique private temp directory, not stdout. Two
-  // real failures forced this (2026-09-13): PyMuPDF and MuPDF both print
-  // warnings to stdout, so `JSON.parse(stdout)` threw on the first word; and
-  // twelve rendered figures came to ~10 MB of base64, past the pipe's buffer.
-  // stdout is still captured so a stray print cannot block the process.
-  const outputDir = await mkdtemp(path.join(tmpdir(), "peer-pdf-figures-"));
-  const outputPath = path.join(outputDir, "figures.json");
-  try {
-   for (const runner of runners) {
-    try {
-      await execFileAsync(
-        runner.command,
-        [
-          ...runner.args,
-          helperScript,
-          "--input",
-          pdfPath,
-          "--output",
-          outputPath,
-          "--max-pages",
-          String(MAX_PDF_PAGES),
-          "--max-figures",
-          String(MAX_PDF_FIGURES),
-        ],
-        {
-          timeout: 25_000,
-          maxBuffer: MAX_STDIO_BYTES,
-        },
-      );
-      const raw = await readFile(outputPath, "utf-8");
-      return JSON.parse(raw) as PdfExtractorOutput;
-    } catch (err) {
-      const message = String(err);
-      if (/not recognized|ENOENT/i.test(message)) continue;
-      console.warn("[figures/pdf-extract] helper failed:", err);
-      return null;
-    }
-   }
-   return null;
-  } finally {
-    await rm(outputDir, { recursive: true, force: true });
-  }
 }
 
 export async function tryPdfCandidates(
@@ -293,60 +193,56 @@ export async function tryPdfCandidates(
     };
   }
 
-  const tempDir = await mkdtemp(path.join(tmpdir(), "peer-pdf-"));
-  const pdfPath = path.join(tempDir, "paper.pdf");
-
-  try {
-    try {
-      await writeFile(pdfPath, bytes);
-    } catch (err) {
-      console.warn("[figures/pdf-extract] failed:", err);
-      return {
-        status: "source_unavailable",
-        candidates: [],
-        reason: "Peer found a legal PDF, but could not finish extracting its figures.",
-      };
-    }
-    return await extractPdfCandidatesFromPath(pdfPath, source);
-  } finally {
-    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
-  }
+  return extractPdfCandidatesFromBytes(bytes, source);
 }
 
 /**
- * Run the figure extractor against a PDF that already lives on disk. Split
- * out of `tryPdfCandidates` (1-25, mirrors `papers/pdf-text.ts`'s 1-24) for
- * an uploaded PDF: the file is already private, server-local storage, so
- * there's no reason to copy it into a *second* temp path just to run the
- * same extractor — the caller owns the file's lifetime, so this function has
- * no temp-dir lifecycle of its own.
+ * Run the figure engine against a PDF that already lives on disk. Split out of
+ * `tryPdfCandidates` (1-25, mirrors `papers/pdf-text.ts`'s 1-24) for an
+ * uploaded PDF: the file is already private, server-local storage, so it is
+ * read once into memory and handed to the engine — no second copy on disk, no
+ * temp directory, and the caller still owns the file's lifetime.
  */
 export async function extractPdfCandidatesFromPath(
   pdfPath: string,
   source: FigureSource,
 ): Promise<PdfAttemptResult> {
   try {
-    const extracted = await runExtractor(pdfPath);
-    if (!extracted) {
-      return {
-        status: "source_unavailable",
-        candidates: [],
-        reason: "Peer found a legal PDF, but the server PDF figure extractor is unavailable here.",
-      };
-    }
+    return await extractPdfCandidatesFromBytes(await readFile(pdfPath), source);
+  } catch (err) {
+    console.warn("[figures/pdf-extract] failed:", err);
+    return unfinished();
+  }
+}
 
-    const candidates = (extracted.figures ?? [])
-      .map((figure, index): PdfFigureCandidate | null => {
-        if (!supportedMimeType(figure.mimeType) || !figure.dataBase64) return null;
+/**
+ * Run the figure engine (`pdf-engine.ts`, MuPDF's WASM build, in this process)
+ * on a PDF's bytes and map each figure to a candidate: the PNG as a
+ * `data:image/png;base64,…` URL, `qualityHint: "high"`. Nothing touches the
+ * disk — two users' PDFs extracted at once cannot meet in a shared file.
+ */
+export async function extractPdfCandidatesFromBytes(
+  bytes: Uint8Array,
+  source: FigureSource,
+): Promise<PdfAttemptResult> {
+  try {
+    const extracted = await extractPdfFigures(bytes, {
+      maxPages: MAX_PDF_PAGES,
+      maxFigures: MAX_PDF_FIGURES,
+    });
+
+    const candidates = extracted.figures
+      .filter((figure) => figure.png.byteLength > 0)
+      .map((figure): PdfFigureCandidate => {
+        const png = Buffer.from(figure.png.buffer, figure.png.byteOffset, figure.png.byteLength);
         return {
-          imageUrl: `data:${figure.mimeType};base64,${figure.dataBase64}`,
+          imageUrl: `data:image/png;base64,${png.toString("base64")}`,
           caption: cleanDisplayText(figure.caption),
           source,
-          ordinal: typeof figure.ordinal === "number" ? figure.ordinal : index,
+          ordinal: figure.ordinal,
           qualityHint: "high",
         };
-      })
-      .filter((figure): figure is PdfFigureCandidate => figure !== null);
+      });
 
     if (candidates.length === 0) {
       return {
@@ -365,10 +261,14 @@ export async function extractPdfCandidatesFromPath(
     };
   } catch (err) {
     console.warn("[figures/pdf-extract] failed:", err);
-    return {
-      status: "source_unavailable",
-      candidates: [],
-      reason: "Peer found a legal PDF, but could not finish extracting its figures.",
-    };
+    return unfinished();
   }
+}
+
+function unfinished(): PdfAttemptResult {
+  return {
+    status: "source_unavailable",
+    candidates: [],
+    reason: "Peer found a legal PDF, but could not finish extracting its figures.",
+  };
 }

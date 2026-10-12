@@ -40,14 +40,17 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
-  // The Python figure helper is spawned at runtime, so the tracer cannot see
-  // it; a route that shells out to one names it here or the deployed
-  // function has no script. Keys are picomatch route globs. PDF text is read
-  // in-process with pdf.js (P0-03 deleted the Python text helper and its two
-  // entries here).
-  outputFileTracingIncludes: {
-    "/api/figure": ["./scripts/extract_pdf_figures.py"],
-  },
+  // The figure engine is MuPDF's own WASM build (`mupdf`, loaded lazily by
+  // `lib/figures/pdf-engine.ts`): an ESM package that finds its 10 MB .wasm
+  // next to its own file. Left external, the tracer ships `node_modules/mupdf`
+  // with every function that imports the engine (`/api/figure`,
+  // `/api/papers/report`) and Node loads it from there, instead of the
+  // bundler compiling the binary into the server chunks. P9-25 built and ran
+  // both forms under this Next version from a copy holding only the traced
+  // files; this is the one P9-28 measured. PDF text is read in-process with
+  // pdf.js (P0-03 deleted the Python text helper), and the Python figure
+  // helper is no longer spawned, so no script is traced either.
+  serverExternalPackages: ["mupdf"],
   outputFileTracingExcludes: {
     "/*": [".tmp*/**"],
   },

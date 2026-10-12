@@ -198,7 +198,7 @@ describe("extractPdfFigures: onlyPage and label", () => {
  *  FinalizationRegistry on construction and unregister on `destroy()`), so a
  *  missed `destroy()` is seen as an object still alive when the call returns. */
 function watchMupdfObjects() {
-  const live = new Map<object, string>();
+  const live = new Map<WeakKey, string>();
   let mostDocuments = 0;
   const register = FinalizationRegistry.prototype.register;
   const unregister = FinalizationRegistry.prototype.unregister;
@@ -264,13 +264,15 @@ describe("extractPdfFigures: MuPDF objects and concurrency", () => {
       let loaded = 0;
       doc.loadPage = (index: number) => {
         loaded += 1;
-        if (loaded === 3) elapsed = EXTRACTION_BUDGET_MS + 1; // page 3 is the last one read
+        if (loaded === 3) elapsed = EXTRACTION_BUDGET_MS + 1; // the budget is spent as page 3 opens
         return loadPage(index);
       };
       return doc;
     });
     const { figures, reason } = await extractPdfFigures(paperPdf, OPTIONS);
-    expect(figures.map((f) => f.page)).toEqual([2, 3]);
-    expect(reason).toMatch(/stopped/);
+    // Page 2's figure was made in time; page 3 opened with the budget spent,
+    // so its chart is not rendered and page 4 is not opened.
+    expect(figures.map((f) => f.page)).toEqual([2]);
+    expect(reason).toMatch(/stopped reading this PDF after 25 s, with 1 figure found so far/);
   });
 });
