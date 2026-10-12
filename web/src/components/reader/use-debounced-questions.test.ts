@@ -11,7 +11,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // The hook runs on the minimal hook runtime, which re-renders only while a mount is alive, so a
 // scripted page keeps the mount going with a 1 ms poll (as `question-box.flow.test.tsx` does)
 // and records each DISTINCT value the hook handed the page: a distinct value is a re-render of
-// the page that matters, and the number of them is what the page pays. The clock is real.
+// the page that matters, and the number of them is what the page pays.
+//
+// The clock is the test's (P9-46, BACKLOG-53). `setTimeout`, `clearTimeout` and `Date` are Vitest's
+// fakes, and time moves only when `elapse` moves it, one millisecond at a time, letting the
+// runtime's promises settle after each. The first version of this file waited on the real clock,
+// so on a busy machine the gap between two scripted keys could grow past 250 ms and the debounce
+// fired, as it should for that gap, in a test that said it never would. Now a gap is exactly the
+// gap the script asked for, whatever else the machine is doing, and no assertion has a slack for
+// a slow machine in it.
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { hookRuntime } = await import("@/test-support/hook-runtime");
@@ -28,8 +36,56 @@ const OTHER = "openalex:W2";
 const AT = "2026-10-11T00:00:00.000Z";
 const store = () => useReadingQuestionsStore.getState();
 
+/**
+ * Move the fake clock on by `ms` milliseconds, one at a time. After each, one turn of the real event
+ * loop (`setImmediate` is not faked) lets every promise the runtime is awaiting run to its end, so
+ * the runtime's own `setTimeout(…, 0)` settle steps and the page's polls advance in step with the
+ * clock and with nothing else.
+ */
+async function elapse(ms: number): Promise<void> {
+  for (let passed = 0; passed < ms; passed++) {
+    vi.advanceTimersByTime(1);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+}
+
+interface Live {
+  /** Set once the reader has done everything the script holds: the poll stops and the mount ends. */
+  over: boolean;
+}
+
+/** What keeps a mount alive: a 1 ms poll that re-renders the page until the script is over. */
+function useKeepAlive(live: Live): void {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (live.over) return;
+    const timer = setTimeout(() => setTick((n) => n + 1), 1);
+    return () => clearTimeout(timer);
+  }, [tick, live]);
+}
+
+/**
+ * Mount `hook`, let `play` move the clock (and do what the reader does) while the mount is alive,
+ * then let the mount finish its last round. Returns the finished mount, not yet unmounted.
+ */
+async function mountAndPlay<T>(hook: (live: Live) => T, play: () => Promise<void>, { maxRounds = 4000 } = {}) {
+  const live: Live = { over: false };
+  let finished = false;
+  const mounting = hookRuntime.mount(() => hook(live), { maxRounds }).finally(() => {
+    finished = true;
+  });
+  await play();
+  live.over = true;
+  // The last round: a few fake milliseconds. A mount that never ends is a bug in the test, not a wait.
+  for (let spent = 0; !finished; spent++) {
+    if (spent > maxRounds * 10) throw new Error("the mount did not finish");
+    await elapse(1);
+  }
+  return mounting;
+}
+
 interface Seen {
-  /** When the page was handed this value. */
+  /** When the page was handed this value (the fake clock's time). */
   at: number;
   asked: PaperQuestions | undefined;
   byPaper: Record<string, PaperQuestions>;
@@ -38,50 +94,41 @@ type Step = (() => void) | { wait: number };
 const wait = (ms: number): Step => ({ wait: ms });
 
 /**
- * A page open on `paperId`, with a scripted reader: one step per render round, a wait being
- * rounds kept alive by a 1 ms poll. Returns every distinct value the hook handed the page, the
- * first being what the page opened on.
+ * A page open on `paperId`, with a scripted reader: each step in turn, a function being what the
+ * reader does at that instant and a wait being exactly that many milliseconds of the test's clock.
+ * Returns every distinct value the hook handed the page, the first being what the page opened on.
  */
 async function page(script: Step[], { paperId = PAPER, delayMs }: { paperId?: string; delayMs?: number } = {}) {
   const seen: Seen[] = [];
-  const queued = [...script];
-  const clock = { until: 0 };
-  const mounted = await hookRuntime.mount(
-    () => {
+  const mounted = await mountAndPlay(
+    (live) => {
       const value = useDebouncedQuestions(paperId, delayMs);
       if (seen.length === 0 || seen[seen.length - 1].byPaper !== value.byPaper) seen.push({ at: Date.now(), ...value });
-      const [tick, setTick] = useState(0);
-      useEffect(() => {
-        if (Date.now() < clock.until) {
-          const timer = setTimeout(() => setTick((n) => n + 1), 1);
-          return () => clearTimeout(timer);
-        }
-        const next = queued.shift();
-        if (!next) return;
-        if (typeof next === "function") {
-          next();
-          setTick((n) => n + 1);
-          return;
-        }
-        clock.until = Date.now() + next.wait;
-        const timer = setTimeout(() => setTick((n) => n + 1), 1);
-        return () => clearTimeout(timer);
-      }, [tick]);
+      useKeepAlive(live);
       return value;
     },
-    { maxRounds: 4000 },
+    async () => {
+      for (const step of script) {
+        if (typeof step === "function") step();
+        else await elapse(step.wait);
+      }
+    },
   );
   mounted.unmount();
   return { seen, updates: seen.length - 1, last: seen[seen.length - 1] };
 }
 
-/** Wait for the pause to be over, with room for a slow machine. */
+/** Wait for the pause to be over: the debounce, and room for the page's next render round. */
 const pause = wait(QUESTIONS_DEBOUNCE_MS + 150);
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null });
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 describe("useDebouncedQuestions — a page that does not follow every keystroke", () => {
   it("the delay is 250 ms", () => {
@@ -127,8 +174,9 @@ describe("useDebouncedQuestions — a page that does not follow every keystroke"
     expect(updates).toBe(1);
     // …carrying the last…
     expect(seen[1].asked?.items).toEqual(["Does tungsten delay rafting?"]);
-    // …no sooner than 250 ms after it (a few ms of timer slack), and not much later.
-    expect(seen[1].at - lastSet).toBeGreaterThanOrEqual(QUESTIONS_DEBOUNCE_MS - 15);
+    // …no sooner than 250 ms after it (the clock is the test's: no slack for timers firing early),
+    // and not much later.
+    expect(seen[1].at - lastSet).toBeGreaterThanOrEqual(QUESTIONS_DEBOUNCE_MS);
     expect(seen[1].at - lastSet).toBeLessThan(QUESTIONS_DEBOUNCE_MS + 150);
   });
 
@@ -138,6 +186,17 @@ describe("useDebouncedQuestions — a page that does not follow every keystroke"
     const { updates } = await page([wait(20), key(0), wait(150), key(1), wait(150), key(2), wait(150), key(3), wait(150)]);
 
     expect(updates).toBe(0);
+  });
+
+  // P9-46: the other side of the test above. That one passes just as well for a hook that never
+  // updates; this one needs the update to come, once per gap of 250 ms or more, and to carry the key
+  // before its gap.
+  it("keys 250 ms or more apart each update: the wait is per key, and what it carries is the key before the gap", async () => {
+    const key = (n: number): Step => () => store().set(PAPER, [`question ${n}`], false, AT);
+    const { seen, updates } = await page([wait(20), key(0), wait(300), key(1), wait(300), key(2), pause]);
+
+    expect(updates).toBe(3);
+    expect(seen.slice(1).map((s) => s.asked?.items)).toEqual([["question 0"], ["question 1"], ["question 2"]]);
   });
 
   it("the store has every keystroke at once, though the page does not", async () => {
@@ -256,26 +315,20 @@ describe("what does not move the page", () => {
 describe("a change between the first render and the subscription is not lost", () => {
   it("is picked up after the wait", async () => {
     let first = true;
-    const startedAt = Date.now();
     const seen: Array<PaperQuestions | undefined> = [];
-    const mounted = await hookRuntime.mount(
-      () => {
+    const mounted = await mountAndPlay(
+      (live) => {
         const value = useDebouncedQuestions(PAPER);
         if (first) {
           first = false;
           // The store is rehydrated after the page's first render and before its effects subscribe.
           useReadingQuestionsStore.setState({ byPaper: { [PAPER]: { items: ["Hydrated?"], gist: false, updatedAt: AT } } });
         }
-        const [tick, setTick] = useState(0);
-        useEffect(() => {
-          if (Date.now() > startedAt + QUESTIONS_DEBOUNCE_MS + 150) return;
-          const timer = setTimeout(() => setTick((n) => n + 1), 1);
-          return () => clearTimeout(timer);
-        }, [tick]);
+        useKeepAlive(live);
         seen.push(value.asked);
         return value;
       },
-      { maxRounds: 4000 },
+      () => elapse(QUESTIONS_DEBOUNCE_MS + 150),
     );
     mounted.unmount();
 
@@ -307,7 +360,7 @@ describe("leaving the page", () => {
     const reads = getState.mock.calls.length;
 
     // A timer that survived the unmount would read the store when it fired.
-    await new Promise((resolve) => setTimeout(resolve, QUESTIONS_DEBOUNCE_MS + 100));
+    await elapse(QUESTIONS_DEBOUNCE_MS + 100);
 
     expect(updates).toBe(0);
     expect(getState.mock.calls.length).toBe(reads);
@@ -319,7 +372,7 @@ describe("the paper it is given", () => {
     store().set(PAPER, ["On the first paper?"], false, AT);
     store().set(OTHER, ["On the second paper?"], false, AT);
     const asked: Array<string | undefined> = [];
-    const mounted = await hookRuntime.mount(
+    const mounted = await mountAndPlay(
       () => {
         // The id is the first paper for the first polls, then the second.
         const [tick, setTick] = useState(0);
@@ -333,6 +386,8 @@ describe("the paper it is given", () => {
         }, [tick]);
         return value;
       },
+      // Nothing for the reader to do: the page's own polls end the mount, 41 of them.
+      () => Promise.resolve(),
       { maxRounds: 400 },
     );
     mounted.unmount();
