@@ -1,0 +1,74 @@
+-- Run by the owner, once, after an export; nothing in the app runs it.
+--
+-- Jobs and events are gone from Peer, which is a paper briefing: the routes and
+-- pages were removed in ffa6eded (2026-09-05) and the code behind them has been
+-- deleted since. This file drops the one table only they used, and holds,
+-- commented out, the two deletes that would remove the event and job rows that
+-- readers saved or gave feedback on. Only the drop is live. The deletes do
+-- nothing until you remove their leading `-- ` yourself.
+--
+-- NOTHING APPLIES THIS FILE. No script, workflow, test or deploy step reads this
+-- directory to run it. It is a FORWARD migration in the style of
+-- 20261007000100_drop_ledger_and_budget.sql, meant to be pasted by hand into the
+-- Supabase SQL editor (or run with psql) by the owner, once, when he chooses.
+-- The file that created the table (20260727000000_opportunity_pools.sql) stays
+-- as history. There is no rollback file, the same as 20261007000100: the
+-- rollback glob (`2026092*`) does not cover this stem, and a dropped table
+-- cannot be brought back by a script. Every statement below is idempotent, so
+-- running the file twice is safe.
+--
+-- EXPORT FIRST. From psql, for the table (optional in practice: it is a cache
+-- of public listings, rebuilt from the sources, but a dropped table is gone):
+--     \copy (select * from public.opportunity_pools) to 'opportunity_pools.csv' csv header
+-- or "Export to CSV" on the table in the dashboard. If you will also run the
+-- commented deletes at the end, export those rows first, because they are
+-- readers' own saved items and feedback and cannot be brought back either:
+--     \copy (select * from public.saved_items where item_kind in ('event', 'job')) to 'saved_items_event_job.csv' csv header
+--     \copy (select * from public.feedback_events where item_kind in ('event', 'job')) to 'feedback_events_event_job.csv' csv header
+--
+-- What this destroys
+--   * public.opportunity_pools (and its index opportunity_pools_created_at_idx):
+--     every row. Each row is a cached, scored daily pool keyed by a one-way hash
+--     of a profile signature plus the date or ISO week: job and event pools,
+--     and possibly older public paper pools from before the paper pool moved to
+--     its own table. The table has no user-id column and was readable and
+--     writable only with the service role. Nothing in the app reads or writes it
+--     now: the cache that did was the job and event pools', which no route has
+--     called since ffa6eded, and the paper feed uses private_paper_pools or
+--     memory.
+--
+-- What this does not touch
+--   * public.private_paper_pools and the other paper caches: the paper pool is
+--     kept there (20260922000000_private_paper_pools.sql), not in this table.
+--   * The rows of public.saved_items and public.feedback_events with item_kind
+--     'event' or 'job', unless you uncomment the deletes below. They are
+--     harmless once nothing reads them: the paper feed reads feedback_events
+--     only where item_kind = 'paper'. The `item_kind in ('paper','event','job')`
+--     check constraints on both tables stay as they are.
+--   * The profile columns career_stage, industry_vs_academia,
+--     location_preferences and authorised_countries: they are the reader's own
+--     words and Peer keeps them. The preference_ledger jsonb on profiles is
+--     not rewritten either.
+--
+-- Safe in either order with the code: no code that runs reads or writes
+-- opportunity_pools. Without CASCADE on purpose: if a view, policy or function
+-- somewhere still depends on the table, this fails loudly instead of dropping
+-- that object with it. The table has no foreign keys and nothing references it.
+drop table if exists public.opportunity_pools;
+
+-- ── Optional: the event and job rows (COMMENTED OUT — the owner's choice) ──
+--
+-- Run these only after the export above, and only after the release in which
+-- /api/saved and /api/feedback no longer accept the kinds 'event' and 'job' is
+-- deployed; before it, a device still on the old bundle can write the rows
+-- straight back. To see what would go, first:
+--
+--   select item_kind, count(*) from public.saved_items
+--     where item_kind in ('event', 'job') group by 1;
+--   select item_kind, count(*) from public.feedback_events
+--     where item_kind in ('event', 'job') group by 1;
+--
+-- then, to delete them (remove the leading `-- ` on the next two statements):
+--
+-- delete from public.saved_items where item_kind in ('event', 'job');
+-- delete from public.feedback_events where item_kind in ('event', 'job');
