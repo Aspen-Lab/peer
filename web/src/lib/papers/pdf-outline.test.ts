@@ -1905,3 +1905,84 @@ describe("a numbered subsection takes its parent's bucket, even when the parent 
     ]);
   });
 });
+
+// ── P9-13b (round P9, round 3, Theme 1): a combining mark's run, a lowered label ─────────────────────
+//
+// A Miller index is set with an overbar over a digit: pdf.js hands it over as a run of its own (U+0305,
+// no width, in the font of the accents) and, behind it, a run holding the space the PDF stores after
+// it, in that same face and a few hundredths of a point wide, before the next digit starts 0.1-0.4pt
+// on. Both were read as text, so `R3̅m` came out `R3̅ m` and `(12̅10)` as `(12̅ 10)`. The fixtures below
+// carry that stored space run the way the page does.
+
+/** Runs set left to right, each `gap` points after the one before it (none by default). */
+function laid(parts: [string, (Partial<PdfTextItem> & { gap?: number })?][], at: { x?: number; y?: number } = {}): PdfTextItem[] {
+  let x = at.x ?? 100;
+  const y = at.y ?? 500;
+  return parts.map(([str, own]) => {
+    const { gap = 0, ...rest } = own ?? {};
+    x += gap;
+    const run = item(str, { x, y, ...rest });
+    x += run.width;
+    return run;
+  });
+}
+const linesOf = (parts: Parameters<typeof laid>[0]) => linesOfPage({ page: 1, items: laid(parts) }).map((l) => l.text);
+
+type Part = [string, (Partial<PdfTextItem> & { gap?: number })?];
+/** COMBINING OVERLINE as the page stores it: a run of its own, no width, a hair behind the digit's edge. */
+const BAR: Part = ["\u0305", { width: 0, gap: -0.2, fontName: "accents" }];
+/** The space the PDF stores after the mark, in the mark's own face: a few hundredths of a point wide. */
+const BAR_SPACE: Part = [" ", { width: 0.04, gap: 0.2, fontName: "accents" }];
+
+describe("a combining mark's run joins its neighbours with no space, whatever the gap (P9-13b)", () => {
+  it.each([0, 0.4, 2, 3.5])("a digit, its overbar and a letter %d pt on read as one index: R3̅m", (gap) => {
+    expect(linesOf([["the space group R3"], BAR, ["m", { gap }], [" is common"]])).toEqual(["the space group R3\u0305m is common"]);
+  });
+
+  it("drops the space the PDF stores after the overbar, in its own face", () => {
+    expect(linesOf([["the space group R3"], BAR, BAR_SPACE, ["m", { gap: 0.08 }], [" is common"]])).toEqual(["the space group R3\u0305m is common"]);
+  });
+
+  it("reads (12, the bar, 10) as one index with or without the stored space: (12̅10)", () => {
+    expect(linesOf([["the (12"], BAR, ["10)", { gap: 0.2 }], [" plane"]])).toEqual(["the (12\u030510) plane"]);
+    expect(linesOf([["the (12"], BAR, BAR_SPACE, ["10)", { gap: 0.4 }], [" plane"]])).toEqual(["the (12\u030510) plane"]);
+  });
+
+  it("closes every bar of an index and a direction, not only the first: (21̅30)[4̅4̅15]", () => {
+    expect(
+      linesOf([["the (21"], BAR, BAR_SPACE, ["30)[4", { gap: 0.4 }], BAR, BAR_SPACE, ["4", { gap: 0.37 }], BAR, BAR_SPACE, ["15]", { gap: 0.41 }], [" axis"]]),
+    ).toEqual(["the (21\u030530)[4\u03054\u030515] axis"]);
+  });
+
+  it("puts no space before a mark either, however far its run sits from the digit", () => {
+    expect(linesOf([["the plane 2"], ["\u0305", { width: 0, gap: 2.6, fontName: "accents" }], ["m", { gap: 0.1 }]])).toEqual(["the plane 2\u0305m"]);
+  });
+
+  it("joins a stack of marks, and the combining arrows (U+20D0 block), the same way", () => {
+    expect(linesOf([["the index 4"], ["\u0305\u0332", { width: 0, gap: -0.2, fontName: "accents" }], BAR_SPACE, ["7", { gap: 0.3 }]])).toEqual(["the index 4\u0305\u03327"]);
+    expect(linesOf([["the field B"], ["\u20D7", { width: 0, gap: -0.2, fontName: "accents" }], BAR_SPACE, ["0", { gap: 0.2 }]])).toEqual(["the field B\u20D70"]);
+  });
+
+  it("keeps the word space after an index when the next word starts a real space away", () => {
+    // The stored space is in the body's face and the next word starts 6pt on: the mark ends a word.
+    expect(linesOf([["a plane 2"], BAR, [" ", { width: 0.7, gap: 0.2 }], ["and", { gap: 6 }], [" a line"]])).toEqual(["a plane 2\u0305 and a line"]);
+    expect(linesOf([["a plane 2"], BAR, ["and", { gap: 6 }]])).toEqual(["a plane 2\u0305 and"]);
+  });
+
+  it("joins a mark on a letter to the stored space's far side, and leaves the word break after it alone: an accent or an arrow ends a word as often as an index", () => {
+    expect(linesOf([["the index (hk"], BAR, BAR_SPACE, ["l)", { gap: 0.3 }]])).toEqual(["the index (hk\u0305l)"]);
+    expect(linesOf([["Jose"], ["\u0301", { width: 0, gap: -0.2, fontName: "accents" }], BAR_SPACE, ["Smith", { gap: 2.5 }]])).toEqual(["Jose\u0301 Smith"]);
+    expect(linesOf([["the field v"], ["\u20D7", { width: 0, gap: -0.2, fontName: "accents" }], BAR_SPACE, ["is", { gap: 2.5 }]])).toEqual(["the field v\u20D7 is"]);
+    // The accent run sits at the start of the run it belongs to, far from its letter: the space stored behind it is still its own.
+    const name = "Jovanovic, A. Z.; Pas";
+    const width = name.length * 4.6;
+    expect(
+      linesOf([[name], ["\u030C", { width: 0, gap: -width + 0.3, fontName: "accents" }], [" ", { width: 0, gap: width - 0.3, fontName: "accents" }], ["ti, I. A."]]),
+    ).toEqual(["Jovanovic, A. Z.; Pas\u030Cti, I. A."]);
+  });
+
+  it("leaves a mark that opens a line, and a line that ends on one, as they are", () => {
+    expect(linesOf([["\u0305", { width: 0, fontName: "accents" }], ["x", { gap: 2.5 }]])).toEqual(["\u0305 x"]);
+    expect(linesOf([["the index 5"], BAR, BAR_SPACE])).toEqual(["the index 5\u0305"]);
+  });
+});

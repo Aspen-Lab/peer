@@ -357,6 +357,16 @@ const CITED = /(?:[.,;:!?)\]\u201D\u2019"']|\p{L}-|\p{L}{3,}|\p{Lu}\p{Ll}|[\p{L}
 /** A bracketed group with a slash in it and no space: "(i/imax)". One raised
  *  digit after it is an exponent ("(i/imax)2"), not a citation of the group. */
 const RATIO_GROUP = /\([^()\s]*\/[^()\s]*\)$/;
+/** A run made only of combining marks: the overbar of a Miller index (U+0305), an accent, a
+ *  vector arrow. The PDF draws it as a run of its own, with no width, and stores a space run
+ *  behind it in the mark's own face. */
+const COMBINING_RUN = /^[\u0300-\u036F\u20D0-\u20FF]+$/;
+const COMBINING_TAIL = /[\u0300-\u036F\u20D0-\u20FF]+$/;
+/** A mark that stands on a digit, a bracket or a sign is the middle of an index ("R3̅m",
+ *  "(12̅10)"): the run behind it follows with no space when it starts within this many ems of the
+ *  mark's edge, whatever else the gap would say. A mark on a letter ("x̄", an accent) ends a word
+ *  as often as it ends an index, so the gap there is read as it always was. */
+const MARK_REACH_EM = 0.5;
 /** What a raised run made only of these is written in: an exponent or a charge
  *  as Unicode superscripts ("cm²", "10⁻¹³", "Ni²⁺"). The signs a PDF uses — the
  *  minus sign, the hyphen, the en dash — are one superscript minus. */
@@ -457,6 +467,11 @@ const longestRun = (runs: PdfTextItem[]): PdfTextItem =>
  * other are one mark, however the PDF split it ("21", "−", "23"). A kept mark
  * made only of digits and signs is written in Unicode superscripts ("cm²",
  * "10⁻¹³", "Ni²⁺"), so it does not read as a digit in the word (P9-08).
+ *
+ * A run of combining marks only (the overbar of a Miller index) sits on the glyph before it and
+ * takes no space on either side: "R3̅m", "(12̅10)". The PDF stores a space run behind it, a few
+ * hundredths of a point wide, and the next digit starts a fraction of a point on; neither is a
+ * word break (P9-13b).
  */
 function lineOf(page: number, y: number, runs: PdfTextItem[], raised?: ReadonlySet<PdfTextItem>): PdfLine | null {
   // A PDF stores runs, not words: two runs set apart on the page are two
@@ -467,6 +482,10 @@ function lineOf(page: number, y: number, runs: PdfTextItem[], raised?: ReadonlyS
   let judged = -1;
   // The raised runs up to this one are a mark of digits and signs, written as superscripts.
   let superscripts = -1;
+  // The face of the combining mark just written: the space run the PDF stores behind it in that face is its own.
+  let markFont: string | null = null;
+  // The mark stands on a digit, a bracket or a sign: the run behind it starts within reach, or is a word apart.
+  let tied = false;
   for (let i = 0; i < runs.length; i++) {
     const item = runs[i];
     if (raised?.has(item) && i > judged) {
@@ -489,12 +508,28 @@ function lineOf(page: number, y: number, runs: PdfTextItem[], raised?: ReadonlyS
       // in it ("st", "2a", "1/2", "0−4 μm") leave it as the PDF has it.
       superscripts = text.trim() && mark && [...mark].every((c) => c in SUPERSCRIPT) ? judged : -1;
     }
+    if (!item.str.trim()) {
+      // The space the PDF stores behind a combining mark, in the mark's own face, is not a word break.
+      if (item.fontName === markFont) {
+        cursor = item.x + (item.width || 0);
+        continue;
+      }
+      markFont = null;
+    }
+    const isMark = COMBINING_RUN.test(item.str);
     const gap = item.x - cursor;
-    if (text && Number.isFinite(cursor) && gap > Math.max(1, item.height * 0.18) && !/\s$/.test(text)) {
+    const joined = isMark || (tied && gap < MARK_REACH_EM * item.height);
+    if (!joined && text && Number.isFinite(cursor) && gap > Math.max(1, item.height * 0.18) && !/\s$/.test(text)) {
       text += " ";
     }
+    // A mark sits on the glyph before it: the last that is not a mark itself.
+    const base = text.replace(COMBINING_TAIL, "").slice(-1);
     text += i <= superscripts && raised?.has(item) ? [...item.str].map((c) => SUPERSCRIPT[c] ?? c).join("") : item.str;
     cursor = item.x + (item.width || 0);
+    if (item.str.trim()) {
+      markFont = isMark && base.trim() ? item.fontName : null;
+      tied = isMark && !!base.trim() && !/\p{L}/u.test(base);
+    }
   }
   text = text.replace(/\s+/g, " ").trim();
   if (text.length === 0) return null;
