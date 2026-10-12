@@ -224,6 +224,35 @@ describe("a nested fraction and a limit are written inside the stack (P9-15)", (
   });
 });
 
+describe("an island's cells follow the lowered-label rule of the line (P9-13b inside P9-15)", () => {
+  // A lowered word after a one-letter variable is a label and is written in brackets ("t" + "on" is `t(on)`): the rule
+  // reads the row's lowered runs. An island row is cut into cells and each is read on its own, so the cell must be
+  // given the row's lowered runs too, or the same label reads `ton` inside an equation and `t(on)` outside one.
+  const label = (x: number, y: number) => [item("t", { x, y }), script("on", x + 4.6, y - 3)];
+
+  it("writes a lowered label inside a cell of the base line as it is written in a sentence", () => {
+    expect(
+      equationsOf([
+        item("Q(ab) =", { x: 100, y: BASE }),
+        ...label(190, BASE),
+        item("I(ab)", { x: 150, y: UP }),
+        item("m I(ab)", { x: 148, y: DOWN }),
+      ]),
+    ).toEqual([{ text: "Q(ab) = I(ab) / m I(ab) t(on)" }]);
+    // The same two runs in a sentence of the same page.
+    const sentence = read([
+      item("A Paper About Cathodes", { height: 17, y: 760 }),
+      item("1 Methods", { y: 740 }),
+      ...[726, 714, 702, 690, 678, 666].map(filler),
+      item("The pulse is held for a time", { x: 100, y: 654 }),
+      ...label(232, 654),
+      item("of ten seconds.", { x: 245, y: 654 }),
+      ...[642, 630, 618].map(filler),
+    ]);
+    expect(sentence.sections?.[0].text).toContain("held for a time t(on) of ten seconds.");
+  });
+});
+
 describe("what is not a stack across a base line keeps the order the rows have (P9-15 guards)", () => {
   it("a two-line equation with no stack keeps its order", () => {
     expect(equationsOf([item("Q(ab) = × 100", { x: 100, y: BASE }), item("m I(ab)", { x: 148, y: DOWN })])).toEqual([

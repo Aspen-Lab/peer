@@ -64,10 +64,11 @@ export interface PdfLine {
   /** The raised run or runs the line opens with, as P9-08's fold took them in from above the baseline,
    *  and the words after them: a fraction's numerator, ahead of the row it was set over (P9-13a). */
   head?: { text: string; rest: string; reach: number };
-  /** The runs of a row that is a fragment of notation, left to right, and the ones of them the fold raised: what the
-   *  display-equation writer reads a row's cells from (P9-15). Only such a row carries them. */
+  /** The runs of a row that is a fragment of notation, left to right, and the ones of them the fold raised or lowered:
+   *  what the display-equation writer reads a row's cells from (P9-15). Only such a row carries them. */
   runs?: readonly PdfTextItem[];
   raised?: ReadonlySet<PdfTextItem>;
+  lowered?: ReadonlySet<PdfTextItem>;
 }
 
 export interface OutlineSection {
@@ -1113,7 +1114,7 @@ function withStackFacts(line: PdfLine, row: Row, ordered: PdfTextItem[]): PdfLin
     reach: reachOf(ordered),
     ...(head && rest ? { head: { text: head.text, rest: rest.text, reach: reachOf(ordered.slice(0, end)) } } : {}),
     // P9-15: a row that could be a row of an equation island keeps its runs, for the writer of the island.
-    ...(isFragment(line.text) ? { runs: ordered, ...(row.raised ? { raised: row.raised } : {}) } : {}),
+    ...(isFragment(line.text) ? { runs: ordered, ...(row.raised ? { raised: row.raised } : {}), ...(row.lowered ? { lowered: row.lowered } : {}) } : {}),
   };
 }
 
@@ -1243,7 +1244,7 @@ interface Cell {
 function cellOf(line: PdfLine, row: number, runs: PdfTextItem[], whole = false): Cell | null {
   const seen = runs.filter((run) => run.str.trim());
   if (seen.length === 0) return null;
-  const text = whole ? line.text : (lineOf(line.page, line.y, runs, line.raised)?.text ?? "");
+  const text = whole ? line.text : (lineOf(line.page, line.y, runs, line.raised, line.lowered)?.text ?? "");
   if (!text) return null;
   const tallest = seen.reduce((best, run) => (run.height > best.height ? run : best), seen[0]);
   return {
@@ -1328,7 +1329,7 @@ export function writeIsland(rows: readonly PdfLine[], leading: number): string |
     let out = "";
     let from = 0;
     const add = (runs: PdfTextItem[]) => {
-      const text = lineOf(cell.line.page, cell.y, runs, cell.line.raised)?.text ?? "";
+      const text = lineOf(cell.line.page, cell.y, runs, cell.line.raised, cell.line.lowered)?.text ?? "";
       out = out && text ? `${out} ${text}` : out || text;
     };
     for (const k of [...cell.limits.keys()].sort((a, b) => a - b)) {
