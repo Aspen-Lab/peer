@@ -45,4 +45,14 @@ describe("what the stopped jobs and events feeds left in the shared definitions 
     expect("localIsoWeek" in calendarDate).toBe(false);
     expect(typeof calendarDate.localCalendarDate).toBe("function");
   });
+
+  it("lib/jobs and lib/events are gone: their type files had no reader left", () => {
+    expect(exists("src/lib/jobs")).toBe(false);
+    expect(exists("src/lib/events")).toBe(false);
+  });
+
+  it("the salary parser of the job listings is gone", () => {
+    expect(exists("src/lib/opportunities/salary.ts")).toBe(false);
+    expect(exists("src/lib/opportunities/salary.test.ts")).toBe(false);
+  });
 });
