@@ -769,7 +769,8 @@ describe("superscripts and subscripts stay on their line (P7-10)", () => {
 
   it("folds a subscript too", () => {
     const page: PdfPageText = { page: 1, items: chain([["Films of TiO"], ["2", sub()], [" were grown on gold"]]) };
-    expect(linesOfPage(page).map((l) => l.text)).toEqual(["Films of TiO2 were grown on gold"]);
+    // P9-14: the lowered digit is written as a subscript, TiO₂.
+    expect(linesOfPage(page).map((l) => l.text)).toEqual(["Films of TiO₂ were grown on gold"]);
   });
 
   it("keeps a small line of its own where no line is near enough to own it", () => {
@@ -1311,7 +1312,8 @@ describe("a citation number is dropped, an exponent is kept (P7-11)", () => {
 
   it("leaves a subscript, an ordinal and a mark that is not a citation number where they are", () => {
     // Below the baseline: a subscript.
-    expect(read([["Films of TiO"], ["2", sub()], [" were grown."]])).toEqual(["Films of TiO2 were grown."]);
+    // (P9-14: the subscript is written TiO₂; it is still not a citation.)
+    expect(read([["Films of TiO"], ["2", sub()], [" were grown."]])).toEqual(["Films of TiO₂ were grown."]);
     // Letters in it: an ordinal or a footnote letter.
     expect(read([["after the 1"], ["st", sup()], [", 20"], ["th", sup()], [" cycle."]])).toEqual(["after the 1st, 20th cycle."]);
     expect(read([["Quillwort films"], ["2a", sup()], [" were grown."]])).toEqual(["Quillwort films2a were grown."]);
@@ -1433,7 +1435,8 @@ describe("a raised run joins its text row, the space the PDF stores after it too
 
   it("the space run after a subscript folds as it did", () => {
     const items = chainSpaced([["Films of TiO"], ["2", sub()], [" were grown on gold"]]);
-    expect(linesOfPage({ page: 1, items }).map((l) => l.text)).toEqual(["Films of TiO2 were grown on gold"]);
+    // P9-14: written TiO₂; the space run behind it folds as it did.
+    expect(linesOfPage({ page: 1, items }).map((l) => l.text)).toEqual(["Films of TiO₂ were grown on gold"]);
   });
 
   describe.each([
@@ -1580,8 +1583,9 @@ describe.each([
     expect(read([["the label f"], ["0−4 μm", sup()], [" was set"]])).toEqual(["the label f0−4 μm was set"]);
   });
 
-  it("a subscript and the digits set inline in a formula are not touched", () => {
-    expect(read([["Films of TiO"], ["2", sub()], [" were grown on gold"]])).toEqual(["Films of TiO2 were grown on gold"]);
+  // P9-14: the lowered digit is a subscript now (TiO₂); a charge set low and the digits typed inline are still not touched.
+  it("a subscript is written TiO₂, and a charge set low and the digits set inline in a formula are not touched", () => {
+    expect(read([["Films of TiO"], ["2", sub()], [" were grown on gold"]])).toEqual(["Films of TiO₂ were grown on gold"]);
     expect(read([["Films of Ti"], ["3+", sub()], [" were grown on gold"]])).toEqual(["Films of Ti3+ were grown on gold"]);
     expect(read([["cells of LiCoO2 and H2O cycled at TC101 for hours"]])).toEqual(["cells of LiCoO2 and H2O cycled at TC101 for hours"]);
   });
@@ -2033,8 +2037,9 @@ describe("a lowered label after a one-letter variable: symbols join, words and r
       ["T", "H", "TH"],
       ["E", "g", "Eg"],
       ["D", "w", "Dw"],
-      ["I", "0", "I0"],
-      ["N", "2", "N2"],
+      // P9-14: a lowered digit is a subscript character, I₀ and N₂.
+      ["I", "0", "I₀"],
+      ["N", "2", "N₂"],
       ["M", "Li", "MLi"],
       ["j", "max", "jmax"],
       ["x", "ij", "xij"],
@@ -2079,16 +2084,124 @@ describe("a lowered label after a one-letter variable: symbols join, words and r
 describe("a subscript's parenthesis follows with no space (P9-13b)", () => {
   it("reads the PDF's I, a lowered '0 (' and a lowered hkl) as I0(hkl)", () => {
     // The space is inside the subscript's own run: the author typed "0 (hkl)" in the lowered face.
-    expect(linesOf([["measured I"], ["0 (", { ...low, width: 7.3 }], ["hkl", { ...low }], [")", { ...low }], [": standard intensity"]])).toEqual(["measured I0(hkl): standard intensity"]);
+    expect(linesOf([["measured I"], ["0 (", { ...low, width: 7.3 }], ["hkl", { ...low }], [")", { ...low }], [": standard intensity"]])).toEqual(["measured I₀(hkl): standard intensity"]);
   });
 
   it("closes the gap before a lowered run that opens with a parenthesis, whatever the gap", () => {
-    expect(linesOf([["measured I"], ["0", { ...low }], ["(hkl)", { ...low, gap: 2.5 }], [": standard"]])).toEqual(["measured I0(hkl): standard"]);
-    expect(linesOf([["measured I"], ["0", { ...low }], [" ", { ...low, width: 0.7 }], ["(hkl)", { ...low, gap: 1.5 }], [": standard"]])).toEqual(["measured I0(hkl): standard"]);
+    // P9-14: the 0 is a subscript character, I₀; the parenthesis still follows it with no space.
+    expect(linesOf([["measured I"], ["0", { ...low }], ["(hkl)", { ...low, gap: 2.5 }], [": standard"]])).toEqual(["measured I₀(hkl): standard"]);
+    expect(linesOf([["measured I"], ["0", { ...low }], [" ", { ...low, width: 0.7 }], ["(hkl)", { ...low, gap: 1.5 }], [": standard"]])).toEqual(["measured I₀(hkl): standard"]);
   });
 
   it("keeps the space before a parenthetical set at the line's size, and before one that follows an exponent", () => {
     expect(linesOf([["its gap "], ["E", VAR], ["g", { ...low, gap: -0.02 }], ["(eV)", { gap: 3 }]])).toEqual(["its gap Eg (eV)"]);
     expect(linesOf([["its rate in mA cm"], ["−2", { height: 6.7, y: 504.4 }], ["(at C/10)", { gap: 3 }]])).toEqual(["its rate in mA cm⁻² (at C/10)"]);
+  });
+});
+
+// ── P9-14 (round P9, round 3, Theme 1): a lowered run of digits is a subscript ──────────────────────────
+//
+// A chemical formula is set with its stoichiometry lowered: `LiCoO` and a lowered `2`. The line builder
+// wrote the digit plain, `LiCoO2`, as it wrote a raised one before P9-08; a reader met `LiCoO2` as a word
+// with a digit in it. A lowered group whose every character has a subscript form (the digits, `+ − - = ( )`
+// and the letter `x`, U+2080-U+208E and U+2093) is written with those characters, `LiCoO₂`, `Li₁₋ₓCoO₂`.
+// All formulas below are invented.
+
+/** A raised run, as the P9-13b fixtures set one. */
+const high: Partial<PdfTextItem> = { height: 6.7, y: 504.4 };
+
+describe("a lowered run of digits is written with the Unicode subscript characters (P9-14)", () => {
+  it("writes LiCoO + a lowered 2 as LiCoO₂, and H₂O, O₂, Li₄Ti₅O₁₂ the same way", () => {
+    expect(linesOf([["Films of LiCoO"], ["2", low], [" were cycled"]])).toEqual(["Films of LiCoO₂ were cycled"]);
+    expect(linesOf([["the H"], ["2", low], ["O and O"], ["2", low], [" gases"]])).toEqual(["the H₂O and O₂ gases"]);
+    expect(linesOf([["spinel Li"], ["4", low], ["Ti"], ["5", low], ["O"], ["12", low], [" anodes"]])).toEqual(["spinel Li₄Ti₅O₁₂ anodes"]);
+  });
+
+  it("writes the 1-x of a solid solution as ₁₋ₓ, whether the PDF stores it as one run or three, with a minus sign or a hyphen", () => {
+    expect(linesOf([["layered Li"], ["1−x", low], ["CoO"], ["2", low], [" films"]])).toEqual(["layered Li₁₋ₓCoO₂ films"]);
+    expect(linesOf([["layered Li"], ["1-x", low], ["CoO"], ["2", low], [" films"]])).toEqual(["layered Li₁₋ₓCoO₂ films"]);
+    expect(linesOf([["layered Li"], ["1", low], ["−", low], ["x", low], ["CoO"], ["2", low], [" films"]])).toEqual(["layered Li₁₋ₓCoO₂ films"]);
+    // A space the PDF stores inside the subscript is not part of it.
+    expect(linesOf([["layered Li"], ["1 ", low], ["− ", low], ["x", low], ["CoO"], ["2", low], [" films"]])).toEqual(["layered Li₁₋ₓCoO₂ films"]);
+  });
+
+  it("writes the sum of a stoichiometry as ₊, and leaves a lowered x with no digit in it as P9-13b writes it: Lix", () => {
+    expect(linesOf([["a phase M"], ["1+x", low], ["O"], [" forms"]])).toEqual(["a phase M₁₊ₓO forms"]);
+    expect(linesOf([["lithiated Li"], ["x", low], ["CoO2"]])).toEqual(["lithiated LixCoO2"]);
+    expect(linesOf([["lithiated Li"], ["x", low], ["CoO"], ["2", low]])).toEqual(["lithiated LixCoO₂"]);
+  });
+
+  it("keeps the charge a superscript behind a subscript: CoO₂⁻, Ni₃²⁺", () => {
+    expect(linesOf([["the CoO"], ["2", low], ["−", high], [" ion"]])).toEqual(["the CoO₂⁻ ion"]);
+    expect(linesOf([["the Ni"], ["3", low], ["2+", high], [" ion"]])).toEqual(["the Ni₃²⁺ ion"]);
+  });
+
+  it("writes I + a lowered 0 and (hkl) as I₀(hkl), in the shapes the page has", () => {
+    // The page's own: the space and the parenthesis are inside the subscript's runs.
+    expect(linesOf([["measured I"], ["0 (", { ...low, width: 7.3 }], ["hkl", low], [")", low], [": standard intensity"]])).toEqual(["measured I₀(hkl): standard intensity"]);
+    // The brief's: a lowered 0, then the index lowered a word-space away, with or without a stored space run.
+    expect(linesOf([["measured I"], ["0", low], ["(hkl)", { ...low, gap: 2.5 }], [": standard"]])).toEqual(["measured I₀(hkl): standard"]);
+    expect(linesOf([["measured I"], ["0", low], [" ", { ...low, width: 0.7 }], ["(hkl)", { ...low, gap: 1.5 }], [": standard"]])).toEqual(["measured I₀(hkl): standard"]);
+    // And the index set at the line's size.
+    expect(linesOf([["measured I"], ["0", low], ["(hkl)"], [": standard"]])).toEqual(["measured I₀(hkl): standard"]);
+  });
+
+  it("writes brackets in a subscript when the whole group is digits and brackets: Ca₃(PO₄)₂, T₁₍₂₎", () => {
+    expect(linesOf([["apatite Ca"], ["3", low], ["(PO"], ["4", low], [")"], ["2", low], [" powder"]])).toEqual(["apatite Ca₃(PO₄)₂ powder"]);
+    expect(linesOf([["the term T"], ["1(2)", low], [" is small"]])).toEqual(["the term T₁₍₂₎ is small"]);
+  });
+
+  it("keeps a group with any other letter as P9-13b writes it: A1g, RCT, TH, Eg, jmax, f(area)", () => {
+    expect(linesOf([["the A"], ["1g", low], [" mode"]])).toEqual(["the A1g mode"]);
+    expect(linesOf([["the A"], ["1", low], ["g", low], [" mode"]])).toEqual(["the A1g mode"]);
+    for (const [variable, sub, expected] of [["R", "CT", "RCT"], ["T", "H", "TH"], ["E", "g", "Eg"], ["j", "max", "jmax"]] as const) {
+      expect(linesOf([["the "], [variable, VAR], [sub, { ...low, gap: -0.02 }], [" value"]]), expected).toEqual([`the ${expected} value`]);
+    }
+    expect(linesOf([["the fraction "], ["f", VAR], ["area", { ...low, gap: -0.01 }], [" = 0.61"]])).toEqual(["the fraction f(area) = 0.61"]);
+  });
+
+  it("writes 1-x as a subscript after a one-letter variable too, not as a bracketed label: y₁₋ₓ", () => {
+    expect(linesOf([["the term "], ["y", VAR], ["1-x", { ...low, gap: -0.02 }], [" is small"]])).toEqual(["the term y₁₋ₓ is small"]);
+  });
+
+  it("leaves a lowered charge, a group that ends on a sign, as it is: Ti3+, Fe4−", () => {
+    expect(linesOf([["films of Ti"], ["3+", low], [" were grown"]])).toEqual(["films of Ti3+ were grown"]);
+    expect(linesOf([["the complex Fe"], ["4\u2212", low], [" is stable"]])).toEqual(["the complex Fe4\u2212 is stable"]);
+  });
+
+  it("leaves a lowered decimal, which has no subscript form for its point, as it is: Ni0.5", () => {
+    expect(linesOf([["spinel LiNi"], ["0.5", low], ["Mn"], ["1.5", low], [" oxide"]])).toEqual(["spinel LiNi0.5Mn1.5 oxide"]);
+  });
+
+  it("leaves a lowered digit that stands on no formula as it is: after a word space, after a digit, at a line's head, after a space", () => {
+    expect(linesOf([["see Figure"], ["2", { ...low, gap: 3 }], [" below"]])).toEqual(["see Figure 2 below"]);
+    expect(linesOf([["see Figure "], ["2", low], [" below"]])).toEqual(["see Figure 2 below"]);
+    expect(linesOf([["a 10"], ["3", low], [" signal"]])).toEqual(["a 103 signal"]);
+    expect(linesOf([["2", low], ["O stands at the head"]])).toEqual(["2O stands at the head"]);
+  });
+
+  it("leaves a plain digit alone: Figure 2, LiCoO2 typed on the line, a raised exponent as P9-08 wrote it", () => {
+    expect(linesOf([["See Figure 2 for the LiCoO2 films in S1 and 1g of CoO2."]])).toEqual(["See Figure 2 for the LiCoO2 films in S1 and 1g of CoO2."]);
+    expect(linesOf([["a diffusivity in cm"], ["2", high], [" per second"]])).toEqual(["a diffusivity in cm² per second"]);
+    expect(linesOf([["the Co"], ["2+", high], [" ion"]])).toEqual(["the Co²⁺ ion"]);
+  });
+
+  it("reads the stored space run behind the base or behind the subscript as it always did: no space in front, one behind", () => {
+    expect(linesOf([["a LiCoO"], [" ", { width: 0.15 }], ["2", { ...low, gap: 0.5 }], [" ", { ...low, width: 0.7 }], ["cathode"]])).toEqual(["a LiCoO₂ cathode"]);
+    expect(linesOf([["a LiCoO"], ["2 ", low], ["cathode"]])).toEqual(["a LiCoO₂ cathode"]);
+  });
+
+  it("still drops a citation number that stands behind a formula ending in a subscript, and keeps an exponent behind a unit", () => {
+    expect(linesOf([["the LiCoO"], ["2", low], ["35", high], [" cathode"]])).toEqual(["the LiCoO₂ cathode"]);
+    expect(linesOf([["the Li"], ["1−x", low], ["CoO"], ["2", low], ["17", high], [", then"]])).toEqual(["the Li₁₋ₓCoO₂, then"]);
+    expect(linesOf([["its rate in s"], ["−1", high], [" at 5"]])).toEqual(["its rate in s⁻¹ at 5"]);
+  });
+
+  it("runs through the page's rows the way a PDF stores them, into the paragraph", () => {
+    const rows = [
+      ...laid([["The LiCoO"], ["2", low], [" film and the Li"], ["1−x", low], ["CoO"], ["2", low], [" film"]], { y: 500 }),
+      ...laid([["are measured at Co"], ["2+", { height: 6.7, y: 492.4 }], [" sites."]], { y: 488 }),
+    ];
+    expect(linesOfPage({ page: 1, items: rows }).map((l) => l.text)).toEqual(["The LiCoO₂ film and the Li₁₋ₓCoO₂ film", "are measured at Co²⁺ sites."]);
   });
 });

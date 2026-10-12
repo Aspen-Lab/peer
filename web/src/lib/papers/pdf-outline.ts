@@ -358,7 +358,7 @@ const CITATION_MARK_MAX = 12;
  *  formula that already ends in digits ("ZnTiO335"). After a digit, a
  *  one-letter variable or one or two lower-case letters ("10−3", "R2", "cm2",
  *  "s−1") a raised digit is an exponent, and it is kept. */
-const CITED = /(?:[.,;:!?)\]\u201D\u2019"']|\p{L}-|\p{L}{3,}|\p{Lu}\p{Ll}|[\p{L})]\d+)$/u;
+const CITED = /(?:[.,;:!?)\]\u201D\u2019"']|\p{L}-|\p{L}{3,}|\p{Lu}\p{Ll}|[\p{L})][\d\u2080-\u2089]+)$/u;
 /** A bracketed group with a slash in it and no space: "(i/imax)", and one that holds a bracketed
  *  label of its own, "(j/j(limiting))" (P9-13b). One raised digit after it is an exponent
  *  ("(i/imax)2"), not a citation of the group. */
@@ -397,6 +397,46 @@ const SUPERSCRIPT: Readonly<Record<string, string>> = {
   "5": "\u2075", "6": "\u2076", "7": "\u2077", "8": "\u2078", "9": "\u2079",
   "+": "\u207A", "\u2212": "\u207B", "-": "\u207B", "\u2013": "\u207B",
 };
+/** What a lowered group made only of these is written in: the stoichiometry of a formula as
+ *  Unicode subscripts ("LiCoO₂", "Li₁₋ₓCoO₂"). U+2080-U+208E, and the letter x (U+2093), the "1−x" of
+ *  a solid solution. Only these have a subscript form: a group with any other character ("A1g",
+ *  "RCT", "0.5") is not one (P9-14). */
+const SUBSCRIPT: Readonly<Record<string, string>> = {
+  "0": "\u2080", "1": "\u2081", "2": "\u2082", "3": "\u2083", "4": "\u2084",
+  "5": "\u2085", "6": "\u2086", "7": "\u2087", "8": "\u2088", "9": "\u2089",
+  "+": "\u208A", "\u2212": "\u208B", "-": "\u208B", "=": "\u208C", "(": "\u208D", ")": "\u208E",
+  x: "\u2093",
+};
+/** The part of a lowered group that opens it: digits, signs and x, with a digit among them. A lone x
+ *  ("Lix", "Nix") is left as P9-13b writes it: the digit of such a formula is often not a run of its own
+ *  (pdf.js merges it into the full-size run before it), and "Liₓ" beside a plain "CoO2" reads worse than
+ *  "Lix" beside it. */
+const SUBSCRIPT_HEAD = /^(?=[+\u2212=x-]*[0-9])[0-9+\u2212=x-]+/;
+/** A lowered group written whole: digits, signs, x and brackets. */
+const SUBSCRIPT_WHOLE = /^[0-9+\u2212=x()-]+$/;
+
+/**
+ * How many characters, counted without the white space between them, of a lowered group are
+ * written as subscripts: all of them when each has a subscript form and the brackets close
+ * ("1−x", "2", "1(2)"); only its head when the rest is a bracketed argument the page lowers too
+ * ("0 (hkl)" is I₀ and "(hkl)": hkl has no subscript form); none for any other group ("1g", "CT",
+ * "0.5").
+ */
+function subscriptLength(group: string): number {
+  const text = group.replace(/\s+/g, "");
+  const head = SUBSCRIPT_HEAD.exec(text)?.[0];
+  // A group that ends on a sign ("3+", "4−") is a charge set low, not a stoichiometry.
+  if (!head || /[+\u2212=-]$/.test(head)) return 0;
+  const rest = text.slice(head.length);
+  if (!rest) return head.length;
+  if (rest[0] !== "(" && rest[0] !== ")") return 0;
+  let depth = 0;
+  for (const c of text) {
+    depth += c === "(" ? 1 : c === ")" ? -1 : 0;
+    if (depth < 0) break;
+  }
+  return SUBSCRIPT_WHOLE.test(text) && depth === 0 ? text.length : head.length;
+}
 
 /** One baseline's worth of runs. */
 interface Row {
@@ -505,6 +545,13 @@ const longestRun = (runs: PdfTextItem[]): PdfTextItem =>
  * run 0.15pt wide, or none) no longer shows. Inside a subscript, no space stands before a
  * parenthesis: "I0 (hkl)" is "I0(hkl)". A parenthetical set at the line's size after a subscript,
  * and any after an exponent, keeps its space: "Eg (eV)", "cm⁻² (at C/10)" (P9-13b).
+ *
+ * A lowered group made only of digits, signs and x, with a digit among them, that touches a letter or
+ * a closing bracket is the stoichiometry of a formula and is written with the Unicode subscripts:
+ * "LiCoO₂", "Li₁₋ₓCoO₂", "I₀(hkl)" (its bracketed argument, which has no subscript form, stays plain).
+ * A group with any other letter ("A1g", "RCT"), a point ("0.5"), a sign at its end (a charge set low),
+ * or one that stands apart from its base is written as before. The charge stays P9-08's raised
+ * superscript: "CoO₂⁻" (P9-14).
  */
 function lineOf(
   page: number,
@@ -527,8 +574,12 @@ function lineOf(
   let tied = false;
   // The last run written that has text in it: the variable a label may stand under.
   let last: PdfTextItem | null = null;
-  // The lowered runs up to this one have been judged as a label.
+  // The lowered runs up to this one have been judged: as the stoichiometry of a formula or as a label.
   let lowJudged = -1;
+  // A lowered group written as subscripts: its first and last run, and how many of its characters remain.
+  let subFrom = -1;
+  let subTo = -1;
+  let subLeft = 0;
   // A label to be written in brackets: where its bracket opens in `text`, its first and its last run.
   let labelAt = -1;
   let labelFrom = -1;
@@ -572,8 +623,23 @@ function lineOf(
       while (end < runs.length && lowered.has(runs[end])) end++;
       lowJudged = end - 1;
       const under = runs.slice(i, end).map((run) => run.str).join("").trim();
-      // A word or a range under a one-letter variable, not a symbol and not a bracketed argument: "f" + "area".
-      if (/\p{L}/u.test(under) && !under.includes("(") && (!SYMBOL_LABEL.test(under) || WORD_LABEL.test(under))) openLabel(i, lowJudged);
+      // The stoichiometry of a formula, digits and signs set under a letter or a bracket that it touches:
+      // "LiCoO" + "2" is LiCoO₂, "Li" + "1−x" is Li₁₋ₓ, "I" + "0 (hkl)" is I₀(hkl). The space the PDF
+      // stores between the two, a fraction of a point wide, is not one.
+      const first = runs.slice(i, end).find((run) => run.str.trim());
+      const length = subscriptLength(under);
+      if (
+        length > 0 && first && last && !raised?.has(last) && !lowered?.has(last) && /[\p{L})\]]$/u.test(last.str) &&
+        first.x - (last.x + (last.width || 0)) < LABEL_TOUCH_EM * last.height
+      ) {
+        text = text.trimEnd();
+        subFrom = i;
+        subTo = lowJudged;
+        subLeft = length;
+      } else if (/\p{L}/u.test(under) && !under.includes("(") && (!SYMBOL_LABEL.test(under) || WORD_LABEL.test(under))) {
+        // A word or a range under a one-letter variable, not a symbol and not a bracketed argument: "f" + "area".
+        openLabel(i, lowJudged);
+      }
     }
     if (!item.str.trim()) {
       // The space the PDF stores behind a combining mark, in the mark's own face, is not a word break.
@@ -587,14 +653,29 @@ function lineOf(
     const gap = item.x - cursor;
     // The parenthesis of a subscript ("I" + "0 (hkl)") follows its symbol with no space.
     const argument = !!last && !!lowered?.has(item) && !!lowered.has(last) && item.str.trimStart().startsWith("(");
-    const joined = isMark || (tied && gap < MARK_REACH_EM * item.height) || i === labelFrom || argument;
+    // A subscript follows its formula, and its own characters follow each other, with no space.
+    const subscript = subLeft > 0 && i >= subFrom && i <= subTo;
+    const joined = isMark || (tied && gap < MARK_REACH_EM * item.height) || i === labelFrom || argument || subscript;
     if (!joined && text && Number.isFinite(cursor) && gap > Math.max(1, item.height * 0.18) && !/\s$/.test(text)) {
       text += " ";
     }
     if (argument) text = text.trimEnd();
     // A mark sits on the glyph before it: the last that is not a mark itself.
     const base = text.replace(COMBINING_TAIL, "").slice(-1);
-    const written = i <= superscripts && raised?.has(item) ? [...item.str].map((c) => SUPERSCRIPT[c] ?? c).join("") : item.str;
+    let written = i <= superscripts && raised?.has(item) ? [...item.str].map((c) => SUPERSCRIPT[c] ?? c).join("") : item.str;
+    if (subscript) {
+      let sub = "";
+      for (const c of item.str) {
+        // The subscript's own characters are written, the white space between them dropped; what the group
+        // holds after them (the argument "(hkl)", the space behind it) is written as it is.
+        if (subLeft <= 0) sub += c;
+        else if (!/\s/.test(c)) {
+          sub += SUBSCRIPT[c] ?? c;
+          subLeft--;
+        }
+      }
+      written = sub;
+    }
     text += lowered?.has(item) ? written.replace(/\s+\(/g, "(") : written;
     cursor = item.x + (item.width || 0);
     if (item.str.trim()) last = item;
