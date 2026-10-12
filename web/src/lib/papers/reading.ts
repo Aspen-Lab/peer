@@ -18,7 +18,6 @@ import type { ExtractedFigureCaption } from "./html-text";
 import type { ExtractedDocument } from "./html-text";
 import type { FullTextResult } from "./full-text";
 import type { SourceLink } from "./source-links";
-import { claimsUploadId } from "./upload-id";
 import { readableSections, readingMapOf, type ReadingMap } from "./reading-map";
 import {
   QUANTITY_STRICT,
@@ -596,10 +595,19 @@ function readableBody(sections: ReturnType<typeof readableSections>): ReadingSec
   }));
 }
 
-/** The route that serves a PDF page's embedded picture. Relative: the page
- *  that renders the reading is the origin that built it. */
-export function pdfFigureUrl(paperId: string, page: number): string {
-  return `/api/papers/${encodeURIComponent(paperId)}/figure-image?page=${page}`;
+/** The route that draws one figure of a PDF: the region on `page` whose
+ *  caption opens "Figure `fig`". Relative: the page that renders the reading
+ *  is the origin that built it. It answers a public paper's PDF to anyone and
+ *  an upload's to its owner only (P9-29). */
+export function pdfFigureUrl(paperId: string, page: number, fig: number): string {
+  return `/api/papers/${encodeURIComponent(paperId)}/figure-image?page=${page}&fig=${fig}`;
+}
+
+/** The number a "Figure 3" / "Fig 3" label names, or null where the figure
+ *  route has nothing to look for: "Figure IV", "Figure S3", "Table 1". */
+function pictureNumber(label: string): number | null {
+  const m = /^fig(?:ure)?\.?\s*([1-9]\d{0,2})$/i.exec(label.trim());
+  return m ? Number(m[1]) : null;
 }
 
 function figureNumber(label: string): number | null {
@@ -617,10 +625,11 @@ function figureNumber(label: string): number | null {
  * beside. Tables are not placed: a table's caption without its table is a
  * sentence about nothing.
  *
- * For a PDF, the picture is offered only when its page carries exactly one
- * figure caption: `extractImages` returns a page's rasters with no positions,
- * so with two figures on a page the route could not say which is which, and
- * a wrong picture under a caption is worse than none.
+ * For a PDF, every "Figure N" caption that has a page is offered its picture:
+ * the URL names the page and the number, and the route draws the region whose
+ * caption opens with that number — two figures on one page each get their own,
+ * and so does an upload's (P9-29; before it, a page with more than one caption
+ * was offered none, and an upload's captions were never offered any).
  */
 export function placeFigures(
   sections: ReadingSection[],
@@ -629,11 +638,6 @@ export function placeFigures(
 ): ReadingSection[] {
   if (sections.length === 0 || captions.length === 0) return sections;
   const out = sections.map((section) => ({ ...section, figures: undefined as ReadingFigure[] | undefined }));
-
-  const perPage = new Map<number, number>();
-  for (const c of captions) {
-    if (typeof c.page === "number") perPage.set(c.page, (perPage.get(c.page) ?? 0) + 1);
-  }
 
   // Cumulative text fraction at the end of each section, for the fallback.
   const lengths = out.map((s) => s.paragraphs.reduce((n, p) => n + p.length, 0));
@@ -679,12 +683,9 @@ export function placeFigures(
       ...(typeof c.page === "number" ? { page: c.page } : {}),
     };
     if (c.imageUrl) figure.imageUrl = c.imageUrl;
-    // P0-07 (§1e.5): no page picture for an uploaded PDF. The page-image
-    // route resolves public papers only and answers 404 for an `upload:` id,
-    // so the URL was a wasted request per figure; the caption and its page
-    // stand alone ("caption · p.N") until BACKLOG-01 serves uploads.
-    else if (pdf && !claimsUploadId(pdf.paperId) && typeof c.page === "number" && perPage.get(c.page) === 1) {
-      figure.imageUrl = pdfFigureUrl(pdf.paperId, c.page);
+    else if (pdf && typeof c.page === "number") {
+      const pictureOf = pictureNumber(c.label);
+      if (pictureOf !== null) figure.imageUrl = pdfFigureUrl(pdf.paperId, c.page, pictureOf);
     }
     (out[at.section].figures ??= []).push(figure);
   }

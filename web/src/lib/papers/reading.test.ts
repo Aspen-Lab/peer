@@ -1,4 +1,4 @@
-import { placeFigures } from "./reading";
+import { placeFigures, pdfFigureUrl } from "./reading";
 import { buildOutline } from "./pdf-outline";
 import { blockMarker } from "@/lib/text/math";
 import { describe, expect, it } from "vitest";
@@ -895,6 +895,11 @@ describe("placeFigures", () => {
     expect(byLabel["Figure IV"].imageUrl).toBeUndefined();
     expect(byLabel["Figure S3"].imageUrl).toBeUndefined();
     expect(byLabel["Figure 9"].imageUrl).toBe("https://x/9.png");
+  });
+
+  it("writes the figure route's URL as the id percent-encoded, then the page, then the figure number (P9-29)", () => {
+    expect(pdfFigureUrl("upload:0123456789abcdef", 5, 3)).toBe("/api/papers/upload%3A0123456789abcdef/figure-image?page=5&fig=3");
+    expect(pdfFigureUrl("openalex:W1", 12, 10)).toBe("/api/papers/openalex%3AW1/figure-image?page=12&fig=10");
   });
 
   it("offers a figure from a paper with no PDF behind it no picture URL (P9-29)", () => {
