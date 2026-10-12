@@ -14,11 +14,11 @@ Score = the weighted share of the paper's **paragraphs that read as printed**. E
 | B | a citation number fused into a word | 0.5 |
 | C | a line-end hyphen joined or kept wrongly | 0.5 |
 | H | a space lost or added at a join | 0.5 |
-| D | a symbol folded to an ASCII word (`degreesC`, `+/-`, `x 10`, `ohm.cm`, `<=`) | 0.5 per paragraph, however many |
-| G | a chemistry/variable sub- or superscript flattened and still readable | 0.25 |
+| D | a symbol folded to an ASCII word or sign (`degreesC`, `+/-`, `x 10`, `<=`, a `-` for the author's `−`) — **only where the PDF prints the symbol** (round 2, §1h.54 (a)): the director checks each D against the raw text layer; a word the authors typed themselves (`ohm.cm`, `Kalpha`, `2 theta`, `sigma`) is the paper's and costs nothing | 0.5 per paragraph, however many |
+| G | a chemistry/variable sub- or superscript flattened **where Unicode could write it** (a digit subscript, `LiCoO2` for `LiCoO₂`; an exponent `cm2`), or mis-spaced / ambiguous (`f 0-4 μm` beside `f4-8 μm`, `I0 (hkl)`); a letter subscript Unicode cannot write, joined plain to its one-letter variable (`RCT`, `Eg`, `jmax`) or written `f(area)`, is the plain-text convention and costs 0 (round 2, §1h.54 (b)) | 0.25 |
 | S | a structure fault: a section missing, out of order, mis-titled, a heading inside a paragraph, end matter in the body, column mixing | 1.0 per section |
 
-A paragraph's cost is capped at 1.0. The director lists every marked paragraph by section and paragraph index with one word per kind (never a sentence of the paper beyond one per kind in the round's notes, scratch only). Round 1 as read by the manager: ~55; by the five blind readers 60 / 64 / 64 / 64 / 55.
+A paragraph's cost is capped at 1.0. The director lists every marked paragraph by section and paragraph index with one word per kind (never a sentence of the paper beyond one per kind in the round's notes, scratch only). Round 1 as read by the manager: ~55; by the five blind readers 60 / 64 / 64 / 64 / 55. Round 2 (the head 5c49def0, Theme 1 landed) by the five blind readers under the table as it stood: 72.3 / 76.5 / 76.5 / 76.5 / 75.8, median **76.5** (F 3.0, H 5.0, G 6.5–6.75, D 0.5 of 65 units; without G 82–87); the director's check against the raw text layer voided the D (`ohm.cm`, `Kalpha`, `2 theta`, `sigma` are the authors' words) and found the real one (the minus sign folded by `clean.ts`) — the two amendments above date from that read.
 
 Also required for a pass, regardless of the score: the 12 (or 13 with the abstract, the owner's call) sections present in the paper's order; every figure caption present once, after the paragraph that first cites it or at the page's end; no author/affiliation/notes/reference block in the body; the map's paragraph openings whole sentences.
 
