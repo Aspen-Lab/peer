@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { defaultProfile, type UserProfile } from "@/types";
 import { remoteProfilePayload } from "@/components/profile-sync";
 import { applyQuestionTermSignal } from "@/lib/preferences/ledger";
-import { opportunityRequestBody, paperFeedRequestBody } from "@/store/feed";
+import { paperFeedRequestBody } from "@/store/feed";
 import PrivacyPage from "./page";
 
 // P5-02 (brief commit 3): where the words of a reader's questions go once they enter the
@@ -145,20 +145,15 @@ describe("/privacy — the ledger travels with each request for the briefing (P5
     expect(JSON.stringify(body)).not.toContain("W424242");
   });
 
-  it("the jobs and events request bodies carry it the same way", () => {
-    for (const surface of ["jobs", "events"] as const) {
-      const body = opportunityRequestBody(profile, surface, []);
-      expect(JSON.stringify(body.preferenceLedger)).toContain("annealing");
-      expect(JSON.stringify(body)).not.toContain("W424242");
-    }
-  });
-
-  it("each builder reads the profile's ledger and puts it in the body — the lines the sentence rests on", () => {
-    for (const name of ["paperFeedRequestBody", "opportunityRequestBody"]) {
-      const builder = fn(feed, name);
-      expect(builder).toContain("const preferenceLedger = profile.preferenceLedger ?? {};");
-      expect(builder).toContain(LEDGER_LINE);
-    }
+  // P9-31 — RE-AIMED (§1c): "each builder" used to be two, the paper builder and
+  // `opportunityRequestBody` (the jobs and events request, whose own test sat above this one and
+  // is gone with it). Jobs and events are not processed (the owner's decision, §1a.18 (f)); the
+  // store builds the paper request alone, and the lines the sentence rests on are its.
+  it("the paper builder reads the profile's ledger and puts it in the body — the lines the sentence rests on", () => {
+    const builder = fn(feed, "paperFeedRequestBody");
+    expect(builder).toContain("const preferenceLedger = profile.preferenceLedger ?? {};");
+    expect(builder).toContain(LEDGER_LINE);
+    expect(feed).not.toContain("opportunityRequestBody");
   });
 
   it("the feed route reads it with the cleaner that keeps the question evidence, and uses it for that request", () => {
@@ -177,9 +172,9 @@ describe("/privacy — the ledger travels with each request for the briefing (P5
   });
 
   it("'your briefing' is the paper briefing: nothing asks for a jobs or events lane and no route answers one", () => {
-    // The builders above still shape a jobs and an events body, but Peer is a paper briefing: the
-    // lanes default to papers, no page asks for the others, and the two routes are gone. If one
-    // comes back, the sentence has to say what that request carries.
+    // Peer is a paper briefing: the store builds no jobs or events request, the lanes default to
+    // papers, no page asks for the others, and the two routes are gone. If one comes back, the
+    // sentence has to say what that request carries.
     expect(feed).toContain('const lanes = options?.lanes ?? ["papers"];');
     for (const file of sourceFiles(join(root, "src"))) {
       expect(readFileSync(file, "utf8")).not.toMatch(/lanes:\s*\[[^\]]*"(?:events|jobs)"/);

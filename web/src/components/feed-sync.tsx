@@ -18,7 +18,7 @@ import { isAuthSessionMissingError } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
 import { sessionStep } from "@/lib/feed/session-step";
 import { useFeedStore } from "@/store/feed";
-import type { Paper, Event, Job } from "@/types";
+import type { Paper } from "@/types";
 import { apiFetch } from "@/lib/api";
 import {
   useFeedSyncStatus,
@@ -76,16 +76,25 @@ export { useFeedSyncStatus };
  * owner's WHOLE pending record on a fully successful batch ("it pushed
  * everything"). The RELOAD HONESTY finding above shows that premise was
  * wrong: the batch below only re-POSTs items CURRENTLY in
- * `local.savedPapers`/`savedEvents`/`savedJobs`/`readItems` — never a
- * delete, never feedback — so `applyMigrationPushResult` now takes exactly
- * those four arrays/keys (`pushed`, below) and clears ONLY the matching
- * keys; a pending unsave/mark-unread or any feedback key survives a
- * successful batch, same as it always survived a failed one.
+ * `local.savedPapers`/`readItems` — never a delete, never feedback — so
+ * `applyMigrationPushResult` now takes exactly those two (`pushed`, below)
+ * and clears ONLY the matching keys; a pending unsave/mark-unread or any
+ * feedback key survives a successful batch, same as it always survived a
+ * failed one.
+ *
+ * PAPERS ONLY (P9-31; the owner's decision, §1a.18 (f): jobs and events are
+ * not processed). The account's `saved_items` / `feedback_events` rows of
+ * kind event or job, written by an older build, are neither pushed nor
+ * pulled: this file sends only papers, `/api/saved` answers only papers, and
+ * a row of any other kind that still reaches `savedPapersFromRows` (an older
+ * server) is dropped there.
  */
 
 interface SavedApiRow {
   itemId: string;
-  itemKind: "paper" | "event" | "job";
+  /** "paper" is the only kind there is; typed wide so a row an older server
+   *  still sends (an event or a job) can be recognised and dropped. */
+  itemKind: string;
   payload: unknown;
   savedAt: string;
 }
@@ -119,15 +128,11 @@ async function fetchRead(): Promise<ReadApiRow[] | null> {
   }
 }
 
-async function pushSaved(
-  itemId: string,
-  itemKind: "paper" | "event" | "job",
-  payload: unknown,
-): Promise<boolean> {
+async function pushSaved(paper: Paper): Promise<boolean> {
   try {
     await apiFetch("/api/saved", {
       method: "POST",
-      body: JSON.stringify({ itemId, itemKind, payload }),
+      body: JSON.stringify({ itemId: paper.id, itemKind: "paper", payload: paper }),
     });
     return true;
   } catch (err) {
@@ -147,6 +152,38 @@ async function pushRead(itemId: string): Promise<boolean> {
     console.warn("[FeedSync] push read failed", err);
     return false;
   }
+}
+
+/**
+ * Step 1 of sign-in: push what this device holds up to the account — saved
+ * papers and read marks, nothing else. Takes only the two fields it pushes, so
+ * whatever else a store (or a stale blob) holds is never reachable from here.
+ */
+export function pushLocalSignals(local: {
+  savedPapers: Paper[];
+  readItems: Record<string, true>;
+}): Promise<PromiseSettledResult<boolean>[]> {
+  const pushes: Promise<boolean>[] = [];
+  for (const paper of local.savedPapers) pushes.push(pushSaved(paper));
+  for (const id of Object.keys(local.readItems)) pushes.push(pushRead(id));
+  return Promise.allSettled(pushes);
+}
+
+/**
+ * Step 2 of sign-in: the account's saved papers, from the rows the server
+ * answered. `null` (the pull FAILED) stays `undefined` — "nothing to merge
+ * from" — and a pull that succeeded with zero rows is a real `[]`; see the
+ * SIGNIN-MERGE note at the call. A row of any kind but "paper" is dropped.
+ */
+export function savedPapersFromRows(
+  rows: SavedApiRow[] | null,
+): Paper[] | undefined {
+  if (rows === null) return undefined;
+  const papers: Paper[] = [];
+  for (const row of rows) {
+    if (row.itemKind === "paper") papers.push(row.payload as Paper);
+  }
+  return papers;
 }
 
 export function FeedSync() {
@@ -211,12 +248,7 @@ export function FeedSync() {
       //    truth from this point — but we don't want to drop anything the
       //    user saved while signed out.
       const local = useFeedStore.getState();
-      const localPushes: Promise<boolean>[] = [];
-      for (const p of local.savedPapers) localPushes.push(pushSaved(p.id, "paper", p));
-      for (const e of local.savedEvents) localPushes.push(pushSaved(e.id, "event", e));
-      for (const j of local.savedJobs) localPushes.push(pushSaved(j.id, "job", j));
-      for (const id of Object.keys(local.readItems)) localPushes.push(pushRead(id));
-      const pushResults = await Promise.allSettled(localPushes);
+      const pushResults = await pushLocalSignals(local);
       // SIGNIN-MERGE (§1aj P3) — this batch's result WAS never inspected
       // before (the guide's §1's own finding); now a single failure anywhere
       // in it surfaces once, in plain words, instead of only a console.warn.
@@ -228,15 +260,13 @@ export function FeedSync() {
           (result) => result.status === "rejected" || (result.status === "fulfilled" && result.value === false),
         );
         // §1aq CORRECTION — pass exactly what this batch attempted to push
-        // (the same four sources `localPushes` above was built from), so a
+        // (the two sources `pushLocalSignals` above was built from), so a
         // full success clears only the matching keys, never a pending
         // unsave/mark-unread or any feedback key (see the doc comment above).
         useFeedStore.getState().applyMigrationPushResult(
           userId,
           {
             savedPapers: local.savedPapers,
-            savedEvents: local.savedEvents,
-            savedJobs: local.savedJobs,
             readIds: Object.keys(local.readItems),
           },
           !anyFailed,
@@ -258,19 +288,7 @@ export function FeedSync() {
       // guide) — `hydrateFromRemote` already had a `?? local` fallback for
       // this, but it could only ever engage on a literal `undefined`, which
       // never reached it from here.
-      let savedPapers: Paper[] | undefined;
-      let savedEvents: Event[] | undefined;
-      let savedJobs: Job[] | undefined;
-      if (savedRows !== null) {
-        savedPapers = [];
-        savedEvents = [];
-        savedJobs = [];
-        for (const row of savedRows) {
-          if (row.itemKind === "paper") savedPapers.push(row.payload as Paper);
-          else if (row.itemKind === "event") savedEvents.push(row.payload as Event);
-          else if (row.itemKind === "job") savedJobs.push(row.payload as Job);
-        }
-      }
+      const savedPapers = savedPapersFromRows(savedRows);
       const readItems: Record<string, true> | undefined =
         readRows === null
           ? undefined
@@ -278,8 +296,6 @@ export function FeedSync() {
 
       useFeedStore.getState().hydrateFromRemote({
         savedPapers,
-        savedEvents,
-        savedJobs,
         readItems,
       });
       // From here the data in this browser is this account's copy: it goes

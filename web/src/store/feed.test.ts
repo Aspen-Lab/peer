@@ -10,6 +10,9 @@ const persistenceCapture = vi.hoisted(() => ({
   migrate: undefined as
     | ((persistedState: unknown, version: number) => unknown)
     | undefined,
+  // P9-31 — the configured `version`, captured the same way, so a test can pin that a version-3
+  // blob (every device that ran an older build) is one the migration runs for.
+  version: undefined as number | undefined,
 }));
 
 vi.mock("zustand/middleware", () => ({
@@ -18,15 +21,17 @@ vi.mock("zustand/middleware", () => ({
     options?: {
       partialize?: (state: unknown) => unknown;
       migrate?: (persistedState: unknown, version: number) => unknown;
+      version?: number;
     },
   ) => {
     persistenceCapture.partialize = options?.partialize;
     persistenceCapture.migrate = options?.migrate;
+    persistenceCapture.version = options?.version;
     return initializer;
   },
 }));
 
-import { defaultProfile, type Event, type Job, type Paper } from "@/types";
+import { defaultProfile, type Paper, type UserProfile } from "@/types";
 import { activePaperTopicsKey, useFeedStore } from "@/store/feed";
 import { useProfileStore } from "@/store/profile";
 import { useJevScreeningStore } from "@/store/jev-screening";
@@ -107,43 +112,18 @@ function paperFeedResponse(id: string) {
   };
 }
 
-function eventsFeedResponse(id?: string) {
+// The active inputs the store reads are the papers' alone: jobs and events are not processed (the
+// owner's decision, §1a.18 (f); P9-31). The cast keeps the fixture valid whatever else the profile
+// type still carries for them.
+function paperOnlyInputs(
+  required: string[] = [],
+  explore: string[] = [],
+): UserProfile["activeSearchInputs"] {
   return {
-    items: id
-      ? [
-          {
-            id,
-            name: `Event ${id}`,
-            type: "conference",
-            date: "2026-08-01",
-            location: "Chicago",
-            isOnline: false,
-            shortDescription: "An event.",
-            relevanceReason: "Relevant event.",
-          },
-        ]
-      : [],
-    meta: {},
-  };
-}
-
-function jobsFeedResponse(id?: string) {
-  return {
-    items: id
-      ? [
-          {
-            id,
-            roleTitle: `Role ${id}`,
-            companyOrLab: "Example Lab",
-            location: "Chicago",
-            isRemote: false,
-            keyRequirements: ["materials"],
-            matchReason: "Relevant role.",
-          },
-        ]
-      : [],
-    meta: {},
-  };
+    papers: { required, explore },
+    locationPreferences: [] as string[],
+    promotedOn: "2026-07-29",
+  } as UserProfile["activeSearchInputs"];
 }
 
 function requestPath(input: string | URL | Request): string {
@@ -184,15 +164,9 @@ describe("feed lane loading", () => {
       profile: {
         ...defaultProfile,
         researchTopics: ["materials"],
-        // Lanes read their topics from the day-locked active inputs, not the
-        // raw profile fields, so all three surfaces need one to fetch at all.
-        activeSearchInputs: {
-          papers: { required: ["materials"], explore: [] },
-          events: { required: ["materials"], explore: [] },
-          jobs: { required: ["materials"], explore: [] },
-          locationPreferences: [],
-          promotedOn: "2026-07-29",
-        },
+        // The papers lane reads its topics from the day-locked active inputs,
+        // not the raw profile fields.
+        activeSearchInputs: paperOnlyInputs(["materials"]),
       },
     });
     // P4-S5b-FIX2 (Round 3) — ABC-JEV-INTEGRATION.md §1g/§1c, closing
@@ -218,15 +192,9 @@ describe("feed lane loading", () => {
     useSyncGate.setState({ settled: true, authUserId: null, authOutcome: "signed-out" });
     useFeedStore.setState({
       papers: [],
-      events: [],
-      jobs: [],
       savedPapers: [],
-      savedEvents: [],
-      savedJobs: [],
       isLoading: false,
       papersLoading: false,
-      eventsLoading: false,
-      jobsLoading: false,
       lastRefresh: null,
       feedTopicsKey: null,
       // P8-01 — the key a failed papers load tried; reset like feedTopicsKey
@@ -234,15 +202,10 @@ describe("feed lane loading", () => {
       feedFailedKey: null,
       aiPaperSearchEnabled: true,
       readItems: {},
-      appliedAt: {},
-      registeredAt: {},
-      submittedAt: {},
       paperSummaries: {},
       recentlyShownIds: {},
       pendingDismissal: null,
       paperFeedback: {},
-      eventFeedback: {},
-      jobFeedback: {},
       // P4-S5a — reset every test to a clean slate; unlike the fields above,
       // these three are new and every existing test predates them, so an
       // explicit reset here (matching this block's own established pattern)
@@ -278,23 +241,21 @@ describe("feed lane loading", () => {
     vi.restoreAllMocks();
   });
 
-  it("publishes papers before events and jobs settle", async () => {
+  // P9-31 — RE-AIMED (§1c): was "publishes papers before events and jobs settle", which asked for
+  // three lanes at once and watched the papers lane publish ahead of the other two. Jobs and
+  // events are not processed (the owner's decision, §1a.18 (f)); the papers half is unchanged —
+  // the lane decorates from the state at the moment it commits, not the state its request saw.
+  it("publishes the papers lane decorated from the state at commit time, then settles the load", async () => {
     const papersResponse = enqueue("/api/feed");
-    const eventsResponse = enqueue("/api/events/feed");
-    const jobsResponse = enqueue("/api/jobs/feed");
 
-    // The daily surface asks for papers alone now, so the three-lane
-    // coordination this test covers has to be requested explicitly.
-    const load = useFeedStore.getState().loadFeed({ lanes: ["papers", "events", "jobs"] });
+    const load = useFeedStore.getState().loadFeed();
 
     await vi.waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     });
     expect(useFeedStore.getState()).toMatchObject({
       isLoading: true,
       papersLoading: true,
-      eventsLoading: true,
-      jobsLoading: true,
     });
 
     // Simulate hydration/user interaction after the request starts. The lane
@@ -318,48 +279,22 @@ describe("feed lane loading", () => {
       paperFeedback: { "paper-fast": "liked" },
     });
     papersResponse.resolve(jsonResponse(paperFeedResponse("paper-fast")));
-    await vi.waitFor(() => {
-      expect(useFeedStore.getState().papers).toHaveLength(1);
-    });
-
-    expect(useFeedStore.getState()).toMatchObject({
-      isLoading: true,
-      papersLoading: false,
-      eventsLoading: true,
-      jobsLoading: true,
-      feedTopicsKey: activePaperTopicsKey(useProfileStore.getState().profile),
-    });
-    expect(useFeedStore.getState().papers[0]?.id).toBe("paper-fast");
-    expect(useFeedStore.getState().papers[0]).toMatchObject({
-      isSaved: true,
-      feedback: "liked",
-    });
-    expect(useFeedStore.getState().events).toEqual([]);
-    expect(useFeedStore.getState().jobs).toEqual([]);
-    const committedPapers = useFeedStore.getState().papers;
-
-    eventsResponse.resolve(jsonResponse(eventsFeedResponse("event-slower")));
-    await vi.waitFor(() => {
-      expect(useFeedStore.getState().eventsLoading).toBe(false);
-    });
-    expect(useFeedStore.getState()).toMatchObject({
-      isLoading: true,
-      jobsLoading: true,
-    });
-    expect(useFeedStore.getState().papers).toBe(committedPapers);
-
-    jobsResponse.resolve(jsonResponse(jobsFeedResponse("job-slowest")));
     await load;
 
     expect(useFeedStore.getState()).toMatchObject({
       isLoading: false,
       papersLoading: false,
-      eventsLoading: false,
-      jobsLoading: false,
+      feedTopicsKey: activePaperTopicsKey(useProfileStore.getState().profile),
     });
-    expect(useFeedStore.getState().papers).toBe(committedPapers);
-    expect(useFeedStore.getState().events[0]?.id).toBe("event-slower");
-    expect(useFeedStore.getState().jobs[0]?.id).toBe("job-slowest");
+    expect(useFeedStore.getState().papers).toHaveLength(1);
+    expect(useFeedStore.getState().papers[0]?.id).toBe("paper-fast");
+    expect(useFeedStore.getState().papers[0]).toMatchObject({
+      isSaved: true,
+      feedback: "liked",
+    });
+    // One request, and it is the papers one: nothing else is asked for.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(requestPath(fetchMock.mock.calls[0]![0] as string | URL | Request)).toBe("/api/feed");
   });
 
   it.each([
@@ -377,13 +312,7 @@ describe("feed lane loading", () => {
     const profile = {
       ...defaultProfile,
       ...focus,
-      activeSearchInputs: {
-        papers: { required: [], explore: [] },
-        events: { required: [], explore: [] },
-        jobs: { required: [], explore: [] },
-        locationPreferences: [],
-        promotedOn: "2026-07-29",
-      },
+      activeSearchInputs: paperOnlyInputs(),
     };
     useProfileStore.setState({ profile });
     enqueueResolved("/api/feed", { items: [], meta: {} });
@@ -418,13 +347,7 @@ describe("feed lane loading", () => {
       ...defaultProfile,
       currentProject: "",
       currentChallenges: "",
-      activeSearchInputs: {
-        papers: { required: [], explore: [] },
-        events: { required: [], explore: [] },
-        jobs: { required: [], explore: [] },
-        locationPreferences: [],
-        promotedOn: "2026-07-29",
-      },
+      activeSearchInputs: paperOnlyInputs(),
     };
     useProfileStore.setState({ profile });
     enqueueResolved("/api/feed", { items: [], meta: {} });
@@ -447,13 +370,7 @@ describe("feed lane loading", () => {
       currentProject: "",
       currentChallenges: "",
       selectedSenseConcepts: [selectedSenseConcept("materials.scanning_electron_microscopy")],
-      activeSearchInputs: {
-        papers: { required: [], explore: [] },
-        events: { required: [], explore: [] },
-        jobs: { required: [], explore: [] },
-        locationPreferences: [],
-        promotedOn: "2026-07-29",
-      },
+      activeSearchInputs: paperOnlyInputs(),
     };
     useProfileStore.setState({ profile });
     enqueueResolved("/api/feed", { items: [], meta: {} });
@@ -485,8 +402,6 @@ describe("feed lane loading", () => {
     });
 
     enqueueResolved("/api/feed", paperFeedResponse("paper-plain-open"));
-    enqueueResolved("/api/events/feed", eventsFeedResponse());
-    enqueueResolved("/api/jobs/feed", jobsFeedResponse());
     await useFeedStore.getState().loadFeed();
 
     expect(useFeedStore.getState().recentlyShownIds).toEqual({
@@ -494,8 +409,6 @@ describe("feed lane loading", () => {
     });
 
     const refreshedPapers = enqueue("/api/feed");
-    enqueueResolved("/api/events/feed", eventsFeedResponse());
-    enqueueResolved("/api/jobs/feed", jobsFeedResponse());
     const explicitRefresh = useFeedStore
       .getState()
       .loadFeed({ advanceHistory: true });
@@ -561,56 +474,35 @@ describe("feed lane loading", () => {
     });
   });
 
-  it("does not let stale lanes clear a newer load's flags", async () => {
+  // P9-31 — RE-AIMED (§1c): was "does not let stale lanes clear a newer load's flags", with an
+  // events and a jobs lane beside the papers lane in each of the two overlapping loads. The papers
+  // half is unchanged: the older load's late response is dropped and cannot clear the newer load's
+  // flags.
+  it("does not let a stale load clear a newer load's flags", async () => {
     const firstPapers = enqueue("/api/feed");
     const secondPapers = enqueue("/api/feed");
-    const firstEvents = enqueue("/api/events/feed");
-    const secondEvents = enqueue("/api/events/feed");
-    const firstJobs = enqueue("/api/jobs/feed");
-    const secondJobs = enqueue("/api/jobs/feed");
 
-    const firstLoad = useFeedStore.getState().loadFeed({ lanes: ["papers", "events", "jobs"] });
-    const secondLoad = useFeedStore.getState().loadFeed({ lanes: ["papers", "events", "jobs"] });
+    const firstLoad = useFeedStore.getState().loadFeed();
+    const secondLoad = useFeedStore.getState().loadFeed();
 
     firstPapers.resolve(jsonResponse(paperFeedResponse("paper-stale")));
-    firstEvents.resolve(jsonResponse(eventsFeedResponse("event-stale")));
-    firstJobs.resolve(jsonResponse(jobsFeedResponse("job-stale")));
     await firstLoad;
 
     expect(useFeedStore.getState()).toMatchObject({
       papers: [],
-      events: [],
-      jobs: [],
       isLoading: true,
       papersLoading: true,
-      eventsLoading: true,
-      jobsLoading: true,
     });
 
     secondPapers.resolve(jsonResponse(paperFeedResponse("paper-current")));
-    await vi.waitFor(() => {
-      expect(useFeedStore.getState().papers[0]?.id).toBe("paper-current");
-    });
-    expect(useFeedStore.getState()).toMatchObject({
-      isLoading: true,
-      papersLoading: false,
-      eventsLoading: true,
-      jobsLoading: true,
-    });
-
-    secondEvents.resolve(jsonResponse(eventsFeedResponse("event-current")));
-    secondJobs.resolve(jsonResponse(jobsFeedResponse("job-current")));
     await secondLoad;
 
     expect(useFeedStore.getState()).toMatchObject({
       isLoading: false,
       papersLoading: false,
-      eventsLoading: false,
-      jobsLoading: false,
     });
-    expect(useFeedStore.getState().events[0]?.id).toBe("event-current");
-    expect(useFeedStore.getState().jobs[0]?.id).toBe("job-current");
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(useFeedStore.getState().papers[0]?.id).toBe("paper-current");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("stores digest bullets as paper summaries keyed by paper id", () => {
@@ -623,69 +515,6 @@ describe("feed lane loading", () => {
       "paper-a": "Sentence for paper A.",
       "paper-b": "Sentence for paper B.",
     });
-  });
-
-  it("sets and unsets job and event completion timestamps", async () => {
-    fetchMock.mockImplementation(async () => jsonResponse({ ok: true }));
-    const job = jobsFeedResponse("job-progress").items[0] as Job;
-    const event = eventsFeedResponse("event-progress").items[0] as Event;
-    useFeedStore.setState({
-      savedJobs: [job],
-      savedEvents: [event],
-    });
-
-    useFeedStore
-      .getState()
-      .setJobApplied(job, true, "2026-07-30T15:00:00.000Z");
-    useFeedStore
-      .getState()
-      .setEventRegistered(event, true, "2026-07-30T16:00:00.000Z");
-    useFeedStore
-      .getState()
-      .setEventSubmitted(event, true, "2026-07-30T17:00:00.000Z");
-
-    let state = useFeedStore.getState();
-    expect(state.appliedAt).toEqual({
-      [job.id]: "2026-07-30T15:00:00.000Z",
-    });
-    expect(state.registeredAt).toEqual({
-      [event.id]: "2026-07-30T16:00:00.000Z",
-    });
-    expect(state.submittedAt).toEqual({
-      [event.id]: "2026-07-30T17:00:00.000Z",
-    });
-    expect(state.savedJobs[0]).toMatchObject({
-      appliedAt: "2026-07-30T15:00:00.000Z",
-    });
-    expect(state.savedEvents[0]).toMatchObject({
-      registeredAt: "2026-07-30T16:00:00.000Z",
-      submittedAt: "2026-07-30T17:00:00.000Z",
-    });
-
-    useFeedStore.getState().setJobApplied(job, false);
-    useFeedStore.getState().setEventRegistered(event, false);
-    useFeedStore.getState().setEventSubmitted(event, false);
-
-    state = useFeedStore.getState();
-    expect(state.appliedAt[job.id]).toBeUndefined();
-    expect(state.registeredAt[event.id]).toBeUndefined();
-    expect(state.submittedAt[event.id]).toBeUndefined();
-    expect(state.savedJobs[0]).not.toHaveProperty("appliedAt");
-    expect(state.savedEvents[0]).not.toHaveProperty("registeredAt");
-    expect(state.savedEvents[0]).not.toHaveProperty("submittedAt");
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(6));
-
-    const replacementPayloads = fetchMock.mock.calls.map(([, init]) => {
-      const body = JSON.parse(String(init?.body)) as { payload: unknown };
-      return body.payload;
-    });
-    expect(replacementPayloads[3]).not.toHaveProperty("appliedAt");
-    expect(replacementPayloads[4]).toMatchObject({
-      submittedAt: "2026-07-30T17:00:00.000Z",
-    });
-    expect(replacementPayloads[4]).not.toHaveProperty("registeredAt");
-    expect(replacementPayloads[5]).not.toHaveProperty("registeredAt");
-    expect(replacementPayloads[5]).not.toHaveProperty("submittedAt");
   });
 
   it("5-04: persists today's briefing papers, not just saved ones", () => {
@@ -713,94 +542,6 @@ describe("feed lane loading", () => {
     });
   });
 
-  it("persists all three completion maps", () => {
-    useFeedStore.setState({
-      appliedAt: { "job-persisted": "2026-07-30T15:00:00.000Z" },
-      registeredAt: { "event-persisted": "2026-07-30T16:00:00.000Z" },
-      submittedAt: { "event-persisted": "2026-07-30T17:00:00.000Z" },
-    });
-
-    expect(persistenceCapture.partialize).toBeTypeOf("function");
-    const persisted = persistenceCapture.partialize?.(
-      useFeedStore.getState(),
-    );
-    expect(persisted).toMatchObject({
-      appliedAt: { "job-persisted": "2026-07-30T15:00:00.000Z" },
-      registeredAt: { "event-persisted": "2026-07-30T16:00:00.000Z" },
-      submittedAt: { "event-persisted": "2026-07-30T17:00:00.000Z" },
-    });
-  });
-
-  it("round-trips completion timestamps inside saved payloads", async () => {
-    fetchMock.mockImplementation(async () => jsonResponse({ ok: true }));
-    const job = jobsFeedResponse("job-round-trip").items[0] as Job;
-    const event = eventsFeedResponse("event-round-trip").items[0] as Event;
-
-    useFeedStore
-      .getState()
-      .setJobApplied(job, true, "2026-07-30T15:00:00.000Z");
-    useFeedStore
-      .getState()
-      .setEventRegistered(event, true, "2026-07-30T16:00:00.000Z");
-    useFeedStore
-      .getState()
-      .setEventSubmitted(event, true, "2026-07-30T17:00:00.000Z");
-
-    await vi.waitFor(() => {
-      const savedCalls = fetchMock.mock.calls.filter(
-        ([input]) => requestPath(input) === "/api/saved",
-      );
-      expect(savedCalls).toHaveLength(3);
-    });
-
-    const savedBodies = fetchMock.mock.calls
-      .filter(([input]) => requestPath(input) === "/api/saved")
-      .map(([, init]) => JSON.parse(String(init?.body))) as {
-      itemId: string;
-      payload: unknown;
-    }[];
-    const jobPayload = savedBodies.find(
-      ({ itemId }) => itemId === job.id,
-    )?.payload as Job;
-    const eventBodies = savedBodies.filter(
-      ({ itemId }) => itemId === event.id,
-    );
-    const eventPayload = eventBodies[eventBodies.length - 1]?.payload as Event;
-
-    expect(jobPayload).toMatchObject({
-      id: job.id,
-      appliedAt: "2026-07-30T15:00:00.000Z",
-    });
-    expect(eventPayload).toMatchObject({
-      id: event.id,
-      registeredAt: "2026-07-30T16:00:00.000Z",
-      submittedAt: "2026-07-30T17:00:00.000Z",
-    });
-
-    useFeedStore.setState({
-      savedJobs: [],
-      savedEvents: [],
-      appliedAt: {},
-      registeredAt: {},
-      submittedAt: {},
-    });
-    useFeedStore.getState().hydrateFromRemote({
-      savedJobs: [jobPayload],
-      savedEvents: [eventPayload],
-    });
-
-    const restored = useFeedStore.getState();
-    expect(restored.savedJobs).toHaveLength(1);
-    expect(restored.savedEvents).toHaveLength(1);
-    expect(restored.appliedAt[job.id]).toBe("2026-07-30T15:00:00.000Z");
-    expect(restored.registeredAt[event.id]).toBe(
-      "2026-07-30T16:00:00.000Z",
-    );
-    expect(restored.submittedAt[event.id]).toBe(
-      "2026-07-30T17:00:00.000Z",
-    );
-  });
-
   // FEED-SYNC-FLAG (ABC-JEV-INTEGRATION.md §5 row FEED-SYNC-FLAG, following
   // POLISH-1-SYNC-A's MEDIUM finding,
   // docs/jev-abc/POLISH-1-SYNC-A-20260928T163023Z.md) — the P6 sign-out
@@ -816,7 +557,7 @@ describe("feed lane loading", () => {
   // `submitFeedback` → `cloudFeedback`, never `cloudSave`) is included as a
   // sibling on the exact same try/apiFetch/catch(console.warn) pattern,
   // beyond the reviewer's literal 4-function list — `resetLocal()` (sign-out)
-  // wipes `paperFeedback`/`eventFeedback`/`jobFeedback` alongside saved/read
+  // wipes `paperFeedback` alongside saved/read
   // state, so an unsynced feedback push is the same P6 data-loss risk.
   //
   // ROUND 2 (ABC-JEV-INTEGRATION.md §1aq, ruling on
@@ -1394,8 +1135,6 @@ describe("feed lane loading", () => {
     describe("applyMigrationPushResult (§1aq point 1, last sentence — CORRECTED, see §1aq CORRECTION)", () => {
       const nothingPushed = {
         savedPapers: [] as { id: string }[],
-        savedEvents: [] as { id: string }[],
-        savedJobs: [] as { id: string }[],
         readIds: [] as string[],
       };
 
@@ -1511,7 +1250,7 @@ describe("feed lane loading", () => {
 
         useFeedStore.getState().applyMigrationPushResult(
           "user-flag",
-          { savedPapers: [], savedEvents: [], savedJobs: [], readIds: [] },
+          { savedPapers: [], readIds: [] },
           true,
         );
 
@@ -1535,7 +1274,7 @@ describe("feed lane loading", () => {
         // real batch could not possibly have re-pushed it either.
         useFeedStore.getState().applyMigrationPushResult(
           "user-flag",
-          { savedPapers: [], savedEvents: [], savedJobs: [], readIds: [] },
+          { savedPapers: [], readIds: [] },
           true,
         );
 
@@ -1564,7 +1303,7 @@ describe("feed lane loading", () => {
         // X IS in savedPapers, so the batch DID re-push it.
         useFeedStore.getState().applyMigrationPushResult(
           "user-flag",
-          { savedPapers: [flagPaper], savedEvents: [], savedJobs: [], readIds: [] },
+          { savedPapers: [flagPaper], readIds: [] },
           true,
         );
 
@@ -2232,8 +1971,6 @@ describe("feed lane loading", () => {
         items: paperFeedResponse("paper-batched").items,
         meta: { batchId: "batch-1", batchStatus: "served" },
       });
-      enqueueResolved("/api/events/feed", eventsFeedResponse());
-      enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
       await useFeedStore.getState().loadFeed();
 
@@ -2254,8 +1991,6 @@ describe("feed lane loading", () => {
         items: paperFeedResponse("paper-prepared").items,
         meta: { batchId: "batch-prepared", batchStatus: "prepared" },
       });
-      enqueueResolved("/api/events/feed", eventsFeedResponse());
-      enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
       await useFeedStore.getState().loadFeed();
 
@@ -2272,8 +2007,6 @@ describe("feed lane loading", () => {
         items: paperFeedResponse("paper-acked").items,
         meta: { batchId: "batch-2", batchStatus: "acknowledged" },
       });
-      enqueueResolved("/api/events/feed", eventsFeedResponse());
-      enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
       await useFeedStore.getState().loadFeed();
 
@@ -2302,8 +2035,6 @@ describe("feed lane loading", () => {
         items: paperFeedResponse("paper-now-acked").items,
         meta: { batchId: "batch-3", batchStatus: "acknowledged" },
       });
-      enqueueResolved("/api/events/feed", eventsFeedResponse());
-      enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
       await useFeedStore.getState().loadFeed();
 
@@ -2330,8 +2061,6 @@ describe("feed lane loading", () => {
       // ever attempted, unless something checks that directly).
       enqueue("/api/feed/ack").resolve(jsonResponse({ error: "ledger_unavailable" }, 503));
       enqueueResolved("/api/feed", paperFeedResponse("paper-no-batch")); // meta: {}
-      enqueueResolved("/api/events/feed", eventsFeedResponse());
-      enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
       await useFeedStore.getState().loadFeed();
 
@@ -2380,8 +2109,6 @@ describe("feed lane loading", () => {
       });
       enqueueResolved("/api/feed/ack", { ok: true, alreadyAcknowledged: false });
       enqueueResolved("/api/feed", paperFeedResponse("paper-after-retry"));
-      enqueueResolved("/api/events/feed", eventsFeedResponse());
-      enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
       await useFeedStore.getState().loadFeed();
 
@@ -2410,8 +2137,6 @@ describe("feed lane loading", () => {
         items: paperFeedResponse("paper-matching-batch").items,
         meta: { batchId: "batch-matching", batchStatus: "served" },
       });
-      enqueueResolved("/api/events/feed", eventsFeedResponse());
-      enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
       await useFeedStore.getState().loadFeed();
 
@@ -2460,8 +2185,6 @@ describe("feed lane loading", () => {
         items: paperFeedResponse("paper-batch-b").items,
         meta: { batchId: "batch-B-new", batchStatus: "served" },
       });
-      enqueueResolved("/api/events/feed", eventsFeedResponse());
-      enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
       await useFeedStore.getState().loadFeed();
 
@@ -2531,8 +2254,6 @@ describe("feed lane loading", () => {
         items: [],
         meta: { emptyReasonCode: "already-delivered" },
       });
-      enqueueResolved("/api/events/feed", eventsFeedResponse());
-      enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
       await useFeedStore.getState().loadFeed();
 
@@ -2544,8 +2265,6 @@ describe("feed lane loading", () => {
         items: paperFeedResponse("paper-1").items,
         meta: {},
       });
-      enqueueResolved("/api/events/feed", eventsFeedResponse());
-      enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
       await useFeedStore.getState().loadFeed();
 
@@ -2555,8 +2274,6 @@ describe("feed lane loading", () => {
     it("clears a previous load's emptyReasonCode before a new load starts, so a failure never shows a stale reason from an earlier empty load", async () => {
       // First load: genuinely empty with a code.
       enqueueResolved("/api/feed", { items: [], meta: { emptyReasonCode: "no-results" } });
-      enqueueResolved("/api/events/feed", eventsFeedResponse());
-      enqueueResolved("/api/jobs/feed", jobsFeedResponse());
       await useFeedStore.getState().loadFeed();
       expect(useFeedStore.getState().emptyReasonCode).toBe("no-results");
 
@@ -2565,8 +2282,6 @@ describe("feed lane loading", () => {
       // and the stale "no-results" from the first load must not linger.
       const failingFetch = enqueue("/api/feed");
       failingFetch.reject(new Error("network down"));
-      enqueueResolved("/api/events/feed", eventsFeedResponse());
-      enqueueResolved("/api/jobs/feed", jobsFeedResponse());
       await useFeedStore.getState().loadFeed();
 
       expect(useFeedStore.getState().feedError).toBeTruthy();
@@ -2707,16 +2422,19 @@ describe("feed lane loading", () => {
       expect(useFeedStore.getState().feedTopicsKey).toBe(papersKey());
     });
 
+    // P9-31 — RE-AIMED (§1c): the load that "does not ask for papers" used to be a load of the
+    // events lane. With that lane gone, the only load that asks for no papers is one that asks for
+    // no lane at all; the assertion is unchanged.
     it("a load that does not ask for papers leaves it alone", async () => {
       enqueue("/api/feed").resolve(jsonResponse({}, 503));
       await useFeedStore.getState().loadFeed({ lanes: ["papers"] });
       const recorded = useFeedStore.getState().feedFailedKey;
       expect(recorded).not.toBeNull();
 
-      enqueueResolved("/api/events/feed", eventsFeedResponse());
-      await useFeedStore.getState().loadFeed({ lanes: ["events"] });
+      await useFeedStore.getState().loadFeed({ lanes: [] });
 
       expect(useFeedStore.getState().feedFailedKey).toBe(recorded);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     it("is cleared by resetLocal (a sign-out starts the feed over)", async () => {
@@ -2756,8 +2474,6 @@ describe("feed lane loading", () => {
         items: paperFeedResponse("paper-1").items,
         meta: { jevScreening: { status: "applied", screened: 5, of: 5 } },
       });
-      enqueueResolved("/api/events/feed", eventsFeedResponse());
-      enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
       await useFeedStore.getState().loadFeed();
 
@@ -2767,8 +2483,6 @@ describe("feed lane loading", () => {
     it("a response that reports nothing leaves the last report alone", async () => {
       useJevScreeningStore.setState({ report: { status: "partial", screened: 31, of: 50 } });
       enqueueResolved("/api/feed", { items: paperFeedResponse("paper-1").items, meta: {} });
-      enqueueResolved("/api/events/feed", eventsFeedResponse());
-      enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
       await useFeedStore.getState().loadFeed();
 
@@ -2779,8 +2493,6 @@ describe("feed lane loading", () => {
       useJevScreeningStore.setState({ report: { status: "applied", screened: 50, of: 50 } });
       const failingFetch = enqueue("/api/feed");
       failingFetch.reject(new Error("network down"));
-      enqueueResolved("/api/events/feed", eventsFeedResponse());
-      enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
       await useFeedStore.getState().loadFeed();
 
@@ -2967,8 +2679,6 @@ describe("feed lane loading", () => {
     describe("papersLane arms pendingLocalDelivery", () => {
       it("arms pendingLocalDelivery with the rendered ids and the current (anonymous) owner key for a batchless response", async () => {
         enqueueResolved("/api/feed", paperFeedResponse("paper-batchless")); // meta: {}
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
         await useFeedStore.getState().loadFeed();
 
@@ -2992,8 +2702,6 @@ describe("feed lane loading", () => {
       it("arms pendingLocalDelivery with the signed-in owner's id, not \"anonymous\", when a real user is signed in", async () => {
         signIn("user-a");
         enqueueResolved("/api/feed", paperFeedResponse("paper-for-a"));
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
         await useFeedStore.getState().loadFeed();
 
@@ -3011,8 +2719,6 @@ describe("feed lane loading", () => {
           items: paperFeedResponse("paper-batched").items,
           meta: { batchId: "batch-1", batchStatus: "served" },
         });
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
         await useFeedStore.getState().loadFeed();
 
@@ -3022,8 +2728,6 @@ describe("feed lane loading", () => {
 
       it("arms nothing for a batchless response with zero papers", async () => {
         enqueueResolved("/api/feed", { items: [], meta: {} });
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
         await useFeedStore.getState().loadFeed();
 
@@ -3043,8 +2747,6 @@ describe("feed lane loading", () => {
           items: paperFeedResponse("paper-new-batched").items,
           meta: { batchId: "batch-2", batchStatus: "served" },
         });
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
         await useFeedStore.getState().loadFeed();
 
@@ -3184,8 +2886,6 @@ describe("feed lane loading", () => {
           deliveredLocalOwnerOrder: ["anonymous"],
         });
         enqueueResolved("/api/feed", { items: [], meta: {} });
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
         await useFeedStore.getState().loadFeed();
 
@@ -3204,8 +2904,6 @@ describe("feed lane loading", () => {
           deliveredLocalOwnerOrder: ["anonymous"],
         });
         enqueueResolved("/api/feed", { items: [], meta: {} });
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
         await useFeedStore.getState().loadFeed();
 
@@ -3228,8 +2926,6 @@ describe("feed lane loading", () => {
           recentlyShownIds: { "paper-recent": Date.now() },
         });
         enqueueResolved("/api/feed", { items: [], meta: {} });
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
         await useFeedStore.getState().loadFeed({ advanceHistory: true });
 
@@ -3263,8 +2959,6 @@ describe("feed lane loading", () => {
           deliveredLocalOwnerOrder: ["anonymous"],
         });
         enqueueResolved("/api/feed", { items: [], meta: {} });
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
         await useFeedStore.getState().loadFeed();
 
@@ -3324,8 +3018,6 @@ describe("feed lane loading", () => {
           ],
         });
         enqueueResolved("/api/feed", { items: [], meta: {} });
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
         await useFeedStore.getState().loadFeed();
 
@@ -3355,8 +3047,6 @@ describe("feed lane loading", () => {
           ],
         });
         enqueueResolved("/api/feed", { items: [], meta: {} });
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
         await useFeedStore.getState().loadFeed();
 
@@ -3391,8 +3081,6 @@ describe("feed lane loading", () => {
           ],
         });
         enqueueResolved("/api/feed", { items: [], meta: {} });
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
         await useFeedStore.getState().loadFeed({ advanceHistory: true });
 
@@ -3433,8 +3121,6 @@ describe("feed lane loading", () => {
         });
         signIn("user-b");
         enqueueResolved("/api/feed", { items: [], meta: {} });
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
         await useFeedStore.getState().loadFeed();
 
@@ -3463,8 +3149,6 @@ describe("feed lane loading", () => {
         // further setup — the signed-out case.
 
         enqueueResolved("/api/feed", { items: [], meta: {} });
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
         await useFeedStore.getState().loadFeed();
 
@@ -3485,15 +3169,11 @@ describe("feed lane loading", () => {
         // B uses the device first.
         signIn("user-b");
         enqueueResolved("/api/feed", { items: [], meta: {} });
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
         await useFeedStore.getState().loadFeed();
 
         // Now switch back to A.
         signIn("user-a");
         enqueueResolved("/api/feed", { items: [], meta: {} });
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
         await useFeedStore.getState().loadFeed();
 
         const paperRequests = fetchMock.mock.calls.filter(
@@ -3510,8 +3190,6 @@ describe("feed lane loading", () => {
         for (const owner of ["user-1", "user-2", "user-3", "user-4", "user-5"]) {
           signIn(owner);
           enqueueResolved("/api/feed", { items: [], meta: {} });
-          enqueueResolved("/api/events/feed", eventsFeedResponse());
-          enqueueResolved("/api/jobs/feed", jobsFeedResponse());
           await useFeedStore.getState().loadFeed();
         }
         expect(
@@ -3523,8 +3201,6 @@ describe("feed lane loading", () => {
         // is evicted to keep the bound at 5.
         signIn("user-6");
         enqueueResolved("/api/feed", { items: [], meta: {} });
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
         await useFeedStore.getState().loadFeed();
 
         const byOwner = useFeedStore.getState().deliveredLocalByOwner;
@@ -3549,22 +3225,16 @@ describe("feed lane loading", () => {
         for (const owner of ["user-1", "user-2", "user-3", "user-4", "user-5"]) {
           signIn(owner);
           enqueueResolved("/api/feed", { items: [], meta: {} });
-          enqueueResolved("/api/events/feed", eventsFeedResponse());
-          enqueueResolved("/api/jobs/feed", jobsFeedResponse());
           await useFeedStore.getState().loadFeed();
         }
         // Re-touch user-1 (otherwise the least recently active) before a
         // 6th owner ever shows up.
         signIn("user-1");
         enqueueResolved("/api/feed", { items: [], meta: {} });
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
         await useFeedStore.getState().loadFeed();
 
         signIn("user-6");
         enqueueResolved("/api/feed", { items: [], meta: {} });
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
         await useFeedStore.getState().loadFeed();
 
         const byOwner = useFeedStore.getState().deliveredLocalByOwner;
@@ -3693,7 +3363,11 @@ describe("feed lane loading", () => {
         });
       });
 
-      it("still performs the pre-existing oppFeedback split for a true legacy (version 0) blob, alongside the new anonymous seed step", () => {
+      // P9-31 — RE-AIMED (§1c): the version 0 -> 1 step used to split the shared `oppFeedback` map
+      // into `eventFeedback` and `jobFeedback`. Jobs and events are not processed (the owner's
+      // decision, §1a.18 (f)), so the map is dropped with them; the anonymous seed step the test
+      // pairs it with is unchanged.
+      it("drops the pre-existing oppFeedback map of a true legacy (version 0) blob instead of splitting it, and still runs the anonymous seed step", () => {
         const ts = Date.parse("2026-01-01T00:00:00.000Z");
         const migrated = persistenceCapture.migrate?.(
           {
@@ -3708,8 +3382,8 @@ describe("feed lane loading", () => {
           deliveredLocalByOwner?: Record<string, Record<string, string>>;
         };
 
-        expect(migrated.eventFeedback).toEqual({ "evt-1": "notInterested" });
-        expect(migrated.jobFeedback).toEqual({ "evt-1": "notInterested" });
+        expect(migrated).not.toHaveProperty("eventFeedback");
+        expect(migrated).not.toHaveProperty("jobFeedback");
         expect(migrated).not.toHaveProperty("oppFeedback");
         expect(migrated.deliveredLocalByOwner).toEqual({
           anonymous: { "paper-legacy": localCalendarDate(new Date(ts)) },
@@ -3761,8 +3435,6 @@ describe("feed lane loading", () => {
         });
 
         enqueueResolved("/api/feed", paperFeedResponse("paper-new-for-a"));
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
         await useFeedStore.getState().loadFeed();
 
         // READ: excluded on the very first load — no second load needed,
@@ -3805,8 +3477,6 @@ describe("feed lane loading", () => {
         });
 
         enqueueResolved("/api/feed", paperFeedResponse("paper-new-for-a"));
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
         await useFeedStore.getState().loadFeed();
 
         const request = JSON.parse(
@@ -3844,8 +3514,6 @@ describe("feed lane loading", () => {
         });
 
         enqueueResolved("/api/feed", paperFeedResponse("paper-new"));
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
         await useFeedStore.getState().loadFeed();
 
         const request = JSON.parse(
@@ -3880,8 +3548,6 @@ describe("feed lane loading", () => {
         // authUserId: null (this file's beforeEach) + authOutcome:
         // "signed-out" is confirmed signed out, not "still loading".
         enqueueResolved("/api/feed", paperFeedResponse("paper-anon"));
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
         await useFeedStore.getState().loadFeed();
 
@@ -3912,8 +3578,6 @@ describe("feed lane loading", () => {
         // this environment — resolveOwnerKeyForLoad treats this the same as
         // confirmed signed out, not "still loading".
         enqueueResolved("/api/feed", paperFeedResponse("paper-anon-unconfigured"));
-        enqueueResolved("/api/events/feed", eventsFeedResponse());
-        enqueueResolved("/api/jobs/feed", jobsFeedResponse());
 
         await useFeedStore.getState().loadFeed();
 
@@ -3942,8 +3606,6 @@ describe("feed lane loading", () => {
           });
 
           enqueueResolved("/api/feed", { items: [], meta: {} });
-          enqueueResolved("/api/events/feed", eventsFeedResponse());
-          enqueueResolved("/api/jobs/feed", jobsFeedResponse());
           await useFeedStore.getState().loadFeed();
 
           const request = JSON.parse(
@@ -3996,8 +3658,6 @@ describe("feed lane loading", () => {
           });
 
           enqueueResolved("/api/feed", { items: [], meta: {} });
-          enqueueResolved("/api/events/feed", eventsFeedResponse());
-          enqueueResolved("/api/jobs/feed", jobsFeedResponse());
           await useFeedStore.getState().loadFeed();
 
           const request = JSON.parse(
@@ -4036,8 +3696,6 @@ describe("feed lane loading", () => {
             authOutcome: "unknown",
           });
           enqueueResolved("/api/feed", paperFeedResponse("paper-new"));
-          enqueueResolved("/api/events/feed", eventsFeedResponse());
-          enqueueResolved("/api/jobs/feed", jobsFeedResponse());
           await useFeedStore.getState().loadFeed({ lanes: ["papers"] });
 
           // The premature load used the unknown-owner union read
@@ -4066,8 +3724,6 @@ describe("feed lane loading", () => {
           // the feedTopicsKey guard on purpose — reproduced directly here.
           signIn("user-me");
           enqueueResolved("/api/feed", { items: [], meta: {} });
-          enqueueResolved("/api/events/feed", eventsFeedResponse());
-          enqueueResolved("/api/jobs/feed", jobsFeedResponse());
           await useFeedStore.getState().loadFeed({ lanes: ["papers"] });
 
           const paperRequests = fetchMock.mock.calls.filter(
@@ -4159,5 +3815,244 @@ describe("feed lane loading", () => {
     // own concept to `dislikedTopics`, this test goes red. Verified by
     // temporarily making that exact change and re-running this file; not
     // committed here (see this item's checkpoint for the restore proof).
+  });
+
+  // P9-31 — C1 of stopping jobs and events (the owner's decision, §1a.18 (f): "职位和活动的信息不应该
+  // 被process，这两个功能（职位，活动）需要被停止"; B P9-26 §5 row C1, rulings §1h.60). The store keeps
+  // papers only: no lane, no saved list, no feedback map, no completion stamp and no action for an
+  // event or a job; nothing of them is persisted, synced or sent; and a `peer-feed` blob an older
+  // build wrote is cleaned by the version 3 -> 4 migration.
+  describe("papers only — jobs and events are not processed (P9-31)", () => {
+    const LEGACY_STATE_KEYS = [
+      "events",
+      "jobs",
+      "eventPool",
+      "jobPool",
+      "eventFacetCounts",
+      "jobFacetCounts",
+      "savedEvents",
+      "savedJobs",
+      "eventsLoading",
+      "jobsLoading",
+      "appliedAt",
+      "registeredAt",
+      "submittedAt",
+      "eventFeedback",
+      "jobFeedback",
+    ];
+    const LEGACY_ACTIONS = [
+      "saveEvent",
+      "notInterestedEvent",
+      "moreLikeEvent",
+      "saveJob",
+      "notInterestedJob",
+      "moreLikeJob",
+      "unsaveEvent",
+      "unsaveJob",
+      "setJobApplied",
+      "setEventRegistered",
+      "setEventSubmitted",
+    ];
+    // What a version-3 blob persisted for them (the other eight state keys were never persisted).
+    const LEGACY_PERSISTED_KEYS = [
+      "savedEvents",
+      "savedJobs",
+      "eventFeedback",
+      "jobFeedback",
+      "appliedAt",
+      "registeredAt",
+      "submittedAt",
+    ];
+    const paper: Paper = {
+      id: "openalex:W1",
+      title: "A paper",
+      authors: ["Researcher"],
+      relevanceReason: "Matches materials.",
+      venue: "Example Journal",
+      source: "other",
+      summaryIntro: "Intro.",
+      summaryExperimentKeywords: [],
+      summaryResultDiscussion: "Result.",
+      isSaved: true,
+      feedback: "saved",
+    };
+
+    it("the state has none of the 15 job / event keys and none of the 11 job / event actions", () => {
+      const state = useFeedStore.getState() as unknown as Record<string, unknown>;
+      expect(LEGACY_STATE_KEYS).toHaveLength(15);
+      expect(LEGACY_ACTIONS).toHaveLength(11);
+      for (const key of [...LEGACY_STATE_KEYS, ...LEGACY_ACTIONS]) {
+        expect(state, key).not.toHaveProperty(key);
+      }
+    });
+
+    it("persists none of the legacy keys (and still persists the papers)", () => {
+      expect(persistenceCapture.partialize).toBeTypeOf("function");
+      const persisted = persistenceCapture.partialize?.(useFeedStore.getState()) as Record<string, unknown>;
+      for (const key of LEGACY_PERSISTED_KEYS) expect(persisted, key).not.toHaveProperty(key);
+      expect(persisted).toHaveProperty("savedPapers");
+      expect(persisted).toHaveProperty("paperFeedback");
+    });
+
+    it("a caller that still asks for an events or a jobs lane gets the papers load and no other request", async () => {
+      // A profile that declares event and job topics, as an older build's did: the routes those
+      // lanes used to call are not asked, whatever the profile holds and whatever lane is named.
+      useProfileStore.setState({
+        profile: {
+          ...useProfileStore.getState().profile,
+          activeSearchInputs: {
+            papers: { required: ["materials"], explore: [] },
+            events: { required: ["materials"], explore: [] },
+            jobs: { required: ["materials"], explore: [] },
+            locationPreferences: [] as string[],
+            promotedOn: "2026-07-29",
+          } as UserProfile["activeSearchInputs"],
+        },
+      });
+      enqueueResolved("/api/feed", paperFeedResponse("paper-only"));
+
+      await useFeedStore.getState().loadFeed({ lanes: ["papers", "events", "jobs"] as never });
+
+      expect(fetchMock.mock.calls.map(([input]) => requestPath(input as string | URL | Request))).toEqual(["/api/feed"]);
+      expect(useFeedStore.getState().papers.map((p) => p.id)).toEqual(["paper-only"]);
+    });
+
+    it("sends feedback to the account for a paper and for nothing else", async () => {
+      fetchMock.mockImplementation(async () => jsonResponse({ ok: true }));
+
+      useFeedStore.getState().submitFeedback("job-1", "job", "saved", { title: "A role" });
+      useFeedStore.getState().submitFeedback("evt-1", "event", "notInterested", { title: "A conference" });
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      useFeedStore.getState().submitFeedback("openalex:W1", "paper", "saved", { title: "A paper" });
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const [input, init] = fetchMock.mock.calls[0]!;
+      expect(requestPath(input as string | URL | Request)).toBe("/api/feedback");
+      expect(JSON.parse(String((init as RequestInit).body))).toMatchObject({
+        itemId: "openalex:W1",
+        itemKind: "paper",
+        feedback: "saved",
+      });
+    });
+
+    it("a sign-in pull that hands over a job or an event stores neither, and keeps the papers", () => {
+      useFeedStore.getState().hydrateFromRemote({
+        savedPapers: [paper],
+        savedJobs: [{ id: "job-1", roleTitle: "A role" }],
+        savedEvents: [{ id: "evt-1", name: "A conference" }],
+        readItems: {},
+      } as never);
+
+      const state = useFeedStore.getState() as unknown as Record<string, unknown>;
+      expect(state).not.toHaveProperty("savedJobs");
+      expect(state).not.toHaveProperty("savedEvents");
+      expect(useFeedStore.getState().savedPapers.map((p) => p.id)).toEqual(["openalex:W1"]);
+    });
+
+    describe("migrate — version 3 -> 4 drops what an older build kept for them", () => {
+      const migrateV3 = (blob: unknown) =>
+        persistenceCapture.migrate?.(blob, 3) as Record<string, unknown>;
+
+      // A hand-written version-3 blob: a saved event, a saved job, their feedback and completion
+      // stamps, a pending outbox of mixed kinds for two owners, and the title / company snapshots a
+      // failed feedback push captured for a job and an event.
+      const v3Blob = () => ({
+        papers: [paper],
+        savedPapers: [paper],
+        savedEvents: [{ id: "evt-1", name: "Materials Conference" }],
+        savedJobs: [{ id: "job-1", roleTitle: "Battery Engineer", companyOrLab: "Acme Cells" }],
+        eventFeedback: { "evt-1": "saved" },
+        jobFeedback: { "job-1": "notInterested" },
+        appliedAt: { "job-1": "2026-07-30T15:00:00.000Z" },
+        registeredAt: { "evt-1": "2026-07-30T16:00:00.000Z" },
+        submittedAt: { "evt-1": "2026-07-30T17:00:00.000Z" },
+        paperFeedback: { "openalex:W1": "saved" },
+        readItems: { "openalex:W1": true },
+        deliveredLocalByOwner: { anonymous: { "openalex:W9": "2026-10-01" } },
+        deliveredLocalOwnerOrder: ["anonymous"],
+        pendingPushByOwner: {
+          "user-a": {
+            "saved:event:evt-1": true,
+            "saved:job:job-1": true,
+            "feedback:event:evt-1": true,
+            "feedback:job:job-1": true,
+            "saved:paper:openalex:W1": true,
+            "feedback:paper:openalex:W1": true,
+            "read:openalex:W1": true,
+            migration: true,
+          },
+          "user-b": { "saved:job:job-2": true },
+        },
+        pendingFeedbackPayloadByOwner: {
+          "user-a": {
+            "feedback:job:job-1": { title: "Battery Engineer", concepts: ["Acme Cells"] },
+            "feedback:event:evt-1": { title: "Materials Conference", concepts: [] },
+            "feedback:paper:openalex:W1": { title: "A paper", concepts: ["x"] },
+          },
+        },
+      });
+
+      it("a version-3 blob with a saved event and a saved job comes out with neither, nor anything about them", () => {
+        const migrated = migrateV3(v3Blob());
+
+        for (const key of LEGACY_PERSISTED_KEYS) expect(migrated, key).not.toHaveProperty(key);
+        const text = JSON.stringify(migrated);
+        for (const needle of ["evt-1", "job-1", "job-2", "Battery Engineer", "Acme Cells", "Materials Conference"]) {
+          expect(text, needle).not.toContain(needle);
+        }
+      });
+
+      it("drops the outbox entries of kind event / job with their payloads, and only those", () => {
+        const migrated = migrateV3(v3Blob());
+
+        expect(migrated.pendingPushByOwner).toEqual({
+          "user-a": {
+            "saved:paper:openalex:W1": true,
+            "feedback:paper:openalex:W1": true,
+            "read:openalex:W1": true,
+            migration: true,
+          },
+          "user-b": {},
+        });
+        expect(migrated.pendingFeedbackPayloadByOwner).toEqual({
+          "user-a": { "feedback:paper:openalex:W1": { title: "A paper", concepts: ["x"] } },
+        });
+      });
+
+      it("leaves the papers' side of the blob exactly as it was", () => {
+        const before = v3Blob();
+        const migrated = migrateV3(v3Blob());
+
+        for (const key of [
+          "papers",
+          "savedPapers",
+          "paperFeedback",
+          "readItems",
+          "deliveredLocalByOwner",
+          "deliveredLocalOwnerOrder",
+        ] as const) {
+          expect(migrated[key], key).toEqual(before[key]);
+        }
+      });
+
+      it("is a no-op on a blob that has nothing of theirs, and does not invent an outbox", () => {
+        const clean = { savedPapers: [paper], paperFeedback: { "openalex:W1": "saved" }, deliveredLocalByOwner: { anonymous: {} }, deliveredLocalOwnerOrder: ["anonymous"] };
+        expect(migrateV3(clean)).toEqual(clean);
+      });
+
+      it("does not throw on an outbox that is not the expected shape", () => {
+        const odd = { savedJobs: [], pendingPushByOwner: null, pendingFeedbackPayloadByOwner: { "user-a": "not a record" } };
+        const migrated = migrateV3(odd);
+        expect(migrated).not.toHaveProperty("savedJobs");
+        expect(migrated.pendingPushByOwner).toBeNull();
+        expect(migrated.pendingFeedbackPayloadByOwner).toEqual({ "user-a": "not a record" });
+      });
+
+      it("the persisted shape is version 4 now: the next load of a version-3 blob runs the step", () => {
+        // The store config the test captured is the real one: its version decides whether `migrate`
+        // runs for a blob an older build wrote.
+        expect(persistenceCapture.version).toBe(4);
+      });
+    });
   });
 });

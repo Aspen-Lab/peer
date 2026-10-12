@@ -2,14 +2,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type {
-  Paper,
-  Event,
-  Job,
-  ItemFeedback,
-  OpportunityFacetCounts,
-  UserProfile,
-} from "@/types";
+import type { Paper, ItemFeedback, UserProfile } from "@/types";
 // Mock fixtures kept for use in unit tests / Storybook only — never wired
 // into the live feed. Pre-2026-04-28 the store used `mockPapers` as a
 // fallback when the real API returned 0 results, which silently surfaced
@@ -38,7 +31,7 @@ import {
 } from "@/lib/feed/sync-status";
 import { scoredItemToPaper } from "@/lib/feed/mapper";
 import { STARTER_TOPICS_KEY, topicsOrStarter } from "@/lib/feed/starter-topics";
-import { aiAvailability, feedsUseAi } from "@/lib/feed/ai-tier";
+import { aiAvailability } from "@/lib/feed/ai-tier";
 import { parseJevApiKey } from "@/lib/decisions/jev-key";
 import type { FeedResponse, FeedMeta } from "@/lib/feed/types";
 import { localCalendarDate } from "@/lib/local-calendar-date";
@@ -46,66 +39,17 @@ import {
   browserFeedIntentCard,
   serializeFeedIntent,
 } from "@/lib/feed/intent";
-import type { EventsFeedResponse } from "@/lib/events/types";
-import type { JobsFeedResponse } from "@/lib/jobs/types";
-import {
-  DEFAULT_OPPORTUNITY_TOP_N,
-  emptyOpportunityFacetCounts,
-} from "@/lib/opportunities/facets";
-import {
-  feedbackSnapshotForEvent,
-  feedbackSnapshotForJob,
-  feedbackSnapshotForPaper,
-} from "@/lib/preferences/ledger";
+import { feedbackSnapshotForPaper } from "@/lib/preferences/ledger";
 
 // ── Cloud-sync helpers (fire-and-forget) ────────────────────────
 // All writes are optimistic: local state already changed before we call
 // these. Failures are logged but never block the UI.
 
-type ItemKind = "paper" | "event" | "job";
-type CompletionKey = "appliedAt" | "registeredAt" | "submittedAt";
-
-const COMPLETION_KEYS: CompletionKey[] = [
-  "appliedAt",
-  "registeredAt",
-  "submittedAt",
-];
-
-function payloadTimestamp(
-  payload: unknown,
-  key: CompletionKey,
-): string | undefined {
-  if (!payload || typeof payload !== "object") return undefined;
-  const value = (payload as Record<string, unknown>)[key];
-  if (typeof value !== "string" || !value.trim()) return undefined;
-  return Number.isFinite(Date.parse(value)) ? value : undefined;
-}
-
-function withCompletionPayload<T extends object>(
-  item: T,
-  completion: Partial<Record<CompletionKey, string | undefined>>,
-): T {
-  const payload = { ...item } as T & Partial<Record<CompletionKey, string>>;
-  for (const key of COMPLETION_KEYS) {
-    if (!(key in completion)) continue;
-    const value = completion[key];
-    if (value) payload[key] = value;
-    else delete payload[key];
-  }
-  return payload;
-}
-
-function completionMap<TItem extends { id: string }>(
-  items: TItem[],
-  key: CompletionKey,
-): Record<string, string> {
-  const entries: Record<string, string> = {};
-  for (const item of items) {
-    const timestamp = payloadTimestamp(item, key);
-    if (timestamp) entries[item.id] = timestamp;
-  }
-  return entries;
-}
+// Peer is a paper briefing: papers are the only kind of item the store keeps,
+// saves, syncs or sends feedback about. Jobs and events are not processed (the
+// owner's decision, §1a.18 (f); P9-31) — `migrate` below drops what an older
+// build persisted for them, and the two routes refuse any other kind.
+type ItemKind = "paper";
 
 // FEED-SYNC-FLAG (ABC-JEV-INTEGRATION.md §5 row FEED-SYNC-FLAG, following
 // POLISH-1-SYNC-A's MEDIUM finding,
@@ -161,7 +105,7 @@ function completionMap<TItem extends { id: string }>(
 //     that is what unsave/unread means) is NEVER retried by anything;
 //   - a failed cloudFeedback is NEVER retried by anything (feedback is
 //     push-only — §1aj finding (d) — the migration batch never touches
-//     paperFeedback/eventFeedback/jobFeedback).
+//     paperFeedback).
 // The in-memory pending set (lib/feed/sync-status.ts) is NOT itself
 // persisted and starts empty on every page load, so without mirroring it
 // somewhere durable, a reload would silently drop the P6 warning for
@@ -198,7 +142,7 @@ type ParsedPendingKey =
   | { dimension: "feedback"; itemKind: ItemKind; itemId: string };
 
 function isItemKind(value: string): value is ItemKind {
-  return value === "paper" || value === "event" || value === "job";
+  return value === "paper";
 }
 
 function parseKindedPendingKey(
@@ -258,9 +202,9 @@ function setPendingPushPersisted(
 
 // OUTBOX-RETRY (§1bc point 2; guide §2.3) — the `{title, concepts}` payload
 // a failed `cloudFeedback` attempted, captured at the moment of that
-// failure because it cannot always be reconstructed later (an event/job
-// that was never saved has no persisted pool to look it up in after a
-// reload). Same owner-resolution shape as `setPendingPushPersisted` above,
+// failure because it cannot always be reconstructed later (a paper that was
+// never saved is not in the persisted list to look it up in once it leaves
+// today's briefing). Same owner-resolution shape as `setPendingPushPersisted` above,
 // but a separate map rather than widening that one's value type — its
 // value is read/spread/deleted as bare `true` in several places today, so
 // a new field only `cloudFeedback` + `retryPendingPushes` + `resetLocal` +
@@ -341,8 +285,8 @@ async function cloudUnsave(itemId: string, itemKind: ItemKind) {
   // `itemId`). Needed so an unsave's key matches the SAME item's save key
   // exactly (`saved:<itemKind>:<itemId>`) — "a failed save followed by a
   // successful unsave is consistent" (§1aq point 1) only holds if both
-  // helpers compute the identical key for that item. All 4 call sites
-  // (unsavePaper/unsaveEvent/unsaveJob/commitDismiss) already know the kind.
+  // helpers compute the identical key for that item. Both call sites
+  // (unsavePaper/commitDismiss) already know the kind.
   const key = pendingSavedKey(itemKind, itemId);
   try {
     await apiFetch(`/api/saved?itemId=${encodeURIComponent(itemId)}`, {
@@ -421,8 +365,8 @@ async function cloudFeedback(
     updateFeedPushFailedFlag(false, key);
     // OUTBOX-RETRY (guide §2.3) — capture the payload now, while it's still
     // in scope, so a later retry can resend it even if the item that
-    // produced it (an unsaved event/job — its pool is not persisted) is
-    // gone from local state by the time the retry runs.
+    // produced it (a paper that was never saved and has left today's
+    // briefing) is gone from local state by the time the retry runs.
     if (ownerId) setPendingFeedbackPayload(ownerId, key, payload);
   }
 }
@@ -452,7 +396,7 @@ function pruneRecentlyShown(
   return Object.fromEntries(entries.slice(0, RECENTLY_SHOWN_CAP));
 }
 
-function dismissedOpportunityIds(
+function notInterestedIds(
   feedbackById: Record<string, ItemFeedback>,
 ): Set<string> {
   return new Set(
@@ -705,11 +649,8 @@ async function ensureAdvisorSeeds(
   return { seedTexts: cachedTexts, seedWorkIds: cachedIds };
 }
 
-function activeSurfaceTopics(
-  profile: UserProfile,
-  surface: "papers" | "events" | "jobs",
-) {
-  const activeTopics = profile.activeSearchInputs?.[surface];
+function activePaperTopics(profile: UserProfile) {
+  const activeTopics = profile.activeSearchInputs?.papers;
   return {
     topics: (activeTopics?.required ?? []).filter(Boolean),
     softTopics: (activeTopics?.explore ?? []).filter(Boolean),
@@ -717,7 +658,7 @@ function activeSurfaceTopics(
 }
 
 function activePaperIntent(profile: UserProfile) {
-  const { topics, softTopics } = activeSurfaceTopics(profile, "papers");
+  const { topics, softTopics } = activePaperTopics(profile);
   return browserFeedIntentCard({
     project: profile.currentProject,
     challenge: profile.currentChallenges,
@@ -753,7 +694,7 @@ export function paperFeedRequestBody(
   // sign-in check has not answered, no model is asked for.
   auth: AuthOutcome = "unknown",
 ): Record<string, unknown> {
-  const { topics: ownTopics, softTopics } = activeSurfaceTopics(profile, "papers");
+  const { topics: ownTopics, softTopics } = activePaperTopics(profile);
   const topics = topicsOrStarter(ownTopics);
   const seedTexts = [
     profile.currentProject,
@@ -827,10 +768,9 @@ export function paperFeedRequestBody(
         : undefined,
     topN: profile.paperCount,
     aiTier: paperAiAvailable ? 2 : 0,
-    // NO `searchConnectors`. The Tavily toggle stays in the profile because
-    // events and jobs still need it — their listings only exist on the open
-    // web — but the paper surface has nothing left to spend it on, so it does
-    // not ask for the key. `opportunityRequestBody` is where it is still sent.
+    // NO `searchConnectors`. The Tavily toggle stays in the profile, but the
+    // paper surface has nothing left to spend it on, so it does not ask for
+    // the key.
     llmOverride: useOwnKey
       ? {
           provider: profile.feedAiProvider,
@@ -922,148 +862,12 @@ async function fetchRealFeed(
   }
 }
 
-// Shared request-shaping for the jobs/events feeds: both routes take the
-// same profile projection.
-export function opportunityRequestBody(
-  profile: UserProfile,
-  surface: "events" | "jobs",
-  excludeIds: string[],
-  auth: AuthOutcome = "unknown",
-): Record<string, unknown> {
-  const { topics, softTopics } = activeSurfaceTopics(profile, surface);
-  const activeInputs = profile.activeSearchInputs;
-  const preferenceLedger = profile.preferenceLedger ?? {};
-  const tavilyApiKey = profile.tavilyApiKey?.trim();
-  const feedAiApiKey = profile.feedAiApiKey?.trim();
-  // RULING 68a: these reads were inline here and duplicated, in different
-  // words, at the dashboard chip — which is how the chip came to claim a tier
-  // it does not govern. One home now: the tier and the override both follow
-  // `aiAvailability`, so a key is only put in a request that will use it.
-  const useOwnKey = aiAvailability(profile, auth) === "byok";
-  return {
-    topics,
-    softTopics: softTopics.length > 0 ? softTopics : undefined,
-    methods: profile.preferredMethods,
-    seedTexts: [profile.currentProject, profile.currentChallenges].filter(
-      (s): s is string => Boolean(s && s.trim().length > 0),
-    ),
-    preferenceLedger:
-      Object.keys(preferenceLedger).length > 0 ? preferenceLedger : undefined,
-    careerStage: activeInputs?.careerStage,
-    industryVsAcademia: profile.industryVsAcademia,
-    locationPreferences: activeInputs?.locationPreferences ?? [],
-    ...(surface === "jobs"
-      ? { authorisedCountries: profile.authorisedCountries }
-      : {}),
-    currentProject: profile.currentProject,
-    topN: DEFAULT_OPPORTUNITY_TOP_N,
-    aiTier: feedsUseAi(profile, auth) ? 2 : 0,
-    searchConnectors: profile.tavilyEnabled
-      ? { tavily: { enabled: true, apiKey: tavilyApiKey || undefined } }
-      : undefined,
-    // Bring-your-own job-source keys (ignored by the events route). Adzuna and
-    // USAJobs unlock industry + US-federal research postings.
-    apiKeys: {
-      adzunaAppId: profile.adzunaAppId?.trim() || undefined,
-      adzunaAppKey: profile.adzunaAppKey?.trim() || undefined,
-      usajobsApiKey: profile.usajobsApiKey?.trim() || undefined,
-      usajobsUserAgent: profile.usajobsUserAgent?.trim() || undefined,
-    },
-    // Only a reader whose own key will run (a key, and signed in) sends one.
-    llmOverride: useOwnKey
-      ? { provider: profile.feedAiProvider, apiKey: feedAiApiKey }
-      : undefined,
-    excludeIds: excludeIds.length > 0 ? excludeIds : undefined,
-  };
-}
-
-async function fetchRealEvents(
-  profile: UserProfile,
-  excludeIds: string[] = [],
-  auth: AuthOutcome = "unknown",
-): Promise<OpportunityClientPool<Event>> {
-  if (activeSurfaceTopics(profile, "events").topics.length === 0) {
-    return emptyOpportunityClientPool<Event>();
-  }
-  try {
-    const res = await fetch("/api/events/feed", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        opportunityRequestBody(profile, "events", excludeIds, auth),
-      ),
-    });
-    if (!res.ok) {
-      console.error("[feed] /api/events/feed returned", res.status);
-      return emptyOpportunityClientPool<Event>();
-    }
-    const data = (await res.json()) as EventsFeedResponse;
-    return {
-      items: data.items ?? [],
-      pool: data.pool ?? data.items ?? [],
-      facetCounts: data.facetCounts ?? emptyOpportunityFacetCounts(),
-    };
-  } catch (err) {
-    console.error("[feed] events fetch failed:", err);
-    return emptyOpportunityClientPool<Event>();
-  }
-}
-
-async function fetchRealJobs(
-  profile: UserProfile,
-  excludeIds: string[] = [],
-  auth: AuthOutcome = "unknown",
-): Promise<OpportunityClientPool<Job>> {
-  if (activeSurfaceTopics(profile, "jobs").topics.length === 0) {
-    return emptyOpportunityClientPool<Job>();
-  }
-  try {
-    const res = await fetch("/api/jobs/feed", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        opportunityRequestBody(profile, "jobs", excludeIds, auth),
-      ),
-    });
-    if (!res.ok) {
-      console.error("[feed] /api/jobs/feed returned", res.status);
-      return emptyOpportunityClientPool<Job>();
-    }
-    const data = (await res.json()) as JobsFeedResponse;
-    return {
-      items: data.items ?? [],
-      pool: data.pool ?? data.items ?? [],
-      facetCounts: data.facetCounts ?? emptyOpportunityFacetCounts(),
-    };
-  } catch (err) {
-    console.error("[feed] jobs fetch failed:", err);
-    return emptyOpportunityClientPool<Job>();
-  }
-}
-
-interface OpportunityClientPool<TItem> {
-  items: TItem[];
-  pool: TItem[];
-  facetCounts: OpportunityFacetCounts;
-}
-
-function emptyOpportunityClientPool<TItem>(): OpportunityClientPool<TItem> {
-  return {
-    items: [],
-    pool: [],
-    facetCounts: emptyOpportunityFacetCounts(),
-  };
-}
-
-type DismissalKind = "paper" | "event" | "job";
-
 interface PendingDismissal {
   id: string;
-  kind: DismissalKind;
-  item: Paper | Event | Job;
+  kind: "paper";
+  item: Paper;
   previousFeedback?: ItemFeedback;
   wasInDisplay: boolean;
-  wasInPool: boolean;
   wasSaved: boolean;
   expiresAt: number;
 }
@@ -1151,7 +955,11 @@ function syncSavedState<
   });
 }
 
-export type FeedLane = "papers" | "events" | "jobs";
+/** The one lane Peer has: the paper briefing. Jobs and events are not
+ *  processed (the owner's decision, §1a.18 (f)), so there is no other lane
+ *  to name; the type stays so the callers that pass `lanes: ["papers"]` keep
+ *  compiling. */
+export type FeedLane = "papers";
 
 export interface FeedLoadOptions {
   /**
@@ -1160,32 +968,20 @@ export interface FeedLoadOptions {
    */
   advanceHistory?: boolean;
   /**
-   * Which pipelines to run. The daily surface asks for `["papers"]` only:
-   * events and jobs are once-a-year needs and used to run on every home-page
-   * tick, taxing the latency of the one lane that is checked every morning.
-   * Omitted means all three, so existing callers keep their behaviour.
+   * Which lanes to run. Papers are the only lane, so omitted means
+   * `["papers"]`; the home page still passes it explicitly.
    */
   lanes?: FeedLane[];
 }
 
 interface FeedState {
   papers: Paper[];
-  events: Event[];
-  jobs: Job[];
-  /** Full daily pools power facets without expanding the default feed slice. */
-  eventPool: Event[];
-  jobPool: Job[];
-  eventFacetCounts: OpportunityFacetCounts;
-  jobFacetCounts: OpportunityFacetCounts;
   savedPapers: Paper[];
-  savedEvents: Event[];
-  savedJobs: Job[];
   isLoading: boolean;
-  /** Per-lane flags let papers render (and the digest start) without waiting
-   * for the slower standing-opportunity lanes. */
+  /** The papers lane's own loading flag (`isLoading` also covers the
+   * bookkeeping after it settles), so the briefing can render — and the
+   * digest start — as soon as the papers arrive. */
   papersLoading: boolean;
-  eventsLoading: boolean;
-  jobsLoading: boolean;
   lastRefresh: string | null;
   /**
    * Why the last paper load produced nothing, when it failed rather than
@@ -1251,9 +1047,6 @@ interface FeedState {
    * See lib/feed/session-step.ts.
    */
   syncedUserId: string | null;
-  appliedAt: Record<string, string>;
-  registeredAt: Record<string, string>;
-  submittedAt: Record<string, string>;
   paperSummaries: Record<string, string>;
   /** id -> ms timestamp. Drives the "don't repeat papers" exclude list. */
   recentlyShownIds: Record<string, number>;
@@ -1261,10 +1054,6 @@ interface FeedState {
   /** id -> feedback. Tracks save/like/dismiss state for any paper the user
    * has interacted with, even ones not in the current feed (e.g. searched). */
   paperFeedback: Record<string, ItemFeedback>;
-  /** id -> feedback for events the user has interacted with. */
-  eventFeedback: Record<string, ItemFeedback>;
-  /** id -> feedback for jobs the user has interacted with. */
-  jobFeedback: Record<string, ItemFeedback>;
   /**
    * P4-S5a — the current response's batch identity (ABC-JEV-INTEGRATION.md
    * §1p.C.5). Transient: re-derived on every load, never persisted — a
@@ -1395,9 +1184,8 @@ interface FeedState {
    * that failure (inside `cloudFeedback`'s own catch branch — see
    * `setPendingFeedbackPayload`) because it cannot always be reconstructed
    * later: `<kind>Feedback[id]` (the VALUE) survives a reload, but this
-   * snapshot does not, and for an item that was never saved (`events`/
-   * `jobs`/`eventPool`/`jobPool` are not persisted) nothing else can
-   * recompute it after one. Cleared together with its key, whether that key
+   * snapshot does not, and for a paper that was never saved and has left
+   * today's briefing nothing else can recompute it after one. Cleared together with its key, whether that key
    * resolves by a later success or by `retryPendingPushes`/`cloudFeedback`
    * giving up on it (§2.2 / §1bc point 3).
    *
@@ -1484,15 +1272,7 @@ interface FeedState {
   savePaper: (paper: Paper) => void;
   notInterestedPaper: (paper: Paper) => void;
   moreLikePaper: (paper: Paper) => void;
-  saveEvent: (event: Event) => void;
-  notInterestedEvent: (event: Event) => void;
-  moreLikeEvent: (event: Event) => void;
-  saveJob: (job: Job) => void;
-  notInterestedJob: (job: Job) => void;
-  moreLikeJob: (job: Job) => void;
   unsavePaper: (id: string) => void;
-  unsaveEvent: (id: string) => void;
-  unsaveJob: (id: string) => void;
   submitFeedback: (
     itemId: string,
     type: string,
@@ -1504,13 +1284,6 @@ interface FeedState {
   markRead: (id: string, paper?: Paper) => void;
   setSyncedUserId: (id: string | null) => void;
   markUnread: (id: string) => void;
-  setJobApplied: (job: Job, applied: boolean, at?: string) => void;
-  setEventRegistered: (
-    event: Event,
-    registered: boolean,
-    at?: string,
-  ) => void;
-  setEventSubmitted: (event: Event, submitted: boolean, at?: string) => void;
   undoDismiss: () => void;
   commitDismiss: () => void;
   /**
@@ -1532,15 +1305,13 @@ interface FeedState {
    */
   hydrateFromRemote: (remote: {
     savedPapers?: Paper[];
-    savedEvents?: Event[];
-    savedJobs?: Job[];
     readItems?: Record<string, true>;
   }) => void;
   /**
    * FEED-SYNC-FLAG round 2 (§1aq point 1, last sentence) — called by
    * feed-sync.tsx once its migration batch's `Promise.allSettled` result is
    * known. `pushed` is exactly what that batch attempted to push: every
-   * item CURRENTLY in `savedPapers`/`savedEvents`/`savedJobs` (it always
+   * paper CURRENTLY in `savedPapers` (it always
    * POSTs "this is saved", never a DELETE) and every id CURRENTLY in
    * `readItems` (same — POST only). It never includes feedback; the batch
    * does not touch feedback at all.
@@ -1556,8 +1327,8 @@ interface FeedState {
    * clearing them anyway would be exactly the over-clearing S1/S2 already
    * ruled out for the steady-state helpers, just moved into this one
    * instead. `fullySucceeded` true now clears ONLY the keys built from
-   * `pushed` (`saved:<kind>:<id>` for each item in
-   * savedPapers/savedEvents/savedJobs, `read:<id>` for each id in readIds)
+   * `pushed` (`saved:paper:<id>` for each paper in
+   * savedPapers, `read:<id>` for each id in readIds)
    * plus the coarse `MIGRATION_PENDING_KEY` — never any OTHER pending key
    * (in-memory AND the persisted `pendingPushByOwner` entry, in lockstep).
    * Every other pending key (an absent-locally saved/unsave key, or any
@@ -1576,8 +1347,6 @@ interface FeedState {
     ownerId: string,
     pushed: {
       savedPapers: { id: string }[];
-      savedEvents: { id: string }[];
-      savedJobs: { id: string }[];
       readIds: string[];
     },
     fullySucceeded: boolean,
@@ -1667,43 +1436,69 @@ let pendingAckInFlight: Promise<void> | null = null;
 // key. Always reset to null once the in-flight pass settles.
 let pendingRetryInFlight: Promise<void> | null = null;
 
-function findSavedItem(
-  state: FeedState,
-  kind: ItemKind,
-  id: string,
-): Paper | Event | Job | undefined {
-  if (kind === "paper") return state.savedPapers.find((p) => p.id === id);
-  if (kind === "event") return state.savedEvents.find((e) => e.id === id);
-  return state.savedJobs.find((j) => j.id === id);
+function findSavedPaper(state: FeedState, id: string): Paper | undefined {
+  return state.savedPapers.find((p) => p.id === id);
 }
 
 function currentFeedbackValue(
   state: FeedState,
-  kind: ItemKind,
   id: string,
 ): ItemFeedback | undefined {
-  if (kind === "paper") return state.paperFeedback[id];
-  if (kind === "event") return state.eventFeedback[id];
-  return state.jobFeedback[id];
+  return state.paperFeedback[id];
+}
+
+// P9-31 — what a version-3 `peer-feed` blob may still hold for jobs and events.
+const LEGACY_OPPORTUNITY_KEYS = [
+  "savedEvents",
+  "savedJobs",
+  "eventFeedback",
+  "jobFeedback",
+  "appliedAt",
+  "registeredAt",
+  "submittedAt",
+  "oppFeedback",
+] as const;
+
+// The outbox keys (`pendingPushByOwner`, and the matching payload snapshots in
+// `pendingFeedbackPayloadByOwner`) are `saved:<kind>:<id>` and
+// `feedback:<kind>:<id>`; only the event / job kinds go, with their payloads.
+const LEGACY_OPPORTUNITY_OUTBOX_PREFIXES = [
+  "saved:event:",
+  "saved:job:",
+  "feedback:event:",
+  "feedback:job:",
+];
+
+/** A per-owner outbox map without its event / job entries; anything that is
+ *  not the expected object-of-objects shape is returned as it came. */
+function withoutOpportunityOutboxKeys(byOwner: unknown): unknown {
+  if (!byOwner || typeof byOwner !== "object" || Array.isArray(byOwner)) {
+    return byOwner;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [owner, record] of Object.entries(byOwner)) {
+    out[owner] =
+      record && typeof record === "object" && !Array.isArray(record)
+        ? Object.fromEntries(
+            Object.entries(record).filter(
+              ([key]) =>
+                !LEGACY_OPPORTUNITY_OUTBOX_PREFIXES.some((prefix) =>
+                  key.startsWith(prefix),
+                ),
+            ),
+          )
+        : record;
+  }
+  return out;
 }
 
 export const useFeedStore = create<FeedState>()(
   persist(
     (set, get) => ({
       papers: [],
-      events: [],
-      jobs: [],
-      eventPool: [],
-      jobPool: [],
-      eventFacetCounts: emptyOpportunityFacetCounts(),
-      jobFacetCounts: emptyOpportunityFacetCounts(),
       savedPapers: [],
-      savedEvents: [],
-      savedJobs: [],
       isLoading: false,
       papersLoading: false,
-      eventsLoading: false,
-      jobsLoading: false,
       lastRefresh: null,
       feedTopicsKey: null,
       feedFailedKey: null,
@@ -1712,17 +1507,12 @@ export const useFeedStore = create<FeedState>()(
       readAt: {},
       library: {},
       syncedUserId: null,
-      appliedAt: {},
-      registeredAt: {},
-      submittedAt: {},
       paperSummaries: {},
       recentlyShownIds: {},
       pendingDismissal: null,
       feedError: null,
       emptyReasonCode: null,
       paperFeedback: {},
-      eventFeedback: {},
-      jobFeedback: {},
       batchId: null,
       batchStatus: null,
       renderedBatchId: null,
@@ -1838,12 +1628,11 @@ export const useFeedStore = create<FeedState>()(
 
         const requestId = ++feedLoadSeq;
         const advanceHistory = options?.advanceHistory === true;
-        // Papers only by default. Events and jobs are no longer product surfaces;
-        // their lanes stay callable for now but nothing asks for them.
+        // Papers are the only lane (jobs and events are not processed — the
+        // owner's decision, §1a.18 (f)); `lanes` is still accepted so the home
+        // page's `lanes: ["papers"]` keeps working.
         const lanes = options?.lanes ?? ["papers"];
         const wantsPapers = lanes.includes("papers");
-        const wantsEvents = lanes.includes("events");
-        const wantsJobs = lanes.includes("jobs");
         // P4-S5b-FIX (Round 3) — ABC-JEV-INTEGRATION.md §1c, closing finding
         // (b). Resolve and "touch" (MRU-bump, evict beyond
         // MAX_DELIVERED_LOCAL_OWNERS) the CURRENT owner's deliveredLocal
@@ -1887,8 +1676,6 @@ export const useFeedStore = create<FeedState>()(
         set({
           isLoading: true,
           papersLoading: wantsPapers,
-          eventsLoading: wantsEvents,
-          jobsLoading: wantsJobs,
           // EMPTY-STATE-REASON — reset alongside feedError, for the same
           // reason: a stale reason from a previous empty load must not
           // survive into a load that might succeed with papers, fail
@@ -1909,8 +1696,6 @@ export const useFeedStore = create<FeedState>()(
           savedPapers,
           recentlyShownIds,
           paperFeedback,
-          eventFeedback,
-          jobFeedback,
         } = get();
         // P4-S5b-FIX2 (Round 3) — `null` (owner not yet known) used to read
         // as no device-local exclusions at all.
@@ -1929,13 +1714,12 @@ export const useFeedStore = create<FeedState>()(
         // the feed page's auto-load key so the page knows the feed is current.
         const topicsKey = activePaperTopicsKey(profile);
 
-        // Papers are a STANDING daily pool now, the same as events and jobs.
-        // The server builds one pool per local day and a plain load re-reads
-        // it, so opening the app a second time shows the SAME reading list
-        // instead of paying for another search — which is the whole point of
-        // the daily pool. Passing the recently-shown set on every load would
-        // undo that from the client side: the pool would be stable and the
-        // client would filter it away.
+        // Papers are a STANDING daily pool. The server builds one pool per
+        // local day and a plain load re-reads it, so opening the app a second
+        // time shows the SAME reading list instead of paying for another
+        // search — which is the whole point of the daily pool. Passing the
+        // recently-shown set on every load would undo that from the client
+        // side: the pool would be stable and the client would filter it away.
         //
         // A deliberate refresh / load-more is the one path that still asks for
         // something new, so it alone carries the consume-once exclusions.
@@ -1946,9 +1730,7 @@ export const useFeedStore = create<FeedState>()(
         // filtered when unioned with the other two sources below). §1g's
         // "no delivered item re-enters future batches" and "saved history
         // preserved" are two SEPARATE clauses, not one excusing the other.
-        const dismissedPaperIds = Array.from(
-          dismissedOpportunityIds(paperFeedback),
-        );
+        const dismissedPaperIds = Array.from(notInterestedIds(paperFeedback));
         // P4-S5b — ABC-JEV-INTEGRATION.md §1p.C.1 + this slice's manager
         // refinement (2026-09-24): papers this DEVICE recorded delivered
         // BEFORE today are excluded starting from that next local day, on
@@ -1991,22 +1773,8 @@ export const useFeedStore = create<FeedState>()(
           ]),
         ).slice(0, DELIVERED_EXCLUDE_SEND_CAP);
 
-        // Events and jobs are STANDING opportunities, not consume-once items: a
-        // conference is relevant every day until its deadline passes, so it
-        // should keep surfacing rather than being suppressed after one view.
-        // Exclude only the ones the user explicitly dismissed so dismissals
-        // stick without starving either small opportunity pool.
-        const dismissedEventIds = Array.from(
-          dismissedOpportunityIds(eventFeedback),
-        );
-        const dismissedJobIds = Array.from(
-          dismissedOpportunityIds(jobFeedback),
-        );
-
-        // Start all three pipelines together, but let each lane publish as
-        // soon as it settles. allSettled below coordinates only the shared
-        // refresh lifecycle; it is not a render barrier. Each helper degrades
-        // to an empty pool on failure so one surface never blanks the others.
+        // The papers lane publishes as soon as it settles; allSettled below
+        // only closes the shared refresh lifecycle (isLoading, lastRefresh).
         const papersLane = (async () => {
           if (!wantsPapers) return;
           try {
@@ -2152,9 +1920,7 @@ export const useFeedStore = create<FeedState>()(
                 // Record shown PAPERS so the next load skips them, but only
                 // for deliberate refresh/load-more actions. Opening today's
                 // feed must not extend timestamps or change the next cached
-                // briefing's exclusion set. Events/jobs are deliberately NOT
-                // recorded — they're standing opportunities that should keep
-                // appearing until their deadline passes or the user acts.
+                // briefing's exclusion set.
                 const now = Date.now();
                 const nextShown: Record<string, number> = {
                   ...state.recentlyShownIds,
@@ -2184,97 +1950,11 @@ export const useFeedStore = create<FeedState>()(
           }
         })();
 
-        const eventsLane = (async () => {
-          if (!wantsEvents) return;
-          try {
-            const realEvents = await fetchRealEvents(
-              profile,
-              dismissedEventIds,
-              useSyncGate.getState().authOutcome,
-            );
-            if (requestId !== feedLoadSeq) return;
-            set((state) => {
-              const currentSavedIds = new Set(
-                state.savedEvents.map((event) => event.id),
-              );
-              // Re-read dismissals from the latest state, not the snapshot the
-              // request was built from: the user may have dismissed something
-              // while this lane was in flight, and a stale response must not
-              // resurrect it.
-              const currentDismissedIds = dismissedOpportunityIds(
-                state.eventFeedback,
-              );
-              const decorate = (event: Event): Event => ({
-                ...event,
-                isSaved: currentSavedIds.has(event.id),
-                feedback:
-                  state.eventFeedback[event.id] ??
-                  (currentSavedIds.has(event.id)
-                    ? ("saved" as ItemFeedback)
-                    : undefined),
-              });
-              const keep = (event: Event) => !currentDismissedIds.has(event.id);
-              return {
-                events: realEvents.items.filter(keep).map(decorate),
-                eventPool: realEvents.pool.filter(keep).map(decorate),
-                eventFacetCounts: realEvents.facetCounts,
-                eventsLoading: false,
-              };
-            });
-          } finally {
-            if (requestId === feedLoadSeq && get().eventsLoading) {
-              set({ eventsLoading: false });
-            }
-          }
-        })();
-
-        const jobsLane = (async () => {
-          if (!wantsJobs) return;
-          try {
-            const realJobs = await fetchRealJobs(
-              profile,
-              dismissedJobIds,
-              useSyncGate.getState().authOutcome,
-            );
-            if (requestId !== feedLoadSeq) return;
-            set((state) => {
-              const currentSavedIds = new Set(
-                state.savedJobs.map((job) => job.id),
-              );
-              const currentDismissedIds = dismissedOpportunityIds(
-                state.jobFeedback,
-              );
-              const decorate = (job: Job): Job => ({
-                ...job,
-                isSaved: currentSavedIds.has(job.id),
-                feedback:
-                  state.jobFeedback[job.id] ??
-                  (currentSavedIds.has(job.id)
-                    ? ("saved" as ItemFeedback)
-                    : undefined),
-              });
-              const keep = (job: Job) => !currentDismissedIds.has(job.id);
-              return {
-                jobs: realJobs.items.filter(keep).map(decorate),
-                jobPool: realJobs.pool.filter(keep).map(decorate),
-                jobFacetCounts: realJobs.facetCounts,
-                jobsLoading: false,
-              };
-            });
-          } finally {
-            if (requestId === feedLoadSeq && get().jobsLoading) {
-              set({ jobsLoading: false });
-            }
-          }
-        })();
-
-        await Promise.allSettled([papersLane, eventsLane, jobsLane]);
+        await Promise.allSettled([papersLane]);
         if (requestId !== feedLoadSeq) return;
         set({
           isLoading: false,
           papersLoading: false,
-          eventsLoading: false,
-          jobsLoading: false,
           // A failed paper load is not a sync; keep the previous stamp so the
           // header cannot read "synced just now" over an error.
           lastRefresh: get().feedError ? get().lastRefresh : new Date().toISOString(),
@@ -2374,183 +2054,6 @@ export const useFeedStore = create<FeedState>()(
         );
       },
 
-      saveEvent: (event) => {
-        const alreadySaved = get().savedEvents.some((e) => e.id === event.id);
-        const previousFeedback = get().eventFeedback[event.id] ?? event.feedback;
-        const savedFeedback =
-          previousFeedback === "moreLikeThis" || previousFeedback === "liked"
-            ? previousFeedback
-            : ("saved" as ItemFeedback);
-        const saved = withCompletionPayload(
-          { ...event, isSaved: true, feedback: savedFeedback },
-          {
-            registeredAt: get().registeredAt[event.id],
-            submittedAt: get().submittedAt[event.id],
-          },
-        );
-        set((s) => ({
-          events: s.events.map((e) => (e.id === event.id ? saved : e)),
-          eventPool: s.eventPool.map((e) =>
-            e.id === event.id ? saved : e,
-          ),
-          savedEvents: alreadySaved
-            ? s.savedEvents.map((e) => (e.id === event.id ? saved : e))
-            : [saved, ...s.savedEvents],
-          eventFeedback: { ...s.eventFeedback, [event.id]: savedFeedback },
-        }));
-        if (!alreadySaved) {
-          useProfileStore.getState().recordEventPreference(saved, "positive");
-        }
-        cloudSave(event.id, "event", saved);
-        get().submitFeedback(
-          event.id,
-          "event",
-          "saved",
-          feedbackSnapshotForEvent(saved),
-        );
-      },
-
-      notInterestedEvent: (event) => {
-        const prev = get().pendingDismissal;
-        if (prev) get().commitDismiss();
-        const previousFeedback = get().eventFeedback[event.id] ?? event.feedback;
-
-        set((s) => ({
-          events: s.events.filter((e) => e.id !== event.id),
-          eventPool: s.eventPool.filter((e) => e.id !== event.id),
-          savedEvents: s.savedEvents.filter((e) => e.id !== event.id),
-          eventFeedback: { ...s.eventFeedback, [event.id]: "notInterested" },
-          pendingDismissal: {
-            id: event.id,
-            kind: "event",
-            item: withCompletionPayload(event, {
-              registeredAt: s.registeredAt[event.id],
-              submittedAt: s.submittedAt[event.id],
-            }),
-            previousFeedback,
-            wasInDisplay: s.events.some((item) => item.id === event.id),
-            wasInPool: s.eventPool.some((item) => item.id === event.id),
-            wasSaved: s.savedEvents.some((item) => item.id === event.id),
-            expiresAt: Date.now() + 4000,
-          },
-        }));
-      },
-
-      moreLikeEvent: (event) => {
-        const previous = get().eventFeedback[event.id] ?? event.feedback;
-        const alreadyLiked = previous === "moreLikeThis" || previous === "liked";
-        set((s) => ({
-          events: s.events.map((e) =>
-            e.id === event.id
-              ? { ...e, feedback: "moreLikeThis" as ItemFeedback }
-              : e,
-          ),
-          savedEvents: s.savedEvents.map((e) =>
-            e.id === event.id
-              ? { ...e, feedback: "moreLikeThis" as ItemFeedback }
-              : e,
-          ),
-          eventPool: s.eventPool.map((e) =>
-            e.id === event.id
-              ? { ...e, feedback: "moreLikeThis" as ItemFeedback }
-              : e,
-          ),
-          eventFeedback: { ...s.eventFeedback, [event.id]: "moreLikeThis" },
-        }));
-        if (!alreadyLiked) {
-          useProfileStore.getState().recordEventPreference(event, "positive");
-        }
-        get().submitFeedback(
-          event.id,
-          "event",
-          "moreLikeThis",
-          feedbackSnapshotForEvent(event),
-        );
-      },
-
-      saveJob: (job) => {
-        const alreadySaved = get().savedJobs.some((j) => j.id === job.id);
-        const previousFeedback = get().jobFeedback[job.id] ?? job.feedback;
-        const savedFeedback =
-          previousFeedback === "moreLikeThis" || previousFeedback === "liked"
-            ? previousFeedback
-            : ("saved" as ItemFeedback);
-        const saved = withCompletionPayload(
-          { ...job, isSaved: true, feedback: savedFeedback },
-          { appliedAt: get().appliedAt[job.id] },
-        );
-        set((s) => ({
-          jobs: s.jobs.map((j) => (j.id === job.id ? saved : j)),
-          jobPool: s.jobPool.map((j) => (j.id === job.id ? saved : j)),
-          savedJobs: alreadySaved
-            ? s.savedJobs.map((j) => (j.id === job.id ? saved : j))
-            : [saved, ...s.savedJobs],
-          jobFeedback: { ...s.jobFeedback, [job.id]: savedFeedback },
-        }));
-        if (!alreadySaved) {
-          useProfileStore.getState().recordJobPreference(saved, "positive");
-        }
-        cloudSave(job.id, "job", saved);
-        get().submitFeedback(job.id, "job", "saved", feedbackSnapshotForJob(saved));
-      },
-
-      notInterestedJob: (job) => {
-        const prev = get().pendingDismissal;
-        if (prev) get().commitDismiss();
-        const previousFeedback = get().jobFeedback[job.id] ?? job.feedback;
-
-        set((s) => ({
-          jobs: s.jobs.filter((j) => j.id !== job.id),
-          jobPool: s.jobPool.filter((j) => j.id !== job.id),
-          savedJobs: s.savedJobs.filter((j) => j.id !== job.id),
-          jobFeedback: { ...s.jobFeedback, [job.id]: "notInterested" },
-          pendingDismissal: {
-            id: job.id,
-            kind: "job",
-            item: withCompletionPayload(job, {
-              appliedAt: s.appliedAt[job.id],
-            }),
-            previousFeedback,
-            wasInDisplay: s.jobs.some((item) => item.id === job.id),
-            wasInPool: s.jobPool.some((item) => item.id === job.id),
-            wasSaved: s.savedJobs.some((item) => item.id === job.id),
-            expiresAt: Date.now() + 4000,
-          },
-        }));
-      },
-
-      moreLikeJob: (job) => {
-        const previous = get().jobFeedback[job.id] ?? job.feedback;
-        const alreadyLiked = previous === "moreLikeThis" || previous === "liked";
-        set((s) => ({
-          jobs: s.jobs.map((j) =>
-            j.id === job.id
-              ? { ...j, feedback: "moreLikeThis" as ItemFeedback }
-              : j,
-          ),
-          jobPool: s.jobPool.map((j) =>
-            j.id === job.id
-              ? { ...j, feedback: "moreLikeThis" as ItemFeedback }
-              : j,
-          ),
-          savedJobs: s.savedJobs.map((j) =>
-            j.id === job.id
-              ? { ...j, feedback: "moreLikeThis" as ItemFeedback }
-              : j,
-          ),
-          jobFeedback: { ...s.jobFeedback, [job.id]: "moreLikeThis" },
-        }));
-        if (!alreadyLiked) {
-          useProfileStore.getState().recordJobPreference(job, "positive");
-        }
-        get().submitFeedback(
-          job.id,
-          "job",
-          "moreLikeThis",
-          feedbackSnapshotForJob(job),
-        );
-      },
-
       unsavePaper: (id) => {
         set((s) => {
           const nextFeedback = { ...s.paperFeedback };
@@ -2574,92 +2077,11 @@ export const useFeedStore = create<FeedState>()(
         cloudUnsave(id, "paper");
       },
 
-      unsaveEvent: (id) => {
-        set((s) => {
-          const nextFeedback = { ...s.eventFeedback };
-          const nextRegisteredAt = { ...s.registeredAt };
-          const nextSubmittedAt = { ...s.submittedAt };
-          const currentFeedback = nextFeedback[id];
-          if (currentFeedback === "saved") delete nextFeedback[id];
-          delete nextRegisteredAt[id];
-          delete nextSubmittedAt[id];
-          return {
-            events: s.events.map((e) =>
-              e.id === id
-                ? {
-                    ...e,
-                    isSaved: false,
-                    feedback:
-                      currentFeedback === "saved" ? undefined : currentFeedback,
-                  }
-                : e,
-            ),
-            eventPool: s.eventPool.map((e) =>
-              e.id === id
-                ? {
-                    ...e,
-                    isSaved: false,
-                    feedback:
-                      currentFeedback === "saved"
-                        ? undefined
-                        : currentFeedback,
-                  }
-                : e,
-            ),
-            savedEvents: s.savedEvents.filter((e) => e.id !== id),
-            eventFeedback: nextFeedback,
-            registeredAt: nextRegisteredAt,
-            submittedAt: nextSubmittedAt,
-          };
-        });
-        cloudUnsave(id, "event");
-      },
-
-      unsaveJob: (id) => {
-        set((s) => {
-          const nextFeedback = { ...s.jobFeedback };
-          const nextAppliedAt = { ...s.appliedAt };
-          const currentFeedback = nextFeedback[id];
-          if (currentFeedback === "saved") delete nextFeedback[id];
-          delete nextAppliedAt[id];
-          return {
-            jobs: s.jobs.map((j) =>
-              j.id === id
-                ? {
-                    ...j,
-                    isSaved: false,
-                    feedback:
-                      currentFeedback === "saved" ? undefined : currentFeedback,
-                  }
-                : j,
-            ),
-            jobPool: s.jobPool.map((j) =>
-              j.id === id
-                ? {
-                    ...j,
-                    isSaved: false,
-                    feedback:
-                      currentFeedback === "saved"
-                        ? undefined
-                        : currentFeedback,
-                  }
-                : j,
-            ),
-            savedJobs: s.savedJobs.filter((j) => j.id !== id),
-            jobFeedback: nextFeedback,
-            appliedAt: nextAppliedAt,
-          };
-        });
-        cloudUnsave(id, "job");
-      },
-
       submitFeedback: (itemId, type, feedback, payload) => {
         console.log(`[Peer] Feedback: ${type} ${itemId} → ${feedback}`);
-        const kind =
-          type === "paper" || type === "event" || type === "job"
-            ? (type as ItemKind)
-            : null;
-        if (kind) cloudFeedback(itemId, kind, feedback, payload);
+        // Papers only: nothing else is sent to the account (the route refuses
+        // any other kind, too).
+        if (type === "paper") cloudFeedback(itemId, "paper", feedback, payload);
       },
 
       markRead: (id, paper) => {
@@ -2699,158 +2121,21 @@ export const useFeedStore = create<FeedState>()(
         cloudMarkUnread(id);
       },
 
-      setJobApplied: (job, applied, at) => {
-        const timestamp = applied
-          ? get().appliedAt[job.id] ?? at ?? new Date().toISOString()
-          : undefined;
-        set((s) => {
-          const nextAppliedAt = { ...s.appliedAt };
-          if (timestamp) nextAppliedAt[job.id] = timestamp;
-          else delete nextAppliedAt[job.id];
-          return {
-            appliedAt: nextAppliedAt,
-            savedJobs: s.savedJobs.map((savedJob) =>
-              savedJob.id === job.id
-                ? withCompletionPayload(savedJob, { appliedAt: timestamp })
-                : savedJob,
-            ),
-          };
-        });
-
-        const saved = get().savedJobs.find(({ id }) => id === job.id);
-        if (saved) cloudSave(job.id, "job", saved);
-        else if (applied) get().saveJob(job);
-      },
-
-      setEventRegistered: (event, registered, at) => {
-        const timestamp = registered
-          ? get().registeredAt[event.id] ?? at ?? new Date().toISOString()
-          : undefined;
-        set((s) => {
-          const nextRegisteredAt = { ...s.registeredAt };
-          if (timestamp) nextRegisteredAt[event.id] = timestamp;
-          else delete nextRegisteredAt[event.id];
-          return {
-            registeredAt: nextRegisteredAt,
-            savedEvents: s.savedEvents.map((savedEvent) =>
-              savedEvent.id === event.id
-                ? withCompletionPayload(savedEvent, {
-                    registeredAt: timestamp,
-                  })
-                : savedEvent,
-            ),
-          };
-        });
-
-        const saved = get().savedEvents.find(({ id }) => id === event.id);
-        if (saved) cloudSave(event.id, "event", saved);
-        else if (registered) get().saveEvent(event);
-      },
-
-      setEventSubmitted: (event, submitted, at) => {
-        const timestamp = submitted
-          ? get().submittedAt[event.id] ?? at ?? new Date().toISOString()
-          : undefined;
-        set((s) => {
-          const nextSubmittedAt = { ...s.submittedAt };
-          if (timestamp) nextSubmittedAt[event.id] = timestamp;
-          else delete nextSubmittedAt[event.id];
-          return {
-            submittedAt: nextSubmittedAt,
-            savedEvents: s.savedEvents.map((savedEvent) =>
-              savedEvent.id === event.id
-                ? withCompletionPayload(savedEvent, {
-                    submittedAt: timestamp,
-                  })
-                : savedEvent,
-            ),
-          };
-        });
-
-        const saved = get().savedEvents.find(({ id }) => id === event.id);
-        if (saved) cloudSave(event.id, "event", saved);
-        else if (submitted) get().saveEvent(event);
-      },
-
       undoDismiss: () => {
         const pending = get().pendingDismissal;
         if (!pending) return;
         set((s) => {
-          if (pending.kind === "paper") {
-            const paper = pending.item as Paper;
-            const nextFeedback = { ...s.paperFeedback };
-            if (pending.previousFeedback) {
-              nextFeedback[pending.id] = pending.previousFeedback;
-            } else {
-              delete nextFeedback[pending.id];
-            }
-            return {
-              papers: restoreByScore(
-                s.papers,
-                paper,
-                pending.wasInDisplay,
-              ),
-              savedPapers: restoreByScore(
-                s.savedPapers,
-                paper,
-                pending.wasSaved,
-              ),
-              paperFeedback: nextFeedback,
-              pendingDismissal: null,
-            };
-          }
-          if (pending.kind === "event") {
-            const event = pending.item as Event;
-            const nextEventFeedback = { ...s.eventFeedback };
-            if (pending.previousFeedback) {
-              nextEventFeedback[pending.id] = pending.previousFeedback;
-            } else {
-              delete nextEventFeedback[pending.id];
-            }
-            return {
-              events: restoreByScore(
-                s.events,
-                event,
-                pending.wasInDisplay,
-              ),
-              eventPool: restoreByScore(
-                s.eventPool,
-                event,
-                pending.wasInPool,
-              ),
-              savedEvents: restoreByScore(
-                s.savedEvents,
-                event,
-                pending.wasSaved,
-              ),
-              eventFeedback: nextEventFeedback,
-              pendingDismissal: null,
-            };
-          }
-          const job = pending.item as Job;
-          const nextJobFeedback = { ...s.jobFeedback };
+          const paper = pending.item;
+          const nextFeedback = { ...s.paperFeedback };
           if (pending.previousFeedback) {
-            nextJobFeedback[pending.id] = pending.previousFeedback;
+            nextFeedback[pending.id] = pending.previousFeedback;
           } else {
-            delete nextJobFeedback[pending.id];
+            delete nextFeedback[pending.id];
           }
           return {
-            jobs: restoreByScore(
-              s.jobs,
-              job,
-              pending.wasInDisplay,
-            ),
-            jobPool: restoreByScore(
-              s.jobPool,
-              job,
-              pending.wasInPool,
-            ),
-            savedJobs: restoreByScore(
-              s.savedJobs,
-              job,
-              pending.wasSaved,
-            ),
-            jobFeedback: nextJobFeedback,
+            papers: restoreByScore(s.papers, paper, pending.wasInDisplay),
+            savedPapers: restoreByScore(s.savedPapers, paper, pending.wasSaved),
+            paperFeedback: nextFeedback,
             pendingDismissal: null,
           };
         });
@@ -2859,57 +2144,16 @@ export const useFeedStore = create<FeedState>()(
       commitDismiss: () => {
         const pending = get().pendingDismissal;
         if (!pending) return;
-        if (pending.kind === "paper") {
-          const paper = pending.item as Paper;
-          useProfileStore.getState().recordPaperPreference(paper, "negative");
-          get().submitFeedback(
-            pending.id,
-            pending.kind,
-            "notInterested",
-            feedbackSnapshotForPaper(paper),
-          );
-        } else if (pending.kind === "event") {
-          const event = pending.item as Event;
-          useProfileStore.getState().recordEventPreference(event, "negative");
-          get().submitFeedback(
-            pending.id,
-            pending.kind,
-            "notInterested",
-            feedbackSnapshotForEvent(event),
-          );
-        } else {
-          const job = pending.item as Job;
-          useProfileStore.getState().recordJobPreference(job, "negative");
-          get().submitFeedback(
-            pending.id,
-            pending.kind,
-            "notInterested",
-            feedbackSnapshotForJob(job),
-          );
-        }
+        const paper = pending.item;
+        useProfileStore.getState().recordPaperPreference(paper, "negative");
+        get().submitFeedback(
+          pending.id,
+          pending.kind,
+          "notInterested",
+          feedbackSnapshotForPaper(paper),
+        );
         if (pending.wasSaved) cloudUnsave(pending.id, pending.kind);
-        set((s) => {
-          if (pending.kind === "event") {
-            const nextRegisteredAt = { ...s.registeredAt };
-            const nextSubmittedAt = { ...s.submittedAt };
-            delete nextRegisteredAt[pending.id];
-            delete nextSubmittedAt[pending.id];
-            return {
-              registeredAt: nextRegisteredAt,
-              submittedAt: nextSubmittedAt,
-              pendingDismissal: null,
-            };
-          }
-          if (pending.kind === "job") {
-            const nextAppliedAt = { ...s.appliedAt };
-            delete nextAppliedAt[pending.id];
-            return {
-              appliedAt: nextAppliedAt,
-              pendingDismissal: null,
-            };
-          }
-          return { pendingDismissal: null };
-        });
+        set({ pendingDismissal: null });
       },
 
       hydrateFromRemote: (remote) => {
@@ -2921,32 +2165,14 @@ export const useFeedStore = create<FeedState>()(
           // saved item disappear, regardless of which HTTP failure caused
           // it, because local's own entries are always unioned back in.
           const nextSavedPapers = unionById(remote.savedPapers, s.savedPapers);
-          const nextSavedEvents = unionById(remote.savedEvents, s.savedEvents);
-          const nextSavedJobs = unionById(remote.savedJobs, s.savedJobs);
           const savedPaperIds = new Set(
             nextSavedPapers.map((paper) => paper.id),
           );
-          const savedEventIds = new Set(
-            nextSavedEvents.map((event) => event.id),
-          );
-          const savedJobIds = new Set(nextSavedJobs.map((job) => job.id));
           const nextPaperFeedback = { ...s.paperFeedback };
-          const nextEventFeedback = { ...s.eventFeedback };
-          const nextJobFeedback = { ...s.jobFeedback };
 
           for (const [id, feedback] of Object.entries(nextPaperFeedback)) {
             if (feedback === "saved" && !savedPaperIds.has(id)) {
               delete nextPaperFeedback[id];
-            }
-          }
-          for (const [id, feedback] of Object.entries(nextEventFeedback)) {
-            if (feedback === "saved" && !savedEventIds.has(id)) {
-              delete nextEventFeedback[id];
-            }
-          }
-          for (const [id, feedback] of Object.entries(nextJobFeedback)) {
-            if (feedback === "saved" && !savedJobIds.has(id)) {
-              delete nextJobFeedback[id];
             }
           }
 
@@ -2956,53 +2182,13 @@ export const useFeedStore = create<FeedState>()(
               savedPaperIds,
               nextPaperFeedback,
             ),
-            events: syncSavedState(
-              s.events,
-              savedEventIds,
-              nextEventFeedback,
-            ),
-            eventPool: syncSavedState(
-              s.eventPool,
-              savedEventIds,
-              nextEventFeedback,
-            ),
-            jobs: syncSavedState(s.jobs, savedJobIds, nextJobFeedback),
-            jobPool: syncSavedState(
-              s.jobPool,
-              savedJobIds,
-              nextJobFeedback,
-            ),
             savedPapers: syncSavedState(
               nextSavedPapers,
               savedPaperIds,
               nextPaperFeedback,
             ),
-            savedEvents: syncSavedState(
-              nextSavedEvents,
-              savedEventIds,
-              nextEventFeedback,
-            ),
-            savedJobs: syncSavedState(
-              nextSavedJobs,
-              savedJobIds,
-              nextJobFeedback,
-            ),
             paperFeedback: nextPaperFeedback,
-            eventFeedback: nextEventFeedback,
-            jobFeedback: nextJobFeedback,
             readItems: unionReadItems(remote.readItems, s.readItems),
-            appliedAt:
-              remote.savedJobs === undefined
-                ? s.appliedAt
-                : completionMap(nextSavedJobs, "appliedAt"),
-            registeredAt:
-              remote.savedEvents === undefined
-                ? s.registeredAt
-                : completionMap(nextSavedEvents, "registeredAt"),
-            submittedAt:
-              remote.savedEvents === undefined
-                ? s.submittedAt
-                : completionMap(nextSavedEvents, "submittedAt"),
           };
         });
       },
@@ -3011,15 +2197,13 @@ export const useFeedStore = create<FeedState>()(
         if (fullySucceeded) {
           // §1aq CORRECTION — clear ONLY the keys this batch actually
           // re-pushed (every item it iterated over — see `pushed`, built by
-          // feed-sync.tsx from the SAME local.savedPapers/savedEvents/
-          // savedJobs/readItems it just POSTed), plus the coarse key. Any
+          // feed-sync.tsx from the SAME local.savedPapers/readItems it just
+          // POSTed), plus the coarse key. Any
           // OTHER pending key (an absent-locally saved/unsave key, or any
           // feedback key) is left exactly as is — see this action's own
           // doc comment on FeedState for why.
           const pushedKeys = [
             ...pushed.savedPapers.map((p) => pendingSavedKey("paper", p.id)),
-            ...pushed.savedEvents.map((e) => pendingSavedKey("event", e.id)),
-            ...pushed.savedJobs.map((j) => pendingSavedKey("job", j.id)),
             ...pushed.readIds.map((id) => pendingReadKey(id)),
           ];
           for (const key of pushedKeys) clearFeedPendingKey(key);
@@ -3070,12 +2254,6 @@ export const useFeedStore = create<FeedState>()(
           pendingPushByOwner,
           pendingFeedbackPayloadByOwner,
           papers: [],
-          events: [],
-          jobs: [],
-          eventPool: [],
-          jobPool: [],
-          eventFacetCounts: emptyOpportunityFacetCounts(),
-          jobFacetCounts: emptyOpportunityFacetCounts(),
           isLoading: false,
           lastRefresh: null,
           feedTopicsKey: null,
@@ -3083,8 +2261,6 @@ export const useFeedStore = create<FeedState>()(
           // for the owner who left is not held against the next one.
           feedFailedKey: null,
           savedPapers: [],
-          savedEvents: [],
-          savedJobs: [],
           readItems: {},
           // The three are one record — `markRead` writes them together and
           // `markUnread` deletes them together — so a reset clears all three.
@@ -3094,15 +2270,10 @@ export const useFeedStore = create<FeedState>()(
           readAt: {},
           library: {},
           syncedUserId: null,
-          appliedAt: {},
-          registeredAt: {},
-          submittedAt: {},
           paperSummaries: {},
           recentlyShownIds: {},
           pendingDismissal: null,
           paperFeedback: {},
-          eventFeedback: {},
-          jobFeedback: {},
           aiPaperSearchEnabled: false,
           batchId: null,
           batchStatus: null,
@@ -3177,14 +2348,14 @@ export const useFeedStore = create<FeedState>()(
             // have raced against a genuinely new interactive action.
             const state = get();
             if (parsed.dimension === "saved") {
-              const item = findSavedItem(state, parsed.itemKind, parsed.itemId);
+              const item = findSavedPaper(state, parsed.itemId);
               if (item) await cloudSave(parsed.itemId, parsed.itemKind, item);
               else await cloudUnsave(parsed.itemId, parsed.itemKind);
             } else if (parsed.dimension === "read") {
               if (state.readItems[parsed.itemId]) await cloudMarkRead(parsed.itemId);
               else await cloudMarkUnread(parsed.itemId);
             } else {
-              const value = currentFeedbackValue(state, parsed.itemKind, parsed.itemId);
+              const value = currentFeedbackValue(state, parsed.itemId);
               if (value === undefined) {
                 // §2.2 — nothing local left to assert for this item's
                 // feedback (e.g. it was unsaved after the save-feedback
@@ -3228,7 +2399,10 @@ export const useFeedStore = create<FeedState>()(
       // a partialize key) is required to actually run the move from the
       // flat, unnamespaced v2 `deliveredLocal` map to the namespaced v3
       // `deliveredLocalByOwner` shape for already-shipped blobs.
-      version: 3,
+      // P9-31 bumps 3 -> 4: jobs and events are no longer processed (the
+      // owner's decision, §1a.18 (f)), so `migrate` drops every key an older
+      // build persisted for them — see its last step.
+      version: 4,
       // skipHydration: rehydrated after mount via <StoreHydrator/> so the
       // first client render matches SSR defaults (empty feed / no saves) and
       // doesn't mismatch the server markup. See store/ui.ts for rationale.
@@ -3244,21 +2418,14 @@ export const useFeedStore = create<FeedState>()(
         // save/feedback fields are re-applied live on top regardless).
         papers: state.papers,
         savedPapers: state.savedPapers,
-        savedEvents: state.savedEvents,
-        savedJobs: state.savedJobs,
         readItems: state.readItems,
         readAt: state.readAt,
         library: state.library,
         syncedUserId: state.syncedUserId,
-        appliedAt: state.appliedAt,
-        registeredAt: state.registeredAt,
-        submittedAt: state.submittedAt,
         paperSummaries: state.paperSummaries,
         aiPaperSearchEnabled: state.aiPaperSearchEnabled,
         recentlyShownIds: state.recentlyShownIds,
         paperFeedback: state.paperFeedback,
-        eventFeedback: state.eventFeedback,
-        jobFeedback: state.jobFeedback,
         // P4-S5a — the outstanding-acknowledgment record, NOT batchId/
         // batchStatus themselves (those are transient and re-derived from
         // the next load's response; persisting them would let a stale
@@ -3303,27 +2470,7 @@ export const useFeedStore = create<FeedState>()(
         pendingFeedbackPayloadByOwner: state.pendingFeedbackPayloadByOwner,
       }),
       migrate: (persistedState, version) => {
-        const persisted = persistedState as Partial<FeedState> & {
-          oppFeedback?: Record<string, ItemFeedback>;
-        };
-
-        // Pre-existing (version 0 -> 1): a legacy build stored one shared
-        // oppFeedback map across events/jobs; split it into the two typed
-        // maps introduced at version 1. Unchanged by P4-S5b below.
-        let current: Partial<FeedState> & {
-          oppFeedback?: Record<string, ItemFeedback>;
-        } = persisted;
-        if (version < 1 && persisted.oppFeedback) {
-          const { oppFeedback, ...rest } = persisted;
-          current = {
-            ...rest,
-            // Older builds shared one source-namespaced map. Copying it into
-            // both typed maps preserves every dismissal without guessing an
-            // adapter's id prefix; ids cannot collide across opportunity kinds.
-            eventFeedback: { ...oppFeedback, ...rest.eventFeedback },
-            jobFeedback: { ...oppFeedback, ...rest.jobFeedback },
-          };
-        }
+        let current = persistedState as Partial<FeedState>;
 
         // P4-S5b-FIX (Round 3) — ABC-JEV-INTEGRATION.md §1c/§1p.C.1, closing
         // docs/jev-abc/P4-S5b-A-20260924T095305Z.md finding (b). Bumping
@@ -3377,6 +2524,27 @@ export const useFeedStore = create<FeedState>()(
             },
             deliveredLocalOwnerOrder: [ANONYMOUS_OWNER_KEY],
           };
+        }
+
+        // P9-31 (version 3 -> 4) — jobs and events are not processed (the
+        // owner's decision, §1a.18 (f)). Drop everything an older build
+        // persisted for them: the saved lists and their payloads, the
+        // feedback maps, the completion stamps (and the shared `oppFeedback`
+        // map of a version-0 blob), and the outbox entries — keys and the
+        // captured title / concept snapshots — of kind event / job. Nothing
+        // is sent anywhere for them, and nothing local keeps them.
+        if (version < 4) {
+          const cleaned: Record<string, unknown> = { ...current };
+          for (const key of LEGACY_OPPORTUNITY_KEYS) delete cleaned[key];
+          for (const field of [
+            "pendingPushByOwner",
+            "pendingFeedbackPayloadByOwner",
+          ]) {
+            if (field in cleaned) {
+              cleaned[field] = withoutOpportunityOutboxKeys(cleaned[field]);
+            }
+          }
+          current = cleaned as Partial<FeedState>;
         }
 
         return current as FeedState;
