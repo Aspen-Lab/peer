@@ -1,5 +1,5 @@
 // npm run purge-uploads — a local/manual trigger for the same daily cleanup
-// Vercel's own cron (repo-root `vercel.json`) calls in production.
+// Vercel's own cron (`web/vercel.json`) calls in production.
 //
 // WHY AN HTTP CALL, NOT A DIRECT IMPORT of `purgeExpiredUploads`: the route
 // (`/api/jobs/purge-uploads`) already IS that function, gated by the same

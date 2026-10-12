@@ -339,7 +339,8 @@ describe("/privacy — an uploaded PDF's storage on Peer's server (P4-00c N7)", 
   });
 
   it("removes them after that by a daily sweep: the cron, the route it calls and the purge's own deletion", () => {
-    const cron = JSON.parse(read("../vercel.json")) as { crons: { path: string; schedule: string }[] };
+    // P9-30: the config lives in the project's Root Directory (web/), where Vercel reads it.
+    const cron = JSON.parse(read("vercel.json")) as { crons: { path: string; schedule: string }[] };
     const purge = cron.crons.find((entry) => entry.path === "/api/jobs/purge-uploads");
     expect(purge?.schedule).toMatch(/^\d+ \d+ \* \* \*$/);
     expect(read("src/app/api/jobs/purge-uploads/route.ts")).toContain("await purgeExpiredUploads();");
