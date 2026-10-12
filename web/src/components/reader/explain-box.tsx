@@ -102,7 +102,8 @@
 // Where it stands (`placePanel`): P7-15 (the owner's R7): from a window of 1024 px a dock
 // fixed at the right edge of the screen — flush with it, 360 px wide, scrolling inside
 // (`explain-dock.ts`); between 640 and 1024 the card P3-02 put under the selection, measured
-// again as the page scrolls; a bottom sheet on a phone. P8-02 (the owner: "level with the first
+// again as the page scrolls — P9-50 (A P9-W3's N7): held between the masthead's foot and the foot
+// legend's top as the dock is, so a grown thread scrolls inside it and never covers either; a bottom sheet on a phone. P8-02 (the owner: "level with the first
 // line of the selected paragraph"): the dock's TOP is level with the first line of the PARAGRAPH
 // of the passage it explains (`ExplainSelection.paragraph`, from `paper-body.tsx`), held between
 // the masthead's foot and the room its whole height needs above the legend (P9-17, rulings §1h.56 and §1h.57: its measured
@@ -323,10 +324,21 @@ export function buttonStyle(place: ButtonPlace): CSSProperties {
  */
 const cardHead = (viewport: Viewport) => (viewport.width >= MASTHEAD_MIN_VIEWPORT_PX ? DOCK_TOP_PX : CARD_MARGIN);
 
+/**
+ * P9-50 rule 2 (A P9-W3 §3 c; the owner's §1a.18 (c): "始终让窗口存在于屏幕里"): where the card's room ends — where the dock's does. From 768 px the
+ * foot legend (`hidden md:flex fixed bottom-0`, `z-30`) is the page's last line and the card (`z-[70]`) used to stand over it: placed under
+ * the selection its bottom was `CARD_MARGIN` (12) above the screen's last pixel, 16 px into the 28-px legend (bottom 988 on a legend whose
+ * top is 972 at 768 × 1000). Its foot is the legend's top, `legendOf` — `DOCK_BOTTOM_PX` at the page's own scale and 28 × zoom once Fit
+ * scales the legend (P9-20), as the dock's `placePanel` reads it. Under 768 px the thumb bar (`md:hidden`) stands in the legend's place and
+ * the sheet (under 640) is flush with the screen's bottom over it, so with no legend the card's foot is the screen's bottom.
+ */
+const cardFoot = (viewport: Viewport) => (viewport.width >= MASTHEAD_MIN_VIEWPORT_PX ? legendOf(viewport) : 0);
+
 /** The card: 360 px wide under the whole selection on a spread, the window's
  *  width less a margin on a phone; above it when there is more room there than
  *  below — it never covers the words it explains. Its height is bounded by the
- *  room it has, and it scrolls inside. P9-50: never above the masthead's foot (`cardHead`). */
+ *  room it has, and it scrolls inside. P9-50: the room is the masthead's foot (`cardHead`)
+ *  to the foot legend's top (`cardFoot`), as the dock's is. */
 export function placeCard(
   rect: ViewRect,
   viewport: Viewport,
@@ -335,16 +347,18 @@ export function placeCard(
   const width = phone ? viewport.width - 2 * CARD_MARGIN : CARD_WIDTH;
   const left = phone ? CARD_MARGIN : clamp(rect.left, CARD_MARGIN, viewport.width - CARD_WIDTH - CARD_MARGIN);
   const head = cardHead(viewport);
+  const foot = cardFoot(viewport);
   // Under the selection: from its last line, and — for a selection scrolled up under the masthead — no higher than the masthead's foot.
   const topBelow = Math.max(rect.bottom + CARD_GAP, head);
-  const roomBelow = viewport.height - topBelow - CARD_MARGIN;
+  const roomBelow = viewport.height - foot - topBelow;
   const roomAbove = rect.top - CARD_GAP - head;
   if (roomBelow >= CARD_ROOM || roomBelow >= roomAbove) {
     const maxHeight = Math.max(roomBelow, CARD_MIN_HEIGHT);
-    return { left, width, maxHeight, top: Math.min(topBelow, viewport.height - CARD_MARGIN - maxHeight) };
+    return { left, width, maxHeight, top: Math.min(topBelow, viewport.height - foot - maxHeight) };
   }
-  const maxHeight = Math.max(roomAbove, CARD_MIN_HEIGHT);
-  return { left, width, maxHeight, bottom: Math.min(viewport.height - rect.top + CARD_GAP, viewport.height - head - maxHeight) };
+  // Above it: 8 px clear of its first line — or, for a selection lower than the legend's top, on the legend's top, never below it.
+  const maxHeight = Math.min(Math.max(roomAbove, CARD_MIN_HEIGHT), Math.max(viewport.height - foot - head, CARD_MIN_HEIGHT));
+  return { left, width, maxHeight, bottom: clamp(viewport.height - rect.top + CARD_GAP, foot, viewport.height - head - maxHeight) };
 }
 
 export interface Place {
@@ -381,7 +395,8 @@ const SHEET_SHARE = 0.6;
  * the thread scrolls inside and the input is pinned at its foot. The words of the selection do not enter
  * it — `bounds` only does where the body reported no paragraph (the selection's own first line then).
  * Below 640: a sheet — the window's width, on its bottom edge, at most 60% of its
- * height. Between the two P3-02's place (`placeCard`), under or above the selection, unchanged.
+ * height. Between the two P3-02's place (`placeCard`), under or above the selection — P9-50: between the masthead's foot (`DOCK_TOP_PX` from
+ * 768 px) and the legend's top, as the dock's is (the screen's bottom where there is no legend, under 768 px).
  */
 export function placePanel(bounds: ViewRect, viewport: Viewport, paragraphTop?: number, needed: number = DOCK_MIN_VISIBLE_PX): Place {
   if (viewport.width < PHONE_WIDTH) {
