@@ -34,6 +34,14 @@ import { PEERS_READING, TERMS } from "./copy";
 import { EvidenceQuote } from "./evidence-quote";
 import { paragraphAnchor } from "./paper-body";
 
+/**
+ * P9-52 (A P9-W3's N5): where there is no hover a term button is a 44 px target (it was 22.5 px, a line of the reading
+ * face), as the reading page's other small controls are (P9-23, `min-h-11`). The 11 px of padding a side is what makes
+ * the box 44 (the words stay centred in it), and `bg-clip-content` keeps the marked term's highlight to the word's own
+ * line, the 22.5 px it was — the box around it is the hit area, not a taller colour. A mouse's button is as it was.
+ */
+const TERM_TOUCH = "[@media(hover:none)]:min-h-11 [@media(hover:none)]:py-[11px] [@media(hover:none)]:bg-clip-content";
+
 /** P9-04 (X3), P9-21: the terms a one-column page is shown while the strip is folded — the first two. */
 export const ONE_COLUMN_TERMS = 2;
 
@@ -143,7 +151,7 @@ export function TermsStrip({
                     onMark(next);
                     if (scroll) findInBody(hit, reveal);
                   }}
-                  className="font-reading text-body font-medium text-heading underline decoration-border-strong decoration-1 underline-offset-4 transition-colors hover:decoration-heading aria-pressed:bg-[color:var(--color-term-mark)]"
+                  className={`font-reading text-body font-medium text-heading underline decoration-border-strong decoration-1 underline-offset-4 transition-colors hover:decoration-heading aria-pressed:bg-[color:var(--color-term-mark)] ${TERM_TOUCH}`}
                 >
                   {term.term}
                 </button>
@@ -166,13 +174,14 @@ export function TermsStrip({
           );
         })}
       </ul>
-      {/* Below the spread (xl) only: in one column the strip is the first two terms and this opens the rest. */}
+      {/* Below the spread (xl) only: in one column the strip is the first two terms and this opens the rest. Where there
+          is no hover (P9-52) it is a 44 px target, its 12 px of margin given up: the words sit 14 px down the box. */}
       {terms.length > ONE_COLUMN_TERMS && (
         <button
           type="button"
           aria-expanded={shownInOneColumn}
           onClick={() => setShownInOneColumn((shown) => !shown)}
-          className="annotation mt-3 block text-text-faint underline-offset-2 transition-colors hover:text-heading hover:underline xl:hidden"
+          className="annotation mt-3 block text-text-faint underline-offset-2 transition-colors hover:text-heading hover:underline xl:hidden [@media(hover:none)]:mt-0 [@media(hover:none)]:min-h-11"
         >
           {shownInOneColumn ? TERMS.fewer : TERMS.showAll(terms.length)}
         </button>

@@ -475,6 +475,8 @@ export function QuestionField({
             {line.length > COUNTER_FROM && (
               <span className="annotation shrink-0 text-text-faint">{ASK.counter(line.length)}</span>
             )}
+            {/* P9-52 (A P9-W3's N5): the × is a lone glyph, 7 x 16 px; where there is no hover it is a 44 x 44 target
+                (the glyph centred in it), and the row's textarea gives it the room (it is `flex-1 min-w-0`). */}
             {(lines.length > 1 || line.trim() !== "") && (
               <button
                 type="button"
@@ -489,13 +491,15 @@ export function QuestionField({
                   // words would stay in the ledger. Settle and sync now, so they go at once.
                   submit();
                 }}
-                className="annotation shrink-0 text-text-faint transition-colors hover:text-heading"
+                className="annotation shrink-0 text-text-faint transition-colors hover:text-heading [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
               >
                 ×
               </button>
             )}
+            {/* P9-52 (N5): the label is the box: a 44 px row where there is no hover, and a tap anywhere on it ticks
+                the checkbox, which stays the native 13 px control (a checkbox's own box does not grow with padding). */}
             {line.trim() !== "" && (
-              <label className="annotation inline-flex basis-full items-center gap-2 text-text-faint">
+              <label className="annotation inline-flex basis-full items-center gap-2 text-text-faint [@media(hover:none)]:min-h-11">
                 <input
                   type="checkbox"
                   checked={isMarked(line)}

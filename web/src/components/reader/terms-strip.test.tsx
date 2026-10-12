@@ -398,6 +398,18 @@ describe("TermsStrip — the term buttons and the fold toggle are touch targets 
     for (const tag of buttons) expect(classesOf(tag)).toContain(TOUCH_FLOOR);
   });
 
+  it("keeps a marked term's highlight to the word's own line where there is no hover: the 44 px is padding, not colour", () => {
+    for (const tag of termButtons(three())) {
+      const classes = classesOf(tag);
+
+      // The button's background is the term mark (`aria-pressed:bg-…`); painted over a 44 px box it would be a taller
+      // block than a mouse's 22.5 px line. 11 px of padding a side and `bg-clip-content` keep it to the content box.
+      expect(classes).toContain("aria-pressed:bg-[color:var(--color-term-mark)]");
+      expect(classes).toContain("[@media(hover:none)]:py-[11px]");
+      expect(classes).toContain("[@media(hover:none)]:bg-clip-content");
+    }
+  });
+
   it("makes the 'show all N terms' toggle at least 44 px tall where there is no hover", () => {
     const tag = toggle(three());
 
