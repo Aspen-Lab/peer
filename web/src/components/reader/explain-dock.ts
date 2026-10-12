@@ -10,7 +10,10 @@
 // the PARAGRAPH it stands at (below: the selected one), measured again as the page scrolls and the window
 // resizes:
 //
-//   top = clamp(paragraphTop, DOCK_TOP_PX, windowHeight − DOCK_BOTTOM_PX − needed)
+//   top = clamp(paragraphTop, DOCK_TOP_PX, windowHeight − legend − needed)
+//
+// where `legend` is the foot legend's height on screen: `DOCK_BOTTOM_PX` at the page's own scale, and 28 × the page's zoom once
+// Fit to screen scales it (`legendHeightPx`; P9-20, BACKLOG-42).
 //
 // so it never stands above the masthead's foot (it stays there while the paragraph is scrolled
 // above it) and never so low that the whole window it needs does not fit above the foot legend. P9-17 (rulings §1h.56 and
@@ -20,7 +23,7 @@
 // (its sticky header, its sticky controls row and two lines of the answer between them), and for the empty window just its
 // own (about 125 px; `DOCK_MIN_VISIBLE_PX` until it is measured). So the window is level with the paragraph's first
 // line whenever all of it fits below that line, else it is lifted until its bottom edge stands on the legend's reserve
-// (`DOCK_BOTTOM_PX`: the legend is the page's own last line), never lower.
+// (the legend's height, `legendHeightPx`: the legend is the page's own last line), never lower.
 // Its height is its content, at most what is left between its top and the legend; it scrolls inside.
 // P9-03b (ruling §1h.49; the owner: "level with the first line of the SELECTED paragraph"): `paragraphTop` is that of
 // the paragraph the reader last selected — the explained one until another is selected. When a selection is offered

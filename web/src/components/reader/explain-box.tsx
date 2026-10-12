@@ -350,7 +350,8 @@ const SHEET_SHARE = 0.6;
  * Where the box stands. From a window of 1024 px: the dock (P7-15, R7) — the window's right edge,
  * 360 px wide, and (P8-02, BACKLOG-31; P9-03b) its top level with the first line of the PARAGRAPH it
  * stands at — the selected one, the explained one until another is selected —
- * `top = clamp(paragraphTop, DOCK_TOP_PX, height − DOCK_BOTTOM_PX − needed)`,
+ * `top = clamp(paragraphTop, DOCK_TOP_PX, height − legend − needed)` (P9-20: `legend` is `viewport.legend`, the foot legend's height as
+ * Fit's zoom scales it — `DOCK_BOTTOM_PX` where the viewport names none),
  * so never above the masthead's foot and never so low that the `needed` height does not fit above the foot
  * legend. P9-17 (rulings §1h.56, §1h.57): `needed` is what the window needs below its top, its own height — the box
  * passes the card's measured height, and at least `DOCK_THREAD_FLOOR_PX` (360: room for its sticky header, its sticky
