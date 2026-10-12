@@ -305,7 +305,8 @@ export default function ProfilePage() {
         />
       )}
 
-      {/* ── Reset ── */}
+      {/* ── Reset ── The three actions are text, 18 px tall to a mouse; where there is no hover each is a 44 px target
+          (P9-52, A P9-W3's N5: `[@media(hover:none)]:min-h-11`, the rule P9-23 set), 12 px apart in the column. ── */}
       <section
         className="mt-14 pt-6 border-t border-border flex flex-col items-start gap-3"
       >
@@ -315,7 +316,7 @@ export default function ProfilePage() {
             resetOnboarding();
             router.push("/welcome");
           }}
-          className="inline-flex items-center gap-1.5 text-meta text-text-faint hover:text-accent transition-colors"
+          className="inline-flex items-center gap-1.5 text-meta text-text-faint hover:text-accent transition-colors [@media(hover:none)]:min-h-11"
         >
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M3 12a9 9 0 1 0 3-6.7" />
@@ -327,7 +328,7 @@ export default function ProfilePage() {
         {!showLogout ? (
           <button
             onClick={() => setShowLogout(true)}
-            className="inline-flex items-center gap-1.5 text-meta text-text-faint hover:text-red transition-colors"
+            className="inline-flex items-center gap-1.5 text-meta text-text-faint hover:text-red transition-colors [@media(hover:none)]:min-h-11"
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M3 6h18" />
@@ -913,7 +914,7 @@ function SectionHeader({
       {onAdjust && (
         <button
           onClick={onAdjust}
-          className="text-caption text-text-faint/80 hover:text-accent transition-[color,background-color,border-color,scale] active:scale-95"
+          className="text-caption text-text-faint/80 hover:text-accent transition-[color,background-color,border-color,scale] active:scale-95 [@media(hover:none)]:min-h-11"
         >
           adjust
         </button>
@@ -1156,7 +1157,7 @@ export function LearnedPreferences({
             <button
               type="button"
               onClick={() => setConfirmReset(true)}
-              className="text-caption text-text-faint/80 hover:text-accent transition-colors shrink-0"
+              className="text-caption text-text-faint/80 hover:text-accent transition-colors shrink-0 [@media(hover:none)]:min-h-11"
             >
               Reset
             </button>
