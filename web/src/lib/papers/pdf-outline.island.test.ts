@@ -157,6 +157,24 @@ describe("a nested fraction and a limit are written inside the stack (P9-15)", (
     ).toEqual([{ text: "R = I(ab)/J(ab) / (1/N n I(ab)/J(ab))" }]);
   });
 
+  it.each([4.5, 5.5])(
+    "sets `1` over `N` whichever row the fold gave it: %s pt under the base line it is a raised run of the denominator's row",
+    (drop) => {
+      // The fold gives a script to the nearest row within its window: past 3.5pt under the base line that is the
+      // denominator's row, and the `1` is then a raised run of it, 5pt clear of the `N` beside it.
+      expect(
+        equationsOf([
+          item("R =", { x: 100, y: BASE }),
+          script("1", 136, BASE - drop),
+          ratio(UP, 133),
+          item("N", { x: 126, y: DOWN }),
+          script("n", 150, DOWN - 3),
+          ratio(DOWN, 156),
+        ]),
+      ).toEqual([{ text: "R = I(ab)/J(ab) / (1/N n I(ab)/J(ab))" }]);
+    },
+  );
+
   it("keeps the sum sign and its limit together: `1` is not set over the sign", () => {
     expect(
       equationsOf([

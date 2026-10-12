@@ -1258,17 +1258,30 @@ function cellOf(line: PdfLine, row: number, runs: PdfTextItem[], whole = false):
   };
 }
 
-/** A row's cells, left to right: a new cell wherever the next run starts more than `gap` past the ones before it. */
+/** A script-size run set this many ems clear of the run before it, and off that run's baseline, is a cell of its own. */
+const SCRIPT_APART_EM = 0.4;
+
+/**
+ * A row's cells, left to right: a new cell wherever the next run starts more than `gap` past the ones before it, and
+ * before a script that stands apart (a numerator the fold took into a row it only half belongs to, as a raised run, is
+ * set clear of the text beside it; an exponent or a subscript touches its base and is not).
+ */
 function cellsOf(line: PdfLine, row: number, gap: number): Cell[] {
   // A line made some other way than by `linesOfRow` has no runs: its text stands in for one.
   const alone: PdfTextItem = { str: line.text, height: line.size, width: line.reach ?? line.text.length * line.size * 0.5, fontName: line.font, x: line.x, y: line.y };
   const runs: PdfTextItem[] = line.runs ? [...line.runs] : [alone];
   const groups: PdfTextItem[][] = [];
+  const tallest = Math.max(...runs.map((run) => run.height));
   let edge = Number.NEGATIVE_INFINITY;
+  let previous: PdfTextItem | undefined;
   for (const run of runs) {
-    if (groups.length === 0 || run.x - edge > gap) groups.push([run]);
+    const visible = run.str.trim() !== "";
+    const apart =
+      visible && !!previous && run.height < SCRIPT_RATIO * tallest && Math.abs(run.y - previous.y) > SUPERSCRIPT_RISE && run.x - edge > SCRIPT_APART_EM * tallest;
+    if (groups.length === 0 || run.x - edge > gap || apart) groups.push([run]);
     else groups[groups.length - 1].push(run);
     edge = Math.max(edge, run.x + (run.width || 0));
+    if (visible) previous = run;
   }
   return groups.flatMap((group) => cellOf(line, row, group, groups.length === 1) ?? []);
 }
