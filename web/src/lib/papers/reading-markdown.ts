@@ -126,8 +126,15 @@ function oneLine(text: string): string {
 }
 
 /** The words of one question's answer, as the page's "For your questions" block
- *  says them (P2-05) — one place, so the Markdown export and the reading note
- *  cannot drift from each other or from the page. */
+ *  says them (P2-05). The Markdown export and the reading note (`lib/notes/templates.ts`,
+ *  which takes the verdict and the quotes) share this one writer, so they cannot drift
+ *  from each other. The page does not call it: its verdict and role words come from the
+ *  same `FOR_YOUR_QUESTIONS` copy, but `for-your-questions.tsx` builds its own "Read next"
+ *  meta line (`readNextLabel`) — the same words, with the minutes on a no-break space so
+ *  "3 min" never wraps apart on a screen, where this writer keeps the plain space Markdown
+ *  carries anywhere. The two are held together by the cross-check in
+ *  `reading-markdown.questions.test.ts`, which reads the page's no-break space as a space
+ *  and the export's text as it is. */
 export interface QuestionEntryLines {
   /** "Answered", "Partly answered", "This paper does not address: <question>.",
    *  or the unverified line (P2-08b). */

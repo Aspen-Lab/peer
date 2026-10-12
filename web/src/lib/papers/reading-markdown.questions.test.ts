@@ -168,7 +168,9 @@ describe("readingToMarkdown with the reader's questions (P2-05)", () => {
       ),
     );
     // P9-05 (X10): the page keeps "3 min" together on a no-break space so it never wraps apart; the
-    // export is portable Markdown and keeps the plain space. Same words, so the no-break space is read as a space here.
+    // export is portable Markdown and keeps the plain space. Same words, so the page's no-break space is read
+    // as a space here. P9-19: on the page's text only. `md` is left as it is and the words below are typed with
+    // plain spaces, so a no-break space that reaches the export is a red line here, not one this test forgives.
     const page = html.replace(/<[^>]+>/g, "").replace(/\u00a0/g, " ");
     const { reading, report, sentences } = fixture({ forYourQuestions: ANSWERS });
 
@@ -204,6 +206,39 @@ describe("readingToMarkdown with the reader's questions (P2-05)", () => {
     }
     expect(page).toContain(FOR_YOUR_QUESTIONS.background);
     expect(md).toContain(FOR_YOUR_QUESTIONS.background);
+  });
+
+  // P9-19 (A P9-R2's F9): `readNextLabel` (the page, `for-your-questions.tsx`) and `questionEntryLines` (the
+  // export) each build "§heading · p.N · N min [· background]"; this is the one place that holds the two together.
+  // The page's minutes ride on a no-break space and the export's never do: the page's text is read with that
+  // space as a space, and the export's is not read at all, so a no-break space in the Markdown cannot pass.
+  it("the Read next meta lines are the same words on the page and in the export: the page's minutes on a no-break space, the export's on a plain one (P9-19, F9)", () => {
+    const NB = "\u00a0";
+    const html = renderToStaticMarkup(
+      createElement(
+        SectionLinks,
+        { headings: MAP.sections.map((section) => section.heading) },
+        createElement(ForYourQuestions, { report: { forYourQuestions: ANSWERS } as Pick<PaperReport, "forYourQuestions">, map: MAP }),
+      ),
+    );
+    const onPage = [...html.matchAll(/<p class="[^"]*text-meta[^"]*">([^<]*)<\/p>/g)].map((match) => match[1]);
+    const { reading, report, sentences } = fixture({ forYourQuestions: ANSWERS });
+    const md = readingToMarkdown(normalPaper, reading, report, sentences, QUESTIONS);
+    const block = md.slice(md.indexOf("## For your questions"), md.indexOf("## What it proposes"));
+    const inExport = block
+      .split("\n")
+      .filter((line) => line.startsWith("- §"))
+      .map((line) => line.slice(2, line.indexOf(" — ")));
+
+    expect(inExport).toEqual(["§2 Results · p.7 · 3 min", "§1 Introduction · p.2 · 2 min · background", "§4 Appendix · 1 min · background"]);
+    // The page: every minutes figure rides on the no-break space.
+    expect(onPage).toHaveLength(inExport.length);
+    for (const line of onPage) expect(line).toMatch(new RegExp(`\\d+${NB}min`));
+    // The export: not one no-break space in the whole block (`oneLine` already clears one inside the label, U+00A0
+    // being `\s`, so a leak would have to come from a step after it; this holds every step to the plain space), and
+    // every label is the page's with its one no-break space read as a space.
+    expect(block).not.toContain(NB);
+    expect(onPage.map((line) => line.replace(NB, " "))).toEqual(inExport);
   });
 
   it("renders the partly verdict; an answer with no section reads 'abstract'; the page appears only when known; no map, no Read next", () => {

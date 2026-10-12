@@ -453,6 +453,48 @@ describe("readingToMarkdown prints the paper's text on one line (P9-06)", () => 
     }
   });
 
+  // P9-19 (A P9-R2's F6 a, the survivor 06c): `evidenceText` flattens the quote with its own `oneLine` and
+  // then flattens the composed "quote — where" line again, so the first call is seen only where there is no
+  // composed line (a claim with evidence and no `evidenceWhere`) and where the quote is nothing but whitespace.
+  it("evidence with no heading to go with it prints on one line too", () => {
+    const report: MarkdownReport = {
+      limitations: [{ text: "Only nine films were measured.", evidence: "We tested\nonly nine\n\nfilms." }],
+      nextStep: { text: "Measure a tenth film.", evidence: "\n  A tenth film\r\nis planned.\n" },
+      provenance: { basis: "model-fulltext" },
+    };
+
+    const md = readingToMarkdown(inventedPaper, base, report, []);
+    const lines = md.split("\n");
+
+    expect(lines).toContain("> We tested only nine films.");
+    expect(lines).toContain("> A tenth film is planned.");
+    // No quote left a tail on the next line, and none carries a `—` it was not given.
+    for (const tail of ["only nine", "films.", "A tenth film", "is planned."]) {
+      expect(lines.some((line) => line.startsWith(tail)), tail).toBe(false);
+    }
+    expect(lines.filter((line) => line.startsWith(">")).every((line) => !line.includes("\u2014"))).toBe(true);
+  });
+
+  it("evidence that is nothing but whitespace is no quote, with or without a heading", () => {
+    const report: MarkdownReport = {
+      limitations: [
+        { text: "Only nine films were measured.", evidence: "  \n ", evidenceWhere: "abstract" },
+        { text: "The annealing time was fixed.", evidence: " \r\n\t", evidenceWhere: "2 Methods" },
+        { text: "One substrate only.", evidence: "\n\n" },
+      ],
+      provenance: { basis: "model-fulltext" },
+    };
+
+    const md = readingToMarkdown(inventedPaper, base, report, []);
+
+    // The claims are there; a quote line is not, and no lone "— abstract" is printed in place of one.
+    expect(md).toContain("Only nine films were measured.");
+    expect(md).toContain("The annealing time was fixed.");
+    expect(md).toContain("One substrate only.");
+    expect(md.split("\n").filter((line) => line.startsWith(">"))).toEqual([]);
+    expect(md).not.toContain("> \u2014");
+  });
+
   it("the reading's own quotes, its TLDR and the title print on one line", () => {
     const reading: PaperReading = {
       ...base,
