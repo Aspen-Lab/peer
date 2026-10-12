@@ -700,6 +700,25 @@ describe("ExplainBox — the empty window follows the selected paragraph and car
     run.mounted.unmount();
   });
 
+  it("holds the 160 px floor while it is empty — level with a low paragraph — and the first Explain lifts it to the thread's 360 px floor, in place (P9-17, ruling §1h.56)", async () => {
+    // 800 px high: an empty window (about 125 px tall) may stand as low as 800 − 28 − 160 = 612; once it holds a passage —
+    // a header, a controls row and two lines of the answer — no lower than 800 − 28 − 360 = 412.
+    const seen: Array<{ top: number | undefined; maxHeight: number | undefined; kind: string }> = [];
+    const note: Step = (tree) => seen.push({ top: look(tree).style?.top, maxHeight: look(tree).style?.maxHeight, kind: kind(look(tree)) });
+    const run = await scenario(base(), [selectNext(inParagraph(first, 700)), note, (tree) => click(tree), note]);
+    await wait();
+
+    expect(seen).toEqual([
+      { top: 612, maxHeight: 160, kind: "empty" },
+      { top: 412, maxHeight: 360, kind: "window" },
+    ]);
+    // The same window all the way: never closed, the width never given back.
+    expect(run.looks.map(kind)).not.toContain("none");
+    expect(removeProperty).not.toHaveBeenCalled();
+    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    run.mounted.unmount();
+  });
+
   it("carries the control once a selection is offered — not before, and the floating button is not rendered", async () => {
     const seen: Array<{ explain: boolean; button: boolean }> = [];
     const note: Step = (tree) => seen.push({ explain: look(tree).explain !== undefined, button: look(tree).button !== undefined });

@@ -10,14 +10,18 @@
 // the PARAGRAPH it stands at (below: the selected one), measured again as the page scrolls and the window
 // resizes:
 //
-//   top = clamp(paragraphTop, DOCK_TOP_PX, windowHeight − DOCK_BOTTOM_PX − DOCK_MIN_VISIBLE_PX)
+//   top = clamp(paragraphTop, DOCK_TOP_PX, windowHeight − DOCK_BOTTOM_PX − floor)
 //
 // so it never stands above the masthead's foot (it stays there while the paragraph is scrolled
-// above it) and never so low that less than `DOCK_MIN_VISIBLE_PX` of it shows above the foot legend.
+// above it) and never so low that less than its floor of it shows above the foot legend. P9-17 (ruling §1h.56; A P9-R2
+// F1): the floor is a property of what the window holds — `DOCK_MIN_VISIBLE_PX` for the empty window (about 125 px
+// tall, so it stands level with a low paragraph) and `DOCK_THREAD_FLOOR_PX` for a window that holds a passage (its
+// sticky header, its sticky controls row and two lines of the answer between them).
 // Its height is its content, at most what is left between its top and the legend; it scrolls inside.
 // P9-03b (ruling §1h.49; the owner: "level with the first line of the SELECTED paragraph"): `paragraphTop` is that of
 // the paragraph the reader last selected — the explained one until another is selected. When a selection is offered
-// (settled, never during a drag) in another paragraph the window moves there at once, with no close and no reflow
+// (P9-18: when the primary pointer is up — a drag that pauses with the button held offers nothing; a keyboard
+// selection keeps the page's 150 ms debounce) in another paragraph the window moves there at once, with no close and no reflow
 // (the properties below are never taken off) and its content unchanged; the "Explain this?" control is in its header
 // while the selection is not the passage it explains. The floating button stands only where no window does.
 //
@@ -59,6 +63,20 @@ export const DOCK_BOTTOM_PX = 28;
  *  top is the window's height less `DOCK_BOTTOM_PX` less this), so a paragraph far down the screen never
  *  leaves a window too short to read. */
 export const DOCK_MIN_VISIBLE_PX = 160;
+
+/**
+ * P9-17 (ruling §1h.56; A P9-R2 F1): the lowest the window stands once it holds a passage — room for its sticky header
+ * (140 px at 1440 × 900 with the build's CSS and fonts: a two-line quote, its section and the "Explain this?" control;
+ * 154 px with the control at the 44 px touch size), its sticky controls row (101 px: the search toggle, the input and
+ * Send) and the top of the answer between them (a 16 px gap, the label, then two 23 px lines). Measured in a browser,
+ * the second line of the answer ends 330 px below the window's top with the pointer's control and 344 px with the touch
+ * one, so 360. At the old 160 px floor the two bars overlapped by 38 to 83 px, covered the search toggle and showed none
+ * of the answer; A's first bound (300) counted two lines and not the answer's own top, and shows none of it either.
+ * The empty window keeps `DOCK_MIN_VISIBLE_PX`: it is about 125 px tall, so it still stands level with a low paragraph.
+ * The cost, for the reader: a selection whose paragraph begins in the last 360 px above the legend keeps a window that
+ * holds a passage above its first line, by up to `DOCK_THREAD_FLOOR_PX − DOCK_MIN_VISIBLE_PX` (200 px).
+ */
+export const DOCK_THREAD_FLOOR_PX = 360;
 
 /**
  * P8-06 (ruling §1h.45): whether the window stands EMPTY, before any passage is explained — a reader with a key

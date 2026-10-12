@@ -71,7 +71,8 @@
 //
 // P9-03b (ruling §1h.49; the owner's words, "level with the first line of the SELECTED paragraph"): while a window
 // stands from 1024 px, it follows the selection. When a selection is offered — the settled selection the page hands the
-// box, after its debounce, not one still being dragged — in a paragraph other than the one the window stands at, the
+// box (P9-18: once the primary pointer is up, so a drag that pauses with the button held offers nothing; a keyboard
+// selection keeps the page's 150 ms debounce) — in a paragraph other than the one the window stands at, the
 // window moves to that paragraph's first line (`placePanel`'s clamp, as for the explained one), with no close and no
 // reflow: `--explain-dock` is never taken off, the content is unchanged by the move (the open thread of the passage
 // explained earlier, or the empty state), and explaining the offered passage replaces the thread in place as before.
@@ -97,7 +98,7 @@
 // again as the page scrolls; a bottom sheet on a phone. P8-02 (the owner: "level with the first
 // line of the selected paragraph"): the dock's TOP is level with the first line of the PARAGRAPH
 // of the passage it explains (`ExplainSelection.paragraph`, from `paper-body.tsx`), held between
-// the masthead's foot and 160 px above the legend and measured again as the page scrolls; its
+// the masthead's foot and 160 px (360 once it holds a passage, P9-17) above the legend and measured again as the page scrolls; its
 // height is its content. P9-03b: it is level with the SELECTED paragraph's first line — the one the
 // reader last selected, which is the explained one until another is selected (it no longer waits for
 // the next passage to be explained). The selections measured again as the page scrolls are the open
@@ -136,7 +137,7 @@ import type { PaperTerm } from "@/lib/papers/report";
 import { MAX_EXPLAIN_MESSAGE_CHARS, threadFull, type ExplainTurn } from "@/store/explain-threads";
 import type { Paper, UserProfile } from "@/types";
 import { EXPLAIN, PEERS_READING } from "./copy";
-import { DOCK_BOTTOM_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_TOP_PX, DOCK_WIDTH_PX, emptyDockStands, reserveDock } from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_WIDTH_PX, emptyDockStands, reserveDock } from "./explain-dock";
 import { EvidenceQuote } from "./evidence-quote";
 import {
   asItems,
@@ -317,20 +318,23 @@ const SHEET_SHARE = 0.6;
  * Where the box stands. From a window of 1024 px: the dock (P7-15, R7) — the window's right edge,
  * 360 px wide, and (P8-02, BACKLOG-31; P9-03b) its top level with the first line of the PARAGRAPH it
  * stands at — the selected one, the explained one until another is selected —
- * `top = clamp(paragraphTop, DOCK_TOP_PX, height − DOCK_BOTTOM_PX − DOCK_MIN_VISIBLE_PX)`,
- * so never above the masthead's foot and never so low that less than 160 px of it shows above the foot
- * legend. Its height is its content, at most the room from its top down to the legend (`maxHeight`);
+ * `top = clamp(paragraphTop, DOCK_TOP_PX, height − DOCK_BOTTOM_PX − floor)`,
+ * so never above the masthead's foot and never so low that less than `floor` of it shows above the foot
+ * legend. P9-17 (ruling §1h.56): the floor is a property of what the window holds — the default, 160 px
+ * (`DOCK_MIN_VISIBLE_PX`), is the empty window's, which is about 125 px tall; a window that holds a passage is
+ * given `DOCK_THREAD_FLOOR_PX` (360), room for its sticky header, its sticky controls row and two lines of the
+ * answer between them. Its height is its content, at most the room from its top down to the legend (`maxHeight`);
  * the thread scrolls inside and the input is pinned at its foot. The words of the selection do not enter
  * it — `bounds` only does where the body reported no paragraph (the selection's own first line then).
  * Below 640: a sheet — the window's width, on its bottom edge, at most 60% of its
  * height. Between the two P3-02's place (`placeCard`), under or above the selection, unchanged.
  */
-export function placePanel(bounds: ViewRect, viewport: Viewport, paragraphTop?: number): Place {
+export function placePanel(bounds: ViewRect, viewport: Viewport, paragraphTop?: number, floor: number = DOCK_MIN_VISIBLE_PX): Place {
   if (viewport.width < PHONE_WIDTH) {
     return { kind: "sheet", left: 0, width: viewport.width, bottom: 0, maxHeight: Math.floor(viewport.height * SHEET_SHARE) };
   }
   if (viewport.width >= DOCK_MIN_VIEWPORT_PX) {
-    const top = clamp(paragraphTop ?? bounds.top, DOCK_TOP_PX, viewport.height - DOCK_BOTTOM_PX - DOCK_MIN_VISIBLE_PX);
+    const top = clamp(paragraphTop ?? bounds.top, DOCK_TOP_PX, viewport.height - DOCK_BOTTOM_PX - floor);
     return { kind: "dock", right: 0, width: DOCK_WIDTH_PX, top, maxHeight: Math.max(0, viewport.height - top - DOCK_BOTTOM_PX) };
   }
   return { kind: "card", ...placeCard(bounds, viewport) };
@@ -1188,7 +1192,8 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   const placedAt = whereOf(open.selection);
   // The dock stands level with the selected paragraph; the card and the sheet with the passage they explain.
   const levelWith = docked && standAt ? standAt : placedAt;
-  const place = placePanel(levelWith.bounds, viewport, levelWith.paragraph?.top);
+  // A window that holds a passage keeps its header, its controls and two lines of the answer in view (P9-17): its own floor.
+  const place = placePanel(levelWith.bounds, viewport, levelWith.paragraph?.top, DOCK_THREAD_FLOOR_PX);
   const heading = reading.body[open.selection.sectionIndex]?.heading ?? "";
   const threadView: ThreadView | undefined =
     canAsk && onReply && open.status.kind === "answer"

@@ -15,7 +15,7 @@ import {
   type ExplainStatus,
   type ThreadView,
 } from "./explain-box";
-import { DOCK_MIN_VISIBLE_PX } from "./explain-dock";
+import { DOCK_MIN_VISIBLE_PX, DOCK_THREAD_FLOOR_PX } from "./explain-dock";
 import { firstAnswerMessage, keyToSend, requestReply } from "./explain-thread";
 
 // P3-02b (ruling §1h.3; §3d 14): the thread under the first answer, the input
@@ -450,7 +450,7 @@ describe("placePanel (P3-02b; P7-15, R7)", () => {
     expect(placePanel(bounds, viewport, -1200)).toMatchObject({ top: 48, maxHeight: 824 });
   });
 
-  it("stands no lower than leaves 160 px of it above the legend while the paragraph is further down", () => {
+  it("stands no lower than leaves 160 px of it above the legend while the paragraph is further down — the floor of a window with nothing in it (re-aimed, P9-17: the default floor, the empty window's)", () => {
     const viewport = { width: 1440, height: 900 };
 
     expect(DOCK_MIN_VISIBLE_PX).toBe(160);
@@ -458,6 +458,40 @@ describe("placePanel (P3-02b; P7-15, R7)", () => {
     expect(placePanel(bounds, viewport, 5000)).toMatchObject({ top: 900 - 28 - 160, maxHeight: 160 });
     // A shorter window moves the limit with it.
     expect(placePanel(bounds, { width: 1280, height: 600 }, 5000)).toMatchObject({ top: 600 - 28 - 160, maxHeight: 160 });
+    // The floor is the fourth parameter, and 160 when it is not given.
+    expect(placePanel(bounds, viewport, 5000, DOCK_MIN_VISIBLE_PX)).toEqual(placePanel(bounds, viewport, 5000));
+  });
+
+  // P9-17 (ruling §1h.56; A P9-R2 F1): a window that holds a passage keeps its sticky header (140 px with a two-line
+  // quote and the "Explain this?" control), its sticky controls row (101 px) and two lines of the answer between them.
+  it("stands no lower than leaves 360 px of it above the legend when it holds a passage (the thread's floor)", () => {
+    const viewport = { width: 1440, height: 900 };
+
+    expect(DOCK_THREAD_FLOOR_PX).toBe(360);
+    expect(placePanel(bounds, viewport, 713, DOCK_THREAD_FLOOR_PX)).toMatchObject({ top: 900 - 28 - 360, maxHeight: 360 });
+    expect(placePanel(bounds, viewport, 5000, DOCK_THREAD_FLOOR_PX)).toEqual({ kind: "dock", right: 0, width: 360, top: 512, maxHeight: 360 });
+    // A shorter window moves the limit with it.
+    expect(placePanel(bounds, { width: 1280, height: 600 }, 5000, DOCK_THREAD_FLOOR_PX)).toMatchObject({ top: 600 - 28 - 360, maxHeight: 360 });
+    expect(placePanel(bounds, { width: 1920, height: 1080 }, 5000, DOCK_THREAD_FLOOR_PX)).toMatchObject({ top: 1080 - 28 - 360, maxHeight: 360 });
+  });
+
+  it("holds its level inside the band whatever the floor: a paragraph above the thread's limit, or under the masthead, stands where it did", () => {
+    const viewport = { width: 1440, height: 900 };
+
+    for (const paragraphTop of [48, 49.5, 400, 512]) {
+      expect(placePanel(bounds, viewport, paragraphTop, DOCK_THREAD_FLOOR_PX)).toEqual(placePanel(bounds, viewport, paragraphTop));
+    }
+    expect(placePanel(bounds, viewport, 400, DOCK_THREAD_FLOOR_PX)).toMatchObject({ top: 400, maxHeight: 472 });
+    expect(placePanel(bounds, viewport, -1200, DOCK_THREAD_FLOOR_PX)).toMatchObject({ top: 48, maxHeight: 824 });
+    // Between the two limits the floors differ: 700 stands at 700 for an empty window and at 512 for a thread.
+    expect(placePanel(bounds, viewport, 700).top).toBe(700);
+    expect(placePanel(bounds, viewport, 700, DOCK_THREAD_FLOOR_PX).top).toBe(512);
+  });
+
+  it("is a dock's floor only: the card and the sheet do not read it", () => {
+    for (const viewport of [{ width: 800, height: 900 }, { width: 390, height: 844 }]) {
+      expect(placePanel(bounds, viewport, 5000, DOCK_THREAD_FLOOR_PX)).toEqual(placePanel(bounds, viewport, 5000));
+    }
   });
 
   it("is the window's height less the masthead and the legend when the paragraph is above, and never negative", () => {

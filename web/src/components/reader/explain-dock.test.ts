@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { placeCard } from "./explain-box";
-import { DOCK_BOTTOM_PX, DOCK_GAP_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_RESERVE_PX, DOCK_TOP_PX, DOCK_VAR, DOCK_WIDTH_PX, DOCK_WIDTH_VAR, emptyDockStands, reserveDock } from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_GAP_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_RESERVE_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_VAR, DOCK_WIDTH_PX, DOCK_WIDTH_VAR, emptyDockStands, reserveDock } from "./explain-dock";
 
 // P7-15 (the owner's R7): the dock's rectangle is built from three numbers that the shell owns —
 // the masthead's height above it, the foot legend's below it, and the width of the card it
@@ -38,11 +38,23 @@ describe("the dock's rectangle against the shell that frames it", () => {
     expect(DOCK_MIN_VIEWPORT_PX).toBe(64 * REM_PX);
   });
 
-  it("never stands so low that less than 160 px of it shows above the legend (P8-02)", () => {
+  it("an empty window never stands so low that less than 160 px of it shows above the legend (P8-02; re-aimed, P9-17: the floor of the window with nothing in it)", () => {
     // The window is level with its paragraph (`placePanel`), and the paragraph may be anywhere on the page:
-    // its top is held between the masthead's foot and this much above the legend.
+    // its top is held between the masthead's foot and this much above the legend. The empty window is about 125 px
+    // tall, so this default floor leaves it all of its height; a window that holds a passage has its own (below).
     expect(DOCK_MIN_VISIBLE_PX).toBe(160);
     expect(DOCK_TOP_PX + DOCK_MIN_VISIBLE_PX + DOCK_BOTTOM_PX).toBe(236);
+  });
+
+  it("a window that holds a passage never stands so low that its header, its controls and two lines of the answer do not show: 360 px (P9-17, ruling §1h.56)", () => {
+    // A P9-R2 F1, measured: the sticky header is 140 px (a two-line quote and the "Explain this?" control), the
+    // sticky controls row 101 px; at the old 160 px floor they overlapped by 38 to 83 px and the answer showed
+    // nowhere. The second line of the answer ends 330 px below the window's top, 344 with the control at the 44 px touch
+    // size (P9-17's browser check; the 300 px first guessed leaves none of it in view). The floor is a property of what the
+    // window holds, not one number for every state.
+    expect(DOCK_THREAD_FLOOR_PX).toBe(360);
+    expect(DOCK_THREAD_FLOOR_PX).toBeGreaterThan(DOCK_MIN_VISIBLE_PX);
+    expect(DOCK_TOP_PX + DOCK_THREAD_FLOOR_PX + DOCK_BOTTOM_PX).toBe(436);
   });
 });
 

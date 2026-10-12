@@ -652,7 +652,7 @@ describe("ExplainBox — the window stands level with the explained paragraph's 
     run.mounted.unmount();
   });
 
-  it("stays under the masthead while the paragraph is scrolled above it, and 160 px above the legend while it is far below", async () => {
+  it("stays under the masthead while the paragraph is scrolled above it, and 360 px above the legend while it is far below (re-aimed, P9-17: a window that holds a passage keeps its header, its controls and two lines; was 160)", async () => {
     const above = await scenario(base({ target: inParagraph(first, -700) }), [(tree) => click(tree)]);
     await wait();
     expect(above.last().style).toMatchObject({ top: 48, maxHeight: 900 - 48 - 28 });
@@ -660,15 +660,15 @@ describe("ExplainBox — the window stands level with the explained paragraph's 
 
     const below = await scenario(base({ target: inParagraph(first, 4000) }), [(tree) => click(tree)]);
     await wait();
-    expect(below.last().style).toMatchObject({ top: 900 - 28 - 160, maxHeight: 160 });
+    expect(below.last().style).toMatchObject({ top: 900 - 28 - 360, maxHeight: 360 });
     below.mounted.unmount();
   });
 
-  it("moves on a mere selection of the next passage, and explaining it leaves the window where it is (re-aimed, P9-03b: was \"does not move on a mere selection — it moves when that passage is explained\")", async () => {
+  it("moves on a mere selection of the next passage, and explaining it leaves the window where it is (re-aimed, P9-03b: was \"does not move on a mere selection — it moves when that passage is explained\"; P9-17: the second paragraph at 480, inside the thread's band, was 620)", async () => {
     const tops: Array<number | undefined> = [];
     const run = await scenario(base({ target: inParagraph(first, 400) }), [
       (tree) => click(tree),
-      selectNext(inParagraph(second, 620), { cached: SECOND_ANSWER }),
+      selectNext(inParagraph(second, 480), { cached: SECOND_ANSWER }),
       // Selected, not explained: P9-03b (re-aimed) — the window is still the first passage's, but level with the SELECTED
       // paragraph (it stayed at the first paragraph's top, 400, until the passage was explained).
       (tree) => tops.push(look(tree).style?.top),
@@ -678,13 +678,13 @@ describe("ExplainBox — the window stands level with the explained paragraph's 
     ]);
     await wait();
 
-    expect(tops).toEqual([620, 620]);
+    expect(tops).toEqual([480, 480]);
     expect(run.last().passage).toBe(second.passage);
     expect(removeProperty).not.toHaveBeenCalled();
     run.mounted.unmount();
   });
 
-  it("follows the paragraph as the page scrolls, and holds the clamp", async () => {
+  it("follows the paragraph as the page scrolls, and holds the clamp (re-aimed, P9-17: the lowest top is 512, was 712; the last stop 480, was 520)", async () => {
     let paragraphTop = 400;
     const moving: ExplainSelection = {
       ...inParagraph(first, 400),
@@ -705,17 +705,18 @@ describe("ExplainBox — the window stands level with the explained paragraph's 
       record,
       scrollTo(5000),
       record,
-      scrollTo(520),
+      scrollTo(480),
       record,
     ]);
     await wait();
 
-    // Opened where the paragraph was read; then wherever the page puts it, held between 48 and 712 (900 − 28 − 160).
-    expect(tops).toEqual([400, 300, 48, 712, 520]);
+    // Opened where the paragraph was read; then wherever the page puts it, held between 48 and 512 (900 − 28 − 360; re-aimed,
+    // P9-17: it was 712, 900 − 28 − 160, the floor of a window with nothing in it).
+    expect(tops).toEqual([400, 300, 48, 512, 480]);
     run.mounted.unmount();
   });
 
-  it("follows the window as it is resized: the limit above the legend moves with its height", async () => {
+  it("follows the window as it is resized: the limit above the legend moves with its height (re-aimed, P9-17: 212 and 360, were 412 and 160)", async () => {
     const paragraphTop = 500;
     const moving: ExplainSelection = {
       ...inParagraph(first, 500),
@@ -732,8 +733,9 @@ describe("ExplainBox — the window stands level with the explained paragraph's 
     ]);
     await wait();
 
-    // 600 − 28 − 160 = 412 is as low as it may stand; the paragraph at 500 is lower; the height is what is left of it.
-    expect(styles).toEqual([{ right: 0, width: 360, top: 412, maxHeight: 160 }]);
+    // 600 − 28 − 360 = 212 is as low as it may stand; the paragraph at 500 is lower; the height is what is left of it
+    // (re-aimed, P9-17: it was 412 and 160, the floor of a window with nothing in it).
+    expect(styles).toEqual([{ right: 0, width: 360, top: 212, maxHeight: 360 }]);
     run.mounted.unmount();
   });
 
@@ -771,7 +773,9 @@ describe("ExplainBox — the window stands level with the explained paragraph's 
 // paragraph of the selection on offer — the settled selection, never the one still being dragged — keeps what it holds, and
 // carries the "Explain this?" control in its header; the floating button stands only where no window does.
 
-const B_TOP = 620;
+// Re-aimed, P9-17: 480, was 620 — a window that holds a passage may stand no lower than 512 (900 − 28 − 360), and these tests
+// are about the window following a paragraph, not about the clamp (pinned above and in `explain-box.thread.test.tsx`).
+const B_TOP = 480;
 const paraA = (): ExplainSelection => inParagraph(first, 400);
 const paraB = (): ExplainSelection => inParagraph(second, B_TOP);
 
@@ -812,16 +816,17 @@ describe("ExplainBox — the window follows the selected paragraph's first line 
     run.mounted.unmount();
   });
 
-  it("falls back on the selection's own first line where the body reported no paragraph", async () => {
-    const run = await scenario(base({ target: paraA() }), [(tree) => click(tree), selectNext(second, { cached: SECOND_ANSWER })]);
+  it("falls back on the selection's own first line where the body reported no paragraph (re-aimed, P9-17: a first line at 460, inside the thread's band; `second`'s 580 is below its limit of 512)", async () => {
+    const near: ExplainSelection = { ...second, rect: { left: 200, top: 480, right: 460, bottom: 500 }, bounds: { left: 100, top: 460, right: 460, bottom: 500 } };
+    const run = await scenario(base({ target: paraA() }), [(tree) => click(tree), selectNext(near, { cached: SECOND_ANSWER })]);
     await wait();
 
-    expect(second.paragraph).toBeUndefined();
-    expect(run.last().style?.top).toBe(second.bounds.top);
+    expect(near.paragraph).toBeUndefined();
+    expect(run.last().style?.top).toBe(near.bounds.top);
     run.mounted.unmount();
   });
 
-  it("is held between the masthead and 160 px above the legend, as the explained paragraph's is", async () => {
+  it("is held between the masthead and 360 px above the legend, as the explained paragraph's is (re-aimed, P9-17: was 160)", async () => {
     const tops: Array<number | undefined> = [];
     const note: Step = (tree) => tops.push(look(tree).style?.top);
     const run = await scenario(base({ target: paraA() }), [
@@ -833,7 +838,7 @@ describe("ExplainBox — the window follows the selected paragraph's first line 
     ]);
     await wait();
 
-    expect(tops).toEqual([900 - 28 - 160, 48]);
+    expect(tops).toEqual([900 - 28 - 360, 48]);
     run.mounted.unmount();
   });
 
@@ -906,7 +911,7 @@ describe("ExplainBox — the window follows the selected paragraph's first line 
 
   it("a Tier 0 window (no key) follows a selection too, whether or not the paper defines something in it", async () => {
     const definedA = inParagraph({ ...first, passage: "The rafting ratio rose." }, 330);
-    const definedB = inParagraph({ ...second, passage: "The rafting ratio is the same in all bars." }, 560);
+    const definedB = inParagraph({ ...second, passage: "The rafting ratio is the same in all bars." }, 440);
     const plainC = inParagraph({ ...second, passage: "Specimens were machined from a single casting." }, 700);
     const tops: Array<number | undefined> = [];
     const note: Step = (tree) => tops.push(look(tree).style?.top);
@@ -925,7 +930,9 @@ describe("ExplainBox — the window follows the selected paragraph's first line 
     ]);
     await wait();
 
-    expect(tops).toEqual([330, 560, 700]);
+    // The third paragraph lies at 700: the window holds a passage, so it stops at 512 (re-aimed, P9-17: it followed to 700; the
+    // second paragraph is at 440, was 560, inside the band).
+    expect(tops).toEqual([330, 440, 512]);
     expect(removeProperty).not.toHaveBeenCalled();
     run.mounted.unmount();
   });
