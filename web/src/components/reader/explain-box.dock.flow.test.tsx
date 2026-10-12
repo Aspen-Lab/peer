@@ -185,6 +185,8 @@ const selectNext =
   };
 /** The renders from the window's first opening on. */
 const fromOpen = (looks: Look[]) => looks.slice(Math.max(0, looks.findIndex((l) => l.card)));
+/** The tops the window stood at over the run, consecutive repeats dropped. */
+const topsOf = (looks: Look[]) => looks.map((l) => l.style?.top).filter((top, i, all) => top !== undefined && top !== all[i - 1]);
 
 const base = (over: Partial<Props> = {}): Props => ({
   target: first,
@@ -861,6 +863,13 @@ describe("ExplainBox — the window follows the selected paragraph's first line 
     expect(tops).toEqual([B_TOP, B_TOP]);
     expect(run.last().passage).toBe(first.passage);
     expect(run.last().explain).toBeUndefined();
+    // P9-17 (A P9-R2 F3): the two `note`s above read the tree of the render in which the selection went away — a render that React
+    // discards and redoes when the box sets state while rendering (`followed`), so they pass whether the memory is kept or not.
+    // The render the reader sees is the LAST one: it is still level with B, and no render on the way stood anywhere else (the
+    // window does not go back to A's paragraph, 400, for a frame or for good). A nulled memory (`if (target !== followed)`) puts
+    // the window back at A under the reader's pointer: red here.
+    expect(run.last().style?.top).toBe(B_TOP);
+    expect(topsOf(fromOpen(run.looks))).toEqual([400, B_TOP]);
     run.mounted.unmount();
   });
 
@@ -1291,8 +1300,6 @@ const giveCard =
   (tree) => {
     (cardElement(tree)?.props.cardRef as { current: unknown }).current = card;
   };
-/** The tops the window stood at over the run, consecutive repeats dropped. */
-const topsOf = (looks: Look[]) => looks.map((l) => l.style?.top).filter((top, i, all) => top !== undefined && top !== all[i - 1]);
 
 describe("ExplainBox — the window's bottom stands on the screen's bottom when its paragraph is too low for the whole window (P9-17, ruling §1h.57)", () => {
   it("is lifted to its real height when that is taller than the thread's floor: its bottom edge on the screen's bottom, above the legend", async () => {
