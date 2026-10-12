@@ -39,8 +39,15 @@ import { paragraphAnchor } from "./paper-body";
  * face), as the reading page's other small controls are (P9-23, `min-h-11`). The 11 px of padding a side is what makes
  * the box 44 (the words stay centred in it), and `bg-clip-content` keeps the marked term's highlight to the word's own
  * line, the 22.5 px it was — the box around it is the hit area, not a taller colour. A mouse's button is as it was.
+ *
+ * P9-58 (A P9-W4's N5 residual): and at least 24 px wide, however short the term — a two-letter term's button was 22.5 px
+ * wide, under the 24 px line. `min-w-6` is a floor, not a width: a longer term keeps its own width, and a short one is
+ * 24 px with its word centred (a button's own text-align), 24 and not 44 because a 44 px box would push a two-letter
+ * word 11 px in from the left edge the other terms and their quotes line up on. The clip above keeps a marked term's
+ * highlight inside the content box, so its height stays the word's own line; its width is the word's or the 24 px floor.
  */
-const TERM_TOUCH = "[@media(hover:none)]:min-h-11 [@media(hover:none)]:py-[11px] [@media(hover:none)]:bg-clip-content";
+const TERM_TOUCH =
+  "[@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-6 [@media(hover:none)]:py-[11px] [@media(hover:none)]:bg-clip-content";
 
 /** P9-04 (X3), P9-21: the terms a one-column page is shown while the strip is folded — the first two. */
 export const ONE_COLUMN_TERMS = 2;
