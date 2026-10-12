@@ -323,7 +323,7 @@ expiry immediately, but the bytes themselves are only physically removed by
 401 with no/wrong secret) — every upload also sweeps expired records opportunistically, but that
 is a supplement to the scheduled job, not a substitute for one. Two ways to actually run it, and
 **neither runs automatically in this local checkout**:
-- **Vercel**: the repo-root [`vercel.json`](vercel.json) declares a daily cron
+- **Vercel**: [`web/vercel.json`](web/vercel.json) (the project's Root Directory, where Vercel reads it) declares a daily cron
   (`crons: [{ path: "/api/jobs/purge-uploads", schedule: "17 3 * * *" }]`); set `CRON_SECRET` in
   the Vercel project's environment variables and Vercel calls the route with that bearer
   automatically — nothing else to configure.

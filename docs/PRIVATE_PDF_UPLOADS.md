@@ -120,7 +120,7 @@ conditions" below).
 Neither of the following runs by itself just because this repository exists — **a fresh local
 checkout purges nothing until one of these is actually configured**:
 
-- **Vercel deployment:** the repo-root `vercel.json` declares a daily cron entry
+- **Vercel deployment:** `web/vercel.json` (the project's Root Directory, where Vercel reads it) declares a daily cron entry
   (`{"crons":[{"path":"/api/jobs/purge-uploads","schedule":"17 3 * * *"}]}`). Set `CRON_SECRET`
   in the Vercel project's environment variables; Vercel calls the route with that bearer
   automatically.

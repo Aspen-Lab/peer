@@ -5,7 +5,7 @@ import { PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
 
 export const dynamic = "force-dynamic";
 
-/** Schedule daily: Vercel's cron (repo-root vercel.json) for the bucket, or
+/** Schedule daily: Vercel's cron (web/vercel.json) for the bucket, or
  * the host that mounts PEER_PRIVATE_UPLOAD_DIR when self-hosting. */
 export async function GET(req: Request) {
   const expected = process.env.CRON_SECRET ? Buffer.from(`Bearer ${process.env.CRON_SECRET}`) : null;
