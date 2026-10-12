@@ -15,6 +15,13 @@ import { READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs
 import type { ColorTheme, ThemeMode } from "@/types";
 import { useSpread } from "./reader-layout";
 
+// P9-23 (A P9-W2's N5): 28 × 28 px, 4 px apart, on a phone. Where there is no
+// hover each control takes the shell's touch rule (notes-button.tsx,
+// reader-tabs.tsx, the masthead's links): 44 × 44, with 8 px between
+// neighbours (`gap-2` on the strip). With a mouse they are the 28 px they
+// were; the floor sits behind the media query so it cannot grow them.
+const TOUCH = "[@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11";
+
 function Divider() {
   return <span aria-hidden className="mx-1 h-4 w-px bg-border-strong" />;
 }
@@ -48,7 +55,7 @@ export function ReadingControls() {
     <div
       role="group"
       aria-label="Reading controls"
-      className="mt-5 inline-flex items-center gap-1 border border-border-strong p-1"
+      className="mt-5 inline-flex items-center gap-1 [@media(hover:none)]:gap-2 border border-border-strong p-1"
     >
       <IconButton
         aria-label="Larger text"
@@ -56,7 +63,7 @@ export function ReadingControls() {
         onClick={() => withZoomTransition(increaseScale)}
         disabled={atMaxScale}
         aria-disabled={atMaxScale}
-        className="font-reading text-body-lg font-semibold"
+        className={`font-reading text-body-lg font-semibold ${TOUCH}`}
       >
         A
       </IconButton>
@@ -65,7 +72,7 @@ export function ReadingControls() {
         onClick={() => withZoomTransition(decreaseScale)}
         disabled={atMinScale}
         aria-disabled={atMinScale}
-        className="font-reading text-meta font-semibold"
+        className={`font-reading text-meta font-semibold ${TOUCH}`}
       >
         A
       </IconButton>
@@ -74,6 +81,7 @@ export function ReadingControls() {
         aria-label="Day reading mode"
         aria-pressed={mode === "system"}
         tone={mode === "system" ? "soft" : "ghost"}
+        className={TOUCH}
         onClick={() => setMode("system")}
       >
         <IconSun size={14} />
@@ -82,6 +90,7 @@ export function ReadingControls() {
         aria-label="Night reading mode"
         aria-pressed={mode === "dark"}
         tone={mode === "dark" ? "soft" : "ghost"}
+        className={TOUCH}
         onClick={() => setMode("dark")}
       >
         <IconMoon size={14} />
@@ -93,6 +102,7 @@ export function ReadingControls() {
         tone={fit ? "soft" : "ghost"}
         disabled={!spread}
         title={!spread ? "Fit needs the two-column layout" : undefined}
+        className={TOUCH}
         // S22: Fit on/off eases like every other zoom change.
         onClick={() => withZoomTransition(() => setFit(!fit))}
       >

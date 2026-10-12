@@ -69,3 +69,51 @@ describe("PrivatePdfStatus — 'Attached to' status line (9-31)", () => {
     expect(html).not.toContain("Attached to:");
   });
 });
+
+// P9-23 (A P9-W2's N5): the two actions were 184 × 16 and 57 × 16 px on a phone, 16 px apart — small enough that a
+// thumb on one lands on the other. Where there is no hover (`hover:none`) each takes the shell's touch rule
+// (`[@media(hover:none)]:min-h-11`, the class notes-button.tsx and reader-tabs.tsx carry) with at least 8 px between
+// them when the row wraps; with a mouse the size is unchanged. They stay two buttons with the same names.
+// Layout is not computed in this node environment; the boxes are measured in the checkpoint
+// (docs/reading-helper-abc/P9-23-C-*.md) and this file pins the classes that make them.
+describe("PrivatePdfStatus — the two actions are touch targets under hover:none (P9-23, N5)", () => {
+  const markup = () => renderToStaticMarkup(createElement(PrivatePdfStatus, { upload, onDeleted: () => {} }));
+  const buttons = () => markup().match(/<button\b[^>]*>/g) ?? [];
+  const classes = (tag: string) => (/\bclass="([^"]*)"/.exec(tag)?.[1] ?? "").split(/\s+/).filter(Boolean);
+
+  it("are still two buttons, 'Forget what Peer learned from this' then 'Delete PDF'", () => {
+    const html = markup();
+    const found = [...html.matchAll(/<button\b[^>]*>([^<]*)<\/button>/g)].map((m) => m[1]);
+
+    expect(found).toEqual(["Forget what Peer learned from this", "Delete PDF"]);
+    for (const tag of buttons()) expect(tag).toContain('type="button"');
+  });
+
+  it("makes both at least 44 px tall where there is no hover", () => {
+    const tags = buttons();
+
+    expect(tags).toHaveLength(2);
+    for (const tag of tags) expect(classes(tag)).toContain("[@media(hover:none)]:min-h-11");
+  });
+
+  it("keeps 8 px between them where there is no hover, also when the row wraps", () => {
+    const row = /<div class="([^"]*flex-wrap[^"]*)"/.exec(markup())?.[1].split(/\s+/) ?? [];
+
+    // The row was `gap-x-4 gap-y-1`: 16 px across, 4 px down when it wraps.
+    expect(row).toContain("gap-x-4");
+    expect(row).toContain("[@media(hover:none)]:gap-y-2");
+  });
+
+  it("leaves the mouse's boxes alone: the same underlined text, no touch height outside hover:none", () => {
+    const row = /<div class="([^"]*flex-wrap[^"]*)"/.exec(markup())?.[1].split(/\s+/) ?? [];
+
+    expect(row).toContain("gap-y-1");
+    for (const tag of buttons()) {
+      const cls = classes(tag);
+      expect(cls).toContain("underline");
+      expect(cls).toContain("underline-offset-4");
+      // The 44 px floor stays behind the media query; a bare min-h-11 would grow the mouse's buttons too.
+      expect(cls).not.toContain("min-h-11");
+    }
+  });
+});
