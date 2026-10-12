@@ -313,3 +313,77 @@ describe("POST /api/figure — an upload's figure request (P0-10)", () => {
   });
 });
 
+
+// P9-28: the preview shows which engine answered and how long the extraction
+// took. The Python helper never ran in production, so a figure that does not
+// appear there needed a header to say whose fault it was; MuPDF's WASM build
+// is the only engine now, and says so on every answer that ran the extractor.
+describe("/api/figure — which engine answered, and how long it took (P9-28)", () => {
+  const FOUND = {
+    imageUrl: "data:image/png;base64,AAAA",
+    caption: "Figure 1",
+    source: "publisher",
+    status: "found",
+    reason: null,
+    hideFigure: false,
+    matchedBy: "keyword",
+  };
+
+  beforeEach(() => {
+    mocks.getUser.mockResolvedValue(signedIn("reader-1"));
+    mocks.extractFigure.mockResolvedValue(FOUND);
+  });
+
+  function expectEngineHeaders(response: Response) {
+    expect(response.headers.get("X-Peer-Figure-Engine")).toBe("mupdf");
+    // A Server-Timing entry for the extraction, in milliseconds.
+    expect(response.headers.get("Server-Timing")).toMatch(/^extract;desc="extractFigure";dur=\d+(\.\d)?$/);
+  }
+
+  it("says so on a public paper's cached GET, without touching its cache header", async () => {
+    const response = await GET(request({ id: "openalex:W1", url: "https://example.org/p" }));
+
+    expect(response.status).toBe(200);
+    expectEngineHeaders(response);
+    expect(response.headers.get("Cache-Control")).toBe("public, s-maxage=86400, stale-while-revalidate=604800");
+  });
+
+  it("says so on an upload's private POST, which stays private", async () => {
+    mocks.ownedUpload.mockResolvedValue({ hash16: "0123456789abcdef", title: "T", ownerKey: "owner", revision: 1 });
+
+    const response = await POST(
+      new NextRequest("http://localhost/api/figure", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: "upload:0123456789abcdef", url: "/api/papers/upload/0123456789abcdef/file" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expectEngineHeaders(response);
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+  });
+
+  it("times the extraction itself: a slow extractor shows in the entry", async () => {
+    mocks.extractFigure.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      return FOUND;
+    });
+
+    const response = await GET(request({ id: "openalex:W2", url: "https://example.org/q" }));
+
+    const duration = Number(/dur=([\d.]+)/.exec(response.headers.get("Server-Timing") ?? "")?.[1]);
+    expect(duration).toBeGreaterThanOrEqual(50);
+    expect(duration).toBeLessThan(5_000);
+  });
+
+  it("does not claim an engine on an answer that never reached the extractor", async () => {
+    mocks.getUser.mockResolvedValue(signedOut());
+
+    const refused = await GET(request({ id: "openalex:W3", url: "https://example.org/r" }));
+
+    expect(refused.status).toBe(401);
+    expect(refused.headers.get("X-Peer-Figure-Engine")).toBeNull();
+    expect(refused.headers.get("Server-Timing")).toBeNull();
+  });
+});

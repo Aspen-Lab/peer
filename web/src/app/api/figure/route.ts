@@ -28,6 +28,13 @@ export const dynamic = "force-dynamic";
 export const revalidate = 86_400;
 export const runtime = "nodejs";
 
+// P9-28: the figure engine is MuPDF's WASM build (`lib/figures/pdf-engine.ts`),
+// run in this function. Every answer that ran the extractor says so, and says
+// how long the extraction took, so a preview's Network tab shows which engine
+// answered and what it cost (the Python helper that stood here never ran in
+// production, and nothing said so).
+const FIGURE_ENGINE = "mupdf";
+
 interface FigureRequest {
   id: string;
   url?: string;
@@ -63,6 +70,7 @@ async function answer(input: FigureRequest, { privately = false } = {}): Promise
   const gate = await requireAiRequest("figure", 60);
   if (gate instanceof NextResponse) return gate;
 
+  const extractionStartedAt = performance.now();
   const result = await extractFigure({
     itemId: input.id,
     url: input.url,
@@ -70,6 +78,7 @@ async function answer(input: FigureRequest, { privately = false } = {}): Promise
     query: input.query,
     figureIndex: input.figureIndex,
   });
+  const extractionMs = performance.now() - extractionStartedAt;
   const isPrivate = privateUpload || privately;
   const cacheControl = isPrivate ? "private, no-store" : result.imageUrl
     ? "public, s-maxage=86400, stale-while-revalidate=604800"
@@ -78,6 +87,8 @@ async function answer(input: FigureRequest, { privately = false } = {}): Promise
   return NextResponse.json(result, {
     headers: {
       "Cache-Control": cacheControl,
+      "X-Peer-Figure-Engine": FIGURE_ENGINE,
+      "Server-Timing": `extract;desc="extractFigure";dur=${extractionMs.toFixed(1)}`,
       ...(isPrivate ? PRIVATE_UPLOAD_HEADERS : {}),
     },
   });
