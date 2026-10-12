@@ -86,10 +86,15 @@ describe("a caption is whole, or cut only where a sentence ends (rule 2)", () =>
     expect((out as string).length).toBeLessThanOrEqual(ROOM);
   });
 
-  it("cuts the keyed example of the walk at its full stop, not at 'films.' plus an ellipsis", () => {
-    const first = "Figure 2. Transmission electron micrographs of the as-deposited and the annealed thin films."; // 92
+  it("cuts the walk's keyed example at its full stop, not at 'silicon.' plus an ellipsis", () => {
+    const first = "Figure 2. Transmission electron micrographs of the as-deposited and the annealed thin films of both of the two oxide compounds on silicon."; // 138
     const text = `${first} (b) The same films after thirty cycles of heating and cooling in air, with the scale bars as marked.`;
+    expect(first.length).toBeLessThanOrEqual(ROOM);
     expect(text.length).toBeGreaterThan(ROOM);
+    // The shape of the head's bug: it cut at 139 characters, backed up to the last space and wrote an ellipsis
+    // there, which here is right after the stop — "…on silicon.…".
+    const cut = text.slice(0, ROOM - 1);
+    expect(`${cut.slice(0, cut.lastIndexOf(" "))}…`).toMatch(/silicon\.…$/);
     const out = leadCaption(text) as string;
     expect(out).toBe(first);
     expect(out).not.toMatch(/[.!?]…/);
