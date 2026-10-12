@@ -227,7 +227,7 @@ export function ReadingMapView({
                   <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
                     <a
                       href={`#${sectionAnchor(k)}`}
-                      className="min-w-0 flex-[1_1_8rem] font-reading text-body-sm leading-[1.45] text-text-muted transition-colors hover:text-heading"
+                      className="min-w-0 flex-[1_1_14rem] font-reading text-body-sm leading-[1.45] text-text-muted transition-colors hover:text-heading"
                     >
                       <MathText text={row.heading} />
                     </a>

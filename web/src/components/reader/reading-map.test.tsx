@@ -461,7 +461,10 @@ describe("ReadingMapView — each row says its words (P9-51, F08)", () => {
     expect(groupClasses).toEqual(expect.arrayContaining(["flex", "flex-wrap", "min-w-0", "flex-1"]));
     // The heading is still the flexible part, with a floor of room before the meta drops under it.
     expect(headingClasses).toContain("min-w-0");
-    expect(headingClasses.some((c) => /^flex-\[1_1_\d+(\.\d+)?rem\]$/.test(c))).toBe(true);
+    // At 390 px (a 330-px group) a 12rem floor leaves a long heading its whole line and the meta its own line
+    // under it; a smaller floor left it 163 px, in three lines, beside the meta.
+    const floor = Number(headingClasses.map((c) => /^flex-\[1_1_(\d+(?:\.\d+)?)rem\]$/.exec(c)?.[1]).find((n) => n !== undefined));
+    expect(floor).toBeGreaterThanOrEqual(12);
     // The meta is no longer an unshrinkable run: it may shrink to the group and wrap between two parts, and
     // it stays at the right of the line (also when it is alone on a line).
     expect(metaClasses).not.toContain("shrink-0");
