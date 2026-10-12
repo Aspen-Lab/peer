@@ -1,11 +1,16 @@
 // POST /api/feedback — append a feedback event
 //
 // Append-only signal stream. Future Tier 1/2 re-ranking reads from here.
+//
+// Papers only. Peer is a paper briefing: jobs and events are not processed, so
+// feedback about one is refused (400) instead of being stored (the owner's
+// decision, §1a.18 (f); P9-31). Rows of kind 'event' / 'job' that an older
+// build wrote stay in the table untouched; nothing reads them
+// (preferences/positive-seeds.ts filters item_kind = 'paper').
 
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-type ItemKind = "paper" | "event" | "job";
 type Feedback = "liked" | "saved" | "notInterested" | "moreLikeThis";
 
 // P2-S4b (Round 3) — F-A-P2-04 (4c), ABC-JEV-INTEGRATION.md §1p.B(5),
@@ -21,10 +26,9 @@ type Feedback = "liked" | "saved" | "notInterested" | "moreLikeThis";
 // request body — `itemId` is used only to derive a same-provider id
 // string, never trusted for authorization.
 //
-// Byte-identical to today whenever nothing is derivable: a non-"paper"
-// item kind, or an itemId whose source isn't one of these four recognized
-// forms (e.g. "dblp"/"web"/"hn"), leaves `payload` exactly as the client
-// sent it.
+// Byte-identical to today whenever nothing is derivable: an itemId whose
+// source isn't one of these four recognized forms (e.g. "dblp"/"web"/"hn")
+// leaves `payload` exactly as the client sent it.
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -60,16 +64,21 @@ export async function POST(request: NextRequest) {
 
   const body = (await request.json()) as {
     itemId?: string;
-    itemKind?: ItemKind;
+    itemKind?: string;
     feedback?: Feedback;
     payload?: unknown;
   };
   if (!body.itemId || !body.itemKind || !body.feedback) {
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
   }
+  // A refusal, not a quiet 200: a client that still sends a job or an event
+  // should be told its write was not kept.
+  if (body.itemKind !== "paper") {
+    return NextResponse.json({ error: "unsupported itemKind" }, { status: 400 });
+  }
 
   // P2-S4b — additive only (see the function's own doc comment above).
-  const resolvedIds = body.itemKind === "paper" ? resolvedIdsFromItemId(body.itemId) : undefined;
+  const resolvedIds = resolvedIdsFromItemId(body.itemId);
   const payload = resolvedIds
     ? { ...(isRecord(body.payload) ? body.payload : {}), resolvedIds }
     : (body.payload ?? null);
