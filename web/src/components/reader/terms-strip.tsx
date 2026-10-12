@@ -16,9 +16,11 @@
 // plain text — there is nothing to point at. No link leaves the page: the
 // rabbit hole is closed by the blueprint ("明确不做：外链、二级术语、维基式长解释").
 //
-// P9-04 (X3): below `sm` the strip folds to its first two terms with a "show all N terms" toggle, in
-// the map's style (`hidden sm:block` / `sm:hidden`; all the terms stay in the DOM, so the server and the
-// client draw the same markup). From `sm` up all the terms show and there is no toggle.
+// P9-04 (X3), P9-21: wherever the reader panel stands in one column with the body — below the spread's
+// two-column breakpoint, `xl` (`spread.ts`), the phone and the widths up to 1279 alike — the strip folds to its
+// first two terms with a "show all N terms" toggle, in the map's style (`hidden xl:block` / `xl:hidden`; all the
+// terms stay in the DOM, so the server and the client draw the same markup). From `xl`, where the panel stands
+// beside the column, all the terms show and there is no toggle. The breakpoint is the spread's own, not a second one.
 //
 // No DOM in this project's Vitest: what the strip shows is tested by rendering
 // it, what a click does through `termButtonState`, and Escape through the hook.
@@ -32,16 +34,16 @@ import { PEERS_READING, TERMS } from "./copy";
 import { EvidenceQuote } from "./evidence-quote";
 import { paragraphAnchor } from "./paper-body";
 
-/** P9-04 (X3): the terms a phone is shown while the strip is folded — the first two. */
-export const PHONE_TERMS = 2;
+/** P9-04 (X3), P9-21: the terms a one-column page is shown while the strip is folded — the first two. */
+export const ONE_COLUMN_TERMS = 2;
 
 /**
- * Is the term at `index` of `total` folded away below `sm`? Only one past the first two, only while the
- * strip is folded, and only when there is a toggle to open it (more than two terms): with two or fewer
- * there is nothing to fold, and nothing hidden without a way back.
+ * Is the term at `index` of `total` folded away below the spread (`xl`)? Only one past the first two, only
+ * while the strip is folded, and only when there is a toggle to open it (more than two terms): with two or
+ * fewer there is nothing to fold, and nothing hidden without a way back.
  */
-export function hiddenOnPhone(index: number, total: number, open: boolean): boolean {
-  return total > PHONE_TERMS && !open && index >= PHONE_TERMS;
+export function hiddenInOneColumn(index: number, total: number, open: boolean): boolean {
+  return total > ONE_COLUMN_TERMS && !open && index >= ONE_COLUMN_TERMS;
 }
 
 /** A click on `clicked` while `marked` is highlighted: the next highlight, and
@@ -96,7 +98,7 @@ export function TermsStrip({
   marked,
   onMark,
   reveal,
-  phoneOpen = false,
+  oneColumnOpen = false,
 }: {
   terms: readonly PaperTerm[];
   /** The body the terms are looked up in, and the map their sections are named by. */
@@ -107,10 +109,10 @@ export function TermsStrip({
   /** P7-14 (R10): the page's way to put the paper's own text on screen first — the strip is
    *  shown under both tabs, the body only under "Paper digestion". */
   reveal?: (run: () => void) => void;
-  /** P9-04 (X3): whether a phone starts with every term shown. Folded by default; for the tests, as the map's. */
-  phoneOpen?: boolean;
+  /** P9-04 (X3), P9-21: whether a one-column page starts with every term shown. Folded by default; for the tests, as the map's. */
+  oneColumnOpen?: boolean;
 }) {
-  const [shownOnPhone, setShownOnPhone] = useState(phoneOpen);
+  const [shownInOneColumn, setShownInOneColumn] = useState(oneColumnOpen);
   const body = reading.body;
   const sections = useMemo(() => new Map((reading.map?.sections ?? []).map((section) => [section.id, section])), [reading.map]);
   const hits = useMemo(() => terms.map((term) => firstOccurrence(body ?? [], term.term)), [terms, body]);
@@ -130,7 +132,7 @@ export function TermsStrip({
           // as the answers do.
           const section = term.sectionId ? sections.get(term.sectionId) : undefined;
           return (
-            <li key={term.term} className={hiddenOnPhone(index, terms.length, shownOnPhone) ? "hidden sm:block" : undefined}>
+            <li key={term.term} className={hiddenInOneColumn(index, terms.length, shownInOneColumn) ? "hidden xl:block" : undefined}>
               {hit ? (
                 <button
                   type="button"
@@ -164,15 +166,15 @@ export function TermsStrip({
           );
         })}
       </ul>
-      {/* Below sm only: the strip is the first two terms and this opens the rest. */}
-      {terms.length > PHONE_TERMS && (
+      {/* Below the spread (xl) only: in one column the strip is the first two terms and this opens the rest. */}
+      {terms.length > ONE_COLUMN_TERMS && (
         <button
           type="button"
-          aria-expanded={shownOnPhone}
-          onClick={() => setShownOnPhone((shown) => !shown)}
-          className="annotation mt-3 block text-text-faint underline-offset-2 transition-colors hover:text-heading hover:underline sm:hidden"
+          aria-expanded={shownInOneColumn}
+          onClick={() => setShownInOneColumn((shown) => !shown)}
+          className="annotation mt-3 block text-text-faint underline-offset-2 transition-colors hover:text-heading hover:underline xl:hidden"
         >
-          {shownOnPhone ? TERMS.fewer : TERMS.showAll(terms.length)}
+          {shownInOneColumn ? TERMS.fewer : TERMS.showAll(terms.length)}
         </button>
       )}
     </Band>

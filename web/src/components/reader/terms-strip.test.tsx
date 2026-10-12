@@ -9,7 +9,7 @@ import type { Paper } from "@/types";
 import { PEERS_READING, TERMS } from "./copy";
 import { SectionLinks } from "./evidence-quote";
 import { PANEL_CLASS, SPREAD_QUERY, XL_BREAKPOINT_PX } from "./spread";
-import { PHONE_TERMS, TermsStrip, findInBody, hiddenOnPhone, termButtonState } from "./terms-strip";
+import { ONE_COLUMN_TERMS, TermsStrip, findInBody, hiddenInOneColumn, termButtonState } from "./terms-strip";
 
 // P3-01 (ruling §1h.1; §3d 13): the strip "Terms to know" under the map — one
 // line per term, the paper's own definition as an attributed quote, Peer's
@@ -196,7 +196,7 @@ describe("finding a term when the body may be on another tab (P7-14, R10)", () =
 // body, i.e. below the spread (`xl`, `spread.ts`), the strip was 578 to 758 px at 640 to 1279 px; from the spread up
 // nothing changes (all the terms, no toggle). The fold is CSS (`hidden xl:block`, `xl:hidden`), as the map's is, so
 // all the terms stay in the DOM and the markup is the same on the server and the client. No DOM here: the open state
-// is the `phoneOpen` prop, as the map's tests use it.
+// is the `oneColumnOpen` prop, as the map's tests use it.
 describe("TermsStrip — folded to two terms wherever the panel stands in one column (P9-04, X3; P9-21)", () => {
   const WORDS = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel"];
   const eightDoc: ExtractedDocument = {
@@ -238,7 +238,7 @@ describe("TermsStrip — folded to two terms wherever the panel stands in one co
   it("folds terms 3 to 8 below the spread (xl) until the toggle is pressed, and not the first two", () => {
     const classes = itemClasses(draw(8));
 
-    expect(PHONE_TERMS).toBe(2);
+    expect(ONE_COLUMN_TERMS).toBe(2);
     expect(classes.slice(0, 2).every((cls) => !cls || !/\bhidden\b/.test(cls))).toBe(true);
     for (const cls of classes.slice(2)) expect(cls).toBe("hidden xl:block");
   });
@@ -253,7 +253,7 @@ describe("TermsStrip — folded to two terms wherever the panel stands in one co
     // The toggle is a one-column control: from the spread (xl) up there is nothing to fold.
     expect(folded).toMatch(/class="[^"]*\bxl:hidden\b/);
 
-    const open = draw(8, { phoneOpen: true });
+    const open = draw(8, { oneColumnOpen: true });
     const opened = toggleOf(open) ?? "";
     expect(opened).toContain(">fewer terms<");
     expect(opened).toContain('aria-expanded="true"');
@@ -277,16 +277,16 @@ describe("TermsStrip — folded to two terms wherever the panel stands in one co
     }
   });
 
-  it("hiddenOnPhone: only a term past the second, only while folded, only when there is a toggle to open it", () => {
-    expect(hiddenOnPhone(0, 8, false)).toBe(false);
-    expect(hiddenOnPhone(1, 8, false)).toBe(false);
-    expect(hiddenOnPhone(2, 8, false)).toBe(true);
-    expect(hiddenOnPhone(7, 8, false)).toBe(true);
-    expect(hiddenOnPhone(7, 8, true)).toBe(false);
-    expect(hiddenOnPhone(2, 3, false)).toBe(true);
+  it("hiddenInOneColumn: only a term past the second, only while folded, only when there is a toggle to open it", () => {
+    expect(hiddenInOneColumn(0, 8, false)).toBe(false);
+    expect(hiddenInOneColumn(1, 8, false)).toBe(false);
+    expect(hiddenInOneColumn(2, 8, false)).toBe(true);
+    expect(hiddenInOneColumn(7, 8, false)).toBe(true);
+    expect(hiddenInOneColumn(7, 8, true)).toBe(false);
+    expect(hiddenInOneColumn(2, 3, false)).toBe(true);
     // Two terms or fewer: no toggle, so nothing may be hidden.
-    expect(hiddenOnPhone(1, 2, false)).toBe(false);
-    expect(hiddenOnPhone(0, 1, false)).toBe(false);
+    expect(hiddenInOneColumn(1, 2, false)).toBe(false);
+    expect(hiddenInOneColumn(0, 1, false)).toBe(false);
   });
 
   // ── P9-21: the fold follows the spread, not the phone ──────────────────────────────────────────────────
@@ -335,7 +335,7 @@ describe("TermsStrip — folded to two terms wherever the panel stands in one co
   });
 
   it("shows every term below the spread once the toggle has opened them, the toggle staying to close them", () => {
-    const html = draw(8, { phoneOpen: true });
+    const html = draw(8, { oneColumnOpen: true });
 
     for (const width of ONE_COLUMN) {
       expect(itemClasses(html).map((cls) => shownAt(width, cls)), `${width}px`).toEqual(Array(8).fill(true));
@@ -348,7 +348,7 @@ describe("TermsStrip — folded to two terms wherever the panel stands in one co
     const html = draw(8);
 
     for (const width of [320, 360, 390, 430, 639]) {
-      expect(itemClasses(html).filter((cls) => shownAt(width, cls))).toHaveLength(PHONE_TERMS);
+      expect(itemClasses(html).filter((cls) => shownAt(width, cls))).toHaveLength(ONE_COLUMN_TERMS);
       expect(toggleOf(html)).toContain(">show all 8 terms<");
       expect(shownAt(width, toggleClass(html))).toBe(true);
     }
