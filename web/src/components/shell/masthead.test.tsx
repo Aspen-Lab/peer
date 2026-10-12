@@ -23,6 +23,13 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), back: vi.fn() }),
 }));
 
+// The briefing the paper was opened from. The store's server snapshot is its initial state, so `setState` would
+// not reach a static render; the masthead reads `papers` and nothing else from it (P9-40: the position rail).
+let papers: { id: string }[] = [];
+vi.mock("@/store/feed", () => ({
+  useFeedStore: (select: (s: { papers: { id: string }[] }) => unknown) => select({ papers }),
+}));
+
 import { Masthead } from "./masthead";
 
 const render = () => renderToStaticMarkup(createElement(Masthead));
@@ -34,6 +41,7 @@ const classes = (tagText: string) => (/\bclass="([^"]*)"/.exec(tagText)?.[1] ?? 
 
 beforeEach(() => {
   pathname = "/papers/openalex%3AW2";
+  papers = [];
 });
 
 describe("the masthead's grid keeps a gap between its cells (N2)", () => {
@@ -172,5 +180,76 @@ describe("below lg the wordmark is its mark alone, so the masthead fits with the
     for (const cls of ["font-display", "text-title-lg", "font-medium", "leading-none", "text-heading"]) {
       expect(word).toContain(cls);
     }
+  });
+});
+
+describe("below lg the position text drops, the arrows stay and name it (P9-40, step 2)", () => {
+  // Step 1 (the wordmark is its mark) fits a mouse from 768 but not a touch tablet: with the 44px arrows and the
+  // 44px `?` the cells still need 844px, so at 768 and 820 the nav stood past the window. The rule's second step:
+  // the "2 of 5" text drops between md and lg, with the hairline after it; the arrows (the real prev / next
+  // buttons) stay, and their names say where you are, since the text that said it is gone.
+  const BRIEFING = ["openalex:W1", "openalex:W2", "openalex:W3", "openalex:W4", "openalex:W5"];
+  const onPaper = (n: number) => {
+    papers = BRIEFING.map((id) => ({ id }));
+    pathname = `/papers/${encodeURIComponent(BRIEFING[n - 1])}`;
+    return render();
+  };
+  /** From the Briefing link to the nav: the rail, the centre cell's whole markup. */
+  const rail = (html: string) => {
+    const from = html.lastIndexOf("<a", html.indexOf('aria-label="← Briefing"'));
+    return html.slice(from, html.indexOf("<nav", from));
+  };
+
+  it("names the position in each arrow: 'Previous paper, 2 of 5' and 'Next paper, 2 of 5'", () => {
+    const html = onPaper(2);
+
+    expect(open(html, "button", 'aria-label="Previous paper')).toContain('aria-label="Previous paper, 2 of 5"');
+    expect(open(html, "button", 'aria-label="Next paper')).toContain('aria-label="Next paper, 2 of 5"');
+  });
+
+  it.each([
+    [1, 'aria-label="Previous paper, 1 of 5"', 'aria-label="Next paper, 1 of 5"'],
+    [5, 'aria-label="Previous paper, 5 of 5"', 'aria-label="Next paper, 5 of 5"'],
+  ])("names the position at the ends too: paper %i of 5, and the missing direction is disabled", (n, prev, next) => {
+    const html = onPaper(n);
+    const prevTag = open(html, "button", "Previous paper");
+    const nextTag = open(html, "button", "Next paper");
+
+    expect(prevTag).toContain(prev);
+    expect(nextTag).toContain(next);
+    expect(n === 1 ? prevTag : nextTag).toContain("disabled");
+    expect(n === 1 ? nextTag : prevTag).not.toContain("disabled");
+  });
+
+  it("draws the position text from lg only: the 'N of M' span is hidden below it, as is the hairline after it", () => {
+    const html = rail(onPaper(2));
+    const text = open(html, "span", "tabular-nums");
+    const rules = html.match(/<span aria-hidden="true" class="[^"]*\bw-px\b[^"]*">/g) ?? [];
+
+    // The text is in the markup, for the widths that hold it: "2 of 5" once.
+    expect(html.replace(/<[^>]*>/g, "")).toContain("2 of 5");
+    expect(classes(text)).toEqual(expect.arrayContaining(["hidden", "lg:inline"]));
+    // Two hairlines frame it from lg (before it, after it); below lg the one after it goes with it, so the arrow
+    // and the keys keep exactly one between them.
+    expect(rules).toHaveLength(2);
+    expect(classes(rules[0] ?? "")).not.toContain("hidden");
+    expect(classes(rules[1] ?? "")).toEqual(expect.arrayContaining(["hidden", "lg:block"]));
+  });
+
+  it("keeps the arrows and the keycaps at every width: they are not hidden by the width", () => {
+    const html = rail(onPaper(2));
+    const buttons = html.match(/<button\b[^>]*>/g) ?? [];
+
+    expect(buttons).toHaveLength(2);
+    for (const b of buttons) expect(classes(b)).not.toContain("hidden");
+  });
+
+  it("is still the way back alone on a deep link: no position, no arrows, no text, no hairline", () => {
+    papers = [];
+    const html = rail(render());
+
+    expect(html.replace(/<[^>]*>/g, "")).toBe("← Briefing");
+    expect(html).not.toContain("<button");
+    expect(html).not.toContain("w-px");
   });
 });
