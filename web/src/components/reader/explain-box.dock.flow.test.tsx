@@ -558,8 +558,9 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     const run = await scenario(base({ target: late, cached: undefined }), []);
 
     // 800 px, no window: 200 px right of the paragraph. The button's left is the paragraph's edge and the 6 px gap; its
-    // top is the selection's (600), not the 626 under the selection.
-    expect(run.last().button?.props.style).toEqual({ left: 600 + 6, top: 600 });
+    // top is the selection's FIRST line (580, `bounds.top`; P9-03b, re-aimed — it was 600, the line the selection ends
+    // on), not the 626 under the selection's end.
+    expect(run.last().button?.props.style).toEqual({ left: 600 + 6, top: 580 });
     expect((run.last().button?.props.style as { left: number }).left).toBeGreaterThanOrEqual(paragraph.right);
     run.mounted.unmount();
   });
@@ -569,7 +570,8 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     const run = await scenario(base({ target: lateDefined, canAsk: false, terms: [term], cached: undefined }), []);
 
     expect(run.last().card).toBeUndefined();
-    expect(run.last().button?.props.style).toEqual({ left: 760 + 6, top: 600 });
+    // P9-03b (re-aimed): level with the selection's first line (580), not the line it ends on (600).
+    expect(run.last().button?.props.style).toEqual({ left: 760 + 6, top: 580 });
     run.mounted.unmount();
   });
 
@@ -584,7 +586,8 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     // One pixel on the threshold's other side (800 − 136 = 664): the gutter.
     const roomy: ExplainSelection = { ...tight, paragraph: { left: 120, top: 560, right: 664, bottom: 860 } };
     const again = await scenario(base({ target: roomy, cached: undefined }), []);
-    expect(again.last().button?.props.style).toEqual({ left: 664 + 6, top: 600 });
+    // P9-03b (re-aimed): the first line's top (580), not the end line's (600).
+    expect(again.last().button?.props.style).toEqual({ left: 664 + 6, top: 580 });
     again.mounted.unmount();
   });
 
@@ -596,7 +599,7 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
       paragraph: { left: 120, top: 560, right: 600, bottom: 860 },
       measure: () => ({
         rect: { left: 200, top: 600 - shift, right: 460, bottom: 620 - shift },
-        bounds: { left: 200, top: 600 - shift, right: 460, bottom: 620 - shift },
+        bounds: { left: 100, top: 580 - shift, right: 460, bottom: 620 - shift },
         paragraph: { left: 120, top: 560 - shift, right: 600, bottom: 860 - shift },
       }),
     };
@@ -608,7 +611,8 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
       () => {},
     ]);
     await wait();
-    expect(run.last().button?.props.style).toEqual({ left: 600 + 6, top: 350 });
+    // P9-03b (re-aimed): the first line's top moves with the page (580 − 250), not the end line's (600 − 250 = 350).
+    expect(run.last().button?.props.style).toEqual({ left: 600 + 6, top: 330 });
     run.mounted.unmount();
   });
 });

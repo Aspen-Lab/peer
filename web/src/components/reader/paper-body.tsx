@@ -267,10 +267,12 @@ export interface ViewRect {
 }
 
 /** Where a selection is on screen: `rect`, where it ends (the last line the
- *  words reach — what the button stands under), and `bounds`, the whole of it
- *  (what the card stands clear of). `paragraph` (P8-02) is the box of the paragraph's
- *  own `<p>`: its top is the paragraph's first line, which the explain window stands level
- *  with. Absent only where the element cannot give a box (the selection is still read). */
+ *  words reach — what the floating button stands under where it has no gutter), and `bounds`, the
+ *  whole of it (what the card stands clear of; its top is the selection's FIRST line, which the
+ *  floating button in the gutter stands level with, P9-03b; and the dock's level where no
+ *  paragraph is reported). `paragraph` (P8-02) is the box of the paragraph's own `<p>`: its top
+ *  is the paragraph's first line, which the explain window stands level with — the selected
+ *  paragraph's, P9-03b. Absent only where the element cannot give a box (the selection is still read). */
 export interface ViewRects {
   rect: ViewRect;
   bounds: ViewRect;

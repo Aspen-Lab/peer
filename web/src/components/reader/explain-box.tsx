@@ -7,7 +7,7 @@
 //
 // The reader selects words of the body (`paper-body.tsx` reads the selection);
 // a small button appears beside them — P9-03: in the gutter right of the paragraph, level with
-// the selection, never over the paper's words; just below them where there is no gutter (a phone,
+// the selection's first line, never over the paper's words; just below them where there is no gutter (a phone,
 // a narrow window; `placeButton`) — P9-03b (ruling §1h.49): but only where no window stands. While
 // a window stands (from 1024 px: a reader with a key, a Tier 0 definition window) there is no room
 // beside the column for a floating control (24 px of it at every width from 1024 to ~1700, measured),
@@ -252,20 +252,21 @@ const PHONE_WIDTH = 640;
 const clamp = (value: number, low: number, high: number) => Math.min(Math.max(value, low), Math.max(low, high));
 
 /**
- * The button (P9-03, the owner's reading of the feature walk's X13: a control stands beside the words, never on
- * them). With the paragraph's box known and room right of it for the button and a margin each side
- * (`viewport.width − paragraph.right ≥ BUTTON_WIDTH + 2·BUTTON_MARGIN`; the viewport is already narrowed by the
- * dock's reserve while the dock stands, so this is the gutter between the reading column and the dock), it stands
- * in that gutter: `left = paragraph.right + BUTTON_GAP`, `top` level with `rect` (the line the selection ends on),
- * both held inside the window. Without a gutter — a phone, a narrow window, a column flush with the edge, no
- * paragraph reported — it is as it was: just below where the selection ends, centred on its end; above it when
- * there is no room below; always inside the window.
+ * The floating button (P9-03, the owner's reading of the feature walk's X13: a control stands beside the words, never
+ * on them) — P9-03b (ruling §1h.49): rendered only where no window stands (the card range, the phone, no key and no
+ * definition, a window hidden with Close), so `viewport` is the whole window. With the paragraph's box known and room
+ * right of it for the button and a margin each side (`viewport.width − paragraph.right ≥ BUTTON_WIDTH + 2·BUTTON_MARGIN`),
+ * it stands in that gutter: `left = paragraph.right + BUTTON_GAP`, `top` level with the selection's FIRST line (the
+ * owner's "first line"; `bounds.top` — `bounds` is the whole selection, and defaults to `rect`, for a selection of one
+ * line), both held inside the window. Without a gutter — a phone, a narrow window, a column flush with the edge, no
+ * paragraph reported — it is as it was: just below where the selection ENDS (`rect`, the last line), centred on its
+ * end; above it when there is no room below; always inside the window.
  */
-export function placeButton(rect: ViewRect, viewport: Viewport, paragraph?: ViewRect): { left: number; top: number } {
+export function placeButton(rect: ViewRect, viewport: Viewport, paragraph?: ViewRect, bounds: ViewRect = rect): { left: number; top: number } {
   if (paragraph && viewport.width - paragraph.right >= BUTTON_WIDTH + 2 * BUTTON_MARGIN) {
     return {
       left: clamp(paragraph.right + BUTTON_GAP, BUTTON_MARGIN, viewport.width - BUTTON_WIDTH - BUTTON_MARGIN),
-      top: clamp(rect.top, BUTTON_MARGIN, viewport.height - BUTTON_HEIGHT - BUTTON_MARGIN),
+      top: clamp(bounds.top, BUTTON_MARGIN, viewport.height - BUTTON_HEIGHT - BUTTON_MARGIN),
     };
   }
   const left = clamp(rect.right - BUTTON_WIDTH / 2, BUTTON_MARGIN, viewport.width - BUTTON_WIDTH - BUTTON_MARGIN);
@@ -1152,7 +1153,7 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
       // The press must not take the selection with it: it is what is explained.
       onMouseDown={(event) => event.preventDefault()}
       onClick={() => start(next)}
-      style={placeButton(askAt.rect, viewport, askAt.paragraph)}
+      style={placeButton(askAt.rect, viewport, askAt.paragraph, askAt.bounds)}
       className="fixed z-[70] rounded-full border border-border-strong bg-surface px-3 py-2 font-mono text-caption text-heading shadow-card-hover transition-colors hover:bg-surface-hover"
     >
       {EXPLAIN.ask}

@@ -313,30 +313,42 @@ describe("the pure rules", () => {
     const paragraph = { left: 408, top: 280, right: 900, bottom: 540 };
     const rect = { left: 600, top: 317, right: 700, bottom: 337 };
 
-    it("(a) stands in the gutter: 6 px right of the paragraph's edge, level with the selection", () => {
-      const at = placeButton(rect, docked, paragraph);
+    it("(a) stands in the gutter: 6 px right of the paragraph's edge, level with the selection's FIRST line (re-aimed, P9-03b: was the line it ends on)", () => {
+      // A selection of three lines: it begins on the line at 317 and ends on the one at 357 (`rect`, the last line).
+      const lines = { left: 410, top: 317, right: 898, bottom: 377 };
+      const last = { left: 410, top: 357, right: 700, bottom: 377 };
+      const at = placeButton(last, docked, paragraph, lines);
 
+      // P9-03b: the first line's top (317), not the last's (357).
       expect(at).toEqual({ left: 900 + 6, top: 317 });
       // Beside the words, not on them: not one pixel of the button is within the paragraph's box.
       expect(at.left).toBeGreaterThanOrEqual(paragraph.right);
       // The same place whatever the selection's width or where in the line it ends.
-      expect(placeButton({ left: 410, top: 317, right: 430, bottom: 337 }, docked, paragraph)).toEqual({ left: 906, top: 317 });
-      expect(placeButton({ left: 410, top: 317, right: 898, bottom: 337 }, docked, paragraph)).toEqual({ left: 906, top: 317 });
+      expect(placeButton({ left: 410, top: 317, right: 430, bottom: 337 }, docked, paragraph, { left: 410, top: 317, right: 430, bottom: 337 })).toEqual({ left: 906, top: 317 });
+      expect(placeButton({ left: 410, top: 317, right: 898, bottom: 337 }, docked, paragraph, { left: 410, top: 317, right: 898, bottom: 337 })).toEqual({ left: 906, top: 317 });
+      // A selection of one line has one line: with no `bounds` given the line reported is the selection's.
+      expect(placeButton(rect, docked, paragraph)).toEqual({ left: 906, top: 317 });
     });
 
     it("(a) with no dock to narrow it, the same rule on the whole window (a reader with no key, a defined term)", () => {
       expect(placeButton(rect, { width: 1440, height: 1000 }, paragraph)).toEqual({ left: 906, top: 317 });
+      expect(placeButton({ left: 410, top: 357, right: 700, bottom: 377 }, { width: 1440, height: 1000 }, paragraph, { left: 410, top: 317, right: 898, bottom: 377 })).toEqual({ left: 906, top: 317 });
     });
 
-    it("(b) the top is held inside the window: a margin from the head, the button's foot a margin above the window's foot", () => {
-      // 1000 − 8 (margin) − 32 (the button's height) = 960.
-      expect(placeButton({ left: 600, top: 990, right: 700, bottom: 1010 }, docked, paragraph)).toEqual({ left: 906, top: 960 });
-      expect(placeButton({ left: 600, top: 960, right: 700, bottom: 980 }, docked, paragraph).top).toBe(960);
-      expect(placeButton({ left: 600, top: 959, right: 700, bottom: 979 }, docked, paragraph).top).toBe(959);
-      // A selection scrolled partly above the window's head.
-      expect(placeButton({ left: 600, top: -20, right: 700, bottom: 0 }, docked, paragraph)).toEqual({ left: 906, top: 8 });
+    it("(b) the first line's top is held inside the window: a margin from the head, the button's foot a margin above the window's foot (re-aimed, P9-03b: was the last line's)", () => {
+      // The selection's first line is at `top`; it ends 40 px lower. 1000 − 8 (margin) − 32 (the button's height) = 960.
+      const at = (top: number, viewport = docked) => placeButton({ left: 600, top: top + 40, right: 700, bottom: top + 60 }, viewport, paragraph, { left: 410, top, right: 700, bottom: top + 60 });
+      expect(at(990)).toEqual({ left: 906, top: 960 });
+      expect(at(960).top).toBe(960);
+      expect(at(959).top).toBe(959);
+      // A selection scrolled partly above the window's head: its first line is above it, its last is not.
+      expect(at(-20)).toEqual({ left: 906, top: 8 });
+      expect(at(-60).top).toBe(8);
       // A window too short to hold the button: the head wins, as the card's does.
-      expect(placeButton({ left: 600, top: 30, right: 700, bottom: 50 }, { width: 1064, height: 30 }, paragraph).top).toBe(8);
+      expect(at(30, { width: 1064, height: 30 }).top).toBe(8);
+      // With no `bounds` the clamps are the selection's own line, as they were.
+      expect(placeButton({ left: 600, top: 990, right: 700, bottom: 1010 }, docked, paragraph)).toEqual({ left: 906, top: 960 });
+      expect(placeButton({ left: 600, top: -20, right: 700, bottom: 0 }, docked, paragraph)).toEqual({ left: 906, top: 8 });
     });
 
     it("(c) with no paragraph reported it is today's place: under where the selection ends, flipped above at the foot", () => {
@@ -345,12 +357,18 @@ describe("the pure rules", () => {
       expect(placeButton(rect, docked, undefined)).toEqual(placeButton(rect, docked));
       expect(placeButton(rect, docked)).toEqual({ left: 700 - 60, top: 337 + 6 });
       expect(placeButton({ left: 300, top: 740, right: 420, bottom: 760 }, vp, undefined).top).toBe(740 - 6 - 32);
+      // P9-03b: the first line is for the gutter only — where the button stands under the selection it is the END that
+      // it stands under, whatever the whole selection's box, and with no paragraph the `bounds` change nothing.
+      const whole = { left: 100, top: 200, right: 420, bottom: 420 };
+      expect(placeButton({ left: 300, top: 400, right: 420, bottom: 420 }, vp, undefined, whole)).toEqual({ left: 360, top: 426 });
     });
 
     it("(d) a paragraph with less than 136 px (the button, a margin each side) to its right gets today's place; with exactly 136, the gutter", () => {
       const noRoom = { left: 408, top: 280, right: 1064 - 135, bottom: 540 };
       expect(placeButton(rect, docked, noRoom)).toEqual(placeButton(rect, docked));
       expect(placeButton(rect, docked, noRoom)).toEqual({ left: 700 - 60, top: 337 + 6 });
+      // …and the whole selection's box (P9-03b) does not move it: it stands under where the selection ends.
+      expect(placeButton(rect, docked, noRoom, { left: 410, top: 200, right: 898, bottom: 337 })).toEqual({ left: 700 - 60, top: 337 + 6 });
       // One pixel more room is the gutter, and it ends a margin and two pixels short of the window's edge.
       const justRoom = { left: 408, top: 280, right: 1064 - 136, bottom: 540 };
       const at = placeButton(rect, docked, justRoom);
@@ -372,13 +390,17 @@ describe("the pure rules", () => {
           for (const top of [-40, 8, 300, 760, 1200]) {
             const box = { left: 100, top: top - 20, right, bottom: top + 400 };
             const where = { left: 120, top, right: Math.min(right, 400), bottom: top + 20 };
-            const at = placeButton(where, vp, box);
+            // P9-03b: the selection began 60 px higher (three lines or so) than the line it ends on.
+            const whole = { left: 100, top: top - 60, right: Math.min(right, 400), bottom: top + 20 };
+            const at = placeButton(where, vp, box, whole);
             if (vp.width - right >= 120 + 2 * 8) {
               gutter += 1;
               expect(at.left).toBeGreaterThanOrEqual(right);
               expect(at.left + 120).toBeLessThanOrEqual(vp.width - 8);
               expect(at.top).toBeGreaterThanOrEqual(8);
               expect(at.top + 32).toBeLessThanOrEqual(vp.height - 8);
+              // Level with the first line wherever it fits in the window.
+              if (whole.top >= 8 && whole.top + 32 <= vp.height - 8) expect(at.top).toBe(whole.top);
             } else {
               fallback += 1;
               expect(at).toEqual(placeButton(where, vp));

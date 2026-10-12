@@ -466,7 +466,8 @@ describe("ExplainBox — the window is there before the first selection (P8-06, 
     const run = await scenario(base({ target: late }), []);
 
     expect(run.last().card).toBeUndefined();
-    expect(run.last().button?.props.style).toEqual({ left: 600 + 6, top: 600 });
+    // P9-03b (re-aimed): level with the selection's first line (`bounds.top` 580), not the line it ends on (600).
+    expect(run.last().button?.props.style).toEqual({ left: 600 + 6, top: 580 });
     run.mounted.unmount();
   });
 
