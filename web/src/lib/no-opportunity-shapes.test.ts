@@ -111,4 +111,10 @@ describe("what the stopped jobs and events feeds left in the shared definitions 
       expect(typeof (format as Record<string, unknown>)[name], name).toBe("function");
     }
   });
+
+  it("the item-route shapes name no event or job detail page", () => {
+    const source = read("src/lib/navigation/item-routes.ts");
+    expect(source).not.toMatch(/\/events\/|\/jobs\/|ItemDetailRoute/);
+    expect(source).toContain("PaperSurfaceRoute");
+  });
 });
