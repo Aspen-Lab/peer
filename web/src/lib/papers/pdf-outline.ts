@@ -524,6 +524,38 @@ const longestRun = (runs: PdfTextItem[]): PdfTextItem =>
   runs.reduce((best, i) => (i.str.trim().length > best.str.trim().length ? i : best), runs[0]);
 
 /**
+ * The runs of a raised mark that are the exponent or charge of the raised run before them, as indexes into
+ * `runs[from..to)` (P9-37). A run set raised again, above the raised run before it by more than the rise a
+ * script needs to be one, no larger than it, made only of characters that have a superscript form, and starting
+ * within reach of its edge, is that run's own: the label "ab" with its charge "3+" above it. A sign and its digits
+ * stored as two runs on that higher level ("−" "1") are one charge. Anything else in the mark, a run at the
+ * label's own height, one with a letter or a point in it, one set apart, is not.
+ */
+function exponentsOf(runs: PdfTextItem[], from: number, to: number): number[] {
+  const found: number[] = [];
+  // The last run with text in it, and whether it was taken here as an exponent.
+  let before: PdfTextItem | null = null;
+  let taken = false;
+  for (let j = from; j < to; j++) {
+    const run = runs[j];
+    const str = run.str.trim();
+    if (!str) continue;
+    const touches = !!before && run.x - (before.x + (before.width || 0)) < LABEL_TOUCH_EM * before.height;
+    const digits = [...str].every((c) => c in SUPERSCRIPT);
+    if (before && touches && digits && run.height <= before.height && run.y - before.y > SUPERSCRIPT_RISE) {
+      found.push(j);
+      taken = true;
+    } else if (before && touches && digits && run.height <= before.height && taken && Math.abs(run.y - before.y) <= SUPERSCRIPT_RISE) {
+      found.push(j);
+    } else {
+      taken = false;
+    }
+    before = run;
+  }
+  return found;
+}
+
+/**
  * Runs read left to right as one line. A citation number raised above the line
  * (`raised`) is left out when it stands after a word or the end of a clause —
  * "…and other materials.12", "…grown on gold,3−5" — and kept where it is an
@@ -552,6 +584,9 @@ const longestRun = (runs: PdfTextItem[]): PdfTextItem =>
  * A group with any other letter ("A1g", "RCT"), a point ("0.5"), a sign at its end (a charge set low),
  * or one that stands apart from its base is written as before. The charge stays P9-08's raised
  * superscript: "CoO₂⁻" (P9-14).
+ *
+ * A raised mark with a letter in it is written as the PDF has it ("st", "2a"), bar the exponent or charge
+ * raised again above one of its runs (`exponentsOf`): "K" + raised "ab" + raised-again "3+" is "Kab³⁺" (P9-37).
  */
 function lineOf(
   page: number,
@@ -568,6 +603,8 @@ function lineOf(
   let judged = -1;
   // The raised runs up to this one are a mark of digits and signs, written as superscripts.
   let superscripts = -1;
+  // The runs of a raised mark with letters in it that are an exponent or a charge raised again above a run of it.
+  const exponents = new Set<number>();
   // The face of the combining mark just written: the space run the PDF stores behind it in that face is its own.
   let markFont: string | null = null;
   // The mark stands on a digit, a bracket or a sign: the run behind it starts within reach, or is a word apart.
@@ -614,7 +651,11 @@ function lineOf(
       // A whole raised mark of digits and signs, with a word before it to stand on: an exponent
       // or a charge, not a footnote number at the head of a line. Letters, a point or a slash
       // in it ("st", "2a", "1/2", "0−4 μm") leave it as the PDF has it.
-      superscripts = text.trim() && mark && [...mark].every((c) => c in SUPERSCRIPT) ? judged : -1;
+      const whole = !!mark && [...mark].every((c) => c in SUPERSCRIPT);
+      superscripts = text.trim() && whole ? judged : -1;
+      // A mark with letters in it is written flat, bar the exponent or charge raised again above one of its
+      // runs: "ab" + "3+" is "ab³⁺" (P9-37).
+      if (text.trim() && mark && !whole) for (const j of exponentsOf(runs, i, end)) exponents.add(j);
       // A number and a unit raised behind a one-letter variable ("f" + "0−4 μm") is that variable's label.
       if (superscripts !== judged && RANGE_LABEL.test(mark)) openLabel(i, judged);
     }
@@ -662,7 +703,7 @@ function lineOf(
     if (argument) text = text.trimEnd();
     // A mark sits on the glyph before it: the last that is not a mark itself.
     const base = text.replace(COMBINING_TAIL, "").slice(-1);
-    let written = i <= superscripts && raised?.has(item) ? [...item.str].map((c) => SUPERSCRIPT[c] ?? c).join("") : item.str;
+    let written = (i <= superscripts || exponents.has(i)) && raised?.has(item) ? [...item.str].map((c) => SUPERSCRIPT[c] ?? c).join("") : item.str;
     if (subscript) {
       let sub = "";
       for (const c of item.str) {
