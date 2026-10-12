@@ -936,3 +936,94 @@ describe("the Profile's small text actions are touch targets where there is no h
     expect(boxes[3]).toEqual(expect.arrayContaining(["inline-flex", "items-center", "gap-1.5", "text-meta", "text-text-faint"]));
   });
 });
+
+// P9-54 (A P9-W3's N5, the remainder P9-52 named): P9-52 raised the two first steps of the Profile's two-step controls
+// to 44 px on touch ("Reset" in What Peer has learned, "Reset profile to defaults"), and left their second steps at the
+// height of their text: a thumb that hit a 44 px "Reset" met a 16 px "Reset all" in the same place, and a 44 px "Reset
+// profile to defaults" a 18 px "Confirm reset". The second step is every button that appears only after a first press:
+// "Reset all" and its "Cancel" (in `LearnedPreferences`), "Confirm reset" and its "Cancel" (in the page's reset section).
+// Where there is no hover (`hover: none`) each is at least 44 px tall, the same one class P9-52 and P9-23 used
+// (`[@media(hover:none)]:min-h-11`); with a mouse nothing moves. Layout is not computed in this node environment, and a
+// second step cannot be rendered here (no test in this project simulates a press, and the confirmation is `useState`
+// inside the component), so the classes are read from the source, as the block above reads the hook-wired page's two
+// buttons. The boxes are in the checkpoint (docs/reading-helper-abc/P9-54-C-*.md).
+describe("the Profile's second-step buttons are touch targets where there is no hover (P9-54, N5)", () => {
+  const TOUCH_FLOOR = "[@media(hover:none)]:min-h-11";
+  const source = readFileSync(join(process.cwd(), "src/app/profile/page.tsx"), "utf8");
+  /** The slice of the source from `from` to the next `to`: the two components that hold a second step. */
+  const region = (from: string, to: string): string => {
+    const start = source.indexOf(from);
+    expect(start, from).toBeGreaterThan(-1);
+    const end = source.indexOf(to, start);
+    expect(end, to).toBeGreaterThan(start);
+    return source.slice(start, end);
+  };
+  /** Every <button> of `text`, in source order: its words (the text after its last `>`) and its className's classes. */
+  const buttonsIn = (text: string): Array<{ label: string; classes: string[] }> => {
+    const found: Array<{ label: string; classes: string[] }> = [];
+    for (let end = text.indexOf("</button>"); end !== -1; end = text.indexOf("</button>", end + 1)) {
+      const chunk = text.slice(text.lastIndexOf("<button", end), end);
+      const names = [...chunk.matchAll(/className="([^"]*)"/g)];
+      found.push({
+        label: chunk.slice(chunk.lastIndexOf(">") + 1).trim(),
+        classes: (names.at(-1)?.[1] ?? "").split(/\s+/).filter(Boolean),
+      });
+    }
+    return found;
+  };
+  /** The one button of `text` whose words are `label`: it must be there, and there once. */
+  const buttonIn = (text: string, label: string): string[] => {
+    const same = buttonsIn(text).filter((b) => b.label === label);
+    expect(same.length, label).toBe(1);
+    return same[0].classes;
+  };
+  // What Peer has learned: "Reset" -> "Reset all" / "Cancel". The reset section: "Reset profile to defaults" ->
+  // "Confirm reset" / "Cancel".
+  const learned = region("export function LearnedPreferences", "function PastBriefings");
+  const resetSection = region("{/* ── Reset ──", "<VersionLine");
+
+  it("makes 'Reset all' (the second step of What Peer has learned) at least 44 px tall where there is no hover", () => {
+    expect(buttonIn(learned, "Reset all")).toContain(TOUCH_FLOOR);
+  });
+
+  it("makes that step's 'Cancel' at least 44 px tall where there is no hover", () => {
+    expect(buttonIn(learned, "Cancel")).toContain(TOUCH_FLOOR);
+  });
+
+  it("makes 'Confirm reset' (the second step of Reset profile to defaults) at least 44 px tall where there is no hover", () => {
+    expect(buttonIn(resetSection, "Confirm reset")).toContain(TOUCH_FLOOR);
+  });
+
+  it("makes that step's 'Cancel' at least 44 px tall where there is no hover", () => {
+    expect(buttonIn(resetSection, "Cancel")).toContain(TOUCH_FLOOR);
+  });
+
+  it("is the same two steps, with the same words and the same quiet colours, and a mouse's boxes are the ones they were", () => {
+    const steps = [
+      buttonIn(learned, "Reset all"),
+      buttonIn(learned, "Cancel"),
+      buttonIn(resetSection, "Confirm reset"),
+      buttonIn(resetSection, "Cancel"),
+    ];
+
+    // No height of any kind outside `hover: none`: a mouse's box is still the height of its words.
+    for (const classes of steps) {
+      for (const cls of classes) {
+        if (/(^|:)(min-h|h|py|pt|pb|my|mt|mb)-/.test(cls)) expect(cls.startsWith("[@media(hover:none)]:"), cls).toBe(true);
+      }
+    }
+    // The colours and the press feedback each step already had.
+    const confirms = ["text-red", "hover:text-red/80", "font-medium", "active:scale-95"];
+    const cancels = ["text-text-faint", "hover:text-text-muted", "active:scale-95"];
+    expect(steps[0]).toEqual(expect.arrayContaining(confirms));
+    expect(steps[1]).toEqual(expect.arrayContaining(cancels));
+    expect(steps[2]).toEqual(expect.arrayContaining(confirms));
+    expect(steps[3]).toEqual(expect.arrayContaining(cancels));
+  });
+
+  it("keeps each pair of steps centred on one line, so a taller button grows the row and does not skew it", () => {
+    // The learned card's pair is `flex items-center gap-3`; the reset panel's is `flex items-center gap-3 ml-auto`.
+    expect(learned).toMatch(/<span className="text-caption flex items-center gap-3 shrink-0">/);
+    expect(resetSection).toMatch(/<div className="flex items-center gap-3 ml-auto">/);
+  });
+});
