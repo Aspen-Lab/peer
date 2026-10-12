@@ -12,7 +12,6 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:events-benchmark": "vitest run --config vitest.live-events.config.ts src/lib/events/benchmark.test.ts",
     "test:live-channels": "vitest run --config vitest.live-channels.config.ts",
     "test:jev-smoke": "vitest run --config vitest.jev-smoke.config.ts",
     "check:providers": "node scripts/check-provider-models.mjs",

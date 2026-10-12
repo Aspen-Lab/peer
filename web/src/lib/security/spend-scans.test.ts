@@ -248,14 +248,23 @@ describe("scan 3 — no operator search credential is read anywhere", () => {
     expect(accepted).toHaveLength(0);
   });
 
-  it("the three adapters still exist and take the reader's credentials from the request (a rename would otherwise make the scan above vacuous)", () => {
+  // RE-AIMED, NOT DELETED (P9-33, §1h.60). This case used to assert that the
+  // three adapters still existed and read the request's `apiKeys`, so that a
+  // rename could not make the scans above vacuous. The adapters are deleted
+  // with the jobs feed, which is the stronger form of the same guarantee: the
+  // scans above (no environment read of any job-source name, anywhere in
+  // `src` or `scripts`) are unchanged and still bind a revival, and this case
+  // now keeps the three files from coming back unreviewed.
+  it("no job-source adapter exists: the three were deleted with the jobs feed and must not return", () => {
     for (const file of [
       "src/lib/jobs/sources/adzuna.ts",
       "src/lib/jobs/sources/jsearch.ts",
       "src/lib/jobs/sources/usajobs.ts",
     ]) {
-      expect(fs.existsSync(path.join(process.cwd(), file)), `${file} is gone`).toBe(true);
-      expect(code(path.join(process.cwd(), file)), `${file} must read the request's apiKeys`).toMatch(/query\.apiKeys\?\./);
+      expect(
+        fs.existsSync(path.join(process.cwd(), file)),
+        `${file} was deleted with the jobs feed (P9-33) and must not return`,
+      ).toBe(false);
     }
   });
 });
