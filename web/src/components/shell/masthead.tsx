@@ -55,6 +55,14 @@ const BACK_WORD = RAIL.back.slice(BACK_ARROW.length);
 const WORDMARK_CLASS =
   "font-display text-title-lg font-medium leading-none tracking-[-0.01em] text-heading";
 
+/**
+ * The phone's in-flow wordmark (the briefing's, below `md`) where there is no hover (P9-52, A P9-W3's N5): it was
+ * 37 x 19 px. It is a block there (`flex w-fit`, so the 44 px is its own box and not a line box's strut) at least 44
+ * px tall, the words centred in it; with a mouse it is the inline link it was.
+ */
+const FLOW_WORDMARK_TOUCH =
+  "[@media(hover:none)]:flex [@media(hover:none)]:w-fit [@media(hover:none)]:min-h-11 [@media(hover:none)]:items-center";
+
 /** The hairline between two words in the bar. A middot is a glyph in a row
  *  of glyphs; a rule is the machine's own line, and the rest of this product
  *  is ruled — the band's rule, the key's, the plate's edge. */
@@ -266,8 +274,10 @@ export function Masthead() {
           dateline. The reading page has no top chrome — the plate is the
           first thing on screen. */}
       {route === "briefing" && (
-        <div className="md:hidden px-6 pt-6">
-          <Link href="/" className={WORDMARK_CLASS}>
+        // 16px of padding above, not 24, where there is no hover: the link's box is 44px there, the words centred
+        // in it, so they sit about where they sat (P9-52).
+        <div className="md:hidden px-6 pt-6 [@media(hover:none)]:pt-4">
+          <Link href="/" className={`${WORDMARK_CLASS} ${FLOW_WORDMARK_TOUCH}`}>
             Peer
           </Link>
         </div>
