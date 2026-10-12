@@ -14,7 +14,9 @@
 
 import type { DigestProvider } from "@/lib/llm/providers/types";
 import type { ExtractedFigureCaption } from "./html-text";
+import { pdfFigureUrl } from "./reading";
 import type { PaperReport, PaperReportKeyResult } from "./report";
+import { bareUploadId } from "./upload-id";
 import {
   pickFigureForCaption,
   type FigurePool,
@@ -239,7 +241,14 @@ function safeJson(text: string): Record<string, unknown> | null {
 }
 
 interface BindArgs {
-  paper: { title?: string };
+  /**
+   * `id` is the id of the PDF the captions and the pool were read from: the
+   * paper's own, or the upload's where the reader attached a PDF of their own
+   * (the report route passes the id it read the text with). With it, a figure
+   * of a PDF is bound by the figure-image route's URL, not by its bytes (P9-53).
+   * Without it, or with an id that route cannot look up, the pool's URL stays.
+   */
+  paper: { title?: string; id?: string };
   report: PaperReport;
   captions: ExtractedFigureCaption[];
   provider: DigestProvider | null;
@@ -265,14 +274,74 @@ const NO_IMAGE: AttachedImage = {
   source: null,
 };
 
+/** The PDF a figure-image URL would be drawn from, as the binder knows it. */
+interface PdfSource {
+  paperId: string;
+  captions: ExtractedFigureCaption[];
+}
+
+/**
+ * The number a "Figure 3" / "Fig. 3" label names, or null where the figure
+ * route has nothing to look for: "Figure S3", "Figure 3b", "Figure IV",
+ * "Table 1". The same rule as `pictureNumber` in `reading.ts`, which is private
+ * there; `figure-binding.route-url.test.ts` pins that the two offer a route URL
+ * for exactly the same labels.
+ */
+function pictureNumber(label: string): number | null {
+  const m = /^fig(?:ure)?\.?\s*([1-9]\d{0,2})$/i.exec(label.trim());
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * Whether the figure-image route can find this id's PDF: a canonical upload id
+ * (answered to its owner only), or one of the two public ids `fetchPaperById`
+ * looks up. A paper from another source (`semantic_scholar:`, `pubmed:`, …)
+ * has a report but no route, so its figures stay by value.
+ */
+function routeCanFind(paperId: string): boolean {
+  return bareUploadId(paperId) !== null || /^(?:arxiv|openalex):\S/.test(paperId);
+}
+
+/** The figure number a caption names, as the pool reads it ("Figure 3" -> "3", "Fig. 3b" -> "3b"). */
+function namedFigure(caption: string | null): string | null {
+  const m = caption?.match(/\bfig(?:ure)?\.?\s*(\d+)([a-z]?)/i);
+  return m ? `${m[1]}${m[2].toLowerCase()}` : null;
+}
+
+/**
+ * The figure-image URL of "Figure N" for a label, where the PDF's own caption
+ * says which page it sits on: the first caption of the document that names the
+ * same picture number (the one the reading places, `placeFigures`), which must
+ * have a page and no picture of its own. Null otherwise.
+ */
+function routeUrlFor(source: PdfSource, label: string): string | null {
+  const n = pictureNumber(label);
+  if (n === null) return null;
+  const caption = source.captions.find((c) => pictureNumber(c.label) === n);
+  if (!caption || caption.imageUrl) return null;
+  const page = caption.page;
+  if (typeof page !== "number" || !Number.isInteger(page) || page < 1) return null;
+  return pdfFigureUrl(source.paperId, page, n);
+}
+
 /**
  * Look up the best image in the pool for a chosen caption + label. Returns
  * the URL/caption/source so the binding can attach them to the report.
+ *
+ * P9-53: where the pool's pick is a PDF-rendered figure (a `data:` URL, about a
+ * megabyte) *of the figure the label names*, the URL attached is the figure-image
+ * route's for that figure instead: the route draws the same region with the same
+ * engine from the caption's own page. Everything else stays as the pool gave it
+ * — an HTML source's own picture (an https URL), a pick made by words rather
+ * than by the figure's number (its caption and its picture belong together, and
+ * the route may not find what the pool could not), a label with no picture
+ * number, a caption with no page. The caption and the source stay the pool's.
  */
 function resolveImage(
   pool: FigurePool | null | undefined,
   matchedCaption: string,
   matchedLabel: string,
+  pdf?: PdfSource | null,
 ): AttachedImage {
   if (!pool || pool.entries.length === 0) return NO_IMAGE;
   const entry: FigurePoolEntry | null = pickFigureForCaption(
@@ -281,8 +350,13 @@ function resolveImage(
     matchedLabel,
   );
   if (!entry) return NO_IMAGE;
+  const n = pdf ? pictureNumber(matchedLabel) : null;
+  const byRoute =
+    pdf && n !== null && /^data:image\//i.test(entry.imageUrl) && namedFigure(entry.caption) === String(n)
+      ? routeUrlFor(pdf, matchedLabel)
+      : null;
   return {
-    imageUrl: entry.imageUrl,
+    imageUrl: byRoute ?? entry.imageUrl,
     caption: entry.caption,
     source: entry.source,
   };
@@ -299,6 +373,11 @@ export async function bindFiguresToReport(
   args: BindArgs,
 ): Promise<PaperReport> {
   const { report, captions, provider, paper, figurePool } = args;
+  // The PDF the pool's figures were drawn from, for the route URL (P9-53).
+  const pdf: PdfSource | null =
+    typeof paper.id === "string" && routeCanFind(paper.id)
+      ? { paperId: paper.id, captions }
+      : null;
   if (captions.length === 0) {
     return {
       ...report,
@@ -358,6 +437,7 @@ export async function bindFiguresToReport(
         figurePool,
         proposalCaptionMatch?.caption ?? proposalQuery,
         allocated.proposalFigureLabel,
+        pdf,
       )
     : NO_IMAGE;
 
@@ -377,7 +457,7 @@ export async function bindFiguresToReport(
         [result.title, result.detail, result.evidence]
           .filter(Boolean)
           .join(" ");
-      const image = resolveImage(figurePool, captionText, result.figureLabel);
+      const image = resolveImage(figurePool, captionText, result.figureLabel, pdf);
       return {
         ...result,
         figureImageUrl: image.imageUrl,
