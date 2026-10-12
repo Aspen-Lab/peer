@@ -189,6 +189,8 @@ export const MAP = {
     apparatus: "apparatus",
   },
   page: (page: number) => `p.${page}`,
+  /** P9-51 (F08): a row's words, as the summary line writes its words ("1,234 words"); "1 word" singular. */
+  words: (words: number) => `${words.toLocaleString("en-US")} word${words === 1 ? "" : "s"}`,
   minutes: (minutes: number) => `${minutes} min`,
   openLines: (heading: string) => `Show how the paragraphs of ${heading} open`,
   closeLines: (heading: string) => `Hide how the paragraphs of ${heading} open`,

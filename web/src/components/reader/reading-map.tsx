@@ -30,13 +30,20 @@
 // directly under the map's heading, there only when a gist renders in the map (an open
 // row that has one). Each gist keeps its role and accessible name and its label face,
 // which already tell Peer's line from the paper's (§1f.17).
+//
+// P9-51 (F08, N5; the map was described to the owner as giving each section's heading, page, word
+// count, minutes and role): a row says its words — `setup · p.2 · 1,234 words · 6 min` — the count its
+// minutes come from, the one the summary line adds up. Its meta is one list of parts, each a span with
+// the separator it owns (P9-22's rule: a wrap never leaves a line ending on "·"), joined by one plain
+// space; the meta may wrap under the heading rather than squeeze it.
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import type { PaperReading } from "@/lib/papers/reading";
 import {
   gistRoute,
   routeByQuestionsCached,
   type ReadingMap,
+  type ReadingMapSection,
   type ReadingRole,
   type RouteResult,
 } from "@/lib/papers/reading-map";
@@ -77,6 +84,20 @@ function depthOf(heading: string): number {
 
 function roleLabel(role: ReadingRole): string | null {
   return role === "body" ? null : MAP.roles[role];
+}
+
+/**
+ * P9-51 (F08): the parts of a row's meta, in order — the role (when Peer could place the heading), the
+ * page (a PDF's), the words, the minutes (none for a section with no words, as before). One list, so the
+ * separators and the spaces are the same on every row.
+ */
+function metaParts(row: ReadingMapSection, role: string | null) {
+  return [
+    ...(role ? [{ name: "role", text: role }] : []),
+    ...(typeof row.page === "number" ? [{ name: "page", text: MAP.page(row.page) }] : []),
+    { name: "words", text: MAP.words(row.words) },
+    ...(row.minutes > 0 ? [{ name: "minutes", text: MAP.minutes(row.minutes) }] : []),
+  ];
 }
 
 export function ReadingMapView({
@@ -179,7 +200,7 @@ export function ReadingMapView({
                 <div
                   data-route={mark?.tier}
                   title={mark?.title}
-                  className={markedClass("flex items-baseline gap-2", mark, "-mx-1 px-1")}
+                  className={markedClass("flex flex-wrap items-baseline gap-x-2", mark, "-mx-1 px-1")}
                 >
                   {foldable ? (
                     <button
@@ -196,17 +217,24 @@ export function ReadingMapView({
                   )}
                   <a
                     href={`#${sectionAnchor(k)}`}
-                    className="min-w-0 flex-1 font-reading text-body-sm leading-[1.45] text-text-muted transition-colors hover:text-heading"
+                    className="min-w-0 flex-[1_1_8rem] font-reading text-body-sm leading-[1.45] text-text-muted transition-colors hover:text-heading"
                   >
                     <MathText text={row.heading} />
                   </a>
-                  {role && <span className="annotation shrink-0 text-text-faint">{role}</span>}
-                  {typeof row.page === "number" && (
-                    <span className="annotation shrink-0 text-text-faint">{MAP.page(row.page)}</span>
-                  )}
-                  {row.minutes > 0 && (
-                    <span className="annotation shrink-0 text-text-faint">{MAP.minutes(row.minutes)}</span>
-                  )}
+                  {/* P9-51 (F08): role · page · words · minutes. Each part keeps itself whole and owns the
+                      separator that introduces it; the one plain space between two parts is the only place
+                      the line may break, so no line ends on "·". The group drops under the heading, right
+                      aligned as it was beside it, when the heading would be left too little room. */}
+                  <span className="annotation ml-auto min-w-0 max-w-full text-right text-text-faint">
+                    {metaParts(row, role).map((part, index) => (
+                      <Fragment key={part.name}>
+                        {index > 0 ? " " : null}
+                        <span data-meta-part={part.name} className="whitespace-nowrap">
+                          {index > 0 ? `· ${part.text}` : part.text}
+                        </span>
+                      </Fragment>
+                    ))}
+                  </span>
                 </div>
                 {/* Peer's words: the tier and the counts behind it. */}
                 {fact && <p className="annotation pl-5 text-text-faint">{fact}</p>}

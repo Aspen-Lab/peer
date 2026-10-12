@@ -430,6 +430,44 @@ describe("ReadingMapView — each row says its words (P9-51, F08)", () => {
     expect(markup.replace(/<span data-meta-part="[a-z]+"[^>]*>[^<]*<\/span>/g, "|").replace(/<[^>]*>/g, "")).toBe("| | | |");
   });
 
+  // The copy: one function, the summary line's own number format (a thousands comma), "1 word" singular.
+  it("writes a row's words with MAP.words: 'N words', a thousands comma, '1 word' singular, '0 words'", () => {
+    expect(MAP.words(0)).toBe("0 words");
+    expect(MAP.words(1)).toBe("1 word");
+    expect(MAP.words(2)).toBe("2 words");
+    expect(MAP.words(1234)).toBe("1,234 words");
+    expect(MAP.words(12345)).toBe("12,345 words");
+    // The same figure the summary line writes for the same count.
+    expect(MAP.summary(1, 1, 1234)).toContain(MAP.words(1234));
+    // The row's own words and minutes are not touched: `page` and `minutes` are what they were.
+    expect(MAP.page(3)).toBe("p.3");
+    expect(MAP.minutes(3)).toBe("3 min");
+  });
+
+  // The layout the words need: at 390 px a role, a page, the words and the minutes are ~230 px of
+  // monospace, which beside a heading squeezed it to a sliver. The row wraps: the heading keeps a floor
+  // of room (a basis), the meta drops under it, right-aligned as it sat beside it, and may itself wrap
+  // between two parts. (Pixels: the checkpoint's measurement.)
+  it("lets the row drop its meta under the heading rather than squeeze the heading: wrap on the row, a floor on the heading, the meta free to shrink", () => {
+    const html = renderWords();
+    const row = /<div[^>]*class="([^"]*)"[^>]*><span aria-hidden="true" class="w-3 shrink-0"><\/span><a href="#paper-section-2" class="([^"]*)">Problem Statement<\/a><span class="([^"]*)">/.exec(html);
+
+    expect(row, "the row, its heading link and its meta").not.toBeNull();
+    const [, rowClasses, headingClasses, metaClasses] = (row ?? []).map((c) => (c ?? "").split(/\s+/));
+    expect(rowClasses).toContain("flex");
+    expect(rowClasses).toContain("flex-wrap");
+    // The heading is still the flexible part, with a floor of room before the meta drops under it.
+    expect(headingClasses).toContain("min-w-0");
+    expect(headingClasses.some((c) => /^flex-\[1_1_\d+(\.\d+)?rem\]$/.test(c))).toBe(true);
+    // The meta is no longer an unshrinkable run: it may shrink to the row and wrap between two parts, and
+    // it stays at the right of the line (also when it is alone on a line).
+    expect(metaClasses).not.toContain("shrink-0");
+    expect(metaClasses).toContain("min-w-0");
+    expect(metaClasses).toContain("max-w-full");
+    expect(metaClasses).toContain("ml-auto");
+    expect(metaClasses).toContain("text-right");
+  });
+
   it("states the words on a row the same with a row open and with the table shown on a phone", () => {
     const base = metaText(renderWords(), "1 Introduction");
 
