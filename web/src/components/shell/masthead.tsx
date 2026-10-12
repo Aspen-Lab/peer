@@ -49,6 +49,8 @@ const SCROLLED_AT = 8;
 
 /** The rail link's arrow — "←" — taken from its label, so the two cannot drift. */
 const BACK_ARROW = RAIL.back.split(" ")[0];
+/** The rest of the label, " Briefing" with its leading space: the arrow is drawn once, the word comes in from `lg`. */
+const BACK_WORD = RAIL.back.slice(BACK_ARROW.length);
 
 const WORDMARK_CLASS =
   "font-display text-title-lg font-medium leading-none tracking-[-0.01em] text-heading";
@@ -139,8 +141,8 @@ export function Masthead() {
         // its own, and the centre is `auto` while the right cell cannot be
         // narrower than the nav, so from 768 to 1279 the rail ended where the
         // nav began — 0px at 768, 900 and 1024 (P9-W2 N2). The gap holds the
-        // line wherever the three fit; where they cannot (below `lg` — see the
-        // rail's link) the Briefing label gives way, not the gap.
+        // line wherever the three fit; where they cannot (below `lg`) the
+        // wordmark gives way to its mark (see the wordmark below), not the gap.
         className="hidden md:grid sticky top-0 z-50 h-12 px-6 gap-x-4 grid-cols-[1fr_auto_1fr] items-center border-b border-border transition-[background-color,box-shadow] data-[scrolled=true]:glass-bar data-[scrolled=true]:shadow-[0_1px_0_var(--color-border-strong)]"
       >
         {/* The bar's tooth, under its words. It cannot ride on the header
@@ -153,9 +155,26 @@ export function Masthead() {
         />
 
         <div className="relative justify-self-start">
-          <Link href="/" className="group/mark relative inline-flex items-center gap-2 px-2 py-1.5 text-heading">
+          {/* Below `lg` the wordmark is its mark alone. With the position rail
+              ("← Briefing · 2 of 5 · k j") the three cells need 826px with a
+              mouse and about 897px on touch (P9-40, ruling §1h.64 (a)); the
+              word is 53px of that, and the mark is what a tab and a shared
+              link's card show, so it names the product on its own. The link
+              keeps its name, "Peer", as an aria-label; its `gap-2` comes in
+              with the word (it sat between the mark, the word and the
+              zero-width corners, 8px of nothing once the word is gone), so
+              from `lg` the box is what it was, to the pixel. The mark and its
+              padding are 30 x 26px, so an invisible `after` box reaches 8px
+              out each side and 12px up and down, to the bar's edges (46 x
+              50px), without taking room in the grid; it is not drawn from
+              `lg`, where the word is the target. */}
+          <Link
+            href="/"
+            aria-label="Peer"
+            className="group/mark relative inline-flex items-center lg:gap-2 px-2 py-1.5 text-heading after:absolute after:-inset-x-2 after:-inset-y-3 lg:after:hidden"
+          >
             <Mark />
-            <span className={WORDMARK_CLASS}>Peer</span>
+            <span className={`${WORDMARK_CLASS} hidden lg:inline`}>Peer</span>
             <Corners className="border-border-strong group-hover/mark:border-text-muted" />
           </Link>
         </div>
@@ -254,24 +273,25 @@ function RailLine({ nav, onBack }: { nav: PaperNav; onBack: () => void }) {
     <>
       <BackToFeedLink
         onBack={onBack}
-        // Below `lg` the wordmark, the rail and the nav (525px of words) plus
-        // the grid's two 16px gaps do not leave room for "← Briefing" beside
-        // its position and keycaps, so the link is its arrow there and the
-        // whole label from `lg` (1024), where the three cells hold it with
-        // room to spare. The name does not change: the label is the link's
-        // `aria-label`, and the two spans are decoration. The arrow alone is
-        // 8px wide, so below `lg` an invisible `after` box (8px either side,
-        // the bar's height; it ends inside the 16px gap) is the click area,
-        // and where there is no hover the link is a 44px target, like the
-        // keycaps' arrows beside it.
+        // Below `lg` the rail and the nav (525px of words) plus the grid's two
+        // 16px gaps do not leave room for "← Briefing" beside its position and
+        // keycaps, so the link is its arrow there and the whole label from `lg`
+        // (1024), where the three cells hold it with room to spare. The arrow
+        // is always there and the word comes in after it, inside the same
+        // span, so the link's textContent reads "← Briefing" once, not
+        // "←← Briefing", and the label is one line of text as it was (two flex
+        // items would each round their own width, 1/64px apart from one run).
+        // The name does not change: the label is the link's `aria-label`, and
+        // the span is decoration. The arrow alone is 8px wide, so below
+        // `lg` an invisible `after` box (8px either side, the bar's height; it
+        // ends inside the 16px gap) is the click area, and where there is no
+        // hover the link is a 44px target, like the keycaps' arrows beside it.
         aria-label={RAIL.back}
         className="relative inline-flex items-center justify-center transition-colors hover:text-heading after:absolute after:-inset-x-2 after:-inset-y-3 lg:after:hidden [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
       >
-        <span aria-hidden="true" className="lg:hidden">
+        <span aria-hidden="true">
           {BACK_ARROW}
-        </span>
-        <span aria-hidden="true" className="hidden lg:inline">
-          {RAIL.back}
+          <span className="hidden lg:inline">{BACK_WORD}</span>
         </span>
       </BackToFeedLink>
       {railHasPosition(nav) && (

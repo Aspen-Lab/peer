@@ -70,22 +70,17 @@ describe("the Briefing link drops its label to its arrow where the cells cannot 
     const html = render();
     const link = html.slice(html.indexOf(back(html)));
     const inside = link.slice(0, link.indexOf("</a>"));
-    const arrow = open(inside, "span", "aria-hidden");
+    const label = open(inside, "span", "aria-hidden");
     const word = open(inside, "span", "lg:inline");
 
     // P9-40 re-aimed this test (§1c): it used to pin two spans, a `lg:hidden` "←" and a `hidden lg:inline`
     // "← Briefing", which left "←← Briefing" in the link's textContent. The property is the same, the arrow below
-    // lg and the whole label from lg, but the arrow is now one span that is always there and only the word
-    // (with its leading space, kept by `whitespace-pre` since a flex item drops it) comes in from lg.
-    expect(inside).toMatch(/^<span[^>]*>←<\/span>/);
-    expect(classes(arrow)).not.toContain("hidden");
-    expect(classes(arrow)).not.toContain("lg:hidden");
-    // The word is in the markup for the widths that hold it, hidden below them.
-    expect(classes(word)).toEqual(expect.arrayContaining(["hidden", "lg:inline", "whitespace-pre"]));
-    expect(inside).toMatch(/hidden lg:inline[^>]*> Briefing<\/span>/);
-    // Neither form is read out twice: the link's name is the aria-label, the spans are decoration.
-    expect(arrow).toContain('aria-hidden="true"');
-    expect(word).toContain('aria-hidden="true"');
+    // lg and the whole label from lg, but the arrow is now there at every width, in the one decorative span, and
+    // only the word (with its leading space) comes in from lg, inside it: one line of text, as it was.
+    expect(inside).toMatch(/href="\/"><span aria-hidden="true">←<span class="hidden lg:inline"> Briefing<\/span><\/span>$/);
+    expect(classes(word)).toEqual(expect.arrayContaining(["hidden", "lg:inline"]));
+    // Neither form is read out twice: the link's name is the aria-label, the span is decoration.
+    expect(label).toContain('aria-hidden="true"');
   });
 
   it("reads '← Briefing' once in its textContent, the arrow shared by the arrow-only and the labelled form", () => {
@@ -159,10 +154,10 @@ describe("below lg the wordmark is its mark alone, so the masthead fits with the
   it("has a click area around the mark that takes no room, at least 44px each way, gone from lg", () => {
     const tag = classes(wordLink(render()));
 
-    // The mark and its padding are 30 x 26px; an invisible `after` box reaches 8px out each side and to the
-    // bar's height (11px: 26 + 22 = 48), 46 x 48px, without taking room in the grid. From lg the whole word is
-    // the target and the box is not drawn.
-    expect(tag).toEqual(expect.arrayContaining(["relative", "after:absolute", "after:-inset-x-2", "after:-inset-y-[11px]"]));
+    // The mark and its padding are 30 x 26px; an invisible `after` box reaches 8px out each side and 12px up and
+    // down, to the bar's edges, 46 x 50px, without taking room in the grid. From lg the whole word is the target
+    // and the box is not drawn.
+    expect(tag).toEqual(expect.arrayContaining(["relative", "after:absolute", "after:-inset-x-2", "after:-inset-y-3"]));
     expect(tag).toContain("lg:after:hidden");
   });
 
