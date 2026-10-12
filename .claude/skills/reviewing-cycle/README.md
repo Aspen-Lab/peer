@@ -22,8 +22,9 @@ Both skills, into Claude Code's skills directory (user scope `~/.claude/skills/`
 scope `.claude/skills/`):
 
 ```bash
-git clone https://github.com/peter14531453/claude-skills.git
-cp -r claude-skills/abc claude-skills/reviewing-cycle ~/.claude/skills/
+git clone https://github.com/peter14531453/claude-skills.git      # abc, which this skill builds on
+git clone https://github.com/peter14531453/reviewing-cycle.git
+cp -r claude-skills/abc reviewing-cycle/reviewing-cycle ~/.claude/skills/
 ```
 
 ChatGPT / Codex / any agent that reads files: put both folders in the working directory and tell
