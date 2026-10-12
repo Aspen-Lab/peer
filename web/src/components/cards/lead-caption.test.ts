@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import * as plateModule from "./paper-plate";
+import { isAbstractBlock, LEAD_CAPTION_CHARS, leadCaption } from "./paper-plate";
 
 // P9-49 (N8, round 3's walk): the lead picture's caption is a sentence or nothing.
 //
@@ -14,19 +14,8 @@ import * as plateModule from "./paper-plate";
 //     is itself longer than the room, at a word, with one ellipsis and no stop or comma in front of it.
 //   * A leading "Figure 4." is a label, not a sentence; "Fig.", "et al.", "e.g." and an initial do not end one.
 
-type LeadCaption = (caption: string | null | undefined, abstract?: string | null) => string | null;
-type IsAbstract = (caption: string | null | undefined, abstract?: string | null) => boolean;
-const api = plateModule as unknown as { leadCaption?: LeadCaption; isAbstractBlock?: IsAbstract; LEAD_CAPTION_CHARS?: number };
-const leadCaption: LeadCaption = (...args) => {
-  if (typeof api.leadCaption !== "function") throw new Error("leadCaption is not exported by paper-plate.tsx");
-  return api.leadCaption(...args);
-};
-const isAbstractBlock: IsAbstract = (...args) => {
-  if (typeof api.isAbstractBlock !== "function") throw new Error("isAbstractBlock is not exported by paper-plate.tsx");
-  return api.isAbstractBlock(...args);
-};
-/** The room under the plate (the head's `CAPTION_CHARS`). */
-const ROOM = 140;
+/** The room under the plate: the head's `CAPTION_CHARS`, 140. */
+const ROOM = LEAD_CAPTION_CHARS;
 
 /** What the engine paired with an invented paper's page-1 graphic: the abstract block beside it. */
 const ABSTRACT_BLOCK =
@@ -75,6 +64,10 @@ describe("an abstract block is never the lead picture's caption (rule 2)", () =>
 });
 
 describe("a caption is whole, or cut only where a sentence ends (rule 2)", () => {
+  it("keeps the room the head had (140 characters under the plate)", () => {
+    expect(ROOM).toBe(140);
+  });
+
   it("leaves a caption that fits as it is (white space made single)", () => {
     expect(leadCaption("Figure 1. Soil water by depth.")).toBe("Figure 1. Soil water by depth.");
     expect(leadCaption("Figure 1.  Soil water\n by depth.")).toBe("Figure 1. Soil water by depth.");

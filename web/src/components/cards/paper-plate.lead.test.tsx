@@ -1,9 +1,8 @@
-import { createElement, type ComponentType } from "react";
+import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Paper } from "@/types";
-import * as plateModule from "./paper-plate";
-import { PaperPlate } from "./paper-plate";
+import { leadFigurePending, PaperPlate } from "./paper-plate";
 
 // P9-49 (N6, X3, round 3's walk): the reading page's LEAD PICTURE.
 //
@@ -21,10 +20,8 @@ import { PaperPlate } from "./paper-plate";
 // The page's first paint is the component's first render, which is what `renderToStaticMarkup` runs
 // (no effect, so the figure is "idle", exactly the state a reader's first paint has).
 
-type PlateProps = Record<string, unknown>;
-// The props the lead plate gains are not in the head's type; the test names them without a cast per call.
-const Plate = PaperPlate as unknown as ComponentType<PlateProps>;
-const render = (props: PlateProps): string => renderToStaticMarkup(createElement(Plate, props));
+type PlateProps = ComponentProps<typeof PaperPlate>;
+const render = (props: PlateProps): string => renderToStaticMarkup(createElement(PaperPlate, props));
 
 const paper = (over: Partial<Paper> = {}): Paper => ({
   id: "arxiv:2607.00001",
@@ -47,14 +44,7 @@ const TERMS = ["Soil water", "Seaweed mulch", "Terraces"];
 
 const openTag = (html: string): string => /<div data-plate="[a-z]+"[^>]*>/.exec(html)?.[0] ?? "";
 const classes = (tag: string): string[] => (/class="([^"]*)"/.exec(tag)?.[1] ?? "").split(/\s+/).filter(Boolean);
-const lead = (over: PlateProps = {}): PlateProps => ({ paper: upload, terms: [], lead: true, lightbox: true, ...over });
-
-type Pending = (figure: { status: string; imageUrl: string | null }, bound?: { imageUrl: string } | null) => boolean;
-const leadFigurePending = (...args: Parameters<Pending>): boolean => {
-  const fn = (plateModule as unknown as { leadFigurePending?: Pending }).leadFigurePending;
-  if (typeof fn !== "function") throw new Error("leadFigurePending is not exported by paper-plate.tsx");
-  return fn(...args);
-};
+const lead = (over: Partial<PlateProps> = {}): PlateProps => ({ paper: upload, terms: [], lead: true, lightbox: true, ...over });
 
 describe("the lead plate holds its box from the first paint (rule 1, N6)", () => {
   it("draws the figure's own box before any figure exists, for a paper with no terms (the no-key upload)", () => {
