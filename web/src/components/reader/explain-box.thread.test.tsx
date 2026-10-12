@@ -15,7 +15,7 @@ import {
   type ExplainStatus,
   type ThreadView,
 } from "./explain-box";
-import { DOCK_MIN_VISIBLE_PX, DOCK_THREAD_FLOOR_PX } from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_MIN_VISIBLE_PX, DOCK_THREAD_FLOOR_PX, legendHeightPx } from "./explain-dock";
 import { firstAnswerMessage, keyToSend, requestReply } from "./explain-thread";
 
 // P3-02b (ruling §1h.3; §3d 14): the thread under the first answer, the input
@@ -711,5 +711,57 @@ describe("the copy (P3-02b)", () => {
     const strings = Object.values(EXPLAIN).flatMap((value) => (typeof value === "function" ? [value("a term")] : [value]));
 
     for (const text of strings) expect(text).not.toMatch(/\bskip\b|don't read|do not read|ignore|not worth/i);
+  });
+});
+
+// ── The legend's reserve follows the legend (P9-20, BACKLOG-42) ─────────────────────────────────────────────
+//
+// A P9-W2: in Fit mode the foot legend, inside the zoomed page container, is 28 × zoom tall on screen (32 / 38.6 / 51.5 px at
+// 1440 × 1000, 1920 × 1080, 2560 × 1440) while the window, outside it, reserved a flat 28 and overlapped it by 4.0 / 10.6 / 23.5 px.
+
+describe("placePanel — the window's bottom stands on the legend's top as Fit scales it (P9-20, BACKLOG-42)", () => {
+  const bounds = { left: 120, top: 300, right: 520, bottom: 330 };
+  const FIT = [
+    { width: 1440, height: 1000, zoom: 1.142, legend: 32, overlap: 4.0 },
+    { width: 1920, height: 1080, zoom: 1.378, legend: 38.6, overlap: 10.6 },
+    { width: 2560, height: 1440, zoom: 1.838, legend: 51.5, overlap: 23.5 },
+  ];
+
+  it("the legend's height is the flat 28 px times the page's zoom — A's three boxes — and the flat 28 for no zoom or a nonsense one", () => {
+    expect(legendHeightPx(1)).toBe(DOCK_BOTTOM_PX);
+    for (const fit of FIT) expect(legendHeightPx(fit.zoom)).toBeCloseTo(fit.legend, 0);
+    for (const nonsense of [0, -1.5, Number.NaN, Number.POSITIVE_INFINITY]) expect(legendHeightPx(nonsense)).toBe(DOCK_BOTTOM_PX);
+  });
+
+  it("stands its bottom edge on the legend's top at every Fit size — a high paragraph, a low one, one far below — and the lowest top leaves its needed height above the legend", () => {
+    for (const { width, height, zoom } of FIT) {
+      const viewport = { width, height, legend: legendHeightPx(zoom) };
+
+      for (const paragraph of [-200, 48, 300, height - 500, height - 100, 5000]) {
+        const place = placePanel(bounds, viewport, paragraph, 360);
+        // Its bottom edge at the tallest it can be: the legend's top, not a pixel under it.
+        expect((place.top ?? 0) + place.maxHeight, `${width} × ${height}, paragraph ${paragraph}`).toBeCloseTo(height - viewport.legend, 6);
+      }
+      expect(placePanel(bounds, viewport, 5000, 360).top).toBeCloseTo(height - viewport.legend - 360, 6);
+    }
+  });
+
+  it("overlapped the legend by 4.0 / 10.6 / 23.5 px on the flat reserve (A's table), and by none on the legend's own height", () => {
+    for (const { width, height, zoom, overlap } of FIT) {
+      const legendTop = height - legendHeightPx(zoom);
+      const flat = placePanel(bounds, { width, height }, 5000, 360);
+      const followed = placePanel(bounds, { width, height, legend: legendHeightPx(zoom) }, 5000, 360);
+
+      expect((flat.top ?? 0) + flat.maxHeight - legendTop, `${width} × ${height} flat`).toBeCloseTo(overlap, 0);
+      expect((followed.top ?? 0) + followed.maxHeight - legendTop, `${width} × ${height} followed`).toBeLessThanOrEqual(1e-9);
+    }
+  });
+
+  it("is the flat 28 px where the viewport names no legend, and the same as zoom 1 (Fit off, a server render, a page without a zoom root)", () => {
+    const viewport = { width: 1440, height: 900 };
+
+    expect(placePanel(bounds, viewport, 5000, 360)).toEqual(placePanel(bounds, { ...viewport, legend: DOCK_BOTTOM_PX }, 5000, 360));
+    expect(placePanel(bounds, viewport, 5000, 360)).toEqual(placePanel(bounds, { ...viewport, legend: legendHeightPx(1) }, 5000, 360));
+    expect(placePanel(bounds, viewport, 48)).toMatchObject({ top: 48, maxHeight: 900 - 48 - 28 });
   });
 });

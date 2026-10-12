@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -6,7 +8,7 @@ import type { PaperReading } from "@/lib/papers/reading";
 import type { PaperTerm } from "@/lib/papers/report";
 import { defaultProfile, type Paper } from "@/types";
 import { EXPLAIN, PEERS_READING } from "./copy";
-import { SectionLinks } from "./evidence-quote";
+import { EvidenceQuote, SectionLinks } from "./evidence-quote";
 import {
   ExplainCard,
   ExplainBox,
@@ -21,7 +23,7 @@ import {
   termSource,
   type ExplainStatus,
 } from "./explain-box";
-import { DOCK_BOTTOM_PX, DOCK_TOP_PX, MASTHEAD_MIN_VIEWPORT_PX, THUMB_BAR_PX } from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_TOP_PX, MASTHEAD_MIN_VIEWPORT_PX, THUMB_BAR_PX, legendHeightPx } from "./explain-dock";
 import type { ExplainSelection } from "./paper-body";
 
 // P3-02 (ruling §1h.2; §3d 14): the button beside a selected passage and the
@@ -324,6 +326,34 @@ describe("ExplainCard — Tier 0: the paper's own definition (§1h.2)", () => {
   });
 });
 
+// P9-20 (A P9-W2's N4): in the 360 px window and the phone's sheet the quotes are set ragged-right. `EvidenceQuote` carries
+// `reading-justify` (the paper's own column keeps that: the design); the window overrides it for what it holds.
+describe("ExplainCard — the quotes are set ragged-right, not justified (P9-20, N4)", () => {
+  const body = (over: Partial<Parameters<typeof ExplainCard>[0]> = {}) => card({ status: { kind: "answer", answer }, ...over });
+  // The markup escapes `&` in an attribute; the class is the one the source says.
+  const rootClass = (html: string) => (/data-explain-card=""[^>]*class="([^"]*)"/.exec(html)?.[1] ?? "").replace(/&amp;/g, "&");
+
+  it("the window's root turns the body's justification off for the quotes it holds: in the dock, the card and the sheet, and the empty window", () => {
+    for (const over of [{ dock: true }, {}, { sheet: true }, { dock: true, empty: true }]) {
+      expect(rootClass(body(over)).split(/\s+/), JSON.stringify(over)).toContain("[&_.reading-justify]:text-left");
+    }
+  });
+
+  it("the quote is still the body's own element (`reading-justify`), so the override has something to take off, and nowhere else is it taken off", () => {
+    const html = body({ dock: true });
+
+    // The passage's quote, the answer's quote and the paper's definition are `EvidenceQuote`s: each carries the class.
+    expect(html.match(/reading-justify/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+    const quote = renderToStaticMarkup(createElement(SectionLinks, { headings: ["2 Methods"] }, createElement(EvidenceQuote, { text: "A sentence.", where: "2 Methods" })));
+    expect(quote).toContain("reading-justify");
+    // The utility itself is untouched: the paper's column keeps its justification.
+    const css = readFileSync(resolve(process.cwd(), "src/app/globals.css"), "utf8");
+    expect(/@utility reading-justify \{\s*text-align: justify;/.test(css)).toBe(true);
+    // And the override is scoped to the window's root, not a rule on every quote.
+    expect(readFileSync(resolve(process.cwd(), "src/components/reader/evidence-quote.tsx"), "utf8")).toContain("reading-justify");
+  });
+});
+
 describe("the pure rules", () => {
   it("termInPassage: whole words, any case, multi-word terms; never inside another word", () => {
     expect(termInPassage("rafting ratio", "The Rafting Ratio rose.")).toBe(true);
@@ -560,6 +590,14 @@ describe("the pure rules", () => {
       expect(MASTHEAD_MIN_VIEWPORT_PX).toBe(768);
       expect((placeButton(where, { width: 767, height: 844 }, column(767)) as { bottom: string }).bottom).toContain("env(safe-area-inset-bottom)");
       expect((placeButton(where, { width: 768, height: 844 }, { left: 16, top: 250, right: 760, bottom: 900 }) as { bottom: string }).bottom).toBe("36px");
+    });
+
+    it("the legend's strip is the legend's own height as Fit scales it (P9-20, BACKLOG-42): 8 px above 28 × zoom", () => {
+      const viewport = { width: 1000, height: 900, legend: legendHeightPx(1.378) };
+
+      expect(placeButton(where, viewport, { left: 16, top: 250, right: 900, bottom: 900 })).toEqual({ edge: 900, bottom: `${legendHeightPx(1.378) + 8}px` });
+      // Under 768 px the bar is the thumb bar, whatever the legend (it is hidden there).
+      expect((placeButton(where, { ...viewport, width: 700 }, column(700)) as { bottom: string }).bottom).toContain("env(safe-area-inset-bottom)");
     });
 
     it("buttonStyle: a gutter place is its corner; a furniture place is its right edge and its lift, `fixed` in the window's own pixels", () => {

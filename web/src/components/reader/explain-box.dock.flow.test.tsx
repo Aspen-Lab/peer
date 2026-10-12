@@ -24,6 +24,7 @@ import type { PaperTerm } from "@/lib/papers/report";
 import type { ExplainTurn } from "@/store/explain-threads";
 import { EXPLAIN } from "./copy";
 import { ExplainBox, ExplainCard, placeCard, type AskResult, type ThreadView } from "./explain-box";
+import { legendHeightPx } from "./explain-dock";
 import type { ReplyResult } from "./explain-thread";
 import type { ExplainSelection } from "./paper-body";
 
@@ -1421,5 +1422,83 @@ describe("ExplainBox — the window's bottom stands on the screen's bottom when 
     expect(card.last().dock).toBe(false);
     expect(card.last().style).toMatchObject(placeCard(first.bounds, { width: 800, height: 900 }));
     card.mounted.unmount();
+  });
+});
+
+// ── The legend's reserve follows the legend (P9-20, BACKLOG-42; A P9-W2) ───────────────────────────────────────────
+//
+// In Fit mode the foot legend, inside the page container the page zooms, is 28 × zoom tall on screen; the box (outside the container)
+// read a flat 28 and its window overlapped the legend by 4.0 / 10.6 / 23.5 px at 1440 / 1920 / 2560. The box now reads the page's zoom
+// (`--page-zoom` on `[data-zoom-root]`) and stands the window's bottom on the legend's top.
+
+describe("ExplainBox — the window's bottom stands on the legend's top as Fit scales the page (P9-20, BACKLOG-42)", () => {
+  let zoom: string;
+  /** The page container and its zoom, as the browser reports them; `zoom` is read afresh each time (the Fit toggle changes it). */
+  const stubZoom = (present = true) => {
+    zoom = "1";
+    (document as unknown as Record<string, unknown>).querySelector = (selector: string) => (present && selector === "[data-zoom-root]" ? { zoomRoot: true } : null);
+    (window as unknown as Record<string, unknown>).getComputedStyle = () => ({ getPropertyValue: (name: string) => (name === "--page-zoom" ? zoom : "") });
+  };
+  const bottomOf = (style: Look["style"]) => (style?.top ?? 0) + (style?.maxHeight ?? 0);
+
+  it("at A's three Fit sizes the tallest the window can be ends on the legend's top: 1440 x 1000, 1920 x 1080, 2560 x 1440", async () => {
+    for (const [width, height, factor] of [[1440, 1000, 1.142], [1920, 1080, 1.378], [2560, 1440, 1.838]] as const) {
+      stubWindow(width, height);
+      stubZoom();
+      zoom = String(factor);
+      for (const paragraph of [200, height - 100]) {
+        const run = await scenario(base({ target: inParagraph(first, paragraph) }), [(tree) => click(tree)]);
+        await wait();
+
+        expect(run.last().dock, `${width} x ${height}`).toBe(true);
+        // The legend's top is `height − 28 × zoom`; the window's bottom edge is not below it (it was 4.0 / 10.6 / 23.5 px below).
+        expect(bottomOf(run.last().style), `${width} x ${height}, paragraph ${paragraph}`).toBeCloseTo(height - legendHeightPx(factor), 6);
+        run.mounted.unmount();
+      }
+    }
+  });
+
+  it("the lowest top it stands at leaves the thread's floor above the legend, not above a flat 28", async () => {
+    stubWindow(1440, 1000);
+    stubZoom();
+    zoom = "1.142";
+    const run = await scenario(base({ target: inParagraph(first, 4000) }), [(tree) => click(tree)]);
+    await wait();
+
+    expect(run.last().style?.top).toBeCloseTo(1000 - legendHeightPx(1.142) - 360, 6);
+    run.mounted.unmount();
+  });
+
+  it("follows a change of zoom with no scroll and no resize: the Fit toggle re-renders the box, and the window's bottom moves to the new legend", async () => {
+    stubWindow(2560, 1440);
+    stubZoom();
+    const run = await scenario(base({ target: inParagraph(first, 4000) }), [
+      (tree) => click(tree),
+      (_tree, ctx) => {
+        zoom = "1.838";
+        ctx.rerender();
+      },
+    ]);
+    await wait();
+    const at = fromOpen(run.looks);
+
+    // Fit off: the flat 28. Fit on: the legend's 51.5 — the same window, moved by the difference.
+    expect(bottomOf(at[0].style)).toBeCloseTo(1440 - 28, 6);
+    expect(bottomOf(run.last().style)).toBeCloseTo(1440 - legendHeightPx(1.838), 6);
+    expect(run.last().style?.top).toBeLessThan(at[0].style?.top ?? 0);
+    run.mounted.unmount();
+  });
+
+  it("is the flat 28 where Fit is off (zoom 1), where the page has no zoom root and where the zoom is nonsense", async () => {
+    stubWindow(1440, 1000);
+    for (const [present, value] of [[true, "1"], [false, "1.5"], [true, ""], [true, "0"], [true, "NaN"]] as const) {
+      stubZoom(present);
+      zoom = value;
+      const run = await scenario(base({ target: inParagraph(first, 4000) }), [(tree) => click(tree)]);
+      await wait();
+
+      expect(bottomOf(run.last().style), `root ${present}, zoom "${value}"`).toBeCloseTo(1000 - 28, 6);
+      run.mounted.unmount();
+    }
   });
 });

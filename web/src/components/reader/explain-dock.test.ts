@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { placeCard } from "./explain-box";
-import { DOCK_BOTTOM_PX, DOCK_GAP_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_RESERVE_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_VAR, DOCK_WIDTH_PX, DOCK_WIDTH_VAR, MASTHEAD_MIN_VIEWPORT_PX, THUMB_BAR_PX, emptyDockStands, reserveDock } from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_GAP_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_RESERVE_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_VAR, DOCK_WIDTH_PX, DOCK_WIDTH_VAR, MASTHEAD_MIN_VIEWPORT_PX, PAGE_ZOOM_ROOT, PAGE_ZOOM_VAR, THUMB_BAR_PX, emptyDockStands, legendHeightPx, reserveDock } from "./explain-dock";
 
 // P7-15 (the owner's R7): the dock's rectangle is built from three numbers that the shell owns —
 // the masthead's height above it, the foot legend's below it, and the width of the card it
@@ -61,6 +61,29 @@ describe("the dock's rectangle against the shell that frames it", () => {
     expect(strip![1].split(/\s+/)).toEqual(expect.arrayContaining(["hidden", "md:flex", "fixed", "bottom-0"]));
     // `md` is 48rem: the masthead's own breakpoint, the one the control's furniture swaps at.
     expect(MASTHEAD_MIN_VIEWPORT_PX).toBe(48 * REM_PX);
+  });
+
+  // P9-20 (BACKLOG-42): the legend is scaled by Fit's zoom and the box is not. The reserve is the legend's height on screen, so the
+  // two facts it rests on are pinned where they are drawn: the legend stands inside the zoom root, the box outside it, and the
+  // root carries the number the box reads.
+  it("the legend is inside the page container that Fit zooms and carries `--page-zoom`; the explain box is outside it — so the window's reserve is `legendHeightPx(zoom)`, not a flat 28 (P9-20)", () => {
+    const page = read("src/app/papers/[id]/page.tsx");
+    const root = page.indexOf('data-zoom-root=""');
+    const legend = page.indexOf("<KeyLegend");
+    const closes = page.indexOf("</PageContainer>", legend);
+    const box = page.indexOf("<ExplainBox");
+
+    expect(PAGE_ZOOM_ROOT).toBe("[data-zoom-root]");
+    expect(PAGE_ZOOM_VAR).toBe("--page-zoom");
+    expect(page).toContain('"--page-zoom": pageZoom');
+    expect(page).toContain("zoom: pageZoom");
+    expect(root).toBeGreaterThan(0);
+    // The legend: after the zoom root opens, before its container closes. The box: after it has closed.
+    expect(legend).toBeGreaterThan(root);
+    expect(closes).toBeGreaterThan(legend);
+    expect(box).toBeGreaterThan(closes);
+    expect(legendHeightPx(1)).toBe(DOCK_BOTTOM_PX);
+    expect(legendHeightPx(2)).toBe(2 * DOCK_BOTTOM_PX);
   });
 
   it("is as wide as P3-02's card, which it replaces from 1024 px (Tailwind's `lg`)", () => {

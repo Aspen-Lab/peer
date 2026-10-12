@@ -143,7 +143,7 @@ import type { PaperTerm } from "@/lib/papers/report";
 import { MAX_EXPLAIN_MESSAGE_CHARS, threadFull, type ExplainTurn } from "@/store/explain-threads";
 import type { Paper, UserProfile } from "@/types";
 import { EXPLAIN, PEERS_READING } from "./copy";
-import { DOCK_BOTTOM_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_WIDTH_PX, MASTHEAD_MIN_VIEWPORT_PX, THUMB_BAR_PX, emptyDockStands, reserveDock } from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_WIDTH_PX, MASTHEAD_MIN_VIEWPORT_PX, PAGE_ZOOM_ROOT, PAGE_ZOOM_VAR, THUMB_BAR_PX, emptyDockStands, legendHeightPx, reserveDock } from "./explain-dock";
 import { EvidenceQuote } from "./evidence-quote";
 import {
   asItems,
@@ -242,7 +242,12 @@ export function termSource(term: PaperTerm, reading: Pick<PaperReading, "map">):
 export interface Viewport {
   width: number;
   height: number;
+  /** P9-20 (BACKLOG-42): the foot legend's height on screen, as Fit's zoom scales it (`legendHeightPx`); `DOCK_BOTTOM_PX` where absent. */
+  legend?: number;
 }
+
+/** The legend's strip: what the window's bottom and the floating control's pill stand above. */
+const legendOf = (viewport: Viewport) => viewport.legend ?? DOCK_BOTTOM_PX;
 
 const BUTTON_WIDTH = 120;
 const BUTTON_HEIGHT = 32;
@@ -294,7 +299,7 @@ export function placeButton(rect: ViewRect, viewport: Viewport, paragraph?: View
     bottom:
       viewport.width < MASTHEAD_MIN_VIEWPORT_PX
         ? `calc(${THUMB_BAR_PX}px + env(safe-area-inset-bottom) + ${BUTTON_MARGIN}px)`
-        : `${DOCK_BOTTOM_PX + BUTTON_MARGIN}px`,
+        : `${legendOf(viewport) + BUTTON_MARGIN}px`,
   };
 }
 
@@ -364,8 +369,9 @@ export function placePanel(bounds: ViewRect, viewport: Viewport, paragraphTop?: 
     return { kind: "sheet", left: 0, width: viewport.width, bottom: 0, maxHeight: Math.floor(viewport.height * SHEET_SHARE) };
   }
   if (viewport.width >= DOCK_MIN_VIEWPORT_PX) {
-    const top = clamp(paragraphTop ?? bounds.top, DOCK_TOP_PX, viewport.height - DOCK_BOTTOM_PX - needed);
-    return { kind: "dock", right: 0, width: DOCK_WIDTH_PX, top, maxHeight: Math.max(0, viewport.height - top - DOCK_BOTTOM_PX) };
+    const legend = legendOf(viewport);
+    const top = clamp(paragraphTop ?? bounds.top, DOCK_TOP_PX, viewport.height - legend - needed);
+    return { kind: "dock", right: 0, width: DOCK_WIDTH_PX, top, maxHeight: Math.max(0, viewport.height - top - legend) };
   }
   return { kind: "card", ...placeCard(bounds, viewport) };
 }
@@ -397,9 +403,24 @@ function styleOf(place: Place): CSSProperties {
   };
 }
 
-function currentViewport(): Viewport {
-  return typeof window === "undefined" ? { width: 1024, height: 768 } : { width: window.innerWidth, height: window.innerHeight };
+/** P9-20 (BACKLOG-42): the page's Fit zoom, read from the page container (`--page-zoom`, `usePageZoom`'s number mirrored beside the CSS
+ *  `zoom`); 1 with Fit off, with no container (a page that is not the paper's) or where there is no DOM to ask. */
+function pageZoom(): number {
+  if (typeof window === "undefined" || typeof document === "undefined" || typeof document.querySelector !== "function") return 1;
+  const root = document.querySelector(PAGE_ZOOM_ROOT);
+  if (!root || typeof window.getComputedStyle !== "function") return 1;
+  const zoom = Number.parseFloat(window.getComputedStyle(root).getPropertyValue(PAGE_ZOOM_VAR));
+  return Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
 }
+
+function currentViewport(): Viewport {
+  return typeof window === "undefined"
+    ? { width: 1024, height: 768 }
+    : { width: window.innerWidth, height: window.innerHeight, legend: legendHeightPx(pageZoom()) };
+}
+
+/** The same window as far as placing goes: a scroll frame that moved nothing renders nothing. */
+const sameViewport = (a: Viewport, b: Viewport) => a.width === b.width && a.height === b.height && a.legend === b.legend;
 
 // ── Asking ─────────────────────────────────────────────────────────────
 
@@ -636,7 +657,10 @@ export function ExplainCard({
       // focus to it, or to the input, so it never falls to <body>. It is no control, so it draws no ring.
       tabIndex={-1}
       style={style}
-      className={`fixed z-[70] overflow-y-auto border border-border-strong bg-surface p-4 outline-none ${
+      // P9-20 (A P9-W2's N4): the quotes in this 360 px window (and the phone's sheet) are set ragged-right, not justified: the body's
+      // `reading-justify` opened word gaps 4.4 times a space at this measure. The override is scoped to the window; the paper's own
+      // column keeps its justification (the design).
+      className={`fixed z-[70] overflow-y-auto border border-border-strong bg-surface p-4 outline-none [&_.reading-justify]:text-left ${
         dock ? "flex flex-col border-r-0" : `shadow-card-hover ${sheet ? "rounded-t-lg border-b-0" : "rounded-lg"}`
       }`}
     >
@@ -906,7 +930,7 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
       frame = undefined;
       // The same size is the same state: a scroll frame that moved nothing renders nothing.
       const size = currentViewport();
-      setViewport((previous) => (previous.width === size.width && previous.height === size.height ? previous : size));
+      setViewport((previous) => (sameViewport(previous, size) ? previous : size));
       const read = watched.map((selection) => ({ of: selection, where: selection.measure?.() ?? null }));
       // A selection that cannot be measured now (it has no size) keeps where it was last read.
       if (read.some((one) => one.where !== null)) {
@@ -934,7 +958,7 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
     if (!waiting) return;
     const onResize = () => {
       const size = currentViewport();
-      setViewport((previous) => (previous.width === size.width && previous.height === size.height ? previous : size));
+      setViewport((previous) => (sameViewport(previous, size) ? previous : size));
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
@@ -974,6 +998,13 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   // of the causes to keep up. Before the paint, so no frame shows the old place.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
+    // P9-20 (BACKLOG-42): the legend's height follows the page's Fit zoom, which the page changes with no scroll and no resize of this
+    // window (the Fit toggle); while something stands that the legend's strip places — the dock, a floating control — it is read
+    // again after each commit (the page re-renders its children with the zoom), and an unchanged one sets nothing.
+    if (docked || target !== null) {
+      const size = currentViewport();
+      setViewport((previous) => (sameViewport(previous, size) ? previous : size));
+    }
     const card = cardRef.current;
     if (!docked || !card) return;
     const height = card.scrollHeight + (card.offsetHeight - card.clientHeight);

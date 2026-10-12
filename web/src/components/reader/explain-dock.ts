@@ -74,8 +74,29 @@ export const MASTHEAD_MIN_VIEWPORT_PX = 768;
  */
 export const THUMB_BAR_PX = 56;
 
-/** The dock's bottom edge stands this far above the window's: the foot legend's height (`--legend-h`). */
+/** The dock's bottom edge stands this far above the window's: the foot legend's height (`--legend-h`) at the page's own scale (zoom 1).
+ *  P9-20 (BACKLOG-42): the legend is `DOCK_BOTTOM_PX × zoom` tall once Fit to screen scales the page — `legendHeightPx` — and
+ *  the window's reserve is that, not this flat number. */
 export const DOCK_BOTTOM_PX = 28;
+
+/** P9-20 (BACKLOG-42; A P9-W2): the custom property that carries the page's Fit zoom (`usePageZoom`, set on the page container
+ *  `[data-zoom-root]` beside the CSS `zoom` it mirrors). The foot legend is inside that container and so is scaled by it; the
+ *  explain box is mounted outside it, in the window's own pixels, and reads the number to size the legend's strip. */
+export const PAGE_ZOOM_VAR = "--page-zoom";
+
+/** The page container the zoom is set on (`page.tsx`, `data-zoom-root`; `withZoomTransition` finds it the same way). */
+export const PAGE_ZOOM_ROOT = "[data-zoom-root]";
+
+/**
+ * P9-20 (BACKLOG-42): the foot legend's height on screen, in the window's own pixels. The legend is `h-[var(--legend-h)]`
+ * (`DOCK_BOTTOM_PX` at 16 px to the rem) inside the page container, which Fit scales with CSS `zoom` — so it is 32 px tall at
+ * 1440 × 1000 (zoom 1.142), 38.6 at 1920 × 1080 (1.378) and 51.5 at 2560 × 1440 (1.838) — while the window kept a flat 28 and
+ * stood 4.0 / 10.6 / 23.5 px over it. Fit off, or no zoom to read, is the flat number. The window's bottom stands on this, and so
+ * does the floating control's strip: the legend's top edge.
+ */
+export function legendHeightPx(zoom: number): number {
+  return Number.isFinite(zoom) && zoom > 0 ? DOCK_BOTTOM_PX * zoom : DOCK_BOTTOM_PX;
+}
 
 /** P8-02: the dock's top stands no lower than this much of it still shows above the foot legend (its lowest
  *  top is the window's height less `DOCK_BOTTOM_PX` less this), so a paragraph far down the screen never
