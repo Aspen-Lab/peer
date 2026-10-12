@@ -3,9 +3,11 @@ import { join } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { defaultProfile } from "@/types";
+import { defaultProfile, type UserAiProvider } from "@/types";
+import { FEED_AI_PROVIDER_OPTIONS } from "@/components/profile/ai-setup";
 import {
   ColorThemePicker,
+  DashboardView,
   DataSourcesLink,
   LearnedPreferences,
   EmailSettingsView,
@@ -757,5 +759,101 @@ describe("Profile page - the Paper screening row (Jev key)", () => {
 
   it("never reads or writes the key itself: the setup component owns it", () => {
     expect(source).not.toMatch(/jevApiKey|updateJevApiKey/);
+  });
+});
+
+
+// P9-24 (§1h.57; the key session's K1 note, A P9-W2's P9-KEY check): the Profile's view mode printed no provider and no
+// saved-key line, only the Edit form did, so the page's text was identical with a key and without one. The view mode now
+// says which AI provider is set and that a key is saved on this device — one plain line — and never any character of the
+// key. `DashboardView` is the view mode's card and renders without a store or a router (it takes the profile as a prop),
+// so the rendered markup is the real thing, not a mock of it.
+describe("DashboardView - the AI setup line (P9-24)", () => {
+  // An invented key of 40 characters. It is not a real key. Letters and digits only, so the markup's escaping cannot hide a
+  // leaked piece of it, and the control test below shows that none of its 4-character pieces turns up on the page by chance.
+  const KEY = "zQ7vXk9LmW3RtB5nHc1JdY8fPa4GgS2eUo6iNq0A";
+  const PIECES = Array.from({ length: KEY.length - 3 }, (_, i) => KEY.slice(i, i + 4));
+  const NO_KEY_LINE = FEED_AI_PROVIDER_OPTIONS.find((option) => option.value === "default")!.label;
+
+  function view(feedAiProvider: UserAiProvider, feedAiApiKey: string | undefined) {
+    return renderToStaticMarkup(
+      createElement(DashboardView, {
+        profile: { ...defaultProfile, feedAiProvider, feedAiApiKey },
+        displayName: "Ada",
+        onEdit: () => {},
+      }),
+    );
+  }
+
+  /** The text of every element that holds the AI setup line (an exact text node, so extra characters would show). */
+  function aiLine(html: string): string | null {
+    const band = html.slice(html.indexOf("AI setup"));
+    const match = band.match(/<span>([^<]*)<\/span><\/p>/);
+    return match ? match[1] : null;
+  }
+
+  it("with a provider and a key saved, says the provider and that the key is saved on this device", () => {
+    const html = view("gemini", KEY);
+    expect(html).toContain("AI setup");
+    expect(aiLine(html)).toBe("Gemini · key saved on this device");
+  });
+
+  it("names each provider by its short label, and nothing else about the key", () => {
+    const labels: [UserAiProvider, string][] = [
+      ["gemini", "Gemini"],
+      ["openai", "OpenAI"],
+      ["anthropic", "Claude"],
+      ["qwen", "Qwen"],
+      ["deepseek", "DeepSeek"],
+    ];
+    for (const [provider, label] of labels) {
+      expect(aiLine(view(provider, KEY))).toBe(`${label} · key saved on this device`);
+    }
+  });
+
+  it("prints no character of the key: not the key, and not any 4-character piece of it, in text or in an attribute", () => {
+    // Control: with no key stored, none of the pieces is on the page, so a piece found with the key stored came from the key.
+    for (const provider of ["gemini", "openai", "anthropic", "qwen", "deepseek"] as const) {
+      const without = view(provider, undefined);
+      expect(PIECES.filter((piece) => without.includes(piece))).toEqual([]);
+      const withKey = view(provider, KEY);
+      expect(aiLine(withKey)).not.toBeNull();
+      expect(withKey).not.toContain(KEY);
+      expect(PIECES.filter((piece) => withKey.includes(piece))).toEqual([]);
+    }
+  });
+
+  it("says the same thing for a short key and a long one: nothing in the line depends on the key's length or its end", () => {
+    const short = view("gemini", "zQ7vXk9L");
+    const long = view("gemini", KEY + KEY);
+    expect(aiLine(short)).toBe(aiLine(long));
+    expect(aiLine(short)).not.toMatch(/\d/);
+  });
+
+  it("with the default provider and no key, says Peer reads without a model - the Profile's own no-key label", () => {
+    const html = view("default", "");
+    expect(aiLine(html)).toBe(NO_KEY_LINE);
+    expect(html).not.toContain("key saved on this device");
+  });
+
+  it("with a provider chosen but no key (or only spaces), still says no key, because Peer then reads without a model", () => {
+    for (const key of [undefined, "", "   "]) {
+      const html = view("gemini", key);
+      expect(aiLine(html)).toBe(NO_KEY_LINE);
+      expect(html).not.toContain("key saved on this device");
+    }
+  });
+
+  it("is plain text: the AI setup band holds no button, input, select or link, and Edit's own control is still the one 'adjust'", () => {
+    const html = view("gemini", KEY);
+    expect(html.indexOf("AI setup")).toBeGreaterThan(-1);
+    const band = html.slice(html.indexOf("AI setup"));
+    expect(band).not.toMatch(/<(button|input|select|textarea|a)[\s>]/);
+    expect(html.match(/adjust</g)).toHaveLength(1);
+  });
+
+  it("makes the page's text differ with a key and without one (K1: it was identical)", () => {
+    const text = (html: string) => html.replace(/<[^>]*>/g, "\u0001");
+    expect(text(view("gemini", KEY))).not.toBe(text(view("default", "")));
   });
 });
