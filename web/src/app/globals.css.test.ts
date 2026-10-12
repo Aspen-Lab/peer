@@ -274,10 +274,11 @@ describe("globals.css — the term highlight token (P3-01)", () => {
 // written by a ResizeObserver — so that the decision, then at the panel's bottom, stayed in view
 // while the plate scrolled away. The commands are under the title now and the question box and the
 // map moved to the column: `top: 4rem` and nothing to measure. A panel pinned by its top cannot show
-// what is below the window, so the panel is the window's height at most (a flex column; "Terms to
-// know" shrinks and scrolls inside itself; only if the blocks above it alone are taller does the
-// panel scroll). Source-text assertions, as above: a computed style in jsdom would not resolve
-// `calc()` against custom properties the way a browser does.
+// what is below the window, so the panel is the window's height at most: a flex column that scrolls as
+// one (P9-04: nothing inside it scrolls or shrinks on its own — the Terms strip is an ordinary block in
+// it, shown whole, where it had been a window of its own at the panel's foot; on a phone, in one column,
+// it folds to two terms with a toggle). Source-text assertions, as above: a computed style in jsdom
+// would not resolve `calc()` against custom properties the way a browser does.
 describe("globals.css — the reader panel pins by its top (P7-14, R2)", () => {
   const utility = css.slice(css.indexOf("@utility reader-panel {"));
   const rule = utility.slice(0, utility.indexOf("\n}") + 2);

@@ -1,8 +1,9 @@
 "use client";
 
 // P7-14 (R10, the owner's review): the strip that switches a full-text paper between "Summary" and
-// "Paper digestion". It stands under the decision block, in the panel on the spread and in the
-// flow below it, and only on a paper Peer has read in full (the page passes it only then).
+// "Paper digestion". It stands under the decision block in the panel on the spread, and directly above
+// the panel it switches in one column, after the shared blocks and the Terms strip (P9-04). It is shown
+// only on a paper Peer has read in full (the page passes it only then).
 //
 // A WAI-ARIA tablist: two buttons with `role="tab"`, `aria-selected`, one tab stop (the selected
 // one; the arrow keys, Home and End move the selection and the focus, as the pattern asks), and
