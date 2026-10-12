@@ -620,7 +620,12 @@ export function ExplainCard({
   ) : null;
   return (
     <div
-      role="dialog"
+      // P9-20 (BACKLOG-44; A P8-05 §11.8; the owner: "改"): a region, not a dialog. The window is always there from the body's first paint
+      // (P8-06), non-modal, and never traps the focus (the page behind it stays usable), so announcing a dialog told a screen reader a lie. A named non-modal landmark:
+      // `region`, not `complementary` — the box mounts inside the page's `<main>`, where a complementary landmark is flagged
+      // (axe `landmark-complementary-is-top-level`), a named region is not; and the card and the sheet are the same content in
+      // another place, not a sidebar. The name is the label below: the title while empty, the passage's explanation otherwise.
+      role="region"
       aria-label={empty ? EXPLAIN.ask : EXPLAIN.card}
       data-explain-card=""
       {...(sheet ? { "data-explain-sheet": "" } : {})}

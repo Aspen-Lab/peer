@@ -126,6 +126,9 @@ describe("ExplainBox — when the button shows (§1h.2)", () => {
     const html = render();
 
     expect(html).not.toContain("role=\"dialog\"");
+    // P9-20: nor is there a region (the window's role now) — the closed popover is the button alone.
+    expect(html).not.toContain("role=\"region\"");
+    expect(html).not.toContain("data-explain-card");
     expect(html).not.toContain(EXPLAIN.loading);
     expect(html).not.toContain(EXPLAIN.meaning);
   });
@@ -201,10 +204,11 @@ const card = (over: Partial<Parameters<typeof ExplainCard>[0]> = {}) =>
   );
 
 describe("ExplainCard — the two parts (§1h.2)", () => {
-  it("is a named, non-modal dialog and says its passage as the paper's own words, with its section", () => {
+  it("is a named, non-modal region (re-aimed, P9-20: was a dialog) and says its passage as the paper's own words, with its section", () => {
     const html = card({ status: { kind: "answer", answer } });
 
-    expect(html).toContain('role="dialog"');
+    expect(html).toContain('role="region"');
+    expect(html).not.toContain('role="dialog"');
     expect(html).toContain(`aria-label="${EXPLAIN.card}"`);
     expect(html).not.toContain("aria-modal");
     // The passage is the paper's: an attributed quote, never a bare label-face line.

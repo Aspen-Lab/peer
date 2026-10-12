@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -51,7 +53,9 @@ describe("ExplainCard — the empty state (P8-06)", () => {
     // The same window as the card with a passage: a dock at the right edge.
     expect(html).toContain("data-explain-card");
     expect(html).toContain("data-explain-dock");
-    expect(html).toContain('role="dialog"');
+    // Re-aimed, P9-20 (BACKLOG-44): a region, not a dialog.
+    expect(html).toContain('role="region"');
+    expect(html).not.toContain('role="dialog"');
     // The title and the one line are the only two paragraphs; Close is the only button.
     expect(html.split("<p")).toHaveLength(3);
     expect(html.split("<button")).toHaveLength(2);
@@ -311,5 +315,55 @@ describe("ExplainBox — the first paint (P8-06, ruling §1h.45)", () => {
     expect(html).toContain("data-explain-ask");
     expect(html).not.toContain("data-explain-card");
     expect(html).not.toContain(EXPLAIN.empty);
+  });
+});
+
+// ── A region, not a dialog (P9-20, BACKLOG-44; A P8-05 §11.8; the owner: "改") ───────────────────────────────────────
+
+describe("the explain window is a non-modal region, never a dialog (P9-20, BACKLOG-44)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const asCard = (place: { dock?: boolean; sheet?: boolean }) => markup({ empty: undefined, passage: PASSAGE, heading: "2 Methods", status: { kind: "answer", answer }, thread: view, ...place });
+
+  it("no role=\"dialog\" and no aria-modal is on the page while the window stands: empty, with a control on offer, from 1024 px", () => {
+    for (const width of [1024, 1280, 1920]) {
+      for (const target of [null, picked]) {
+        const html = firstPaint(width, { target });
+
+        expect(html, `${width} px`).toContain("data-explain-card");
+        expect(html, `${width} px`).not.toContain('role="dialog"');
+        expect(html, `${width} px`).not.toContain("aria-modal");
+        expect(html.match(/role="region"/g), `${width} px`).toHaveLength(1);
+      }
+    }
+  });
+
+  it("nor does the window that holds a thread, in any of the places it takes: the dock, the card at the selection, the phone's sheet", () => {
+    for (const [name, place] of [["dock", { dock: true }], ["card", {}], ["sheet", { sheet: true }]] as const) {
+      const html = asCard(place);
+
+      expect(html, name).toContain("data-explain-card");
+      expect(html, name).not.toContain('role="dialog"');
+      expect(html, name).not.toContain("aria-modal");
+      expect(html.match(/role="region"/g), name).toHaveLength(1);
+    }
+    // The empty window, as the dock.
+    expect(markup()).not.toContain('role="dialog"');
+    expect(markup().match(/role="region"/g)).toHaveLength(1);
+  });
+
+  it("is a landmark that has a name — the title while it is empty, the explanation of the selected passage once it holds one", () => {
+    expect(markup()).toMatch(new RegExp(`role="region"[^>]*aria-label="${EXPLAIN.ask.replace("?", "\\?")}"`));
+    expect(asCard({ dock: true })).toMatch(new RegExp(`role="region"[^>]*aria-label="${EXPLAIN.card}"`));
+    for (const html of [markup(), asCard({ dock: true }), asCard({ sheet: true }), asCard({})]) {
+      expect(/role="region"[^>]*aria-label="[^"]+"/.test(html)).toBe(true);
+    }
+  });
+
+  it("traps no focus and is modal nowhere: the component says neither `aria-modal` nor a dialog role", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/components/reader/explain-box.tsx"), "utf8");
+
+    expect(source).not.toMatch(/aria-modal\s*=/);
+    expect(source).not.toMatch(/role=["']dialog["']/);
+    expect(source).toMatch(/role="region"/);
   });
 });
