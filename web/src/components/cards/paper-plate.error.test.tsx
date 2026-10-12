@@ -5,8 +5,10 @@ import { describe, expect, it, vi } from "vitest";
 // refuses every request). When it fails, the plate falls to the terms plate — and that fall was a step in the
 // title's place: the picture's box is 16:9 (320 × 180 at 1440, 350 × 196.9 at 390) and the terms plate was 2.4:1
 // (133 and 146 px), so the h1 moved up 47 px / 51 px, and the caption the page sets under the plate stayed under a
-// plate that no longer drew its picture. Rule 2: the plate's height does not change in the step, and the plate says
-// that its picture failed (`onFigureError`) so the line that names the picture can go with it.
+// plate that no longer drew its picture. Rule 2: the plate's height does not change in the step, and the caption goes
+// with the picture it named. The caption is the reading page's `<figcaption>` (the next child of the `<figure>` the
+// plate stands in); the page cannot see the failure, which is the plate's own state, so the plate's box carries the
+// variant that hides it (`[figure:has(&)>figcaption]:hidden`) and the page's shape is pinned below.
 //
 // The feed's tiles (`feed-tile.tsx`) mount the same component without `lead`: what they draw when a picture fails
 // is pinned here as it was (rule 3).
@@ -23,6 +25,8 @@ vi.mock("react", async (importOriginal) => {
 });
 vi.mock("@/components/paper-figure", () => ({ useResolvedFigure: () => state.figure }));
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import type { ComponentProps, ReactElement, ReactNode } from "react";
 import { hookRuntime } from "@/test-support/hook-runtime";
 import type { Paper } from "@/types";
@@ -153,26 +157,49 @@ describe("the lead plate whose picture fails keeps the box it held (P9-57, rule 
   });
 });
 
-describe("the lead plate says that its picture failed, so the line that names it can go (P9-57, rule 2)", () => {
-  it("calls onFigureError once, with the picture that failed", async () => {
+const HIDE_CAPTION = "[figure:has(&)>figcaption]:hidden";
+
+describe("the caption goes with the picture it named (P9-57, rule 2)", () => {
+  it("hides its figure's caption when the lead plate has lost its picture", async () => {
     state.figure = found(SRC);
-    const seen: string[] = [];
-    await draw(lead({ onFigureError: (src) => seen.push(src) }), true);
-    expect(seen).toEqual([SRC]);
+    expect(classesOf(await draw(lead(), true))).toContain(HIDE_CAPTION);
+    expect(classesOf(await draw(lead({ terms: [] }), true))).toContain(HIDE_CAPTION);
   });
 
-  it("does not call it for a picture that loads", async () => {
+  it("does not while the picture is drawn or still on its way: the caption stays under a picture that is there", async () => {
     state.figure = found(SRC);
-    const seen: string[] = [];
-    await draw(lead({ onFigureError: (src) => seen.push(src) }));
-    expect(seen).toEqual([]);
+    expect(classesOf(await draw(lead()))).not.toContain(HIDE_CAPTION);
+    state.figure = { ...found(SRC), imageUrl: null, caption: null, status: "idle" };
+    const held = await draw(lead());
+    expect(elements(held)[0]?.props["data-plate-pending"]).toBe("");
+    expect(classesOf(held)).not.toContain(HIDE_CAPTION);
   });
 
-  it("reports it from the plain img as from the lightbox (one handler, both pictures)", async () => {
+  it("reaches only the figure's caption, and only on the lead plate: a tile that lost its picture has no such variant", async () => {
     state.figure = found(SRC);
-    const seen: string[] = [];
-    await draw(tile({ onFigureError: (src) => seen.push(src) }), true);
-    expect(seen).toEqual([SRC]);
+    expect(classesOf(await draw(tile(), true))).not.toContain(HIDE_CAPTION);
+  });
+
+  // The variant reads `figure:has(<the plate>) > figcaption`. The reading page is too large to render here, so its
+  // shape is pinned as the neighbouring tests pin theirs, by its own lines: the plate's `<figure>` holds the card
+  // the plate stands in and, as the card's next sibling, the caption's `<figcaption>`.
+  it("papers/[id]/page.tsx stands in the shape the variant reads: the plate's figure, the card, then the figcaption as its sibling", () => {
+    const page = readFileSync(resolve(process.cwd(), "src/app/papers/[id]/page.tsx"), "utf8");
+    const mount = page.indexOf("<PaperPlate");
+    expect(mount, "the page mounts the plate").toBeGreaterThan(-1);
+    const open = page.lastIndexOf("<figure>", mount);
+    const close = page.indexOf("</figure>", mount);
+    expect(open, "the plate stands inside a bare <figure>").toBeGreaterThan(-1);
+    const block = page.slice(open, close);
+    expect(block.match(/<figcaption/g)).toHaveLength(1);
+    const card = block.indexOf("</SwipeableCard>");
+    expect(block.indexOf("<SwipeableCard")).toBeLessThan(mount - open);
+    expect(card).toBeGreaterThan(mount - open);
+    // Between the card's end and the figcaption: only the condition that draws it — no wrapper element.
+    const between = block.slice(card + "</SwipeableCard>".length, block.indexOf("<figcaption"));
+    expect(between.replace(/\/\/.*$/gm, "").replace(/\s+/g, " ").trim()).toBe("{caption && (");
+    // …and the figcaption is the last thing in the figure.
+    expect(block.slice(block.indexOf("</figcaption>") + "</figcaption>".length).replace(/\s+/g, " ").trim()).toBe(")}");
   });
 });
 
