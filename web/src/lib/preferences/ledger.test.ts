@@ -1,14 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
-  applyOpportunityFacetPreferenceSignal,
   applyPreferenceSignal,
   applyUploadPreferenceSignal,
   cleanPreferenceLedger,
-  FACET_PREFERENCE_BOOST_MAX,
-  facetPreferenceReason,
-  materiallyChangedByFacetPreference,
-  opportunityFacetPreferenceConcept,
-  opportunityFacetPreferenceConcepts,
   prepareLedger,
   preferenceKey,
   scorePreferenceMatch,
@@ -21,7 +15,6 @@ import type { RawItem } from "@/lib/sources/types";
 
 const T0 = "2026-01-01T00:00:00.000Z";
 const T0_MS = Date.parse(T0);
-const T14_MS = Date.parse("2026-01-15T00:00:00.000Z");
 // Two 60-day half-lives after T0.
 const T120 = "2026-05-01T00:00:00.000Z";
 
@@ -91,78 +84,6 @@ describe("applyPreferenceSignal", () => {
   });
 });
 
-describe("applyOpportunityFacetPreferenceSignal", () => {
-  it("records a facet click as separate weak evidence under the event origin", () => {
-    const ledger = applyOpportunityFacetPreferenceSignal(
-      undefined,
-      "location",
-      " Chicago ",
-      { at: T0, origin: "event" },
-    );
-    const entry = ledger["event|facet:location:chicago"];
-
-    expect(entry).toMatchObject({
-      label: "Chicago",
-      source: "opportunity_facet",
-      origin: "event",
-      positive: 0,
-      negative: 0,
-      facetPositive: 1,
-      lastFacetAt: T0,
-    });
-  });
-
-  it("keeps event and job facet evidence in their existing origin namespaces", () => {
-    let ledger = applyOpportunityFacetPreferenceSignal(
-      undefined,
-      "format",
-      "online",
-      { at: T0, origin: "event" },
-    );
-    ledger = applyOpportunityFacetPreferenceSignal(
-      ledger,
-      "format",
-      "online",
-      { at: T0, origin: "job" },
-    );
-
-    expect(ledger["event|facet:format:online"].facetPositive).toBe(1);
-    expect(ledger["job|facet:format:online"].facetPositive).toBe(1);
-  });
-
-  it("normalizes facet keys and ignores empty values", () => {
-    expect(
-      opportunityFacetPreferenceConcept("month", " 2026-08 "),
-    ).toMatchObject({
-      key: "facet:month:2026-08",
-      label: "2026-08",
-    });
-    expect(
-      applyOpportunityFacetPreferenceSignal(undefined, "location", "   ", {
-        at: T0,
-        origin: "job",
-      }),
-    ).toEqual({});
-  });
-
-  it("gives hybrid events all format concepts used by facet filtering", () => {
-    expect(
-      opportunityFacetPreferenceConcepts("events", {
-        location: "Chicago, IL + Virtual",
-        place: { city: "Chicago", region: "IL" },
-        startDate: "2026-08-11",
-        isOnline: true,
-      }).map(({ key }) => key),
-    ).toEqual([
-      "facet:location:chicago",
-      "facet:month:2026-08",
-      "facet:format:hybrid",
-      "facet:format:online",
-      "facet:format:in-person",
-    ]);
-  });
-});
-
 // ── scorePreferenceMatch ────────────────────────────────────────
 
 describe("scorePreferenceMatch", () => {
@@ -215,138 +136,6 @@ describe("scorePreferenceMatch", () => {
     expect(r.boost).toBeGreaterThan(0);
   });
 
-  it("caps the combined contribution of all facet history", () => {
-    const facetConcepts = [
-      opportunityFacetPreferenceConcept("location", "Chicago")!,
-      opportunityFacetPreferenceConcept("month", "2026-08")!,
-      opportunityFacetPreferenceConcept("format", "hybrid")!,
-    ];
-    let ledger = {};
-    for (let count = 0; count < 20; count += 1) {
-      for (const [group, value] of [
-        ["location", "Chicago"],
-        ["month", "2026-08"],
-        ["format", "hybrid"],
-      ] as const) {
-        ledger = applyOpportunityFacetPreferenceSignal(
-          ledger,
-          group,
-          value,
-          { at: T0, origin: "event" },
-        );
-      }
-    }
-
-    const result = scorePreferenceMatch(
-      itemWith(facetConcepts),
-      prepareLedger(ledger),
-      [],
-      { now: T0_MS, targetKind: "event" },
-    );
-    expect(result.facetBoost).toBe(FACET_PREFERENCE_BOOST_MAX);
-    expect(result.boost).toBe(FACET_PREFERENCE_BOOST_MAX);
-  });
-
-  it("decays facet evidence faster than explicit positive evidence", () => {
-    const explicitConcept = concept("Chicago");
-    const facetConcept = opportunityFacetPreferenceConcept(
-      "location",
-      "Chicago",
-    )!;
-    const explicitLedger = applyPreferenceSignal(
-      undefined,
-      [explicitConcept],
-      "positive",
-      { at: T0, origin: "event" },
-    );
-    const facetLedger = applyOpportunityFacetPreferenceSignal(
-      undefined,
-      "location",
-      "Chicago",
-      { at: T0, origin: "event" },
-    );
-
-    const explicitNow = scorePreferenceMatch(
-      itemWith([explicitConcept]),
-      prepareLedger(explicitLedger),
-      [],
-      { now: T0_MS, targetKind: "event" },
-    ).boost;
-    const explicitLater = scorePreferenceMatch(
-      itemWith([explicitConcept]),
-      prepareLedger(explicitLedger),
-      [],
-      { now: T14_MS, targetKind: "event" },
-    ).boost;
-    const facetNow = scorePreferenceMatch(
-      itemWith([facetConcept]),
-      prepareLedger(facetLedger),
-      [],
-      { now: T0_MS, targetKind: "event" },
-    ).facetBoost;
-    const facetLater = scorePreferenceMatch(
-      itemWith([facetConcept]),
-      prepareLedger(facetLedger),
-      [],
-      { now: T14_MS, targetKind: "event" },
-    ).facetBoost;
-
-    expect(facetLater).toBeLessThan(facetNow);
-    expect(facetLater / facetNow).toBeLessThan(
-      explicitLater / explicitNow,
-    );
-  });
-
-  it("never lets one facet click counteract an explicit dismissal", () => {
-    const dismissed = concept("solid-state battery");
-    const chicago = opportunityFacetPreferenceConcept(
-      "location",
-      "Chicago",
-    )!;
-    let ledger = applyOpportunityFacetPreferenceSignal(
-      undefined,
-      "location",
-      "Chicago",
-      { at: T0, origin: "event" },
-    );
-    ledger = applyPreferenceSignal(ledger, [dismissed], "negative", {
-      at: T0,
-      origin: "event",
-    });
-
-    const result = scorePreferenceMatch(
-      itemWith([dismissed, chicago]),
-      prepareLedger(ledger),
-      [],
-      { now: T0_MS, targetKind: "event" },
-    );
-    expect(result.penalty).toBeLessThan(1);
-    expect(result.facetBoost).toBe(0);
-    expect(result.boost).toBe(0);
-    expect(result.matchedFacetPositive).toEqual([]);
-  });
-
-  it("does not leak facet evidence across opportunity origins", () => {
-    const chicago = opportunityFacetPreferenceConcept(
-      "location",
-      "Chicago",
-    )!;
-    const eventLedger = applyOpportunityFacetPreferenceSignal(
-      undefined,
-      "location",
-      "Chicago",
-      { at: T0, origin: "event" },
-    );
-    const jobResult = scorePreferenceMatch(
-      itemWith([chicago]),
-      prepareLedger(eventLedger),
-      [],
-      { now: T0_MS, targetKind: "job" },
-    );
-
-    expect(jobResult.facetBoost).toBe(0);
-  });
-
   // 9-25 (Ruling 4): confirm — an upload-sourced concept has no OpenAlex
   // taxonomy id, so it can only ever match a candidate's title/abstract by
   // its own literal words. That match must be word-bounded (padded-space
@@ -376,23 +165,6 @@ describe("scorePreferenceMatch", () => {
 });
 
 // ── summarizePreferenceLedger ───────────────────────────────────
-
-describe("facet preference explanations", () => {
-  it("only treats a two-place rise or a top-10 crossing as material", () => {
-    expect(materiallyChangedByFacetPreference(4, 2)).toBe(true);
-    expect(materiallyChangedByFacetPreference(10, 9)).toBe(true);
-    expect(materiallyChangedByFacetPreference(4, 3)).toBe(false);
-    expect(materiallyChangedByFacetPreference(2, 2)).toBe(false);
-    expect(materiallyChangedByFacetPreference(2, 3)).toBe(false);
-  });
-
-  it("uses the first auditable matched facet in the card reason", () => {
-    expect(facetPreferenceReason([" Chicago ", "hybrid"])).toBe(
-      "Because you often view Chicago",
-    );
-    expect(facetPreferenceReason([])).toBeUndefined();
-  });
-});
 
 describe("summarizePreferenceLedger", () => {
   it("splits and sorts liked vs disliked by decayed net", () => {
@@ -428,102 +200,50 @@ describe("cleanPreferenceLedger", () => {
   });
 });
 
-// ── Directional origin influence (papers → events → jobs) ──────
+// ── Event and job entries (stopped feeds, P9-35) ───────────────
 
-describe("origin-aware ledger", () => {
+describe("event and job entries from an older build", () => {
   const ml = concept("machine learning");
 
-  it("namespaces job/event entries so they never collide with paper entries", () => {
-    let ledger = applyPreferenceSignal({}, [ml], "positive", { at: T0 });
-    ledger = applyPreferenceSignal(ledger, [ml], "negative", {
-      at: T0,
-      origin: "job",
-    });
-    expect(Object.keys(ledger).sort()).toEqual([
-      `job|${ml.key}`,
-      ml.key,
-    ].sort());
-    expect(ledger[ml.key].positive).toBe(1);
-    expect(ledger[ml.key].negative).toBe(0);
-    expect(ledger[`job|${ml.key}`].negative).toBe(1);
-    expect(ledger[`job|${ml.key}`].origin).toBe("job");
-  });
-
+  // RE-AIMED, NOT DELETED (was "job feedback never affects paper scoring"):
+  // the property stays and now holds by deletion. An entry recorded from a job
+  // is a raw object here, because the type no longer carries `origin`.
   it("job feedback never affects paper scoring", () => {
-    const ledger = applyPreferenceSignal({}, [ml], "negative", {
-      at: T0,
-      origin: "job",
-    });
-    const score = scorePreferenceMatch(itemWith([ml]), prepareLedger(ledger), [], {
+    const stored = {
+      [`job|${ml.key}`]: {
+        key: `job|${ml.key}`,
+        label: ml.label,
+        source: "openalex_topic",
+        origin: "job",
+        positive: 0,
+        negative: 1,
+        lastNegativeAt: T0,
+        lastSeenAt: T0,
+      },
+    } as unknown as Parameters<typeof prepareLedger>[0];
+    const score = scorePreferenceMatch(itemWith([ml]), prepareLedger(stored), [], {
       now: T0_MS,
     });
     expect(score.penalty).toBe(1);
     expect(score.matchedNegative).toEqual([]);
   });
 
-  it("paper feedback flows into event scoring more strongly than job scoring", () => {
-    const ledger = applyPreferenceSignal({}, [ml], "positive", { at: T0 });
-    const prepared = prepareLedger(ledger);
-    const eventScore = scorePreferenceMatch(itemWith([ml]), prepared, [], {
-      now: T0_MS,
-      targetKind: "event",
-    });
-    const jobScore = scorePreferenceMatch(itemWith([ml]), prepared, [], {
-      now: T0_MS,
-      targetKind: "job",
-    });
-    const paperScore = scorePreferenceMatch(itemWith([ml]), prepared, [], {
-      now: T0_MS,
-    });
-    expect(eventScore.boost).toBeGreaterThan(0);
-    expect(jobScore.boost).toBeGreaterThan(0);
-    expect(paperScore.boost).toBeGreaterThan(eventScore.boost);
-    expect(eventScore.boost).toBeGreaterThan(jobScore.boost);
-  });
-
-  it("event feedback leaks weakly into jobs but not into events from jobs", () => {
-    const fromEvent = applyPreferenceSignal({}, [ml], "positive", {
-      at: T0,
-      origin: "event",
-    });
-    const fromJob = applyPreferenceSignal({}, [ml], "positive", {
-      at: T0,
-      origin: "job",
-    });
-    const jobScore = scorePreferenceMatch(itemWith([ml]), prepareLedger(fromEvent), [], {
-      now: T0_MS,
-      targetKind: "job",
-    });
-    const eventScore = scorePreferenceMatch(itemWith([ml]), prepareLedger(fromJob), [], {
-      now: T0_MS,
-      targetKind: "event",
-    });
-    expect(jobScore.boost).toBeGreaterThan(0);
-    expect(eventScore.boost).toBe(0);
-  });
-
-  it("allows negative evidence on required topics for job origin (protection is paper-only)", () => {
-    const ledger = applyPreferenceSignal({}, [ml], "negative", {
-      at: T0,
-      origin: "job",
-      requiredTopics: ["machine learning"],
-    });
-    expect(ledger[`job|${ml.key}`].negative).toBe(1);
-    const jobScore = scorePreferenceMatch(
-      itemWith([ml]),
-      prepareLedger(ledger),
-      ["machine learning"],
-      { now: T0_MS, targetKind: "job" },
-    );
-    expect(jobScore.penalty).toBeLessThan(1);
-  });
-
-  it("cleanPreferenceLedger preserves origin and survives roundtrip", () => {
-    const ledger = applyPreferenceSignal({}, [ml], "positive", {
-      at: T0,
-      origin: "event",
-    });
-    const cleaned = cleanPreferenceLedger(JSON.parse(JSON.stringify(ledger)));
-    expect(cleaned[`event|${ml.key}`].origin).toBe("event");
+  // RE-AIMED, NOT DELETED (was "cleanPreferenceLedger preserves origin and
+  // survives roundtrip"): the cleaner used to keep the origin; it now deletes
+  // the entry that carries one (`ledger.opportunity.test.ts` pins why).
+  it("cleanPreferenceLedger deletes an entry that carries an event origin, and survives a roundtrip", () => {
+    const stored = {
+      [`event|${ml.key}`]: {
+        key: `event|${ml.key}`,
+        label: ml.label,
+        source: "openalex_topic",
+        origin: "event",
+        positive: 1,
+        negative: 0,
+        lastSeenAt: T0,
+      },
+    };
+    const cleaned = cleanPreferenceLedger(JSON.parse(JSON.stringify(stored)));
+    expect(cleaned).toEqual({});
   });
 });

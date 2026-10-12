@@ -7,8 +7,6 @@ import { applyColorTheme, normalizeColorTheme } from "@/lib/theme";
 import type {
   UserProfile,
   Paper,
-  Event,
-  Job,
   CareerStage,
   IndustryAcademiaPreference,
   DigestChannel,
@@ -27,17 +25,13 @@ import { stripCredentialFields, stripLegacyOpportunityFields } from "@/lib/profi
 import { useJevScreeningStore } from "@/store/jev-screening";
 import { cleanQuestions } from "@/store/reading-questions";
 import {
-  applyOpportunityFacetPreferenceSignal,
   applyPreferenceSignal,
   applyQuestionTermSignal,
   applyUploadPreferenceSignal,
   holdsQuestionTerms,
   removeUploadPreferenceSignal,
-  conceptsFromEvent,
-  conceptsFromJob,
   conceptsFromPaper,
   setTermLean,
-  type OpportunityFacetGroup,
   type QuestionTerm,
   type TermLean,
 } from "@/lib/preferences/ledger";
@@ -112,26 +106,6 @@ interface ProfileState {
   recordPaperPreference: (
     paper: Paper,
     signal: "positive" | "negative",
-    at?: string,
-  ) => void;
-  /** Event feedback: recorded under the `event` origin namespace — flows
-   * weakly into job scoring, never back into papers. */
-  recordEventPreference: (
-    event: Event,
-    signal: "positive" | "negative",
-    at?: string,
-  ) => void;
-  /** Job feedback: recorded under the `job` origin namespace — job-only. */
-  recordJobPreference: (
-    job: Job,
-    signal: "positive" | "negative",
-    at?: string,
-  ) => void;
-  /** Facet clicks are weak, positive-only evidence under event/job origins. */
-  recordOpportunityFacetPreference: (
-    origin: "event" | "job",
-    group: OpportunityFacetGroup,
-    value: string,
     at?: string,
   ) => void;
   /** Wipe everything Peer has learned from likes/saves/dismissals. */
@@ -501,45 +475,6 @@ export const useProfileStore = create<ProfileState>()(
                 at,
                 requiredTopics: s.profile.researchTopics,
               },
-            ),
-          },
-        })),
-
-      recordEventPreference: (event, signal, at) =>
-        set((s) => ({
-          profile: {
-            ...s.profile,
-            preferenceLedger: applyPreferenceSignal(
-              s.profile.preferenceLedger,
-              conceptsFromEvent(event),
-              signal,
-              { at, origin: "event" },
-            ),
-          },
-        })),
-
-      recordJobPreference: (job, signal, at) =>
-        set((s) => ({
-          profile: {
-            ...s.profile,
-            preferenceLedger: applyPreferenceSignal(
-              s.profile.preferenceLedger,
-              conceptsFromJob(job),
-              signal,
-              { at, origin: "job" },
-            ),
-          },
-        })),
-
-      recordOpportunityFacetPreference: (origin, group, value, at) =>
-        set((s) => ({
-          profile: {
-            ...s.profile,
-            preferenceLedger: applyOpportunityFacetPreferenceSignal(
-              s.profile.preferenceLedger,
-              group,
-              value,
-              { at, origin },
             ),
           },
         })),

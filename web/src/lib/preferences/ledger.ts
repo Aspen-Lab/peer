@@ -1,8 +1,4 @@
 import type {
-  Event,
-  FeedItemKind,
-  Job,
-  OpportunityFacetSelection,
   Paper,
   PreferenceConcept,
   PreferenceConceptSource,
@@ -10,17 +6,11 @@ import type {
   PreferenceLedgerEntry,
 } from "@/types";
 import type { RawItem } from "@/lib/sources/types";
-import {
-  opportunityFacetValues,
-  type FacetableOpportunity,
-  type FacetSurface,
-} from "@/lib/opportunities/facets";
 
 const HALF_LIFE_DAYS = 60;
 export const FACET_PREFERENCE_HALF_LIFE_DAYS = 14;
 const MAX_CONCEPTS_PER_ITEM = 16;
 const POSITIVE_BOOST_MAX = 0.18;
-export const FACET_PREFERENCE_BOOST_MAX = 0.04;
 // Heavier than the original 0.45: a concept you've repeatedly rejected drops to
 // ×0.40 of base, so persistent dislikes are genuinely suppressed. A single
 // dislike stays gentle thanks to the saturating curve below. Tunable.
@@ -31,58 +21,26 @@ type PreferenceSignalKind = "positive" | "negative";
 interface ApplyPreferenceSignalOptions {
   at?: string;
   requiredTopics?: string[];
-  /**
-   * Surface the feedback came from. Non-paper origins are stored under
-   * namespaced keys (`job|…` / `event|…`) so the same concept can carry
-   * independent evidence per surface. Defaults to "paper" (legacy shape,
-   * un-namespaced keys).
-   */
-  origin?: FeedItemKind;
 }
-
-interface ApplyOpportunityFacetSignalOptions {
-  at?: string;
-  origin: Exclude<FeedItemKind, "paper">;
-}
-
-export type OpportunityFacetGroup = keyof OpportunityFacetSelection;
 
 /**
- * Directional influence matrix: how strongly an entry recorded on `origin`
- * counts when scoring items of `target`. Papers are the ground truth of the
- * user's research identity, so paper feedback flows into events (strongly —
- * same academic sphere) and jobs (moderately). Academic-event feedback leaks
- * weakly into jobs. Nothing flows back into papers, and job feedback stays
- * job-only, per product decision (2026-07).
+ * Entries that older builds recorded from the stopped events and jobs feeds
+ * are stored under `event|…` / `job|…` keys and carry `origin: "event"` /
+ * `"job"`. They counted for nothing on a paper (their influence there was 0),
+ * and they must keep counting for nothing: **they are deleted whenever a
+ * ledger is cleaned, never kept with the origin dropped.** An entry that lost
+ * its origin is a paper entry, and one of these would lift a paper that shares
+ * its concept by 0.1049 (of a 0.18 maximum). The namespace is checked as well
+ * as the field, for an entry that reached the ledger without its origin.
  */
-const ORIGIN_INFLUENCE: Record<FeedItemKind, Record<FeedItemKind, number>> = {
-  paper: { paper: 1, event: 0, job: 0 },
-  event: { paper: 0.8, event: 1, job: 0 },
-  job: { paper: 0.5, event: 0.25, job: 1 },
-};
-
-/** Influence of an entry with `origin` on items of kind `target`. */
-export function originInfluence(
-  target: FeedItemKind,
-  origin: FeedItemKind | undefined,
-): number {
-  return ORIGIN_INFLUENCE[target][origin ?? "paper"];
-}
-
-function entryOrigin(entry: PreferenceLedgerEntry): FeedItemKind {
-  return entry.origin ?? "paper";
-}
-
-function namespacedKey(key: string, origin: FeedItemKind): string {
-  return origin === "paper" ? key : `${origin}|${key}`;
+function isLegacyOpportunityEntry(key: string, origin: unknown): boolean {
+  return origin === "event" || origin === "job" || /^(?:event|job)\|/.test(key);
 }
 
 export interface PreferenceMatchScore {
   boost: number;
-  facetBoost: number;
   penalty: number;
   matchedPositive: string[];
-  matchedFacetPositive: string[];
   matchedNegative: string[];
 }
 
@@ -142,38 +100,6 @@ export function preferenceKey(
   return `text:${normalizePreferenceLabel(label)}`;
 }
 
-export function opportunityFacetPreferenceConcept(
-  group: OpportunityFacetGroup,
-  value: string,
-): PreferenceConcept | undefined {
-  const label = value.trim().replace(/\s+/g, " ");
-  const normalized = normalizePreferenceLabel(label);
-  if (!normalized) return undefined;
-  return {
-    key: `facet:${group}:${normalized}`,
-    label,
-    source: "opportunity_facet",
-  };
-}
-
-export function opportunityFacetPreferenceConcepts(
-  surface: FacetSurface,
-  item: FacetableOpportunity,
-): PreferenceConcept[] {
-  const values = opportunityFacetValues(surface, item);
-  const formats =
-    values.format === "hybrid"
-      ? ["hybrid", "online", "in-person"]
-      : [values.format];
-  return normalizePreferenceConcepts([
-    opportunityFacetPreferenceConcept("location", values.location ?? ""),
-    opportunityFacetPreferenceConcept("month", values.month ?? ""),
-    ...formats.map((format) =>
-      opportunityFacetPreferenceConcept("format", format),
-    ),
-  ]);
-}
-
 export function normalizePreferenceConcepts(
   concepts: Array<Partial<PreferenceConcept> | null | undefined>,
 ): PreferenceConcept[] {
@@ -222,32 +148,6 @@ export function conceptsFromPaper(paper: Paper): PreferenceConcept[] {
   const direct = normalizePreferenceConcepts(paper.preferenceSignals ?? []);
   if (direct.length > 0) return direct;
   return fallbackConceptsFromKeywords(paper.summaryExperimentKeywords ?? []);
-}
-
-export function conceptsFromJob(job: Job): PreferenceConcept[] {
-  const direct = normalizePreferenceConcepts(job.preferenceSignals ?? []);
-  if (direct.length > 0) return direct;
-  return normalizePreferenceConcepts(
-    (job.keyRequirements ?? []).map((label) => ({
-      key: preferenceKey(label, "job_tag"),
-      label,
-      source: "job_tag" as const,
-    })),
-  );
-}
-
-export function conceptsFromEvent(event: Event): PreferenceConcept[] {
-  const direct = normalizePreferenceConcepts(event.preferenceSignals ?? []);
-  if (direct.length > 0) return direct;
-  // Fallback: the event name itself. Too specific to generalize much, but a
-  // dismissal of "NeurIPS 2026" should at least suppress re-surfacing it.
-  return normalizePreferenceConcepts([
-    {
-      key: preferenceKey(event.name, "event_topic"),
-      label: event.name,
-      source: "event_topic" as const,
-    },
-  ]);
 }
 
 export function conceptsFromRawItem(item: RawItem): PreferenceConcept[] {
@@ -472,7 +372,8 @@ export function cleanPreferenceLedger(
 
   for (const [key, raw] of Object.entries(input)) {
     if (!raw || typeof raw !== "object") continue;
-    const entry = raw as Partial<PreferenceLedgerEntry>;
+    // `origin` is not part of the entry any more; an older build wrote it.
+    const entry = raw as Partial<PreferenceLedgerEntry> & { origin?: unknown };
     const label = typeof entry.label === "string" ? entry.label.trim() : "";
     if (!label) continue;
     const source = entry.source ?? "paper_keyword";
@@ -480,6 +381,12 @@ export function cleanPreferenceLedger(
       typeof entry.key === "string" && entry.key.trim()
         ? entry.key.trim()
         : key || preferenceKey(label, source);
+    if (
+      isLegacyOpportunityEntry(normalizedKey, entry.origin) ||
+      isLegacyOpportunityEntry(key, undefined)
+    ) {
+      continue;
+    }
     out[normalizedKey] = {
       key: normalizedKey,
       label,
@@ -523,10 +430,6 @@ export function cleanPreferenceLedger(
           : new Date().toISOString(),
       ...(entry.uploads ? { uploads: cleanUploadEvidence(entry.uploads) } : {}),
       ...cleanedQuestionEvidence(entry.questions),
-      origin:
-        entry.origin === "event" || entry.origin === "job"
-          ? entry.origin
-          : undefined,
       // Kept through cleaning, or the exemption it grants would vanish the
       // first time the ledger is normalised — on the server, every request.
       explicit: entry.explicit === true ? true : undefined,
@@ -545,23 +448,17 @@ export function applyPreferenceSignal(
   const nowIso = options.at ?? new Date().toISOString();
   const nowMs = Date.parse(nowIso);
   const safeNowMs = Number.isFinite(nowMs) ? nowMs : Date.now();
-  const origin = options.origin ?? "paper";
   const clean = cleanPreferenceLedger(ledger);
   const next: PreferenceLedger = { ...clean };
 
   for (const concept of normalizePreferenceConcepts(concepts)) {
-    // Required-topic protection only guards the paper surface: dismissing ML
-    // *jobs* must be allowed to suppress ML jobs even when ML is a required
-    // research topic (job entries never flow back into paper scoring anyway).
     if (
       signal === "negative" &&
-      origin === "paper" &&
       conceptMatchesRequired(concept, options.requiredTopics)
     ) {
       continue;
     }
-    const storageKey = namespacedKey(concept.key, origin);
-    const current = next[storageKey];
+    const current = next[concept.key];
     const base: PreferenceLedgerEntry = current
       ? decayedEntry(current, nowIso, safeNowMs)
       : {
@@ -571,13 +468,11 @@ export function applyPreferenceSignal(
           lastSeenAt: nowIso,
         };
 
-    next[storageKey] =
+    next[concept.key] =
       signal === "positive"
         ? {
             ...base,
             ...concept,
-            key: storageKey,
-            origin: origin === "paper" ? undefined : origin,
             positive: base.positive + 1,
             lastPositiveAt: nowIso,
             lastSeenAt: nowIso,
@@ -585,55 +480,12 @@ export function applyPreferenceSignal(
         : {
             ...base,
             ...concept,
-            key: storageKey,
-            origin: origin === "paper" ? undefined : origin,
             negative: base.negative + 1,
             lastNegativeAt: nowIso,
             lastSeenAt: nowIso,
           };
   }
 
-  return next;
-}
-
-/**
- * Store a facet click in the existing preference ledger without promoting it
- * to explicit save/like evidence. Event and job namespaces stay independent.
- */
-export function applyOpportunityFacetPreferenceSignal(
-  ledger: PreferenceLedger | undefined,
-  group: OpportunityFacetGroup,
-  value: string,
-  options: ApplyOpportunityFacetSignalOptions,
-): PreferenceLedger {
-  const concept = opportunityFacetPreferenceConcept(group, value);
-  if (!concept) return cleanPreferenceLedger(ledger);
-
-  const nowIso = options.at ?? new Date().toISOString();
-  const nowMs = Date.parse(nowIso);
-  const safeNowMs = Number.isFinite(nowMs) ? nowMs : Date.now();
-  const clean = cleanPreferenceLedger(ledger);
-  const next: PreferenceLedger = { ...clean };
-  const storageKey = namespacedKey(concept.key, options.origin);
-  const current = next[storageKey];
-  const base: PreferenceLedgerEntry = current
-    ? decayedEntry(current, nowIso, safeNowMs)
-    : {
-        ...concept,
-        positive: 0,
-        negative: 0,
-        lastSeenAt: nowIso,
-      };
-
-  next[storageKey] = {
-    ...base,
-    ...concept,
-    key: storageKey,
-    origin: options.origin,
-    facetPositive: (base.facetPositive ?? 0) + 1,
-    lastFacetAt: nowIso,
-    lastSeenAt: nowIso,
-  };
   return next;
 }
 
@@ -689,18 +541,10 @@ function lookupLedgerEntries(
 ): PreferenceLedgerEntry[] {
   const matches: PreferenceLedgerEntry[] = [];
   const seen = new Set<string>();
-  // Exact key hits across every origin namespace (paper entries are stored
-  // un-namespaced; event/job entries under `event|…` / `job|…`).
-  for (const key of [
-    concept.key,
-    namespacedKey(concept.key, "event"),
-    namespacedKey(concept.key, "job"),
-  ]) {
-    const entry = prepared.byKey[key];
-    if (entry && !seen.has(entry.key)) {
-      seen.add(entry.key);
-      matches.push(entry);
-    }
+  const exact = prepared.byKey[concept.key];
+  if (exact) {
+    seen.add(exact.key);
+    matches.push(exact);
   }
   // Also match by normalized label so a text-keyed entry and an OpenAlex-keyed
   // entry for the same concept name bridge across sources.
@@ -742,20 +586,6 @@ function decayedCounts(
   };
 }
 
-function decayedFacetPositive(
-  entry: PreferenceLedgerEntry,
-  nowMs: number,
-): number {
-  return (
-    (entry.facetPositive ?? 0) *
-    decayFactor(
-      entry.lastFacetAt,
-      nowMs,
-      FACET_PREFERENCE_HALF_LIFE_DAYS,
-    )
-  );
-}
-
 export function scorePreferenceMatch(
   item: RawItem,
   prepared: PreparedLedger | undefined,
@@ -764,32 +594,21 @@ export function scorePreferenceMatch(
     now?: number;
     documentFrequency?: PreferenceDocumentFrequency;
     corpusSize?: number;
-    /**
-     * The surface being scored. Controls how much each ledger entry counts
-     * via the directional influence matrix. Defaults to "paper", which zeroes
-     * out event/job entries — existing paper scoring is unaffected.
-     */
-    targetKind?: FeedItemKind;
   } = {},
 ): PreferenceMatchScore {
   if (!prepared || prepared.size === 0) {
     return {
       boost: 0,
-      facetBoost: 0,
       penalty: 1,
       matchedPositive: [],
-      matchedFacetPositive: [],
       matchedNegative: [],
     };
   }
 
   const now = options.now ?? Date.now();
-  const targetKind = options.targetKind ?? "paper";
   let boost = 0;
-  let facetBoost = 0;
   let penaltyLoss = 0;
   const matchedPositive = new Set<string>();
-  const matchedFacetPositive = new Set<string>();
   const matchedNegative = new Set<string>();
 
   const concepts = conceptsFromRawItem(item);
@@ -813,96 +632,36 @@ export function scorePreferenceMatch(
     );
 
     for (const entry of entries) {
-      const influence = originInfluence(targetKind, entryOrigin(entry));
-      if (influence <= 0) continue;
       const { positive, negative } = decayedCounts(entry, now);
       const net = positive - negative;
       if (net > 0.05) {
         const magnitude = 1 - Math.exp(-net / 2);
-        boost += POSITIVE_BOOST_MAX * magnitude * specificity * influence;
+        boost += POSITIVE_BOOST_MAX * magnitude * specificity;
         matchedPositive.add(entry.label);
       } else if (
         net < -0.05 &&
-        // Required-topic protection guards the paper feed only; on job/event
-        // surfaces a repeatedly-dismissed core topic should genuinely sink.
-        (targetKind !== "paper" ||
-          entry.explicit === true ||
+        (entry.explicit === true ||
           !conceptMatchesRequired(concept, requiredTopics))
       ) {
         const magnitude = 1 - Math.exp(-Math.abs(net) / 2);
-        penaltyLoss += NEGATIVE_PENALTY_MAX * magnitude * specificity * influence;
+        penaltyLoss += NEGATIVE_PENALTY_MAX * magnitude * specificity;
         matchedNegative.add(entry.label);
-      }
-
-      const facetPositive = decayedFacetPositive(entry, now);
-      const facetInfluence =
-        targetKind !== "paper" && entryOrigin(entry) === targetKind ? 1 : 0;
-      if (facetPositive > 0.05 && facetInfluence > 0) {
-        const magnitude = 1 - Math.exp(-facetPositive / 2);
-        facetBoost +=
-          FACET_PREFERENCE_BOOST_MAX *
-          magnitude *
-          specificity *
-          facetInfluence;
-        matchedFacetPositive.add(entry.label);
       }
     }
   }
 
-  const cappedFacetBoost =
-    matchedNegative.size > 0
-      ? 0
-      : Math.min(FACET_PREFERENCE_BOOST_MAX, facetBoost);
   return {
-    boost: Math.min(POSITIVE_BOOST_MAX, boost) + cappedFacetBoost,
-    facetBoost: cappedFacetBoost,
+    boost: Math.min(POSITIVE_BOOST_MAX, boost),
     penalty: Math.max(1 - NEGATIVE_PENALTY_MAX, 1 - Math.min(NEGATIVE_PENALTY_MAX, penaltyLoss)),
     matchedPositive: Array.from(matchedPositive),
-    matchedFacetPositive:
-      cappedFacetBoost > 0 ? Array.from(matchedFacetPositive) : [],
     matchedNegative: Array.from(matchedNegative),
   };
-}
-
-export function materiallyChangedByFacetPreference(
-  baselineIndex: number,
-  finalIndex: number,
-  topN = 10,
-): boolean {
-  if (baselineIndex < 0 || finalIndex < 0 || finalIndex >= baselineIndex) {
-    return false;
-  }
-  return (
-    baselineIndex - finalIndex >= 2 ||
-    (baselineIndex >= topN && finalIndex < topN)
-  );
-}
-
-export function facetPreferenceReason(
-  matchedLabels: string[],
-): string | undefined {
-  const label = matchedLabels.find((value) => value.trim())?.trim();
-  return label ? `Because you often view ${label}` : undefined;
 }
 
 export function feedbackSnapshotForPaper(paper: Paper) {
   return {
     title: paper.title,
     concepts: conceptsFromPaper(paper),
-  };
-}
-
-export function feedbackSnapshotForJob(job: Job) {
-  return {
-    title: [job.roleTitle, job.companyOrLab].filter(Boolean).join(" — "),
-    concepts: conceptsFromJob(job),
-  };
-}
-
-export function feedbackSnapshotForEvent(event: Event) {
-  return {
-    title: event.name,
-    concepts: conceptsFromEvent(event),
   };
 }
 
