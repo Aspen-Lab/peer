@@ -259,11 +259,13 @@ function RailLine({ nav, onBack }: { nav: PaperNav; onBack: () => void }) {
         // its position and keycaps, so the link is its arrow there and the
         // whole label from `lg` (1024), where the three cells hold it with
         // room to spare. The name does not change: the label is the link's
-        // `aria-label`, and the two spans are decoration. Where there is no
-        // hover the arrow is still a 44px target, like the keycaps' arrows
-        // beside it.
+        // `aria-label`, and the two spans are decoration. The arrow alone is
+        // 8px wide, so below `lg` an invisible `after` box (8px either side,
+        // the bar's height; it ends inside the 16px gap) is the click area,
+        // and where there is no hover the link is a 44px target, like the
+        // keycaps' arrows beside it.
         aria-label={RAIL.back}
-        className="inline-flex items-center justify-center transition-colors hover:text-heading [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
+        className="relative inline-flex items-center justify-center transition-colors hover:text-heading after:absolute after:-inset-x-2 after:-inset-y-3 lg:after:hidden [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
       >
         <span aria-hidden="true" className="lg:hidden">
           {BACK_ARROW}

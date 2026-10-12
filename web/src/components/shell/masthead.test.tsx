@@ -86,6 +86,16 @@ describe("the Briefing link drops its label to its arrow where the cells cannot 
     expect(tag).toContain("[@media(hover:none)]:min-w-11");
   });
 
+  it("is wider to hit than its glyph below lg: an invisible after box reaches 8px out each side, gone from lg", () => {
+    const tag = classes(back(render()));
+
+    // The arrow is about 8px wide in the bar's mono. `after:absolute` + `-inset-x-2` / `-inset-y-3` make a click
+    // area of about 24 x 42 px around it without taking any room in the grid, and the box ends inside the 16px gap.
+    expect(tag).toEqual(expect.arrayContaining(["relative", "after:absolute", "after:-inset-x-2", "after:-inset-y-3"]));
+    // From lg the whole label is the target and the box is not drawn.
+    expect(tag).toContain("lg:after:hidden");
+  });
+
   it("is on a paper only: the briefing's masthead has no rail", () => {
     pathname = "/";
 
