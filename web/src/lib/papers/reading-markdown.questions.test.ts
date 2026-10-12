@@ -221,7 +221,9 @@ describe("readingToMarkdown with the reader's questions (P2-05)", () => {
         createElement(ForYourQuestions, { report: { forYourQuestions: ANSWERS } as Pick<PaperReport, "forYourQuestions">, map: MAP }),
       ),
     );
-    const onPage = [...html.matchAll(/<p class="[^"]*text-meta[^"]*">([^<]*)<\/p>/g)].map((match) => match[1]);
+    // P9-22 (X10): the row is a list of spans now (each part in its own element, the separator in the part it
+    // introduces), so a row's words are its text with the tags removed — the same string as when it was one text node.
+    const onPage = [...html.matchAll(/<p class="[^"]*text-meta[^"]*">(.*?)<\/p>/g)].map((match) => match[1].replace(/<[^>]+>/g, ""));
     const { reading, report, sentences } = fixture({ forYourQuestions: ANSWERS });
     const md = readingToMarkdown(normalPaper, reading, report, sentences, QUESTIONS);
     const block = md.slice(md.indexOf("## For your questions"), md.indexOf("## What it proposes"));

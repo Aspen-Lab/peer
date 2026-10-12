@@ -52,6 +52,16 @@ function render(value: Pick<PaperReport, "forYourQuestions"> = report): string {
   );
 }
 
+// P9-22 (X10): the Read next meta row is a list of spans, so its words are read from the row's text (tags
+// removed) — the same string whether the row is one text node or a list of parts. `metaRowsHtml` is the row's inner
+// markup, for the tests that look at the parts themselves.
+function metaRowsHtml(html: string): string[] {
+  return [...html.matchAll(/<p class="[^"]*text-meta[^"]*">(.*?)<\/p>/g)].map((match) => match[1]);
+}
+function metaRows(html: string): string[] {
+  return metaRowsHtml(html).map((inner) => inner.replace(/<[^>]+>/g, ""));
+}
+
 describe("ForYourQuestions (P2-04)", () => {
   it("is absent without verified question answers", () => {
     expect(render({})).toBe("");
@@ -97,9 +107,9 @@ describe("ForYourQuestions (P2-04)", () => {
     expect(html).not.toContain("—");
     // Read next keeps both rows.
     expect(html).toContain("Read next");
-    expect(html).toContain(`§2 Results · p.7 · 3${NB}min`);
+    expect(metaRows(html)).toContain(`§2 Results · p.7 · 3${NB}min`);
     expect(html).toContain("It reports the measured retention result.");
-    expect(html).toContain(`§1 Introduction · p.2 · 2${NB}min · background</p>`);
+    expect(metaRows(html)).toContain(`§1 Introduction · p.2 · 2${NB}min · background`);
   });
 
   // P2-04b (§1g.15 finding 1): the sentence takes a period only when the
@@ -154,7 +164,7 @@ describe("ForYourQuestions (P2-04)", () => {
     // Both answers (both from "2 Results", page 7) carry it, once each.
     expect(html.match(/§2 Results<\/a> · p\.7<\/span>/g)).toHaveLength(2);
     // Read next keeps its own "§Heading · p.N · M min" label, which is not the attribution.
-    expect(html).toContain(`§2 Results · p.7 · 3${NB}min`);
+    expect(metaRows(html)).toContain(`§2 Results · p.7 · 3${NB}min`);
   });
 
   it("takes the page from the answer, else from its section in the map, else none", () => {
@@ -202,21 +212,22 @@ describe("ForYourQuestions (P2-04)", () => {
   // It is one string now, parts joined with " · ", the minutes on a no-break space, the role word
   // only for a background item. (The DOM cannot measure a wrap; the no-break space is what pins it.)
   it("joins the Read next meta line's parts with · in one string: §heading · p.N · N min · background, with no 'minbackground' (P9-05, X10)", () => {
-    const lines = (html: string) => [...html.matchAll(/<p class="[^"]*text-meta[^"]*">([^<]*)<\/p>/g)].map((match) => match[1]);
+    const lines = metaRows;
     const html = render();
 
     // The question's two surviving rows, in order: the answer row has no role word, the background row ends in it.
     expect(lines(html)).toEqual([`§2 Results · p.7 · 3${NB}min`, `§1 Introduction · p.2 · 2${NB}min · background`]);
     expect(html).not.toContain("minbackground");
-    expect(html.replace(NB, " ")).not.toMatch(/min\s*background/);
+    expect(lines(html).join("\n").replace(NB, " ")).not.toMatch(/min\s*background/);
     // The role word is not a span of its own any more.
     expect(html).not.toContain("<span class=\"ml-2\">background</span>");
     // The minutes never wrap apart: the space between the number and "min" is the no-break one.
     for (const line of lines(html)) expect(line).toMatch(new RegExp(`\\d+${NB}min`));
     expect(lines(html).join("")).not.toMatch(/\d min/);
     // The page keeps its plain form: "p.7", no space, no no-break space.
-    expect(html).toContain("p.7 · 3");
+    expect(lines(html).join("\n")).toContain("p.7 · 3");
     expect(html).not.toMatch(/p\.[\s\u00a0]\d/);
+    expect(lines(html).join("\n")).not.toMatch(/p\.[\s\u00a0]\d/);
   });
 
   it("puts the role word last on a background row whatever the row order, and an answer row never carries it (P9-05, X10)", () => {
@@ -233,7 +244,7 @@ describe("ForYourQuestions (P2-04)", () => {
         },
       ],
     });
-    const lines = [...html.matchAll(/<p class="[^"]*text-meta[^"]*">([^<]*)<\/p>/g)].map((match) => match[1]);
+    const lines = metaRows(html);
 
     expect(lines).toEqual([`§1 Introduction · p.2 · 2${NB}min · background`, `§2 Results · p.7 · 3${NB}min`]);
     expect(lines[1]).not.toContain("background");
@@ -243,9 +254,9 @@ describe("ForYourQuestions (P2-04)", () => {
     const html = render();
 
     expect(html).toContain("Read next");
-    expect(html).toContain(`§2 Results · p.7 · 3${NB}min`);
+    expect(metaRows(html)).toContain(`§2 Results · p.7 · 3${NB}min`);
     expect(html).toContain("It reports the measured retention result.");
-    expect(html).toContain(`§1 Introduction · p.2 · 2${NB}min · background</p>`);
+    expect(metaRows(html)).toContain(`§1 Introduction · p.2 · 2${NB}min · background`);
     expect(html).not.toContain("This must not render.");
   });
 
@@ -291,5 +302,140 @@ describe("ForYourQuestions (P2-04)", () => {
     expect(digestion).not.toContain("answers");
     expect(digestion).not.toContain("<ForYourQuestions");
     expect(source).not.toContain("QuotaNotice");
+  });
+});
+
+// P9-22 (A P9-W2's X10, round 3): the Read next meta row was one string, `§… · p.3 · 11 min · background`, and a
+// browser set it as one run of text: at 1440 (632 px) and at 390 (350 px) it wrapped to two lines and line one ended on
+// a dangling "·", with "background" alone on line two. The row is a list of parts now — the section, the page, the
+// minutes, the role word — each part unbreakable (`white-space: nowrap`) and the separator the first word of the part it
+// introduces ("· p.3"), the parts joined by one plain space that stands outside every part: the only place a line may
+// break. So a wrapped line may begin with "· background" and none ends on a "·". The words, the order and the separators
+// a screen reader or a copy gets are the string they were. (A DOM test cannot measure a wrap; it pins the markup that
+// makes the wrap safe, and the measured wrap is in the P9-22 checkpoint.) The section's title is the one long part: it is
+// left free to wrap inside itself.
+describe("the Read next meta row never ends a line on its separator (P9-22, X10)", () => {
+  interface Part {
+    part: string;
+    className: string;
+    text: string;
+  }
+  const partsOf = (inner: string): Part[] =>
+    [...inner.matchAll(/<span\b([^>]*)>([^<]*)<\/span>/g)].map((match) => ({
+      part: /data-meta-part="([^"]*)"/.exec(match[1])?.[1] ?? "",
+      className: /class="([^"]*)"/.exec(match[1])?.[1] ?? "",
+      text: match[2],
+    }));
+  // What stands in the row outside its parts' elements.
+  const outside = (inner: string) => inner.replace(/<span\b[^>]*>[^<]*<\/span>/g, "");
+
+  const answerRow = (html: string) => metaRowsHtml(html)[0];
+  const backgroundRow = (html: string) => metaRowsHtml(html)[1];
+
+  it("puts each part in an element of its own, with the separator as the first word of the part it introduces", () => {
+    const html = render();
+
+    expect(partsOf(answerRow(html)).map(({ part, text }) => [part, text])).toEqual([
+      ["section", "§2 Results"],
+      ["page", "· p.7"],
+      ["minutes", `· 3${NB}min`],
+    ]);
+    // The role word is a part too, on a background row only, with its separator in front of it.
+    expect(partsOf(backgroundRow(html)).map(({ part, text }) => [part, text])).toEqual([
+      ["section", "§1 Introduction"],
+      ["page", "· p.2"],
+      ["minutes", `· 2${NB}min`],
+      ["role", "· background"],
+    ]);
+  });
+
+  it("starts no part but the first with anything except '· ', and ends none on a separator or a space", () => {
+    const html = render();
+
+    for (const inner of [answerRow(html), backgroundRow(html)]) {
+      const parts = partsOf(inner);
+      expect(parts.length).toBeGreaterThanOrEqual(3);
+      parts.forEach(({ text }, index) => {
+        expect(text, text).toMatch(index === 0 ? /^[^\s·]/ : /^· \S/);
+        expect(text, text).not.toMatch(/[\s·]$/);
+      });
+    }
+  });
+
+  it("makes every short part unbreakable and leaves the section's title free to wrap inside itself", () => {
+    const html = render();
+
+    for (const inner of [answerRow(html), backgroundRow(html)]) {
+      const parts = partsOf(inner);
+      expect(parts.length).toBeGreaterThanOrEqual(3);
+      for (const { part, className, text } of parts) {
+        if (part === "section") expect(className.split(/\s+/), text).not.toContain("whitespace-nowrap");
+        else expect(className.split(/\s+/), text).toContain("whitespace-nowrap");
+      }
+    }
+  });
+
+  it("joins the parts with one plain space that stands outside every part, and nothing else stands outside them", () => {
+    const html = render();
+
+    for (const inner of [answerRow(html), backgroundRow(html)]) {
+      const parts = partsOf(inner);
+      expect(parts.length).toBeGreaterThanOrEqual(3);
+      // The only break opportunity between two parts is that space: it is not inside either of them, so a line can
+      // end on it and the next begin with "· …", and a part can neither end on the separator nor be split from it.
+      expect(outside(inner)).toBe(" ".repeat(parts.length - 1));
+      expect(inner).not.toMatch(/<\/span><span/);
+    }
+  });
+
+  it("a section with no page has no page part and no doubled separator: the minutes' part opens the row's tail", () => {
+    const noPage: ReadingMap = { sections: [{ id: "a", heading: "4 Appendix", canonical: "body", role: "body", words: 150, minutes: 1, paragraphs: [] }], totalMinutes: 1 };
+    const html = renderToStaticMarkup(
+      createElement(ForYourQuestions, {
+        report: { forYourQuestions: [{ question: "Is there a survey?", verdict: "partly", answers: [], readNext: [{ sectionId: "a", why: "It lists the survey instrument.", kind: "background" }] }] },
+        map: noPage,
+      }),
+    );
+    const inner = metaRowsHtml(html)[0];
+
+    expect(partsOf(inner).map(({ part, text }) => [part, text])).toEqual([
+      ["section", "§4 Appendix"],
+      ["minutes", `· 1${NB}min`],
+      ["role", "· background"],
+    ]);
+    expect(metaRows(html)).toEqual([`§4 Appendix · 1${NB}min · background`]);
+    expect(outside(inner)).toBe("  ");
+  });
+
+  it("keeps a long section title in the one wrappable part, with the page, the minutes and the role word whole after it", () => {
+    const heading = "3 How the seaweed mulch was laid over the terrace soil, and how the soil water was logged through three dry spells";
+    const long: ReadingMap = { sections: [{ id: "l", heading, canonical: "body", role: "body", page: 11, words: 2500, minutes: 11, paragraphs: [] }], totalMinutes: 11 };
+    const html = renderToStaticMarkup(
+      createElement(ForYourQuestions, {
+        report: { forYourQuestions: [{ question: "How was it set out?", verdict: "partly", answers: [], readNext: [{ sectionId: "l", why: "How the plots were set out.", kind: "background" }] }] },
+        map: long,
+      }),
+    );
+    const parts = partsOf(metaRowsHtml(html)[0]);
+
+    expect(parts.map(({ part, text }) => [part, text])).toEqual([
+      ["section", `§${heading}`],
+      ["page", "· p.11"],
+      ["minutes", `· 11${NB}min`],
+      ["role", "· background"],
+    ]);
+    expect(parts[0].className.split(/\s+/)).not.toContain("whitespace-nowrap");
+    for (const part of parts.slice(1)) expect(part.className.split(/\s+/)).toContain("whitespace-nowrap");
+  });
+
+  // Green before and after (the words are the guard): whatever the markup, the row's text is the string it was.
+  it("reads, to a screen reader and to a copy, as the same words in the same order with the same separators as before", () => {
+    const html = render();
+
+    expect(metaRows(html)).toEqual([`§2 Results · p.7 · 3${NB}min`, `§1 Introduction · p.2 · 2${NB}min · background`]);
+    // One string for the row, whitespace included: no extra space, no line break, nothing hidden or added.
+    for (const inner of metaRowsHtml(html)) {
+      expect(inner).not.toMatch(/aria-hidden|aria-label|\n|<br|<wbr|&nbsp;|​/);
+    }
   });
 });
