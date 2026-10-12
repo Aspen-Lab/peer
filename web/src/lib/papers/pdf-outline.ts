@@ -58,6 +58,12 @@ export interface PdfLine {
   y: number;
   size: number;
   font: string;
+  /** How far the line's runs reach to the right of `x`. `foldStacks` compares the x-ranges of a
+   *  fraction's rows by it (P9-13a). */
+  reach?: number;
+  /** The raised run or runs the line opens with, as P9-08's fold took them in from above the baseline,
+   *  and the words after them: a fraction's numerator, ahead of the row it was set over (P9-13a). */
+  head?: { text: string; rest: string; reach: number };
 }
 
 export interface OutlineSection {
@@ -516,7 +522,7 @@ function linesOfRow(page: number, row: Row): PdfLine[] {
     if (label && words) return [{ ...label, text: label.text.replace(/[:.—–-]$/, "") }, words];
   }
   const line = lineOf(page, row.y, ordered, row.raised);
-  return line ? [line] : [];
+  return line ? [withStackFacts(line, row, ordered)] : [];
 }
 
 /** Runs gathered into lines by baseline. */
@@ -935,6 +941,12 @@ function foldLines(parts: readonly string[], vocab: Vocabulary): string {
 // Two or more of them in a run are lifted as one unnumbered block when the stack stands between sentences,
 // and rejoin the sentence they interrupt when it goes on below them. This is the one exception to the cheap
 // rule of §1h.41 (c): a single line of symbols stays prose, and so does one line of prose, however short.
+//
+// P9-13a: P9-08's fold takes a numerator set within 7.5pt above a text row INTO that row, as its first, raised run,
+// and leaves the denominator, lowered more than a subscript is, a fragment row of its own. That is a fraction set
+// around a text row all the same, and it is written `numerator / denominator` in the sentence, like the three rows
+// of the sandwich. The lone fragment row of the same family (the numerator is somewhere else, or nowhere) joins the
+// sentence it stands in, too, and never opens a paragraph.
 
 /** A line `foldStacks` made out of rows the page set tighter than its leading: it carries on the sentence
  *  before it, wherever those rows stood. */
@@ -951,6 +963,9 @@ const LEADING_MIN_GAP = 0.6;
 /** What a text row set between a numerator and a denominator opens with ("× 100, and the share of…"): the
  *  operator is what tells a fraction in a sentence from a label set above and below a prose row. */
 const STACK_OPERATOR = /^[×=+÷−·∑Σ/]/;
+/** A raised run of only digits, separators and signs is an exponent, a charge, a footnote or a citation number
+ *  ("2", "2+", "−1", "3−5", "12"), not a numerator: a numerator carries a variable or a bracket. */
+const MARK_ONLY = /^[\d\s,+\u2013\u2212-]+$/;
 
 /** The paper's leading: the median gap between consecutive same-page lines that are at least 0.6 of the
  *  body size apart. 0 when there is nothing to measure. */
@@ -966,8 +981,40 @@ export function leadingOf(lines: readonly PdfLine[], body: { size: number }): nu
   return gaps[Math.floor(gaps.length / 2)];
 }
 
-const isStackRow = (line: PdfLine) =>
-  !line.block && line.text.length <= STACK_ROW_MAX && !/\p{L}{4,}/u.test(line.text) && /[\p{L}\p{N}]/u.test(line.text);
+/** Short, no word of four letters, a letter or a digit in it: a fragment of notation, not a line of prose. */
+const isFragment = (text: string) => text.length <= STACK_ROW_MAX && !/\p{L}{4,}/u.test(text) && /[\p{L}\p{N}]/u.test(text);
+const isStackRow = (line: PdfLine) => !line.block && isFragment(line.text);
+
+/**
+ * What `foldStacks` needs of a row and the line's text no longer says (P9-13a): how far the row reaches, and
+ * whether it opens with a raised run, which is the fold's `raised`, with the line's words after it. The head
+ * is read as `lineOf` reads a line, so it is written as the line writes it; nothing is before it for it to be
+ * a citation of or an exponent on, and it is kept as the PDF has it.
+ */
+function withStackFacts(line: PdfLine, row: Row, ordered: PdfTextItem[]): PdfLine {
+  const reachOf = (runs: PdfTextItem[]) => round(Math.max(...runs.map((run) => run.x + (run.width || 0))) - ordered[0].x);
+  let end = 0;
+  while (end < ordered.length && row.raised?.has(ordered[end])) end++;
+  const head = end > 0 && end < ordered.length ? lineOf(line.page, row.y, ordered.slice(0, end), row.raised) : null;
+  const rest = head ? lineOf(line.page, row.y, ordered.slice(end), row.raised) : null;
+  return {
+    ...line,
+    reach: reachOf(ordered),
+    ...(head && rest ? { head: { text: head.text, rest: rest.text, reach: reachOf(ordered.slice(0, end)) } } : {}),
+  };
+}
+
+/** The numerator a text row opens with, when it is one: a short raised fragment with a variable or a bracket in
+ *  it, and an operator opening the words after it ("× 100, and the share of…"). */
+function numeratorOf(line: PdfLine): NonNullable<PdfLine["head"]> | null {
+  const head = line.head;
+  if (line.block || !head || isFragment(line.text) || !isFragment(head.text) || MARK_ONLY.test(head.text)) return null;
+  return STACK_OPERATOR.test(head.rest) ? head : null;
+}
+
+/** Whether the row below a text row stands under its numerator: their x-ranges meet. */
+const meets = (text: PdfLine, head: { reach: number }, below: PdfLine) =>
+  below.x <= text.x + head.reach && text.x <= below.x + (below.reach ?? 0);
 
 /**
  * Two or more consecutive same-page rows, each a short fragment and each within 0.8 of the leading below
@@ -977,6 +1024,13 @@ const isStackRow = (line: PdfLine) =>
  * line after opens in lower case) the rows are joined into it. A fragment row, a text row that opens with an
  * operator and a fragment row, all tight, are a fraction set inside a sentence: `numerator / denominator`
  * and the row's text, one line of that sentence. Anything else is left as the page set it.
+ *
+ * P9-13a: the same fraction after P9-08's fold took the numerator into the text row (a text row that opens
+ * with a raised fragment, then an operator) has the denominator for the next row: a fragment row, tight below
+ * it, whose x-range meets the numerator's. The two are written `numerator / denominator` ahead of the row's
+ * words, one line of the sentence above, which is unfinished. And a lone fragment row, tight below an
+ * unfinished row that opens with no such numerator, with a lower-case line after it, is a half of the same
+ * family and joins the sentence where it stands.
  */
 export function foldStacks(lines: readonly PdfLine[], leading: number, lift: (text: string) => string): FlowLine[] {
   if (leading <= 0) return [...lines];
@@ -1008,6 +1062,19 @@ export function foldStacks(lines: readonly PdfLine[], leading: number, lift: (te
     ) {
       out.push({ ...row, text: `${numerator.text} / ${denominator.text} ${row.text}`, x: before.x, y: denominator.y, continues: true });
       i += 3;
+      continue;
+    }
+    // P9-13a: the numerator is the text row's first run (the fold took it in), the denominator the row after it.
+    const raised = numeratorOf(lines[i]);
+    if (unfinished(before) && raised && row && isStackRow(row) && tight(lines[i], row) && meets(lines[i], raised, row)) {
+      out.push({ ...lines[i], text: `${raised.text} / ${row.text} ${raised.rest}`, x: before.x, y: row.y, continues: true });
+      i += 2;
+      continue;
+    }
+    // P9-13a: a fragment row on its own, tight under the unfinished row it belongs to (no numerator above it).
+    if (unfinished(before) && !before.head && isStackRow(lines[i]) && tight(before, lines[i]) && row && !row.block && /^\p{Ll}/u.test(row.text.trim())) {
+      out.push({ ...lines[i], x: before.x, continues: true });
+      i++;
       continue;
     }
     out.push(lines[i]);
