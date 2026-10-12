@@ -86,6 +86,7 @@ function sentence(n: number, from = 0): string {
   const body = run(n - 1, from);
   return `${body[0]!.toUpperCase()}${body.slice(1)}.`;
 }
+const capital = (text: string): string => `${text[0]!.toUpperCase()}${text.slice(1)}`;
 /** What the figure engine hands the binder: the text, white space made single, cut hard at 500 characters. */
 const engineSlice = (text: string): string => text.replace(/\s+/g, " ").trim().slice(0, ROOM);
 /** The engine's slice of a text for the first starting word whose slice is 500 long and `fits`. */
@@ -105,8 +106,8 @@ const S3 = sentence(130, 2);
 const WHOLE = `${LABEL} ${S1} ${S2}`; // what the slices below are cut back to: 361 characters
 // The slice of "label, two sentences, a third that runs on", in the two ways it can end: inside a word, or on the
 // space after one (the engine normalizes, then slices, so its 500th character may be that space).
-const SLICED = slicedWhere((from) => `${WHOLE} ${run(400, from)}`, (s) => !s.endsWith(" "));
-const SLICED_ON_A_SPACE = slicedWhere((from) => `${WHOLE} ${run(400, from)}`, (s) => s.endsWith(" "));
+const SLICED = slicedWhere((from) => `${WHOLE} ${capital(run(400, from))}`, (s) => !s.endsWith(" "));
+const SLICED_ON_A_SPACE = slicedWhere((from) => `${WHOLE} ${capital(run(400, from))}`, (s) => s.endsWith(" "));
 // 500 characters with no sentence end at all (the label is not one), likewise.
 const RUN_ON = slicedWhere((from) => `${LABEL} ${run(700, from)}`, (s) => !s.endsWith(" "));
 const RUN_ON_ON_A_SPACE = slicedWhere((from) => `${LABEL} ${run(700, from)}`, (s) => s.endsWith(" "));
@@ -139,9 +140,11 @@ describe("a caption that fits and ends on a stop is printed as it is (P9-59)", (
     const whole = `${sentence(300)} ${sentence(ROOM - 301, 6)}`;
     expect(whole).toHaveLength(ROOM);
     expect(await line(whole)).toBe(whole);
-    const closed = `${whole.slice(0, -1)}.”`;
+    const closed = `${whole.slice(0, -2)}.”`;
+    expect(closed).toHaveLength(ROOM);
     expect(await line(closed)).toBe(closed);
-    const bracket = `${whole.slice(0, -1)}.)`;
+    const bracket = `${whole.slice(0, -2)}.)`;
+    expect(bracket).toHaveLength(ROOM);
     expect(await line(bracket)).toBe(bracket);
   });
 
