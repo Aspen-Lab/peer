@@ -492,7 +492,11 @@ export function mergeProfileAtSignIn(
 /** The seven fields §1aj names as "credential-like" (six) plus the reader's own
  *  Jev key — never restored, never imported, never pushed, never written into a
  *  backup file, under any circumstance. Checked again by test against the full
- *  merge output, not just at this one call site. */
+ *  merge output, not just at this one call site.
+ *
+ *  The Adzuna and USAJobs names stay in this list after those fields left
+ *  `UserProfile` (the jobs feed they served is stopped): the strip is by name
+ *  at runtime, and a backup file or a blob written before can still carry one. */
 const CREDENTIAL_LIKE_FIELDS = [
   "tavilyApiKey",
   "adzunaAppId",
@@ -505,16 +509,55 @@ const CREDENTIAL_LIKE_FIELDS = [
 
 /** The explicit strip step the guide requires between parsing a backup file
  *  and installing anything from it — `defaultProfile` (and therefore
- *  `parseExportedProfile`'s own allow-list) still carries these seven fields
- *  (six from the removed events/jobs era, plus the Jev key), so a raw restore
- *  would let them back in unless this runs first. The same step runs on the
- *  way OUT (`exportProfileDocument`), so a file never holds one either. */
+ *  `parseExportedProfile`'s own allow-list) still carries the Tavily, model and
+ *  Jev keys, so a raw restore would let them back in unless this runs first.
+ *  The same step runs on the way OUT (`exportProfileDocument`), so a file never
+ *  holds one either. */
 export function stripCredentialFields(
   document: Partial<UserProfile>,
 ): Partial<UserProfile> {
   const clean: Record<string, unknown> = { ...document };
   for (const field of CREDENTIAL_LIKE_FIELDS) delete clean[field];
   return clean as Partial<UserProfile>;
+}
+
+/**
+ * What the profile used to hold for the events and jobs feeds, which are
+ * stopped (rulings 60): the event and job topic lists, and the Adzuna and
+ * USAJobs credentials. None is a field of `UserProfile` any more; a blob saved
+ * on a device before, or a backup file, can still carry them, so the store's
+ * migration, the push payload and a restore all strip them by name from here.
+ * (The events/jobs halves of `activeSearchInputs` go with them, below.)
+ */
+export const LEGACY_OPPORTUNITY_FIELDS = [
+  "eventRequiredTopics",
+  "eventExploreTopics",
+  "jobRequiredTopics",
+  "jobExploreTopics",
+  "adzunaAppId",
+  "adzunaAppKey",
+  "usajobsApiKey",
+  "usajobsUserAgent",
+] as const;
+
+/**
+ * A copy of a profile (or a persisted blob, or a patch) with every
+ * `LEGACY_OPPORTUNITY_FIELDS` key removed and the `events` / `jobs` halves of
+ * `activeSearchInputs` removed. Nothing else is touched: Career stage, Looking
+ * toward, the locations and the Tavily fields are the reader's own and stay.
+ * Never edits its argument.
+ */
+export function stripLegacyOpportunityFields<T extends object>(profile: T): T {
+  const clean: Record<string, unknown> = { ...(profile as Record<string, unknown>) };
+  for (const field of LEGACY_OPPORTUNITY_FIELDS) delete clean[field];
+  const active = clean.activeSearchInputs;
+  if (active && typeof active === "object" && !Array.isArray(active)) {
+    const { events, jobs, ...rest } = active as Record<string, unknown>;
+    void events;
+    void jobs;
+    clean.activeSearchInputs = rest;
+  }
+  return clean as T;
 }
 
 export interface BackupRestoreOutcome {
@@ -539,7 +582,9 @@ export function mergeProfileFromBackup(
   local: UserProfile,
   backup: Partial<UserProfile>,
 ): BackupRestoreOutcome {
-  const safeBackup = stripCredentialFields(backup);
+  // A backup written before the events and jobs feeds stopped can still name
+  // their fields; none is installed, and none counts as restored.
+  const safeBackup = stripLegacyOpportunityFields(stripCredentialFields(backup));
   const localRecord = local as unknown as Record<string, unknown>;
   const patch: Partial<UserProfile> = {};
   let restoredFieldCount = 0;

@@ -30,6 +30,8 @@ import {
   listUnionChanged,
   preferenceLedgerChanged,
   singleValueSnapshot,
+  stripCredentialFields,
+  stripLegacyOpportunityFields,
   SINGLE_VALUE_FIELDS,
   LIST_FIELDS,
   type SingleValueField,
@@ -135,39 +137,36 @@ async function fetchRemoteForSync(): Promise<
 
 /**
  * Local keys (the model key, the Jev key, Tavily, and — SIGNIN-MERGE §1aj —
- * the events/jobs-era Adzuna/USAJobs credentials) never leave the device.
+ * the Adzuna/USAJobs credentials of the stopped jobs feed) never leave the
+ * device.
  *
- * The Adzuna/USAJobs fields were a real gap until this fix: no screen calls
- * `updateAdzunaKeys`/`updateUsajobsKeys` any more (that UI was removed with
- * events/jobs), so in practice they never held a value — but a restored
- * backup file (see the profile page's "Restore from a backup file" control)
- * CAN carry a real one, and without this exclusion it would ride along in
- * the very next debounced PUT body. `profilePatchToRow` has no column for
- * any of the four, so it could not reach the database either way, but it
- * would still leave the browser in plaintext over the wire and land in a
- * request body / server log — exactly what "never uploaded" means to
- * prevent. Proven by web/src/components/profile-sync.test.ts.
+ * The Adzuna/USAJobs fields are no longer part of `UserProfile` (no screen sets
+ * them, and the feed they served is stopped), so they in practice never hold a
+ * value — but a restored backup file (see the profile page's "Restore from a
+ * backup file" control) or a blob saved before CAN carry a real one, and
+ * without the by-name strip below it would ride along in the very next
+ * debounced PUT body. `profilePatchToRow` has no column for any of the four, so
+ * it could not reach the database either way, but it would still leave the
+ * browser in plaintext over the wire and land in a request body / server log —
+ * exactly what "never uploaded" means to prevent. Proven by
+ * web/src/components/profile-sync.test.tsx.
+ *
+ * The same strip drops the event and job topic lists and the events/jobs halves
+ * of `activeSearchInputs` that such a blob can still hold (rulings 60): nothing
+ * about those stopped feeds is pushed either.
  */
 export function remoteProfilePayload(profile: UserProfile): Partial<UserProfile> {
   const {
     tavilyEnabled,
     tavilyApiKey,
-    adzunaAppId,
-    adzunaAppKey,
-    usajobsApiKey,
-    usajobsUserAgent,
     feedAiProvider,
     feedAiApiKey,
     jevApiKey,
     standingQuestions,
-    ...rest
+    ...fields
   } = profile;
   void tavilyEnabled;
   void tavilyApiKey;
-  void adzunaAppId;
-  void adzunaAppKey;
-  void usajobsApiKey;
-  void usajobsUserAgent;
   void feedAiProvider;
   void feedAiApiKey;
   // The reader's Jev key never leaves the browser except in the paper request
@@ -176,6 +175,7 @@ export function remoteProfilePayload(profile: UserProfile): Partial<UserProfile>
   // P5-01: the reader's standing questions never leave the browser either — /privacy's "Your
   // questions" entry says so and pins this line.
   void standingQuestions;
+  const rest = stripLegacyOpportunityFields(stripCredentialFields(fields));
   const feedIntent = profileFeedIntentCard(profile);
   return feedIntent ? { ...rest, feedIntent } : rest;
 }

@@ -5,6 +5,8 @@ import {
   mergePreferenceLedger,
   mergeProfileFromBackup,
   stripCredentialFields,
+  stripLegacyOpportunityFields,
+  LEGACY_OPPORTUNITY_FIELDS,
   dirtySingleValueFields,
   singleValueSnapshot,
   listUnionChanged,
@@ -621,6 +623,92 @@ describe("stripCredentialFields", () => {
   });
 });
 
+// P9-32 (rulings 60, R3): the events and jobs feeds are stopped, so the profile
+// holds nothing for them. A blob or a backup written before can still carry the
+// old fields; this is the one place that names them.
+describe("stripLegacyOpportunityFields", () => {
+  it("removes the event and job topic lists, the Adzuna and USAJobs credentials and the events/jobs halves of the active snapshot, and nothing else", () => {
+    const legacy = {
+      displayName: "Aspen",
+      researchTopics: ["battery materials"],
+      careerStage: "Postdoc",
+      locationPreferences: ["Chicago"],
+      tavilyEnabled: true,
+      eventRequiredTopics: ["battery conferences"],
+      eventExploreTopics: ["workshops"],
+      jobRequiredTopics: ["battery scientist"],
+      jobExploreTopics: ["national laboratory"],
+      adzunaAppId: "adzuna-id",
+      adzunaAppKey: "adzuna-secret",
+      usajobsApiKey: "usajobs-secret",
+      usajobsUserAgent: "me@example.test",
+      activeSearchInputs: {
+        papers: { required: ["battery materials"], explore: [] },
+        events: { required: ["battery conferences"], explore: [] },
+        jobs: { required: ["battery scientist"], explore: [] },
+        careerStage: "Postdoc",
+        locationPreferences: ["Chicago"],
+        promotedOn: "2026-10-12",
+      },
+    };
+    expect(stripLegacyOpportunityFields(legacy)).toEqual({
+      displayName: "Aspen",
+      researchTopics: ["battery materials"],
+      careerStage: "Postdoc",
+      locationPreferences: ["Chicago"],
+      tavilyEnabled: true,
+      activeSearchInputs: {
+        papers: { required: ["battery materials"], explore: [] },
+        careerStage: "Postdoc",
+        locationPreferences: ["Chicago"],
+        promotedOn: "2026-10-12",
+      },
+    });
+  });
+
+  it("names exactly the eight legacy fields", () => {
+    expect([...LEGACY_OPPORTUNITY_FIELDS].sort()).toEqual(
+      [
+        "adzunaAppId",
+        "adzunaAppKey",
+        "eventExploreTopics",
+        "eventRequiredTopics",
+        "jobExploreTopics",
+        "jobRequiredTopics",
+        "usajobsApiKey",
+        "usajobsUserAgent",
+      ].sort(),
+    );
+  });
+
+  it("does not edit what it was given, and hands a profile that holds none of them back as it was", () => {
+    const legacy = {
+      eventRequiredTopics: ["x"],
+      activeSearchInputs: {
+        papers: { required: [], explore: [] },
+        events: { required: ["x"], explore: [] },
+        jobs: { required: [], explore: [] },
+        locationPreferences: [],
+        promotedOn: "2026-10-12",
+      },
+    };
+    const before = JSON.stringify(legacy);
+    stripLegacyOpportunityFields(legacy);
+    expect(JSON.stringify(legacy)).toBe(before);
+
+    const clean = {
+      displayName: "Aspen",
+      researchTopics: ["a"],
+      activeSearchInputs: {
+        papers: { required: ["a"], explore: [] },
+        locationPreferences: [],
+        promotedOn: "2026-10-12",
+      },
+    };
+    expect(stripLegacyOpportunityFields(clean)).toEqual(clean);
+  });
+});
+
 describe("mergeProfileFromBackup", () => {
   it("strips credentials again itself, even if a caller forgot to", () => {
     const local = profile({});
@@ -638,6 +726,19 @@ describe("mergeProfileFromBackup", () => {
     expect(patch).not.toHaveProperty("feedAiApiKey");
     expect(patch).not.toHaveProperty("jevApiKey");
     expect(patch.displayName).toBe("Restored Name");
+  });
+
+  it("installs no event or job field from a backup that still holds them, and does not count them as restored", () => {
+    const local = profile({});
+    const oldBackup = {
+      displayName: "Restored Name",
+      eventRequiredTopics: ["battery conferences"],
+      jobRequiredTopics: ["battery scientist"],
+      adzunaAppId: "adzuna-id",
+    } as Partial<UserProfile>;
+    const { patch, restoredFieldCount } = mergeProfileFromBackup(local, oldBackup);
+    expect(patch).toEqual({ displayName: "Restored Name" });
+    expect(restoredFieldCount).toBe(1);
   });
 
   it("backup wins outright for a single-value field, even overriding a non-empty local value (no P1-style conflict rule here)", () => {
