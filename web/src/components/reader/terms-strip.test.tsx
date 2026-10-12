@@ -8,6 +8,7 @@ import type { PaperTerm } from "@/lib/papers/report";
 import type { Paper } from "@/types";
 import { PEERS_READING, TERMS } from "./copy";
 import { SectionLinks } from "./evidence-quote";
+import { PANEL_CLASS, SPREAD_QUERY, XL_BREAKPOINT_PX } from "./spread";
 import { PHONE_TERMS, TermsStrip, findInBody, hiddenOnPhone, termButtonState } from "./terms-strip";
 
 // P3-01 (ruling §1h.1; §3d 13): the strip "Terms to know" under the map — one
@@ -189,12 +190,14 @@ describe("finding a term when the body may be on another tab (P7-14, R10)", () =
   });
 });
 
-// P9-04 (X3, the feature walk's 390 x 844 with eight terms): the strip was 1,409 px of the phone's page. Below
-// `sm` (40rem) it shows its first two terms and a toggle in the map's style, "show all N terms" / "fewer
-// terms"; from `sm` up nothing changes (all the terms, no toggle). The fold is CSS (`hidden sm:block`,
-// `sm:hidden`), as the map's is, so all the terms stay in the DOM and the markup is the same on the server and
-// the client. No DOM here: the open state is the `phoneOpen` prop, as the map's tests use it.
-describe("TermsStrip — folded to two terms on a phone (P9-04, X3)", () => {
+// P9-04 (X3, the feature walk's 390 x 844 with eight terms): the strip was 1,409 px of the phone's page; it shows its
+// first two terms and a toggle in the map's style, "show all N terms" / "fewer terms". P9-21 (A P9-W2's X3 remainder):
+// the fold is not the phone's alone but the one column's — wherever the reader panel stands in one column with the
+// body, i.e. below the spread (`xl`, `spread.ts`), the strip was 578 to 758 px at 640 to 1279 px; from the spread up
+// nothing changes (all the terms, no toggle). The fold is CSS (`hidden xl:block`, `xl:hidden`), as the map's is, so
+// all the terms stay in the DOM and the markup is the same on the server and the client. No DOM here: the open state
+// is the `phoneOpen` prop, as the map's tests use it.
+describe("TermsStrip — folded to two terms wherever the panel stands in one column (P9-04, X3; P9-21)", () => {
   const WORDS = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel"];
   const eightDoc: ExtractedDocument = {
     source: "pdf",
@@ -232,12 +235,12 @@ describe("TermsStrip — folded to two terms on a phone (P9-04, X3)", () => {
     expect(html.match(/<button\b[^>]*aria-pressed=/g)).toHaveLength(8);
   });
 
-  it("folds terms 3 to 8 below sm until the toggle is pressed, and not the first two", () => {
+  it("folds terms 3 to 8 below the spread (xl) until the toggle is pressed, and not the first two", () => {
     const classes = itemClasses(draw(8));
 
     expect(PHONE_TERMS).toBe(2);
     expect(classes.slice(0, 2).every((cls) => !cls || !/\bhidden\b/.test(cls))).toBe(true);
-    for (const cls of classes.slice(2)) expect(cls).toBe("hidden sm:block");
+    for (const cls of classes.slice(2)) expect(cls).toBe("hidden xl:block");
   });
 
   it("says 'show all 8 terms' while folded and 'fewer terms' once open, with aria-expanded to match", () => {
@@ -247,8 +250,8 @@ describe("TermsStrip — folded to two terms on a phone (P9-04, X3)", () => {
     const folded = toggleOf(draw(8)) ?? "";
     expect(folded).toContain(">show all 8 terms<");
     expect(folded).toContain('aria-expanded="false"');
-    // The toggle is a phone control: from sm up there is nothing to fold.
-    expect(folded).toMatch(/class="[^"]*\bsm:hidden\b/);
+    // The toggle is a one-column control: from the spread (xl) up there is nothing to fold.
+    expect(folded).toMatch(/class="[^"]*\bxl:hidden\b/);
 
     const open = draw(8, { phoneOpen: true });
     const opened = toggleOf(open) ?? "";
@@ -260,7 +263,7 @@ describe("TermsStrip — folded to two terms on a phone (P9-04, X3)", () => {
   it("counts the terms it was given: three terms fold one, and the toggle names three", () => {
     const html = draw(3);
 
-    expect(itemClasses(html).map((cls) => cls === "hidden sm:block")).toEqual([false, false, true]);
+    expect(itemClasses(html).map((cls) => cls === "hidden xl:block")).toEqual([false, false, true]);
     expect(toggleOf(html)).toContain(">show all 3 terms<");
   });
 
@@ -284,5 +287,92 @@ describe("TermsStrip — folded to two terms on a phone (P9-04, X3)", () => {
     // Two terms or fewer: no toggle, so nothing may be hidden.
     expect(hiddenOnPhone(1, 2, false)).toBe(false);
     expect(hiddenOnPhone(0, 1, false)).toBe(false);
+  });
+
+  // ── P9-21: the fold follows the spread, not the phone ──────────────────────────────────────────────────
+  // What the reader sees at a width is the CSS cascade of the display utilities the strip carries; there is no
+  // DOM, so it is modelled the way Tailwind emits it: unprefixed first, then each breakpoint in ascending order
+  // (a larger one overrides a smaller one), `hidden` = none, `block` = shown, no display utility = shown. The
+  // breakpoints are Tailwind's defaults (`globals.css` adds only 3xl and 4xl); `xl` is the spread's own.
+  const BREAKPOINT_PX: Record<string, number> = { sm: 640, md: 768, lg: 1024, xl: XL_BREAKPOINT_PX, "2xl": 1536 };
+  const shownAt = (width: number, cls: string | null): boolean => {
+    let shown = true;
+    const tokens = (cls ?? "").split(/\s+/).filter(Boolean);
+    for (const token of tokens) if (token === "hidden") shown = false;
+    for (const token of tokens) if (token === "block") shown = true;
+    for (const [prefix, min] of Object.entries(BREAKPOINT_PX).sort((a, b) => a[1] - b[1])) {
+      if (width < min) continue;
+      for (const token of tokens) {
+        if (token === `${prefix}:hidden`) shown = false;
+        if (token === `${prefix}:block`) shown = true;
+      }
+    }
+    return shown;
+  };
+  const toggleClass = (html: string) => /class="([^"]*)"/.exec(toggleOf(html) ?? "")?.[1] ?? null;
+  /** The widths of one column: the phone, the sm / md / lg widths the strip used to be unfolded at, and the last one before the spread. */
+  const ONE_COLUMN = [320, 390, 639, 640, 768, 900, 1024, 1279];
+  const SPREAD = [1280, 1440, 1536, 1920];
+
+  it("is folded at every one-column width, 640 to 1279 included — two terms shown, six folded, the toggle shown", () => {
+    const html = draw(8);
+    const classes = itemClasses(html);
+
+    for (const width of ONE_COLUMN) {
+      expect(classes.map((cls) => shownAt(width, cls)), `${width}px`).toEqual([true, true, false, false, false, false, false, false]);
+      expect(shownAt(width, toggleClass(html)), `the toggle at ${width}px`).toBe(true);
+    }
+  });
+
+  it("is unfolded from the spread up — all eight terms shown, the toggle gone", () => {
+    const html = draw(8);
+    const classes = itemClasses(html);
+
+    for (const width of SPREAD) {
+      expect(classes.map((cls) => shownAt(width, cls)), `${width}px`).toEqual(Array(8).fill(true));
+      expect(shownAt(width, toggleClass(html)), `the toggle at ${width}px`).toBe(false);
+    }
+  });
+
+  it("shows every term below the spread once the toggle has opened them, the toggle staying to close them", () => {
+    const html = draw(8, { phoneOpen: true });
+
+    for (const width of ONE_COLUMN) {
+      expect(itemClasses(html).map((cls) => shownAt(width, cls)), `${width}px`).toEqual(Array(8).fill(true));
+      expect(shownAt(width, toggleClass(html)), `the toggle at ${width}px`).toBe(true);
+    }
+    expect(toggleOf(html)).toContain(">fewer terms<");
+  });
+
+  it("leaves the phone as P9-04 built it: below sm the same two terms and the same toggle", () => {
+    const html = draw(8);
+
+    for (const width of [320, 360, 390, 430, 639]) {
+      expect(itemClasses(html).filter((cls) => shownAt(width, cls))).toHaveLength(PHONE_TERMS);
+      expect(toggleOf(html)).toContain(">show all 8 terms<");
+      expect(shownAt(width, toggleClass(html))).toBe(true);
+    }
+  });
+
+  it("folds nothing at any width when there is nothing to open: two terms or one, no toggle", () => {
+    for (const n of [1, 2]) {
+      const html = draw(n);
+
+      for (const width of [...ONE_COLUMN, ...SPREAD]) expect(itemClasses(html).every((cls) => shownAt(width, cls))).toBe(true);
+      expect(toggleOf(html)).toBeNull();
+    }
+  });
+
+  it("folds at the width the panel goes beside the column: the spread's own breakpoint, not a second one", () => {
+    // `xl` is both what the panel's classes say and what the page's media query asks (spread.ts keeps the two in step).
+    const spreadPrefix = /^(\w+):/.exec(PANEL_CLASS)?.[1];
+
+    expect(spreadPrefix).toBe("xl");
+    expect(SPREAD_QUERY).toBe(`(min-width: ${XL_BREAKPOINT_PX / 16}rem)`);
+    const html = draw(8);
+    expect(itemClasses(html).slice(2)).toEqual(Array(6).fill(`hidden ${spreadPrefix}:block`));
+    expect(toggleClass(html)).toMatch(new RegExp(`(?:^|\\s)${spreadPrefix}:hidden(?:\\s|$)`));
+    // And no other breakpoint is in the fold: nothing in the strip is shown or hidden at sm, md or lg.
+    expect(html).not.toMatch(/\b(?:sm|md|lg|2xl):(?:block|hidden)\b/);
   });
 });
