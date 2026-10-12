@@ -58,7 +58,16 @@ const WORDMARK_CLASS =
 /** The hairline between two words in the bar. A middot is a glyph in a row
  *  of glyphs; a rule is the machine's own line, and the rest of this product
  *  is ruled — the band's rule, the key's, the plate's edge. */
-const RULE = <span aria-hidden className="mx-2 block h-3 w-px bg-border-strong" />;
+const RULE = (
+  <span
+    aria-hidden
+    className="mx-2 block h-3 w-px bg-border-strong [@media(hover:none)]:max-lg:mx-1"
+  />
+);
+// 4px a side, not 8, on a touch tablet below `lg` (P9-40, step 3): its 44px arrows and 44px `?` leave the cells
+// 13px short of 768 after the wordmark is a mark and the position text is gone, and the five hairlines that
+// show there are the one thing in the bar that is air, not a word or a target. The `?` ends at 744px, inside the
+// bar's 24px margin. A mouse's cells fit already and keep the 8px.
 
 /** The same hairline, drawn from `lg` only: it goes with the position text it follows. */
 const RULE_FROM_LG = <span aria-hidden className="mx-2 hidden h-3 w-px bg-border-strong lg:block" />;
