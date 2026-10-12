@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -206,5 +208,34 @@ describe("the feed tile's plate is byte for byte what it was (rule 4)", () => {
   it("a tile's className is appended as before", () => {
     const tag = openTag(render({ paper: paper(), terms: TERMS, className: "extra" }));
     expect(classes(tag).at(-1)).toBe("extra");
+  });
+});
+
+// The reading page is too large to render here; what makes the plate's slot hold is a few lines of its own, pinned
+// as the neighbouring tests pin theirs (reader-layout.order.test.tsx reads the same file).
+describe("papers/[id]/page.tsx mounts the lead plate (rules 1 and 2)", () => {
+  const page = readFileSync(resolve(process.cwd(), "src/app/papers/[id]/page.tsx"), "utf8");
+  const gate = page.slice(page.indexOf("const hasPlate ="), page.indexOf(";", page.indexOf("const hasPlate =")));
+  const mount = page.slice(page.indexOf("<PaperPlate"), page.indexOf("/>", page.indexOf("<PaperPlate")));
+  const captionLine = page.slice(page.indexOf("const caption = "), page.indexOf(");", page.indexOf("const caption = ")));
+
+  it("keeps the plate's slot (and its card shell) while the figure is on its way: hasPlate reads leadFigurePending", () => {
+    expect(page).toContain("const leadPending = leadFigurePending(resolvedFigure, boundFigure);");
+    expect(gate).toContain("leadPending");
+    expect(page).toContain('plateIsFigure || leadPending ? undefined : "shadow-card"');
+  });
+
+  it("mounts the plate as the lead picture, with the reading's abstract", () => {
+    expect(mount).toContain("lead");
+    expect(mount).toContain("abstract={abstractText}");
+    expect(page).toContain('const abstractText = reading?.abstract.sentences.join(" ");');
+  });
+
+  it("sets the caption through leadCaption, not the 140-character cut, and does not clamp it", () => {
+    expect(captionLine).toContain("leadCaption(");
+    expect(page).not.toContain("plateCaption");
+    const figcaption = page.slice(page.indexOf("<figcaption\n                title={caption}"), page.indexOf("</figcaption>", page.indexOf("<figcaption\n                title={caption}")));
+    expect(figcaption).toContain("title={caption}");
+    expect(figcaption).not.toContain("line-clamp");
   });
 });
