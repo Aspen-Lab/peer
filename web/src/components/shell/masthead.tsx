@@ -47,6 +47,9 @@ import {
 /** Scrolled this far, the bar takes its glass. */
 const SCROLLED_AT = 8;
 
+/** The rail link's arrow — "←" — taken from its label, so the two cannot drift. */
+const BACK_ARROW = RAIL.back.split(" ")[0];
+
 const WORDMARK_CLASS =
   "font-display text-title-lg font-medium leading-none tracking-[-0.01em] text-heading";
 
@@ -131,7 +134,14 @@ export function Masthead() {
         // product is hairlines now, and this was the last surface without
         // one. The edge is there at rest; the glass still arrives on scroll,
         // background only, so the height never changes.
-        className="hidden md:grid sticky top-0 z-50 h-12 px-6 grid-cols-[1fr_auto_1fr] items-center border-b border-border transition-[background-color,box-shadow] data-[scrolled=true]:glass-bar data-[scrolled=true]:shadow-[0_1px_0_var(--color-border-strong)]"
+        //
+        // `gap-x-4`: the cells keep 16px between them. The grid has no gap of
+        // its own, and the centre is `auto` while the right cell cannot be
+        // narrower than the nav, so from 768 to 1279 the rail ended where the
+        // nav began — 0px at 768, 900 and 1024 (P9-W2 N2). The gap holds the
+        // line wherever the three fit; where they cannot (below `lg` — see the
+        // rail's link) the Briefing label gives way, not the gap.
+        className="hidden md:grid sticky top-0 z-50 h-12 px-6 gap-x-4 grid-cols-[1fr_auto_1fr] items-center border-b border-border transition-[background-color,box-shadow] data-[scrolled=true]:glass-bar data-[scrolled=true]:shadow-[0_1px_0_var(--color-border-strong)]"
       >
         {/* The bar's tooth, under its words. It cannot ride on the header
             itself: `glass-bar` sets `background` as a shorthand, which resets
@@ -244,9 +254,23 @@ function RailLine({ nav, onBack }: { nav: PaperNav; onBack: () => void }) {
     <>
       <BackToFeedLink
         onBack={onBack}
-        className="transition-colors hover:text-heading"
+        // Below `lg` the wordmark, the rail and the nav (525px of words) plus
+        // the grid's two 16px gaps do not leave room for "← Briefing" beside
+        // its position and keycaps, so the link is its arrow there and the
+        // whole label from `lg` (1024), where the three cells hold it with
+        // room to spare. The name does not change: the label is the link's
+        // `aria-label`, and the two spans are decoration. Where there is no
+        // hover the arrow is still a 44px target, like the keycaps' arrows
+        // beside it.
+        aria-label={RAIL.back}
+        className="inline-flex items-center justify-center transition-colors hover:text-heading [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
       >
-        {RAIL.back}
+        <span aria-hidden="true" className="lg:hidden">
+          {BACK_ARROW}
+        </span>
+        <span aria-hidden="true" className="hidden lg:inline">
+          {RAIL.back}
+        </span>
       </BackToFeedLink>
       {railHasPosition(nav) && (
         <>
