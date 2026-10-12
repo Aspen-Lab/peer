@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import * as calendarDate from "@/lib/local-calendar-date";
+import * as format from "@/lib/format";
 import * as poolCache from "@/lib/opportunities/pool-cache";
 
 /**
@@ -88,6 +89,26 @@ describe("what the stopped jobs and events feeds left in the shared definitions 
     // dropping a member would make the type refuse what is already stored.
     for (const member of ["job_tag", "event_topic", "opportunity_facet"]) {
       expect(source, member).toContain(`"${member}"`);
+    }
+  });
+
+  it("the shared formatter keeps what the papers use and loses the ten the job and event listings used", () => {
+    for (const name of [
+      "formatDateRange",
+      "formatWeekdayRange",
+      "daysUntil",
+      "formatDayDistance",
+      "formatDaysLeft",
+      "formatDaysAgo",
+      "formatAgeInWords",
+      "formatMatchPct",
+      "isMonthGranularity",
+      "dateClaimEndMs",
+    ]) {
+      expect(name in format, name).toBe(false);
+    }
+    for (const name of ["parseDate", "formatDate", "formatTimeAgo", "formatDayAge", "formatCount"]) {
+      expect(typeof (format as Record<string, unknown>)[name], name).toBe("function");
     }
   });
 });

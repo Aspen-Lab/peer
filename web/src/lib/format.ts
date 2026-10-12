@@ -1,4 +1,4 @@
-// Shared date / relative-time / count / percent formatting.
+// Shared date / relative-time / count formatting.
 //
 // This is the ONLY place these live — do not hand-roll a formatter inside a
 // page or card. Before this module existed the app had five relative-time
@@ -10,8 +10,8 @@ const DAY_MS = 86_400_000;
 /**
  * Parse an ISO string. Date-only strings ("2026-07-19") are parsed as LOCAL
  * dates — `new Date("2026-07-19")` parses as UTC midnight, which renders as
- * the previous day in western timezones. Event dates and publication dates
- * must never shift by a day.
+ * the previous day in western timezones. Publication dates must never shift
+ * by a day.
  */
 export function parseDate(iso: string | null | undefined): Date | null {
   if (!iso) return null;
@@ -32,35 +32,14 @@ export function parseDate(iso: string | null | undefined): Date | null {
 }
 
 /**
- * A23-02 / Ruling 62b. A date the page evidenced only to the MONTH — the shape
- * a listing title's `(Aug 2026)` supports and nothing finer.
+ * A23-02 / Ruling 62b. A date evidenced only to the MONTH ("2026-08"), nothing
+ * finer. Not exported as a predicate: `formatDate` and `parseDate` are the two
+ * places that act on it.
  */
 export const MONTH_GRANULARITY_RE = /^(\d{4})-(0[1-9]|1[0-2])$/;
 
-export function isMonthGranularity(iso: string | null | undefined): boolean {
+function isMonthGranularity(iso: string | null | undefined): boolean {
   return Boolean(iso && MONTH_GRANULARITY_RE.test(iso.trim()));
-}
-
-/**
- * A23-02 / Ruling 62b. THE LAST INSTANT AT WHICH A DATE CLAIM CAN STILL BE
- * TRUE, which is what every expiry test actually wants.
- *
- * For a day-level date this is just `Date.parse`. For a month-granularity one
- * it is the END of that month, and the difference is the whole point of the
- * ruling: `Date.parse("2026-08")` is 1 August, so an expiry test reading it
- * directly would retire an August event on the FIRST of August — expiring a
- * live row wrongly early, which is worse than the late expiry it replaces.
- * A month-granularity value expires ONLY when its month has fully passed.
- */
-export function dateClaimEndMs(iso: string | null | undefined): number {
-  if (!iso) return NaN;
-  const trimmed = iso.trim();
-  const monthOnly = MONTH_GRANULARITY_RE.exec(trimmed);
-  if (monthOnly) {
-    // First instant of the NEXT month, minus one — local, matching parseDate.
-    return new Date(Number(monthOnly[1]), Number(monthOnly[2]), 1).getTime() - 1;
-  }
-  return Date.parse(trimmed);
 }
 
 export type DateStyle = "full" | "medium" | "short" | "monthYear";
@@ -89,10 +68,9 @@ const DATE_STYLE_OPTS: Record<DateStyle, Intl.DateTimeFormatOptions> = {
  *    "monthYear" still gets "monthYear", and no day-level value moves a byte;
  *  - it FILLS nothing — an unparseable value still returns `null`.
  *
- * Before round 24 this branch lived privately inside the event card
- * (`lib/events/card.ts`). Five other render sites did not have it and printed
- * an invented day; the branch lives here now so there is exactly one copy,
- * which is what this module's header has demanded from the start.
+ * The branch lives here, once, as this module's header demands: before round
+ * 24 it sat privately in a card that has since been removed, and the render
+ * sites that reached this module directly printed an invented day.
  */
 export function formatDate(
   iso: string | null | undefined,
@@ -102,60 +80,6 @@ export function formatDate(
   if (!d) return null;
   const effective: DateStyle = isMonthGranularity(iso) ? "monthYear" : style;
   return d.toLocaleDateString("en-US", DATE_STYLE_OPTS[effective]);
-}
-
-/**
- * B-05. Compact date range for an event's DATES tile — "Mar 8 – 11, 2027",
- * "Mar 30 – Apr 2, 2027", "Dec 30, 2026 – Jan 2, 2027". Collapses whatever the
- * two ends share. The event report used to print the start in "full" style and
- * the end in "medium", joined by a dot: "Monday, March 8, 2027 · Mar 11, 2027".
- */
-export function formatDateRange(
-  startIso: string | null | undefined,
-  endIso: string | null | undefined,
-): string | null {
-  const start = parseDate(startIso);
-  if (!start) return null;
-  // A24-02 / Ruling 62b. A month-granularity start has no day to range FROM,
-  // so there is no range to print — it renders its own month and IGNORES the
-  // end. Both ends month-granularity in DIFFERENT months is deliberately NOT
-  // built: no live row has that shape, and inventing "Aug – Sep 2026" on no
-  // witness is an unearned clause. Such a row renders the START's month,
-  // which is true.
-  if (isMonthGranularity(startIso)) return formatDate(startIso);
-  const end = parseDate(endIso);
-  if (!end || end.getTime() <= start.getTime()) return formatDate(startIso);
-
-  const monthDay = (d: Date) =>
-    d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  if (start.getFullYear() !== end.getFullYear()) {
-    return `${formatDate(startIso)} – ${formatDate(endIso)}`;
-  }
-  const head =
-    start.getMonth() === end.getMonth()
-      ? `${monthDay(start)} – ${end.getDate()}`
-      : `${monthDay(start)} – ${monthDay(end)}`;
-  return `${head}, ${end.getFullYear()}`;
-}
-
-/** B-05. Weekday span beneath a date range — "Mon – Thu", or "Mon" for a day. */
-export function formatWeekdayRange(
-  startIso: string | null | undefined,
-  endIso: string | null | undefined,
-): string | null {
-  const start = parseDate(startIso);
-  if (!start) return null;
-  // A24-02 / Ruling 62b. A MONTH has no weekday. `null` is what the report
-  // tile's `detail: … ?? undefined` already consumes, so the sub-line
-  // DISAPPEARS rather than printing the weekday of a first-of-the-month
-  // anchor the page never stated. The card said "Aug 2026" while plate 03
-  // said "Aug 1, 2026 / Sat" — a day of month AND a day of week, both invented.
-  if (isMonthGranularity(startIso)) return null;
-  const weekday = (d: Date) =>
-    d.toLocaleDateString("en-US", { weekday: "short" });
-  const end = parseDate(endIso);
-  if (!end || end.getTime() <= start.getTime()) return weekday(start);
-  return `${weekday(start)} – ${weekday(end)}`;
 }
 
 /**
@@ -196,79 +120,10 @@ export function formatDayAge(
   return formatDate(iso, "monthYear");
 }
 
-/** Signed whole days from now to `iso` (positive = future). For deadlines. */
-export function daysUntil(iso: string, nowMs: number = Date.now()): number {
-  const d = parseDate(iso);
-  if (!d) return 0;
-  return Math.round((d.getTime() - nowMs) / DAY_MS);
-}
-
-/**
- * Bidirectional day distance in words, for deadlines and event dates:
- * "today", "tomorrow", "in 5 days", "2 weeks ago", "in 3 months"…
- */
-export function formatDayDistance(days: number): string {
-  if (days === 0) return "today";
-  if (days === 1) return "tomorrow";
-  if (days === -1) return "yesterday";
-  if (days > 0 && days < 14) return `in ${days} days`;
-  if (days < 0 && days > -14) return `${Math.abs(days)} days ago`;
-  if (days >= 14 && days < 60) return `in ${Math.floor(days / 7)} weeks`;
-  if (days <= -14 && days > -60) return `${Math.floor(Math.abs(days) / 7)} weeks ago`;
-  if (days >= 60 && days < 365) return `in ${Math.floor(days / 30)} months`;
-  if (days <= -60 && days > -365) return `${Math.floor(Math.abs(days) / 30)} months ago`;
-  if (days >= 365) return `in ${Math.floor(days / 365)} years`;
-  return `${Math.floor(Math.abs(days) / 365)} years ago`;
-}
-
-/**
- * B2-01. Report-only countdown vocabulary. Plate 02 and 03 always read
- * "N days left" / "N days ago" — never bucketed into weeks or months, and
- * never abbreviated to "Nd". `formatDayDistance` / `formatDayAge` above keep
- * serving the feed, the papers view and job cards exactly as before; those
- * surfaces have their own established relative-time vocabulary and are not
- * part of this loop. These two exist only so the job and event reports stop
- * needing to hand-roll a fourth vocabulary inline — the exact drift this
- * module's header comment warns about.
- */
-export function formatDaysLeft(days: number): string {
-  if (days <= 0) return "due today";
-  return `${days} day${days === 1 ? "" : "s"} left`;
-}
-
-/** B2-01. The past-tense half of the pair above — "8 days ago", not "8d ago". */
-export function formatDaysAgo(days: number): string {
-  if (days <= 0) return "today";
-  return `${days} day${days === 1 ? "" : "s"} ago`;
-}
-
-/**
- * Long-form past age in words for prose contexts:
- * "today", "yesterday", "12 days ago", "3 months ago", "1.5 years ago".
- */
-export function formatAgeInWords(days: number): string {
-  if (days < 1) return "today";
-  if (days < 2) return "yesterday";
-  if (days < 30) return `${days} days ago`;
-  if (days < 60) return "1 month ago";
-  if (days < 365) return `${Math.round(days / 30)} months ago`;
-  const years = days / 365;
-  if (years < 1.5) return "1 year ago";
-  return `${years.toFixed(1).replace(/\.0$/, "")} years ago`;
-}
-
 /** Compact count — 842, 1.2k, 34k, 1.1M. */
 export function formatCount(n: number): string {
   if (n < 1000) return n.toString();
   if (n < 10_000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
   if (n < 1_000_000) return Math.round(n / 1000) + "k";
   return (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
-}
-
-/** Relevance score (0–1, may arrive dirty) → integer percent, clamped. */
-export function formatMatchPct(
-  score: number | null | undefined,
-): number | null {
-  if (score == null) return null;
-  return Math.round(Math.max(0, Math.min(1, score)) * 100);
 }
