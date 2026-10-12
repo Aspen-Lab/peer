@@ -52,7 +52,7 @@ import type { Claim, PaperReport } from "@/lib/papers/report";
 import type { Route } from "next";
 import { aiAvailability, explainWindowAvailable } from "@/lib/feed/ai-tier";
 import { useSyncGate } from "@/components/profile-sync";
-import { PaperPlate } from "@/components/cards/paper-plate";
+import { PaperPlate, leadFigurePending } from "@/components/cards/paper-plate";
 import { SwipeableCard } from "@/components/cards/swipe-card";
 import { useResolvedFigure } from "@/components/paper-figure";
 import { TitleBlock } from "@/components/reader/title-block";
@@ -1026,6 +1026,10 @@ function Reader({
         ? resolvedFigure.caption
         : null,
   );
+  // P9-49 (N6): the figure is still on its way (the route has not answered, the report has bound
+  // nothing). The plate's slot is held, with the card shell that frames it, so the title does not
+  // move when the picture lands.
+  const leadPending = leadFigurePending(resolvedFigure, boundFigure);
   // A paper with neither a figure nor a term of its own has no plate at all
   // (`PaperPlate` renders nothing for it), and the card shell that frames the
   // plate must go with it — an empty swipeable card above the title reads as a
@@ -1034,7 +1038,8 @@ function Reader({
   const hasPlate =
     Boolean(boundFigure?.imageUrl) ||
     Boolean(resolvedFigure.imageUrl) ||
-    plateTerms.length > 0;
+    plateTerms.length > 0 ||
+    leadPending;
 
   const abstractSentences = useMemo(() => reading?.abstract.sentences ?? [], [reading]);
   const marks = useMemo(() => {
@@ -1365,7 +1370,7 @@ function Reader({
               {...(isUploadId ? {} : { onSwipeLeft: skip, leftLabel: SWIPE.notInterested })}
               rightLabel={paper.isSaved ? SWIPE.unsave : SWIPE.save}
               rightActive={paper.isSaved}
-              className={plateIsFigure ? undefined : "shadow-card"}
+              className={plateIsFigure || leadPending ? undefined : "shadow-card"}
             >
               <PaperPlate
                 paper={paper}
@@ -1373,6 +1378,7 @@ function Reader({
                 figure={boundFigure}
                 imageAlt={caption ? "" : undefined}
                 lightbox
+                lead
               />
             </SwipeableCard>
             {caption && (

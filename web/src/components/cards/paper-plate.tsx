@@ -7,7 +7,7 @@
 
 import { useState } from "react";
 import type { Paper } from "@/types";
-import { useResolvedFigure } from "@/components/paper-figure";
+import { useResolvedFigure, type FigureState } from "@/components/paper-figure";
 import { FigureLightbox } from "@/components/reader/figure-lightbox";
 
 /**
@@ -57,6 +57,31 @@ export interface PlateFigure {
 }
 
 /**
+ * P9-49 (N6): is the lead picture's figure still on its way — the figure route has not answered
+ * (`idle`), the report has bound nothing, no picture is in hand?
+ *
+ * The reading page asks it twice, of the same state: here, to hold the figure's own box until the
+ * picture lands (or the route says there is none), and in `papers/[id]/page.tsx`, to keep the plate's
+ * slot (and the card shell that frames it) in the layout while it is held. Without a key the plate used
+ * to be drawn only when `POST /api/figure` returned (4-5 s on an upload), and the title and the decision
+ * block moved 96 px (1440) / 120 px (390) down under a reader about to press "Read it here".
+ *
+ * Once the route has answered — with a picture, or with none — this is false; a picture that never comes
+ * takes its held box away in one step (to the terms plate when the paper has terms, to nothing when it
+ * has none).
+ */
+export function leadFigurePending(
+  figure: Pick<FigureState, "status" | "imageUrl">,
+  bound?: PlateFigure | null,
+): boolean {
+  return figure.status === "idle" && !figure.imageUrl && !bound?.imageUrl;
+}
+
+/** The figure's own box: the mat, 16:9, with the plate's own crop marks. A picture stands in it, and so does the held slot. */
+const FIGURE_BOX =
+  "tile-cover cropmarks [--cm-inset:6px] [--cm-c:var(--plate-ink-faint)] overflow-hidden aspect-[16/9] @container";
+
+/**
  * The plate — the card's visual element, present on every card at the same
  * offset and the same 16:9 ratio.
  *
@@ -77,6 +102,7 @@ export function PaperPlate({
   imageAlt,
   className,
   lightbox = false,
+  lead = false,
 }: {
   paper: Paper;
   terms?: string[];
@@ -94,6 +120,12 @@ export function PaperPlate({
    * off so every other caller is unaffected by construction.
    */
   lightbox?: boolean;
+  /**
+   * P9-49 (N6): the reading page's lead picture. While its figure is still being looked for it holds the
+   * figure's own box — the mat the picture will stand in — so nothing below it moves when the picture
+   * lands. The briefing feed's tiles (`feed-tile.tsx`) do not pass this and are drawn exactly as before.
+   */
+  lead?: boolean;
 }) {
   // The same args as the card, so the page and the card read one cache entry.
   const resolved = useResolvedFigure({
@@ -120,7 +152,9 @@ export function PaperPlate({
   // picture. (`src` and not `showFigure`: an image that was found and then
   // failed to load still keeps the window, because the callers laid out for
   // one and cannot see the failure.)
-  if (!src && terms.length === 0) return null;
+  // P9-49 (N6): the lead picture's slot is held while its figure is on the way, with terms or without.
+  const pending = lead && leadFigurePending(resolved, bound);
+  if (!src && terms.length === 0 && !pending) return null;
 
   // Plain concatenation, not `cn`: the card passes no class, and its markup
   // must stay byte-for-byte what it was.
@@ -136,9 +170,24 @@ export function PaperPlate({
   // These words are Peer's own composition, allocated across the briefing by
   // `allocatePlateTerms`; nothing was cropped, and a mark that appears on both
   // branches marks neither.
-  const base = showFigure
-    ? "tile-cover cropmarks [--cm-inset:6px] [--cm-c:var(--plate-ink-faint)] overflow-hidden aspect-[16/9] @container"
-    : "tile-cover grain overflow-hidden aspect-[2.4/1] @container";
+  const base =
+    showFigure || pending
+      ? FIGURE_BOX
+      : "tile-cover grain overflow-hidden aspect-[2.4/1] @container";
+
+  // The held slot: the box and nothing in it — no picture, no caption, no word of the paper's own
+  // ("nothing on it is invented"). Class for class the box the picture stands in, so its landing adds
+  // no height; the picture fades in over the same mat.
+  if (pending) {
+    return (
+      <div
+        data-plate="figure"
+        data-plate-pending=""
+        aria-hidden
+        className={className ? `${base} ${className}` : base}
+      />
+    );
+  }
 
   // A mat exists to hold a picture. With a figure the plate is a mat — light,
   // because scientific figures are drawn on white and matting is what keeps a
