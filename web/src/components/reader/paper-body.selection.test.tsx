@@ -341,25 +341,52 @@ const reading = {
   provenance: { sourceLabel: "PDF" },
 } as unknown as PaperReading;
 
-let documentListeners: Map<string, Set<() => void>>;
+type Listener = (event?: unknown) => void;
+type ListenOptions = boolean | { capture?: boolean };
+
+/**
+ * A DOM target's listeners as the DOM keeps them (P9-18): one per (type,
+ * function, capture phase), and removed only by naming the same three — so a
+ * listener added in the capture phase and removed without it stays, as it
+ * would in a browser.
+ */
+function registry() {
+  const entries: Array<{ type: string; listener: Listener; capture: boolean }> = [];
+  const captureOf = (options?: ListenOptions) => (typeof options === "object" ? Boolean(options.capture) : Boolean(options));
+  const find = (type: string, listener: Listener, capture: boolean) => entries.findIndex((e) => e.type === type && e.listener === listener && e.capture === capture);
+  return {
+    add(type: string, listener: Listener, options?: ListenOptions) {
+      const capture = captureOf(options);
+      if (find(type, listener, capture) < 0) entries.push({ type, listener, capture });
+    },
+    remove(type: string, listener: Listener, options?: ListenOptions) {
+      const at = find(type, listener, captureOf(options));
+      if (at >= 0) entries.splice(at, 1);
+    },
+    of: (type: string) => entries.filter((e) => e.type === type),
+    all: () => [...entries],
+  };
+}
+
+let documentListeners: ReturnType<typeof registry>;
+let windowListeners: ReturnType<typeof registry>;
 let current: SelectionLike | null;
 
 beforeEach(() => {
   vi.useFakeTimers();
-  documentListeners = new Map();
+  documentListeners = registry();
+  windowListeners = registry();
   current = null;
   vi.stubGlobal("document", {
-    addEventListener: (type: string, listener: () => void) => {
-      documentListeners.set(type, (documentListeners.get(type) ?? new Set()).add(listener));
-    },
-    removeEventListener: (type: string, listener: () => void) => {
-      documentListeners.get(type)?.delete(listener);
-    },
+    addEventListener: (type: string, listener: Listener, options?: ListenOptions) => documentListeners.add(type, listener, options),
+    removeEventListener: (type: string, listener: Listener, options?: ListenOptions) => documentListeners.remove(type, listener, options),
   });
   vi.stubGlobal("window", {
     getSelection: () => current,
     setTimeout: (fn: () => void, ms: number) => setTimeout(fn, ms),
     clearTimeout: (id: number | undefined) => clearTimeout(id),
+    addEventListener: (type: string, listener: Listener, options?: ListenOptions) => windowListeners.add(type, listener, options),
+    removeEventListener: (type: string, listener: Listener, options?: ListenOptions) => windowListeners.remove(type, listener, options),
   });
 });
 
@@ -368,8 +395,16 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const changed = () => [...(documentListeners.get("selectionchange") ?? [])].forEach((listener) => listener());
-const count = () => documentListeners.get("selectionchange")?.size ?? 0;
+const dispatch = (target: ReturnType<typeof registry>, type: string, event?: unknown) => target.of(type).forEach(({ listener }) => listener(event));
+const changed = () => dispatch(documentListeners, "selectionchange");
+const count = () => documentListeners.of("selectionchange").length;
+const MOUSE = { button: 0, isPrimary: true, pointerType: "mouse" };
+/** The primary button goes down on the page (a pointer event reaches the document). */
+const press = (init: Record<string, unknown> = {}) => dispatch(documentListeners, "pointerdown", { ...MOUSE, ...init });
+/** …and comes up, or the browser takes the pointer away. */
+const release = (type: "pointerup" | "pointercancel" = "pointerup", init: Record<string, unknown> = {}) => dispatch(documentListeners, type, { ...MOUSE, ...init });
+/** The window loses focus (the reader switches to another window). */
+const blurred = () => dispatch(windowListeners, "blur", {});
 
 async function mountBody(onSelect?: (selection: ExplainSelection | null) => void) {
   // `mount` settles with real timers; let the runtime's own waits through.
@@ -456,5 +491,239 @@ describe("PaperBody's selection listener (P3-02)", () => {
 
     expect(JSON.stringify(listening.value)).toBe(bare);
     listening.unmount();
+  });
+});
+
+// ── P9-18 (BACKLOG-45; A P9-R2's F2 and §6.1; ruling §1h.56) ──────────────
+// A selection is offered when the primary pointer is UP. The 150 ms wait is
+// "the reader has stopped", and a reader who drags with the button down, and
+// stops to look at the words, has not finished: the window must not move and
+// the control must not appear until the release. A selection made without a
+// press (keyboard, touch handles, a script) has no release, and keeps the
+// 150 ms wait.
+describe("PaperBody's selection listener — offered when the primary pointer is up (P9-18, BACKLOG-45)", () => {
+  async function mountSeen() {
+    const seen: Array<ExplainSelection | null> = [];
+    const mounted = await mountBody((s) => seen.push(s));
+    return { seen, mounted };
+  }
+
+  it("offers nothing while the primary button is down, however long the drag pauses; the release offers it at once", async () => {
+    const { seen, mounted } = await mountSeen();
+    press();
+    current = selection();
+    changed();
+    vi.advanceTimersByTime(SELECTION_DEBOUNCE_MS + 250); // the reader holds still 400 ms with the button down
+    expect(seen, "nothing may be offered while the primary pointer is down").toEqual([]);
+    release();
+    vi.advanceTimersByTime(0);
+
+    expect(seen, "one report, the moment the button comes up — no wait after it").toHaveLength(1);
+    expect(seen[0]).toMatchObject({ sectionIndex: 1, paragraphIndex: 2, passage: "the rafting ratio" });
+    vi.advanceTimersByTime(1000);
+    expect(seen, "and the release read is the only one").toHaveLength(1);
+    mounted.unmount();
+  });
+
+  it("reports a drag that moves, pauses and moves again once, at the release", async () => {
+    const { seen, mounted } = await mountSeen();
+    press();
+    current = selection();
+    for (let i = 0; i < 5; i += 1) {
+      changed();
+      vi.advanceTimersByTime(100);
+    }
+    vi.advanceTimersByTime(400); // the pause
+    changed();
+    vi.advanceTimersByTime(SELECTION_DEBOUNCE_MS * 2);
+    expect(seen).toEqual([]);
+    release();
+    vi.advanceTimersByTime(SELECTION_DEBOUNCE_MS);
+
+    expect(seen).toHaveLength(1);
+    mounted.unmount();
+  });
+
+  it("holds a wait already running when the button goes down: a press ends the debounce it found", async () => {
+    const { seen, mounted } = await mountSeen();
+    current = selection();
+    changed(); // e.g. a double click's first selection, or a keyboard change
+    vi.advanceTimersByTime(100);
+    press();
+    vi.advanceTimersByTime(SELECTION_DEBOUNCE_MS * 2);
+    expect(seen, "the wait that was running does not fire into the press").toEqual([]);
+    release();
+    vi.advanceTimersByTime(0);
+
+    expect(seen).toHaveLength(1);
+    mounted.unmount();
+  });
+
+  it("reports null at the release of a click that collapses a selection, not before", async () => {
+    const { seen, mounted } = await mountSeen();
+    press();
+    current = null; // the press collapses the selection…
+    changed();
+    vi.advanceTimersByTime(SELECTION_DEBOUNCE_MS + 250);
+    expect(seen).toEqual([]);
+    release();
+    vi.advanceTimersByTime(0);
+
+    expect(seen).toEqual([null]);
+    mounted.unmount();
+  });
+
+  it("holds each drag until its own release", async () => {
+    const { seen, mounted } = await mountSeen();
+    press();
+    current = selection({ text: "the first drag" });
+    changed();
+    release();
+    vi.advanceTimersByTime(0);
+    expect(seen).toHaveLength(1);
+
+    press();
+    current = selection({ text: "the second drag" });
+    changed();
+    vi.advanceTimersByTime(SELECTION_DEBOUNCE_MS + 250);
+    expect(seen, "the second drag is not offered while it is held").toHaveLength(1);
+    release();
+    vi.advanceTimersByTime(0);
+
+    expect(seen.map((s) => s?.passage)).toEqual(["the first drag", "the second drag"]);
+    mounted.unmount();
+  });
+
+  it("frees the gate and reads when the window loses focus with the button down: the release may never arrive", async () => {
+    const { seen, mounted } = await mountSeen();
+    press();
+    current = selection();
+    changed();
+    vi.advanceTimersByTime(SELECTION_DEBOUNCE_MS + 250);
+    expect(seen).toEqual([]);
+    blurred();
+    vi.advanceTimersByTime(0);
+    expect(seen, "one read when the window blurs").toHaveLength(1);
+
+    // …and the flag is clear: a keyboard change after it is on the 150 ms wait again.
+    current = selection({ text: "the next words" });
+    changed();
+    vi.advanceTimersByTime(SELECTION_DEBOUNCE_MS - 1);
+    expect(seen).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(seen.map((s) => s?.passage)).toEqual(["the rafting ratio", "the next words"]);
+    mounted.unmount();
+  });
+
+  it("frees the gate when the browser takes the pointer away (pointercancel), and the next change is read after 150 ms", async () => {
+    const { seen, mounted } = await mountSeen();
+    press();
+    release("pointercancel");
+    current = selection();
+    changed();
+    vi.advanceTimersByTime(SELECTION_DEBOUNCE_MS);
+
+    expect(seen).toHaveLength(1);
+    mounted.unmount();
+  });
+
+  it("reads at once when the pointer is cancelled with the button down, as at a release", async () => {
+    const { seen, mounted } = await mountSeen();
+    press();
+    current = selection();
+    changed();
+    vi.advanceTimersByTime(SELECTION_DEBOUNCE_MS + 250);
+    expect(seen).toEqual([]);
+    release("pointercancel");
+    vi.advanceTimersByTime(0);
+
+    expect(seen).toHaveLength(1);
+    mounted.unmount();
+  });
+
+  it("keeps the 150 ms wait for a keyboard selection: shift + arrow ×5 is offered once, 150 ms after the last key", async () => {
+    const { seen, mounted } = await mountSeen();
+    current = selection();
+    for (let i = 0; i < 5; i += 1) {
+      changed();
+      vi.advanceTimersByTime(40);
+    }
+    vi.advanceTimersByTime(SELECTION_DEBOUNCE_MS - 40 - 1);
+    expect(seen).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(seen).toHaveLength(1);
+    vi.advanceTimersByTime(1000);
+
+    expect(seen, "once, after the last key").toHaveLength(1);
+    mounted.unmount();
+  });
+
+  it.each([
+    ["a touch pointer (selection handles fire no pointer events)", { pointerType: "touch" }],
+    ["a secondary button", { button: 2 }],
+    ["a pointer that is not the primary one", { isPrimary: false }],
+  ])("keeps the 150 ms wait under %s: it is no press of the primary pointer", async (_name, init) => {
+    const { seen, mounted } = await mountSeen();
+    press(init);
+    current = selection();
+    changed();
+    vi.advanceTimersByTime(SELECTION_DEBOUNCE_MS - 1);
+    expect(seen).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(seen).toHaveLength(1);
+    release("pointerup", init);
+    vi.advanceTimersByTime(1000);
+
+    expect(seen, "and its lifting adds no read of its own").toHaveLength(1);
+    mounted.unmount();
+  });
+
+  it("reads nothing for a release, a cancel or a blur that no press of the primary pointer came before", async () => {
+    const { seen, mounted } = await mountSeen();
+    current = selection();
+    release();
+    release("pointercancel");
+    blurred();
+    vi.advanceTimersByTime(1000);
+
+    expect(seen).toEqual([]);
+    mounted.unmount();
+  });
+
+  it("listens for the pointer on the document in the capture phase, and for the blur on the window", async () => {
+    const mounted = await mountBody(() => {});
+
+    for (const type of ["pointerdown", "pointerup", "pointercancel"]) {
+      expect(documentListeners.of(type), type).toHaveLength(1);
+      expect(documentListeners.of(type)[0].capture, `${type} in the capture phase, so a handler that stops propagation cannot hide it`).toBe(true);
+    }
+    expect(windowListeners.of("blur")).toHaveLength(1);
+    mounted.unmount();
+  });
+
+  it("adds no listener without somewhere to report to, and removes every one it added on unmount", async () => {
+    const without = await mountBody();
+    expect(documentListeners.all()).toEqual([]);
+    expect(windowListeners.all()).toEqual([]);
+    without.unmount();
+
+    const withIt = await mountBody(() => {});
+    expect(documentListeners.all().length).toBeGreaterThan(0);
+    withIt.unmount();
+
+    expect(documentListeners.all(), "document").toEqual([]);
+    expect(windowListeners.all(), "window").toEqual([]);
+  });
+
+  it("reports nothing after it is unmounted, even for a release already on its way", async () => {
+    const { seen, mounted } = await mountSeen();
+    press();
+    current = selection();
+    changed();
+    release();
+    mounted.unmount();
+    vi.advanceTimersByTime(1000);
+
+    expect(seen).toEqual([]);
   });
 });
