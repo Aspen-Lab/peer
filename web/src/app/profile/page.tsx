@@ -684,8 +684,8 @@ function HeroStat({
 // said "What you save" — a claim about the reader that Peer could not support,
 // since `saveEvent` and `saveJob` are called nowhere outside the store and
 // both surfaces state in their own header comments that they are gone. The
-// `savedEvents`/`savedJobs` selectors stay in `useReadingStats`, so legacy
-// synced rows are still counted honestly in the total.
+// store no longer holds saved events or jobs (P9-31, §1h.60), so the total in
+// `useReadingStats` counts saved papers only.
 
 // ── Venue grid — blocks, warm intensity by rank ───────────────
 
@@ -975,12 +975,10 @@ function SignalRow({
 
 function useReadingStats() {
   const savedPapers = useFeedStore((s) => s.savedPapers);
-  const savedEvents = useFeedStore((s) => s.savedEvents);
-  const savedJobs = useFeedStore((s) => s.savedJobs);
   const readItems = useFeedStore((s) => s.readItems);
   const lastRefresh = useFeedStore((s) => s.lastRefresh);
 
-  const saved = savedPapers.length + savedEvents.length + savedJobs.length;
+  const saved = savedPapers.length;
   const read = Object.keys(readItems).length;
 
   // Top keywords across saved papers' experiment keywords
