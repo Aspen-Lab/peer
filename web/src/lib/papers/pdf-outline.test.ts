@@ -1604,6 +1604,104 @@ describe("a raised run at the head of a line is not converted to superscripts (P
   });
 });
 
+// ── P9-37 (round P9, Theme 1; round 3's one residual): a run raised again above a raised run is its exponent ──
+//
+// A symbol can carry a label set raised and, above that label, a charge raised again: a base at the body's
+// baseline, a label of letters raised 3.9pt, and its charge or exponent raised again to 7.25pt, smaller still,
+// then the line goes on at the baseline. The fold takes both raised runs into the one mark; with letters in it,
+// the whole mark was written flat ("Kab3+"). The higher run, made only of digits and signs and touching the run
+// before it, is that run's own exponent or charge and is written in superscripts ("Kab³⁺"); the run below it
+// keeps the letters the PDF has. Every other mark is read as it was (P9-08's one-level mark, its citation, the
+// label with a point or slash in it, the label rule).
+describe.each([
+  ["without the space run", chain],
+  ["with the space run", chainSpaced],
+] as const)("a run raised again above a raised run is that run's exponent or charge, %s (P9-37)", (_name, build) => {
+  const read = (parts: [string, Partial<PdfTextItem>?][]) => linesOfPage({ page: 1, items: build(parts) }).map((l) => l.text);
+  /** The label, raised 3.9pt above the baseline at two thirds the size; its charge, raised again to 7.25pt, smaller. */
+  const label = { height: 6.7, y: 503.9 };
+  const again = { height: 4.5, y: 507.25 };
+
+  it("writes the charge in superscripts and keeps the letters of the run below it", () => {
+    expect(read([["the value of K"], ["ab", label], ["3+", again], [" was found"]])).toEqual(["the value of Kab³⁺ was found"]);
+    expect(read([["the value of K"], ["ab", label], ["−2", again], [" was found"]])).toEqual(["the value of Kab⁻² was found"]);
+    expect(read([["the value of K"], ["ab", label], ["-1", again], [" was found"]])).toEqual(["the value of Kab⁻¹ was found"]);
+  });
+
+  it("writes it again each time the line does, and a sign and its digits stored as two runs on the higher level are one charge", () => {
+    expect(read([["K"], ["ab", label], ["3+", again], [" and K"], ["ab", label], ["3+", again], [" alike"]])).toEqual(["Kab³⁺ and Kab³⁺ alike"]);
+    expect(read([["the value of K"], ["ab", label], ["−", again], ["1", again], [" was found"]])).toEqual(["the value of Kab⁻¹ was found"]);
+  });
+
+  it("leaves a second-level run that is not that run's exponent as the PDF has it", () => {
+    // a letter in it
+    expect(read([["the value of K"], ["ab", label], ["c3", again], [" was found"]])).toEqual(["the value of Kabc3 was found"]);
+    // a point in it
+    expect(read([["the value of K"], ["ab", label], ["2.5", again], [" was found"]])).toEqual(["the value of Kab2.5 was found"]);
+    // at the first run's own height: one mark, written flat
+    expect(read([["the value of K"], ["ab", label], ["3+", label], [" was found"]])).toEqual(["the value of Kab3+ was found"]);
+    // not above it by more than the rise a script needs to be one (1pt)
+    expect(read([["the value of K"], ["ab", { height: 6.7, y: 504 }], ["3+", { height: 4.5, y: 505 }], [" was found"]])).toEqual(["the value of Kab3+ was found"]);
+    // larger than the run below it
+    expect(read([["the value of K"], ["ab", { height: 6, y: 503.9 }], ["3+", { height: 6.7, y: 507.25 }], [" was found"]])).toEqual(["the value of Kab3+ was found"]);
+  });
+
+  it("leaves a one-level mark as P9-08 wrote it: a charge, an exponent, a citation after a word", () => {
+    expect(read([["the ion Ni"], ["2+", sup()], [" binds the film"]])).toEqual(["the ion Ni²⁺ binds the film"]);
+    expect(read([["a diffusivity in cm"], ["2", sup()], [" per second"]])).toEqual(["a diffusivity in cm² per second"]);
+    expect(read([["Quillwort cathode degradation"], ["17", sup()], [" is slow in cells."]])).toEqual(["Quillwort cathode degradation is slow in cells."]);
+    expect(read([["the label f"], ["0−4 μm", sup()], [" was set"]])).toEqual(["the label f0−4 μm was set"]);
+    expect(read([["a toughness of 2.1 MPam"], ["1/2", sup()], [" was seen"]])).toEqual(["a toughness of 2.1 MPam1/2 was seen"]);
+  });
+
+  it("leaves a mark with nothing before it to stand on as it was: a label raised at the head of a line", () => {
+    expect(read([["ab", label], ["3+", again], [" was found"]])).toEqual(["ab3+ was found"]);
+  });
+});
+
+describe("a run raised again above a raised run, as the PDF stores a line (P9-37)", () => {
+  const label = { height: 6.7, y: 503.9 };
+  const again = { height: 4.5, y: 507.25 };
+
+  it("follows its run with no space, and the text after it with none: the line goes straight on at the baseline", () => {
+    const read = (parts: [string, Partial<PdfTextItem>?][]) => linesOfPage({ page: 1, items: chain(parts) }).map((l) => l.text);
+    expect(read([["the value of K"], ["ab", label], ["3+", again], ["(1 K) was found"]])).toEqual(["the value of Kab³⁺(1 K) was found"]);
+    expect(read([["K"], ["ab", label], ["3+", again], ["(1 K) and K"], ["ab", label], ["3+", again], ["(2 K) alike"]])).toEqual([
+      "Kab³⁺(1 K) and Kab³⁺(2 K) alike",
+    ]);
+  });
+
+  it("starts inside the run before it, as the PDF's own width of a raised word can overrun", () => {
+    // The raised word's stored width reaches past the start of the charge on the page: a negative gap still touches.
+    const [k, ab] = chain([["the value of K"], ["ab", label]]);
+    const items = [k, ab, item("3+", { ...again, x: ab.x + ab.width - 3, width: 4.6 }), item("(1 K) was found", { x: ab.x + ab.width + 1.6 })];
+    expect(linesOfPage({ page: 1, items }).map((l) => l.text)).toEqual(["the value of Kab³⁺(1 K) was found"]);
+  });
+
+  it("does not take a run set apart from the one below it: a space's width away, it is a word of its own", () => {
+    const [k, ab] = chain([["the value of K"], ["ab", label]]);
+    const items = [k, ab, item("3+", { ...again, x: ab.x + ab.width + 3, width: 4.6 }), item(" was found", { x: ab.x + ab.width + 8 })];
+    expect(linesOfPage({ page: 1, items }).map((l) => l.text)).toEqual(["the value of Kab 3+ was found"]);
+  });
+
+  it("reaches the paragraph the section is made of", () => {
+    const prose = (y: number) => item("Recurrent neural networks have long been established in sequence modelling.", { y });
+    const page: PdfPageText = {
+      page: 1,
+      items: [
+        item("A Paper About Sequence Models", { height: 17, y: 760 }),
+        item("1 Introduction", { y: 740 }),
+        ...[726, 714, 702].map(prose),
+        ...chain([["The value of K"], ["ab", { ...label, y: 690 + 3.9 }], ["3+", { ...again, y: 690 + 7.25 }], ["(1 K) was held until the film was whole"]], { y: 690 }),
+        ...[678, 666].map(prose),
+      ],
+    };
+    const text = (buildOutline([page]).sections ?? []).map((s) => s.text).join(" ");
+    expect(text).toContain("The value of Kab³⁺(1 K) was held until the film was whole");
+    expect(text).not.toContain("Kab3+");
+  });
+});
+
 // ── P7-18 (§1h.39 b, c): the end matter after the argument, and the subsections' buckets ────────────
 //
 // The owner's paper (a 19-page, two-column journal article) ends its argument at 4.5 and then prints
