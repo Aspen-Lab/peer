@@ -31,10 +31,17 @@ describe("the lead plate is not the report's to change (P9-55)", () => {
   });
 
   it("is held, drawn and captioned from the figure route's answer alone", () => {
-    expect(from("const leadPending =", ";")).not.toContain("boundFigure");
-    expect(from("const hasPlate =", ";")).not.toContain("boundFigure");
-    expect(from("const caption = ", ");")).not.toContain("boundFigure");
-    expect(from("const plateIsFigure =", ";")).not.toContain("boundFigure");
+    // None of the lines that decide the plate's slot, picture and caption reads the report (or a figure of its).
+    const readsReport = /\b(boundFigure|report)\b/;
+    for (const line of [
+      from("const plateImage =", ";"),
+      from("const caption = ", ");"),
+      from("const leadPending =", ";"),
+      from("const hasPlate =", ";"),
+      from("const plateIsFigure =", ";"),
+    ]) {
+      expect(line.replace(/\/\/.*$/gm, "")).not.toMatch(readsReport);
+    }
   });
 
   it("has no report figure of its own to hand the plate: the report's figures are drawn by its sections", () => {
