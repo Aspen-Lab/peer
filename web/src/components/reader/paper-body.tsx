@@ -243,7 +243,12 @@ export function markedClass(base: string, mark: SectionMark | null, extra?: stri
 
 /** The longest passage a selection may be (characters, whitespace collapsed). */
 export const MAX_SELECTION_CHARS = 1200;
-/** How long a selection holds still before it is read — a drag is not a selection. */
+/**
+ * How long a selection holds still before it is read — for a selection made
+ * without a press of the primary pointer (shift + arrows, touch handles, a
+ * script). A selection made by a drag with the mouse or a pen is read when the
+ * button comes up, however long the reader holds still before that (P9-18).
+ */
 export const SELECTION_DEBOUNCE_MS = 150;
 
 const PARAGRAPH_ANCHOR = /^paper-section-(\d+)-p(\d+)$/;
@@ -404,9 +409,21 @@ export function readSelection(selection: SelectionLike | null): ExplainSelection
 }
 
 /**
- * Report the reader's selection to `onSelect` — after it has held still for
- * `SELECTION_DEBOUNCE_MS` — and `null` whenever there is none. Listens only
- * while there is somewhere to report to. Adds nothing to the page's markup.
+ * Report the reader's selection to `onSelect`, and `null` whenever there is
+ * none — once the reader has let go of it (P9-18, BACKLOG-45).
+ *
+ * A selection is offered when the primary pointer is up: while the mouse or pen
+ * button is down a drag is not finished, however long the reader holds still
+ * to look at the words, so `selectionchange` arms nothing then and a press ends
+ * the wait it found. The release (or the browser taking the pointer away, or
+ * the window losing focus with the button down, when no release will come)
+ * reads at once — the drag's last `selectionchange` came before it, so nothing
+ * else would schedule the read — and so does a click that collapses a
+ * selection, which reports `null` the same way. A selection made without that
+ * press (shift + arrows, touch handles, which fire no pointer events, or a
+ * script) keeps the wait: it is read after `SELECTION_DEBOUNCE_MS` of stillness.
+ * Listens only while there is somewhere to report to, and removes every
+ * listener it added. Adds nothing to the page's markup.
  */
 function useSelectionListener(onSelect: ((selection: ExplainSelection | null) => void) | undefined): void {
   const latest = useRef(onSelect);
@@ -417,13 +434,39 @@ function useSelectionListener(onSelect: ((selection: ExplainSelection | null) =>
   useEffect(() => {
     if (!listening) return;
     let timer: number | undefined;
-    const onChange = () => {
+    /** The primary button (mouse or pen) is held down on the page. */
+    let down = false;
+    const arm = (delay: number) => {
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => latest.current?.(readSelection(window.getSelection() as unknown as SelectionLike | null)), SELECTION_DEBOUNCE_MS);
+      timer = window.setTimeout(() => latest.current?.(readSelection(window.getSelection() as unknown as SelectionLike | null)), delay);
     };
+    const onChange = () => {
+      if (!down) arm(SELECTION_DEBOUNCE_MS);
+    };
+    const onPress = (event: PointerEvent) => {
+      // A touch selection is made with handles that fire no pointer events, and a
+      // secondary button or a second pointer does not select: those keep the wait.
+      if (!event.isPrimary || event.button !== 0 || event.pointerType === "touch") return;
+      down = true;
+      window.clearTimeout(timer);
+    };
+    const onRelease = () => {
+      if (!down) return;
+      down = false;
+      arm(0);
+    };
+    // The capture phase, so a handler that stops a pointer event's propagation cannot hide it.
     document.addEventListener("selectionchange", onChange);
+    document.addEventListener("pointerdown", onPress, true);
+    document.addEventListener("pointerup", onRelease, true);
+    document.addEventListener("pointercancel", onRelease, true);
+    window.addEventListener("blur", onRelease);
     return () => {
       document.removeEventListener("selectionchange", onChange);
+      document.removeEventListener("pointerdown", onPress, true);
+      document.removeEventListener("pointerup", onRelease, true);
+      document.removeEventListener("pointercancel", onRelease, true);
+      window.removeEventListener("blur", onRelease);
       window.clearTimeout(timer);
     };
   }, [listening]);
