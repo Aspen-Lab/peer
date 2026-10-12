@@ -10,20 +10,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // No DOM in this project's Vitest: the bar is rendered to markup (the pixels are measured in a browser, in the checkpoint), and the
 // cell's handlers are read off its element.
 
+// The bar reads the router and the feed store. A server render reads a zustand store's INITIAL state (an empty briefing, no "3 of 10"),
+// so the store is stood in for here: the briefing the rail counts in is the one the test sets.
 let pathname = "/papers/p3";
+let briefing: Paper[] = [];
 vi.mock("next/navigation", () => ({
   usePathname: () => pathname,
   useRouter: () => ({ push: vi.fn(), back: vi.fn() }),
 }));
+vi.mock("@/store/feed", () => ({
+  useFeedStore: (select: (state: { papers: Paper[]; savedPapers: Paper[] }) => unknown) => select({ papers: briefing, savedPapers: [] }),
+}));
 
 import { EXPLAIN } from "@/components/reader/copy";
 import { registerReaderActions } from "@/lib/reader/reader-keys";
-// @ts-expect-error red on the head (P9-41): the module does not exist yet; the commit that adds it removes this line
 import { setExplainOffer } from "@/lib/reader/explain-offer";
-import { useFeedStore } from "@/store/feed";
 import type { Paper } from "@/types";
 import { ThumbBar } from "./thumb-bar";
-// @ts-expect-error red on the head (P9-41): the cell is not exported yet; the commit that adds it removes this line
 import { ExplainCell } from "./thumb-bar";
 
 const paper = (id: string) => ({ id, title: `Paper ${id}` }) as unknown as Paper;
@@ -38,12 +41,12 @@ const cell = (html: string) => open(html, "button", "data-explain-ask");
 
 beforeEach(() => {
   pathname = "/papers/p3";
-  useFeedStore.setState({ papers: ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9", "p10"].map(paper) });
+  briefing = ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9", "p10"].map(paper);
   setExplainOffer(false);
 });
 afterEach(() => {
   setExplainOffer(false);
-  useFeedStore.setState({ papers: [] });
+  briefing = [];
 });
 
 describe("the thumb bar's rail — the Explain control stands in it only while a settled selection is on offer (P9-41, §1h.66)", () => {

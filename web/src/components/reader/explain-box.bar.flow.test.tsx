@@ -17,7 +17,6 @@ vi.mock("react", async (importOriginal) => {
 import { useEffect, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 import { hookRuntime } from "@/test-support/hook-runtime";
-// @ts-expect-error red on the head (P9-41): the module does not exist yet; the commit that adds it removes this line
 import { explainOffered, setExplainOffer } from "@/lib/reader/explain-offer";
 import type { ExplainAnswer } from "@/lib/papers/explain";
 import type { PaperReading } from "@/lib/papers/reading";

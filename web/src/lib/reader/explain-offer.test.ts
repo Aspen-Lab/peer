@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-// @ts-expect-error red on the head (P9-41): the module does not exist yet; the commit that adds it removes this line
 import { explainOffered, setExplainOffer, subscribeExplainOffer } from "./explain-offer";
 
 // P9-41 (ruling §1h.66): below 768 px the "Explain this" control is a cell of the thumb bar (`components/shell/thumb-bar.tsx`),

@@ -6,6 +6,13 @@
 // bar is the rail: ← Briefing · 3 of 10 · Next → — the move-on-without-
 // judging the page had no room for, and the way back, both under the thumb.
 //
+// P9-41 (ruling §1h.66): while a settled selection in the paper's body has an
+// "Explain this?" control on offer (the explain box says so through
+// `explain-offer.ts`), the rail's centre cell gives its place to that control —
+// a 44px target in thumb reach that covers none of the paper's words (a pill
+// above the bar covered 1,790–2,473 px² of them) — and "3 of 10" waits; ←
+// Briefing and Next → keep their columns. The cell goes with the selection.
+//
 // The row of 30px text tabs it replaces sat at the top of every page,
 // including the reading page, under the 44px target the page enforces for
 // its own buttons. Gestures stay in the content (the card and the plate are
@@ -18,7 +25,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useFeedStore } from "@/store/feed";
 import { RouteGlyph } from "@/components/shell/icons";
 import { BackToFeedLink } from "@/components/navigation/back-to-feed-link";
-import { RAIL } from "@/components/reader/copy";
+import { EXPLAIN, RAIL } from "@/components/reader/copy";
+import { useExplainOffer } from "@/lib/reader/explain-offer";
 import { paperNav } from "@/lib/reader/paper-nav";
 import { readerActions } from "@/lib/reader/reader-keys";
 import {
@@ -114,15 +122,20 @@ function Rail({
 }) {
   const nav = paperNav(ids, id);
   const positioned = railHasPosition(nav);
+  const explaining = useExplainOffer();
   return (
     <div className="grid grid-cols-[1fr_auto_1fr] items-center h-14 px-3">
       <BackToFeedLink onBack={onBack} className={`${CELL_CLASS} justify-self-start text-text`}>
         {RAIL.back}
       </BackToFeedLink>
-      {positioned && (
-        <span className="text-body-sm text-text-muted tabular-nums">
-          {RAIL.position(nav.index, nav.total)}
-        </span>
+      {explaining ? (
+        <ExplainCell />
+      ) : (
+        positioned && (
+          <span className="text-body-sm text-text-muted tabular-nums">
+            {RAIL.position(nav.index, nav.total)}
+          </span>
+        )
       )}
       {positioned && (
         // Dimmed, not gone, at the last paper: the Next row in the content
@@ -140,3 +153,23 @@ function Rail({
   );
 }
 
+/**
+ * P9-41 (ruling §1h.66): the "Explain this?" control as the rail's centre cell, while a settled selection has one on offer. The pill's
+ * words (its accessible name) and the pill's action — the page's own `explain`, what the `e` key calls: the explain window opens for
+ * the selection and the box, which then has nothing on offer, takes the cell away. 44px tall (`min-h-11`, bare: the bar is a touch
+ * surface by its place), in the 56px rail's middle, where "3 of 10" stood. The mouse-down is cancelled so the press does not take the
+ * selection with it — the selection is what is explained.
+ */
+export function ExplainCell() {
+  return (
+    <button
+      type="button"
+      data-explain-ask=""
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={() => readerActions()?.explain?.()}
+      className="col-start-2 justify-self-center inline-flex min-h-11 items-center rounded-full border border-border-strong bg-surface px-4 font-mono text-caption text-heading transition-colors hover:bg-surface-hover"
+    >
+      {EXPLAIN.ask}
+    </button>
+  );
+}
