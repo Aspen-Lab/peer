@@ -15,7 +15,7 @@ import {
 } from "./pool-cache";
 
 const base: PoolCacheKeyInput = {
-  surface: "events",
+  surface: "papers",
   requiredTopics: ["solid-state batteries", "electrochemistry"],
   exploreTopics: ["cathode materials"],
   careerStage: "PhD Year 4",
@@ -23,7 +23,7 @@ const base: PoolCacheKeyInput = {
   now: new Date(2026, 6, 27, 12, 0, 0),
 };
 
-describe("daily opportunity pool cache key", () => {
+describe("daily pool cache key", () => {
   it("is deterministic, order-insensitive, and file-safe", () => {
     const first = derivePoolCacheKey(base);
     const reordered = derivePoolCacheKey({
@@ -34,40 +34,25 @@ describe("daily opportunity pool cache key", () => {
     });
 
     expect(reordered).toBe(first);
-    // ABC-freemium 1-17 · R-POOL-1 — REWRITTEN, NOT DELETED. The prefix moves
-    // from `v5` and a local DATE to `v6` and a local ISO WEEK on this surface.
-    // 2026-07-27 is a Monday, so it opens 2026-W31.
-    expect(first).toMatch(/^peer-pool-v6-events-2026-W31-[a-f0-9]{32}$/);
+    // RE-AIMED (P9-35, §1h.60), NOT DELETED: this case was written for the
+    // events surface's weekly key (`peer-pool-v6-events-2026-W31-…`). That
+    // surface is stopped; the property (a deterministic, order-insensitive,
+    // file-safe key) is asserted on the papers key, which is daily.
+    expect(first).toMatch(new RegExp(`^${PAPER_POOL_KEY_PREFIX}2026-07-27-[a-f0-9]{32}$`));
   });
 
-  it("keeps papers on a DAILY key while jobs and events go weekly", () => {
-    // ABC-freemium 1-17 — the case that catches an over-broad edit. D3 keeps
-    // papers daily because they run on free academic sources.
-    const monday = new Date(2026, 6, 27, 12, 0, 0);
-    expect(
-      derivePoolCacheKey({ ...base, surface: "papers", now: monday }),
-    ).toMatch(new RegExp(`^${PAPER_POOL_KEY_PREFIX}2026-07-27-[a-f0-9]{32}$`));
-    expect(derivePoolCacheKey({ ...base, surface: "jobs", now: monday })).toMatch(
-      /^peer-pool-v6-jobs-2026-W31-[a-f0-9]{32}$/,
-    );
-  });
-
-  it("gives two days in the same ISO week the SAME jobs and events key", () => {
-    // The whole point of the item: a rebuild once a week, not once a night.
+  // RE-AIMED (P9-35, §1h.60), NOT DELETED: was "keeps papers on a DAILY key while
+  // jobs and events go weekly" and "gives two days in the same ISO week the SAME
+  // jobs and events key". The weekly half is deleted with the weekly fork; the
+  // papers half is what is left of both, and it is the half that must not move.
+  it("keeps papers on a DAILY key: two days in one ISO week are two keys", () => {
     const monday = new Date(2026, 6, 27, 12, 0, 0);
     const thursday = new Date(2026, 6, 30, 12, 0, 0);
-
-    for (const surface of ["events", "jobs"] as const) {
-      expect(derivePoolCacheKey({ ...base, surface, now: thursday })).toBe(
-        derivePoolCacheKey({ ...base, surface, now: monday }),
-      );
-    }
-    // ...and papers still change nightly, which is what makes the assertion
-    // above a statement about the fork rather than about the whole function.
-    expect(
-      derivePoolCacheKey({ ...base, surface: "papers", now: thursday }),
-    ).not.toBe(
-      derivePoolCacheKey({ ...base, surface: "papers", now: monday }),
+    expect(derivePoolCacheKey({ ...base, now: monday })).toMatch(
+      new RegExp(`^${PAPER_POOL_KEY_PREFIX}2026-07-27-[a-f0-9]{32}$`),
+    );
+    expect(derivePoolCacheKey({ ...base, now: thursday })).not.toBe(
+      derivePoolCacheKey({ ...base, now: monday }),
     );
   });
 
@@ -97,11 +82,10 @@ describe("daily opportunity pool cache key", () => {
     // via SCORE-ZERO, before that v11 via ABBREV-RECALL, before that v10 via
     // LCO-FORMULA, before that v9 via SENSE-CONTEXT round 2, before that v8
     // via SENSE-CONTEXT round 1, before that v7 via REQUIRED-GATE §1ao.9; see
-    // the papers-specific PAPER_POOL_KEY_PREFIX assertion above) while events
-    // and jobs stay on CACHE_KEY_VERSION 6.
-    for (const surface of ["papers", "events", "jobs"] as const) {
-      expect(derivePoolCacheKey({ ...base, surface })).not.toMatch(/^peer-pool-v5-/);
-    }
+    // the papers-specific PAPER_POOL_KEY_PREFIX assertion above). (P9-35: it
+    // used to loop over the events and jobs surfaces too, which stayed on a
+    // v6 weekly key; they are stopped.)
+    expect(derivePoolCacheKey(base)).not.toMatch(/^peer-pool-v5-/);
   });
 
   // T2-EXTRACTOR (ABC-JEV-INTEGRATION.md §1bv) — REWRITTEN, NOT DELETED (was
@@ -118,10 +102,11 @@ describe("daily opportunity pool cache key", () => {
     expect(derivePoolCacheKey({ ...base, surface: "papers" })).toMatch(/^peer-pool-v23-papers-/);
   });
 
-  it("ignores aiTier on surfaces that never send it", () => {
-    // `aiTier` exists for the papers pool, whose Tier-2 entry carries an LLM
-    // ranking a Tier-0 entry does not. Events and jobs pass it as undefined,
-    // and an undefined field must not perturb their keys.
+  it("an undefined aiTier is the same key as an absent one", () => {
+    // RE-AIMED (P9-35), NOT DELETED: was "ignores aiTier on surfaces that never
+    // send it" (events and jobs). `aiTier` exists for the papers pool, whose
+    // Tier-2 entry carries an LLM ranking a Tier-0 entry does not; a caller that
+    // sends none passes undefined, and an undefined field must not perturb the key.
     expect(derivePoolCacheKey({ ...base, aiTier: undefined })).toBe(
       derivePoolCacheKey(base),
     );
@@ -138,7 +123,7 @@ describe("daily opportunity pool cache key", () => {
     expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it("changes for every profile dimension, surface, and period", () => {
+  it("changes for every profile dimension and period", () => {
     const keys = [
       derivePoolCacheKey(base),
       derivePoolCacheKey({
@@ -159,13 +144,10 @@ describe("daily opportunity pool cache key", () => {
       }),
       derivePoolCacheKey({
         ...base,
-        surface: "jobs",
-      }),
-      derivePoolCacheKey({
-        ...base,
-        // ABC-freemium 1-17 — was "the next day", which no longer moves an
-        // events key. The period is a week now, so the case steps a week.
-        now: new Date(2026, 7, 3, 0, 1, 0),
+        // RE-AIMED (P9-35): this case stepped a WEEK, because the events key it
+        // was written for was weekly. The papers key is daily, so the next day
+        // moves it. (The `surface: "jobs"` entry of this list went with the surface.)
+        now: new Date(2026, 6, 28, 12, 0, 0),
       }),
     ];
 
@@ -199,6 +181,66 @@ describe("daily opportunity pool cache key", () => {
   });
 });
 
+// P9-35 · §1h.60 — the job and event halves of this file were removed (their
+// pool types, their guards, the weekly key). **The paper key must not move:** a
+// changed key reads as a cold cache for every reader, a whole daily pool
+// rebuilt at once. The values below were computed on the code as it stood
+// BEFORE that removal, from inputs that set every field of the hashed
+// signature (the thin cases at the "jevScreening" block below pin the rest,
+// and stay as they were).
+describe("pool cache key — the paper signature is byte-identical after the job and event surfaces went (P9-35)", () => {
+  const full: PoolCacheKeyInput = {
+    surface: "papers",
+    requiredTopics: ["solid-state battery", "LCO"],
+    exploreTopics: ["catalysis"],
+    careerStage: "Postdoc",
+    locationPreferences: ["Chicago", "online"],
+    aiTier: 1,
+    paperScopeIdentity: "scope-identity-fixture",
+    paperOwnerId: "owner-fixture",
+    uploadInterests: ["solid electrolyte"],
+    now: new Date(2026, 6, 29, 9, 0),
+  };
+
+  it("pins the key of an input that sets every field of the signature", () => {
+    expect(derivePoolCacheKey(full)).toBe("peer-pool-v23-papers-2026-07-29-5e33e1464ffa6206cf0fe715363adbf6");
+  });
+
+  it("pins the key of the same input with a Jev key", () => {
+    expect(derivePoolCacheKey({ ...full, jevScreening: true })).toBe("peer-pool-v23-papers-2026-07-29-c5c87e8de9fa9371b4271ee6485199b1");
+  });
+
+  it("pins the key of the thinnest input (topics and a day only)", () => {
+    expect(
+      derivePoolCacheKey({
+        surface: "papers",
+        requiredTopics: ["solid-state battery"],
+        now: new Date(2026, 6, 29, 9, 0),
+      }),
+    ).toBe("peer-pool-v23-papers-2026-07-29-90822c596a8e97056248017ab667844c");
+  });
+
+  it("keeps the career stage and the locations in the hash (they are empty for a paper reader, but they are in the bytes)", () => {
+    expect(derivePoolCacheKey({ ...full, careerStage: undefined })).not.toBe(derivePoolCacheKey(full));
+    expect(derivePoolCacheKey({ ...full, locationPreferences: [] })).not.toBe(derivePoolCacheKey(full));
+  });
+});
+
+describe("isCachedPool — only a paper pool is a pool (P9-35)", () => {
+  const stamp = { generatedAt: "2026-07-29T14:00:00.000Z", localDate: "2026-07-29" };
+
+  it.each(["events", "jobs"])("rejects a stored %s pool of an older build", (surface) => {
+    expect(isCachedPool({ ...stamp, surface, items: [], facetCounts: {} })).toBe(false);
+    expect(
+      isCachedPool({ ...stamp, surface, items: [], facetCounts: { location: {}, month: {}, format: {} } }),
+    ).toBe(false);
+  });
+
+  it("still accepts a paper pool", () => {
+    expect(isCachedPool({ ...stamp, surface: "papers", items: [], aiOrder: [], aiReasons: {} })).toBe(true);
+  });
+});
+
 // Compile-time contract guard: adapters may vary, but every implementation
 // stores the complete discriminated CachedPool payload.
 class TestCache implements PoolCache {
@@ -222,8 +264,7 @@ void TestCache;
 // generic mechanism `getOrBuildCachedPool` now offers: an optional
 // `shouldPersist` gate on the freshly-built pool, checked before (and only
 // before) writing it to the cache. Omitting the parameter must behave
-// exactly as before, since `events/pipeline.ts` and `jobs/pipeline.ts` both
-// call this function and never pass it.
+// exactly as before, since a caller that never passes it must be unaffected.
 describe("getOrBuildCachedPool — optional shouldPersist gate (P2-S2)", () => {
   function fakePaperPool(): CachedPaperPool {
     return {
@@ -295,9 +336,9 @@ describe("getOrBuildCachedPool — optional shouldPersist gate (P2-S2)", () => {
 // `WeakMap<PoolCache, Map<string, Promise<CachedPool>>>` keyed by the
 // CALLER's `cache` object, so two distinct `PoolCache` instances working
 // the exact same pool key never coalesced. That was harmless for the
-// anonymous/events/jobs surfaces (they all share one process-wide cache
-// singleton — `ephemeralPaperPoolCache` / `getDefaultOpportunityPoolCache()`
-// — so there was only ever one object to key on), but silently broken for
+// anonymous surface (it shares one process-wide cache singleton —
+// `ephemeralPaperPoolCache` — so there was only ever one object to key
+// on), but silently broken for
 // signed-in papers: `feed/pipeline.ts`'s `runFeedPipeline` constructs a
 // brand-new `PrivatePaperPoolCache` on every request that omits
 // `options.cache`, so two truly concurrent requests for the same owner —
@@ -579,16 +620,20 @@ describe("CachedPaperPool.jev — optional record of what Jev did (a reader's Je
  * operator's key.
  */
 describe("getOrBuildCachedPool — forced rebuild (R-POOL-2)", () => {
-  const KEY = "peer-pool-v6-jobs-2026-W31-deadbeef";
+  // RE-AIMED (P9-35), NOT DELETED: the fixtures were a jobs pool under a weekly
+  // jobs key. The cases are about the cache path (read, write, single flight),
+  // not about any surface, so they run on a paper pool under a paper key.
+  const KEY = `${PAPER_POOL_KEY_PREFIX}2026-07-27-deadbeef`;
 
   function pool(marker: string): CachedPool {
     return {
-      surface: "jobs",
+      surface: "papers",
       items: [],
-      facetCounts: {},
+      aiOrder: [],
+      aiReasons: {},
       generatedAt: marker,
       localDate: "2026-07-27",
-    } as unknown as CachedPool;
+    };
   }
 
   // Every pool is acceptable here — the cases are about the cache path, not

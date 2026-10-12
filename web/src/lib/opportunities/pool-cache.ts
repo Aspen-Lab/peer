@@ -1,41 +1,32 @@
 import { createHash } from "node:crypto";
-import type {
-  CareerStage,
-  OpportunityFacetCounts,
-} from "@/types";
-import type { ScoredEventItem } from "@/lib/events/types";
-import type { ScoredJobItem } from "@/lib/jobs/types";
+import type { CareerStage } from "@/types";
 import type { ScoredItem } from "@/lib/scoring/types";
 import type { SourceId } from "@/lib/sources/types";
-import { localCalendarDate, localIsoWeek } from "@/lib/local-calendar-date";
+import { localCalendarDate } from "@/lib/local-calendar-date";
 import { canonicalize } from "@/lib/scoring/term-expand";
 
-export type OpportunitySurface = "papers" | "events" | "jobs";
-export type { OpportunityFacetCounts, OpportunityFormat } from "@/types";
-export { localCalendarDate, localIsoWeek } from "@/lib/local-calendar-date";
+export { localCalendarDate } from "@/lib/local-calendar-date";
 
 interface CachedPoolBase {
   generatedAt: string;
   localDate: string;
 }
 
-interface CachedOpportunityPoolBase extends CachedPoolBase {
-  facetCounts: OpportunityFacetCounts;
-}
-
 /**
- * The paper surface's daily pool — the twin of `CachedEventPool` /
- * `CachedJobPool`, and it replaced a far thinner record that held ONLY the
- * web-search discovery side-channel's query boosts. That record cached the
- * cheap half of a paper build and left the expensive half — every academic
+ * The paper surface's daily pool. It replaced a far thinner record that held
+ * ONLY the web-search discovery side-channel's query boosts. That record cached
+ * the cheap half of a paper build and left the expensive half — every academic
  * source fetch and, at Tier 2, an LLM rerank — to re-run on every request, so
  * a page reload rebuilt the feed and re-spent the tokens. The side-channel
  * itself is gone; see `buildPaperPool` for why nothing was lost with it.
  *
- * Two fields have no counterpart on the other two surfaces:
+ * It is the only pool there is: the pools of the stopped events and jobs feeds
+ * (§1h.60) have no type, no guard and no key here any more.
  *
- * - `items` are scored WITHOUT the preference ledger, exactly as the jobs pool
- *   is, so one day's pool can be re-ranked locally when likes/dismissals move.
+ * Two fields are particular to it:
+ *
+ * - `items` are scored WITHOUT the preference ledger, so one day's pool can be
+ *   re-ranked locally when likes/dismissals move.
  * - `aiOrder` / `aiReasons` carry Tier 2's output forward. Re-scoring on a hit
  *   would otherwise discard the one part of the build that costs money, which
  *   would defeat the point of caching at all.
@@ -140,24 +131,11 @@ export interface CachedPaperPool extends CachedPoolBase {
   jev?: { status: "applied" | "partial" | "unavailable" | "rejected"; screened: number; of: number };
 }
 
-export interface CachedEventPool extends CachedOpportunityPoolBase {
-  surface: "events";
-  items: ScoredEventItem[];
-}
-
-export interface CachedJobPool extends CachedOpportunityPoolBase {
-  surface: "jobs";
-  items: ScoredJobItem[];
-}
-
 /**
  * Enriched daily candidates with a neutral baseline score. Request-time
  * preference scoring may reorder them locally without rebuilding this pool.
  */
-export type CachedPool =
-  | CachedPaperPool
-  | CachedEventPool
-  | CachedJobPool;
+export type CachedPool = CachedPaperPool;
 
 export interface PoolCache {
   get(key: string): Promise<CachedPool | null>;
@@ -179,44 +157,32 @@ export function isCachedPool(value: unknown): value is CachedPool {
   if (typeof value.generatedAt !== "string") return false;
   if (typeof value.localDate !== "string") return false;
 
-  if (value.surface === "papers") {
-    return (
-      Array.isArray(value.items) &&
-      Array.isArray(value.aiOrder) &&
-      value.aiOrder.every((id) => typeof id === "string") &&
-      isRecord(value.aiReasons)
-    );
-  }
-
-  if (value.surface !== "events" && value.surface !== "jobs") return false;
-  if (!Array.isArray(value.items)) return false;
-  return isRecord(value.facetCounts);
+  // A pool that an older build stored for the stopped events or jobs feeds is
+  // not a pool: only the paper surface has one.
+  if (value.surface !== "papers") return false;
+  return (
+    Array.isArray(value.items) &&
+    Array.isArray(value.aiOrder) &&
+    value.aiOrder.every((id) => typeof id === "string") &&
+    isRecord(value.aiReasons)
+  );
 }
 
 export function isCachedPaperPool(pool: CachedPool): pool is CachedPaperPool {
   return pool.surface === "papers";
 }
 
-export function isCachedEventPool(pool: CachedPool): pool is CachedEventPool {
-  return pool.surface === "events";
-}
-
-export function isCachedJobPool(pool: CachedPool): pool is CachedJobPool {
-  return pool.surface === "jobs";
-}
-
 export interface PoolCacheKeyInput {
   uploadInterests?: string[];
-  surface: OpportunitySurface;
+  surface: "papers";
   requiredTopics: string[];
   exploreTopics?: string[];
   careerStage?: CareerStage;
   locationPreferences?: string[];
   /**
-   * Papers only. A Tier-2 pool carries an LLM ranking a Tier-0 pool does not,
-   * so the tier changes the payload rather than just the view of it. Left
-   * undefined by every other caller, which `JSON.stringify` omits — so the
-   * events and jobs keys keep the shape they had before this field existed.
+   * A Tier-2 pool carries an LLM ranking a Tier-0 pool does not, so the tier
+   * changes the payload rather than just the view of it. Left undefined by a
+   * caller that sends none, which `JSON.stringify` omits.
    */
   aiTier?: 0 | 1 | 2;
   /** A server-derived private paper intent identity; never supplied by HTTP. */
@@ -224,7 +190,7 @@ export interface PoolCacheKeyInput {
   /** Owner is a separate private boundary, not merely part of a hash. */
   paperOwnerId?: string;
   /**
-   * Papers only. True when the reader brought their own Jev key and this pool is
+   * True when the reader brought their own Jev key and this pool is
    * built with Jev's order in it, so it must not be the pool a reader without
    * the key shares (a key added at noon would otherwise keep serving the keyless
    * pool until tomorrow). Hashed ONLY when true, so every key that existed before
@@ -236,16 +202,12 @@ export interface PoolCacheKeyInput {
   now?: Date;
 }
 
-// Bump whenever the durable pool payload semantics change. v3 makes cached
-// scores preference-neutral so one daily pool can be safely re-ranked locally.
-// v4 turns the papers entry from a discovery-only record into a full daily
-// pool, so a v3 papers entry can no longer satisfy a v4 read. v5 drops the
-// deleted discovery side-channel's `queryBoosts`/`resultCount` from it. v6
-// moves the jobs and events period from a day to an ISO week (R-POOL-1); the
-// bump is **not optional**, because a v5 daily key and a v6 weekly key would
-// otherwise collide in the shared `opportunity_pools` table.
-const CACHE_KEY_VERSION = 6;
-// Papers stay on their own version number, bumped independently for P0-01
+// The papers pool's key version: bump whenever the durable pool payload
+// semantics change. (Version 6 was the jobs and events pools' weekly key; they
+// are stopped, §1h.60, and the rows they left in `opportunity_pools` have no
+// reader.) v3 made cached scores preference-neutral, v4 turned the papers entry
+// into a full daily pool and v5 dropped the deleted discovery side-channel's
+// fields from it. Bumped independently for P0-01
 // (owner/intent scoping joined the hashed signature — an old v5 papers-cache
 // row must never be read back as if it already had that scope). v7 —
 // ABC-JEV-INTEGRATION.md §1ao.9/REQUIRED-GATE
@@ -463,10 +425,7 @@ const CACHE_KEY_VERSION = 6;
 // 700 real items, guide §Q2: canonicalize() already turns the comma into
 // whitespace before T1 ever runs, so a genuine paper was always admitted via
 // the bare token regardless of T2). A v22 (or older) pool build never ran
-// the comma-form check, so it must never be served as if it does. These
-// bumps share their numbers with `CACHE_KEY_VERSION` above by coincidence,
-// not by a shared cause — see `derivePoolCacheKey` below for how each is
-// selected.
+// the comma-form check, so it must never be served as if it does.
 const PAPER_CACHE_KEY_VERSION = 23;
 /**
  * SINGLE SOURCE OF TRUTH for the literal key prefix a durable papers-pool
@@ -489,23 +448,16 @@ function normalizeSet(values: string[] | undefined): string[] {
 }
 
 export function derivePoolCacheKey(input: PoolCacheKeyInput): string {
-  // ABC-freemium 1-17 · R-POOL-1 · D3 — **jobs and events rebuild weekly;
-  // papers stay daily.** The function already knows the surface, so the fork
-  // lives here and no caller changes.
+  // The papers pool is daily (D3 kept it so: it runs on free academic sources).
+  // The jobs and events pools had a weekly fork here until they were stopped
+  // (§1h.60); the fork went with them and **the hashed signature below did not
+  // move** — `pool-cache.test.ts` pins keys computed before the removal, because
+  // a changed signature reads as a cold cache for every reader.
   //
   // The period appears TWICE below — inside the hashed signature and again as a
-  // plaintext segment of the returned key. A fix that changed only the
-  // signature would leave a daily string in the key and rebuild daily anyway,
-  // so both read the same `period`.
-  //
-  // A mid-week topic change is still a cache miss on the user's own key, because
-  // `requiredTopics`/`exploreTopics` remain in the signature. D3 says that in as
-  // many words ("that is their quota to spend") — intended, not a regression.
-  const period =
-    input.surface === "papers"
-      ? localCalendarDate(input.now)
-      : localIsoWeek(input.now);
-  const version = input.surface === "papers" ? PAPER_CACHE_KEY_VERSION : CACHE_KEY_VERSION;
+  // plaintext segment of the returned key — so both read the same `period`.
+  const period = localCalendarDate(input.now);
+  const version = PAPER_CACHE_KEY_VERSION;
   const signature = JSON.stringify({
     version,
     surface: input.surface,
@@ -532,9 +484,9 @@ export function derivePoolCacheKey(input: PoolCacheKeyInput): string {
 // B1 option (b). Used to be a `WeakMap<PoolCache, Map<string,
 // Promise<CachedPool>>>` keyed by the CALLER's `cache` object, so two
 // distinct `PoolCache` instances working the exact same key never
-// coalesced. That was invisible for the anonymous/events/jobs surfaces —
-// they all share one process-wide cache singleton
-// (`ephemeralPaperPoolCache` / `getDefaultOpportunityPoolCache()`), so
+// coalesced. That was invisible for the anonymous surface — it shares one
+// process-wide cache singleton (`ephemeralPaperPoolCache`; the events and jobs
+// surfaces had one too until §1h.60), so
 // there was only ever one object to key on — but silently broken for
 // signed-in papers: `feed/pipeline.ts`'s `runFeedPipeline` builds a
 // brand-new `PrivatePaperPoolCache` on every request that omits
@@ -578,8 +530,7 @@ const inFlightByKey = new Map<string, Promise<CachedPool>>();
  * "a pool where every source failed is not cached as a valid day." Checked
  * against the freshly built pool, before it would otherwise be written.
  * Optional and defaulting to "always persist" (today's exact behavior) so
- * every existing caller — `events/pipeline.ts`, `jobs/pipeline.ts`, and any
- * papers caller that omits it — is unaffected; only `feed/pipeline.ts`
+ * every caller that omits it is unaffected; only `feed/pipeline.ts`
  * passes one, to skip persisting a build where every attempted source
  * failed. The fresh pool is still RETURNED to this caller either way —
  * only persistence is gated, never the response.
