@@ -299,7 +299,9 @@ describe("buildReading", () => {
     // P8-04: 6 -> 7 — no field added; the sections and buckets a public
     // paper's reading is built from changed (P7-10 / P7-11 / P7-18 for PDFs,
     // P8-04 for HTML), so a reading cached under 6 is read again.
-    expect(reading.version).toBe(7);
+    // P9: 7 -> 8 — no field added; the PDF text and the cleaner changed
+    // (P9-08 / P9-09 / P9-10), so a reading cached under 7 is read again.
+    expect(reading.version).toBe(8);
     expect(reading.paperId).toBe("openalex:W7204479535");
     expect(reading.builtAt).toBe("2026-09-06T12:00:00.000Z");
     expect(reading.provenance).toEqual({

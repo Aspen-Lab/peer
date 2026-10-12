@@ -371,7 +371,7 @@ describe("GET /api/papers/[id]/reading — 9-14 (A9-13): the ?upload= supplement
     });
     mocks.getFullText.mockResolvedValue(zenodoFullText);
 
-    const res = await call("openalex:W7208807247", "?v=7&upload=upload:0000000000000007");
+    const res = await call("openalex:W7208807247", "?v=8&upload=upload:0000000000000007");
 
     expect(res.status).toBe(200);
     expect(mocks.getFullText).toHaveBeenCalledWith({ paperId: "upload:0000000000000007" });

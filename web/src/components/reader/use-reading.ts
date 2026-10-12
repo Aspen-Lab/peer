@@ -28,7 +28,7 @@ const TTL_MS = 24 * 60 * 60 * 1000;
  *  old full reading (P8-04). The version in the URL moves the cache's key with
  *  the bump, so an old body is never served to a newer client. The route
  *  ignores the parameter. */
-const READING_VERSION: PaperReading["version"] = 7;
+const READING_VERSION: PaperReading["version"] = 8;
 
 type ReadingCache = Record<string, { reading: PaperReading; ts: number }>;
 
