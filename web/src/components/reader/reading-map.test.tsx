@@ -448,18 +448,21 @@ describe("ReadingMapView — each row says its words (P9-51, F08)", () => {
   // monospace, which beside a heading squeezed it to a sliver. The row wraps: the heading keeps a floor
   // of room (a basis), the meta drops under it, right-aligned as it sat beside it, and may itself wrap
   // between two parts. (Pixels: the checkpoint's measurement.)
-  it("lets the row drop its meta under the heading rather than squeeze the heading: wrap on the row, a floor on the heading, the meta free to shrink", () => {
+  it("lets the row drop its meta under the heading rather than squeeze the heading: wrap on the heading-and-meta group, a floor on the heading, the meta free to shrink", () => {
     const html = renderWords();
-    const row = /<div[^>]*class="([^"]*)"[^>]*><span aria-hidden="true" class="w-3 shrink-0"><\/span><a href="#paper-section-2" class="([^"]*)">Problem Statement<\/a><span class="([^"]*)">/.exec(html);
+    const row =
+      /<div[^>]*class="([^"]*)"[^>]*><span aria-hidden="true" class="w-3 shrink-0"><\/span><div class="([^"]*)"><a href="#paper-section-2" class="([^"]*)">Problem Statement<\/a><span class="([^"]*)">/.exec(html);
 
-    expect(row, "the row, its heading link and its meta").not.toBeNull();
-    const [, rowClasses, headingClasses, metaClasses] = (row ?? []).map((c) => (c ?? "").split(/\s+/));
+    expect(row, "the row, the group of its heading link and its meta").not.toBeNull();
+    const [, rowClasses, groupClasses, headingClasses, metaClasses] = (row ?? []).map((c) => (c ?? "").split(/\s+/));
+    // The row stays one flex line (the fold toggle, then the group); the group is what wraps.
     expect(rowClasses).toContain("flex");
-    expect(rowClasses).toContain("flex-wrap");
+    expect(rowClasses).not.toContain("flex-wrap");
+    expect(groupClasses).toEqual(expect.arrayContaining(["flex", "flex-wrap", "min-w-0", "flex-1"]));
     // The heading is still the flexible part, with a floor of room before the meta drops under it.
     expect(headingClasses).toContain("min-w-0");
     expect(headingClasses.some((c) => /^flex-\[1_1_\d+(\.\d+)?rem\]$/.test(c))).toBe(true);
-    // The meta is no longer an unshrinkable run: it may shrink to the row and wrap between two parts, and
+    // The meta is no longer an unshrinkable run: it may shrink to the group and wrap between two parts, and
     // it stays at the right of the line (also when it is alone on a line).
     expect(metaClasses).not.toContain("shrink-0");
     expect(metaClasses).toContain("min-w-0");
@@ -497,6 +500,22 @@ describe("ReadingMapView — the map's toggles are touch targets (P9-51, N5)", (
 
     expect(toggles.map((m) => m[3]).sort()).toEqual(["+", "−"].sort());
     for (const [, name, classes] of toggles) expect(classes.split(/\s+/), name).toContain(TOUCH);
+  });
+
+  // The floor is on the fold toggle, which is the row's first item. With the heading and the meta in
+  // one group beside it, a row whose meta dropped under the heading is as tall as the floor (the toggle
+  // centred against the two lines), not the floor plus the meta line. With a mouse the row is as it was.
+  it("centres the row's toggle against its heading and meta where there is no hover, so the floor does not stack on the wrapped meta", () => {
+    const html = render({ openRows: [0] });
+    const row = /<div class="([^"]*)"><button\b[^>]*aria-expanded/.exec(html);
+    const rowClasses = (row?.[1] ?? "").split(/\s+/).filter(Boolean);
+
+    expect(row, "a row with a fold toggle").not.toBeNull();
+    expect(rowClasses).toContain("flex");
+    expect(rowClasses).toContain("items-baseline");
+    expect(rowClasses).toContain("[@media(hover:none)]:items-center");
+    // Behind the media query only: a bare items-center would move the mouse's rows.
+    expect(rowClasses).not.toContain("items-center");
   });
 
   it("leaves the mouse's boxes alone: the floor is behind hover:none, never a bare min-h-11", () => {

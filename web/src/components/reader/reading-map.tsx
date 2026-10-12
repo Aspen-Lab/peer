@@ -89,6 +89,9 @@ function roleLabel(role: ReadingRole): string | null {
 
 /** P9-51: the floor a toggle has where there is no hover (P9-23's rule: 44 px tall; with a mouse nothing moves). */
 const TOUCH_TALL = "[@media(hover:none)]:min-h-11";
+/** P9-51: where there is no hover the row's toggle is the row's tallest item; it is centred against the heading
+ *  and the meta beside it, so a row whose meta dropped under the heading is as tall as the floor, not more. */
+const TOUCH_CENTER = "[@media(hover:none)]:items-center";
 
 /**
  * P9-51 (F08): the parts of a row's meta, in order — the role (when Peer could place the heading), the
@@ -204,7 +207,7 @@ export function ReadingMapView({
                 <div
                   data-route={mark?.tier}
                   title={mark?.title}
-                  className={markedClass("flex flex-wrap items-baseline gap-x-2", mark, "-mx-1 px-1")}
+                  className={markedClass(`flex items-baseline gap-2 ${TOUCH_CENTER}`, mark, "-mx-1 px-1")}
                 >
                   {foldable ? (
                     <button
@@ -219,26 +222,30 @@ export function ReadingMapView({
                   ) : (
                     <span aria-hidden className="w-3 shrink-0" />
                   )}
-                  <a
-                    href={`#${sectionAnchor(k)}`}
-                    className="min-w-0 flex-[1_1_8rem] font-reading text-body-sm leading-[1.45] text-text-muted transition-colors hover:text-heading"
-                  >
-                    <MathText text={row.heading} />
-                  </a>
-                  {/* P9-51 (F08): role · page · words · minutes. Each part keeps itself whole and owns the
-                      separator that introduces it; the one plain space between two parts is the only place
-                      the line may break, so no line ends on "·". The group drops under the heading, right
-                      aligned as it was beside it, when the heading would be left too little room. */}
-                  <span className="annotation ml-auto min-w-0 max-w-full text-right text-text-faint">
-                    {metaParts(row, role).map((part, index) => (
-                      <Fragment key={part.name}>
-                        {index > 0 ? " " : null}
-                        <span data-meta-part={part.name} className="whitespace-nowrap">
-                          {index > 0 ? `· ${part.text}` : part.text}
-                        </span>
-                      </Fragment>
-                    ))}
-                  </span>
+                  {/* The heading and its meta are one group: it is what wraps (the meta drops under the
+                      heading when the heading would be left too little room), beside the fold toggle. */}
+                  <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+                    <a
+                      href={`#${sectionAnchor(k)}`}
+                      className="min-w-0 flex-[1_1_8rem] font-reading text-body-sm leading-[1.45] text-text-muted transition-colors hover:text-heading"
+                    >
+                      <MathText text={row.heading} />
+                    </a>
+                    {/* P9-51 (F08): role · page · words · minutes. Each part keeps itself whole and owns the
+                        separator that introduces it; the one plain space between two parts is the only place
+                        the line may break, so no line ends on "·". The group drops under the heading, right
+                        aligned as it was beside it, when the heading would be left too little room. */}
+                    <span className="annotation ml-auto min-w-0 max-w-full text-right text-text-faint">
+                      {metaParts(row, role).map((part, index) => (
+                        <Fragment key={part.name}>
+                          {index > 0 ? " " : null}
+                          <span data-meta-part={part.name} className="whitespace-nowrap">
+                            {index > 0 ? `· ${part.text}` : part.text}
+                          </span>
+                        </Fragment>
+                      ))}
+                    </span>
+                  </div>
                 </div>
                 {/* Peer's words: the tier and the counts behind it. */}
                 {fact && <p className="annotation pl-5 text-text-faint">{fact}</p>}
