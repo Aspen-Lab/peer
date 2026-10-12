@@ -48,6 +48,21 @@ const doc = withIds(zenodoDocJson);
 const map = buildReadingMap(doc);
 const body = () => buildReading(paper, fullText(doc)).body;
 
+// P9-47 (BACKLOG-41): "holds a bounded number" and "is per body" are the two tests that route
+// ROUTE_CACHE_LIMIT + 1 and ROUTE_CACHE_LIMIT * 3 + 1 distinct questions. They took 0.4 s and 0.8 s
+// alone and 7 s and 14 s on one core shared sixteen ways (the load of three full suites), against
+// vitest's 5 s. The profiler puts the time in `termVariantMatches` and `termOccurrences`, which build
+// a RegExp with `\p{L}\p{N}\p{M}` look-arounds at every call; `splitSentences` (0.09 ms for the whole
+// body) and `buildReading` (1 ms) were never the cost. Two parts, both per question: a term the
+// process has not routed before costs about 7.5 ms to compile whatever the body is (the old
+// `variant${n}` was a new term every time), and matching the terms over this fixture's 7.4 kB costs
+// 3-6 ms. The cache keys on the text typed, not on its terms and not on what the body says, so
+// neither is needed to count misses: `typed(n)` gives distinct texts of one set of terms, and the
+// second body is the first one's six sections with each paragraph cut to its first 100 characters
+// (still one entry per map row, index-aligned).
+const shortBody = () =>
+  body().map((section) => ({ ...section, paragraphs: section.paragraphs.map((paragraph) => paragraph.slice(0, 100)) }));
+
 const FIVE = [
   "graph embeddings protein structure",
   "protein folding prediction accuracy",
@@ -180,10 +195,12 @@ describe("routeByQuestionsCached — a hit returns the same object, a changed qu
 });
 
 describe("routeByQuestionsCached — a small cache", () => {
-  const typed = (n: number) => `graph embeddings protein structure variant${n} cathode`;
+  // Distinct texts, one set of terms: `tokenize` drops a token shorter than three characters, so
+  // a number under 100 is no term and every question after the first reuses its compiled patterns.
+  const typed = (n: number) => `graph embeddings protein structure cathode (${n})`;
 
   it("holds a bounded number of questions per body, the least recently used leaving first", () => {
-    const sections = body();
+    const sections = shortBody();
     const first = routeByQuestionsCached(map, sections, [typed(0)]).byQuestion[0];
     const second = routeByQuestionsCached(map, sections, [typed(1)]).byQuestion[0];
     for (let n = 2; n < ROUTE_CACHE_LIMIT; n++) routeByQuestionsCached(map, sections, [typed(n)]);
@@ -203,7 +220,7 @@ describe("routeByQuestionsCached — a small cache", () => {
   it("is per body: another paper's questions never push this one's out", () => {
     const sections = body();
     const mine = routeByQuestionsCached(map, sections, [typed(0)]).byQuestion[0];
-    const elsewhere = body();
+    const elsewhere = shortBody(); // another paper's body, a short one: only the count of misses on it matters
     for (let n = 0; n < ROUTE_CACHE_LIMIT * 3; n++) routeByQuestionsCached(map, elsewhere, [typed(n)]);
 
     expect(routeByQuestionsCached(map, sections, [typed(0)]).byQuestion[0]).toBe(mine);
