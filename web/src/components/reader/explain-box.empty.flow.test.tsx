@@ -21,6 +21,7 @@ import type { ReactElement, ReactNode } from "react";
 import { hookRuntime } from "@/test-support/hook-runtime";
 import type { ExplainAnswer } from "@/lib/papers/explain";
 import type { PaperReading } from "@/lib/papers/reading";
+import { explainOffered } from "@/lib/reader/explain-offer";
 import type { PaperTerm } from "@/lib/papers/report";
 import type { ExplainTurn } from "@/store/explain-threads";
 import { explainWindowAvailable } from "@/lib/feed/ai-tier";
@@ -808,7 +809,7 @@ describe("ExplainBox — the empty window follows the selected paragraph and car
     run.mounted.unmount();
   });
 
-  it("is the window's control at 1024, 1280, 1440 and 1920; the floating button is there once the window is hidden, and in the card range with no window at all", async () => {
+  it("is the window's control at 1024, 1280, 1440 and 1920; the floating button is there once the window is hidden, and in the card range with no window at all (re-aimed, P9-41: not on the phone, where the thumb bar's cell is the control)", async () => {
     for (const [width, height] of [[1024, 768], [1280, 800], [1440, 900], [1920, 1080]] as const) {
       stubWindow(width, height);
       const run = await scenario(base({ target: inParagraph(first, 400) }), []);
@@ -826,12 +827,20 @@ describe("ExplainBox — the empty window follows the selected paragraph and car
     expect(hidden.last().button).toBeDefined();
     hidden.mounted.unmount();
 
-    for (const [width, height] of [[1023, 800], [800, 900], [390, 844]] as const) {
+    for (const [width, height] of [[1023, 800], [800, 900]] as const) {
       stubWindow(width, height);
       const card = await scenario(base({ target: inParagraph(first, 400) }), []);
       expect(card.last().card, `${width} px`).toBeUndefined();
       expect(card.last().button, `${width} px`).toBeDefined();
       card.mounted.unmount();
     }
+    // Re-aimed, P9-41 (§1h.66): on the phone (under 768 px) there is no floating button — the control is the thumb bar's cell, and the
+    // box offers the selection to it.
+    stubWindow(390, 844);
+    const phone = await scenario(base({ target: inParagraph(first, 400) }), []);
+    expect(phone.last().card).toBeUndefined();
+    expect(phone.last().button).toBeUndefined();
+    expect(explainOffered()).toBe(true);
+    phone.mounted.unmount();
   });
 });

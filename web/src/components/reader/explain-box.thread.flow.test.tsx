@@ -695,7 +695,9 @@ describe("ExplainBox — the page keeps the dock's width clear while it is open 
   it("reserves nothing for the card (640 to 1023 px) or the phone's sheet: those stand over the page, as before", async () => {
     for (const [width, height] of [[800, 900], [390, 844]]) {
       stubWindow(width, height);
-      const run = await scenario(base(), [(tree) => click(tree)]);
+      // Re-aimed, P9-41: at 390 px the sheet is opened by the thumb bar's cell — the page's `explain` action, the box's `openRef`.
+      const openRef = { current: null as (() => void) | null };
+      const run = await scenario(base({ openRef }), [(tree) => (width < 768 ? openRef.current?.() : click(tree))]);
       await wait();
 
       expect(run.last().card).toBeDefined();

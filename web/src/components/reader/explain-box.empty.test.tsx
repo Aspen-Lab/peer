@@ -301,12 +301,13 @@ describe("ExplainBox — the first paint (P8-06, ruling §1h.45)", () => {
     }
   });
 
-  it("P9-03b: where no window stands the floating button does — no key and a defined term, from 1024 px as well as below it", () => {
+  it("P9-03b: where no window stands the floating button does — no key and a defined term, from 1024 px as well as below it (re-aimed, P9-41: down to 768 px; under it the thumb bar's cell is the control and the box draws no button)", () => {
     const html = firstPaint(1280, { canAsk: false, terms: [rafting], target: { ...picked, passage: "The rafting ratio rose." } });
 
     expect(html.split("data-explain-ask")).toHaveLength(2);
     expect(html).toMatch(/data-explain-ask=""[^>]*style=/);
-    for (const width of [1023, 800, 390]) expect(firstPaint(width, { target: picked }), `${width} px`).toMatch(/data-explain-ask=""[^>]*style=/);
+    for (const width of [1023, 800, 768]) expect(firstPaint(width, { target: picked }), `${width} px`).toMatch(/data-explain-ask=""[^>]*style=/);
+    for (const width of [767, 390]) expect(firstPaint(width, { target: picked }), `${width} px`).not.toContain("data-explain-ask");
   });
 
   it("does not have the Tier 0 window in it: no key, a defined term selected — only the button, until it is pressed", () => {

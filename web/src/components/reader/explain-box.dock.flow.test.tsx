@@ -24,6 +24,7 @@ import type { PaperTerm } from "@/lib/papers/report";
 import type { ExplainTurn } from "@/store/explain-threads";
 import { EXPLAIN } from "./copy";
 import { ExplainBox, ExplainCard, placeCard, type AskResult, type ThreadView } from "./explain-box";
+import { explainOffered } from "@/lib/reader/explain-offer";
 import { legendHeightPx } from "./explain-dock";
 import type { ReplyResult } from "./explain-thread";
 import type { ExplainSelection } from "./paper-body";
@@ -438,16 +439,22 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     run.mounted.unmount();
   });
 
-  it("from 1024 px only: a new selection still closes the card (640 to 1023) and the phone's sheet, and leaves its own button (re-aimed, P9-03b: at 1024 the control is the window's, below it the floating button)", async () => {
+  // Re-aimed, P9-41 (§1h.66): under 768 px (640 and 390 here) the control a closed card or sheet leaves is the thumb bar's cell, not a
+  // floating button — the box draws no button and offers the new selection to the bar (`explainOffered`); the press there is the page's
+  // `explain` action, the box's `openRef`. From 768 px (800) and 1023 it is still the floating button; at 1024 the window's own control.
+  it("from 1024 px only: a new selection still closes the card (640 to 1023) and the phone's sheet, and leaves its own control (re-aimed, P9-03b: at 1024 the control is the window's, below it the floating button; P9-41: under 768 px the thumb bar's cell)", async () => {
     for (const [width, height, stays] of [[1024, 800, true], [1023, 800, false], [800, 900, false], [640, 900, false], [390, 844, false]] as const) {
       stubWindow(width, height);
-      const run = await scenario(base(), [(tree) => click(tree), selectNext(second, { cached: undefined })]);
+      const openRef = { current: null as (() => void) | null };
+      const run = await scenario(base({ openRef }), [(tree) => (width < 768 ? openRef.current?.() : click(tree)), selectNext(second, { cached: undefined })]);
       await wait();
 
       expect(run.last().card !== undefined, `${width} px`).toBe(stays);
-      // The control stands in one place only: the window's header where the window stays, the floating button where it closed.
+      // The control stands in one place only: the window's header where the window stays, the floating button where it closed — and
+      // under 768 px the bar's cell, which is the flag the box has published.
       expect(run.last().explain !== undefined, `${width} px`).toBe(stays);
-      expect(run.last().button !== undefined, `${width} px`).toBe(!stays);
+      expect(run.last().button !== undefined, `${width} px`).toBe(!stays && width >= 768);
+      expect(explainOffered(), `${width} px`).toBe(!stays && width < 768);
       run.mounted.unmount();
     }
   });
@@ -1127,26 +1134,31 @@ describe("ExplainBox — the window carries the Explain this? control (P9-03b, r
 });
 
 describe("ExplainBox — the floating button stands only where no window does (P9-03b, ruling §1h.49)", () => {
-  it("is there in the card range and on the phone, and not the window's control", async () => {
+  // Re-aimed, P9-41 (§1h.66): the floating button stands in the card range (768 to 1023 px) only; on the phone (640 and 390 here, under
+  // 768 px) the control is the thumb bar's cell — no button, no window control, and the offer published for the bar.
+  it("is there in the card range, and not the window's control; on the phone it is the thumb bar's cell, not a button (re-aimed, P9-41)", async () => {
     for (const [width, height] of [[1023, 800], [900, 900], [800, 900], [640, 900], [390, 844]] as const) {
       stubWindow(width, height);
       const run = await scenario(base({ target: paraA() }), []);
 
-      expect(run.last().button, `${width} px`).toBeDefined();
+      expect(run.last().button !== undefined, `${width} px`).toBe(width >= 768);
+      expect(explainOffered(), `${width} px`).toBe(width < 768);
       expect(run.last().card, `${width} px`).toBeUndefined();
       expect(run.last().explain, `${width} px`).toBeUndefined();
       run.mounted.unmount();
     }
   });
 
-  it("stays the card's and the sheet's button after they open: a new selection closes them and leaves it", async () => {
+  it("stays the card's and the sheet's control after they open: a new selection closes them and leaves it (re-aimed, P9-41: the button in the card range, the thumb bar's cell on the phone)", async () => {
     for (const [width, height] of [[900, 900], [390, 844]] as const) {
       stubWindow(width, height);
-      const run = await scenario(base({ target: paraA() }), [(tree) => click(tree), selectNext(paraB(), { cached: undefined })]);
+      const openRef = { current: null as (() => void) | null };
+      const run = await scenario(base({ target: paraA(), openRef }), [(tree) => (width < 768 ? openRef.current?.() : click(tree)), selectNext(paraB(), { cached: undefined })]);
       await wait();
 
       expect(run.last().card, `${width} px`).toBeUndefined();
-      expect(run.last().button, `${width} px`).toBeDefined();
+      expect(run.last().button !== undefined, `${width} px`).toBe(width >= 768);
+      expect(explainOffered(), `${width} px`).toBe(width < 768);
       expect(run.last().explain, `${width} px`).toBeUndefined();
       run.mounted.unmount();
     }

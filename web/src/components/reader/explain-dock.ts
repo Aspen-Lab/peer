@@ -69,13 +69,13 @@ export const DOCK_TOP_PX = 48;
 export const MASTHEAD_MIN_VIEWPORT_PX = 768;
 
 /**
- * P9-20 (A P9-W2's X13): the page's bottom furniture is the phone's thumb bar under 768 px and the foot legend from it. The bar
- * (`components/shell/thumb-bar.tsx`) is `md:hidden fixed inset-x-0 bottom-0`, its cells 56 px tall (`h-14`) with the safe area under
- * them; the legend (`key-legend.tsx`) is `hidden md:flex fixed inset-x-0 bottom-0`, `DOCK_BOTTOM_PX` tall. Both swap at Tailwind's `md`,
- * 48rem, the masthead's own breakpoint (`MASTHEAD_MIN_VIEWPORT_PX`). Copied from the bar's `THUMB_BAR_PX`; a test holds the copy
- * against it, so a taller bar cannot leave the floating control standing on it.
+ * P9-20 (A P9-W2's X13), P9-41 (ruling §1h.66): the page's bottom furniture is the phone's thumb bar under 768 px and the foot legend from
+ * it. Both swap at Tailwind's `md`, 48rem, the masthead's own breakpoint (`MASTHEAD_MIN_VIEWPORT_PX`): the bar
+ * (`components/shell/thumb-bar.tsx`) is `md:hidden fixed inset-x-0 bottom-0`, the legend (`key-legend.tsx`) is `hidden md:flex fixed
+ * inset-x-0 bottom-0`, `DOCK_BOTTOM_PX` tall. The "Explain this?" control follows the swap: from 768 px a pill above the legend where no
+ * gutter stands (`explain-box.tsx`, `placeButton`); under 768 px a cell of the bar's own rail, with no pill at all — so nothing here
+ * copies the bar's height any more: there is nothing above the bar to clear (a test holds the swap against both components).
  */
-export const THUMB_BAR_PX = 56;
 
 /** The dock's bottom edge stands this far above the window's: the foot legend's height (`--legend-h`) at the page's own scale (zoom 1).
  *  P9-20 (BACKLOG-42): the legend is `DOCK_BOTTOM_PX × zoom` tall once Fit to screen scales the page — `legendHeightPx` — and

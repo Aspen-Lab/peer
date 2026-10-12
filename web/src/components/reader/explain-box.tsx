@@ -7,9 +7,12 @@
 //
 // The reader selects words of the body (`paper-body.tsx` reads the selection);
 // a small button appears beside them — P9-03: in the gutter right of the paragraph, level with
-// the selection's first line, never over the paper's words; P9-20: where there is no gutter (a phone, a window under ~700 px;
-// `placeButton`) it stands on the page's bottom furniture, a pill above the thumb bar (under 768 px) or the foot legend, not below
-// the selection's end where it covered the next line — P9-03b (ruling §1h.49): but only where no window stands. While
+// the selection's first line, never over the paper's words; P9-20: from 768 px, where there is no gutter (a window of ~768 to
+// ~900 px; `placeButton`) it stands on the page's bottom furniture, a pill above the foot legend, not below the selection's end where
+// it covered the next line; P9-41 (ruling §1h.66): under 768 px there is no pill at all — the control is a cell of the thumb bar's rail
+// (`thumb-bar.tsx`), which covers none of the paper's words (a pill above the bar covered 1,790 to 2,473 px² of them), and the box only
+// says, through `explain-offer.ts`, that a settled selection on the screen has a control on offer; the bar's cell calls the page's
+// `explain` action, which is this box's `open` (below). P9-03b (ruling §1h.49): the pill stands only where no window stands. While
 // a window stands (from 1024 px: a reader with a key, a Tier 0 definition window) there is no room
 // beside the column for a floating control (24 px of it at every width from 1024 to ~1700, measured),
 // so the window carries the control itself, in its header (`ExplainCard`'s `onExplain`), and follows
@@ -136,6 +139,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type Ref } from "react";
 import { hasUserLlmOverride } from "@/lib/feed/ai-tier";
+import { setExplainOffer } from "@/lib/reader/explain-offer";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import type { ExplainAnswer, ExplainItem } from "@/lib/papers/explain";
 import type { PaperReading } from "@/lib/papers/reading";
@@ -143,7 +147,7 @@ import type { PaperTerm } from "@/lib/papers/report";
 import { MAX_EXPLAIN_MESSAGE_CHARS, threadFull, type ExplainTurn } from "@/store/explain-threads";
 import type { Paper, UserProfile } from "@/types";
 import { EXPLAIN, PEERS_READING } from "./copy";
-import { DOCK_BOTTOM_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_WIDTH_PX, MASTHEAD_MIN_VIEWPORT_PX, PAGE_ZOOM_ROOT, PAGE_ZOOM_VAR, THUMB_BAR_PX, emptyDockStands, legendHeightPx, reserveDock } from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_WIDTH_PX, MASTHEAD_MIN_VIEWPORT_PX, PAGE_ZOOM_ROOT, PAGE_ZOOM_VAR, emptyDockStands, legendHeightPx, reserveDock } from "./explain-dock";
 import { EvidenceQuote } from "./evidence-quote";
 import {
   asItems,
@@ -264,8 +268,8 @@ const PHONE_WIDTH = 640;
 const clamp = (value: number, low: number, high: number) => Math.min(Math.max(value, low), Math.max(low, high));
 
 /** Where the floating button stands: beside the words, in the gutter (`left`, `top`: its top-left corner in the window's pixels), or —
- *  P9-20 — on the page's bottom furniture, where there is no gutter (`edge`: the x of its right edge; `bottom`: a CSS length from the
- *  window's foot, so the control keeps its place above a bar that grows, as the bar does with the safe area). */
+ *  P9-20 — on the foot legend, where there is no gutter (`edge`: the x of its right edge; `bottom`: a CSS length from the window's foot,
+ *  the legend's height as Fit scales it and the margin). */
 export type ButtonPlace = { left: number; top: number } | { edge: number; bottom: string };
 
 /**
@@ -279,12 +283,15 @@ export type ButtonPlace = { left: number; top: number } | { edge: number; bottom
  * the masthead shows (a long paragraph straddling the head of the window put the button over it), the margin alone
  * under it.
  *
- * P9-20 (A P9-W2's X13; rule 1): without a gutter — a phone, a window under ~700 px, a column flush with the edge, no paragraph
- * reported — it no longer falls back to "under the selection's end", which put 116 × 34 px over the next line's words (2,120 px²
- * at 700, 640 and 390). It stands on the page's own bottom furniture: a pill fixed a margin (8 px) above the top edge of the thumb
- * bar under 768 px (`md:hidden`; the bar is `THUMB_BAR_PX` and the safe area), or of the foot legend from 768 px
- * (`hidden md:flex`; `DOCK_BOTTOM_PX`), its right edge on the column's (`paragraph.right`; the window's margin where none is
- * reported). It stays where it is while the selection stands — nothing about it follows the page's scroll — and goes with it.
+ * P9-20 (A P9-W2's X13; rule 1): without a gutter — a window of 768 to ~900 px, a column flush with the edge, no paragraph reported — it
+ * no longer falls back to "under the selection's end", which put 116 × 34 px over the next line's words (2,120 px² at 700, 640 and 390). It
+ * stands on the page's own foot legend: a pill fixed a margin (8 px) above its top edge (`hidden md:flex`; `legendOf`), its right edge on the
+ * column's (`paragraph.right`; the window's margin where none is reported). It stays where it is while the selection stands — nothing
+ * about it follows the page's scroll — and goes with it.
+ *
+ * P9-41 (ruling §1h.66): the box asks for a place only from 768 px, where the foot legend shows. Under it the thumb bar shows instead
+ * (`md:hidden`) and holds the control as a cell of its rail; the pill's former strip above the bar (8 px over its 56 px and the safe
+ * area) still covered 1,790 to 2,473 px² of the words that scroll under it, so it is gone from here with the pill it placed.
  */
 export function placeButton(rect: ViewRect, viewport: Viewport, paragraph?: ViewRect, bounds: ViewRect = rect): ButtonPlace {
   if (paragraph && viewport.width - paragraph.right >= BUTTON_WIDTH + 2 * BUTTON_MARGIN) {
@@ -296,10 +303,7 @@ export function placeButton(rect: ViewRect, viewport: Viewport, paragraph?: View
   }
   return {
     edge: clamp(paragraph?.right ?? viewport.width - BUTTON_MARGIN, BUTTON_WIDTH + BUTTON_MARGIN, viewport.width - BUTTON_MARGIN),
-    bottom:
-      viewport.width < MASTHEAD_MIN_VIEWPORT_PX
-        ? `calc(${THUMB_BAR_PX}px + env(safe-area-inset-bottom) + ${BUTTON_MARGIN}px)`
-        : `${legendOf(viewport) + BUTTON_MARGIN}px`,
+    bottom: `${legendOf(viewport) + BUTTON_MARGIN}px`,
   };
 }
 
@@ -1251,14 +1255,30 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
     }
   }, [replyState]);
 
-  if (!anchor && !standing) return null;
   /** Where `selection` is now: as it was last measured, else as it was read. */
   const whereOf = (selection: ExplainSelection): ViewRects => measured.find((one) => one.of === selection)?.where ?? selection;
 
+  // P9-41 (ruling §1h.66): under 768 px the thumb bar is the page's foot (`md:hidden`), and the control is a cell of its rail, not a
+  // pill (a pill above the bar covered 1,790 to 2,473 px² of the words scrolling under it). The box draws nothing there and says, through
+  // `explain-offer.ts`, whether the bar should show the cell: while a control is on offer for the current selection (`next`: settled, the
+  // reader's to explain — a key, or a defined term of the paper) and that selection is not wholly out of the viewport — scrolled away
+  // above the screen or below it (read as the page scrolls, `measured`), the cell goes and the rail is as it was; scrolled back, it
+  // returns. The bar's press is the page's `explain` action, which is `openBox` (`openRef`): the window opens for the selection, and
+  // there is nothing on offer after that. Taken back when the page is left.
+  const nextAt = next ? whereOf(next) : null;
+  const inBar = nextAt !== null && viewport.width < MASTHEAD_MIN_VIEWPORT_PX && nextAt.bounds.bottom > 0 && nextAt.bounds.top < viewport.height;
+  useEffect(() => {
+    setExplainOffer(inBar);
+  }, [inBar]);
+  useEffect(() => () => setExplainOffer(false), []);
+
+  if (!anchor && !standing) return null;
+
   // The control for the current selection — a locked block is not shown: with no key, only the paper's own definition
   // is worth one. P9-03b (ruling §1h.49): while a window stands from 1024 px it is the window's (`onExplain`, in its
-  // header); this floating button, which stands beside the words, is rendered only where no window does.
-  const askAt = next && !docked ? whereOf(next) : null;
+  // header); this floating button, which stands beside the words, is rendered only where no window does — and, P9-41, only from
+  // 768 px: under it the thumb bar's cell is the control (above).
+  const askAt = next && !docked && viewport.width >= MASTHEAD_MIN_VIEWPORT_PX ? whereOf(next) : null;
   const explainNext =
     next && docked
       ? () => {
@@ -1268,15 +1288,19 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
           start(next);
         }
       : undefined;
-  const ask = next && askAt ? (
+  const askPlace = next && askAt ? placeButton(askAt.rect, viewport, askAt.paragraph, askAt.bounds) : null;
+  const ask = next && askPlace ? (
     <button
       type="button"
       data-explain-ask=""
       // The press must not take the selection with it: it is what is explained.
       onMouseDown={(event) => event.preventDefault()}
       onClick={() => start(next)}
-      style={buttonStyle(placeButton(askAt.rect, viewport, askAt.paragraph, askAt.bounds))}
-      className="fixed z-[70] rounded-full border border-border-strong bg-surface px-3 py-2 font-mono text-caption text-heading shadow-card-hover transition-colors hover:bg-surface-hover"
+      style={buttonStyle(askPlace)}
+      // P9-41: the pill on the legend (no gutter) is a 44 px touch target where there is no hover (P9-23's rule, as the window's header
+      // control, P9-17). The gutter pill is not: its clamps assume the 32 px `BUTTON_HEIGHT`, and a taller one would stand past the
+      // window's foot; with a mouse neither pill changes.
+      className={`fixed z-[70] rounded-full border border-border-strong bg-surface px-3 py-2 font-mono text-caption text-heading shadow-card-hover transition-colors hover:bg-surface-hover${"bottom" in askPlace ? " [@media(hover:none)]:min-h-11" : ""}`}
     >
       {EXPLAIN.ask}
     </button>
