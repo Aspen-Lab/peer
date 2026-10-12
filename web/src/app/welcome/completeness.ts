@@ -14,7 +14,6 @@ export type StepKey =
   | "work"
   | "radar"
   | "ai"
-  | "connectors"
   | "persona";
 
 export const STEP_META: { key: StepKey; label: string }[] = [
@@ -23,9 +22,6 @@ export const STEP_META: { key: StepKey; label: string }[] = [
   { key: "work", label: "Work" },
   { key: "radar", label: "Radar" },
   { key: "ai", label: "AI" },
-  // "Data" matches the feed toolbar's "Data APIs" control; "Sources" would
-  // collide with the radar step's Sources field.
-  { key: "connectors", label: "Data" },
   { key: "persona", label: "Persona" },
 ];
 
@@ -50,11 +46,6 @@ const RADAR_FIELDS = [
   "feedAvoidOldPapers",
   "feedAvoidBroadSurveys",
 ] as const;
-
-/** Whether the one remaining data connector (Tavily) is configured. */
-export function connectorCount(profile: UserProfile): number {
-  return profile.tavilyEnabled && profile.tavilyApiKey?.trim() ? 1 : 0;
-}
 
 export function isStepDone(
   key: StepKey,
@@ -94,8 +85,6 @@ export function isStepDone(
       // their own key and are signed in (or sign-in is not configured here).
       // Peer holds no key of its own, so there is no other way to be done.
       return aiAvailability(profile, auth) !== "none";
-    case "connectors":
-      return connectorCount(profile) > 0;
     case "persona":
       return personaDone;
   }

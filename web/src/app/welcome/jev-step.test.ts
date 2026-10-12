@@ -11,21 +11,20 @@ import { STEP_META, isStepDone } from "./completeness";
 describe("welcome wizard - the Jev block", () => {
   const source = readFileSync(join(process.cwd(), "src/app/welcome/page.tsx"), "utf8");
 
-  it("adds no wizard step: the seven steps are the ones that were there", () => {
+  it("adds no wizard step: the six steps are the ones that were there, less the retired Data step", () => {
     expect(STEP_META.map((step) => step.key)).toEqual([
       "basics",
       "topics",
       "work",
       "radar",
       "ai",
-      "connectors",
       "persona",
     ]);
   });
 
   it("mounts the short Jev block inside the ai step, after the model-key fields", () => {
     const aiStart = source.indexOf('key === "ai" && (');
-    const aiEnd = source.indexOf('key === "connectors" && (');
+    const aiEnd = source.indexOf('key === "persona" && (');
     expect(aiStart).toBeGreaterThan(-1);
     expect(aiEnd).toBeGreaterThan(aiStart);
     const aiStep = source.slice(aiStart, aiEnd);
