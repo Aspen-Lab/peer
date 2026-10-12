@@ -1986,3 +1986,106 @@ describe("a combining mark's run joins its neighbours with no space, whatever th
     expect(linesOf([["the index 5"], BAR, BAR_SPACE])).toEqual(["the index 5\u0305"]);
   });
 });
+
+// A lowered label after a variable. The PDF sets a subscript (`R` + `CT`, `f` + `area`) as a run of
+// two thirds the size 2pt under the line, touching the variable, and the f-range labels of a grain-size
+// fraction as a raised run of the same size, 3.9pt over it, behind a stored space run 0.15pt wide
+// when the variable is an `f` and none when it is not: `f 0-4 μm` beside `f4-8 μm`. A label that is a
+// symbol (`CT`, `H`, `g`) is written joined; a label that is a word or a range with a unit is written
+// `f(area)`, `f(0-4 μm)`, which reads the same wherever the PDF put its stored space.
+
+/** A subscript, two thirds the size, 2pt under the line. */
+const low: Partial<PdfTextItem> = { height: 6.7, y: 498 };
+/** A raised label, two thirds the size, 3.9pt over the line (the f-range labels). */
+const label: Partial<PdfTextItem> = { height: 6.7, y: 503.9 };
+const VAR: Partial<PdfTextItem> = { fontName: "italic" };
+
+describe("a lowered label after a one-letter variable: symbols join, words and ranges are bracketed (P9-13b)", () => {
+  it("writes a word as f(area), j/j(limiting), t(on), t(off)", () => {
+    expect(linesOf([["the fraction "], ["f", VAR], ["area", { ...low, gap: -0.01 }], [" = 0.61"]])).toEqual(["the fraction f(area) = 0.61"]);
+    expect(linesOf([["the ratio "], ["j", VAR], ["/", { gap: 0 }], ["j", VAR], ["limiting", { ...low, gap: -0.05 }], [" is large"]])).toEqual(["the ratio j/j(limiting) is large"]);
+    expect(linesOf([["a "], ["t", VAR], ["on", { ...low, gap: 0 }], [" of 10 s and a "], ["t", VAR], ["off", { ...low, gap: 0 }], [" of 75 s"]])).toEqual(["a t(on) of 10 s and a t(off) of 75 s"]);
+  });
+
+  it("writes a range with a unit as f(0-4 μm), lowered or raised, with the stored space run before it or without", () => {
+    /** The label as the page stores it: the number, the stored space, the unit in two runs, then the text. */
+    const runs = (own: Partial<PdfTextItem>, gap: number): Part[] => [
+      ["0-4", { ...own, gap }],
+      [" ", { ...own, width: 0.33 }],
+      ["μ", own],
+      ["m ", own],
+      ["= 0.191, "],
+    ];
+    // The brief's fixture: lowered.
+    expect(linesOf([["fractions "], ["f", VAR], ...runs(low, 0)])).toEqual(["fractions f(0-4 μm) = 0.191,"]);
+    // As the page sets it: raised, behind a stored space run 0.15pt wide, 1.37pt short of the label.
+    expect(linesOf([["fractions "], ["f", VAR], [" ", { width: 0.15 }], ...runs(label, 1.37)])).toEqual(["fractions f(0-4 μm) = 0.191,"]);
+    // And touching, with no stored space: the other two labels of the paper.
+    expect(linesOf([["fractions "], ["f", VAR], ...runs(label, -0.01)])).toEqual(["fractions f(0-4 μm) = 0.191,"]);
+  });
+
+  it("keeps a symbol joined: RCT, TH, Eg, Dw, I0, N2, MLi, jmax, xij", () => {
+    for (const [variable, sub, expected] of [
+      ["R", "CT", "RCT"],
+      ["T", "H", "TH"],
+      ["E", "g", "Eg"],
+      ["D", "w", "Dw"],
+      ["I", "0", "I0"],
+      ["N", "2", "N2"],
+      ["M", "Li", "MLi"],
+      ["j", "max", "jmax"],
+      ["x", "ij", "xij"],
+      ["T", "eff", "Teff"],
+    ] as const) {
+      expect(linesOf([["the "], [variable, VAR], [sub, { ...low, gap: -0.02 }], [" value"]]), expected).toEqual([`the ${expected} value`]);
+    }
+  });
+
+  it("brackets the short words that read as a word once joined: t(in) and t(out), as t(on) and t(off)", () => {
+    expect(linesOf([["a "], ["t", VAR], ["in", { ...low, gap: 0 }], [" and a "], ["t", VAR], ["out", { ...low, gap: 0 }], [" of 4 s"]])).toEqual(["a t(in) and a t(out) of 4 s"]);
+  });
+
+  it("brackets a label whose variable it touches within 2pt, the page's own gap running to 1.5, and not one a word space off", () => {
+    expect(linesOf([["the "], ["f", VAR], [" ", { width: 0.17 }], ["8-15", { ...label, gap: 1.52 }], [" ", { ...label, width: 0.36 }], ["μm", { ...label, gap: 2 }], [" = 0.6"]])).toEqual(["the f(8-15 μm) = 0.6"]);
+    expect(linesOf([["the "], ["f", VAR], ["8-15 μm", { ...label, gap: 2.6 }], [" = 0.6"]])).toEqual(["the f 8-15 μm = 0.6"]);
+  });
+
+  it("keeps an exponent behind a bracketed label: (j/j(limiting))² and (j/jmax)², as (i/imax)² was kept", () => {
+    expect(linesOf([["the ratio (j/"], ["j", VAR], ["limiting", { ...low, gap: -0.02 }], [")"], ["2", { height: 6.7, y: 504.4 }], [" is large"]])).toEqual(["the ratio (j/j(limiting))² is large"]);
+    expect(linesOf([["the ratio (j/"], ["j", VAR], ["max", { ...low, gap: -0.02 }], [")"], ["2", { height: 6.7, y: 504.4 }], [" is large"]])).toEqual(["the ratio (j/jmax)² is large"]);
+  });
+
+  it("leaves a lowered run after a word of two letters or more, or after a digit, as it is", () => {
+    expect(linesOf([["Li"], ["x", { ...low, gap: 0 }], ["CoO2"]])).toEqual(["LixCoO2"]);
+    expect(linesOf([["a film"], ["area", { ...low, gap: 0 }], [" in cm"]])).toEqual(["a filmarea in cm"]);
+    expect(linesOf([["a 10"], ["on", { ...low, gap: 0 }], [" signal"]])).toEqual(["a 10on signal"]);
+  });
+
+  it("leaves a label a word space away from its variable as it is: only a label that touches belongs to it", () => {
+    expect(linesOf([["the "], ["f", VAR], ["area", { ...low, gap: 2.6 }], [" = 0.61"]])).toEqual(["the f area = 0.61"]);
+  });
+
+  it("leaves a raised exponent as it is: cm², a unit's 1/2, a letter exponent, a symbol's charge label", () => {
+    expect(linesOf([["a diffusivity in cm"], ["2", { height: 6.7, y: 504.4 }], [" per second"]])).toEqual(["a diffusivity in cm² per second"]);
+    expect(linesOf([["a toughness in MPa m"], ["1/2", { height: 6.7, y: 504.4 }], [" at room temperature"]])).toEqual(["a toughness in MPa m1/2 at room temperature"]);
+    expect(linesOf([["a power x"], ["n", { height: 6.7, y: 504.4 }], [" of the field"]])).toEqual(["a power xn of the field"]);
+    expect(linesOf([["its "], ["D", VAR], ["Cod2+", { ...label, gap: 0 }], ["(350 C)"]])).toEqual(["its DCod2+(350 C)"]);
+  });
+});
+
+describe("a subscript's parenthesis follows with no space (P9-13b)", () => {
+  it("reads the PDF's I, a lowered '0 (' and a lowered hkl) as I0(hkl)", () => {
+    // The space is inside the subscript's own run: the author typed "0 (hkl)" in the lowered face.
+    expect(linesOf([["measured I"], ["0 (", { ...low, width: 7.3 }], ["hkl", { ...low }], [")", { ...low }], [": standard intensity"]])).toEqual(["measured I0(hkl): standard intensity"]);
+  });
+
+  it("closes the gap before a lowered run that opens with a parenthesis, whatever the gap", () => {
+    expect(linesOf([["measured I"], ["0", { ...low }], ["(hkl)", { ...low, gap: 2.5 }], [": standard"]])).toEqual(["measured I0(hkl): standard"]);
+    expect(linesOf([["measured I"], ["0", { ...low }], [" ", { ...low, width: 0.7 }], ["(hkl)", { ...low, gap: 1.5 }], [": standard"]])).toEqual(["measured I0(hkl): standard"]);
+  });
+
+  it("keeps the space before a parenthetical set at the line's size, and before one that follows an exponent", () => {
+    expect(linesOf([["its gap "], ["E", VAR], ["g", { ...low, gap: -0.02 }], ["(eV)", { gap: 3 }]])).toEqual(["its gap Eg (eV)"]);
+    expect(linesOf([["its rate in mA cm"], ["−2", { height: 6.7, y: 504.4 }], ["(at C/10)", { gap: 3 }]])).toEqual(["its rate in mA cm⁻² (at C/10)"]);
+  });
+});

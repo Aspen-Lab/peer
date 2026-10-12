@@ -354,9 +354,10 @@ const CITATION_MARK_MAX = 12;
  *  one-letter variable or one or two lower-case letters ("10−3", "R2", "cm2",
  *  "s−1") a raised digit is an exponent, and it is kept. */
 const CITED = /(?:[.,;:!?)\]\u201D\u2019"']|\p{L}-|\p{L}{3,}|\p{Lu}\p{Ll}|[\p{L})]\d+)$/u;
-/** A bracketed group with a slash in it and no space: "(i/imax)". One raised
- *  digit after it is an exponent ("(i/imax)2"), not a citation of the group. */
-const RATIO_GROUP = /\([^()\s]*\/[^()\s]*\)$/;
+/** A bracketed group with a slash in it and no space: "(i/imax)", and one that holds a bracketed
+ *  label of its own, "(j/j(limiting))" (P9-13b). One raised digit after it is an exponent
+ *  ("(i/imax)2"), not a citation of the group. */
+const RATIO_GROUP = /\([^()\s]*\/[^()\s]*(?:\([^()\s]*\)[^()\s]*)?\)$/;
 /** A run made only of combining marks: the overbar of a Miller index (U+0305), an accent, a
  *  vector arrow. The PDF draws it as a run of its own, with no width, and stores a space run
  *  behind it in the mark's own face. */
@@ -367,6 +368,22 @@ const COMBINING_TAIL = /[\u0300-\u036F\u20D0-\u20FF]+$/;
  *  mark's edge, whatever else the gap would say. A mark on a letter ("x̄", an accent) ends a word
  *  as often as it ends an index, so the gap there is read as it always was. */
 const MARK_REACH_EM = 0.5;
+/** A script set more than this many points under its row's baseline is a subscript. */
+const SUBSCRIPT_FALL = 1;
+/** A label set under or over a one-letter variable that is a symbol is written joined to it:
+ *  letters and digits, up to three of them ("RCT", "TH", "Eg", "Dw", "I0", "jmax"). Any other
+ *  label, a word or a range ("area", "limiting", "0-4 μm"), is written in brackets: "f(area)". */
+const SYMBOL_LABEL = /^[\p{L}\d]{1,3}$/u;
+/** ...bar the short words that read as a word once joined to a letter ("ton", "toff", "tin"): the
+ *  two ends of a switch or a flow, "t(on)" and "t(off)". */
+const WORD_LABEL = /^(?:on|off|in|out)$/;
+/** A raised label that is a number and a unit ("0−4 μm", "8-15 μm"): the grain-size fractions of
+ *  "f 0-4 μm = 0.19". It is bracketed after its variable too. */
+const RANGE_LABEL = /^\d[\d.,\u2212\u2013-]*\s+\p{L}+$/u;
+/** A label touches its variable when it starts within this many ems of the variable's edge
+ *  (2pt at 10pt; the page's own gaps run to 1.5): a stored space run between them, a fraction of a
+ *  point wide, does not part them, and a space a word apart (0.25em and more) does. */
+const LABEL_TOUCH_EM = 0.2;
 /** What a raised run made only of these is written in: an exponent or a charge
  *  as Unicode superscripts ("cm²", "10⁻¹³", "Ni²⁺"). The signs a PDF uses — the
  *  minus sign, the hyphen, the en dash — are one superscript minus. */
@@ -382,6 +399,8 @@ interface Row {
   items: PdfTextItem[];
   /** The scripts folded into the row from above its baseline: superscripts. */
   raised?: Set<PdfTextItem>;
+  /** The scripts folded into the row from under its baseline: subscripts. */
+  lowered?: Set<PdfTextItem>;
 }
 
 const median = (values: number[]): number =>
@@ -433,6 +452,7 @@ function rowsOf(items: PdfTextItem[], text: number): Row[] {
   const fold = (script: PdfTextItem, row: Row) => {
     row.items.push(script);
     if (script.y - row.y > SUPERSCRIPT_RISE) (row.raised ??= new Set()).add(script);
+    else if (row.y - script.y > SUBSCRIPT_FALL) (row.lowered ??= new Set()).add(script);
   };
   const base = rows.slice();
   const small: PdfTextItem[] = [];
@@ -472,8 +492,22 @@ const longestRun = (runs: PdfTextItem[]): PdfTextItem =>
  * takes no space on either side: "R3̅m", "(12̅10)". The PDF stores a space run behind it, a few
  * hundredths of a point wide, and the next digit starts a fraction of a point on; neither is a
  * word break (P9-13b).
+ *
+ * A subscript (`lowered`) or a raised number-and-unit label ("0−4 μm") that touches a one-letter
+ * variable run is that variable's label. A symbol, up to three letters or digits ("RCT", "Eg",
+ * "I0", "jmax"), stays joined to it; a word or a range is written in brackets, "f(area)",
+ * "f(0-4 μm)", "t(on)", so that the space the PDF puts or does not put between the two (a stored
+ * run 0.15pt wide, or none) no longer shows. Inside a subscript, no space stands before a
+ * parenthesis: "I0 (hkl)" is "I0(hkl)". A parenthetical set at the line's size after a subscript,
+ * and any after an exponent, keeps its space: "Eg (eV)", "cm⁻² (at C/10)" (P9-13b).
  */
-function lineOf(page: number, y: number, runs: PdfTextItem[], raised?: ReadonlySet<PdfTextItem>): PdfLine | null {
+function lineOf(
+  page: number,
+  y: number,
+  runs: PdfTextItem[],
+  raised?: ReadonlySet<PdfTextItem>,
+  lowered?: ReadonlySet<PdfTextItem>,
+): PdfLine | null {
   // A PDF stores runs, not words: two runs set apart on the page are two
   // words even where neither carries a space ("Ashish Vaswani" and "Noam
   // Shazeer" arrived as one string until this gap was measured).
@@ -486,6 +520,24 @@ function lineOf(page: number, y: number, runs: PdfTextItem[], raised?: ReadonlyS
   let markFont: string | null = null;
   // The mark stands on a digit, a bracket or a sign: the run behind it starts within reach, or is a word apart.
   let tied = false;
+  // The last run written that has text in it: the variable a label may stand under.
+  let last: PdfTextItem | null = null;
+  // The lowered runs up to this one have been judged as a label.
+  let lowJudged = -1;
+  // A label to be written in brackets: where its bracket opens in `text`, its first and its last run.
+  let labelAt = -1;
+  let labelFrom = -1;
+  let labelTo = -1;
+  /** Opens a bracket for the script runs `from..to` when they are a label that touches a one-letter variable. */
+  const openLabel = (from: number, to: number) => {
+    const first = runs.slice(from, to + 1).find((run) => run.str.trim());
+    if (labelAt >= 0 || !last || !first || !/^\p{L}$/u.test(last.str.trim())) return;
+    if (raised?.has(last) || lowered?.has(last) || first.x - cursor >= LABEL_TOUCH_EM * last.height) return;
+    text = text.trimEnd();
+    labelAt = text.length;
+    labelFrom = from;
+    labelTo = to;
+  };
   for (let i = 0; i < runs.length; i++) {
     const item = runs[i];
     if (raised?.has(item) && i > judged) {
@@ -507,6 +559,16 @@ function lineOf(page: number, y: number, runs: PdfTextItem[], raised?: ReadonlyS
       // or a charge, not a footnote number at the head of a line. Letters, a point or a slash
       // in it ("st", "2a", "1/2", "0−4 μm") leave it as the PDF has it.
       superscripts = text.trim() && mark && [...mark].every((c) => c in SUPERSCRIPT) ? judged : -1;
+      // A number and a unit raised behind a one-letter variable ("f" + "0−4 μm") is that variable's label.
+      if (superscripts !== judged && RANGE_LABEL.test(mark)) openLabel(i, judged);
+    }
+    if (lowered?.has(item) && i > lowJudged) {
+      let end = i + 1;
+      while (end < runs.length && lowered.has(runs[end])) end++;
+      lowJudged = end - 1;
+      const under = runs.slice(i, end).map((run) => run.str).join("").trim();
+      // A word or a range under a one-letter variable, not a symbol and not a bracketed argument: "f" + "area".
+      if (/\p{L}/u.test(under) && !under.includes("(") && (!SYMBOL_LABEL.test(under) || WORD_LABEL.test(under))) openLabel(i, lowJudged);
     }
     if (!item.str.trim()) {
       // The space the PDF stores behind a combining mark, in the mark's own face, is not a word break.
@@ -518,14 +580,24 @@ function lineOf(page: number, y: number, runs: PdfTextItem[], raised?: ReadonlyS
     }
     const isMark = COMBINING_RUN.test(item.str);
     const gap = item.x - cursor;
-    const joined = isMark || (tied && gap < MARK_REACH_EM * item.height);
+    // The parenthesis of a subscript ("I" + "0 (hkl)") follows its symbol with no space.
+    const argument = !!last && !!lowered?.has(item) && !!lowered.has(last) && item.str.trimStart().startsWith("(");
+    const joined = isMark || (tied && gap < MARK_REACH_EM * item.height) || i === labelFrom || argument;
     if (!joined && text && Number.isFinite(cursor) && gap > Math.max(1, item.height * 0.18) && !/\s$/.test(text)) {
       text += " ";
     }
+    if (argument) text = text.trimEnd();
     // A mark sits on the glyph before it: the last that is not a mark itself.
     const base = text.replace(COMBINING_TAIL, "").slice(-1);
-    text += i <= superscripts && raised?.has(item) ? [...item.str].map((c) => SUPERSCRIPT[c] ?? c).join("") : item.str;
+    const written = i <= superscripts && raised?.has(item) ? [...item.str].map((c) => SUPERSCRIPT[c] ?? c).join("") : item.str;
+    text += lowered?.has(item) ? written.replace(/\s+\(/g, "(") : written;
     cursor = item.x + (item.width || 0);
+    if (item.str.trim()) last = item;
+    if (i === labelTo && labelAt >= 0) {
+      const inner = text.slice(labelAt);
+      text = `${text.slice(0, labelAt)}(${inner.trim()})${inner.slice(inner.trimEnd().length)}`;
+      labelAt = labelFrom = labelTo = -1;
+    }
     if (item.str.trim()) {
       markFont = isMark && base.trim() ? item.fontName : null;
       tied = isMark && !!base.trim() && !/\p{L}/u.test(base);
@@ -552,11 +624,11 @@ function linesOfRow(page: number, row: Row): PdfLine[] {
   const ordered = [...row.items].sort((a, b) => a.x - b.x);
   const [first, ...rest] = ordered;
   if (rest.length > 0 && RUN_IN_LABEL.test(first.str.trim()) && first.fontName !== longestRun(rest).fontName) {
-    const label = lineOf(page, row.y, [first], row.raised);
-    const words = lineOf(page, row.y, rest, row.raised);
+    const label = lineOf(page, row.y, [first], row.raised, row.lowered);
+    const words = lineOf(page, row.y, rest, row.raised, row.lowered);
     if (label && words) return [{ ...label, text: label.text.replace(/[:.—–-]$/, "") }, words];
   }
-  const line = lineOf(page, row.y, ordered, row.raised);
+  const line = lineOf(page, row.y, ordered, row.raised, row.lowered);
   return line ? [withStackFacts(line, row, ordered)] : [];
 }
 
