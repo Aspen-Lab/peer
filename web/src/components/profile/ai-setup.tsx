@@ -24,12 +24,17 @@ export const FEED_AI_PROVIDER_OPTIONS: { value: UserAiProvider; label: string }[
   { value: "deepseek", label: "DeepSeek — text only, no image analysis" },
 ];
 
+// No dollar figure lives here, on purpose. The monthly totals that used to sit
+// in this table ("about $8/month" and four more) rested on a basis of about 40
+// opened Deep reports a day (10 papers, 15 events, 15 jobs); events and jobs
+// are stopped, and the repo holds neither that arithmetic nor a per-report
+// price to re-derive a figure from, so the guide says what a bill depends on
+// and does not state a number it cannot back (ruling §1h.60 R4, P9-36).
 type ProviderGuide = {
   name: string;
   verdict: string;
   dropdownTitle: string;
   bestFor: string;
-  estimatedMonthly: string;
   keyUrl: string;
   keyLinkLabel: string;
 };
@@ -41,7 +46,6 @@ const PROVIDER_GUIDES: Record<UserCloudAiProvider, ProviderGuide> = {
     dropdownTitle: "Why Google Gemini is the best value model for most Peer users",
     bestFor:
       "Strong reports, charts, and paper figures at the lowest cost among our two primary recommendations.",
-    estimatedMonthly: "about $8/month",
     keyUrl: "https://aistudio.google.com/apikey",
     keyLinkLabel: "Create a Gemini API key",
   },
@@ -51,7 +55,6 @@ const PROVIDER_GUIDES: Record<UserCloudAiProvider, ProviderGuide> = {
     dropdownTitle: "Why OpenAI is the easiest all-around choice",
     bestFor:
       "Reliable text and image understanding with the simplest familiar option for people who already use ChatGPT.",
-    estimatedMonthly: "about $16/month",
     keyUrl: "https://platform.openai.com/api-keys",
     keyLinkLabel: "Create an OpenAI API key",
   },
@@ -61,7 +64,6 @@ const PROVIDER_GUIDES: Record<UserCloudAiProvider, ProviderGuide> = {
     dropdownTitle: "Why Alibaba Qwen is a low-cost full-feature alternative",
     bestFor:
       "Good text and image capability at low cost, with a slightly more involved account and region setup.",
-    estimatedMonthly: "about $7/month",
     keyUrl: "https://modelstudio.console.alibabacloud.com/",
     keyLinkLabel: "Open Alibaba Model Studio",
   },
@@ -71,8 +73,6 @@ const PROVIDER_GUIDES: Record<UserCloudAiProvider, ProviderGuide> = {
     dropdownTitle: "Why Anthropic Claude is the premium-quality option",
     bestFor:
       "Excellent long-form reading and image understanding when report quality matters more than price.",
-    estimatedMonthly:
-      "about $60/month during Sonnet 5 introductory pricing; about $75/month afterward",
     keyUrl: "https://console.anthropic.com/settings/keys",
     keyLinkLabel: "Create an Anthropic API key",
   },
@@ -82,7 +82,6 @@ const PROVIDER_GUIDES: Record<UserCloudAiProvider, ProviderGuide> = {
     dropdownTitle: "Why DeepSeek is the lowest-cost text-only option",
     bestFor:
       "Text ranking, summaries, and report writing when you do not need figures, charts, or other images analyzed.",
-    estimatedMonthly: "about $7/month",
     keyUrl: "https://platform.deepseek.com/api_keys",
     keyLinkLabel: "Create a DeepSeek API key",
   },
@@ -294,14 +293,9 @@ export function AiProviderGuideDetails({
 
   return (
     <div className="space-y-3 border-t border-border/50 px-4 pb-4 pt-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <p className="max-w-2xl text-caption leading-relaxed text-text-muted">
-          {guide.bestFor}
-        </p>
-        <span className="rounded-full bg-bg px-2.5 py-1 text-micro font-semibold text-text-muted shadow-[inset_0_0_0_1px_rgba(20,20,20,0.06)]">
-          Heavy-use estimate: {guide.estimatedMonthly}
-        </span>
-      </div>
+      <p className="max-w-2xl text-caption leading-relaxed text-text-muted">
+        {guide.bestFor}
+      </p>
 
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="rounded-xl bg-bg/65 p-3">
@@ -325,7 +319,7 @@ export function AiProviderGuideDetails({
           </p>
           <p className="mt-1 text-caption leading-relaxed text-text-muted">
             Stronger reading and extraction for every Deep report you open
-            in Papers, Events, or Jobs.
+            on a paper.
           </p>
         </div>
       </div>
@@ -368,9 +362,9 @@ export function AiProviderGuideDetails({
       )}
 
       <p className="text-micro leading-relaxed text-text-faint">
-        Estimate assumes about 40 opened Deep reports per day (10 papers, 15
-        events, and 15 jobs), plus normal daily ranking and summary use.
-        Actual billing is usage-based and can be much lower.
+        What this costs depends on how many Deep reports you open, plus normal
+        daily ranking and summary use. {guide.name} bills your own key by
+        usage; its price list has the current rates.
       </p>
     </div>
   );
@@ -432,9 +426,9 @@ export function AiProviderGuide({ provider }: { provider: UserAiProvider }) {
           <strong className="text-heading">
             Important: DeepSeek cannot process images in Peer.
           </strong>{" "}
-          It can power text ranking, summaries and text Deep reports across
-          Papers, Events, and Jobs, but Peer will skip figure, chart, diagram,
-          and other image analysis.
+          It can power text ranking, summaries and text Deep reports for
+          papers, but Peer will skip figure, chart, diagram, and other image
+          analysis.
         </div>
       )}
 
