@@ -52,7 +52,7 @@ import type { Claim, PaperReport } from "@/lib/papers/report";
 import type { Route } from "next";
 import { aiAvailability, explainWindowAvailable } from "@/lib/feed/ai-tier";
 import { useSyncGate } from "@/components/profile-sync";
-import { PaperPlate, leadCaption, leadFigurePending } from "@/components/cards/paper-plate";
+import { PaperPlate, isSameFigure, leadCaption, leadFigurePending } from "@/components/cards/paper-plate";
 import { SwipeableCard } from "@/components/cards/swipe-card";
 import { useResolvedFigure } from "@/components/paper-figure";
 import { TitleBlock } from "@/components/reader/title-block";
@@ -1012,37 +1012,26 @@ function Reader({
     doi: paper.doi,
     paperTitle: paper.title,
   });
-  const boundFigure = report?.whatItProposes.figureImageUrl
-    ? {
-        imageUrl: report.whatItProposes.figureImageUrl,
-        caption: report.whatItProposes.figureCaption ?? null,
-      }
-    : null;
+  // P9-55: the lead plate is the figure route's answer for this paper and nothing the report brings —
+  // the picture the briefing's tile had, with a key and without one. The report lands 2-3 s after the
+  // first paint on a keyed first visit; its bound figure used to be swapped into the plate, and the
+  // bound caption (up to three lines) moved the title +68.8 px (1440) / +68.7 px (390). The report's
+  // figures are drawn by its own sections below (`takeBound`), where nothing above them can move.
+  const plateImage =
+    resolvedFigure.imageUrl && !resolvedFigure.hideFigure ? resolvedFigure.imageUrl : null;
   // P9-49 (N8): a sentence or nothing — never the abstract's own block (the figure engine pairs a
   // page-1 graphic with the nearest text), never a cut that ends on a stop and an ellipsis.
   const abstractText = reading?.abstract.sentences.join(" ");
-  const caption = leadCaption(
-    boundFigure
-      ? boundFigure.caption
-      : resolvedFigure.imageUrl && !resolvedFigure.hideFigure
-        ? resolvedFigure.caption
-        : null,
-    abstractText,
-  );
-  // P9-49 (N6): the figure is still on its way (the route has not answered, the report has bound
-  // nothing). The plate's slot is held, with the card shell that frames it, so the title does not
-  // move when the picture lands.
-  const leadPending = leadFigurePending(resolvedFigure, boundFigure);
+  const caption = leadCaption(plateImage ? resolvedFigure.caption : null, abstractText);
+  // P9-49 (N6): the figure is still on its way (the route has not answered). The plate's slot is
+  // held, with the card shell that frames it, so the title does not move when the picture lands.
+  const leadPending = leadFigurePending(resolvedFigure);
   // A paper with neither a figure nor a term of its own has no plate at all
   // (`PaperPlate` renders nothing for it), and the card shell that frames the
   // plate must go with it — an empty swipeable card above the title reads as a
   // picture that failed to load. The page then opens on the title, which is
   // what the one-column phone layout has always done when the plate is short.
-  const hasPlate =
-    Boolean(boundFigure?.imageUrl) ||
-    Boolean(resolvedFigure.imageUrl) ||
-    plateTerms.length > 0 ||
-    leadPending;
+  const hasPlate = Boolean(resolvedFigure.imageUrl) || plateTerms.length > 0 || leadPending;
 
   const abstractSentences = useMemo(() => reading?.abstract.sentences ?? [], [reading]);
   const marks = useMemo(() => {
@@ -1288,14 +1277,19 @@ function Reader({
 
   const keyResults = report?.resultsAndSignificance.keyResults ?? [];
   const methods = report?.whatItProposes.methods ?? [];
-  // The report's bound figures, deduped in page order: the plate first, then
-  // the proposal's, then each result's. The binder can hand one figure to
-  // several places; it is shown once, at the first. Known in render, so a
-  // local set does it; only the figures the sections fetch for themselves
-  // need the registry.
-  const boundShown = new Set<string>(boundFigure?.imageUrl ? [boundFigure.imageUrl] : []);
+  // The report's bound figures, deduped in page order: the plate's own picture
+  // first, then the proposal's, then each result's. The binder can hand one
+  // figure to several places; it is shown once, at the first. Known in render,
+  // so a local set does it; only the figures the sections fetch for themselves
+  // need the registry. P9-55: the plate's picture is the figure route's, not
+  // the report's, so a bound figure is drawn by its section unless it IS that
+  // picture (`isSameFigure`: the same URL, or for a PDF the same caption).
+  const boundShown = new Set<string>(plateImage ? [plateImage] : []);
   const takeBound = (url: string | null | undefined, caption?: string | null) => {
     if (!url || boundShown.has(url)) return null;
+    if (isSameFigure({ imageUrl: plateImage, caption: resolvedFigure.caption }, { imageUrl: url, caption })) {
+      return null;
+    }
     boundShown.add(url);
     return { url, caption };
   };
@@ -1317,9 +1311,7 @@ function Reader({
   // the rectangle goes. The TERMS plate keeps the frame: it is set on
   // `--color-surface`, the card's own colour, and with no frame it would have
   // no edge against the page at all.
-  const plateIsFigure =
-    Boolean(boundFigure?.imageUrl) ||
-    (Boolean(resolvedFigure.imageUrl) && !resolvedFigure.hideFigure);
+  const plateIsFigure = Boolean(plateImage);
   // P7-14 (R10): the answers to the reader's questions are one of the blocks both tabs share, so
   // they are built once, here, and drawn in the common slot — with the field, above the tab's
   // blocks. (A paper with no body has no tabs and no common slot: they stay first in its
@@ -1378,7 +1370,6 @@ function Reader({
               <PaperPlate
                 paper={paper}
                 terms={plateTerms}
-                figure={boundFigure}
                 imageAlt={caption ? "" : undefined}
                 lightbox
                 lead

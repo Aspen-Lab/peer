@@ -46,10 +46,15 @@ export const PLATE_TERM_CLASS = [
 ];
 
 /**
- * A figure the caller already holds — the deep report's bound
- * `whatItProposes.figureImageUrl` + `figureCaption`. It replaces whatever the
- * resolver found; the resolver still runs, because its `/api/figure` entry is
- * the one the card primed and the page shares.
+ * A figure the caller already holds. It replaces whatever the resolver found; the resolver still runs,
+ * because its `/api/figure` entry is the one the card primed and the page shares.
+ *
+ * P9-55: the reading page does not pass one. It used to hand the plate the deep report's bound
+ * `whatItProposes.figureImageUrl` + `figureCaption`, which landed 2-3 s after the first paint on a keyed
+ * first visit with no cached report and swapped the plate's picture; the bound caption (three lines at 1440
+ * and at 390) then moved the title +68.8 px / +68.7 px. The plate is the figure route's answer for the paper
+ * alone — the picture the briefing's tile had, with a key and without one — and the report's bound figure is
+ * drawn by the report's own sections (`isSameFigure` keeps it from being drawn twice).
  */
 export interface PlateFigure {
   imageUrl: string;
@@ -62,7 +67,8 @@ export interface PlateFigure {
  *
  * The reading page asks it twice, of the same state: here, to hold the figure's own box until the
  * picture lands (or the route says there is none), and in `papers/[id]/page.tsx`, to keep the plate's
- * slot (and the card shell that frames it) in the layout while it is held. Without a key the plate used
+ * slot (and the card shell that frames it) in the layout while it is held. (`bound` is the plate's
+ * `figure` prop; the page passes none since P9-55, so only the route can end the hold.) Without a key the plate used
  * to be drawn only when `POST /api/figure` returned (4-5 s on an upload), and the title and the decision
  * block moved 96 px (1440) / 120 px (390) down under a reader about to press "Read it here".
  *
@@ -168,6 +174,25 @@ export function leadCaption(caption: string | null | undefined, abstract?: strin
   const at = /\s/.test(text[LEAD_CAPTION_CHARS - 1] ?? "") ? room.length : room.lastIndexOf(" ");
   const cut = at > LEAD_CAPTION_CHARS / 2 ? room.slice(0, at) : room;
   return `${cut.replace(/[\s,;:.!?\-–—(\[]+$/, "")}…`;
+}
+
+/**
+ * P9-55: is `bound` — a figure the report bound to one of its sections — the picture the lead plate already
+ * draws? A bound figure is drawn once, at the first place the page has it, and the plate is the first: the
+ * section stands down for it. The same HTML figure has the same URL in both. A PDF figure does not: the figure
+ * route hands the plate a `data:` URL and the binder hands the report the figure-image route's URL for the same
+ * region (P9-53), so there the caption — the extractor's, the same text on both sides — says it is the same
+ * figure. A false "different" draws a picture twice; a false "same" would lose one, so only an exact URL or an
+ * exact caption (white space made single, case ignored) counts, and a plate with no picture is no match.
+ */
+export function isSameFigure(
+  plate: { imageUrl?: string | null; caption?: string | null } | null | undefined,
+  bound: { imageUrl?: string | null; caption?: string | null } | null | undefined,
+): boolean {
+  if (!plate?.imageUrl || !bound?.imageUrl) return false;
+  if (plate.imageUrl === bound.imageUrl) return true;
+  const own = squeeze(plate.caption).toLowerCase();
+  return own.length > 0 && own === squeeze(bound.caption).toLowerCase();
 }
 
 /**

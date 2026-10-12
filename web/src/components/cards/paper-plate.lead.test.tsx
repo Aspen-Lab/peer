@@ -80,7 +80,7 @@ describe("the lead plate holds its box from the first paint (rule 1, N6)", () =>
     expect(openTag(html)).toContain('aria-hidden="true"');
   });
 
-  it("keeps drawing the picture itself when one is bound (the keyed first paint with a cached report)", () => {
+  it("keeps drawing the picture itself when one is handed in (the component's `figure` prop; the reading page passes none since P9-55)", () => {
     const html = render(lead({ figure: BOUND }));
     expect(html).toContain("<img");
     expect(html).toContain("data:image/png;base64,AAAA");
@@ -220,7 +220,7 @@ describe("papers/[id]/page.tsx mounts the lead plate (rules 1 and 2)", () => {
   const captionLine = page.slice(page.indexOf("const caption = "), page.indexOf(");", page.indexOf("const caption = ")));
 
   it("keeps the plate's slot (and its card shell) while the figure is on its way: hasPlate reads leadFigurePending", () => {
-    expect(page).toContain("const leadPending = leadFigurePending(resolvedFigure, boundFigure);");
+    expect(page).toContain("const leadPending = leadFigurePending(resolvedFigure);");
     expect(gate).toContain("leadPending");
     expect(page).toContain('plateIsFigure || leadPending ? undefined : "shadow-card"');
   });
