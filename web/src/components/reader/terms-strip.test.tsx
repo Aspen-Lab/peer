@@ -445,3 +445,80 @@ describe("TermsStrip — the term buttons and the fold toggle are touch targets 
     expect(classesOf(toggle(html))).toEqual(expect.arrayContaining(["annotation", "mt-3", "block", "xl:hidden"]));
   });
 });
+
+// P9-58 (A P9-W4's N5 residual): after P9-52 every term button is 44.5 px tall on a phone, but a two-letter term's is
+// 22.5 px wide ("DO", "pH": the word's own width, under the 24 px line A's sweep reads). Where there is no hover
+// (`hover: none`) a term button is at least 24 px wide however short the term, the word centred in it: `min-w-6`, 24 px,
+// not `min-w-11` (44), because a 44 px box would push a two-letter word 11 px in from the left edge the other terms
+// and their quotes line up on, and 24 is the line the sweep draws. The height rule (44 px, the padding, the
+// content-box clip) is P9-52's and stays. A mouse's button is as it was. No layout in this node environment: the
+// boxes are in the checkpoint (docs/reading-helper-abc/P9-58-C-*.md); this block pins the classes that make them.
+describe("TermsStrip — a short term's button is a 24 px wide target where there is no hover (P9-58, N5)", () => {
+  const WIDTH_FLOOR = "[@media(hover:none)]:min-w-6";
+  const TOUCH_PREFIX = "[@media(hover:none)]:";
+  // An invented methods section, with three short terms it uses: two letters ("DO" defined by the paper, "pH" Peer's) and one ("R").
+  const shortDoc: ExtractedDocument = {
+    source: "pdf",
+    pageCount: 2,
+    figureCaptions: [],
+    sections: [
+      { id: "s0", heading: "Abstract", canonical: "abstract", text: "Not in the body." },
+      { id: "s1", heading: "1 Methods", canonical: "methods", page: 1, text: "Dissolved oxygen (DO) was read at the outlet. The pH of every sample was logged. The ratio R fell across the bed." },
+    ],
+  };
+  const shortReading = buildReading(
+    paper,
+    { status: "ok", attempts: [], doc: shortDoc, sourceLink: { url: "https://example.org/p.pdf", kind: "pdf", label: "doi", rank: 1 } } as FullTextResult,
+    new Date("2026-10-05T00:00:00.000Z"),
+  );
+  const DO: PaperTerm = { term: "DO", definition: "Dissolved oxygen (DO) was read at the outlet.", evidence: "Dissolved oxygen (DO) was read at the outlet.", evidenceWhere: "1 Methods", sectionId: "s1", page: 1 };
+  const pH: PaperTerm = { term: "pH", definition: "How acid or basic the water is.", peer: true };
+  const R: PaperTerm = { term: "R", definition: "A ratio the paper reports.", peer: true };
+  const renderShort = () => render({ terms: [DO, pH, R], reading: shortReading, oneColumnOpen: true });
+  const tagsOf = (html: string, tag: string) => html.match(new RegExp(`<${tag}\\b[^>]*>`, "g")) ?? [];
+  const classesOf = (tag: string) => (/\bclass="([^"]*)"/.exec(tag)?.[1] ?? "").split(/\s+/).filter(Boolean);
+  const termButtons = (html: string) => tagsOf(html, "button").filter((tag) => tag.includes("aria-pressed="));
+
+  it("makes every term button at least 24 px wide where there is no hover, however short the term: two letters, one letter", () => {
+    const short = termButtons(renderShort());
+    const long = termButtons(render({ terms: [defined, peers, unplaced] }));
+
+    // All three short terms are in the body, so all three are buttons (a term the body never uses is plain text, and a
+    // test that found none would pass for nothing). QPU and creep are the head's own fixture: the floor is on every button.
+    expect(short.map((tag) => /aria-label="([^"]*)"/.exec(tag)?.[1])).toEqual([TERMS.find("DO"), TERMS.find("pH"), TERMS.find("R")]);
+    expect(long).toHaveLength(2);
+    for (const tag of [...short, ...long]) expect(classesOf(tag), tag).toContain(WIDTH_FLOOR);
+  });
+
+  it("leaves a mouse's width alone and fixes no width: a w-, min-w- or max-w- class is behind hover:none and is a min-w", () => {
+    for (const html of [renderShort(), render({ terms: [defined, peers, unplaced], oneColumnOpen: true })]) {
+      for (const tag of tagsOf(html, "button")) {
+        for (const cls of classesOf(tag)) {
+          if (!/(^|:)(w|min-w|max-w)-/.test(cls)) continue;
+          // behind hover:none, so a mouse's box is the word's own width ...
+          expect(cls.startsWith(TOUCH_PREFIX), cls).toBe(true);
+          // ... and a floor, so a long term ("retention time", 90 px) keeps its own width instead of being fixed or capped at 24.
+          expect(cls.slice(TOUCH_PREFIX.length).startsWith("min-w-"), cls).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("keeps the word centred in its 24 px, and P9-52's height rule beside the width floor: 44 px, 11 px of padding, the highlight clipped to the content box", () => {
+    for (const tag of termButtons(renderShort())) {
+      const classes = classesOf(tag);
+
+      // The word is centred by the button's own (default) text-align: nothing pushes it to a side, by alignment or by one-sided padding or margin.
+      expect(classes.filter((cls) => /(^|:)(text-(left|right|start|end)|justify-|p[lrse]-|px-|ml-|mr-|mx-)/.test(cls)), tag).toEqual([]);
+      // The 44 px height, its padding, and the clip that keeps a marked term's highlight to the word's own line are as P9-52 built them.
+      expect(classes).toEqual(
+        expect.arrayContaining([
+          "[@media(hover:none)]:min-h-11",
+          "[@media(hover:none)]:py-[11px]",
+          "[@media(hover:none)]:bg-clip-content",
+          "aria-pressed:bg-[color:var(--color-term-mark)]",
+        ]),
+      );
+    }
+  });
+});
