@@ -2,6 +2,10 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## Unreleased
+
+Jobs and events code removed; Peer is a paper briefing.
+
 ## v0.45.0 — 2026-10-06
 
 Paper screening with your own Jev key.
