@@ -139,6 +139,19 @@ describe("everything else as it was (P9-50 rule 3)", () => {
     expect(placeCard(line(300, 800), { width: 900, height: 900 })).toMatchObject({ left: 900 - 360 - 12, width: 360 });
   });
 
+  it("the choice of side is P3-02's, measured as it was: the legend's 28 px do not turn a card that stood under a selection into one above it (A's 900 × 900 touch case)", () => {
+    // 221.4 px of room under the selection to a 12-px margin (220 is the card's want): under it, as ever — its extent is then held to the legend.
+    const under = placeCard({ left: 40, top: 611.7, right: 400, bottom: 658.6 }, { width: 900, height: 900 });
+    expect(under.top).toBeCloseTo(666.6, 6);
+    expect(under.bottom).toBeUndefined();
+    expect(bottomEdge(under, 900)).toBe(900 - DOCK_BOTTOM_PX);
+
+    // 219.4 px: not enough, and more room above: above it, as ever.
+    const above = placeCard({ left: 40, top: 613.7, right: 400, bottom: 660.6 }, { width: 900, height: 900 });
+    expect(above.top).toBeUndefined();
+    expect(bottomEdge(above, 900)).toBeCloseTo(613.7 - 8, 6);
+  });
+
   it("the card range's place is placeCard's, the sheet below 640 and the dock from 1024 are untouched", () => {
     const bounds = line(300);
     expect(placePanel(bounds, { width: 768, height: 1000 }, 300)).toEqual({ kind: "card", ...placeCard(bounds, { width: 768, height: 1000 }) });

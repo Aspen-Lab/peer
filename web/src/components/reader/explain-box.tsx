@@ -348,16 +348,20 @@ export function placeCard(
   const left = phone ? CARD_MARGIN : clamp(rect.left, CARD_MARGIN, viewport.width - CARD_WIDTH - CARD_MARGIN);
   const head = cardHead(viewport);
   const foot = cardFoot(viewport);
-  // Under the selection: from its last line, and — for a selection scrolled up under the masthead — no higher than the masthead's foot.
-  const topBelow = Math.max(rect.bottom + CARD_GAP, head);
-  const roomBelow = viewport.height - foot - topBelow;
-  const roomAbove = rect.top - CARD_GAP - head;
+  // Which side is P3-02's choice, measured as it was — the room each side of the selection to a `CARD_MARGIN` from the window's edge — so
+  // that the head and the foot below hold the card where it stands and never move it to the other side of the words.
+  const roomBelow = viewport.height - rect.bottom - CARD_GAP - CARD_MARGIN;
+  const roomAbove = rect.top - CARD_GAP - CARD_MARGIN;
   if (roomBelow >= CARD_ROOM || roomBelow >= roomAbove) {
-    const maxHeight = Math.max(roomBelow, CARD_MIN_HEIGHT);
-    return { left, width, maxHeight, top: Math.min(topBelow, viewport.height - foot - maxHeight) };
+    // Under the selection: from its last line — for a selection scrolled up under the masthead, no higher than the masthead's foot — down
+    // to the legend's top.
+    const top = Math.max(rect.bottom + CARD_GAP, head);
+    const maxHeight = Math.max(viewport.height - foot - top, CARD_MIN_HEIGHT);
+    return { left, width, maxHeight, top: Math.min(top, viewport.height - foot - maxHeight) };
   }
-  // Above it: 8 px clear of its first line — or, for a selection lower than the legend's top, on the legend's top, never below it.
-  const maxHeight = Math.min(Math.max(roomAbove, CARD_MIN_HEIGHT), Math.max(viewport.height - foot - head, CARD_MIN_HEIGHT));
+  // Above it: 8 px clear of its first line — or, for a selection lower than the legend's top, on the legend's top, never below it — and no
+  // higher than the masthead's foot, so a long thread scrolls inside.
+  const maxHeight = Math.min(Math.max(rect.top - CARD_GAP - head, CARD_MIN_HEIGHT), Math.max(viewport.height - foot - head, CARD_MIN_HEIGHT));
   return { left, width, maxHeight, bottom: clamp(viewport.height - rect.top + CARD_GAP, foot, viewport.height - head - maxHeight) };
 }
 
