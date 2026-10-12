@@ -497,7 +497,9 @@ export function DashboardView({
 
 // ── Reading: fancy editorial dashboard ─────────────────────────
 
-function ReadingCard({
+// Exported for a static-markup test (P9-36): its counts come from the feed
+// store, so a test can seed the store and read what the reader is told.
+export function ReadingCard({
   profile,
 }: {
   profile: ReturnType<typeof useProfileStore.getState>["profile"];

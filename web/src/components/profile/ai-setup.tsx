@@ -278,6 +278,104 @@ export function AiProviderRecommendation() {
   );
 }
 
+/**
+ * The expanded body of the selected-provider guide: what the two models are
+ * for and what the reader's own bill rests on. Split out of `AiProviderGuide`
+ * (whose `open` state a static render cannot toggle) so its text can be
+ * rendered, and checked, as the reader sees it.
+ */
+export function AiProviderGuideDetails({
+  provider,
+}: {
+  provider: UserCloudAiProvider;
+}) {
+  const guide = PROVIDER_GUIDES[provider];
+  const models = PROVIDER_MODELS[provider];
+
+  return (
+    <div className="space-y-3 border-t border-border/50 px-4 pb-4 pt-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <p className="max-w-2xl text-caption leading-relaxed text-text-muted">
+          {guide.bestFor}
+        </p>
+        <span className="rounded-full bg-bg px-2.5 py-1 text-micro font-semibold text-text-muted shadow-[inset_0_0_0_1px_rgba(20,20,20,0.06)]">
+          Heavy-use estimate: {guide.estimatedMonthly}
+        </span>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="rounded-xl bg-bg/65 p-3">
+          <p className="eyebrow text-text-faint">
+            Everyday model
+          </p>
+          <p className="mt-1 text-meta font-semibold text-heading">
+            {modelLabel(models.small)}
+          </p>
+          <p className="mt-1 text-caption leading-relaxed text-text-muted">
+            Fast, economical ranking, query building, classification, and
+            short summaries.
+          </p>
+        </div>
+        <div className="rounded-xl bg-bg/65 p-3">
+          <p className="eyebrow text-text-faint">
+            Deep-report model
+          </p>
+          <p className="mt-1 text-meta font-semibold text-heading">
+            {modelLabel(models.large)}
+          </p>
+          <p className="mt-1 text-caption leading-relaxed text-text-muted">
+            Stronger reading and extraction for every Deep report you open
+            in Papers, Events, or Jobs.
+          </p>
+        </div>
+      </div>
+
+      {/*
+        ABC-freemium 6-02 · Ruling 19 point 1. After the swap both Gemini
+        tiers name ONE id, so the two cells above show the same name and
+        the "two models" explanation stops being true for that provider —
+        a promise the screen contradicts, which is the same defect class as
+        a button that leads nowhere. The routing is unchanged and still
+        per-job; only the destination happens to coincide, so the honest
+        version says exactly that.
+      */}
+      {/* Merge note (2026-09-23): the follow-up line keeps Gemini's two tiers on
+          two ids (3.1 Flash-Lite / 3.6 Flash), so today no provider's tiers
+          coincide and the literal types stop overlapping. Compared as plain
+          strings so this still says "one model" the day two tiers match. */}
+      {(models.small as string) === models.large ? (
+        <p className="text-caption leading-relaxed text-text-muted">
+          <strong className="text-heading">Why one model?</strong> You
+          provide one key. For this provider Peer sends both the frequent,
+          simpler work and Deep reports to the same model. You do not need
+          to choose or switch models yourself.
+        </p>
+      ) : (
+        <p className="text-caption leading-relaxed text-text-muted">
+          <strong className="text-heading">Why two models?</strong> You
+          provide one key. Peer automatically sends frequent, simpler work
+          to the economical model and reserves the stronger model for Deep
+          reports. You do not need to choose or switch models yourself.
+        </p>
+      )}
+
+      {provider === "openai" && (
+        <p className="text-caption leading-relaxed text-text-muted">
+          A ChatGPT subscription and OpenAI API billing are separate. Even
+          if you pay for ChatGPT, create an API key and add a small API
+          spending limit for Peer.
+        </p>
+      )}
+
+      <p className="text-micro leading-relaxed text-text-faint">
+        Estimate assumes about 40 opened Deep reports per day (10 papers, 15
+        events, and 15 jobs), plus normal daily ranking and summary use.
+        Actual billing is usage-based and can be much lower.
+      </p>
+    </div>
+  );
+}
+
 /** Selected-provider guidance. Runtime and copy share the same model IDs. */
 export function AiProviderGuide({ provider }: { provider: UserAiProvider }) {
   const [open, setOpen] = useState(false);
@@ -298,7 +396,6 @@ export function AiProviderGuide({ provider }: { provider: UserAiProvider }) {
   }
 
   const guide = PROVIDER_GUIDES[provider];
-  const models = PROVIDER_MODELS[provider];
   const isDeepSeek = provider === "deepseek";
 
   return (
@@ -341,88 +438,7 @@ export function AiProviderGuide({ provider }: { provider: UserAiProvider }) {
         </div>
       )}
 
-      {open && (
-        <div className="space-y-3 border-t border-border/50 px-4 pb-4 pt-3">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <p className="max-w-2xl text-caption leading-relaxed text-text-muted">
-              {guide.bestFor}
-            </p>
-            <span className="rounded-full bg-bg px-2.5 py-1 text-micro font-semibold text-text-muted shadow-[inset_0_0_0_1px_rgba(20,20,20,0.06)]">
-              Heavy-use estimate: {guide.estimatedMonthly}
-            </span>
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div className="rounded-xl bg-bg/65 p-3">
-              <p className="eyebrow text-text-faint">
-                Everyday model
-              </p>
-              <p className="mt-1 text-meta font-semibold text-heading">
-                {modelLabel(models.small)}
-              </p>
-              <p className="mt-1 text-caption leading-relaxed text-text-muted">
-                Fast, economical ranking, query building, classification, and
-                short summaries.
-              </p>
-            </div>
-            <div className="rounded-xl bg-bg/65 p-3">
-              <p className="eyebrow text-text-faint">
-                Deep-report model
-              </p>
-              <p className="mt-1 text-meta font-semibold text-heading">
-                {modelLabel(models.large)}
-              </p>
-              <p className="mt-1 text-caption leading-relaxed text-text-muted">
-                Stronger reading and extraction for every Deep report you open
-                in Papers, Events, or Jobs.
-              </p>
-            </div>
-          </div>
-
-          {/*
-            ABC-freemium 6-02 · Ruling 19 point 1. After the swap both Gemini
-            tiers name ONE id, so the two cells above show the same name and
-            the "two models" explanation stops being true for that provider —
-            a promise the screen contradicts, which is the same defect class as
-            a button that leads nowhere. The routing is unchanged and still
-            per-job; only the destination happens to coincide, so the honest
-            version says exactly that.
-          */}
-          {/* Merge note (2026-09-23): the follow-up line keeps Gemini's two tiers on
-              two ids (3.1 Flash-Lite / 3.6 Flash), so today no provider's tiers
-              coincide and the literal types stop overlapping. Compared as plain
-              strings so this still says "one model" the day two tiers match. */}
-          {(models.small as string) === models.large ? (
-            <p className="text-caption leading-relaxed text-text-muted">
-              <strong className="text-heading">Why one model?</strong> You
-              provide one key. For this provider Peer sends both the frequent,
-              simpler work and Deep reports to the same model. You do not need
-              to choose or switch models yourself.
-            </p>
-          ) : (
-            <p className="text-caption leading-relaxed text-text-muted">
-              <strong className="text-heading">Why two models?</strong> You
-              provide one key. Peer automatically sends frequent, simpler work
-              to the economical model and reserves the stronger model for Deep
-              reports. You do not need to choose or switch models yourself.
-            </p>
-          )}
-
-          {provider === "openai" && (
-            <p className="text-caption leading-relaxed text-text-muted">
-              A ChatGPT subscription and OpenAI API billing are separate. Even
-              if you pay for ChatGPT, create an API key and add a small API
-              spending limit for Peer.
-            </p>
-          )}
-
-          <p className="text-micro leading-relaxed text-text-faint">
-            Estimate assumes about 40 opened Deep reports per day (10 papers, 15
-            events, and 15 jobs), plus normal daily ranking and summary use.
-            Actual billing is usage-based and can be much lower.
-          </p>
-        </div>
-      )}
+      {open && <AiProviderGuideDetails provider={provider} />}
     </div>
   );
 }
