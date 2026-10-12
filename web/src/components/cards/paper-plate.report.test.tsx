@@ -48,9 +48,16 @@ describe("the report's bound figure is drawn where the report draws its sections
     expect(from("const boundShown =", ";")).toBe("const boundShown = new Set<string>(plateImage ? [plateImage] : [])");
   });
 
-  it("stands a bound figure down only for the picture the plate already draws", () => {
-    const take = from("const takeBound =", "};");
-    expect(take).toContain("isSameFigure({ imageUrl: plateImage, caption: resolvedFigure.caption }, { imageUrl: url, caption })");
+  it("draws a bound figure unless it is already shown or IS the plate's own picture — the whole of takeBound", () => {
+    // Whole, so that a `takeBound` that drops every figure (a picture lost), or none (a picture twice), is red.
+    const take = from("const takeBound =", "\n  };").replace(/\s+/g, " ").trim();
+    expect(take).toBe(
+      "const takeBound = (url: string | null | undefined, caption?: string | null) => { " +
+        "if (!url || boundShown.has(url)) return null; " +
+        "if (isSameFigure({ imageUrl: plateImage, caption: resolvedFigure.caption }, { imageUrl: url, caption })) { return null; } " +
+        "boundShown.add(url); " +
+        "return { url, caption };",
+    );
   });
 
   it("still hands the proposal block the bound figure, and each result its own", () => {
