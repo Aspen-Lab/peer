@@ -10,6 +10,7 @@ import { SectionLinks } from "./evidence-quote";
 import {
   ExplainCard,
   ExplainBox,
+  buttonStyle,
   definingTerm,
   explainLlmOverride,
   placeButton,
@@ -20,7 +21,7 @@ import {
   termSource,
   type ExplainStatus,
 } from "./explain-box";
-import { DOCK_TOP_PX, MASTHEAD_MIN_VIEWPORT_PX } from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_TOP_PX, MASTHEAD_MIN_VIEWPORT_PX, THUMB_BAR_PX } from "./explain-dock";
 import type { ExplainSelection } from "./paper-body";
 
 // P3-02 (ruling §1h.2; §3d 14): the button beside a selected passage and the
@@ -104,18 +105,21 @@ describe("ExplainBox — when the button shows (§1h.2)", () => {
     expect(render({ canAsk: false, terms: [{ ...peerOnly, term: "rafting ratio" }] })).toBe("");
   });
 
-  it("sets the button in the label face, fixed beside the selection, inside the viewport", () => {
+  it("sets the button in the label face, fixed, inside the viewport — on the page's furniture where the body reported no paragraph (re-aimed, P9-20: was beside the selection, just under where it ends)", () => {
     const html = render();
     const style = /style="([^"]*)"/.exec(html)?.[1] ?? "";
-    const left = Number(/left:\s*(\d+(?:\.\d+)?)px/.exec(style)?.[1]);
-    const top = Number(/top:\s*(\d+(?:\.\d+)?)px/.exec(style)?.[1]);
+    const right = /right:\s*calc\(100% - (\d+(?:\.\d+)?)px\)/.exec(style)?.[1];
+    const bottom = /bottom:\s*([^;]+)/.exec(style)?.[1];
 
     expect(html).toMatch(/class="[^"]*\bfixed\b/);
     expect(html).toMatch(/class="[^"]*\bfont-mono\b/);
-    expect(top).toBe(selection.rect.bottom + 6);
-    expect(left).toBe(selection.rect.right - 60);
-    expect(left).toBeGreaterThanOrEqual(8);
-    expect(left).toBeLessThanOrEqual(1024 - 8);
+    // 800 px: the foot legend's strip (28 px) and a margin (8) above it; its right edge a margin from the window's (800 − 8).
+    expect(bottom).toBe(`${DOCK_BOTTOM_PX + 8}px`);
+    expect(Number(right)).toBe(800 - 8);
+    // Not under the selection: nothing in the style comes from where the words are.
+    expect(style).not.toMatch(/(?:^|;)\s*top:/);
+    expect(style).not.toMatch(/(?:^|;)\s*left:/);
+    expect(Number(right)).toBeGreaterThanOrEqual(120 + 8);
   });
 
   it("sends nothing and shows no card until it is clicked: the closed popover is the button alone", () => {
@@ -124,6 +128,60 @@ describe("ExplainBox — when the button shows (§1h.2)", () => {
     expect(html).not.toContain("role=\"dialog\"");
     expect(html).not.toContain(EXPLAIN.loading);
     expect(html).not.toContain(EXPLAIN.meaning);
+  });
+});
+
+// P9-20 (A P9-W2's X13): where no gutter stands the floating button was just under the selection's end and covered the next line's
+// words (116 x 34 px = 2,120 px² at 700, 640 and 390). It stands on the page's own bottom furniture now: above the thumb bar under
+// 768 px, above the foot legend from it. The markup at each width (no DOM in this project's Vitest; the pixels are measured in a browser).
+describe("ExplainBox — the floating button where no gutter stands stands on the page's furniture (P9-20, X13)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const at = (width: number, over: Partial<PopoverProps> = {}) => {
+    vi.stubGlobal("window", { innerWidth: width, innerHeight: 844 });
+    const html = render(over);
+    const style = /style="([^"]*)"/.exec(html)?.[1] ?? "";
+    return { html, style };
+  };
+  const paragraphAt = (right: number): ExplainSelection => ({ ...selection, paragraph: { left: 16, top: 300, right, bottom: 640 } });
+  const BAR_LIFT = `calc(${THUMB_BAR_PX}px + env(safe-area-inset-bottom) + 8px)`;
+
+  it("on a phone and under 768 px it is a pill 8 px above the thumb bar's top edge, its right edge on the column's", () => {
+    for (const [width, right] of [[390, 374], [640, 624], [700, 684], [767, 751]] as const) {
+      const { html, style } = at(width, { target: paragraphAt(right) });
+
+      expect(html, `${width} px`).toContain(">Explain this?<");
+      expect(style, `${width} px`).toContain(`right:calc(100% - ${right}px)`);
+      expect(style, `${width} px`).toContain(`bottom:${BAR_LIFT}`);
+      // Not under the selection (`selection.rect.bottom` + 6 was the old top): no `top`, no `left`.
+      expect(style, `${width} px`).not.toMatch(/(?:^|;)(?:top|left):/);
+    }
+  });
+
+  it("from 768 px with no gutter it is a pill 8 px above the foot legend's top edge: the legend's 28 px and the margin", () => {
+    // 800 px wide, the paragraph's right edge at 700: 100 px to its right, less than the 136 the button and its margins need.
+    for (const width of [768, 800, 1000]) {
+      const { style } = at(width, { target: paragraphAt(width - 100) });
+
+      expect(style, `${width} px`).toContain(`right:calc(100% - ${width - 100}px)`);
+      expect(style, `${width} px`).toContain(`bottom:${DOCK_BOTTOM_PX + 8}px`);
+      expect(style, `${width} px`).not.toMatch(/(?:^|;)(?:top|left):/);
+    }
+  });
+
+  it("where a gutter stands the button is beside the words, as it was: `left` and `top`, no `bottom`", () => {
+    const { style } = at(800, { target: paragraphAt(600) });
+
+    expect(style).toContain(`left:${600 + 6}px`);
+    expect(style).toMatch(/(?:^|;)top:\d/);
+    expect(style).not.toContain("bottom:");
+    expect(style).not.toContain("right:");
+  });
+
+  it("is the same pill wherever in the page the selection is: its place does not read the selection's rectangles", () => {
+    const high: ExplainSelection = { ...paragraphAt(374), rect: { left: 40, top: 40, right: 100, bottom: 60 }, bounds: { left: 16, top: 20, right: 374, bottom: 60 } };
+    const low: ExplainSelection = { ...paragraphAt(374), rect: { left: 40, top: 700, right: 300, bottom: 720 }, bounds: { left: 16, top: 640, right: 374, bottom: 720 } };
+
+    expect(at(390, { target: high }).style).toBe(at(390, { target: low }).style);
   });
 });
 
@@ -289,26 +347,38 @@ describe("the pure rules", () => {
     expect(termSource({ ...rafting, evidenceWhere: undefined, sectionId: undefined, page: undefined }, reading)).toEqual({ where: "abstract", page: undefined });
   });
 
-  it("placeButton: just below the selection, flipped above at the foot of the window, always inside it", () => {
+  it("placeButton: with no paragraph reported it stands on the page's furniture, never just below the selection, and always inside the window (re-aimed, P9-20: was just below the selection's end, flipped above at the foot of the window)", () => {
     const vp = { width: 1024, height: 768 };
+    const room = 120 + 8;
 
-    // Centred under where the selection ends.
-    expect(placeButton({ left: 300, top: 400, right: 420, bottom: 420 }, vp)).toEqual({ left: 360, top: 426 });
-    expect(placeButton({ left: 300, top: 740, right: 420, bottom: 760 }, vp).top).toBeLessThan(740);
-    expect(placeButton({ left: 1000, top: 100, right: 1020, bottom: 120 }, vp).left).toBe(1024 - 8 - 120);
-    expect(placeButton({ left: -50, top: 100, right: 10, bottom: 120 }, vp).left).toBe(8);
-    for (const rect of [{ left: 5, top: 5, right: 9, bottom: 9 }, { left: 900, top: 760, right: 1020, bottom: 780 }]) {
-      const at = placeButton(rect, vp);
-      expect(at.top).toBeGreaterThanOrEqual(8);
-      expect(at.top).toBeLessThanOrEqual(768);
+    // No gutter is known: the foot legend's strip from 768 px, a margin above its top edge; the right edge on the window's margin.
+    expect(placeButton({ left: 300, top: 400, right: 420, bottom: 420 }, vp)).toEqual({ edge: 1024 - 8, bottom: `${DOCK_BOTTOM_PX + 8}px` });
+    // Wherever the selection is — mid-page, at the foot of the window, off its left edge — the pill is where it was (it was under the end).
+    for (const rect of [{ left: 300, top: 400, right: 420, bottom: 420 }, { left: 300, top: 740, right: 420, bottom: 760 }, { left: 1000, top: 100, right: 1020, bottom: 120 }, { left: -50, top: 100, right: 10, bottom: 120 }, { left: 5, top: 5, right: 9, bottom: 9 }]) {
+      expect(placeButton(rect, vp)).toEqual({ edge: 1024 - 8, bottom: `${DOCK_BOTTOM_PX + 8}px` });
+    }
+    // Always inside the window, down to the narrowest that holds the button and a margin each side (136).
+    for (const width of [136, 390, 767, 768, 1024]) {
+      const at = placeButton({ left: 5, top: 5, right: 9, bottom: 9 }, { width, height: 768 });
+      expect("edge" in at).toBe(true);
+      const { edge } = at as { edge: number };
+      expect(edge).toBeGreaterThanOrEqual(room);
+      expect(edge).toBeLessThanOrEqual(width - 8);
     }
   });
 
   // P9-03 (the feature walk's X13: at 1440 the button stood at (535,317), 116 x 34, over the body text of the
   // selected paragraph — the next line of the paragraph it was beside). A control stands beside the words, never on
   // them: with the paragraph's box known and room to its right, the button stands in the gutter, level with the
-  // selection, and below the selection's end only where there is no gutter (a phone, a narrow window).
+  // selection, and below the selection's end only where there is no gutter (a phone, a narrow window) — re-aimed, P9-20: where there is
+  // none it stands on the page's bottom furniture (the next describe).
   describe("placeButton: the gutter beside the paragraph (P9-03)", () => {
+    // The gutter's place is a corner (`left`, `top`); the helper says so, and narrows the type.
+    const inGutter = (...args: Parameters<typeof placeButton>) => {
+      const place = placeButton(...args);
+      expect("top" in place, "a gutter place has a corner").toBe(true);
+      return place as { left: number; top: number };
+    };
     // The viewport the box passes while the dock stands: 1440 less the 376 px the page keeps clear.
     const docked = { width: 1440 - 376, height: 1000 };
     const paragraph = { left: 408, top: 280, right: 900, bottom: 540 };
@@ -318,7 +388,7 @@ describe("the pure rules", () => {
       // A selection of three lines: it begins on the line at 317 and ends on the one at 357 (`rect`, the last line).
       const lines = { left: 410, top: 317, right: 898, bottom: 377 };
       const last = { left: 410, top: 357, right: 700, bottom: 377 };
-      const at = placeButton(last, docked, paragraph, lines);
+      const at = inGutter(last, docked, paragraph, lines);
 
       // P9-03b: the first line's top (317), not the last's (357).
       expect(at).toEqual({ left: 900 + 6, top: 317 });
@@ -338,7 +408,7 @@ describe("the pure rules", () => {
 
     it("(b) the first line's top is held inside the window: a margin from the head, the button's foot a margin above the window's foot (re-aimed, P9-03b: was the last line's)", () => {
       // The selection's first line is at `top`; it ends 40 px lower. 1000 − 8 (margin) − 32 (the button's height) = 960.
-      const at = (top: number, viewport = docked) => placeButton({ left: 600, top: top + 40, right: 700, bottom: top + 60 }, viewport, paragraph, { left: 410, top, right: 700, bottom: top + 60 });
+      const at = (top: number, viewport = docked) => inGutter({ left: 600, top: top + 40, right: 700, bottom: top + 60 }, viewport, paragraph, { left: 410, top, right: 700, bottom: top + 60 });
       expect(at(990)).toEqual({ left: 906, top: 960 });
       expect(at(960).top).toBe(960);
       expect(at(959).top).toBe(959);
@@ -360,60 +430,63 @@ describe("the pure rules", () => {
       // A's scratch: 800 x 900, the paragraph's right edge at 639, the selection's first line 120 px above the window.
       const paragraph800 = { left: 44, top: -300, right: 639, bottom: 420 };
       const first = { left: 60, top: -120, right: 600, bottom: 200 };
-      const at800 = placeButton({ left: 300, top: 176, right: 420, bottom: 200 }, { width: 800, height: 900 }, paragraph800, first);
+      const at800 = inGutter({ left: 300, top: 176, right: 420, bottom: 200 }, { width: 800, height: 900 }, paragraph800, first);
 
       expect(at800.left).toBeGreaterThanOrEqual(paragraph800.right);
       expect(at800.top).toBeGreaterThanOrEqual(DOCK_TOP_PX);
       expect(at800).toEqual({ left: 645, top: DOCK_TOP_PX + 8 });
       // The measure's case: 900 x 900, a paragraph straddling the head.
-      const at900 = placeButton({ left: 300, top: 176, right: 420, bottom: 200 }, { width: 900, height: 900 }, { left: 44, top: -300, right: 689, bottom: 420 }, first);
+      const at900 = inGutter({ left: 300, top: 176, right: 420, bottom: 200 }, { width: 900, height: 900 }, { left: 44, top: -300, right: 689, bottom: 420 }, first);
       expect(at900.top).toBeGreaterThanOrEqual(56);
       // The boundary is the masthead's own: Tailwind's `md`, 768 px.
       expect(MASTHEAD_MIN_VIEWPORT_PX).toBe(768);
-      const atWidth = (width: number) => placeButton({ left: 300, top: 176, right: 420, bottom: 200 }, { width, height: 900 }, { left: 44, top: -300, right: width - 200, bottom: 420 }, first).top;
+      const atWidth = (width: number) => inGutter({ left: 300, top: 176, right: 420, bottom: 200 }, { width, height: 900 }, { left: 44, top: -300, right: width - 200, bottom: 420 }, first).top;
       // Under 768 px there is no masthead (`hidden md:grid`): the window's own margin, as before.
       expect(atWidth(767)).toBe(8);
       expect(atWidth(768)).toBe(56);
       expect(atWidth(1064)).toBe(56);
       // Below the head it is untouched: a first line at 56 or lower is where it was; one at 40 is moved down to 56.
-      const line = (top: number) => placeButton({ left: 300, top, right: 420, bottom: top + 20 }, { width: 900, height: 900 }, { left: 44, top: top - 20, right: 689, bottom: 420 }, { left: 60, top, right: 600, bottom: 200 }).top;
+      const line = (top: number) => inGutter({ left: 300, top, right: 420, bottom: top + 20 }, { width: 900, height: 900 }, { left: 44, top: top - 20, right: 689, bottom: 420 }, { left: 60, top, right: 600, bottom: 200 }).top;
       expect(line(56)).toBe(56);
       expect(line(300)).toBe(300);
       expect(line(40)).toBe(56);
     });
 
-    it("(c) with no paragraph reported it is today's place: under where the selection ends, flipped above at the foot", () => {
+    it("(c) with no paragraph reported it stands on the furniture, right-aligned to the window's margin (re-aimed, P9-20: was today's place, under where the selection ends, flipped above at the foot)", () => {
       const vp = { width: 1024, height: 768 };
-      expect(placeButton({ left: 300, top: 400, right: 420, bottom: 420 }, vp, undefined)).toEqual({ left: 360, top: 426 });
+      const legend = { edge: 1024 - 8, bottom: `${DOCK_BOTTOM_PX + 8}px` };
+      expect(placeButton({ left: 300, top: 400, right: 420, bottom: 420 }, vp, undefined)).toEqual(legend);
       expect(placeButton(rect, docked, undefined)).toEqual(placeButton(rect, docked));
-      expect(placeButton(rect, docked)).toEqual({ left: 700 - 60, top: 337 + 6 });
-      expect(placeButton({ left: 300, top: 740, right: 420, bottom: 760 }, vp, undefined).top).toBe(740 - 6 - 32);
-      // P9-03b: the first line is for the gutter only — where the button stands under the selection it is the END that
-      // it stands under, whatever the whole selection's box, and with no paragraph the `bounds` change nothing.
+      expect(placeButton(rect, docked)).toEqual({ edge: 1064 - 8, bottom: `${DOCK_BOTTOM_PX + 8}px` });
+      // At the foot of the window it is no longer flipped above the selection: the strip it stands on is the foot's.
+      expect(placeButton({ left: 300, top: 740, right: 420, bottom: 760 }, vp, undefined)).toEqual(legend);
+      // P9-03b: the first line is for the gutter only — the whole selection's box changes nothing where there is none.
       const whole = { left: 100, top: 200, right: 420, bottom: 420 };
-      expect(placeButton({ left: 300, top: 400, right: 420, bottom: 420 }, vp, undefined, whole)).toEqual({ left: 360, top: 426 });
+      expect(placeButton({ left: 300, top: 400, right: 420, bottom: 420 }, vp, undefined, whole)).toEqual(legend);
     });
 
-    it("(d) a paragraph with less than 136 px (the button, a margin each side) to its right gets today's place; with exactly 136, the gutter", () => {
+    it("(d) a paragraph with less than 136 px (the button, a margin each side) to its right gets the furniture (re-aimed, P9-20: was today's place under the selection's end); with exactly 136, the gutter", () => {
       const noRoom = { left: 408, top: 280, right: 1064 - 135, bottom: 540 };
-      expect(placeButton(rect, docked, noRoom)).toEqual(placeButton(rect, docked));
-      expect(placeButton(rect, docked, noRoom)).toEqual({ left: 700 - 60, top: 337 + 6 });
-      // …and the whole selection's box (P9-03b) does not move it: it stands under where the selection ends.
-      expect(placeButton(rect, docked, noRoom, { left: 410, top: 200, right: 898, bottom: 337 })).toEqual({ left: 700 - 60, top: 337 + 6 });
+      // 1064 px: the foot legend's strip; the pill's right edge is the column's.
+      expect(placeButton(rect, docked, noRoom)).toEqual({ edge: 1064 - 135, bottom: `${DOCK_BOTTOM_PX + 8}px` });
+      // …and the whole selection's box (P9-03b) does not move it.
+      expect(placeButton(rect, docked, noRoom, { left: 410, top: 200, right: 898, bottom: 337 })).toEqual(placeButton(rect, docked, noRoom));
       // One pixel more room is the gutter, and it ends a margin and two pixels short of the window's edge.
       const justRoom = { left: 408, top: 280, right: 1064 - 136, bottom: 540 };
-      const at = placeButton(rect, docked, justRoom);
+      const at = inGutter(rect, docked, justRoom);
       expect(at).toEqual({ left: 1064 - 136 + 6, top: 317 });
       expect(at.left + 120).toBeLessThanOrEqual(1064 - 8);
-      // A column flush with the window's edge, and a phone.
-      expect(placeButton(rect, docked, { left: 0, top: 280, right: 1064, bottom: 540 })).toEqual(placeButton(rect, docked));
+      // A column flush with the window's edge: the pill's right edge is held a margin inside it.
+      expect(placeButton(rect, docked, { left: 0, top: 280, right: 1064, bottom: 540 })).toEqual({ edge: 1064 - 8, bottom: `${DOCK_BOTTOM_PX + 8}px` });
+      // A phone: no gutter at 390 px (16 px to the column's right), so the thumb bar's strip, its right edge on the column's.
       const phone = { width: 390, height: 780 };
-      expect(placeButton({ left: 40, top: 300, right: 200, bottom: 320 }, phone, { left: 16, top: 250, right: 374, bottom: 600 })).toEqual(
-        placeButton({ left: 40, top: 300, right: 200, bottom: 320 }, phone),
-      );
+      expect(placeButton({ left: 40, top: 300, right: 200, bottom: 320 }, phone, { left: 16, top: 250, right: 374, bottom: 600 })).toEqual({
+        edge: 374,
+        bottom: `calc(${THUMB_BAR_PX}px + env(safe-area-inset-bottom) + 8px)`,
+      });
     });
 
-    it("for any paragraph, selection and window: in the gutter it never touches the paragraph and stays inside the window; without one it is today's place", () => {
+    it("for any paragraph, selection and window: in the gutter it never touches the paragraph and stays inside the window; without one it is on the furniture, wherever the selection is (re-aimed, P9-20: was today's place)", () => {
       let gutter = 0;
       let fallback = 0;
       for (const vp of [docked, { width: 1440, height: 900 }, { width: 904, height: 800 }, { width: 1024, height: 768 }, { width: 640, height: 700 }, { width: 390, height: 780 }]) {
@@ -423,9 +496,9 @@ describe("the pure rules", () => {
             const where = { left: 120, top, right: Math.min(right, 400), bottom: top + 20 };
             // P9-03b: the selection began 60 px higher (three lines or so) than the line it ends on.
             const whole = { left: 100, top: top - 60, right: Math.min(right, 400), bottom: top + 20 };
-            const at = placeButton(where, vp, box, whole);
             if (vp.width - right >= 120 + 2 * 8) {
               gutter += 1;
+              const at = inGutter(where, vp, box, whole);
               expect(at.left).toBeGreaterThanOrEqual(right);
               expect(at.left + 120).toBeLessThanOrEqual(vp.width - 8);
               // P9-17: from 768 px the head is the masthead's foot and a margin, below it the window's own margin.
@@ -436,7 +509,13 @@ describe("the pure rules", () => {
               if (whole.top >= head && whole.top + 32 <= vp.height - 8) expect(at.top).toBe(whole.top);
             } else {
               fallback += 1;
-              expect(at).toEqual(placeButton(where, vp));
+              const at = placeButton(where, vp, box, whole);
+              // On the furniture: no corner, whatever the selection's rectangles are…
+              expect("edge" in at).toBe(true);
+              expect(at).toEqual(placeButton({ left: 0, top: 0, right: 1, bottom: 1 }, vp, box));
+              // …its right edge on the column's, held inside the window.
+              const { edge } = at as { edge: number };
+              expect(edge).toBe(Math.min(Math.max(right, 128), vp.width - 8));
             }
           }
         }
@@ -444,6 +523,47 @@ describe("the pure rules", () => {
       // Both branches were exercised.
       expect(gutter).toBeGreaterThan(20);
       expect(fallback).toBeGreaterThan(20);
+    });
+  });
+
+  // P9-20 (A P9-W2's X13): where no gutter stands, the pill stands on the page's own bottom furniture — a strip the page already
+  // reserves — never on the words. Under 768 px (`md`) the furniture is the phone's thumb bar, from 768 px the foot legend.
+  describe("placeButton: the page's bottom furniture where no gutter stands (P9-20, X13)", () => {
+    const column = (width: number) => ({ left: 16, top: 250, right: width - 16, bottom: 900 });
+    const where = { left: 40, top: 300, right: 200, bottom: 320 };
+
+    it("under 768 px it is 8 px above the thumb bar's top edge: the bar's 56 px and the safe area, then the margin", () => {
+      for (const width of [390, 480, 640, 700, 767]) {
+        expect(placeButton(where, { width, height: 844 }, column(width)), `${width} px`).toEqual({
+          edge: width - 16,
+          bottom: `calc(${THUMB_BAR_PX}px + env(safe-area-inset-bottom) + 8px)`,
+        });
+      }
+      expect(THUMB_BAR_PX).toBe(56);
+    });
+
+    it("from 768 px it is 8 px above the foot legend's top edge (the legend's 28 px, then the margin)", () => {
+      // 768 to ~900 the column leaves too little to its right at some widths; the pill takes the legend's strip there.
+      for (const width of [768, 800, 1024, 1440]) {
+        expect(placeButton(where, { width, height: 900 }, { left: 16, top: 250, right: width - 100, bottom: 900 }), `${width} px`).toEqual({
+          edge: width - 100,
+          bottom: `${DOCK_BOTTOM_PX + 8}px`,
+        });
+      }
+    });
+
+    it("the breakpoint is the masthead's and the shell's `md`: 767 is the bar's, 768 the legend's", () => {
+      expect(MASTHEAD_MIN_VIEWPORT_PX).toBe(768);
+      expect((placeButton(where, { width: 767, height: 844 }, column(767)) as { bottom: string }).bottom).toContain("env(safe-area-inset-bottom)");
+      expect((placeButton(where, { width: 768, height: 844 }, { left: 16, top: 250, right: 760, bottom: 900 }) as { bottom: string }).bottom).toBe("36px");
+    });
+
+    it("buttonStyle: a gutter place is its corner; a furniture place is its right edge and its lift, `fixed` in the window's own pixels", () => {
+      expect(buttonStyle({ left: 906, top: 317 })).toEqual({ left: 906, top: 317 });
+      expect(buttonStyle({ edge: 374, bottom: "64px" })).toEqual({ right: "calc(100% - 374px)", bottom: "64px" });
+      // The same place for the same input: nothing in it moves with the page's scroll (the box passes the measured rectangles; this one ignores them).
+      const style = (top: number) => buttonStyle(placeButton({ left: 40, top, right: 200, bottom: top + 20 }, { width: 390, height: 844 }, column(390)));
+      expect(style(100)).toEqual(style(700));
     });
   });
 

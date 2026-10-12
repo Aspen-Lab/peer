@@ -513,7 +513,7 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     run.mounted.unmount();
   });
 
-  it("keeps the new selection's control clear of the window: no floating button stands under the 376 px the page leaves free (re-aimed, P9-03b: the window carries it)", async () => {
+  it("keeps the new selection's control clear of the window: no floating button stands under the 376 px the page leaves free (re-aimed, P9-03b: the window carries it; P9-20: before any window the button is on the page's furniture)", async () => {
     stubWindow(1280, 800);
     const late: ExplainSelection = { ...second, rect: { left: 700, top: 600, right: 1000, bottom: 620 }, bounds: { left: 700, top: 580, right: 1000, bottom: 620 } };
     // P8-06 (re-aimed): "no window yet" is now the reader with no key, whose Tier 0 definition opens on the press
@@ -521,8 +521,9 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     // `explain-box.empty.flow.test.tsx`).
     const lateDefined: ExplainSelection = { ...late, passage: "The rafting ratio is the same in all bars." };
     const before = await scenario(base({ target: lateDefined, canAsk: false, terms: [term], cached: undefined }), []);
-    // No window yet: the button is centred on the end of the selection, as it always was.
-    expect(before.last().button?.props.style).toEqual({ left: 1000 - 60, top: 620 + 6 });
+    // No window yet, and the body reported no paragraph (no gutter is known): re-aimed, P9-20 — the button is not centred under the
+    // end of the selection (it covered the next line) but stands on the foot legend's strip, 28 + 8 px up, a margin from the window's edge.
+    expect(before.last().button?.props.style).toEqual({ right: "calc(100% - 1272px)", bottom: "36px" });
     before.mounted.unmount();
 
     const opened = await scenario(base({ target: first }), [(tree) => click(tree), selectNext(late, { cached: undefined })]);
@@ -534,10 +535,11 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     opened.mounted.unmount();
   });
 
-  it("measures the new selection again as the page scrolls, for its button (re-aimed, P9-03b: in the card range, where a floating button still stands)", async () => {
+  it("measures the new selection again as the page scrolls, for its button (re-aimed, P9-03b: in the card range, where a floating button still stands; P9-20: in the gutter, where it follows the words — on the furniture it stands still, next test)", async () => {
     stubWindow(800, 900);
     let rect = { left: 200, top: 600, right: 460, bottom: 620 };
-    const moving: ExplainSelection = { ...second, measure: () => ({ rect, bounds: rect }) };
+    const paragraphAt = () => ({ left: 120, top: rect.top - 20, right: 600, bottom: rect.top + 240 });
+    const moving: ExplainSelection = { ...second, paragraph: paragraphAt(), measure: () => ({ rect, bounds: rect, paragraph: paragraphAt() }) };
     const run = await scenario(base({ target: moving, cached: undefined }), [
       () => {
         rect = { left: 200, top: 300, right: 460, bottom: 320 };
@@ -547,8 +549,43 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     ]);
     await wait();
 
-    expect(run.last().button?.props.style).toEqual({ left: 460 - 60, top: 320 + 6 });
+    // In the gutter (200 px right of the paragraph): beside the selection's first line, wherever the page has scrolled it to.
+    expect(run.last().button?.props.style).toEqual({ left: 600 + 6, top: 300 });
     run.mounted.unmount();
+  });
+
+  it("P9-20: on the furniture the button does not move as the page scrolls: it stands put while the selection stands, and goes with it", async () => {
+    stubWindow(390, 844);
+    let rect = { left: 40, top: 600, right: 300, bottom: 620 };
+    // The column's right edge is the pill's; the body reports it again with each measure, and it does not move with the scroll.
+    const paragraphAt = () => ({ left: 16, top: rect.top - 20, right: 374, bottom: rect.top + 240 });
+    const moving: ExplainSelection = { ...second, paragraph: paragraphAt(), measure: () => ({ rect, bounds: rect, paragraph: paragraphAt() }) };
+    const styles: unknown[] = [];
+    const run = await scenario(base({ target: moving, cached: undefined }), [
+      (tree) => styles.push(look(tree).button?.props.style),
+      () => {
+        rect = { left: 40, top: 120, right: 300, bottom: 140 };
+        fire("scroll", {});
+      },
+      (tree) => styles.push(look(tree).button?.props.style),
+      () => {
+        rect = { left: 40, top: -300, right: 300, bottom: -280 };
+        fire("scroll", {});
+      },
+      (tree) => styles.push(look(tree).button?.props.style),
+    ]);
+    await wait();
+    styles.push(run.last().button?.props.style);
+
+    const pill = { right: "calc(100% - 374px)", bottom: "calc(56px + env(safe-area-inset-bottom) + 8px)" };
+    expect(styles.length).toBeGreaterThanOrEqual(3);
+    expect(styles.every((style) => JSON.stringify(style) === JSON.stringify(pill))).toBe(true);
+    run.mounted.unmount();
+
+    // Gone with the selection: no selection, no pill.
+    const away = await scenario(base({ target: null, cached: undefined }), []);
+    expect(away.last().button).toBeUndefined();
+    away.mounted.unmount();
   });
 
   // P9-03 (the feature walk's X13): the button stands beside the words, never on them. The body reports the
@@ -577,12 +614,13 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     run.mounted.unmount();
   });
 
-  it("P9-03: a paragraph that leaves the window less than 136 px keeps today's place under the selection's end (re-aimed, P9-03b: the card range, no dock to narrow the window)", async () => {
+  it("P9-03: a paragraph that leaves the window less than 136 px gets the page's furniture, not a place under the selection's end (re-aimed, P9-03b: the card range, no dock to narrow the window; P9-20: was today's place under the selection's end)", async () => {
     stubWindow(800, 900);
     // The paragraph ends at 700: 100 px to its right.
     const tight: ExplainSelection = { ...second, rect: { left: 500, top: 600, right: 640, bottom: 620 }, paragraph: { left: 120, top: 560, right: 700, bottom: 860 } };
     const run = await scenario(base({ target: tight, cached: undefined }), []);
-    expect(run.last().button?.props.style).toEqual({ left: 640 - 60, top: 620 + 6 });
+    // 800 px: the foot legend's strip, a margin above it; the pill's right edge is the column's (700).
+    expect(run.last().button?.props.style).toEqual({ right: "calc(100% - 700px)", bottom: "36px" });
     run.mounted.unmount();
 
     // One pixel on the threshold's other side (800 − 136 = 664): the gutter.

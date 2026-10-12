@@ -732,13 +732,13 @@ describe("ExplainBox — the page keeps the dock's width clear while it is open 
     run.mounted.unmount();
   });
 
-  it("reads where the selection is after the page has reflowed, so the button stands by the words again once the dock closes (re-aimed, P9-03b: a reader with no key — the Tier 0 definition window is the dock that comes and goes; a key reader's window stands from the mount, with no floating button beside it)", async () => {
-    // What the page captured when the selection was made (`first.rect`: right 420, bottom 420) is not
-    // where the words stand once the dock has come and gone: after the reflow they are at right 700,
-    // bottom 500 in the wide page. The button must follow the measure, not the first capture.
-    const wide = { rect: { left: 560, top: 480, right: 700, bottom: 500 }, bounds: { left: 560, top: 480, right: 700, bottom: 500 } };
-    const narrow = { rect: { left: 300, top: 900, right: 380, bottom: 920 }, bounds: { left: 300, top: 900, right: 380, bottom: 920 } };
-    const target: ExplainSelection = { ...first, passage: "The rafting ratio rose.", measure: () => (root.has("--explain-dock") ? narrow : wide) };
+  it("reads where the selection is after the page has reflowed, so the button stands by the words again once the dock closes (re-aimed, P9-03b: a reader with no key — the Tier 0 definition window is the dock that comes and goes; a key reader's window stands from the mount, with no floating button beside it; P9-20: in the gutter, where the button stands beside the words — on the furniture it reads nothing of them)", async () => {
+    // What the page captured when the selection was made (`first.rect`: right 420, bottom 420; the column to 700) is not
+    // where the words stand once the dock has come and gone: after the reflow they are at right 700, bottom 500 in the wide page,
+    // the column to 760. The button must follow the measure, not the first capture.
+    const wide = { rect: { left: 560, top: 480, right: 700, bottom: 500 }, bounds: { left: 560, top: 480, right: 700, bottom: 500 }, paragraph: { left: 100, top: 460, right: 760, bottom: 700 } };
+    const narrow = { rect: { left: 300, top: 900, right: 380, bottom: 920 }, bounds: { left: 300, top: 900, right: 380, bottom: 920 }, paragraph: { left: 100, top: 880, right: 500, bottom: 1100 } };
+    const target: ExplainSelection = { ...first, passage: "The rafting ratio rose.", paragraph: { left: 100, top: 360, right: 700, bottom: 600 }, measure: () => (root.has("--explain-dock") ? narrow : wide) };
     const buttonAt: Array<{ left?: number; top?: number }> = [];
     // P8-06 (re-aimed): the dock closes with the Close button — Escape now clears the passage back to the empty
     // state, which keeps the width reserved and so moves nothing.
@@ -751,11 +751,12 @@ describe("ExplainBox — the page keeps the dock's width clear while it is open 
     await wait();
     const style = run.last().button?.props.style as { left: number; top: number } | undefined;
 
-    // Before the dock the button is where the first capture put it: just below its end, centred on it.
-    expect(buttonAt[0]).toEqual({ left: 420 - 60, top: 420 + 6 });
-    // After the dock closed it is below the words' end where the measure says they are.
+    // Before the dock the button is where the first capture put it: in the gutter of the column the page captured (to 700),
+    // level with the selection's first line (`first.bounds.top`, 380).
+    expect(buttonAt[0]).toEqual({ left: 700 + 6, top: 380 });
+    // After the dock closed it is beside the words where the measure says they are: the wide page's column (to 760), first line 480.
     expect(run.last().card).toBeUndefined();
-    expect(style).toEqual({ left: 700 - 60, top: 500 + 6 });
+    expect(style).toEqual({ left: 760 + 6, top: 480 });
     run.mounted.unmount();
   });
 });

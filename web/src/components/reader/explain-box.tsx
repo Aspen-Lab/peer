@@ -7,8 +7,9 @@
 //
 // The reader selects words of the body (`paper-body.tsx` reads the selection);
 // a small button appears beside them — P9-03: in the gutter right of the paragraph, level with
-// the selection's first line, never over the paper's words; just below them where there is no gutter (a phone,
-// a narrow window; `placeButton`) — P9-03b (ruling §1h.49): but only where no window stands. While
+// the selection's first line, never over the paper's words; P9-20: where there is no gutter (a phone, a window under ~700 px;
+// `placeButton`) it stands on the page's bottom furniture, a pill above the thumb bar (under 768 px) or the foot legend, not below
+// the selection's end where it covered the next line — P9-03b (ruling §1h.49): but only where no window stands. While
 // a window stands (from 1024 px: a reader with a key, a Tier 0 definition window) there is no room
 // beside the column for a floating control (24 px of it at every width from 1024 to ~1700, measured),
 // so the window carries the control itself, in its header (`ExplainCard`'s `onExplain`), and follows
@@ -142,7 +143,7 @@ import type { PaperTerm } from "@/lib/papers/report";
 import { MAX_EXPLAIN_MESSAGE_CHARS, threadFull, type ExplainTurn } from "@/store/explain-threads";
 import type { Paper, UserProfile } from "@/types";
 import { EXPLAIN, PEERS_READING } from "./copy";
-import { DOCK_BOTTOM_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_WIDTH_PX, MASTHEAD_MIN_VIEWPORT_PX, emptyDockStands, reserveDock } from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_WIDTH_PX, MASTHEAD_MIN_VIEWPORT_PX, THUMB_BAR_PX, emptyDockStands, reserveDock } from "./explain-dock";
 import { EvidenceQuote } from "./evidence-quote";
 import {
   asItems,
@@ -257,6 +258,11 @@ const PHONE_WIDTH = 640;
 
 const clamp = (value: number, low: number, high: number) => Math.min(Math.max(value, low), Math.max(low, high));
 
+/** Where the floating button stands: beside the words, in the gutter (`left`, `top`: its top-left corner in the window's pixels), or —
+ *  P9-20 — on the page's bottom furniture, where there is no gutter (`edge`: the x of its right edge; `bottom`: a CSS length from the
+ *  window's foot, so the control keeps its place above a bar that grows, as the bar does with the safe area). */
+export type ButtonPlace = { left: number; top: number } | { edge: number; bottom: string };
+
 /**
  * The floating button (P9-03, the owner's reading of the feature walk's X13: a control stands beside the words, never
  * on them) — P9-03b (ruling §1h.49): rendered only where no window stands (the card range, the phone, no key and no
@@ -266,11 +272,16 @@ const clamp = (value: number, low: number, high: number) => Math.min(Math.max(va
  * owner's "first line"; `bounds.top` — `bounds` is the whole selection, and defaults to `rect`, for a selection of one
  * line), both held inside the window — P9-17 (ruling §1h.56): its head is the masthead's foot and a margin from 768 px, where
  * the masthead shows (a long paragraph straddling the head of the window put the button over it), the margin alone
- * under it. Without a gutter — a phone, a narrow window, a column flush with the edge, no
- * paragraph reported — it is as it was: just below where the selection ENDS (`rect`, the last line), centred on its
- * end; above it when there is no room below; always inside the window.
+ * under it.
+ *
+ * P9-20 (A P9-W2's X13; rule 1): without a gutter — a phone, a window under ~700 px, a column flush with the edge, no paragraph
+ * reported — it no longer falls back to "under the selection's end", which put 116 × 34 px over the next line's words (2,120 px²
+ * at 700, 640 and 390). It stands on the page's own bottom furniture: a pill fixed a margin (8 px) above the top edge of the thumb
+ * bar under 768 px (`md:hidden`; the bar is `THUMB_BAR_PX` and the safe area), or of the foot legend from 768 px
+ * (`hidden md:flex`; `DOCK_BOTTOM_PX`), its right edge on the column's (`paragraph.right`; the window's margin where none is
+ * reported). It stays where it is while the selection stands — nothing about it follows the page's scroll — and goes with it.
  */
-export function placeButton(rect: ViewRect, viewport: Viewport, paragraph?: ViewRect, bounds: ViewRect = rect): { left: number; top: number } {
+export function placeButton(rect: ViewRect, viewport: Viewport, paragraph?: ViewRect, bounds: ViewRect = rect): ButtonPlace {
   if (paragraph && viewport.width - paragraph.right >= BUTTON_WIDTH + 2 * BUTTON_MARGIN) {
     const head = viewport.width >= MASTHEAD_MIN_VIEWPORT_PX ? DOCK_TOP_PX + BUTTON_MARGIN : BUTTON_MARGIN;
     return {
@@ -278,10 +289,18 @@ export function placeButton(rect: ViewRect, viewport: Viewport, paragraph?: View
       top: clamp(bounds.top, head, viewport.height - BUTTON_HEIGHT - BUTTON_MARGIN),
     };
   }
-  const left = clamp(rect.right - BUTTON_WIDTH / 2, BUTTON_MARGIN, viewport.width - BUTTON_WIDTH - BUTTON_MARGIN);
-  const below = rect.bottom + BUTTON_GAP;
-  const top = below + BUTTON_HEIGHT > viewport.height - BUTTON_MARGIN ? Math.max(BUTTON_MARGIN, rect.top - BUTTON_GAP - BUTTON_HEIGHT) : below;
-  return { left, top };
+  return {
+    edge: clamp(paragraph?.right ?? viewport.width - BUTTON_MARGIN, BUTTON_WIDTH + BUTTON_MARGIN, viewport.width - BUTTON_MARGIN),
+    bottom:
+      viewport.width < MASTHEAD_MIN_VIEWPORT_PX
+        ? `calc(${THUMB_BAR_PX}px + env(safe-area-inset-bottom) + ${BUTTON_MARGIN}px)`
+        : `${DOCK_BOTTOM_PX + BUTTON_MARGIN}px`,
+  };
+}
+
+/** A place as the floating button's inline style (`position: fixed`): its corner in the gutter, else its right edge and its lift. */
+export function buttonStyle(place: ButtonPlace): CSSProperties {
+  return "top" in place ? { left: place.left, top: place.top } : { right: `calc(100% - ${place.edge}px)`, bottom: place.bottom };
 }
 
 /** The card: 360 px wide under the whole selection on a spread, the window's
@@ -1219,7 +1238,7 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
       // The press must not take the selection with it: it is what is explained.
       onMouseDown={(event) => event.preventDefault()}
       onClick={() => start(next)}
-      style={placeButton(askAt.rect, viewport, askAt.paragraph, askAt.bounds)}
+      style={buttonStyle(placeButton(askAt.rect, viewport, askAt.paragraph, askAt.bounds))}
       className="fixed z-[70] rounded-full border border-border-strong bg-surface px-3 py-2 font-mono text-caption text-heading shadow-card-hover transition-colors hover:bg-surface-hover"
     >
       {EXPLAIN.ask}

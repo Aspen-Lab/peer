@@ -65,6 +65,15 @@ export const DOCK_TOP_PX = 48;
  *  masthead's `z-50`) keeps below them from here; under it the window's own margin is its head. */
 export const MASTHEAD_MIN_VIEWPORT_PX = 768;
 
+/**
+ * P9-20 (A P9-W2's X13): the page's bottom furniture is the phone's thumb bar under 768 px and the foot legend from it. The bar
+ * (`components/shell/thumb-bar.tsx`) is `md:hidden fixed inset-x-0 bottom-0`, its cells 56 px tall (`h-14`) with the safe area under
+ * them; the legend (`key-legend.tsx`) is `hidden md:flex fixed inset-x-0 bottom-0`, `DOCK_BOTTOM_PX` tall. Both swap at Tailwind's `md`,
+ * 48rem, the masthead's own breakpoint (`MASTHEAD_MIN_VIEWPORT_PX`). Copied from the bar's `THUMB_BAR_PX`; a test holds the copy
+ * against it, so a taller bar cannot leave the floating control standing on it.
+ */
+export const THUMB_BAR_PX = 56;
+
 /** The dock's bottom edge stands this far above the window's: the foot legend's height (`--legend-h`). */
 export const DOCK_BOTTOM_PX = 28;
 
