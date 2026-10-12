@@ -1,4 +1,4 @@
-import { placeFigures, pdfFigureUrl } from "./reading";
+import { placeFigures } from "./reading";
 import { buildOutline } from "./pdf-outline";
 import { blockMarker } from "@/lib/text/math";
 import { describe, expect, it } from "vitest";
@@ -846,25 +846,68 @@ describe("placeFigures", () => {
     expect(placed[0].figures?.map((f) => f.label)).toEqual(["Figure 1"]);
   });
 
-  it("offers a PDF page's picture only when the page holds one figure", () => {
+  // P9-29 (§1h.59), re-aimed from "offers a PDF page's picture only when the page holds one figure":
+  // that rule existed because the route returned "the largest raster on the page", with no way to
+  // say which figure. The route answers `?page=N&fig=K` with the region whose caption opens
+  // "Figure K" now, so every captioned figure is offered its own picture, two on a page included.
+  it("offers every captioned figure of a PDF its own picture, by page and number — two on one page included (P9-29)", () => {
     const placed = placeFigures(
       [section("A", "Figure 1 and Figure 2 and Figure 3.")],
       [cap(1, { page: 3 }), cap(2, { page: 5 }), cap(3, { page: 5 })],
       { paperId: "openalex:W1" },
     );
     const byLabel = Object.fromEntries((placed[0].figures ?? []).map((f) => [f.label, f]));
-    expect(byLabel["Figure 1"].imageUrl).toBe(pdfFigureUrl("openalex:W1", 3));
+    expect(byLabel["Figure 1"].imageUrl).toBe("/api/papers/openalex%3AW1/figure-image?page=3&fig=1");
     expect(byLabel["Figure 1"].page).toBe(3);
-    expect(byLabel["Figure 2"].imageUrl).toBeUndefined();
-    expect(byLabel["Figure 3"].imageUrl).toBeUndefined();
+    expect(byLabel["Figure 2"].imageUrl).toBe("/api/papers/openalex%3AW1/figure-image?page=5&fig=2");
+    expect(byLabel["Figure 3"].imageUrl).toBe("/api/papers/openalex%3AW1/figure-image?page=5&fig=3");
   });
 
-  // P0-07 (§1e.5, A's F5): an uploaded PDF's captions carry pages since
-  // P0-03, and the page-image route serves public papers only — for an
-  // `upload:` id it answers 404, a wasted request per figure. Until
-  // BACKLOG-01 serves uploads, an upload's figure is its caption and page,
-  // with no picture URL; the page already sets that as "caption · p.N".
-  it("offers no page picture for an uploaded PDF — the caption and its page stand alone", () => {
+  it("gives two captions on one page each their own URL (P9-29)", () => {
+    const placed = placeFigures(
+      [section("A", "As Figure 7 shows, it works.", "Figure 8 shows the opposite.")],
+      [cap(7, { page: 6 }), cap(8, { page: 6 })],
+      { paperId: "arxiv:2610.00001" },
+    );
+    const figures = placed[0].figures ?? [];
+    expect(figures.map((f) => f.label)).toEqual(["Figure 7", "Figure 8"]);
+    expect(figures.map((f) => f.imageUrl)).toEqual([
+      "/api/papers/arxiv%3A2610.00001/figure-image?page=6&fig=7",
+      "/api/papers/arxiv%3A2610.00001/figure-image?page=6&fig=8",
+    ]);
+  });
+
+  it("reads the number from how the caption was written, and offers no picture where there is no number or no page (P9-29)", () => {
+    const placed = placeFigures(
+      [section("A", "Fig. 2 and Figure 4 and Figure IV and Figure S3 and Figure 9.")],
+      [
+        { ordinal: 0, label: "Fig 2", caption: "short form", page: 2 },
+        { ordinal: 1, label: "Figure 4", caption: "no page" },
+        { ordinal: 2, label: "Figure IV", caption: "a roman number", page: 3 },
+        { ordinal: 3, label: "Figure S3", caption: "a supplementary figure", page: 4 },
+        { ordinal: 4, label: "Figure 9", caption: "has its own picture", page: 5, imageUrl: "https://x/9.png" },
+      ],
+      { paperId: "openalex:W1" },
+    );
+    const byLabel = Object.fromEntries((placed[0].figures ?? []).map((f) => [f.label, f]));
+    expect(byLabel["Fig 2"].imageUrl).toBe("/api/papers/openalex%3AW1/figure-image?page=2&fig=2");
+    expect(byLabel["Figure 4"].imageUrl).toBeUndefined();
+    expect(byLabel["Figure IV"].imageUrl).toBeUndefined();
+    expect(byLabel["Figure S3"].imageUrl).toBeUndefined();
+    expect(byLabel["Figure 9"].imageUrl).toBe("https://x/9.png");
+  });
+
+  it("offers a figure from a paper with no PDF behind it no picture URL (P9-29)", () => {
+    const placed = placeFigures([section("A", "Figure 1 is here.")], [cap(1, { page: 2 })], null);
+    expect(placed[0].figures?.[0].imageUrl).toBeUndefined();
+  });
+
+  // P0-07 (§1e.5, A's F5) withheld the picture URL from an uploaded PDF while the page-image
+  // route answered 404 for an `upload:` id. P9-29 (BACKLOG-01, §1h.59) re-aims this test: the route
+  // resolves an upload for its owner now, so an upload's figure is offered its picture like any
+  // paper's, and the URL carries the upload id, the page and the number. What stays: the caption and
+  // its page are as they were, and a public paper's PDF gets its URL as before.
+  it("offers an uploaded PDF's figure its picture — the upload's id, the page and the number in the URL (P9-29, BACKLOG-01)", () => {
     const uploadPaper = { ...normalPaper, id: "upload:0123456789abcdef" } as Paper;
     const doc = docWith(
       [{ id: "s0", heading: "1 Results", canonical: "results", text: "Figure 1 shows the creep rate against boundary density." }],
@@ -877,18 +920,43 @@ describe("placeFigures", () => {
     const figure = uploaded.body[0].figures?.[0];
 
     expect(figure).toMatchObject({ label: "Figure 1", caption: "Creep rate against boundary density.", page: 2 });
-    expect(figure?.imageUrl).toBeUndefined();
-    expect(JSON.stringify(uploaded.body)).not.toContain("figure-image");
+    expect(figure?.imageUrl).toBe("/api/papers/upload%3A0123456789abcdef/figure-image?page=2&fig=1");
 
-    // Directly: an upload id gets no picture; a public paper's PDF still does.
+    // Directly: an upload id gets its URL; so does a public paper's PDF.
     const placed = placeFigures(
       [section("A", "Figure 1 is here.")],
       [cap(1, { page: 2 })],
       { paperId: "upload:0123456789abcdef" },
     );
-    expect(placed[0].figures?.[0].imageUrl).toBeUndefined();
+    expect(placed[0].figures?.[0].imageUrl).toBe("/api/papers/upload%3A0123456789abcdef/figure-image?page=2&fig=1");
     expect(placeFigures([section("A", "Figure 1 is here.")], [cap(1, { page: 2 })], { paperId: "openalex:W1" })[0].figures?.[0].imageUrl)
-      .toBe(pdfFigureUrl("openalex:W1", 2));
+      .toBe("/api/papers/openalex%3AW1/figure-image?page=2&fig=1");
+  });
+
+  it("gives an upload's Figure 3 caption on page 5 the figure-image URL for page 5, figure 3 (P9-29)", () => {
+    const placed = placeFigures(
+      [section("A", "Figure 3 is the one.")],
+      [cap(3, { page: 5 })],
+      { paperId: "upload:0123456789abcdef" },
+    );
+    expect(placed[0].figures?.[0].imageUrl).toBe("/api/papers/upload%3A0123456789abcdef/figure-image?page=5&fig=3");
+  });
+
+  it("gives an upload's two figures on one page each their own URL, and the caption text and order stay as they were (P9-29)", () => {
+    const placed = placeFigures(
+      [section("A", "Figure 3 is first.", "Figure 4 is second.")],
+      [cap(3, { page: 5 }), cap(4, { page: 5 })],
+      { paperId: "upload:0123456789abcdef" },
+    );
+    const figures = placed[0].figures ?? [];
+    expect(figures.map((f) => [f.label, f.caption, f.after, f.page])).toEqual([
+      ["Figure 3", "caption 3", 0, 5],
+      ["Figure 4", "caption 4", 1, 5],
+    ]);
+    expect(figures.map((f) => f.imageUrl)).toEqual([
+      "/api/papers/upload%3A0123456789abcdef/figure-image?page=5&fig=3",
+      "/api/papers/upload%3A0123456789abcdef/figure-image?page=5&fig=4",
+    ]);
   });
 
   // P9-09 (cluster E): a figure set in the middle of a column used to cut, by its own height, the
