@@ -285,3 +285,65 @@ describe("on a touch tablet below lg the hairlines are 4px either side, so the 4
     expect(fromLg[0]).not.toContain("[@media(hover:none)]:max-lg:mx-1");
   });
 });
+
+// P9-52 (A P9-W3's N5, §6 item 5): on the home page at 390 x 844 with touch the phone's in-flow wordmark ("Peer", the
+// `md:hidden` link above the date; the bar is gone below 768) was 37 x 19 px. Where there is no hover (`hover: none`) it
+// is at least 44 px tall (`[@media(hover:none)]:min-h-11`, the rule P9-23 gave the bar's own controls); with a mouse
+// nothing moves. It is made a block (`flex w-fit`) there so the 44 px is its own box and not a line box's strut, and
+// the wrapper's 24 px of padding above gives back 8 px of it, so the words sit about where they sat. The bar's cells,
+// P9-23's and P9-40's, are not touched: the bar is hidden below `md` and the link is hidden from it. Layout is not
+// computed in this node environment: the boxes and the bar's `?` / scrollWidth checks are in the checkpoint
+// (docs/reading-helper-abc/P9-52-C-*.md), and this block pins the classes that make them.
+describe("the phone's in-flow wordmark on the home page is a touch target where there is no hover (P9-52, N5)", () => {
+  // The bar's wordmark link wears the registration corners (`group/mark`); the in-flow one is the link set in the display serif.
+  const flowLink = (html: string) => open(html, "a", "font-display");
+  const flowWrapper = (html: string) => open(html, "div", "md:hidden");
+
+  it("is at least 44 px tall where there is no hover, and is a block there so the 44 px is its own box", () => {
+    pathname = "/";
+    const link = classes(flowLink(render()));
+
+    expect(link).toContain("[@media(hover:none)]:min-h-11");
+    expect(link).toContain("[@media(hover:none)]:flex");
+    expect(link).toContain("[@media(hover:none)]:w-fit");
+    expect(link).toContain("[@media(hover:none)]:items-center");
+  });
+
+  it("gives back 8 px of the wrapper's 24 px above it where there is no hover, so the words sit about where they sat", () => {
+    pathname = "/";
+    const wrapper = classes(flowWrapper(render()));
+
+    expect(wrapper).toContain("pt-6");
+    expect(wrapper).toContain("[@media(hover:none)]:pt-4");
+  });
+
+  it("is the same link for a mouse: the display serif, to '/', in flow below md only, and no height floor outside hover:none", () => {
+    pathname = "/";
+    const html = render();
+    const link = classes(flowLink(html));
+
+    expect(flowLink(html)).toContain('href="/"');
+    expect(link).toEqual(expect.arrayContaining(["font-display", "text-title-lg", "font-medium", "leading-none", "text-heading"]));
+    expect(classes(flowWrapper(html))).toEqual(expect.arrayContaining(["md:hidden", "px-6", "pt-6"]));
+    for (const cls of [...link, ...classes(flowWrapper(html))]) {
+      if (/(^|:)(min-h|h|min-w|w)-/.test(cls)) expect(cls.startsWith("[@media(hover:none)]:"), cls).toBe(true);
+    }
+    // The word is still the one text of the link, named by what it says.
+    expect(html).toMatch(/<a\b[^>]*font-display[^>]*>Peer<\/a>/);
+  });
+
+  it("is on the home page only: a paper has no in-flow wordmark", () => {
+    pathname = "/papers/openalex%3AW2";
+
+    expect(flowLink(render())).toBe("");
+    expect(flowWrapper(render())).toBe("");
+  });
+
+  it("leaves the bar's own wordmark link as P9-40 built it: no touch floor of its own", () => {
+    pathname = "/";
+    const bar = classes(open(render(), "a", "group/mark"));
+
+    expect(bar).toEqual(expect.arrayContaining(["group/mark", "relative", "inline-flex", "items-center", "lg:gap-2"]));
+    expect(bar).not.toContain("[@media(hover:none)]:min-h-11");
+  });
+});

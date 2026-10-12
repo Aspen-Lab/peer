@@ -376,3 +376,60 @@ describe("TermsStrip — folded to two terms wherever the panel stands in one co
     expect(html).not.toMatch(/\b(?:sm|md|lg|2xl):(?:block|hidden)\b/);
   });
 });
+
+// P9-52 (A P9-W3's N5, §6 item 5): on a phone (390 x 844, touch) the term buttons were 22.5 px tall and "show all N
+// terms" 110 x 16 px. Where there is no hover (`hover: none`) each is at least 44 px tall, the rule P9-23 set for the
+// reading page's other small controls (`[@media(hover:none)]:min-h-11`); with a mouse nothing moves. Layout is not
+// computed in this node environment: the boxes are in the checkpoint (docs/reading-helper-abc/P9-52-C-*.md), and
+// this block pins the classes that make them.
+describe("TermsStrip — the term buttons and the fold toggle are touch targets where there is no hover (P9-52, N5)", () => {
+  const TOUCH_FLOOR = "[@media(hover:none)]:min-h-11";
+  const three = () => render({ terms: [defined, peers, unplaced] });
+  const tagsOf = (html: string, tag: string) => html.match(new RegExp(`<${tag}\\b[^>]*>`, "g")) ?? [];
+  const classesOf = (tag: string) => (/\bclass="([^"]*)"/.exec(tag)?.[1] ?? "").split(/\s+/).filter(Boolean);
+  const termButtons = (html: string) => tagsOf(html, "button").filter((tag) => tag.includes("aria-pressed="));
+  const toggle = (html: string) => tagsOf(html, "button").find((tag) => tag.includes("aria-expanded=")) ?? "";
+
+  it("makes every term button at least 44 px tall where there is no hover", () => {
+    const buttons = termButtons(three());
+
+    // QPU and creep are in the body; ansatz is not, so it is plain text and has no button.
+    expect(buttons).toHaveLength(2);
+    for (const tag of buttons) expect(classesOf(tag)).toContain(TOUCH_FLOOR);
+  });
+
+  it("makes the 'show all N terms' toggle at least 44 px tall where there is no hover", () => {
+    const tag = toggle(three());
+
+    expect(tag).toContain('aria-expanded="false"');
+    expect(classesOf(tag)).toContain(TOUCH_FLOOR);
+  });
+
+  it("takes the toggle's 12 px top margin back where there is no hover: its 44 px box centres the words about as far down", () => {
+    const tag = classesOf(toggle(three()));
+
+    // The 16 px words sit 14 px down a 44 px box, so the 12 px of margin above would put them 26 px under the
+    // last term. The margin stays for a mouse; the fold grows by the target, not by the target and the margin.
+    expect(tag).toContain("mt-3");
+    expect(tag).toContain("[@media(hover:none)]:mt-0");
+  });
+
+  it("is the same two buttons with the same names and states: Find QPU / Find creep, and the toggle", () => {
+    const html = three();
+
+    expect(termButtons(html).map((tag) => /aria-label="([^"]*)"/.exec(tag)?.[1])).toEqual([TERMS.find("QPU"), TERMS.find("creep")]);
+    expect(html).toContain(">show all 3 terms<");
+  });
+
+  it("leaves a mouse's boxes alone: no height floor outside hover:none, on any button of the strip", () => {
+    const html = render({ terms: [defined, peers, unplaced], oneColumnOpen: true });
+
+    for (const tag of tagsOf(html, "button")) {
+      for (const cls of classesOf(tag)) {
+        if (/(^|:)(min-h|h)-/.test(cls)) expect(cls.startsWith("[@media(hover:none)]:"), cls).toBe(true);
+      }
+    }
+    // The page's own mt-3 and the underline stay: the visible words are the ones they were.
+    expect(classesOf(toggle(html))).toEqual(expect.arrayContaining(["annotation", "mt-3", "block", "xl:hidden"]));
+  });
+});

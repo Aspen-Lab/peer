@@ -53,3 +53,26 @@ describe("RestoreFromBackup — SSR safety", () => {
     expect(html).toMatch(/class="[^"]*hidden[^"]*"/);
   });
 });
+
+// P9-52 (A P9-W3's N5, §6 item 5): "Restore from a backup file" was 150 x 18 px on a phone (390 x 844, touch). Where
+// there is no hover (`hover: none`) the button is at least 44 px tall, the rule P9-23 set for the reading page's
+// actions (`[@media(hover:none)]:min-h-11`); with a mouse nothing moves. Layout is not computed in this node
+// environment: the box is in the checkpoint (docs/reading-helper-abc/P9-52-C-*.md), and this block pins the classes.
+describe("RestoreFromBackup — a touch target where there is no hover (P9-52, N5)", () => {
+  const button = () => (render({ kind: "signed-out" }).match(/<button\b[^>]*>/g) ?? [])[0] ?? "";
+  const classesOf = (tag: string) => (/\bclass="([^"]*)"/.exec(tag)?.[1] ?? "").split(/\s+/).filter(Boolean);
+
+  it("makes the button at least 44 px tall where there is no hover", () => {
+    expect(classesOf(button())).toContain("[@media(hover:none)]:min-h-11");
+  });
+
+  it("is the same button, and a mouse's box is the one it was: no height floor outside hover:none", () => {
+    const classes = classesOf(button());
+
+    expect(button()).toContain('type="button"');
+    expect(classes).toEqual(expect.arrayContaining(["inline-flex", "items-center", "gap-1.5", "text-meta", "text-text-faint"]));
+    for (const cls of classes) {
+      if (/(^|:)(min-h|h)-/.test(cls)) expect(cls.startsWith("[@media(hover:none)]:"), cls).toBe(true);
+    }
+  });
+});

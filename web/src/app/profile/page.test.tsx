@@ -857,3 +857,82 @@ describe("DashboardView - the AI setup line (P9-24)", () => {
     expect(text(view("gemini", KEY))).not.toBe(text(view("default", "")));
   });
 });
+
+// P9-52 (A P9-W3's N5, §6 item 5): on a phone (390 x 844, touch) the Profile's five text actions were 16 to 18 px
+// tall: "adjust" 31 x 16, "Reset" 29 x 16, "Replay walkthrough" 129 x 18, "Reset profile to defaults" 152 x 18, and (in
+// restore-backup.tsx) "Restore from a backup file" 150 x 18. Where there is no hover (`hover: none`) each is at least
+// 44 px tall, the rule P9-23 set for the Delete PDF / Forget actions (`[@media(hover:none)]:min-h-11`); with a mouse
+// nothing moves. Layout is not computed in this node environment: the boxes are in the checkpoint
+// (docs/reading-helper-abc/P9-52-C-*.md), and this block pins the classes that make them. "adjust" and "Reset" render
+// from the exported `DashboardView` and `LearnedPreferences`; the other two are in the hook-wired page, so they are
+// read from its source, as the blocks above read it.
+describe("the Profile's small text actions are touch targets where there is no hover (P9-52, N5)", () => {
+  const TOUCH_FLOOR = "[@media(hover:none)]:min-h-11";
+  const classesOf = (tag: string) => (/\bclass="([^"]*)"/.exec(tag)?.[1] ?? "").split(/\s+/).filter(Boolean);
+  const buttonTag = (html: string, label: string) =>
+    (html.match(/<button\b[^>]*>[^<]*<\/button>/g) ?? []).find((tag) => tag.endsWith(`>${label}</button>`)) ?? "";
+  const source = readFileSync(join(process.cwd(), "src/app/profile/page.tsx"), "utf8");
+  /** The className of the <button> whose text is `label`: the last className before the label, after its `<button`. */
+  const sourceClasses = (label: string): string[] => {
+    const at = source.indexOf(label);
+    expect(at, label).toBeGreaterThan(-1);
+    const open = source.lastIndexOf("<button", at);
+    const names = [...source.slice(open, at).matchAll(/className="([^"]*)"/g)];
+    return (names.at(-1)?.[1] ?? "").split(/\s+/).filter(Boolean);
+  };
+  const T0 = "2026-10-12T00:00:00.000Z";
+  const learned = () =>
+    renderToStaticMarkup(
+      createElement(LearnedPreferences, {
+        profile: {
+          ...defaultProfile,
+          preferenceLedger: {
+            "text:reed bed": { key: "text:reed bed", label: "reed bed", source: "paper_keyword" as const, positive: 2, negative: 0, lastSeenAt: T0 },
+          },
+        },
+        onReset: () => {},
+      }),
+    );
+  const dashboard = () => renderToStaticMarkup(createElement(DashboardView, { profile: { ...defaultProfile }, displayName: "Ada", onEdit: () => {} }));
+
+  it("makes 'adjust' (the Signals header's action) at least 44 px tall where there is no hover", () => {
+    const tag = buttonTag(dashboard(), "adjust");
+
+    expect(tag).not.toBe("");
+    expect(classesOf(tag)).toContain(TOUCH_FLOOR);
+  });
+
+  it("makes 'Reset' (What Peer has learned) at least 44 px tall where there is no hover", () => {
+    const tag = buttonTag(learned(), "Reset");
+
+    expect(tag).not.toBe("");
+    expect(classesOf(tag)).toContain(TOUCH_FLOOR);
+  });
+
+  it("makes 'Replay walkthrough' at least 44 px tall where there is no hover", () => {
+    expect(sourceClasses("Replay walkthrough")).toContain(TOUCH_FLOOR);
+  });
+
+  it("makes 'Reset profile to defaults' at least 44 px tall where there is no hover", () => {
+    expect(sourceClasses("Reset profile to defaults")).toContain(TOUCH_FLOOR);
+  });
+
+  it("leaves a mouse's boxes alone: the same words, the same quiet colours, no height floor outside hover:none", () => {
+    const boxes = [
+      classesOf(buttonTag(dashboard(), "adjust")),
+      classesOf(buttonTag(learned(), "Reset")),
+      sourceClasses("Replay walkthrough"),
+      sourceClasses("Reset profile to defaults"),
+    ];
+
+    for (const classes of boxes) {
+      for (const cls of classes) {
+        if (/(^|:)(min-h|h)-/.test(cls)) expect(cls.startsWith("[@media(hover:none)]:"), cls).toBe(true);
+      }
+    }
+    expect(boxes[0]).toEqual(expect.arrayContaining(["text-caption", "text-text-faint/80", "hover:text-accent"]));
+    expect(boxes[1]).toEqual(expect.arrayContaining(["text-caption", "text-text-faint/80", "shrink-0"]));
+    expect(boxes[2]).toEqual(expect.arrayContaining(["inline-flex", "items-center", "gap-1.5", "text-meta", "text-text-faint"]));
+    expect(boxes[3]).toEqual(expect.arrayContaining(["inline-flex", "items-center", "gap-1.5", "text-meta", "text-text-faint"]));
+  });
+});
