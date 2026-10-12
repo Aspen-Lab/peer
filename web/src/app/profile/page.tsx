@@ -306,7 +306,9 @@ export default function ProfilePage() {
       )}
 
       {/* ── Reset ── The three actions are text, 18 px tall to a mouse; where there is no hover each is a 44 px target
-          (P9-52, A P9-W3's N5: `[@media(hover:none)]:min-h-11`, the rule P9-23 set), 12 px apart in the column. ── */}
+          (P9-52, A P9-W3's N5: `[@media(hover:none)]:min-h-11`, the rule P9-23 set), 12 px apart in the column. The
+          second step of each two-step control (here "Confirm reset" and "Cancel"; "Reset all" and "Cancel" in What Peer
+          has learned) is the same 44 px target (P9-54). ── */}
       <section
         className="mt-14 pt-6 border-t border-border flex flex-col items-start gap-3"
       >
@@ -347,13 +349,13 @@ export default function ProfilePage() {
                   setShowLogout(false);
                   setMode("view");
                 }}
-                className="text-red hover:text-red/80 font-medium transition-[color,background-color,border-color,scale] active:scale-95"
+                className="text-red hover:text-red/80 font-medium transition-[color,background-color,border-color,scale] active:scale-95 [@media(hover:none)]:min-h-11"
               >
                 Confirm reset
               </button>
               <button
                 onClick={() => setShowLogout(false)}
-                className="text-text-faint hover:text-text-muted transition-[color,background-color,border-color,scale] active:scale-95"
+                className="text-text-faint hover:text-text-muted transition-[color,background-color,border-color,scale] active:scale-95 [@media(hover:none)]:min-h-11"
               >
                 Cancel
               </button>
@@ -1141,14 +1143,14 @@ export function LearnedPreferences({
                   onReset();
                   setConfirmReset(false);
                 }}
-                className="text-red hover:text-red/80 font-medium transition-[color,background-color,border-color,scale] active:scale-95"
+                className="text-red hover:text-red/80 font-medium transition-[color,background-color,border-color,scale] active:scale-95 [@media(hover:none)]:min-h-11"
               >
                 Reset all
               </button>
               <button
                 type="button"
                 onClick={() => setConfirmReset(false)}
-                className="text-text-faint hover:text-text-muted transition-[color,background-color,border-color,scale] active:scale-95"
+                className="text-text-faint hover:text-text-muted transition-[color,background-color,border-color,scale] active:scale-95 [@media(hover:none)]:min-h-11"
               >
                 Cancel
               </button>
