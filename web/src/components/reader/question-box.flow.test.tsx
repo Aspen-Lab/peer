@@ -25,6 +25,14 @@ const net = vi.hoisted(() => ({
   calls: [] as Array<{ questions: string[] | null; deep: unknown; aborted: boolean; done: boolean }>,
   /** How long each request takes before its report arrives. */
   delayMs: 30,
+  /**
+   * P9-39 (BACKLOG-47): when set, a request takes no time of its own — it stays in flight until
+   * the test lets it go, so what is in flight while the reader types is the script's to say, not
+   * a race between a delay and how fast a loaded machine runs the script.
+   */
+  hold: false,
+  /** `gates[n]` lets the nth request go (set while it is held, in the order the requests went out). */
+  gates: [] as Array<() => void>,
 }));
 
 vi.mock("@/lib/papers/report-stream", () => ({
@@ -35,7 +43,10 @@ vi.mock("@/lib/papers/report-stream", () => ({
       if (!call.done) call.aborted = true;
     });
     yield { type: "mode", aiMode: "tier2" };
-    await new Promise((resolve) => setTimeout(resolve, net.delayMs));
+    await new Promise<void>((resolve) => {
+      if (net.hold) net.gates[net.calls.indexOf(call)] = resolve;
+      else setTimeout(resolve, net.delayMs);
+    });
     call.done = true;
     yield {
       type: "report",
@@ -131,7 +142,7 @@ interface View {
   /** The Submit button of this render, if the box shows one. */
   submit: ReactElement<Props> | undefined;
 }
-type Step = ((view: View) => void) | { wait: number };
+type Step = ((view: View) => void) | { wait: number } | { until: () => boolean; what: string };
 
 const type =
   (index: number, value: string): Step =>
@@ -151,16 +162,35 @@ const leave =
 /** P7-13 (R11c): the Submit button is pressed. */
 const submit: Step = (view) => (view.submit!.props.onClick as () => void)();
 const sleep = (ms: number): Step => ({ wait: ms });
+/**
+ * P9-39 (BACKLOG-47): wait for something the script itself brings about, not for the clock.
+ * `condition` is a state of the runtime's own making (a request has gone out, a report is cached),
+ * reached by promises that one render round drains, so it holds within a few rounds on any
+ * machine, loaded or not. A condition that never holds fails the test, naming what it waited for.
+ */
+const until = (what: string, condition: () => boolean): Step => ({ until: condition, what });
+/** The nth request (the open is the 0th) is in flight: it has gone out, and the test holds it. */
+const inFlight = (n: number): Step => until(`request ${n} in flight`, () => net.gates[n] !== undefined);
+/** Lets the nth held request go: its report arrives. */
+const release =
+  (n: number): Step =>
+  () => {
+    const gate = net.gates[n];
+    if (!gate) throw new Error(`request ${n} is not in flight, so it cannot be released`);
+    gate();
+  };
+/** The most rounds an `until` waits: a round drains every promise, so more would be a state never reached. */
+const MOST_ROUNDS_WAITED = 50;
 
 /**
  * One page open: the hook, the field, and a scripted reader — one action per
  * render round, a wait being rounds kept alive by a 1 ms poll until the clock
- * says so. The field is rendered beside the hook as the page does, both on the
- * store's settled set.
+ * says so (`sleep`) or the condition holds (`until`). The field is rendered
+ * beside the hook as the page does, both on the store's settled set.
  */
 async function session(script: Step[]) {
   const queued = [...script];
-  const clock = { until: 0 };
+  const clock = { until: 0, condition: null as { holds: () => boolean; what: string; rounds: number } | null };
   /** The field's handlers of the latest render: a step must call this render's closures. */
   const latest: { view: View | null } = { view: null };
   const opened = await hookRuntime.mount(
@@ -176,6 +206,13 @@ async function session(script: Step[]) {
       };
       const [tick, setTick] = useState(0);
       useEffect(() => {
+        const waiting = clock.condition;
+        if (waiting && !waiting.holds()) {
+          if (++waiting.rounds > MOST_ROUNDS_WAITED) throw new Error(`never reached within ${MOST_ROUNDS_WAITED} rounds: ${waiting.what}`);
+          const timer = setTimeout(() => setTick((n) => n + 1), 1);
+          return () => clearTimeout(timer);
+        }
+        clock.condition = null;
         if (Date.now() < clock.until) {
           const timer = setTimeout(() => setTick((n) => n + 1), 1);
           return () => clearTimeout(timer);
@@ -184,6 +221,11 @@ async function session(script: Step[]) {
         if (!next) return;
         if (typeof next === "function") {
           next(latest.view!);
+          setTick((n) => n + 1);
+          return;
+        }
+        if ("until" in next) {
+          clock.condition = { holds: next.until, what: next.what, rounds: 0 };
           setTick((n) => n + 1);
           return;
         }
@@ -219,6 +261,8 @@ describe("the question box and the deep report (P2-08b, §1g.18)", () => {
     vi.stubGlobal("window", page.win);
     net.calls.length = 0;
     net.delayMs = 30;
+    net.hold = false;
+    net.gates.length = 0;
     useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null });
   });
 
@@ -246,12 +290,33 @@ describe("the question box and the deep report (P2-08b, §1g.18)", () => {
   });
 
   it("sets settled while a request is in flight never abort it: it finishes, and one more goes out for the latest set", async () => {
-    net.delayMs = 200;
+    // P9-39 (BACKLOG-47): the requests are held by hand and let go by the script, none by a delay,
+    // so "alpha is in flight while beta and gamma settle" is true by construction — not because
+    // 200 ms outlasts the time a loaded machine takes to type two sets.
+    net.hold = true;
     const alpha = "Synthetic question about topic alpha here?";
     const beta = "Synthetic question about topic beta here?";
     const gamma = "Synthetic question about topic gamma here?";
 
-    await session([sleep(300), type(0, alpha), submit, sleep(50), type(0, beta), submit, sleep(50), type(0, gamma), submit, sleep(900)]);
+    await session([
+      // The open goes out, is let go, and caches its report before any question is asked.
+      inFlight(0),
+      release(0),
+      until("the open's report cached", () => cachedKeys().length === 1),
+      // Alpha settles and goes out; it is held in flight from here until it is let go.
+      type(0, alpha),
+      submit,
+      inFlight(1),
+      // Beta and gamma settle while it is: nothing is free to send either of them.
+      type(0, beta),
+      submit,
+      type(0, gamma),
+      submit,
+      // Alpha is let go and finishes; then the one more request goes out, for gamma, and finishes.
+      release(1),
+      inFlight(2),
+      release(2),
+    ]);
 
     // The open, set alpha (in flight while beta and gamma settle), then gamma
     // alone: beta was superseded before anything was free to send it.
