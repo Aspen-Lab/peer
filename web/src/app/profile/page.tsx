@@ -684,10 +684,8 @@ function HeroStat({
 
 // `TypeTiles` stood here. It drew "EVENTS 0 / JOBS 0" under a heading that
 // said "What you save" — a claim about the reader that Peer could not support,
-// since `saveEvent` and `saveJob` are called nowhere outside the store and
-// both surfaces state in their own header comments that they are gone. The
-// store no longer holds saved events or jobs (P9-31, §1h.60), so the total in
-// `useReadingStats` counts saved papers only.
+// since nothing saved an event or a job and both surfaces are gone. The total
+// in `useReadingStats` counts saved papers and nothing else (P9-36).
 
 // ── Venue grid — blocks, warm intensity by rank ───────────────
 
