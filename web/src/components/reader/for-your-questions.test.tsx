@@ -7,7 +7,7 @@ import type { PaperReport } from "@/lib/papers/report";
 import type { ReadingMap } from "@/lib/papers/reading-map";
 import { FOR_YOUR_QUESTIONS } from "./copy";
 import { EvidenceQuote, SectionLinks } from "./evidence-quote";
-import { ForYourQuestions } from "./for-your-questions";
+import { ForYourQuestions, readNextLabel } from "./for-your-questions";
 
 // P9-05 (X10): the minutes ride on a no-break space, so "3 min" never wraps apart.
 const NB = "\u00a0";
@@ -426,6 +426,29 @@ describe("the Read next meta row never ends a line on its separator (P9-22, X10)
     ]);
     expect(parts[0].className.split(/\s+/)).not.toContain("whitespace-nowrap");
     for (const part of parts.slice(1)) expect(part.className.split(/\s+/)).toContain("whitespace-nowrap");
+  });
+
+  // Not red on the head: `readNextLabel` was not exported there, so this one could not even import it. It ties the row
+  // to the function the Markdown export's docstring and P9-05 / P9-19 name.
+  it("reads as the string readNextLabel names, for a row with a page and without one, with a role word and without", () => {
+    const sections = [
+      ...map.sections,
+      { id: "s3", heading: "4 Appendix", canonical: "body", role: "body", words: 150, minutes: 1, paragraphs: [] },
+    ] as ReadingMap["sections"];
+
+    expect(readNextLabel(sections[1], "background")).toBe(`§2 Results · p.7 · 3${NB}min · background`);
+    expect(readNextLabel(sections[2], "answer")).toBe(`§4 Appendix · 1${NB}min`);
+    for (const section of sections) {
+      for (const kind of ["answer", "background"] as const) {
+        const html = renderToStaticMarkup(
+          createElement(ForYourQuestions, {
+            report: { forYourQuestions: [{ question: "Is it here?", verdict: "partly", answers: [], readNext: [{ sectionId: section.id, why: "It says.", kind }] }] },
+            map: { sections: [section], totalMinutes: section.minutes },
+          }),
+        );
+        expect(metaRows(html), `${section.heading} / ${kind}`).toEqual([readNextLabel(section, kind)]);
+      }
+    }
   });
 
   // Green before and after (the words are the guard): whatever the markup, the row's text is the string it was.

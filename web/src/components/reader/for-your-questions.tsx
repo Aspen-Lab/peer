@@ -5,23 +5,40 @@
 // this component only presents that bounded material and resolves reading-map
 // metadata locally. It never adds report terms (P3-01 owns that strip).
 
+import { Fragment } from "react";
 import type { PaperReport, QuestionAnswers } from "@/lib/papers/report";
 import type { ReadingMap, ReadingMapSection } from "@/lib/papers/reading-map";
 import { Band } from "@/components/ui/band";
 import { EvidenceQuote } from "./evidence-quote";
 import { FOR_YOUR_QUESTIONS } from "./copy";
 
-/** P9-05 (X10): the whole meta line is one string — `§heading · p.N · N min`, then the role
- * word for a background row — so no part can run into the next ("11 minbackground") and the
- * line wraps only at a " · ". The minutes ride on a no-break space so "11" and "min" never
- * wrap apart; the page keeps its plain `p.N`. */
-function readNextLabel(section: ReadingMapSection, kind: QuestionAnswers["readNext"][number]["kind"]): string {
+/** The parts of a Read next meta row, in order: the section, the page when the map knows it, the minutes, and the
+ * role word of a background row. */
+type MetaPart = "section" | "page" | "minutes" | "role";
+
+/** P9-22 (X10, round 3): the meta row is a list of parts, not one string. The separator belongs to the part it
+ * introduces — "· p.3", "· 11 min", "· background" — so a part never opens a line without it and no line can end
+ * on a "·": a line breaks only at the plain space the markup puts between two parts, never inside one. The
+ * minutes still ride on a no-break space (P9-05), so "11" and "min" stay together even where the part is not
+ * nowrap; the page keeps its plain `p.N`. */
+export function readNextParts(
+  section: ReadingMapSection,
+  kind: QuestionAnswers["readNext"][number]["kind"],
+): { part: MetaPart; text: string }[] {
   return [
-    `§${section.heading}`,
-    ...(typeof section.page === "number" ? [`p.${section.page}`] : []),
-    `${section.minutes}\u00a0min`,
-    ...(kind === "background" ? [FOR_YOUR_QUESTIONS.background] : []),
-  ].join(" · ");
+    { part: "section", text: `§${section.heading}` },
+    ...(typeof section.page === "number" ? [{ part: "page" as const, text: `· p.${section.page}` }] : []),
+    { part: "minutes", text: `· ${section.minutes}\u00a0min` },
+    ...(kind === "background" ? [{ part: "role" as const, text: `· ${FOR_YOUR_QUESTIONS.background}` }] : []),
+  ];
+}
+
+/** The row as one string — what a screen reader and a copy hear: `§heading · p.N · N min`, then the role word for
+ * a background row (P9-05). The markup is these same parts, joined by the same single space. */
+export function readNextLabel(section: ReadingMapSection, kind: QuestionAnswers["readNext"][number]["kind"]): string {
+  return readNextParts(section, kind)
+    .map(({ text }) => text)
+    .join(" ");
 }
 
 function verdict(question: QuestionAnswers): string {
@@ -89,7 +106,19 @@ export function ForYourQuestions({
                   <ul className="space-y-3">
                     {next.map(({ item, section }) => (
                       <li key={`${item.kind}:${item.sectionId}`}>
-                        <p className="font-mono text-meta text-text-muted">{readNextLabel(section, item.kind)}</p>
+                        {/* One string to a reader and a copy; to the line breaker a list of whole parts (P9-22, X10).
+                            Each short part is unbreakable and carries its own leading "·". The section's title is the one
+                            part left free to wrap inside itself: a long heading must not run off a phone. */}
+                        <p className="font-mono text-meta text-text-muted">
+                          {readNextParts(section, item.kind).map(({ part, text }, index) => (
+                            <Fragment key={part}>
+                              {index > 0 ? " " : null}
+                              <span data-meta-part={part} className={part === "section" ? undefined : "whitespace-nowrap"}>
+                                {text}
+                              </span>
+                            </Fragment>
+                          ))}
+                        </p>
                         <p className="font-reading text-body-sm leading-[1.55] text-text reading-justify mt-1">{item.why}</p>
                       </li>
                     ))}
