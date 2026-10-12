@@ -351,6 +351,14 @@ const CITED = /(?:[.,;:!?)\]\u201D\u2019"']|\p{L}-|\p{L}{3,}|\p{Lu}\p{Ll}|[\p{L}
 /** A bracketed group with a slash in it and no space: "(i/imax)". One raised
  *  digit after it is an exponent ("(i/imax)2"), not a citation of the group. */
 const RATIO_GROUP = /\([^()\s]*\/[^()\s]*\)$/;
+/** What a raised run made only of these is written in: an exponent or a charge
+ *  as Unicode superscripts ("cm²", "10⁻¹³", "Ni²⁺"). The signs a PDF uses — the
+ *  minus sign, the hyphen, the en dash — are one superscript minus. */
+const SUPERSCRIPT: Readonly<Record<string, string>> = {
+  "0": "\u2070", "1": "\u00B9", "2": "\u00B2", "3": "\u00B3", "4": "\u2074",
+  "5": "\u2075", "6": "\u2076", "7": "\u2077", "8": "\u2078", "9": "\u2079",
+  "+": "\u207A", "\u2212": "\u207B", "-": "\u207B", "\u2013": "\u207B",
+};
 
 /** One baseline's worth of runs. */
 interface Row {
@@ -440,7 +448,9 @@ const longestRun = (runs: PdfTextItem[]): PdfTextItem =>
  * "…and other materials.12", "…grown on gold,3−5" — and kept where it is an
  * exponent: it carries nothing a reader of the digest needs, and glued to the
  * word before it, it reads as a digit in it. Raised runs that follow each
- * other are one mark, however the PDF split it ("21", "−", "23").
+ * other are one mark, however the PDF split it ("21", "−", "23"). A kept mark
+ * made only of digits and signs is written in Unicode superscripts ("cm²",
+ * "10⁻¹³", "Ni²⁺"), so it does not read as a digit in the word (P9-08).
  */
 function lineOf(page: number, y: number, runs: PdfTextItem[], raised?: ReadonlySet<PdfTextItem>): PdfLine | null {
   // A PDF stores runs, not words: two runs set apart on the page are two
@@ -449,6 +459,8 @@ function lineOf(page: number, y: number, runs: PdfTextItem[], raised?: ReadonlyS
   let text = "";
   let cursor = Number.NaN;
   let judged = -1;
+  // The raised runs up to this one are a mark of digits and signs, written as superscripts.
+  let superscripts = -1;
   for (let i = 0; i < runs.length; i++) {
     const item = runs[i];
     if (raised?.has(item) && i > judged) {
@@ -466,12 +478,16 @@ function lineOf(page: number, y: number, runs: PdfTextItem[], raised?: ReadonlyS
         continue;
       }
       judged = end - 1;
+      // A whole raised mark of digits and signs, with a word before it to stand on: an exponent
+      // or a charge, not a footnote number at the head of a line. Letters, a point or a slash
+      // in it ("st", "2a", "1/2", "0−4 μm") leave it as the PDF has it.
+      superscripts = text.trim() && mark && [...mark].every((c) => c in SUPERSCRIPT) ? judged : -1;
     }
     const gap = item.x - cursor;
     if (text && Number.isFinite(cursor) && gap > Math.max(1, item.height * 0.18) && !/\s$/.test(text)) {
       text += " ";
     }
-    text += item.str;
+    text += i <= superscripts && raised?.has(item) ? [...item.str].map((c) => SUPERSCRIPT[c] ?? c).join("") : item.str;
     cursor = item.x + (item.width || 0);
   }
   text = text.replace(/\s+/g, " ").trim();

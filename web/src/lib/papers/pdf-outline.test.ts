@@ -759,7 +759,8 @@ describe("superscripts and subscripts stay on their line (P7-10)", () => {
     };
     const lines = linesOfPage(page);
     expect(lines).toHaveLength(1);
-    expect(lines[0].text).toMatch(/^The diffusivity was 3 x 10 ?12 and the film$/);
+    // P9-08 (cluster G): the kept exponent is a Unicode superscript, 10¹², not the digits glued to the 10.
+    expect(lines[0].text).toMatch(/^The diffusivity was 3 x 10 ?¹² and the film$/);
     expect(lines[0]).toMatchObject({ y: 500, size: 10 });
   });
 
@@ -1283,23 +1284,26 @@ describe("a citation number is dropped, an exponent is kept (P7-11)", () => {
   });
 
   it("keeps an exponent: a script after a digit, or after a one- or two-letter unit, stays glued", () => {
-    expect(read([["a rate of 5 x 10"], ["−3", sup()], [" per second"]])).toEqual(["a rate of 5 x 10−3 per second"]);
-    expect(read([["a diffusivity in cm"], ["2", sup()], [" per second"]])).toEqual(["a diffusivity in cm2 per second"]);
-    expect(read([["a rate in s"], ["−1", sup()], [" at room temperature"]])).toEqual(["a rate in s−1 at room temperature"]);
-    expect(read([["a current of 12.5 mA cm"], ["−2", sup()], [" was used"]])).toEqual(["a current of 12.5 mA cm−2 was used"]);
-    expect(read([["the fit gave R"], ["2", sup()], [" above 0.99"]])).toEqual(["the fit gave R2 above 0.99"]);
-    expect(read([["an area of 4 mm"], ["2", sup()], [" each"]])).toEqual(["an area of 4 mm2 each"]);
-    expect(read([["a capacity in mAh g"], ["−1", sup()], [" at C/10"]])).toEqual(["a capacity in mAh g−1 at C/10"]);
+    // P9-08 (cluster G): kept, and set in Unicode superscripts (10⁻³, cm², s⁻¹), no longer glued as digits.
+    expect(read([["a rate of 5 x 10"], ["−3", sup()], [" per second"]])).toEqual(["a rate of 5 x 10⁻³ per second"]);
+    expect(read([["a diffusivity in cm"], ["2", sup()], [" per second"]])).toEqual(["a diffusivity in cm² per second"]);
+    expect(read([["a rate in s"], ["−1", sup()], [" at room temperature"]])).toEqual(["a rate in s⁻¹ at room temperature"]);
+    expect(read([["a current of 12.5 mA cm"], ["−2", sup()], [" was used"]])).toEqual(["a current of 12.5 mA cm⁻² was used"]);
+    expect(read([["the fit gave R"], ["2", sup()], [" above 0.99"]])).toEqual(["the fit gave R² above 0.99"]);
+    expect(read([["an area of 4 mm"], ["2", sup()], [" each"]])).toEqual(["an area of 4 mm² each"]);
+    expect(read([["a capacity in mAh g"], ["−1", sup()], [" at C/10"]])).toEqual(["a capacity in mAh g⁻¹ at C/10"]);
   });
 
   it("keeps a negative exponent after a long unit: a citation never opens with a minus", () => {
-    expect(read([["a rate in mol"], ["−1", sup()], [" of lithium"]])).toEqual(["a rate in mol−1 of lithium"]);
-    expect(read([["a rate in min"], ["-1", sup()], [" of lithium"]])).toEqual(["a rate in min-1 of lithium"]);
+    // P9-08 (cluster G): ⁻¹, for the minus sign and the hyphen alike.
+    expect(read([["a rate in mol"], ["−1", sup()], [" of lithium"]])).toEqual(["a rate in mol⁻¹ of lithium"]);
+    expect(read([["a rate in min"], ["-1", sup()], [" of lithium"]])).toEqual(["a rate in min⁻¹ of lithium"]);
   });
 
   it("keeps a negative exponent the PDF stored as two raised runs, a sign and a digit", () => {
-    expect(read([["a rate in mol"], ["\u2212", sup()], ["1", sup()], [" of lithium"]])).toEqual(["a rate in mol\u22121 of lithium"]);
-    expect(read([["a rate of 5 x 10"], ["\u2212", sup()], ["12 ", sup()], ["per second"]])).toEqual(["a rate of 5 x 10\u221212 per second"]);
+    // P9-08 (cluster G): the two runs are one mark, ⁻¹ and ⁻¹².
+    expect(read([["a rate in mol"], ["\u2212", sup()], ["1", sup()], [" of lithium"]])).toEqual(["a rate in mol⁻¹ of lithium"]);
+    expect(read([["a rate of 5 x 10"], ["\u2212", sup()], ["12 ", sup()], ["per second"]])).toEqual(["a rate of 5 x 10⁻¹² per second"]);
   });
 
   it("leaves a subscript, an ordinal and a mark that is not a citation number where they are", () => {
@@ -1359,6 +1363,9 @@ const DROPPED: [string, string, string][] = [
   ["Quillwort films were grown on gold–silver", "5", " and then annealed."],
   ["Quillwort cathode degradation", "17", " is slow in cells."],
 ];
+/** A kept raised run of digits and signs as the line prints it now: in Unicode superscripts (P9-08, cluster G). */
+const superOf = (mark: string): string =>
+  [...mark].map((c) => (/\d/.test(c) ? "⁰¹²³⁴⁵⁶⁷⁸⁹"[Number(c)] : c === "+" ? "⁺" : "⁻")).join("");
 const KEPT: [string, string, string][] = [
   ["a rate of 5 x 10", "−3", " per second"],
   ["a diffusivity in cm", "2", " per second"],
@@ -1385,7 +1392,7 @@ describe("a raised run joins its text row, the space the PDF stores after it too
 
   it("an exponent keeps its place: a unit's exponent twice on one line, never '2 2' in front of it", () => {
     const items = chainSpaced([["a current density from 15 mA/cm"], ["2", sup()], [" to 30 mA/cm"], ["2", sup()], [" at room temperature"]]);
-    expect(linesOfPage({ page: 1, items }).map((l) => l.text)).toEqual(["a current density from 15 mA/cm2 to 30 mA/cm2 at room temperature"]);
+    expect(linesOfPage({ page: 1, items }).map((l) => l.text)).toEqual(["a current density from 15 mA/cm² to 30 mA/cm² at room temperature"]);
   });
 
   it("a lone raised digit is not thrown away as a folio", () => {
@@ -1403,12 +1410,12 @@ describe("a raised run joins its text row, the space the PDF stores after it too
     // The lone "2" was a line of its own, and a line of one to four digits is a page number.
     expect(linesOfPage(page).map((l) => l.text)).not.toContain("2");
     const text = (buildOutline([page]).sections ?? []).map((s) => s.text).join(" ");
-    expect(text).toContain("The current was held at 7 mA/cm2 until the film was whole");
+    expect(text).toContain("The current was held at 7 mA/cm² until the film was whole");
   });
 
   it("a script as high as the window reaches (7.25pt, the stacked label's charge) still belongs to its line", () => {
     const items = chainSpaced([["the ion Co"], ["2+", { height: 6.7, y: 507.25 }], [" binds the film"]]);
-    expect(linesOfPage({ page: 1, items }).map((l) => l.text)).toEqual(["the ion Co2+ binds the film"]);
+    expect(linesOfPage({ page: 1, items }).map((l) => l.text)).toEqual(["the ion Co²⁺ binds the film"]);
   });
 
   it("small print with no line near it keeps a line of its own, its space run with it", () => {
@@ -1435,10 +1442,10 @@ describe("a raised run joins its text row, the space the PDF stores after it too
       expect(read([[before], [mark, sup()], [after]])).toEqual([`${before}${after}`]);
     });
     it.each(KEPT)("keeps %s + %s", (before, mark, after) => {
-      expect(read([[before], [mark, sup()], [after]])).toEqual([`${before}${mark}${after}`]);
+      expect(read([[before], [mark, sup()], [after]])).toEqual([`${before}${superOf(mark)}${after}`]);
     });
     it("keeps a negative exponent stored as two raised runs, a sign and a digit", () => {
-      expect(read([["a rate in mol"], ["−", sup()], ["1", sup()], [" of lithium"]])).toEqual(["a rate in mol−1 of lithium"]);
+      expect(read([["a rate in mol"], ["−", sup()], ["1", sup()], [" of lithium"]])).toEqual(["a rate in mol⁻¹ of lithium"]);
     });
   });
 });
@@ -1475,26 +1482,26 @@ describe.each([
 
   it("drops every row of P7-11's table, and keeps its exponents", () => {
     for (const [before, mark, after] of DROPPED) expect(read([[before], [mark, sup()], [after]]), `${before} + ${mark}`).toEqual([`${before}${after}`]);
-    for (const [before, mark, after] of KEPT) expect(read([[before], [mark, sup()], [after]]), `${before} + ${mark}`).toEqual([`${before}${mark}${after}`]);
+    for (const [before, mark, after] of KEPT) expect(read([[before], [mark, sup()], [after]]), `${before} + ${mark}`).toEqual([`${before}${superOf(mark)}${after}`]);
   });
 
   it("an exponent stays: after a unit of one or two lower-case letters, a one-letter variable, a bare number, or with its own sign", () => {
-    expect(read([["a diffusivity in cm"], ["2", sup()], [" per second"]])).toEqual(["a diffusivity in cm2 per second"]);
-    expect(read([["a current density in mA/cm"], ["2", sup()], [" was held"]])).toEqual(["a current density in mA/cm2 was held"]);
-    expect(read([["the fit gave R"], ["2", sup()], [" above 0.99"]])).toEqual(["the fit gave R2 above 0.99"]);
-    expect(read([["a rate of 5 x 10"], ["12", sup()], [" per second"]])).toEqual(["a rate of 5 x 1012 per second"]);
-    expect(read([["a wavenumber of 595 cm"], ["−1", sup()], [" was seen"]])).toEqual(["a wavenumber of 595 cm−1 was seen"]);
+    expect(read([["a diffusivity in cm"], ["2", sup()], [" per second"]])).toEqual(["a diffusivity in cm² per second"]);
+    expect(read([["a current density in mA/cm"], ["2", sup()], [" was held"]])).toEqual(["a current density in mA/cm² was held"]);
+    expect(read([["the fit gave R"], ["2", sup()], [" above 0.99"]])).toEqual(["the fit gave R² above 0.99"]);
+    expect(read([["a rate of 5 x 10"], ["12", sup()], [" per second"]])).toEqual(["a rate of 5 x 10¹² per second"]);
+    expect(read([["a wavenumber of 595 cm"], ["−1", sup()], [" was seen"]])).toEqual(["a wavenumber of 595 cm⁻¹ was seen"]);
     expect(read([["a toughness of 2.1 MPam"], ["1/2", sup()], [" was seen"]])).toEqual(["a toughness of 2.1 MPam1/2 was seen"]);
   });
 
   it("a charge stays: a digit with its sign, however the formula before it ends", () => {
-    expect(read([["the complex Fe(CN)6"], ["4−", sup()], [" is stable"]])).toEqual(["the complex Fe(CN)64− is stable"]);
-    expect(read([["the ion Ni"], ["2+", sup()], [" binds the film"]])).toEqual(["the ion Ni2+ binds the film"]);
-    expect(read([["a lone hydroxide OH"], ["−", sup()], [" was found"]])).toEqual(["a lone hydroxide OH− was found"]);
+    expect(read([["the complex Fe(CN)6"], ["4−", sup()], [" is stable"]])).toEqual(["the complex Fe(CN)6⁴⁻ is stable"]);
+    expect(read([["the ion Ni"], ["2+", sup()], [" binds the film"]])).toEqual(["the ion Ni²⁺ binds the film"]);
+    expect(read([["a lone hydroxide OH"], ["−", sup()], [" was found"]])).toEqual(["a lone hydroxide OH⁻ was found"]);
   });
 
   it("a single raised digit after a bracketed group with a slash and no space is an exponent: '(i/imax)2'", () => {
-    expect(read([["the plot of (i/imax)"], ["2", sup()], [" against t/tmax"]])).toEqual(["the plot of (i/imax)2 against t/tmax"]);
+    expect(read([["the plot of (i/imax)"], ["2", sup()], [" against t/tmax"]])).toEqual(["the plot of (i/imax)² against t/tmax"]);
   });
 
   it("any other number after a closing bracket is still a citation: a name, a phrase with a space, two digits", () => {
@@ -1509,20 +1516,84 @@ describe("what a raised number is, across runs (P9-08, cluster B)", () => {
   const read = (parts: [string, Partial<PdfTextItem>?][]) => linesOfPage({ page: 1, items: chain(parts) }).map((l) => l.text);
 
   it("a charge stays when a bracket follows it: '[OH−]/[Ni2+]'", () => {
-    expect(read([["a ratio [OH"], ["−", sup()], ["]/[Ni"], ["2+", sup()], ["]"]])).toEqual(["a ratio [OH−]/[Ni2+]"]);
+    expect(read([["a ratio [OH"], ["−", sup()], ["]/[Ni"], ["2+", sup()], ["]"]])).toEqual(["a ratio [OH⁻]/[Ni²⁺]"]);
   });
 
   it("a mark that carries its own sign is never a citation: '4−', '2+', '−13'", () => {
     // After a word of three letters, where a bare number would go.
-    expect(read([["the cathode"], ["2+", sup()], [" binds"]])).toEqual(["the cathode2+ binds"]);
-    expect(read([["the cathode"], ["4−", sup()], [" binds"]])).toEqual(["the cathode4− binds"]);
-    expect(read([["the cathode"], ["−13", sup()], [" binds"]])).toEqual(["the cathode−13 binds"]);
+    expect(read([["the cathode"], ["2+", sup()], [" binds"]])).toEqual(["the cathode²⁺ binds"]);
+    expect(read([["the cathode"], ["4−", sup()], [" binds"]])).toEqual(["the cathode⁴⁻ binds"]);
+    expect(read([["the cathode"], ["−13", sup()], [" binds"]])).toEqual(["the cathode⁻¹³ binds"]);
   });
 
   it("a range keeps its shape: a dash, a comma or the space a PDF leaves where an en dash was", () => {
     expect(read([["grown on gold,"], ["3−5", sup()], [" and annealed"]])).toEqual(["grown on gold, and annealed"]);
     expect(read([["grown on gold,"], ["89 91", sup()], [" and annealed"]])).toEqual(["grown on gold, and annealed"]);
     expect(read([["grown on gold,"], ["5,6", sup()], [" and annealed"]])).toEqual(["grown on gold, and annealed"]);
+  });
+});
+
+// ── P9-08 (round P9, Theme 1; B P9-01 §4): a raised run of digits and signs is a Unicode superscript ──
+//
+// The PDF sets an exponent or a charge as a run of its own, raised: "cm" + "2", "10" + "−13", "Ni" + "2+".
+// The line used to print it as plain digits glued to the word ("cm2", "10−13", "Ni2+"), which reads as a
+// digit in the word. A *whole* raised run made only of digits and signs is now written in Unicode
+// superscripts (cm², 10⁻¹³, Ni²⁺); a raised run with a letter, a unit, a point or a slash in it ("st",
+// "1/2", "0−4 μm") is left as the PDF has it, and so are lowered runs and the digits set inline in a
+// formula ("H2O": no geometry to read). The page shows them only once the PDF's text clean keeps them
+// (`cleanDisplayText` still flattens them with NFKC): this is the line builder's half.
+
+describe.each([
+  ["without the space run", chain],
+  ["with the space run", chainSpaced],
+] as const)("a raised run of digits and signs is read as Unicode superscripts, %s (P9-08, cluster G)", (_name, build) => {
+  const read = (parts: [string, Partial<PdfTextItem>?][]) => linesOfPage({ page: 1, items: build(parts) }).map((l) => l.text);
+
+  it("a raised 2 after a unit prints ², and a sign with it prints ⁻ or ⁺", () => {
+    expect(read([["a diffusivity in cm"], ["2", sup()], [" per second"]])).toEqual(["a diffusivity in cm² per second"]);
+    expect(read([["a current density in mA/cm"], ["2", sup()], [" was held"]])).toEqual(["a current density in mA/cm² was held"]);
+    expect(read([["a wavenumber of 595 cm"], ["−1", sup()], [" was seen"]])).toEqual(["a wavenumber of 595 cm⁻¹ was seen"]);
+    expect(read([["a rate in s"], ["-1", sup()], [" at room temperature"]])).toEqual(["a rate in s⁻¹ at room temperature"]);
+    expect(read([["the ion Ni"], ["2+", sup()], [" binds the film"]])).toEqual(["the ion Ni²⁺ binds the film"]);
+  });
+
+  it("a raised −13 after 10 prints ⁻¹³, however many digits, and a raised 4− prints ⁴⁻", () => {
+    expect(read([["a diffusivity of 4.6 x 10"], ["−13", sup()], [" cm2/s"]])).toEqual(["a diffusivity of 4.6 x 10⁻¹³ cm2/s"]);
+    expect(read([["a rate of 5 x 10"], ["12", sup()], [" per second"]])).toEqual(["a rate of 5 x 10¹² per second"]);
+    expect(read([["the complex Fe(CN)6"], ["4−", sup()], [" is stable"]])).toEqual(["the complex Fe(CN)6⁴⁻ is stable"]);
+    expect(read([["a lone hydroxide OH"], ["−", sup()], [" was found"]])).toEqual(["a lone hydroxide OH⁻ was found"]);
+  });
+
+  it("a sign and its digits stored as two raised runs print as one mark", () => {
+    expect(read([["a rate in mol"], ["\u2212", sup()], ["1", sup()], [" of lithium"]])).toEqual(["a rate in mol⁻¹ of lithium"]);
+    expect(read([["a rate of 5 x 10"], ["\u2013", sup()], ["12", sup()], [" per second"]])).toEqual(["a rate of 5 x 10⁻¹² per second"]);
+  });
+
+  it("a raised run with a letter, a unit, a point or a slash in it stays exactly as the PDF has it", () => {
+    expect(read([["after the 1"], ["st", sup()], [" charge cycle"]])).toEqual(["after the 1st charge cycle"]);
+    expect(read([["a toughness of 2.1 MPam"], ["1/2", sup()], [" was seen"]])).toEqual(["a toughness of 2.1 MPam1/2 was seen"]);
+    expect(read([["Quillwort films"], ["2a", sup()], [" were grown."]])).toEqual(["Quillwort films2a were grown."]);
+    expect(read([["a width of 4 mm"], ["2.5", sup()], [" each"]])).toEqual(["a width of 4 mm2.5 each"]);
+    expect(read([["the label f"], ["0−4 μm", sup()], [" was set"]])).toEqual(["the label f0−4 μm was set"]);
+  });
+
+  it("a subscript and the digits set inline in a formula are not touched", () => {
+    expect(read([["Films of TiO"], ["2", sub()], [" were grown on gold"]])).toEqual(["Films of TiO2 were grown on gold"]);
+    expect(read([["Films of Ti"], ["3+", sub()], [" were grown on gold"]])).toEqual(["Films of Ti3+ were grown on gold"]);
+    expect(read([["cells of LiCoO2 and H2O cycled at TC101 for hours"]])).toEqual(["cells of LiCoO2 and H2O cycled at TC101 for hours"]);
+  });
+
+  it("a raised run that is dropped as a citation is not printed in any form", () => {
+    expect(read([["Quillwort cathodes degrade."], ["12", sup()], [" They fade."]])).toEqual(["Quillwort cathodes degrade. They fade."]);
+  });
+});
+
+describe("a raised run at the head of a line is not converted to superscripts (P9-08, cluster G)", () => {
+  const read = (parts: [string, Partial<PdfTextItem>?][]) => linesOfPage({ page: 1, items: chain(parts) }).map((l) => l.text);
+
+  it("nothing is before it for it to stand on: a footnote number, a charge", () => {
+    expect(read([["1", sup()], ["Department of Materials Science"]])).toEqual(["1Department of Materials Science"]);
+    expect(read([["2+", sup()], [" is the charge"]])).toEqual(["2+ is the charge"]);
   });
 });
 
