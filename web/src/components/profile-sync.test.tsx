@@ -65,14 +65,8 @@ const fullyPopulatedProfile: UserProfile = {
   ...defaultProfile,
   displayName: "Alice Chen",
   researchTopics: ["battery materials"],
-  eventRequiredTopics: ["conference-topic"],
-  eventExploreTopics: ["conference-explore"],
-  jobRequiredTopics: ["job-topic"],
-  jobExploreTopics: ["job-explore"],
   activeSearchInputs: {
     papers: { required: ["battery materials"], explore: [] },
-    events: { required: ["conference-topic"], explore: ["conference-explore"] },
-    jobs: { required: ["job-topic"], explore: ["job-explore"] },
     careerStage: "Postdoc",
     locationPreferences: ["Chicago"],
     promotedOn: "2026-09-29",
@@ -124,10 +118,6 @@ const fullyPopulatedProfile: UserProfile = {
   digestEmail: "alice@example.edu",
   tavilyEnabled: true,
   tavilyApiKey: "tvly-secret",
-  adzunaAppId: "adzuna-id",
-  adzunaAppKey: "adzuna-secret",
-  usajobsApiKey: "usajobs-secret",
-  usajobsUserAgent: "me@example.test",
   feedAiProvider: "openai",
   feedAiApiKey: "sk-secret",
   // An invented string. It is not, and never was, a key.
@@ -833,7 +823,7 @@ describe("pullMergeAndPush — the lost-update mitigation (§1bq.3)", () => {
   // proven separately by the mitigation test above). A REAL, empty
   // `reconcilePushPayload` output is not reachable with a real
   // `defaultProfile`-shaped profile (PROFILE-SYNC-A's own Check 3 finding:
-  // several no-server-column fields, e.g. eventRequiredTopics/
+  // several no-server-column fields, e.g. activeSearchInputs/
   // deepReportEnabled/onboardedAt, are always present, harmlessly, in every
   // payload) — so this proves the REACHABLE half of "nothing to push" (the
   // list itself is excluded) rather than a literal `{}`, and the baselines

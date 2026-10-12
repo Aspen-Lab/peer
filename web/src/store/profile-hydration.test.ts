@@ -5,6 +5,9 @@ import { defaultProfile } from "@/types";
 
 describe("profile hydration", () => {
   it("installs promoted inputs before an immediate feed request is built", async () => {
+    // A device that saved this profile before the events and jobs feeds were
+    // stopped still holds their topic lists; hydration installs the Papers
+    // inputs only (P9-32).
     const persistedProfile = {
       ...defaultProfile,
       researchTopics: ["paper-required"],
@@ -31,7 +34,7 @@ describe("profile hydration", () => {
     };
     vi.stubGlobal("window", { localStorage: storage });
     const { useProfileStore } = await import("./profile");
-    const { opportunityRequestBody } = await import("./feed");
+    const { paperFeedRequestBody } = await import("./feed");
 
     await useProfileStore.persist.rehydrate();
 
@@ -41,25 +44,20 @@ describe("profile hydration", () => {
         required: ["paper-required"],
         explore: ["paper-explore"],
       },
-      events: {
-        required: ["event-required"],
-        explore: ["event-explore"],
-      },
-      jobs: {
-        required: ["job-required"],
-        explore: ["job-explore"],
-      },
       careerStage: defaultProfile.careerStage,
       locationPreferences: ["Chicago"],
       promotedOn: localCalendarDate(),
     });
+    expect(hydrated).not.toHaveProperty("eventRequiredTopics");
+    expect(hydrated).not.toHaveProperty("jobRequiredTopics");
 
-    const request = opportunityRequestBody(hydrated, "events", []);
-    expect(request.topics).toEqual(
-      hydrated.activeSearchInputs?.events.required,
-    );
+    const request = paperFeedRequestBody(hydrated, {
+      seedTexts: [],
+      seedWorkIds: [],
+    });
+    expect(request.topics).toEqual(hydrated.activeSearchInputs?.papers.required);
     expect(request.softTopics).toEqual(
-      hydrated.activeSearchInputs?.events.explore,
+      hydrated.activeSearchInputs?.papers.explore,
     );
     vi.unstubAllGlobals();
   });

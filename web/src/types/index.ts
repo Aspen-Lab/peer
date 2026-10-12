@@ -385,8 +385,6 @@ export interface SurfaceTopics {
 
 export interface ActiveSearchInputs {
   papers: SurfaceTopics;
-  events: SurfaceTopics;
-  jobs: SurfaceTopics;
   careerStage?: CareerStage;
   locationPreferences: string[];
   promotedOn: string;
@@ -422,10 +420,6 @@ export type ColorTheme = `${ThemeMode}:${ThemeAccent}`;
 export interface UserProfile {
   displayName: string;
   researchTopics: string[];
-  eventRequiredTopics: string[];
-  eventExploreTopics: string[];
-  jobRequiredTopics: string[];
-  jobExploreTopics: string[];
   activeSearchInputs?: ActiveSearchInputs;
   careerStage: CareerStage;
   industryVsAcademia: IndustryAcademiaPreference;
@@ -548,20 +542,14 @@ export interface UserProfile {
    */
   digestEmail?: string;
   /**
-   * Optional per-user data-source API keys for the jobs & events feeds. All
-   * kept in local browser state (never synced to the shared profile row) so
-   * users can bring their own keys without writing secrets server-side. Each
-   * unlocks broader coverage:
-   *   • Tavily   — web discovery of conferences + academic job boards (all fields)
-   *   • Adzuna   — industry job aggregator across 19 countries (app_id + app_key)
-   *   • USAJobs  — US federal / national-lab research posts (key + contact email)
+   * Optional per-user Tavily web-search switch and key. Kept in local browser
+   * state (never synced to the shared profile row) so users can bring their own
+   * key without writing secrets server-side. No screen sets them now: the
+   * onboarding step that did went with the stopped events and jobs feeds, and
+   * the fields stay for a device or a backup that holds one.
    */
   tavilyEnabled: boolean;
   tavilyApiKey?: string;
-  adzunaAppId?: string;
-  adzunaAppKey?: string;
-  usajobsApiKey?: string;
-  usajobsUserAgent?: string;
   /**
    * Optional per-user AI override for Tier 2 reranking. Also local-only so
    * users can bring their own normal API key without syncing secrets to the
@@ -617,10 +605,6 @@ export const defaultProfile: UserProfile = {
   // Empty by design — first-run users see the profile-setup nudge in the
   // header rather than a feed pre-tuned for someone else's PhD.
   researchTopics: [],
-  eventRequiredTopics: [],
-  eventExploreTopics: [],
-  jobRequiredTopics: [],
-  jobExploreTopics: [],
   careerStage: "PhD Year 3",
   industryVsAcademia: "both",
   locationPreferences: [],
@@ -652,10 +636,6 @@ export const defaultProfile: UserProfile = {
   digestEmail: "",
   tavilyEnabled: false,
   tavilyApiKey: "",
-  adzunaAppId: "",
-  adzunaAppKey: "",
-  usajobsApiKey: "",
-  usajobsUserAgent: "",
   feedAiProvider: "default",
   feedAiApiKey: "",
   jevApiKey: "",

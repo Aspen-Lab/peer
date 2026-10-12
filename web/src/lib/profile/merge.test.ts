@@ -609,6 +609,8 @@ describe("preferenceLedgerChanged (§1bk.8 AMENDMENT)", () => {
 // since restoring a named file is itself the deliberate user action).
 describe("stripCredentialFields", () => {
   it("removes all seven credential-like fields, even when every one is present with a real value", () => {
+    // The Adzuna and USAJobs names are no longer fields of UserProfile; the strip
+    // is by name, so a blob or a backup written before is still cleaned.
     const stripped = stripCredentialFields({
       displayName: "Aspen",
       tavilyApiKey: "tvly-secret",
@@ -618,7 +620,7 @@ describe("stripCredentialFields", () => {
       usajobsUserAgent: "me@example.test",
       feedAiApiKey: "sk-secret",
       jevApiKey: "jev-test-sentinel-not-a-key-0000",
-    });
+    } as Partial<UserProfile>);
     expect(stripped).toEqual({ displayName: "Aspen" });
   });
 });
@@ -696,15 +698,14 @@ describe("stripLegacyOpportunityFields", () => {
     stripLegacyOpportunityFields(legacy);
     expect(JSON.stringify(legacy)).toBe(before);
 
-    const clean = {
-      displayName: "Aspen",
+    const clean = profile({
       researchTopics: ["a"],
       activeSearchInputs: {
         papers: { required: ["a"], explore: [] },
         locationPreferences: [],
         promotedOn: "2026-10-12",
       },
-    };
+    });
     expect(stripLegacyOpportunityFields(clean)).toEqual(clean);
   });
 });
@@ -719,7 +720,7 @@ describe("mergeProfileFromBackup", () => {
       usajobsApiKey: "usajobs-secret",
       feedAiApiKey: "sk-secret",
       jevApiKey: "jev-test-sentinel-not-a-key-0000",
-    });
+    } as Partial<UserProfile>);
     expect(patch).not.toHaveProperty("tavilyApiKey");
     expect(patch).not.toHaveProperty("adzunaAppKey");
     expect(patch).not.toHaveProperty("usajobsApiKey");

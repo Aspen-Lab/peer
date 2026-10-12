@@ -23,7 +23,7 @@ import type {
 } from "@/types";
 import { defaultProfile } from "@/types";
 import { normalizePersistedFeedIntent } from "@/lib/feed/intent";
-import { stripCredentialFields } from "@/lib/profile/merge";
+import { stripCredentialFields, stripLegacyOpportunityFields } from "@/lib/profile/merge";
 import { useJevScreeningStore } from "@/store/jev-screening";
 import { cleanQuestions } from "@/store/reading-questions";
 import {
@@ -98,10 +98,6 @@ interface ProfileState {
   updateDisplayName: (name: string) => void;
   updateTopics: (topics: string[]) => void;
   updateSoftTopics: (topics: string[]) => void;
-  updateEventTopics: (topics: string[]) => void;
-  updateEventSoftTopics: (topics: string[]) => void;
-  updateJobTopics: (topics: string[]) => void;
-  updateJobSoftTopics: (topics: string[]) => void;
   updatePreferredJournals: (journals: string[]) => void;
   updateCareerStage: (stage: CareerStage) => void;
   updateIndustryPreference: (pref: IndustryAcademiaPreference) => void;
@@ -174,8 +170,6 @@ interface ProfileState {
   updateDigestEmail: (email: string) => void;
   updateTavilyEnabled: (value: boolean) => void;
   updateTavilyApiKey: (value: string) => void;
-  updateAdzunaKeys: (appId: string, appKey: string) => void;
-  updateUsajobsKeys: (apiKey: string, userAgent: string) => void;
   updateFeedAiProvider: (value: UserProfile["feedAiProvider"]) => void;
   updateFeedAiApiKey: (value: string) => void;
   /** The reader's own Jev key: trimmed, blank clears it. Never synced. */
@@ -206,10 +200,17 @@ interface ProfileState {
   logOut: () => void;
 }
 
-export function migrateProfileStore(
-  persisted: unknown,
-  version: number,
-): unknown {
+/**
+ * Brings a persisted `peer-profile` blob up to the current shape. The step that
+ * matters most is the v8 one (the events and jobs feeds are stopped): whatever
+ * version the blob is, the event and job topic lists, the Adzuna and USAJobs
+ * credentials and the events/jobs halves of the active snapshot are dropped —
+ * they are no longer part of the profile, and nothing may keep storing,
+ * syncing or reading them. It is idempotent, so it needs no version switch.
+ * The reader's own words (Career stage, Looking toward, locations, work
+ * authorisation) and the Tavily fields are kept.
+ */
+export function migrateProfileStore(persisted: unknown): unknown {
   if (!persisted || typeof persisted !== "object") return persisted;
 
   const state = persisted as {
@@ -218,43 +219,11 @@ export function migrateProfileStore(
   };
   if (!state.profile || typeof state.profile !== "object") return persisted;
 
-  const profile: PersistedUserProfile = { ...state.profile };
+  const profile: PersistedUserProfile = stripLegacyOpportunityFields({
+    ...state.profile,
+  });
   if (profile.colorTheme !== undefined) {
     profile.colorTheme = normalizeColorTheme(profile.colorTheme);
-  }
-
-  if (version < 3) {
-    const requiredTopics = Array.isArray(profile.researchTopics)
-      ? profile.researchTopics
-      : [];
-    const exploreTopics = Array.isArray(profile.softTopics)
-      ? profile.softTopics
-      : [];
-
-    if (
-      !Array.isArray(profile.eventRequiredTopics) ||
-      profile.eventRequiredTopics.length === 0
-    ) {
-      profile.eventRequiredTopics = [...requiredTopics];
-    }
-    if (
-      !Array.isArray(profile.eventExploreTopics) ||
-      profile.eventExploreTopics.length === 0
-    ) {
-      profile.eventExploreTopics = [...exploreTopics];
-    }
-    if (
-      !Array.isArray(profile.jobRequiredTopics) ||
-      profile.jobRequiredTopics.length === 0
-    ) {
-      profile.jobRequiredTopics = [...requiredTopics];
-    }
-    if (
-      !Array.isArray(profile.jobExploreTopics) ||
-      profile.jobExploreTopics.length === 0
-    ) {
-      profile.jobExploreTopics = [...exploreTopics];
-    }
   }
 
   const authorisedCountries = (
@@ -278,8 +247,8 @@ export function migrateProfileStore(
 }
 
 /**
- * True when the active snapshot has no usable topics on any surface but the
- * pending fields do — i.e. we have never once locked in a real search input.
+ * True when the active snapshot has no usable paper topics but the pending
+ * field does — i.e. we have never once locked in a real search input.
  *
  * This is the bootstrap case, and it has to bypass the once-a-day rule.
  * Promotion normally runs at hydration, which for a brand-new user happens
@@ -294,16 +263,8 @@ export function migrateProfileStore(
 function hasNoActiveInputsYet(profile: UserProfile): boolean {
   const active = profile.activeSearchInputs;
   if (!active) return true;
-  const activeCount =
-    active.papers.required.length +
-    active.events.required.length +
-    active.jobs.required.length;
-  if (activeCount > 0) return false;
-  const pendingCount =
-    profile.researchTopics.length +
-    profile.eventRequiredTopics.length +
-    profile.jobRequiredTopics.length;
-  return pendingCount > 0;
+  if (active.papers.required.length > 0) return false;
+  return profile.researchTopics.length > 0;
 }
 
 export function promoteSearchInputs(
@@ -324,14 +285,6 @@ export function promoteSearchInputs(
       papers: {
         required: [...profile.researchTopics],
         explore: [...(profile.softTopics ?? [])],
-      },
-      events: {
-        required: [...profile.eventRequiredTopics],
-        explore: [...profile.eventExploreTopics],
-      },
-      jobs: {
-        required: [...profile.jobRequiredTopics],
-        explore: [...profile.jobExploreTopics],
       },
       careerStage: profile.careerStage,
       locationPreferences: [...profile.locationPreferences],
@@ -485,26 +438,6 @@ export const useProfileStore = create<ProfileState>()(
 
       updateSoftTopics: (topics) =>
         set((s) => ({ profile: { ...s.profile, softTopics: topics, feedIntent: undefined } })),
-
-      updateEventTopics: (topics) =>
-        set((s) => ({
-          profile: { ...s.profile, eventRequiredTopics: topics },
-        })),
-
-      updateEventSoftTopics: (topics) =>
-        set((s) => ({
-          profile: { ...s.profile, eventExploreTopics: topics },
-        })),
-
-      updateJobTopics: (topics) =>
-        set((s) => ({
-          profile: { ...s.profile, jobRequiredTopics: topics },
-        })),
-
-      updateJobSoftTopics: (topics) =>
-        set((s) => ({
-          profile: { ...s.profile, jobExploreTopics: topics },
-        })),
 
       updatePreferredJournals: (journals) =>
         set((s) => ({ profile: { ...s.profile, preferredJournals: journals } })),
@@ -732,22 +665,6 @@ export const useProfileStore = create<ProfileState>()(
         set((s) => ({
           profile: { ...s.profile, tavilyApiKey: value.trim() || undefined },
         })),
-      updateAdzunaKeys: (appId, appKey) =>
-        set((s) => ({
-          profile: {
-            ...s.profile,
-            adzunaAppId: appId.trim() || undefined,
-            adzunaAppKey: appKey.trim() || undefined,
-          },
-        })),
-      updateUsajobsKeys: (apiKey, userAgent) =>
-        set((s) => ({
-          profile: {
-            ...s.profile,
-            usajobsApiKey: apiKey.trim() || undefined,
-            usajobsUserAgent: userAgent.trim() || undefined,
-          },
-        })),
       updateFeedAiProvider: (value) =>
         set((s) => ({
           profile: {
@@ -907,7 +824,8 @@ export const useProfileStore = create<ProfileState>()(
         syncedAccountId: state.syncedAccountId,
       }) as ProfileState,
       // v2: colorTheme became a "mode:accent" composite.
-      // v3: Events and Jobs gained independent Required/Explore topic fields.
+      // v3: Events and Jobs gained independent Required/Explore topic fields
+      //     (dropped again at v8).
       // v4: work-authorisation countries became a persisted profile signal.
       // v5: PROFILE-SYNC (§1bk) — lastSynced, a per-device snapshot of the
       //     single-value fields' last-confirmed values. The migration adds
@@ -935,9 +853,15 @@ export const useProfileStore = create<ProfileState>()(
       //     the old code has not "switched" accounts merely because this
       //     fix shipped, so its very next sign-in must not be treated as
       //     one.
-      version: 7,
-      migrate: (persisted, version) =>
-        migrateProfileStore(persisted, version) as ProfileState,
+      // v8: the events and jobs feeds are stopped (rulings 60). The migration
+      //     drops the event and job topic lists, the Adzuna and USAJobs
+      //     credentials and the events/jobs halves of `activeSearchInputs`
+      //     from a saved profile; nothing is seeded in their place (the old
+      //     v3 step that copied the paper topics into them is gone). It drops
+      //     whatever version the blob is at, so it replaces the version switch
+      //     the earlier steps needed.
+      version: 8,
+      migrate: (persisted) => migrateProfileStore(persisted) as ProfileState,
       // Build the promoted snapshot as part of the state installed by
       // hydration, so subscribers can never observe hydrated pending inputs
       // without the corresponding active inputs.

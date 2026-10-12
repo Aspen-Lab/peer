@@ -95,8 +95,6 @@ function setTopic(topic: string) {
       researchTopics: [topic],
       activeSearchInputs: {
         papers: { required: [topic], explore: [] },
-        events: { required: [], explore: [] },
-        jobs: { required: [], explore: [] },
         locationPreferences: [],
         promotedOn: "2026-07-29",
       },
