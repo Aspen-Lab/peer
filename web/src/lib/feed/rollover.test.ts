@@ -52,6 +52,10 @@ class MemoryPoolCache implements PoolCache {
 const originalOpenAlexFetch = bySourceId.openalex.fetch;
 afterEach(() => {
   bySourceId.openalex.fetch = originalOpenAlexFetch;
+  // A no-op for every test that never froze the clock; restores it for the
+  // one that does (the "no special boost or penalty" test below), even when
+  // one of its assertions throws.
+  vi.useRealTimers();
 });
 
 function stubLiveOpenAlex(items: RawItem[]) {
@@ -232,6 +236,17 @@ describe("rolloverCandidates -- merge + eligibility (P4-S6)", () => {
   });
 
   it("gives a rollover candidate no special boost or penalty -- its score is byte-identical to what the SAME content would get if fetched live", async () => {
+    // Freeze the wall clock for BOTH runs (P9-43, BACKLOG-48). The pipeline's
+    // `now` option only reaches the pool build: read-time scoring is
+    // `scoreItems(..., now = Date.now())` in lib/scoring/combine.ts, so each
+    // run scores recency against its own wall clock, and the second run starts
+    // a few ms (under load, a few hundred) after the first. That drift --
+    // about 4e-12 of score per ms for this fixture -- is the whole difference
+    // between the two scores; the summation order is the same in both runs.
+    // Only `Date` is faked, so the source-timeout timers and promises are real.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 24, 9, 0));
+
     const itemA = paper(1);
     const itemB = paper(2, {
       title: "Solid-State Battery Electrolyte Interfacial Stability",
@@ -264,13 +279,15 @@ describe("rolloverCandidates -- merge + eligibility (P4-S6)", () => {
     );
     const bScoreAsRollover = bAsRollover.items.find((i) => i.id === "openalex:paper-2")?.score;
 
-    // toBeCloseTo, not toBe: the two runs' floating-point summation order
-    // can differ in the last couple of decimal places (a real, harmless
-    // artifact of JS float arithmetic, not a special boost/penalty) --
-    // 9 digits of precision is far tighter than any deliberate boost/
-    // penalty in this codebase (e.g. the +1/3 journal boost) could hide
-    // inside.
-    expect(bScoreAsRollover).toBeCloseTo(bScoreAsLive!, 9);
+    // Exact equality, as the test's own name says. With the clock frozen above
+    // the two runs add the same terms in the same order (verified: scores equal
+    // to the last bit with a real 1 s pause between the runs), so there is no
+    // float noise left to excuse and no tolerance for a small boost or
+    // penalty -- even +1e-6 -- to hide inside. The earlier
+    // `toBeCloseTo(..., 9)` (5e-10) was blamed on summation order but was
+    // really clock drift, and failed whenever the second run started more than
+    // ~100 ms after the first.
+    expect(bScoreAsRollover).toBe(bScoreAsLive);
   });
 
   it("never pads: live + rollover candidates fewer than topN still returns only what's genuinely eligible", async () => {
