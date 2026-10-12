@@ -85,6 +85,34 @@ describe("the lead plate holds its box from the first paint (rule 1, N6)", () =>
   });
 });
 
+// Rule 2 reaches the plate itself: with no `imageAlt`, the plate's own caption is the image's alt and the lightbox's
+// caption, so an abstract block must not get in by that door either. (The line under the plate is `leadCaption`'s,
+// tested in lead-caption.test.ts.)
+describe("an abstract block is not the lead picture's alt or lightbox caption (rule 2, N8)", () => {
+  const ABSTRACT = "ABSTRACT: Terraced orchards lose water to storms and to dry spells. We laid dried seaweed in a thick layer.";
+  const altOf = (html: string): string | null => /<img [^>]*alt="([^"]*)"/.exec(html)?.[1] ?? null;
+
+  it("drops a block that opens with the word Abstract", () => {
+    expect(altOf(render(lead({ figure: { imageUrl: BOUND.imageUrl, caption: ABSTRACT } })))).toBe("");
+  });
+
+  it("drops the reading's own abstract, even without the word", () => {
+    const abstract = "Terraced orchards lose water to storms and to dry spells. We laid dried seaweed in a thick layer, a thin layer or not at all.";
+    const block = "Terraced orchards lose water to storms and to dry spells. We laid dried seaweed in a thick layer.";
+    expect(altOf(render(lead({ figure: { imageUrl: BOUND.imageUrl, caption: block }, abstract })))).toBe("");
+    expect(altOf(render(lead({ figure: { imageUrl: BOUND.imageUrl, caption: block } })))).toBe(block);
+  });
+
+  it("keeps a real caption as the alt (the page then passes imageAlt='' when it sets the caption itself)", () => {
+    expect(altOf(render(lead({ figure: BOUND, abstract: "Terraced orchards lose water to storms and to dry spells." })))).toBe("Figure 1. A caption.");
+    expect(altOf(render(lead({ figure: BOUND, imageAlt: "" })))).toBe("");
+  });
+
+  it("is for the lead picture only: a feed tile's alt is as it was", () => {
+    expect(altOf(render({ paper: paper(), terms: [], figure: { imageUrl: BOUND.imageUrl, caption: ABSTRACT } }))).toBe(ABSTRACT);
+  });
+});
+
 describe("leadFigurePending — when the page keeps the slot (rule 1)", () => {
   it("is true while the figure route has not answered and nothing is bound", () => {
     expect(leadFigurePending({ status: "idle", imageUrl: null }, null)).toBe(true);
