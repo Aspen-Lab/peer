@@ -11,7 +11,7 @@
 // keeps its own front matter; it is not this export.)
 
 import type { Paper } from "@/types";
-import { FOR_YOUR_QUESTIONS, MAP } from "@/components/reader/copy";
+import { FOR_YOUR_QUESTIONS, MAP, PEERS_READING, REPORT_HEADING } from "@/components/reader/copy";
 import { displayHeading, quoteAttribution } from "./reading";
 import type { PaperReading, ReadingBlock, ReadingQuote } from "./reading";
 import type { ReadingMap } from "./reading-map";
@@ -288,7 +288,21 @@ export function readingToMarkdown(
     lines.push(`## ${heading}`, "", ...body, "");
   };
   const section = (block: Exclude<ReadingBlock, "skim">, body: string[]) => extra(HEADING[block], body);
-  const PEERS = "*Peer's reading — not a quote*";
+  // The attribution under a block Peer wrote with no sentence of the paper to show for it: the
+  // page's own footer words (`PEERS_READING`), in the italic line this export gives Peer's lines.
+  const PEERS = `*${PEERS_READING}*`;
+
+  // P9-27 (the owner, §1a.18 (b)): the page's "What is new here" — the proposal's `newHere` lines,
+  // Peer's reading — is a block of its own, the first of the Summary's report blocks, right after
+  // the words that open it. So here: its own section right after the opening (everything above the
+  // first `##`: the skim, the abstract, the Decision sentences — a heading earlier would take the
+  // Decision line under it), written whether or not the proposal has a summary, once, under `PEERS`.
+  // With no line to show there is no section. Each result's own novelty line stays with its result.
+  const newHere = (report?.whatItProposes?.newHere ?? []).map(oneLine).filter(Boolean);
+  extra(
+    REPORT_HEADING.newHere,
+    newHere.length > 0 ? [...spaced(newHere.map((line) => [line])), "", PEERS] : [],
+  );
 
   // P2-05: the answers to the reader's questions, where the page puts them —
   // after the Decision block, before "What it proposes". P7-12: with no answers,
@@ -297,18 +311,11 @@ export function readingToMarkdown(
   if (answered.length > 0) extra(FOR_YOUR_QUESTIONS.heading, spaced(questionGroups(answered, reading.map)));
   else if (asked.length > 0) extra(YOUR_QUESTIONS, asked.map((question) => `- ${question}`));
 
-  // The page's order: the proposal (merged with the old "what is new"
-  // block — S6, they duplicated each other), the method, the results (or a
-  // review's contents), then the rewrite's own blocks. "Why it fits you" is
-  // deleted (S6).
+  // The page's order: the proposal alone (P9-27: the "new here" lines are the section above's —
+  // S6 had merged them into it), the method, the results (or a review's contents), then the
+  // rewrite's own blocks. "Why it fits you" is deleted (S6).
   const proposal = report?.whatItProposes?.summary?.trim();
-  const newHere = report?.whatItProposes?.newHere?.filter(Boolean) ?? [];
-  if (proposal) {
-    extra(
-      "What it proposes",
-      newHere.length > 0 ? [proposal, "", ...newHere, "", PEERS] : [proposal],
-    );
-  }
+  if (proposal) extra("What it proposes", [proposal]);
 
   const methods = report?.whatItProposes?.methods?.filter((claim) => claim.text) ?? [];
   if (methods.length > 0) {

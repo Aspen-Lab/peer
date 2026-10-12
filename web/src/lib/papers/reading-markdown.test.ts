@@ -4,6 +4,7 @@ import type { ExtractedDocument } from "./html-text";
 import { buildReading, describeAvailability, omittedForReader } from "./reading";
 import type { PaperReading, ReadingQuote } from "./reading";
 import { readingToMarkdown, type MarkdownReport } from "./reading-markdown";
+import { PEERS_READING, REPORT_HEADING } from "@/components/reader/copy";
 import arxivHtmlDocJson from "./__fixtures__/arxiv-2609.02697.doc.json";
 import normalPaperJson from "./__fixtures__/abstract-normal-W7204479535.paper.json";
 import noAbstractPaperJson from "./__fixtures__/no-abstract-W7204992910.paper.json";
@@ -512,5 +513,119 @@ describe("readingToMarkdown prints the paper's text on one line (P9-06)", () => 
     expect(md).toContain("> The peak grew by 40 %. \u2014 \u00A74 Results\n");
     expect(md).toContain("> Films were annealed at 600 K. \u2014 \u00A72 Methods\n");
     expect(md).toContain("> Only one alloy. \u2014 \u00A75 Discussion\n");
+  });
+});
+
+// P9-27 (the owner, §1a.18 (b), "这个放到summary那里"; the manager's follow-up): the page shows the proposal's
+// `newHere` lines as a block of their own, "What is new here", ahead of "What it proposes". The copy follows:
+// its own "## What is new here" section right after the opening (title, DOI, skim, abstract and the Decision
+// sentences — the opening is everything before the first `##`), under the attribution the export already uses
+// for Peer's lines, written whether or not a proposal summary exists, and once: "What it proposes" carries the
+// proposal alone. Every sentence here is invented. (Before this, the lines rode inside "What it proposes",
+// only when it had a summary; no earlier test pinned that place.)
+describe("readingToMarkdown gives \"What is new here\" its own section after the opening (P9-27)", () => {
+  const PEERS = "*Peer's reading \u2014 not a quote*";
+  const NEW_A = "It swaps the imported film for a mulch cut from local seaweed.";
+  const NEW_B = "Three layer depths are compared in one orchard.";
+  const SUMMARY = "The paper lays seaweed on terrace soil and logs the soil water.";
+  const NOVELTY = "Earlier trials used only one layer depth.";
+  const reading = buildReading(normalPaper, null, NOW);
+  const sentences = describeAvailability({ reading, ...noModel });
+  const reportWith = (whatItProposes: NonNullable<MarkdownReport["whatItProposes"]>): MarkdownReport => ({
+    skim: [{ text: "Deeper seaweed layers held more soil water.", evidence: reading.abstract.sentences[1], evidenceWhere: "abstract" }],
+    whatItProposes,
+    resultsAndSignificance: {
+      summary: "Soil water stayed higher under the thick layer.",
+      keyResults: [{ title: "Water kept", detail: "The index rose with depth.", evidence: "The index rose with depth.", evidenceWhere: "4 Results", novelty: NOVELTY }],
+    },
+    provenance: { basis: "model-fulltext" },
+  });
+  const count = (md: string, text: string) => md.split(text).length - 1;
+  /** One `##` section: from its heading to the next heading (or the end). */
+  const sectionOf = (md: string, heading: string) => {
+    const from = md.indexOf(`## ${heading}\n`);
+    if (from < 0) return null;
+    const next = md.indexOf("\n## ", from + 1);
+    return md.slice(from, next < 0 ? md.length : next + 1);
+  };
+
+  it("uses the page's heading and the page's attribution words", () => {
+    expect(REPORT_HEADING.newHere).toBe("What is new here");
+    expect(PEERS).toBe(`*${PEERS_READING}*`);
+  });
+
+  it("is a section of its own, after the opening and before \"What it proposes\", under Peer's attribution", () => {
+    const md = readingToMarkdown(normalPaper, reading, reportWith({ summary: SUMMARY, newHere: [NEW_A, NEW_B] }), sentences);
+
+    expect(count(md, "## What is new here")).toBe(1);
+    expect(sectionOf(md, "What is new here")).toBe(`## What is new here\n\n${NEW_A}\n\n${NEW_B}\n\n${PEERS}\n\n`);
+    // The opening — the skim, the abstract and its footer, the Decision sentences — comes first, whole.
+    const at = (text: string) => md.indexOf(text);
+    expect(at("*Peer's skim")).toBeGreaterThan(-1);
+    expect(at("*From the abstract")).toBeGreaterThan(at("*Peer's skim"));
+    expect(at(sentences.join(" "))).toBeGreaterThan(at("*From the abstract"));
+    expect(at("## What is new here")).toBeGreaterThan(at(sentences.join(" ")));
+    expect(at("## What it proposes")).toBeGreaterThan(at("## What is new here"));
+    // Nothing of the opening is inside the new section's words, and it is the first heading of the copy.
+    expect(md.indexOf("\n## ") + 1).toBe(at("## What is new here"));
+  });
+
+  it("\"What it proposes\" carries the proposal alone, and each line is on the copy once", () => {
+    const md = readingToMarkdown(normalPaper, reading, reportWith({ summary: SUMMARY, newHere: [NEW_A, NEW_B] }), sentences);
+
+    expect(sectionOf(md, "What it proposes")).toBe(`## What it proposes\n\n${SUMMARY}\n\n`);
+    expect(count(md, NEW_A)).toBe(1);
+    expect(count(md, NEW_B)).toBe(1);
+    expect(count(md, PEERS)).toBe(1);
+  });
+
+  it("is written with no proposal summary too, and then there is no \"What it proposes\"", () => {
+    for (const whatItProposes of [{ newHere: [NEW_A] }, { summary: "   ", newHere: [NEW_A] }]) {
+      const md = readingToMarkdown(normalPaper, reading, reportWith(whatItProposes), sentences);
+
+      expect(sectionOf(md, "What is new here")).toBe(`## What is new here\n\n${NEW_A}\n\n${PEERS}\n\n`);
+      expect(md).not.toContain("## What it proposes");
+      expect(count(md, NEW_A)).toBe(1);
+    }
+  });
+
+  it("is absent, heading and attribution and all, with no line to show", () => {
+    const reports: (MarkdownReport | null)[] = [
+      null,
+      reportWith({ summary: SUMMARY }),
+      reportWith({ summary: SUMMARY, newHere: [] }),
+      reportWith({ summary: SUMMARY, newHere: ["", "   \n "] }),
+    ];
+    for (const report of reports) {
+      const md = readingToMarkdown(normalPaper, reading, report, sentences);
+
+      expect(md).not.toContain("## What is new here");
+      expect(md).not.toContain(PEERS);
+    }
+    expect(readingToMarkdown(normalPaper, reading, reportWith({ summary: SUMMARY }), sentences)).toContain(`## What it proposes\n\n${SUMMARY}\n`);
+  });
+
+  it("prints each line on one line, and drops a blank one", () => {
+    const md = readingToMarkdown(normalPaper, reading, reportWith({ summary: SUMMARY, newHere: ["  It swaps the film\nfor a seaweed\r\n mulch. ", "", NEW_B] }), sentences);
+
+    expect(sectionOf(md, "What is new here")).toBe(`## What is new here\n\nIt swaps the film for a seaweed mulch.\n\n${NEW_B}\n\n${PEERS}\n\n`);
+  });
+
+  it("stands right after the opening, ahead of the reader's questions, whose block it leaves whole", () => {
+    const md = readingToMarkdown(normalPaper, reading, reportWith({ summary: SUMMARY, newHere: [NEW_A] }), sentences, ["Does it hold at 600 K?"]);
+    const at = (text: string) => md.indexOf(text);
+
+    expect(at("## What is new here")).toBeGreaterThan(at(sentences.join(" ")));
+    expect(at("## Your questions")).toBeGreaterThan(at("## What is new here"));
+    expect(at("## What it proposes")).toBeGreaterThan(at("## Your questions"));
+    expect(sectionOf(md, "Your questions")).toBe("## Your questions\n\n- Does it hold at 600 K?\n\n");
+  });
+
+  it("leaves each result's own novelty line with its result, under the label it always had", () => {
+    const md = readingToMarkdown(normalPaper, reading, reportWith({ summary: SUMMARY, newHere: [NEW_A] }), sentences);
+
+    expect(count(md, `What is new here: ${NOVELTY}`)).toBe(1);
+    expect(sectionOf(md, "What they found, and how big")).toContain(`What is new here: ${NOVELTY}`);
+    expect(sectionOf(md, "What is new here")).not.toContain(NOVELTY);
   });
 });
