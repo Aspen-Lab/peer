@@ -55,6 +55,27 @@ describe("no job or event source or pipeline is in the tree", () => {
     expect(entries("src/lib/events").filter((name) => name !== "types.ts")).toEqual([]);
   });
 
+  it("lib/opportunities holds only the modules the paper pool and the paper caches share", () => {
+    // `pool-cache` and `shared` serve the paper pool and `lib/feed/pipeline`;
+    // `private-paper-cache` and `channel-candidate-cache` are the paper
+    // caches; `facets`, `retrieval-identity` and `salary` are read by the feed
+    // store, the ledger and the shared types. Anything else here is a job or
+    // event reader, enricher, searcher or cache that has come back.
+    const KEPT = new Set([
+      "shared",
+      "pool-cache",
+      "private-paper-cache",
+      "channel-candidate-cache",
+      "facets",
+      "retrieval-identity",
+      "salary",
+    ]);
+    const unexpected = entries("src/lib/opportunities").filter(
+      (name) => !KEPT.has(name.replace(/\.test\.tsx?$|\.tsx?$/, "")),
+    );
+    expect(unexpected).toEqual([]);
+  });
+
   it("no non-test source or script names the host of a job board or an events feed", () => {
     // The hosts the deleted clients called. Tavily is not here: the paper `web`
     // source shares it. The build guard bans the credential names on Vercel

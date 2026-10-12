@@ -12,7 +12,10 @@ import { describe, expect, it } from "vitest";
  * grep is not a gate.
  *
  * The allow-list below is every remaining occurrence in non-test source, each
- * with the reason it is allowed. **All four are server-only.** Adding a file
+ * with the reason it is allowed. **Both are server-only.** (P9-33, §1h.60: the
+ * two other entries, `pool-cache-disk.ts` and `pool-cache-runtime.ts`, were the
+ * job and event pool-cache adapters; they were deleted with those modules, and
+ * the entries went with them. The two checks below are unchanged.) Adding a file
  * here is a decision: if the new occurrence ships to the browser and gates AI
  * or an AI-dependent UI state, it belongs in `aiAvailability`
  * instead (R-ENT-3), and the escape clause in Ruling 2 point 2 applies — stop
@@ -26,14 +29,6 @@ const ALLOWED: ReadonlyArray<{ file: string; why: string }> = [
   {
     file: "src/app/auth/callback/route.ts",
     why: "Server route. Chooses the redirect origin after OAuth; nothing to do with AI.",
-  },
-  {
-    file: "src/lib/opportunities/pool-cache-disk.ts",
-    why: "Server-side cache adapter. Decides whether pools persist to disk; nothing to do with AI.",
-  },
-  {
-    file: "src/lib/opportunities/pool-cache-runtime.ts",
-    why: "Server-side cache selection, disk vs Supabase; nothing to do with AI.",
   },
 ];
 
