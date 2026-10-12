@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { extractPdfTextFromBytes } from "@/lib/papers/pdf-text";
 import { minimalPdf, prose } from "@/lib/papers/minimal-pdf.test-helper";
-import { cleanDisplayText } from "./clean";
+import { cleanDisplayText, cleanPaperText } from "./clean";
 
 describe("cleanDisplayText", () => {
   it("2-03: folds the stray fraction-slash artifact (U+2044) out of a PDF-extracted caption", () => {
@@ -187,72 +187,102 @@ describe("cleanDisplayText — braces stay outside LaTeX (P9-10)", () => {
 });
 
 // P9-16 (round P9 round-3 Theme 1; cluster D of the round-2 blind read): the
-// display text keeps the minus sign and the dashes as the author set them. The
-// cleaner folded U+2212, U+2013 and U+2014 to "-", so "[12 −20 8 1]" printed as
-// "[12 -20 8 1]" and every minus sign of the owner's paper was lost. Only the
-// hyphen glyphs fold to "-"; the two other dash look-alikes fold to their
-// nearest honest relative. The evidence matcher still folds every dash and
-// minus to "-" (evidence.ts), so a quote typed with "-" still finds the body.
+// paper's display text keeps the minus sign and the dashes as the author set
+// them. The cleaner folded U+2212, U+2013 and U+2014 to "-", so "[12 −20 8 1]"
+// printed as "[12 -20 8 1]" and every minus sign of the owner's paper was lost.
+// The ruling (§1h.55) keeps them on the PAPER path only: `cleanPaperText` (what
+// `papers/pdf-text.ts` uses) narrows the dash step to the hyphen glyphs, and
+// `cleanDisplayText`, which feeds the sources and from them `scoring/tokenize.ts`
+// (it keeps only "-" inside a token), folds every dash and minus as it always
+// did. The evidence matcher folds every dash and minus to "-" itself
+// (evidence.ts), so a quote typed with "-" still finds the body.
 // The characters look alike, so every one is spelled by code point.
-const MINUS = "−"; // MINUS SIGN
-const EN = "–"; // EN DASH
-const EM = "—"; // EM DASH
-const HYPHEN = "‐"; // HYPHEN
-const NB_HYPHEN = "‑"; // NON-BREAKING HYPHEN
-const FIGURE = "‒"; // FIGURE DASH
-const BAR = "―"; // HORIZONTAL BAR
+const MINUS = "\u2212"; // MINUS SIGN
+const EN = "\u2013"; // EN DASH
+const EM = "\u2014"; // EM DASH
+const HYPHEN = "\u2010"; // HYPHEN
+const NB_HYPHEN = "\u2011"; // NON-BREAKING HYPHEN
+const FIGURE = "\u2012"; // FIGURE DASH
+const BAR = "\u2015"; // HORIZONTAL BAR
 
-describe("cleanDisplayText — the author's minus sign and dashes stay (P9-16)", () => {
+describe("cleanDisplayText — the default still folds every dash and minus to a hyphen-minus (P9-16 guard)", () => {
+  it("P9-16 guard: folds the minus sign and the en dash to '-'", () => {
+    expect(cleanDisplayText(`[12 ${MINUS}20 8 1]`)).toBe("[12 -20 8 1]");
+    expect(cleanDisplayText(`20${MINUS}30 mV`)).toBe("20-30 mV");
+    expect(cleanDisplayText(`1990${EN}2000`)).toBe("1990-2000");
+  });
+
+  it("P9-16 guard: folds the em dash and the rest of the family to '-'", () => {
+    expect(cleanDisplayText(`a ${EM} b`)).toBe("a - b");
+    expect(cleanDisplayText(`re${HYPHEN}use and non${NB_HYPHEN}breaking`)).toBe("re-use and non-breaking");
+    expect(cleanDisplayText(`12${FIGURE}34 and a ${BAR} b`)).toBe("12-34 and a - b");
+  });
+
+  it("P9-16 guard: the entities and a mojibake dash read as '-', before the LaTeX step as they always did", () => {
+    expect(cleanDisplayText("&minus;20 and 1990&ndash;2000 and a &mdash; b")).toBe("-20 and 1990-2000 and a - b");
+    expect(cleanDisplayText("1990\u00E2\u20AC\u201C2000 and a \u00E2\u20AC\u201D b")).toBe("1990-2000 and a - b");
+    // The entity is a hyphen when the LaTeX subscript step runs, so the "_" goes
+    // with it exactly as for a typed hyphen-minus.
+    expect(cleanDisplayText("x_&minus;1")).toBe(cleanDisplayText("x_-1"));
+  });
+});
+
+describe("cleanPaperText — the author's minus sign and dashes stay (P9-16)", () => {
   it("P9-16: keeps the minus sign: a vector, a range, a charge and a formula", () => {
-    expect(cleanDisplayText(`[12 ${MINUS}20 8 1]`)).toBe(`[12 ${MINUS}20 8 1]`);
-    expect(cleanDisplayText(`20${MINUS}30 mV`)).toBe(`20${MINUS}30 mV`);
-    expect(cleanDisplayText(`Li1${MINUS}xCoO2 and a drift of ${MINUS}0.4 V`)).toBe(
+    expect(cleanPaperText(`[12 ${MINUS}20 8 1]`)).toBe(`[12 ${MINUS}20 8 1]`);
+    expect(cleanPaperText(`20${MINUS}30 mV`)).toBe(`20${MINUS}30 mV`);
+    expect(cleanPaperText(`Li1${MINUS}xCoO2 and a drift of ${MINUS}0.4 V`)).toBe(
       `Li1${MINUS}xCoO2 and a drift of ${MINUS}0.4 V`,
     );
   });
 
   it("P9-16: keeps the en dash and the em dash", () => {
-    expect(cleanDisplayText(`1990${EN}2000`)).toBe(`1990${EN}2000`);
-    expect(cleanDisplayText(`a ${EM} b`)).toBe(`a ${EM} b`);
-    expect(cleanDisplayText(`a${EM}b and pp. 4${EN}9`)).toBe(`a${EM}b and pp. 4${EN}9`);
+    expect(cleanPaperText(`1990${EN}2000`)).toBe(`1990${EN}2000`);
+    expect(cleanPaperText(`a ${EM} b`)).toBe(`a ${EM} b`);
+    expect(cleanPaperText(`a${EM}b and pp. 4${EN}9`)).toBe(`a${EM}b and pp. 4${EN}9`);
   });
 
   it("P9-16: folds the hyphen glyphs to the hyphen-minus", () => {
-    expect(cleanDisplayText(`re${HYPHEN}use`)).toBe("re-use");
-    expect(cleanDisplayText(`non${NB_HYPHEN}breaking`)).toBe("non-breaking");
+    expect(cleanPaperText(`re${HYPHEN}use`)).toBe("re-use");
+    expect(cleanPaperText(`non${NB_HYPHEN}breaking`)).toBe("non-breaking");
   });
 
   it("P9-16: folds the figure dash to an en dash and the horizontal bar to an em dash", () => {
-    expect(cleanDisplayText(`12${FIGURE}34`)).toBe(`12${EN}34`);
-    expect(cleanDisplayText(`a ${BAR} b`)).toBe(`a ${EM} b`);
+    expect(cleanPaperText(`12${FIGURE}34`)).toBe(`12${EN}34`);
+    expect(cleanPaperText(`a ${BAR} b`)).toBe(`a ${EM} b`);
   });
 
   it("P9-16: the ASCII hyphen-minus is what it was", () => {
-    expect(cleanDisplayText("GPT-4, a 4-2 split and x = -3")).toBe("GPT-4, a 4-2 split and x = -3");
+    expect(cleanPaperText("GPT-4, a 4-2 split and x = -3")).toBe("GPT-4, a 4-2 split and x = -3");
   });
 
-  it("P9-16: the entities and the numeric references name the same symbols", () => {
-    expect(cleanDisplayText("&minus;20 and 1990&ndash;2000 and a &mdash; b")).toBe(
-      `${MINUS}20 and 1990${EN}2000 and a ${EM} b`,
-    );
-    expect(cleanDisplayText("&#8722;20 and &#x2212;20, 4&#8211;9 and a&#x2014;b")).toBe(
+  it("P9-16: a numeric reference to the glyph keeps it, a reference to a hyphen glyph folds", () => {
+    expect(cleanPaperText("&#8722;20 and &#x2212;20, 4&#8211;9 and a&#x2014;b")).toBe(
       `${MINUS}20 and ${MINUS}20, 4${EN}9 and a${EM}b`,
     );
-    // The hyphen glyphs reached by a reference fold, as the raw glyphs do.
-    expect(cleanDisplayText("re&#8208;use and non&#x2011;breaking")).toBe("re-use and non-breaking");
+    expect(cleanPaperText("re&#8208;use and non&#x2011;breaking")).toBe("re-use and non-breaking");
   });
 
-  it("P9-16: a dash that mojibake spoiled is repaired to the dash, and the one that cannot be told apart reads as a hyphen", () => {
-    // UTF-8 EN DASH (E2 80 93) and EM DASH (E2 80 94) read as Windows-1252.
-    expect(cleanDisplayText("1990â€“2000")).toBe(`1990${EN}2000`);
-    expect(cleanDisplayText("a â€” b")).toBe(`a ${EM} b`);
-    // The third byte arrived as a straight quote: en or em cannot be told.
-    expect(cleanDisplayText('a â€" b')).toBe("a - b");
+  it("P9-16: it is the same pipeline with the dash step narrowed — folding its dashes gives the default", () => {
+    const samples = [
+      `[12 ${MINUS}20 8 1] and Li1${MINUS}xCoO2`,
+      `grown at T = 275 \u00B0C, 1990${EN}2000, a ${EM} b, 0 \u2264 \u03C6 \u2264 360\u00B0`,
+      `CO 2 and {003} and H_{2}O and 12${FIGURE}34, a ${BAR} b, re${HYPHEN}use`,
+      `4 \u00B5m \u00E2\u20AC\u201C 5 \u00B5m and ${MINUS}0.4 V`,
+    ];
+    for (const sample of samples) {
+      expect(cleanPaperText(sample).replace(/[\u2013\u2014\u2212]/g, "-")).toBe(cleanDisplayText(sample));
+    }
+    // And with no dash in it, the two are the same string.
+    expect(cleanPaperText("the {003} plane at 275 \u00B0C, a \u2264 b, CO 2")).toBe(
+      cleanDisplayText("the {003} plane at 275 \u00B0C, a \u2264 b, CO 2"),
+    );
   });
 
   it("P9-16: end to end, a PDF's text layer keeps its en and em dashes", async () => {
     // WinAnsi: byte 0x96 is the en dash, 0x97 the em dash (the helper writes
-    // Latin-1, so U+0096 and U+0097 are those bytes).
+    // Latin-1, so U+0096 and U+0097 are those bytes). `extractPdfTextFromBytes`
+    // cleans through `cleanPaperText`.
     const bytes = minimalPdf([
       [
         ["A Paper About Cathodes", 72, 90, 18],

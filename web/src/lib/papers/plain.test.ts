@@ -303,10 +303,10 @@ describe("numbersKept", () => {
     expect(numbersKept("No figures here.", "Still none.")).toBe(true);
   });
 
-  // P9-16: the display text keeps the author's minus sign (U+2212) and dashes,
-  // so the paragraph the guard compares against carries them; the guard folds
-  // them for itself (`normaliseNumerals`), and a plain rewrite typed with a
-  // hyphen-minus is not refused.
+  // P9-16: the paper's display text (`cleanPaperText`) keeps the author's minus
+  // sign (U+2212) and dashes, so the paragraph the guard compares against
+  // carries them; the guard folds them for itself (`normaliseNumerals`), and a
+  // plain rewrite typed with a hyphen-minus is not refused.
   it("P9-16: is true when a rewrite types the body's minus sign or en dash as a hyphen-minus, and the other way round", () => {
     const body = "The bias went from \u22120.4 V to \u22121.2 V over 20\u221230 mV, and 10\u201320 ms, in [12 \u221220 8 1].";
     const typed = "The bias went from -0.4 V to -1.2 V over 20-30 mV, and 10-20 ms, in [12 -20 8 1].";

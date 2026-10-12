@@ -21,7 +21,7 @@
 // separate and unchanged.
 
 import { readFile } from "node:fs/promises";
-import { cleanDisplayText } from "@/lib/text/clean";
+import { cleanPaperText } from "@/lib/text/clean";
 import { buildOutline, gutterPrior, linesOfPageWith, type PdfOutline, type PdfPageText } from "./pdf-outline";
 import { withInheritedBuckets, withSectionIds } from "./html-text";
 import type { ExtractedDocument, ExtractedSection, ExtractedFigureCaption } from "./html-text";
@@ -163,9 +163,9 @@ function normalize(extractor: PdfOutline): ExtractedDocument {
     withInheritedBuckets(
       (extractor.sections ?? [])
         .map((section) => ({
-          heading: cleanDisplayText(section.heading) || "Body",
+          heading: cleanPaperText(section.heading) || "Body",
           canonical: section.canonical || "body",
-          text: cleanDisplayText(section.text),
+          text: cleanPaperText(section.text),
           ...(typeof section.page === "number" ? { page: section.page } : {}),
         }))
         .filter((section) => section.text.length > 0),
@@ -176,8 +176,8 @@ function normalize(extractor: PdfOutline): ExtractedDocument {
   const figureCaptions: ExtractedFigureCaption[] = (extractor.figureCaptions ?? [])
     .map((cap, index) => ({
       ordinal: typeof cap.ordinal === "number" ? cap.ordinal : index,
-      label: cleanDisplayText(cap.label) || `Figure ${index + 1}`,
-      caption: cleanDisplayText(cap.caption),
+      label: cleanPaperText(cap.label) || `Figure ${index + 1}`,
+      caption: cleanPaperText(cap.caption),
       ...(typeof cap.page === "number" ? { page: cap.page } : {}),
       // Its place in the document, so a figure the prose never names by
       // number still lands near where the paper put it.
@@ -186,11 +186,11 @@ function normalize(extractor: PdfOutline): ExtractedDocument {
     .filter((cap) => cap.caption.length > 0);
 
   const equations = (extractor.equations ?? [])
-    .map((eq) => ({ text: cleanDisplayText(eq.text), ...(eq.number ? { number: eq.number } : {}) }))
+    .map((eq) => ({ text: cleanPaperText(eq.text), ...(eq.number ? { number: eq.number } : {}) }))
     .filter((eq) => eq.text.length > 0);
 
   return {
-    title: cleanDisplayText(extractor.title) || null,
+    title: cleanPaperText(extractor.title) || null,
     sections,
     figureCaptions,
     ...(equations.length > 0 ? { equations } : {}),

@@ -133,9 +133,10 @@ describe("normalizeForMatch", () => {
     expect(evidenceSupported(corpus, oldQuote)).toBe(true);
   });
 
-  // P9-16: display text keeps the author's minus sign and dashes (U+2212,
-  // U+2013, U+2014), so the matcher is the only place that folds them: a
-  // model's quote typed with "-" must still find a body set with "\u2212".
+  // P9-16: the paper's display text (`cleanPaperText`) keeps the author's minus
+  // sign and dashes (U+2212, U+2013, U+2014), so the matcher is the only place
+  // that folds them for a paper: a model's quote typed with "-" must still find
+  // a body set with "\u2212".
   it("P9-16: a quote with a hyphen-minus matches a body with the minus sign, and the other way round", () => {
     const body = "The gate was swept over 20\u221230 mV at a bias of \u22120.4 V across the whole set of cells.";
     const quote = "The gate was swept over 20-30 mV at a bias of -0.4 V across the whole set of cells.";
