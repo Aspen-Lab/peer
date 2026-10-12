@@ -91,7 +91,8 @@ describe("GET /api/papers/[id]/reading", () => {
     // which this merge keeps (see reading.test.ts's own note). P1-04: 5 -> 6
     // (section ids and the reading map). P8-04: 6 -> 7 (the extractors'
     // sections and buckets changed; see reading.test.ts's note).
-    expect(body.version).toBe(7);
+    // P9: 7 -> 8 (the PDF text and the cleaner changed: P9-08 / P9-09 / P9-10).
+    expect(body.version).toBe(8);
     expect(body.paperId).toBe("openalex:W7208807247");
     expect(body.provenance.fullText).toBe("pdf");
     expect(body.provenance.pageCount).toBe(5);
