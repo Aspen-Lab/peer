@@ -81,7 +81,9 @@ describe("profile.standingQuestions — storage", () => {
       expect(mod.useProfileStore.getState().profile.standingQuestions).toEqual(INVENTED);
       mod.useProfileStore.getState().updateStandingQuestions([INVENTED[0]]);
       const written = JSON.parse(localStorageValue(mod));
-      expect(written.version).toBe(7);
+      // The store's current version (8 since the events/jobs fields were dropped, P9-32):
+      // writing the list does not move it.
+      expect(written.version).toBe(8);
       expect(written.state.profile.standingQuestions).toEqual([INVENTED[0]]);
     } finally {
       vi.unstubAllGlobals();
