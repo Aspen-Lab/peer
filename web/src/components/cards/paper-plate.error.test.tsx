@@ -56,7 +56,7 @@ const paper: Paper = {
   summaryResultDiscussion: "",
   isSaved: false,
 };
-type PlateProps = ComponentProps<typeof PaperPlate> & { onFigureError?: (src: string) => void };
+type PlateProps = ComponentProps<typeof PaperPlate>;
 const lead = (over: Partial<PlateProps> = {}): PlateProps => ({ paper, terms: TERMS, lead: true, lightbox: true, ...over });
 const tile = (over: Partial<PlateProps> = {}): PlateProps => ({ paper, terms: TERMS, ...over });
 

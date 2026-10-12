@@ -83,9 +83,11 @@ export function leadFigurePending(
   return figure.status === "idle" && !figure.imageUrl && !bound?.imageUrl;
 }
 
+/** What gives the figure's box its height: 16:9 and nothing taller, in a container the terms are sized by. */
+const BOX_SHAPE = "overflow-hidden aspect-[16/9] @container";
+
 /** The figure's own box: the mat, 16:9, with the plate's own crop marks. A picture stands in it, and so does the held slot. */
-const FIGURE_BOX =
-  "tile-cover cropmarks [--cm-inset:6px] [--cm-c:var(--plate-ink-faint)] overflow-hidden aspect-[16/9] @container";
+const FIGURE_BOX = `tile-cover cropmarks [--cm-inset:6px] [--cm-c:var(--plate-ink-faint)] ${BOX_SHAPE}`;
 
 /**
  * P9-49 (X3): below the spread the plate is as wide as the column (up to 712 px) and 16:9, so 337 to 400
@@ -98,6 +100,18 @@ const FIGURE_BOX =
  * tall, and nothing changes.
  */
 const LEAD_CAP = "max-xl:max-h-[240px] max-xl:w-full";
+
+/**
+ * P9-57: the lead plate whose picture did not load. The figure route found a picture and the box was held for it
+ * (320 × 180 at 1440, 350 × 196.9 at 390); the browser could not draw it (an owner-only route that answers 404, a
+ * publisher's host that refuses every request) and the plate fell to the 2.4:1 terms plate — 133 and 146 px, so the
+ * title and the decision block under it moved up 47 px and 51 px, under a reader about to press "Read it here". It
+ * keeps the box instead, class for class the figure's own shape (`BOX_SHAPE`, `LEAD_CAP`), with the look of the terms
+ * plate (the card's surface and grain, the paper's words set at the foot — no mat, no crop marks: nothing was cropped,
+ * and there is no reproduction to register). The feed's tiles do not pass `lead`; theirs falls to the 2.4:1 plate as
+ * it always did.
+ */
+const LEAD_LOST_BOX = `tile-cover grain ${BOX_SHAPE} ${LEAD_CAP}`;
 
 // ── The lead picture's caption (P9-49, N8) ──────────────────────────────────────────────────────────
 //
@@ -218,6 +232,7 @@ export function PaperPlate({
   lightbox = false,
   lead = false,
   abstract,
+  onFigureError,
 }: {
   paper: Paper;
   terms?: string[];
@@ -246,6 +261,13 @@ export function PaperPlate({
    * abstract is not the picture's caption — not under it, not in its alt, not in the lightbox.
    */
   abstract?: string | null;
+  /**
+   * P9-57: called once, with the picture's URL, when the browser could not load the picture the plate drew. The
+   * plate itself falls to the terms plate in the same box (lead) or in the tile's 2.4:1 box. A line the caller sets
+   * under the plate to name the picture (the reading page's `<figcaption>`) is the caller's to take away; the plate
+   * cannot reach it.
+   */
+  onFigureError?: (src: string) => void;
 }) {
   // The same args as the card, so the page and the card read one cache entry.
   const resolved = useResolvedFigure({
@@ -264,8 +286,15 @@ export function PaperPlate({
   const caption = lead && isAbstractBlock(rawCaption, abstract) ? null : rawCaption;
   // `hideFigure` is the resolver's verdict on its own candidate; a bound figure
   // was chosen by the report, so the verdict does not apply to it.
-  const showFigure =
-    Boolean(src) && (bound ? true : !resolved.hideFigure) && failedSrc !== src;
+  const pictureFailed = failedSrc !== null && failedSrc === src;
+  const showFigure = Boolean(src) && (bound ? true : !resolved.hideFigure) && !pictureFailed;
+  // P9-57: the lead picture that was drawn and did not load keeps its box (`LEAD_LOST_BOX`).
+  const lostLead = lead && pictureFailed;
+  const onPictureError = () => {
+    if (!src || failedSrc === src) return;
+    setFailedSrc(src);
+    onFigureError?.(src);
+  };
 
   // Nothing to show and nothing to set: no plate. A window is worth its space
   // only when something is in it, and a paper with neither a figure nor a term
@@ -273,7 +302,8 @@ export function PaperPlate({
   // its own title, rather than carrying an empty window the height of a
   // picture. (`src` and not `showFigure`: an image that was found and then
   // failed to load still keeps the window, because the callers laid out for
-  // one and cannot see the failure.)
+  // one and cannot see the failure — the lead plate tells its caller through
+  // `onFigureError`, and keeps its height.)
   // P9-49 (N6): the lead picture's slot is held while its figure is on the way, with terms or without.
   const pending = lead && leadFigurePending(resolved, bound);
   if (!src && terms.length === 0 && !pending) return null;
@@ -292,8 +322,9 @@ export function PaperPlate({
   // These words are Peer's own composition, allocated across the briefing by
   // `allocatePlateTerms`; nothing was cropped, and a mark that appears on both
   // branches marks neither.
-  const base =
-    showFigure || pending
+  const base = lostLead
+    ? LEAD_LOST_BOX
+    : showFigure || pending
       ? lead
         ? `${FIGURE_BOX} ${LEAD_CAP}`
         : FIGURE_BOX
@@ -343,7 +374,7 @@ export function PaperPlate({
               }
             }}
             onLoad={(event) => event.currentTarget.classList.remove("opacity-0")}
-            onError={() => setFailedSrc(src)}
+            onError={onPictureError}
             className="h-full w-full object-contain opacity-0 transition-opacity duration-[320ms] ease-snap"
           />
         ) : (
@@ -362,7 +393,7 @@ export function PaperPlate({
               }
             }}
             onLoad={(event) => event.currentTarget.classList.remove("opacity-0")}
-            onError={() => setFailedSrc(src)}
+            onError={onPictureError}
             className="h-full w-full object-contain opacity-0 transition-opacity duration-[var(--dur-base)] ease-expo"
           />
         )
