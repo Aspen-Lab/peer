@@ -50,6 +50,8 @@ interface Textarea {
   value: string;
   focus: () => void;
   setSelectionRange: (start: number, end: number) => void;
+  readonly selectionStart: number;
+  readonly selectionEnd: number;
 }
 type RefCallback = (el: Textarea | null) => void;
 
@@ -58,18 +60,34 @@ type RefCallback = (el: Textarea | null) => void;
  * the ref callbacks of the lines are called (the old ones with null first, as React does) with the
  * line's textarea. Typing goes where `focus()` last put it, at the end of what is there — the caret
  * of a line the reader has just filled, and what Playwright's `insertText` does.
+ *
+ * P9-19 (A P9-R2's F6 b): the staged runtime has no DOM and no spy to read, so the stub textarea keeps the
+ * selection a DOM textarea keeps: `setSelectionRange` records its range, clamped to the value as the DOM
+ * clamps it, and `selectionStart` / `selectionEnd` read it back. The caret starts at 0 and stays wherever the
+ * code last put it — the stub does not move it when the value changes, as a browser may or may not. So
+ * a line is "at its end" only if the code asked for it.
  */
 function reader(props: { examples?: Array<{ label: string; items: string[] }> } = {}) {
   let active = -1;
   const textareas: Textarea[] = [];
   let refs: Array<RefCallback | undefined> = [];
+  const selections: Array<[number, number]> = [];
   const textarea = (i: number): Textarea =>
     (textareas[i] ??= {
       get value() {
         return view().lines[i] ?? "";
       },
       focus: () => void (active = i),
-      setSelectionRange: () => {},
+      setSelectionRange(start: number, end: number) {
+        const length = this.value.length;
+        selections[i] = [Math.min(start, length), Math.min(end, length)];
+      },
+      get selectionStart() {
+        return (selections[i] ?? [0, 0])[0];
+      },
+      get selectionEnd() {
+        return (selections[i] ?? [0, 0])[1];
+      },
     });
 
   const mounted = stagedRuntime.mount(
@@ -115,6 +133,22 @@ function reader(props: { examples?: Array<{ label: string; items: string[] }> } 
       stagedRuntime.event(() => {
         if (active < 0) throw new Error("nothing has the focus: the typing would go nowhere");
         call(at(active).onChange, { target: { value: view().lines[active] + text } });
+      }),
+    /** Where the caret of line `i` stands, and how long the line is. */
+    caret: (i: number) => ({
+      start: textarea(i).selectionStart,
+      end: textarea(i).selectionEnd,
+      length: textarea(i).value.length,
+    }),
+    /** Text inserted at the caret of the focused line (replacing a selection), as a browser does. */
+    typeAtCaret: (text: string) =>
+      stagedRuntime.event(() => {
+        if (active < 0) throw new Error("nothing has the focus: the typing would go nowhere");
+        const field = textarea(active);
+        const before = view().lines[active];
+        call(at(active).onChange, {
+          target: { value: before.slice(0, field.selectionStart) + text + before.slice(field.selectionEnd) },
+        });
       }),
     /** Select all, then type over: the line becomes `text`. */
     typeOver: (text: string) =>
@@ -259,6 +293,52 @@ describe("Enter hands the focus to the line it adds, whatever the page's render 
     r.chip(Q2); // line 1 is full, so the tag opens line 2
     expect(r.lines()).toEqual([Q1, Q2]);
     expect(r.active).toBe(1);
+    r.unmount();
+  });
+});
+
+// P9-19 (A P9-R2's F6 b; the survivor 11d of P9-11): an example tag fills a line and hands it the focus, and
+// the caret is to stand at the end of what it put there, so the next words the reader types continue the
+// question instead of landing in front of it. (`question-field.tsx` asks for it with `setSelectionRange`; a
+// browser may put the caret there on its own when a value is set from script, and may not, so the code does
+// not rely on it. Nothing before this pinned the call: with it removed every test here stayed green.)
+describe("a line an example tag filled has the caret at its end (P9-19)", () => {
+  const examples = [{ label: "From your earlier questions", items: [Q2] }];
+
+  it("the tag fills the empty line, focuses it, and the caret stands at its end", () => {
+    const r = reader({ examples });
+    r.click(0);
+    r.chip(Q2); // line 1 is empty, so the tag fills it
+    expect(r.lines()).toEqual([Q2]);
+    expect(r.active).toBe(0);
+    const caret = r.caret(0);
+    expect(caret.length).toBe(Q2.length);
+    expect(caret.start).toBe(caret.length);
+    expect(caret.end).toBe(caret.length);
+    r.unmount();
+  });
+
+  it("the tag that opens a second line puts the caret at the end of that line", () => {
+    const r = reader({ examples });
+    r.click(0);
+    r.type(Q1);
+    r.pageRenders();
+    r.chip(Q2); // line 1 is full, so the tag opens line 2
+    expect(r.lines()).toEqual([Q1, Q2]);
+    expect(r.active).toBe(1);
+    const caret = r.caret(1);
+    expect(caret.length).toBe(Q2.length);
+    expect(caret.start).toBe(caret.length);
+    expect(caret.end).toBe(caret.length);
+    r.unmount();
+  });
+
+  it("what the reader types next continues the question: it is added after the words the tag put there", () => {
+    const r = reader({ examples });
+    r.click(0);
+    r.chip(Q2);
+    r.typeAtCaret(" And in air?");
+    expect(r.lines()).toEqual([`${Q2} And in air?`]);
     r.unmount();
   });
 });
