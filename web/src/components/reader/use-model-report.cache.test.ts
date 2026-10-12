@@ -50,7 +50,7 @@ import { hookRuntime } from "@/test-support/hook-runtime";
 import { captureConsole } from "@/test-support/console-capture";
 import { defaultProfile, type Paper, type UserProfile } from "@/types";
 import { emptyReport, type PaperReport } from "@/lib/papers/report";
-import { buildReportKey, rememberReport, useModelReport } from "./use-model-report";
+import { buildReportKey, rememberReport, useModelReport, withoutFigureData } from "./use-model-report";
 
 const STORAGE_KEY = "peer-paper-report-v7";
 /** The ceiling the brief names for the cache's budget (rule 2: "≤ 1.5 M characters"). */
@@ -249,6 +249,34 @@ describe("the report cache holds no figure by value (P9-48 rule 1)", () => {
     expect(holdsDataUrl(localStorage.getItem(STORAGE_KEY)!)).toBe(false);
     expect(Object.keys(storedCache()).sort()).toEqual([keyFor(["a"]), keyFor(["b"]), keyFor(["c"]), keyFor(["d"])].sort());
     expect(storedCache()[keyFor(["a"])].report.whatItProposes.summary).toContain("The proposal of a.");
+  });
+});
+
+describe("withoutFigureData — the copy of a report the cache keeps (P9-48 rule 1)", () => {
+  it("is the very report when it holds no data: figure", () => {
+    const plain = report("p", { proposal: "https://arxiv.org/html/2607.00001v1/x1.png", results: [null, "/api/papers/arxiv%3A2607.00001/figure-image?page=3&fig=1"] });
+
+    expect(withoutFigureData(plain)).toBe(plain);
+  });
+
+  it("drops the field — absent, as where no picture was attached — and leaves the report it was given alone", () => {
+    const figure = dataUrl(5000);
+    const held = report("h", { proposal: figure, results: [figure, "https://example.org/y.png"] });
+
+    const stored = withoutFigureData(held);
+
+    expect("figureImageUrl" in stored.whatItProposes).toBe(false);
+    expect("figureImageUrl" in stored.resultsAndSignificance.keyResults[0]).toBe(false);
+    expect(stored.resultsAndSignificance.keyResults[1].figureImageUrl).toBe("https://example.org/y.png");
+    expect(held.whatItProposes.figureImageUrl === figure).toBe(true);
+    expect(held.resultsAndSignificance.keyResults[0].figureImageUrl === figure).toBe(true);
+  });
+
+  it("reads a cache entry of an older shape without throwing", () => {
+    const old = { skim: [], whatItProposes: { summary: "old", methods: [], figureImageUrl: dataUrl(5000) } } as unknown as PaperReport;
+
+    expect(() => withoutFigureData(old)).not.toThrow();
+    expect("figureImageUrl" in withoutFigureData(old).whatItProposes).toBe(false);
   });
 });
 

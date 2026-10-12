@@ -53,6 +53,66 @@ function readCache(): ReportCache {
   }
 }
 
+/** A figure carried by value: the picture's own bytes, `data:image/png;base64,…`. */
+function isFigureData(url: unknown): boolean {
+  return typeof url === "string" && /^\s*data:/i.test(url);
+}
+
+/**
+ * P9-48 rule 1 (A's P9-W3 §4, §6 item 1): the report as the cache keeps it —
+ * with no figure by value. A figure rendered from the PDF arrives as a
+ * `data:` URL (1.08 M characters for one), on the proposal and on any key
+ * result, and the cache stored it once per cache key, so a handful of question
+ * sets filled the origin's `localStorage`. Each such URL is dropped from the
+ * stored copy: the field is absent, the state `figure-binding` leaves where no
+ * picture was attached, while `figureLabel`, `figureCaption` and
+ * `figureSource` (a few words) stay. The report in memory is untouched, so
+ * this visit still draws the figure it was handed.
+ *
+ * A reload then draws what the page draws for a report with no bound figure:
+ * the plate asks the figure resolver (`/api/figure`, which the page runs anyway
+ * and the card primed) and each key result's section asks it for its own — the
+ * paper's figure by the resolver's pick, not necessarily the one the report
+ * bound.
+ *
+ * Why not the figure-image route's URL (`/api/papers/<id>/figure-image?page=&fig=`),
+ * which would draw the same picture again: the route names a page, and the
+ * report does not carry one — only the reading does (`ReadingFigure.page`),
+ * and this hook is given a paper, not a reading. The server can send that URL
+ * where it binds the figure (it has each caption's page), and then the browser
+ * never holds the data URL at all; that is not this file's to change.
+ *
+ * Only a `data:` URL goes: an `https:` URL or the route's own URL is already
+ * small and is kept as it is. The same report comes back (not a copy) when it
+ * holds none.
+ */
+export function withoutFigureData(report: PaperReport): PaperReport {
+  const proposes = report.whatItProposes;
+  const results = report.resultsAndSignificance?.keyResults;
+  const proposalHolds = isFigureData(proposes?.figureImageUrl);
+  const resultsHold = Array.isArray(results) && results.some((result) => isFigureData(result?.figureImageUrl));
+  if (!proposalHolds && !resultsHold) return report;
+
+  const out: PaperReport = { ...report };
+  if (proposalHolds) {
+    const bare = { ...proposes };
+    delete bare.figureImageUrl;
+    out.whatItProposes = bare;
+  }
+  if (resultsHold) {
+    out.resultsAndSignificance = {
+      ...report.resultsAndSignificance,
+      keyResults: results!.map((result) => {
+        if (!isFigureData(result?.figureImageUrl)) return result;
+        const bare = { ...result };
+        delete bare.figureImageUrl;
+        return bare;
+      }),
+    };
+  }
+  return out;
+}
+
 function readCached(key: string): PaperReport | null {
   if (!key) return null;
   const entry = readCache()[key];
@@ -72,8 +132,13 @@ export function rememberReport(key: string, report: PaperReport): void {
 function writeCached(key: string, report: PaperReport): void {
   if (!key || typeof window === "undefined") return;
   try {
-    const cache = readCache();
-    cache[key] = { report, savedAt: Date.now() };
+    // P9-48 rule 1: the new report, and every report an earlier build cached
+    // with its figure inside, go back without the figure — an old cache is
+    // rewritten as small as a new one, and its reports are kept.
+    const cache: ReportCache = {};
+    for (const [k, entry] of Object.entries({ ...readCache(), [key]: { report, savedAt: Date.now() } })) {
+      if (entry?.report && typeof entry.report === "object") cache[k] = { ...entry, report: withoutFigureData(entry.report) };
+    }
     const pruned = Object.fromEntries(
       Object.entries(cache)
         .sort((a, b) => (b[1].savedAt ?? 0) - (a[1].savedAt ?? 0))
