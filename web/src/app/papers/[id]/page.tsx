@@ -5,12 +5,13 @@
 // what Peer has and has not read; the reading controls and the DOI), and — on
 // a paper Peer has read in full — two tabs. "Paper digestion" (the default):
 // the map and the paper itself. "Summary": the abstract as written with the
-// claim and the numbers in ink, then the report as it read before the 2026-09
-// rewrite — the proposal (what is new, folded in — S6), how it was done, the
-// results with their figures, a review's contents, a glance, and today's
-// related papers (components/reader/report-sections.tsx) — and under that the
-// blocks the rewrite added: where it is thin, the next step, the record, the
-// reader's library. "Before you read" and the answers to the reader's
+// claim and the numbers in ink, then "What is new here" (P9-27: Peer's reading
+// of the novelty, a block of its own, nowhere else on the page), then the
+// report as it read before the 2026-09 rewrite — the proposal, how it was
+// done, the results with their figures, a review's contents, a glance, and
+// today's related papers (components/reader/report-sections.tsx) — and under
+// that the blocks the rewrite added: where it is thin, the next step, the
+// record, the reader's library. "Before you read" and the answers to the reader's
 // questions stand above both tabs, one state, never remounted by a switch;
 // "Terms to know" stands in the panel under the tab strip. A paper with no
 // body has no tabs and is the page it was. Later-arriving content (the server
@@ -80,6 +81,7 @@ import { QuoteList } from "@/components/reader/quote-list";
 import { ClaimList } from "@/components/reader/claim-list";
 import {
   GlanceBlock,
+  NewHereBlock,
   ProposalBlock,
   RelatedBlock,
   ResultsBlock,
@@ -1466,10 +1468,23 @@ function Reader({
           <>
             {!hasBody && answers}
 
+            {/* P9-27 (the owner, §1a.18 (b)): "What is new here" — the proposal's
+                `newHere` lines, Peer's reading — stands first of the Summary's own
+                blocks, directly after the words that open it (the claim over the
+                closed abstract), as a block of its own and nowhere else on the page.
+                Drawn only where there is a report; inside, only with a line to show. */}
+            {report && (
+              <NewHereBlock
+                report={report}
+                stagger={stagger++}
+                scramble={shouldScrambleReport}
+              />
+            )}
+
             {/* ── The report as it read before the rewrite, in its order ── */}
 
-            {/* S6: "What is new" merged into "What it proposes" — one block,
-                one figure slot. */}
+            {/* S6: "What is new" merged into "What it proposes" — one block, one
+                figure slot. P9-27: the "new here" lines are the block above's now. */}
             {report && (
               <ProposalBlock
                 report={report}

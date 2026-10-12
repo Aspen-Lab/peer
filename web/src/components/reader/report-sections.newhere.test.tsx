@@ -1,4 +1,4 @@
-import { Fragment, createElement, type ComponentType } from "react";
+import { Fragment, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Paper } from "@/types";
@@ -8,16 +8,7 @@ import { BLOCK_HEADING, PEERS_READING, REPORT_HEADING, WHATS_NEW } from "./copy"
 import { PaperWords } from "./paper-words";
 import { ReaderLayout } from "./reader-layout";
 import { ReaderTabs } from "./reader-tabs";
-import * as sections from "./report-sections";
-
-const { FigureRegistry, ProposalBlock, ResultsBlock } = sections;
-// The new block is looked up by name: on the head it does not exist, and these tests must fail on that
-// (the block is not there), not on the type-check.
-const NewHereBlock = (sections as Record<string, unknown>)["NewHereBlock"] as ComponentType<{
-  report: PaperReport;
-  stagger: number;
-  scramble?: boolean;
-}>;
+import { FigureRegistry, NewHereBlock, ProposalBlock, ResultsBlock } from "./report-sections";
 
 // P9-27 (the owner's decision, §1a.18 (b), "这个放到summary那里" — put it on the Summary): the paper's
 // "What is new here" — the proposal's `newHere` lines, Peer's reading with no sentence of the paper to show
@@ -129,6 +120,8 @@ function summaryTab(report: PaperReport | null, scramble = false): string {
 }
 
 const times = (html: string, text: string) => html.split(text).length - 1;
+/** The footer as the markup spells it: the apostrophe is escaped. */
+const FOOTER = PEERS_READING.replace(/&/g, "&amp;").replace(/'/g, "&#x27;");
 const HEADING = (label: string) => new RegExp(`<h2[^>]*>(?:<span[^>]*></span>)?${label}</h2>`);
 const at = (html: string, text: string) => html.indexOf(text);
 const headingAt = (html: string, label: string) => html.search(HEADING(label));
@@ -167,18 +160,18 @@ describe("'What is new here' on the Summary tab (P9-27)", () => {
 
   it("keeps the footer that marks it as Peer's reading, not the paper's words, under its lines", () => {
     const html = page();
-    const footer = at(html, PEERS_READING);
+    const footer = at(html, FOOTER);
 
     expect(footer).toBeGreaterThan(at(html, NEW_B));
     expect(footer).toBeLessThan(headingAt(html, REPORT_HEADING.proposal));
-    expect(times(html, PEERS_READING)).toBe(1);
+    expect(times(html, FOOTER)).toBe(1);
   });
 
   it("shows each 'new here' line once on the page: it is no longer inside 'What it proposes'", () => {
     const html = page();
     expect(times(html, NEW_A)).toBe(1);
     expect(times(html, NEW_B)).toBe(1);
-    expect(times(html, PEERS_READING)).toBe(1);
+    expect(times(html, FOOTER)).toBe(1);
   });
 
   it("'What it proposes' holds the proposal and its figure, with neither the lines nor the footer", () => {
@@ -197,7 +190,7 @@ describe("'What is new here' on the Summary tab (P9-27)", () => {
     expect(proposal).toContain("The proposal");
     expect(proposal).not.toContain(NEW_A);
     expect(proposal).not.toContain(NEW_B);
-    expect(proposal).not.toContain(PEERS_READING);
+    expect(proposal).not.toContain(FOOTER);
   });
 
   it("leaves each result's own novelty line with its result", () => {
@@ -218,7 +211,7 @@ describe("'What is new here' on the Summary tab (P9-27)", () => {
     const fresh = summaryTab(reportWith([NEW_A, NEW_B]), true);
 
     expect(times(fresh, "What is new here</h2>")).toBe(1);
-    expect(times(fresh, PEERS_READING)).toBe(1);
+    expect(times(fresh, FOOTER)).toBe(1);
     expect(headingAt(fresh, "What is new here")).toBeLessThan(headingAt(fresh, REPORT_HEADING.proposal));
   });
 });
@@ -228,7 +221,7 @@ describe("no 'What is new here' block without a 'new here' line (P9-27)", () => 
     const html = summaryTab(reportWith());
 
     expect(html).not.toContain("What is new here</h2>");
-    expect(html).not.toContain(PEERS_READING);
+    expect(html).not.toContain(FOOTER);
     expect(html).toContain(SUMMARY_LINE);
     expect(html).toContain(NOVELTY);
   });
@@ -238,7 +231,7 @@ describe("no 'What is new here' block without a 'new here' line (P9-27)", () => 
       const html = summaryTab(reportWith(newHere));
 
       expect(html).not.toContain("What is new here</h2>");
-      expect(html).not.toContain(PEERS_READING);
+      expect(html).not.toContain(FOOTER);
     }
   });
 
@@ -254,7 +247,7 @@ describe("no 'What is new here' block without a 'new here' line (P9-27)", () => 
     expect(html).toContain('role="tabpanel"');
     expect(html).toContain("Abstract</span>");
     expect(html).not.toContain("What is new here");
-    expect(html).not.toContain(PEERS_READING);
+    expect(html).not.toContain(FOOTER);
     expect(html).not.toContain(REPORT_HEADING.proposal);
   });
 });

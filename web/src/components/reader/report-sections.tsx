@@ -15,6 +15,12 @@
 // wrote with no sentence to show for it — novelty, fit — carries a footer
 // saying so, in the machine's face. Nothing here is a status string.
 //
+// P9-27 (the owner, §1a.18 (b), "这个放到summary那里"): the paper's "What is
+// new here" — the proposal's `newHere` lines — is a block of its own on the
+// Summary, ahead of "What it proposes", under that footer. It is drawn once,
+// by `NewHereBlock`; the proposal block no longer holds the lines. Each
+// result's own novelty line stays with its result.
+//
 // Figures: a result's bound figure (the deep report chose it) shows as
 // before. Where the report bound none, the section asks the figure service
 // for one that matches its own words, as the old page did; a figure already
@@ -146,15 +152,57 @@ function SectionFigure({
   return <MattedFigure src={url} caption={figure.caption} />;
 }
 
+// ── What is new here ───────────────────────────────────────────────────
+
+/**
+ * P9-27 (the owner, §1a.18 (b)): the paper's "What is new here" — up to two
+ * short lines on what the proposal adds, where the summary does not already
+ * say it. Peer's reading with no sentence of the paper to show for it, so the
+ * block ends on the footer that says so (`PEERS_READING`). Absent, heading
+ * and all, when the report has no line to show; the page draws it only where
+ * there is a report (Tier 0 has none).
+ */
+export function NewHereBlock({
+  report,
+  stagger,
+  scramble,
+}: {
+  report: PaperReport;
+  stagger: number;
+  /** S5: true while this report is scrambling into place — a fresh generation, not a cache hit. */
+  scramble?: boolean;
+}) {
+  const lines = (report.whatItProposes.newHere ?? []).filter((line) => line.trim());
+  if (lines.length === 0) return null;
+  return (
+    <Section stagger={stagger}>
+      <Heading label={REPORT_HEADING.newHere} />
+      <div className="space-y-3 measure">
+        {lines.map((sentence, i) =>
+          scramble ? (
+            <ScrambleText key={`${i}:${sentence}`} text={sentence} className={`${CLAIM_CLASS} block`} />
+          ) : (
+            <p key={`${i}:${sentence}`} className={CLAIM_CLASS}>
+              {sentence}
+            </p>
+          ),
+        )}
+      </div>
+      <p className={FOOTER_CLASS}>{PEERS_READING}</p>
+    </Section>
+  );
+}
+
 // ── Proposal ───────────────────────────────────────────────────────────
 
 /**
- * S6 (2026-09): the old "What is new" and "What it proposes" blocks merged
- * into one — the two were duplicating the same content. One heading, the
- * plain-language summary first, then up to two short "new here" lines where
- * the novelty is not already said by the summary. Inherits the old
- * NoveltyBlock's figure slot: the proposal's own figure now hangs off this
- * merged block instead of a separate "What is new" section.
+ * The proposal: one heading and the plain-language summary. S6 (2026-09)
+ * merged the old "What is new" and "What it proposes" blocks into this one
+ * (the two were duplicating the same content) and it inherits the old
+ * NoveltyBlock's figure slot: the proposal's own figure hangs off this block.
+ * P9-27: the "new here" lines the merge folded in are `NewHereBlock`'s now,
+ * a block of their own ahead of this one; they are not shown here (the figure
+ * is still looked for with the first of them, as before).
  */
 export function ProposalBlock({
   report,
@@ -176,6 +224,7 @@ export function ProposalBlock({
   scramble?: boolean;
 }) {
   const summary = report.whatItProposes.summary.trim();
+  // Only the figure's search words: the lines themselves are `NewHereBlock`'s.
   const newHere = report.whatItProposes.newHere ?? [];
   if (!summary) return null;
   return (
@@ -186,20 +235,6 @@ export function ProposalBlock({
       ) : (
         <p className={`${CLAIM_CLASS} measure`}>{summary}</p>
       )}
-      {newHere.length > 0 && (
-        <div className="space-y-3 measure mt-4">
-          {newHere.map((sentence, i) =>
-            scramble ? (
-              <ScrambleText key={`${i}:${sentence}`} text={sentence} className={`${CLAIM_CLASS} block`} />
-            ) : (
-              <p key={`${i}:${sentence}`} className={CLAIM_CLASS}>
-                {sentence}
-              </p>
-            ),
-          )}
-        </div>
-      )}
-      {newHere.length > 0 && <p className={FOOTER_CLASS}>{PEERS_READING}</p>}
       {figure ? (
         <MattedFigure src={figure.url} caption={figure.caption} />
       ) : (

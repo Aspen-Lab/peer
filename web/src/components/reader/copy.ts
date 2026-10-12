@@ -27,8 +27,13 @@ export const BLOCK_HEADING: Record<Exclude<ReadingBlock, "skim">, string> = {
  *
  * S6 (2026-09): "What is new" merged into "What it proposes" (they
  * duplicated each other) and "Why it fits you" was deleted outright.
+ *
+ * P9-27 (the owner, §1a.18 (b)): the proposal's "new here" lines stand on
+ * the Summary as a block of their own again — `newHere`, ahead of the
+ * proposal — under `PEERS_READING`: Peer's reading, not the paper's words.
  */
 export const REPORT_HEADING = {
+  newHere: "What is new here",
   proposal: "What it proposes",
   review: "What the review covers",
   glance: "At a glance",
@@ -57,7 +62,8 @@ export const FOR_YOUR_QUESTIONS = {
 /** Under a block Peer wrote with no sentence of the paper to show for it. */
 export const PEERS_READING = "Peer's reading — not a quote";
 
-/** Before a result's novelty line. */
+/** Before a result's novelty line — the result's own, so it keeps its colon; the paper's is the
+ *  heading `REPORT_HEADING.newHere`. */
 export const WHATS_NEW = "What is new here:";
 
 /** The glance facts. */

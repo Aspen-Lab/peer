@@ -131,7 +131,8 @@ function tabProblems(source: string): string[] {
     if (!onDigestion.includes(block)) problems.push(`${block} is not under Paper digestion`);
     if (onSummary.includes(block)) problems.push(`${block} is also under Summary`);
   }
-  for (const block of ["<ProposalBlock", "<ClaimList", "<GlanceBlock", "<RelatedBlock", "<RecordBlock", "<InYourLibrary"]) {
+  // P9-27: "What is new here" is a block of the Summary now, ahead of "What it proposes".
+  for (const block of ["<NewHereBlock", "<ProposalBlock", "<ClaimList", "<GlanceBlock", "<RelatedBlock", "<RecordBlock", "<InYourLibrary"]) {
     if (!onSummary.includes(block)) problems.push(`${block} is not under Summary`);
     if (onDigestion.includes(block)) problems.push(`${block} is also under Paper digestion`);
   }
