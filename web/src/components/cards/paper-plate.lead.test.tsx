@@ -239,3 +239,13 @@ describe("papers/[id]/page.tsx mounts the lead plate (rules 1 and 2)", () => {
     expect(figcaption).not.toContain("line-clamp");
   });
 });
+
+describe("feed-tile.tsx mounts the plate as it did (rule 4)", () => {
+  const tile = readFileSync(resolve(process.cwd(), "src/components/cards/feed-tile.tsx"), "utf8");
+
+  it("passes the paper and its terms and nothing the lead picture reads: the markup pinned above is the tile's", () => {
+    const mounts = tile.match(/<PaperPlate[^>]*\/>/g) ?? [];
+    expect(mounts).toEqual(["<PaperPlate paper={paper} terms={plateTerms} />"]);
+    expect(tile).not.toContain("leadCaption");
+  });
+});
