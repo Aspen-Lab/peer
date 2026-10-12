@@ -719,6 +719,50 @@ describe("ExplainBox — the empty window follows the selected paragraph and car
     run.mounted.unmount();
   });
 
+  // P9-17 (ruling §1h.57): the empty window needs only its own height (about 125 px with the title and the hint line), so a low
+  // paragraph keeps it level to within that: its bottom edge on the screen's bottom, above the legend, when the paragraph is lower.
+  it("is as low as its own height lets it, once measured: level with a low paragraph, else its bottom on the screen's bottom (P9-17, ruling §1h.57)", async () => {
+    const sized = (height: number) => ({ scrollHeight: height - 2, offsetHeight: height, clientHeight: height - 2, scrollTop: 0, getBoundingClientRect: () => ({ height }) });
+    const give =
+      (card: unknown): Step =>
+      (tree) => {
+        const element = (function find(node: ReactNode): ReactElement<Props2> | undefined {
+          if (Array.isArray(node)) return node.map(find).find(Boolean);
+          if (!node || typeof node !== "object" || !("props" in node)) return undefined;
+          const el = node as ReactElement<Props2>;
+          return el.type === ExplainCard ? el : find(el.props.children);
+        })(tree);
+        (element?.props.cardRef as { current: unknown }).current = card;
+      };
+    // 800 px high: unmeasured it may stand as low as 800 − 28 − 160 = 612 (its fallback); measured 126 px tall, 800 − 28 − 126 = 646.
+    const low = await scenario(base(), [selectNext(inParagraph(first, 780)), give(sized(126))]);
+    await wait();
+    expect(low.last().empty).toBe(true);
+    expect(low.last().style).toEqual({ right: 0, width: 360, top: 646, maxHeight: 126 });
+    expect(low.last().style!.top! + 126).toBe(800 - 28);
+    low.mounted.unmount();
+
+    // A paragraph higher than that: level with its first line, as before.
+    const high = await scenario(base(), [selectNext(inParagraph(first, 500)), give(sized(126))]);
+    await wait();
+    expect(high.last().style?.top).toBe(500);
+    high.mounted.unmount();
+
+    // The control joins the title in the header and the window is taller: it stands higher, its bottom still on the bottom.
+    const card = sized(126);
+    const taller = await scenario(base(), [
+      selectNext(inParagraph(first, 780)),
+      give(card),
+      (_tree, ctx) => {
+        Object.assign(card, sized(150));
+        ctx.rerender();
+      },
+    ]);
+    await wait();
+    expect(taller.last().style?.top).toBe(800 - 28 - 150);
+    taller.mounted.unmount();
+  });
+
   it("carries the control once a selection is offered — not before, and the floating button is not rendered", async () => {
     const seen: Array<{ explain: boolean; button: boolean }> = [];
     const note: Step = (tree) => seen.push({ explain: look(tree).explain !== undefined, button: look(tree).button !== undefined });

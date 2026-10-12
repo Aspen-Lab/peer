@@ -488,6 +488,39 @@ describe("placePanel (P3-02b; P7-15, R7)", () => {
     expect(placePanel(bounds, viewport, 700, DOCK_THREAD_FLOOR_PX).top).toBe(512);
   });
 
+  // P9-17 (ruling §1h.57; the owner: "如果选中段落在屏幕最下方，那么窗口的最底部就直接贴着整个屏幕的最底部。总之，始终让窗口存在于屏幕里"): the
+  // window's top is level with the paragraph's first line whenever the whole window it needs fits below that line; else it is
+  // lifted until its bottom edge stands on the screen's bottom (above the 28 px foot legend), never lower; and it is never above
+  // the masthead's foot nor below the legend, at any window height. The fourth parameter is what the window needs.
+  it("stands level with the paragraph when the whole window fits below it, else on the screen's bottom — never lower, never off the screen, at any window height", () => {
+    let level = 0;
+    let lifted = 0;
+    for (const height of [600, 660, 720, 780, 840, 900, 960, 1020, 1080]) {
+      for (const needed of [125, 160, DOCK_THREAD_FLOOR_PX, 520, 700, 2000]) {
+        for (const paragraphTop of [-500, 0, 48, 100, 300, 500, 700, 900, 1200, 5000]) {
+          const place = placePanel(bounds, { width: 1440, height }, paragraphTop, needed);
+          const own = Math.min(needed, height - 28 - 48); // no window is taller than the room between the masthead and the legend
+          const why = `${height} high, needs ${needed}, paragraph at ${paragraphTop}`;
+
+          expect(place.top, why).toBeGreaterThanOrEqual(48);
+          expect(place.top! + own, why).toBeLessThanOrEqual(height - 28);
+          expect(place.top! + place.maxHeight, why).toBe(height - 28);
+          if (paragraphTop >= 48) expect(place.top, why).toBeLessThanOrEqual(paragraphTop);
+          if (paragraphTop >= 48 && paragraphTop + own <= height - 28) {
+            level += 1;
+            expect(place.top, why).toBe(paragraphTop);
+          }
+          if (paragraphTop >= 48 && paragraphTop + own > height - 28) {
+            lifted += 1;
+            expect(place.top! + own, why).toBe(height - 28);
+          }
+        }
+      }
+    }
+    expect(level).toBeGreaterThan(100);
+    expect(lifted).toBeGreaterThan(100);
+  });
+
   it("is a dock's floor only: the card and the sheet do not read it", () => {
     for (const viewport of [{ width: 800, height: 900 }, { width: 390, height: 844 }]) {
       expect(placePanel(bounds, viewport, 5000, DOCK_THREAD_FLOOR_PX)).toEqual(placePanel(bounds, viewport, 5000));

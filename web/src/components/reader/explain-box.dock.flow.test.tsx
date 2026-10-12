@@ -1274,3 +1274,107 @@ describe("ExplainBox — the header control hands the focus to the window (P9-17
     run.mounted.unmount();
   });
 });
+
+
+// ── The window's bottom stands on the screen's bottom when its paragraph is too low (P9-17, ruling §1h.57) ───────────────
+//
+// The owner: "如果选中段落在屏幕最下方，那么窗口的最底部就直接贴着整个屏幕的最底部。总之，始终让窗口存在于屏幕里." The box measures the
+// card's own height after each commit (`scrollHeight` plus its border, whatever `max-height` clips) and the window needs at
+// least that, and at least the thread's floor with a passage; it is level with its paragraph when all of it fits below, else
+// lifted until its bottom stands on the legend's reserve. No DOM here: a stand-in for the card says how tall the browser made it.
+
+/** The card as the browser sized it: `height` from border to border (2 px of border), what `max-height` clips included. */
+const sized = (height: number) => ({ scrollHeight: height - 2, offsetHeight: height, clientHeight: height - 2, scrollTop: 0, getBoundingClientRect: () => ({ height }) });
+const cardElement = (tree: ReactNode) => elements(tree).find((el) => el.type === ExplainCard);
+const giveCard =
+  (card: unknown): Step =>
+  (tree) => {
+    (cardElement(tree)?.props.cardRef as { current: unknown }).current = card;
+  };
+/** The tops the window stood at over the run, consecutive repeats dropped. */
+const topsOf = (looks: Look[]) => looks.map((l) => l.style?.top).filter((top, i, all) => top !== undefined && top !== all[i - 1]);
+
+describe("ExplainBox — the window's bottom stands on the screen's bottom when its paragraph is too low for the whole window (P9-17, ruling §1h.57)", () => {
+  it("is lifted to its real height when that is taller than the thread's floor: its bottom edge on the screen's bottom, above the legend", async () => {
+    const card = sized(520);
+    const run = await scenario(base({ target: inParagraph(first, 4000) }), [(tree) => click(tree), giveCard(card)]);
+    await wait();
+
+    // Unmeasured it stood at the thread's floor (900 − 28 − 360 = 512); measured 520 px tall, 900 − 28 − 520 = 352.
+    expect(topsOf(fromOpen(run.looks))).toEqual([512, 352]);
+    expect(run.last().style).toEqual({ right: 0, width: 360, top: 352, maxHeight: 520 });
+    expect(run.last().style!.top! + 520).toBe(900 - 28);
+    run.mounted.unmount();
+  });
+
+  it("keeps the thread's floor when what it holds is shorter than that, and is level with the paragraph wherever the whole window fits below it", async () => {
+    const short = await scenario(base({ target: inParagraph(first, 4000) }), [(tree) => click(tree), giveCard(sized(200))]);
+    await wait();
+    expect(short.last().style?.top).toBe(900 - 28 - 360);
+    short.mounted.unmount();
+
+    // 300 + 520 = 820 ≤ 872: all of it fits below the first line.
+    const fits = await scenario(base({ target: inParagraph(first, 300) }), [(tree) => click(tree), giveCard(sized(520))]);
+    await wait();
+    expect(fits.last().style).toEqual({ right: 0, width: 360, top: 300, maxHeight: 900 - 300 - 28 });
+    fits.mounted.unmount();
+
+    // 360 + 520 = 880 > 872: lifted by the 8 px that do not fit, to 352.
+    const barely = await scenario(base({ target: inParagraph(first, 360) }), [(tree) => click(tree), giveCard(sized(520))]);
+    await wait();
+    expect(barely.last().style?.top).toBe(352);
+    barely.mounted.unmount();
+  });
+
+  it("is never above the masthead's foot, nor off the screen: a window as tall as the room between the masthead and the legend stands at 48", async () => {
+    const run = await scenario(base({ target: inParagraph(first, 4000) }), [(tree) => click(tree), giveCard(sized(2000))]);
+    await wait();
+
+    expect(run.last().style).toEqual({ right: 0, width: 360, top: 48, maxHeight: 900 - 48 - 28 });
+    run.mounted.unmount();
+  });
+
+  it("holds at every window height from 600 to 1080: the bottom on the screen's bottom, the top at or below the masthead's foot", async () => {
+    for (const height of [600, 660, 720, 780, 840, 900, 960, 1020, 1080]) {
+      stubWindow(1440, height);
+      const run = await scenario(base({ target: inParagraph(first, 5000) }), [(tree) => click(tree), giveCard(sized(520))]);
+      await wait();
+
+      const style = run.last().style!;
+      expect(style.top, `${height} px`).toBe(height - 28 - 520);
+      expect(style.top!, `${height} px`).toBeGreaterThanOrEqual(48);
+      expect(style.top! + 520, `${height} px`).toBeLessThanOrEqual(height - 28);
+      run.mounted.unmount();
+    }
+  });
+
+  it("moves up as the thread grows, its bottom staying on the screen's bottom (a reply arrives, the reader types a longer draft)", async () => {
+    const card = sized(520);
+    const run = await scenario(base({ target: inParagraph(first, 4000) }), [
+      (tree) => click(tree),
+      giveCard(card),
+      (_tree, ctx) => {
+        Object.assign(card, sized(700));
+        ctx.rerender();
+      },
+    ]);
+    await wait();
+
+    expect(topsOf(fromOpen(run.looks))).toEqual([512, 352, 172]);
+    run.mounted.unmount();
+  });
+
+  it("does not move for a card it cannot measure (no height yet, or a card and a sheet): the thread's floor, as before", async () => {
+    const run = await scenario(base({ target: inParagraph(first, 4000) }), [(tree) => click(tree), giveCard({ scrollTop: 0, scrollHeight: 520 })]);
+    await wait();
+    expect(run.last().style?.top).toBe(900 - 28 - 360);
+    run.mounted.unmount();
+
+    stubWindow(800, 900);
+    const card = await scenario(base({ target: inParagraph(first, 4000) }), [(tree) => click(tree), giveCard(sized(520))]);
+    await wait();
+    expect(card.last().dock).toBe(false);
+    expect(card.last().style).toMatchObject(placeCard(first.bounds, { width: 800, height: 900 }));
+    card.mounted.unmount();
+  });
+});

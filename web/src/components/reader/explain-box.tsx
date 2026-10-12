@@ -101,7 +101,9 @@
 // again as the page scrolls; a bottom sheet on a phone. P8-02 (the owner: "level with the first
 // line of the selected paragraph"): the dock's TOP is level with the first line of the PARAGRAPH
 // of the passage it explains (`ExplainSelection.paragraph`, from `paper-body.tsx`), held between
-// the masthead's foot and 160 px (360 once it holds a passage, P9-17) above the legend and measured again as the page scrolls; its
+// the masthead's foot and the room its whole height needs above the legend (P9-17, rulings §1h.56 and §1h.57: its measured
+// height, at least 360 px once it holds a passage — lifted until its bottom stands on the screen's bottom when the paragraph
+// is too low for all of it) and measured again as the page scrolls; its
 // height is its content. P9-03b: it is level with the SELECTED paragraph's first line — the one the
 // reader last selected, which is the explained one until another is selected (it no longer waits for
 // the next passage to be explained). The selections measured again as the page scrolls are the open
@@ -324,23 +326,26 @@ const SHEET_SHARE = 0.6;
  * Where the box stands. From a window of 1024 px: the dock (P7-15, R7) — the window's right edge,
  * 360 px wide, and (P8-02, BACKLOG-31; P9-03b) its top level with the first line of the PARAGRAPH it
  * stands at — the selected one, the explained one until another is selected —
- * `top = clamp(paragraphTop, DOCK_TOP_PX, height − DOCK_BOTTOM_PX − floor)`,
- * so never above the masthead's foot and never so low that less than `floor` of it shows above the foot
- * legend. P9-17 (ruling §1h.56): the floor is a property of what the window holds — the default, 160 px
- * (`DOCK_MIN_VISIBLE_PX`), is the empty window's, which is about 125 px tall; a window that holds a passage is
- * given `DOCK_THREAD_FLOOR_PX` (360), room for its sticky header, its sticky controls row and two lines of the
- * answer between them. Its height is its content, at most the room from its top down to the legend (`maxHeight`);
+ * `top = clamp(paragraphTop, DOCK_TOP_PX, height − DOCK_BOTTOM_PX − needed)`,
+ * so never above the masthead's foot and never so low that the `needed` height does not fit above the foot
+ * legend. P9-17 (rulings §1h.56, §1h.57): `needed` is what the window needs below its top, its own height — the box
+ * passes the card's measured height, and at least `DOCK_THREAD_FLOOR_PX` (360: room for its sticky header, its sticky
+ * controls row and two lines of the answer between them) once it holds a passage; the default, 160 px
+ * (`DOCK_MIN_VISIBLE_PX`), is the empty window's until it is measured (it is about 125 px tall). So the window is level
+ * with the paragraph's first line whenever all of it fits below, else it is lifted until its bottom edge stands on the
+ * legend's reserve — never lower, and always inside the screen. Its height is its content, at most the room from its
+ * top down to the legend (`maxHeight`);
  * the thread scrolls inside and the input is pinned at its foot. The words of the selection do not enter
  * it — `bounds` only does where the body reported no paragraph (the selection's own first line then).
  * Below 640: a sheet — the window's width, on its bottom edge, at most 60% of its
  * height. Between the two P3-02's place (`placeCard`), under or above the selection, unchanged.
  */
-export function placePanel(bounds: ViewRect, viewport: Viewport, paragraphTop?: number, floor: number = DOCK_MIN_VISIBLE_PX): Place {
+export function placePanel(bounds: ViewRect, viewport: Viewport, paragraphTop?: number, needed: number = DOCK_MIN_VISIBLE_PX): Place {
   if (viewport.width < PHONE_WIDTH) {
     return { kind: "sheet", left: 0, width: viewport.width, bottom: 0, maxHeight: Math.floor(viewport.height * SHEET_SHARE) };
   }
   if (viewport.width >= DOCK_MIN_VIEWPORT_PX) {
-    const top = clamp(paragraphTop ?? bounds.top, DOCK_TOP_PX, viewport.height - DOCK_BOTTOM_PX - floor);
+    const top = clamp(paragraphTop ?? bounds.top, DOCK_TOP_PX, viewport.height - DOCK_BOTTOM_PX - needed);
     return { kind: "dock", right: 0, width: DOCK_WIDTH_PX, top, maxHeight: Math.max(0, viewport.height - top - DOCK_BOTTOM_PX) };
   }
   return { kind: "card", ...placeCard(bounds, viewport) };
@@ -821,6 +826,9 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   // P9-03b: the last settled selection the reader made — what the window stands level with once the selection itself
   // has gone away (a click in the window collapses it; the window must not jump back from under the pointer).
   const [followed, setFollowed] = useState<ExplainSelection | null>(null);
+  // P9-17 (ruling §1h.57): the card's own height as the browser made it, read after each commit while the dock stands — what the
+  // window needs below its top. null until it is read (a server render, the first paint, a test with no DOM).
+  const [cardHeight, setCardHeight] = useState<number | null>(null);
   // A new selection closes the card and the sheet; one that merely went away does not (a click
   // in the card collapses it). P8-02: the dock, from 1024 px, is not closed by a new selection — it
   // stays, and the reader takes the new passage into it with the button or `e`. Derived, so the
@@ -935,6 +943,19 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
     // — and, P8-06, on a reader's first sight of the paper, when there is usually none.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docked]);
+  // P9-17 (ruling §1h.57): the window's whole height must be in view, so its height is read after each commit while the dock
+  // stands: `scrollHeight` (the content, whatever `max-height` clips) and the border. It does not depend on where the window is,
+  // so the move it causes settles at once; a same-height reading sets nothing (the state bails out, the chain ends). After every
+  // commit on purpose: whatever changes what the card holds — a reply, a draft, the control, a late font — is read, with no list
+  // of the causes to keep up. Before the paint, so no frame shows the old place.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => {
+    const card = cardRef.current;
+    if (!docked || !card) return;
+    const height = card.scrollHeight + (card.offsetHeight - card.clientHeight);
+    if (!Number.isFinite(height)) return;
+    setCardHeight((previous) => (previous !== null && Math.abs(previous - height) < 1 ? previous : height));
+  });
   // Leaving the paper with the dock open gives the width back — and scrolls nothing: the next page is not this one's.
   useLayoutEffect(
     () => () => {
@@ -1225,7 +1246,7 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
         dock
         cardRef={cardRef}
         inputRef={inputRef}
-        style={styleOf(standAt ? placePanel(standAt.bounds, viewport, standAt.paragraph?.top) : placePanel(NO_BOUNDS, viewport, DOCK_TOP_PX))}
+        style={styleOf(standAt ? placePanel(standAt.bounds, viewport, standAt.paragraph?.top, cardHeight ?? DOCK_MIN_VISIBLE_PX) : placePanel(NO_BOUNDS, viewport, DOCK_TOP_PX))}
       />
     );
   }
@@ -1233,8 +1254,9 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   const placedAt = whereOf(open.selection);
   // The dock stands level with the selected paragraph; the card and the sheet with the passage they explain.
   const levelWith = docked && standAt ? standAt : placedAt;
-  // A window that holds a passage keeps its header, its controls and two lines of the answer in view (P9-17): its own floor.
-  const place = placePanel(levelWith.bounds, viewport, levelWith.paragraph?.top, DOCK_THREAD_FLOOR_PX);
+  // P9-17: the whole window stays in view (ruling §1h.57) — its measured height, and at least what a window that holds a passage
+  // needs to show its header, its controls and two lines of the answer (ruling §1h.56).
+  const place = placePanel(levelWith.bounds, viewport, levelWith.paragraph?.top, Math.max(cardHeight ?? 0, DOCK_THREAD_FLOOR_PX));
   const heading = reading.body[open.selection.sectionIndex]?.heading ?? "";
   const threadView: ThreadView | undefined =
     canAsk && onReply && open.status.kind === "answer"
