@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ReaderLayout } from "./reader-layout";
+import { COMMON_ID, ReaderLayout, scrollToTabStart } from "./reader-layout";
 import { TABPANEL_ID, tabId } from "./reader-tabs";
 
 // P7-14 (R2 + Q1, then R10): the order of the reading page's blocks in both layouts.
@@ -251,5 +251,88 @@ describe("reader-layout.tsx source (P7-14)", () => {
     expect(source).not.toContain("--panel-h");
     expect(source).not.toContain("ResizeObserver");
     expect(source).not.toMatch(/immediately after the title/);
+  });
+});
+
+// P9-04 follow-up (§1h.50 a): where a tab the reader picks starts. The page's `startOfTab` scrolled to the
+// common blocks when they had gone off the top. In one column they used to stand BELOW the strip; since the
+// strip moved to directly above its panel they stand above it, so a pick made at the strip threw the page back
+// up to "Before you read" (measured at 390 x 844: scrollY 1,048 -> 616, the strip from y 13 to y 445). In one
+// column the start of a tab is its panel (`scroll-mt-20` leaves the strip above it in view); on the spread the
+// column still opens with the common blocks, as before. No DOM here: the lookup is a stub with rects.
+describe("scrollToTabStart — where a picked tab starts (P9-04 follow-up, §1h.50 a)", () => {
+  /** A document of the named elements and their tops; every `scrollIntoView` is written down. */
+  function stub(tops: Record<string, number>) {
+    const scrolled: Array<{ id: string; arg: unknown }> = [];
+    const doc = {
+      getElementById: (id: string) =>
+        id in tops
+          ? ({ getBoundingClientRect: () => ({ top: tops[id] }), scrollIntoView: (arg: unknown) => scrolled.push({ id, arg }) } as unknown as HTMLElement)
+          : null,
+    };
+    return { doc, scrolled };
+  }
+
+  it("one column: never back up to the common blocks, whatever their top (the measured jump)", () => {
+    // The strip is in view at the top of a phone (y 13), its panel 54 px below, the common blocks 350 above.
+    const { doc, scrolled } = stub({ [COMMON_ID]: -352, [TABPANEL_ID]: 67 });
+
+    scrollToTabStart(false, doc);
+
+    expect(scrolled).toEqual([]);
+  });
+
+  it("one column: when the panel has gone off the top, the page goes to the panel (the strip above it), not to the common blocks", () => {
+    const { doc, scrolled } = stub({ [COMMON_ID]: -900, [TABPANEL_ID]: -40 });
+
+    scrollToTabStart(false, doc);
+
+    expect(scrolled).toEqual([{ id: TABPANEL_ID, arg: { block: "start" } }]);
+  });
+
+  it("one column: with no common blocks on the page it is the same", () => {
+    const { doc, scrolled } = stub({ [TABPANEL_ID]: -40 });
+
+    scrollToTabStart(false, doc);
+
+    expect(scrolled).toEqual([{ id: TABPANEL_ID, arg: { block: "start" } }]);
+  });
+
+  it("the spread, unchanged: the column opens with the common blocks, and a pick goes there when they have scrolled off", () => {
+    const off = stub({ [COMMON_ID]: -300, [TABPANEL_ID]: 120 });
+    scrollToTabStart(true, off.doc);
+    expect(off.scrolled).toEqual([{ id: COMMON_ID, arg: { block: "start" } }]);
+
+    // On screen already: nothing moves.
+    const on = stub({ [COMMON_ID]: 80, [TABPANEL_ID]: 400 });
+    scrollToTabStart(true, on.doc);
+    expect(on.scrolled).toEqual([]);
+
+    // No common blocks: the panel, when it has scrolled off.
+    const bare = stub({ [TABPANEL_ID]: -10 });
+    scrollToTabStart(true, bare.doc);
+    expect(bare.scrolled).toEqual([{ id: TABPANEL_ID, arg: { block: "start" } }]);
+  });
+
+  it("does nothing on a page with neither (no tabs, no body)", () => {
+    for (const spread of [false, true]) {
+      const { doc, scrolled } = stub({});
+
+      scrollToTabStart(spread, doc);
+
+      expect(scrolled).toEqual([]);
+    }
+  });
+});
+
+describe("page.tsx hands the tab pick's start to scrollToTabStart with the layout it is in (P9-04 follow-up)", () => {
+  const page = readFileSync(resolve(process.cwd(), "src/app/papers/[id]/page.tsx"), "utf8");
+  const start = page.slice(page.indexOf("const startOfTab = useCallback("), page.indexOf("const { tab, select: selectTab, reveal } = useReaderTab"));
+
+  it("startOfTab is scrollToTabStart(spread, document), re-made when the layout changes, and no longer reads the common blocks itself", () => {
+    expect(start).toContain("scrollToTabStart(spread, document)");
+    expect(start).toContain("[spread]");
+    expect(start).not.toContain("COMMON_ID");
+    expect(start).not.toContain("getElementById");
   });
 });

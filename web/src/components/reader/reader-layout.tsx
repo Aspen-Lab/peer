@@ -48,6 +48,19 @@ import type { ReaderTab } from "./use-reader-tab";
 /** The id of the wrapper that holds the blocks both tabs share. */
 export const COMMON_ID = "reader-common";
 
+/**
+ * Where a tab the reader picks starts, once its blocks are on the page: the page goes there only if it has
+ * scrolled off the top. On the spread the column opens with the common blocks, so that is the start (the
+ * panel when there are none). In one column (P9-04, X3) the common blocks stand ABOVE the strip and the
+ * panel directly below it, so the start is the panel — `scroll-mt-20` leaves the strip in view above it —
+ * and never the common blocks: a pick made at the strip must not throw the page back up to them.
+ * `doc` is the document (a stub in the tests).
+ */
+export function scrollToTabStart(spread: boolean, doc: Pick<Document, "getElementById">): void {
+  const start = (spread ? doc.getElementById(COMMON_ID) : null) ?? doc.getElementById(TABPANEL_ID);
+  if (start && start.getBoundingClientRect().top < 0) start.scrollIntoView({ block: "start" });
+}
+
 interface ReaderLayoutProps {
   /** From `useSpread()`; the page owns it so its own effects can depend on it. */
   spread: boolean;

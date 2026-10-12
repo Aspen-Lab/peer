@@ -92,8 +92,8 @@ import { NextRow } from "@/components/reader/next-row";
 import { LoadingMat } from "@/components/reader/loading-mat";
 import { ReaderToast, useReaderToast } from "@/components/reader/reader-toast";
 import {
-  COMMON_ID,
   ReaderLayout,
+  scrollToTabStart,
   usePageZoom,
   useResolvedReadingScale,
   useSpread,
@@ -110,7 +110,7 @@ import { ReadingMapView, readingRoute } from "@/components/reader/reading-map";
 import { useDebouncedQuestions } from "@/components/reader/use-debounced-questions";
 import { TermsStrip } from "@/components/reader/terms-strip";
 import { SectionLinks } from "@/components/reader/evidence-quote";
-import { ReaderTabs, TABPANEL_ID } from "@/components/reader/reader-tabs";
+import { ReaderTabs } from "@/components/reader/reader-tabs";
 import { useReaderTab } from "@/components/reader/use-reader-tab";
 import { settledQuestions, useReadingQuestionsHydrated } from "@/store/reading-questions";
 import { explanationFor, passageHash, useExplainThreadsStore, type ExplainTurn } from "@/store/explain-threads";
@@ -880,13 +880,11 @@ function Reader({
   // it, and `reveal` is every jump into the paper's own text (below) — the body is under
   // Paper digestion, so from Summary the tab is switched first and the jump follows. A change of
   // tab closes an open "Explain this?" card (its selection lives in the body that goes), and a tab
-  // the reader picks starts at its start (`startOfTab`: the blocks both tabs share, or the panel,
-  // when they have scrolled off the top).
+  // the reader picks starts at its start (`startOfTab`, when that has scrolled off the top: on the spread
+  // the blocks both tabs share, which open the column; in one column the panel, with the strip directly
+  // above it — P9-04, the common blocks stand above the strip there and the page never goes back up to them).
   const clearExplain = useCallback(() => selectExplain(null), [selectExplain]);
-  const startOfTab = useCallback(() => {
-    const start = document.getElementById(COMMON_ID) ?? document.getElementById(TABPANEL_ID);
-    if (start && start.getBoundingClientRect().top < 0) start.scrollIntoView({ block: "start" });
-  }, []);
+  const startOfTab = useCallback(() => scrollToTabStart(spread, document), [spread]);
   const { tab, select: selectTab, reveal } = useReaderTab({ hasBody, onChange: clearExplain, atStart: startOfTab });
   const scrollToBody = useCallback(() => {
     const block = document.getElementById(PAPER_BODY_ID);
