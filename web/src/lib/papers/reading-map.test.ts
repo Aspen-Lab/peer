@@ -97,12 +97,15 @@ describe("buildReadingMap — the committed fixtures", () => {
         // never a later pick. Boilerplate before that sentence is deliberately
         // not attributed to the paragraph's central idea.
         const firstKeptOffset = paragraph.indexOf(firstNonBoilerplate!);
-        expect(paragraph.includes(line.opening)).toBe(true);
-        expect(paragraph.slice(firstKeptOffset).startsWith(line.opening)).toBe(true);
+        // P9-56 (N9): a first sentence over 400 characters is cut at a word and says so with one "…", which
+        // the paragraph does not hold; what stands before it is the paragraph's own text.
+        const shown = line.opening.endsWith("…") ? line.opening.slice(0, -1) : line.opening;
+        expect(paragraph.includes(shown)).toBe(true);
+        expect(paragraph.slice(firstKeptOffset).startsWith(shown)).toBe(true);
         if (!isBoilerplate(splitSentences(paragraph)[0])) {
-          expect(paragraph.startsWith(line.opening)).toBe(true);
+          expect(paragraph.startsWith(shown)).toBe(true);
         }
-        expect(line.opening.length).toBeLessThanOrEqual(160);
+        expect(line.opening.length).toBeLessThanOrEqual(400);
       }
     });
     expect(openings).toBeGreaterThan(0);
@@ -177,39 +180,46 @@ describe("buildReadingMap — openings (§1f.21, P1-10)", () => {
     expect(openingOf(paragraph)).toBe(paragraph);
   });
 
-  it("cuts a sentence longer than 160 characters at the last space before 160, without adding anything", () => {
+  // P9-56 (N9), re-aimed from "longer than 160 … at the last space before 160": the cap is 400 and the cut
+  // line carries one "…" (the paragraph has no such character, so the line is the paragraph's text plus it).
+  it("cuts a sentence longer than 400 characters at the last space that leaves room for a \"…\", without adding anything else", () => {
     const long =
       "The encoder maps every residue of the protein chain to a vector in a shared latent space, " +
-      "and the decoder then reads the distances between those vectors back into a contact map of the fold.";
+      "and the decoder then reads the distances between those vectors back into a contact map of the fold, " +
+      "while a second head scores each predicted contact against the templates that the search found for the chain, " +
+      "and a third head combines both scores into the confidence that is printed beside every residue of the final model.";
     const paragraph = `${long} A second sentence follows here to make sure only the first is taken.`;
     const map = buildReadingMap(doc([{ text: paragraph }]));
     const opening = map.sections[0].paragraphs[0].opening ?? "";
+    const kept = opening.slice(0, -1);
 
-    expect(long.length).toBeGreaterThan(160);
-    expect(opening.length).toBeLessThanOrEqual(160);
-    expect(paragraph.includes(opening)).toBe(true);
-    expect(paragraph.startsWith(opening)).toBe(true);
+    expect(long.length).toBeGreaterThan(400);
+    expect(opening.length).toBeLessThanOrEqual(400);
+    expect(opening.endsWith("…")).toBe(true);
+    expect(paragraph.includes(kept)).toBe(true);
+    expect(paragraph.startsWith(kept)).toBe(true);
     // A whole-word cut: the paragraph continues with a space right after it.
-    expect(paragraph[opening.length]).toBe(" ");
-    expect(opening).toBe(opening.trim());
-    expect(opening.endsWith("…")).toBe(false);
+    expect(paragraph[kept.length]).toBe(" ");
+    expect(kept).toBe(kept.trim());
+    expect(kept.includes("…")).toBe(false);
   });
 
   it("keeps a short first sentence when the following long sentence cannot fit", () => {
     const first = "Brief lead.";
-    const long = `This later sentence ${"keeps going ".repeat(20)}beyond the opening limit.`;
+    // P9-56: 40 repeats (was 20): the later sentence must still be too long for the opening, now 400, not 160.
+    const long = `This later sentence ${"keeps going ".repeat(40)}beyond the opening limit.`;
     const paragraph = `${first} ${long}`;
 
     expect(buildReadingMap(doc([{ text: paragraph }])).sections[0].paragraphs[0].opening).toBe(first);
   });
 
-  it("grows only through the 160-character boundary and never adds the following sentence", () => {
+  it("grows only through the 400-character boundary and never adds the following sentence", () => {
     const first = "Short opening explains context.";
-    const second = `${"x".repeat(160 - first.length - 2)}.`;
+    const second = `${"x".repeat(400 - first.length - 2)}.`;
     const paragraph = `${first} ${second} A later sentence must stay out.`;
     const expected = `${first} ${second}`;
 
-    expect(expected).toHaveLength(160);
+    expect(expected).toHaveLength(400);
     expect(buildReadingMap(doc([{ text: paragraph }])).sections[0].paragraphs[0].opening).toBe(expected);
   });
 
