@@ -64,6 +64,10 @@ export interface PdfLine {
   /** The raised run or runs the line opens with, as P9-08's fold took them in from above the baseline,
    *  and the words after them: a fraction's numerator, ahead of the row it was set over (P9-13a). */
   head?: { text: string; rest: string; reach: number };
+  /** The runs of a row that is a fragment of notation, left to right, and the ones of them the fold raised: what the
+   *  display-equation writer reads a row's cells from (P9-15). Only such a row carries them. */
+  runs?: readonly PdfTextItem[];
+  raised?: ReadonlySet<PdfTextItem>;
 }
 
 export interface OutlineSection {
@@ -1108,6 +1112,8 @@ function withStackFacts(line: PdfLine, row: Row, ordered: PdfTextItem[]): PdfLin
     ...line,
     reach: reachOf(ordered),
     ...(head && rest ? { head: { text: head.text, rest: rest.text, reach: reachOf(ordered.slice(0, end)) } } : {}),
+    // P9-15: a row that could be a row of an equation island keeps its runs, for the writer of the island.
+    ...(isFragment(line.text) ? { runs: ordered, ...(row.raised ? { raised: row.raised } : {}) } : {}),
   };
 }
 
@@ -1153,7 +1159,10 @@ export function foldStacks(lines: readonly PdfLine[], leading: number, lift: (te
       const after = lines[j + 1]?.text.trim() ?? "";
       const last = rows[rows.length - 1];
       if (!unfinished(before) || /^\p{Lu}/u.test(after)) {
-        out.push({ ...rows[0], text: lift(rows.map((row) => row.text).join("\n")), y: last.y, block: true });
+        // P9-15: a display island is written on one line, left to right, where it holds a stack or a limit;
+        // any other island keeps its rows, top to bottom.
+        const text = writeIsland(rows, leading) ?? rows.map((row) => row.text).join("\n");
+        out.push({ ...rows[0], text: lift(text), y: last.y, block: true });
       } else if (/^\p{Ll}/u.test(after)) {
         out.push({ ...rows[0], text: rows.map((row) => row.text).join(" "), x: before.x, y: last.y, continues: true });
       } else {
@@ -1188,6 +1197,237 @@ export function foldStacks(lines: readonly PdfLine[], leading: number, lift: (te
     i++;
   }
   return out;
+}
+
+// ── A display island, written on one line (P9-15) ───────────────────────────────────────────────────
+//
+// The rows of a display island used to be written as the page stacks them, top to bottom, each row's runs left to
+// right: a fraction read numerator, the line it belongs to, denominator ("I(ab) Q(ab) = × 100 m I(ab)"), which is
+// no equation. It is written on one line now, left to right, the way the equation is read aloud.
+//
+// The island is cut into cells: the runs of each row, a new cell where two runs are more than 0.9 em apart. The base
+// line is the text-size row that holds `=` (else the widest text-size row); its cells that stand on its baseline are
+// the line's own text. Every cell above that baseline or below it (a row of its own, or a script the fold took into
+// the base line and left a few points off it) is the material of a stack: the cells of one stretch of the line with
+// no text of the line in it, an upper side and a lower side that meet in x, are written `upper / lower` where that
+// stretch stands in the line. A side of several cells is parenthesised. A short script-size cell between the line and
+// a text-size cell of its own side, near it, is a fraction inside the stack ("1" over "N": `1/N`). A short
+// script-size cell below or above an operator run (Σ ∑ ∏ ∫ lim), over the operator's x-range, is its limit and is
+// written right after it. An island with neither is left as the rows were.
+
+/** Runs of a row more than this many ems of the island's text apart are cells of their own; nearer, they meet. */
+const CELL_GAP_EM = 0.9;
+/** A limit ("n", "n=1") or an inner numerator ("1") is at most this many characters. */
+const SCRIPT_CELL_MAX = 3;
+/** The rows of a stack, and a limit, stand within this many leadings of the line they belong to. */
+const STACK_REACH = 1.2;
+/** A run that is an operator: a sum, a product, an integral, a limit. Its limits are written right after it. */
+const OPERATOR_RUN = /^(?:[∑Σ∏∫]|lim)$/;
+
+/** The runs of one row that sit together, as the island's writer reads them. */
+interface Cell {
+  line: PdfLine;
+  row: number;
+  runs: PdfTextItem[];
+  x0: number;
+  x1: number;
+  /** The baseline and the height of the cell's tallest run. */
+  y: number;
+  size: number;
+  text: string;
+  /** The limits that go right after the operator run at this index. */
+  limits?: Map<number, string[]>;
+}
+
+/** A cell made of `runs` (all of a row's, or a part of them), or null when they hold nothing to read. */
+function cellOf(line: PdfLine, row: number, runs: PdfTextItem[], whole = false): Cell | null {
+  const seen = runs.filter((run) => run.str.trim());
+  if (seen.length === 0) return null;
+  const text = whole ? line.text : (lineOf(line.page, line.y, runs, line.raised)?.text ?? "");
+  if (!text) return null;
+  const tallest = seen.reduce((best, run) => (run.height > best.height ? run : best), seen[0]);
+  return {
+    line,
+    row,
+    runs,
+    x0: Math.min(...seen.map((run) => run.x)),
+    x1: Math.max(...seen.map((run) => run.x + (run.width || 0))),
+    y: tallest.y,
+    size: tallest.height,
+    text,
+  };
+}
+
+/** A row's cells, left to right: a new cell wherever the next run starts more than `gap` past the ones before it. */
+function cellsOf(line: PdfLine, row: number, gap: number): Cell[] {
+  // A line made some other way than by `linesOfRow` has no runs: its text stands in for one.
+  const alone: PdfTextItem = { str: line.text, height: line.size, width: line.reach ?? line.text.length * line.size * 0.5, fontName: line.font, x: line.x, y: line.y };
+  const runs: PdfTextItem[] = line.runs ? [...line.runs] : [alone];
+  const groups: PdfTextItem[][] = [];
+  let edge = Number.NEGATIVE_INFINITY;
+  for (const run of runs) {
+    if (groups.length === 0 || run.x - edge > gap) groups.push([run]);
+    else groups[groups.length - 1].push(run);
+    edge = Math.max(edge, run.x + (run.width || 0));
+  }
+  return groups.flatMap((group) => cellOf(line, row, group, groups.length === 1) ?? []);
+}
+
+/** Cells top to bottom, and left to right within one level (baselines within a line's tolerance of each other). */
+function readingOrder(cells: readonly Cell[]): Cell[] {
+  const levels: Cell[][] = [];
+  for (const cell of [...cells].sort((a, b) => b.y - a.y)) {
+    const level = levels[levels.length - 1];
+    if (level && level[0].y - cell.y <= LINE_TOLERANCE) level.push(cell);
+    else levels.push([cell]);
+  }
+  return levels.flatMap((level) => level.sort((a, b) => a.x0 - b.x0));
+}
+
+const gapBetween = (a: Cell, b: Cell) => Math.max(a.x0 - b.x1, b.x0 - a.x1);
+const isOperatorFirst = (cell: Cell) => OPERATOR_RUN.test(cell.runs.find((run) => run.str.trim())?.str.trim() ?? "");
+
+/**
+ * The rows of a display island as one line, or null when it holds neither a stack nor a limit (a two-line equation,
+ * a column of figures, rows that share no span) and is to keep its rows. `rows` run top to bottom, one page.
+ */
+export function writeIsland(rows: readonly PdfLine[], leading: number): string | null {
+  const largest = Math.max(...rows.map((row) => row.size));
+  const small = (size: number) => size < SCRIPT_RATIO * largest;
+  const near = CELL_GAP_EM * largest;
+
+  // The base line: the text-size row that holds `=`; with none, the widest text-size row. Two rows that hold `=`
+  // are an equation over several lines, not a fraction, and a block with no letter and no `=` a column of figures.
+  const sized = rows.map((_, i) => i).filter((i) => !small(rows[i].size));
+  const holding = sized.filter((i) => rows[i].text.includes("="));
+  if (holding.length > 1 || (holding.length === 0 && !rows.some((row) => /\p{L}/u.test(row.text)))) return null;
+  const width = (row: PdfLine) => row.reach ?? row.text.length;
+  const base = holding[0] ?? sized.reduce((best, i) => (width(rows[i]) > width(rows[best]) ? i : best));
+  const baseY = rows[base].y;
+  const sideOf = (cell: Cell): "above" | "below" | "line" => {
+    if (cell.row !== base) return cell.row < base ? "above" : "below";
+    return cell.y > baseY + LINE_TOLERANCE ? "above" : cell.y < baseY - LINE_TOLERANCE ? "below" : "line";
+  };
+
+  let cells = rows.flatMap((row, i) => cellsOf(row, i, near));
+  const textOf = (cell: Cell): string => {
+    if (!cell.limits) return cell.text;
+    let out = "";
+    let from = 0;
+    const add = (runs: PdfTextItem[]) => {
+      const text = lineOf(cell.line.page, cell.y, runs, cell.line.raised)?.text ?? "";
+      out = out && text ? `${out} ${text}` : out || text;
+    };
+    for (const k of [...cell.limits.keys()].sort((a, b) => a - b)) {
+      add(cell.runs.slice(from, k + 1));
+      out += (cell.limits.get(k) ?? []).join(" ");
+      from = k + 1;
+    }
+    add(cell.runs.slice(from));
+    return out;
+  };
+
+  // A limit: a short script-size cell under or over an operator run, over the run's x-range, goes right after it.
+  let limits = 0;
+  for (const op of [...cells]) {
+    for (let k = 0; k < op.runs.length; k++) {
+      const run = op.runs[k];
+      if (!OPERATOR_RUN.test(run.str.trim())) continue;
+      const found = [-1, 1].flatMap((direction) => {
+        let nearest: Cell | undefined;
+        for (const cell of cells) {
+          const rise = cell.y - run.y;
+          if (cell === op || !small(cell.size) || cell.text.trim().length > SCRIPT_CELL_MAX) continue;
+          if (Math.sign(rise) !== direction || Math.abs(rise) <= SUPERSCRIPT_RISE || Math.abs(rise) > STACK_REACH * leading) continue;
+          if (cell.x0 > run.x + (run.width || 0) || cell.x1 < run.x) continue;
+          if (!nearest || Math.abs(rise) < Math.abs(nearest.y - run.y)) nearest = cell;
+        }
+        return nearest ? [nearest] : [];
+      });
+      if (found.length === 0) continue;
+      (op.limits ??= new Map()).set(k, found.map((cell) => cell.text));
+      cells = cells.filter((cell) => !found.includes(cell));
+      limits += found.length;
+    }
+  }
+
+  // A fraction inside a side: a short script-size cell between the base line and a text-size cell of its own side,
+  // within a cell gap of it, is set over (or under) that cell: "1" over "N" is `1/N`. A cell that opens with an
+  // operator is not the one: the sign stands beside the fraction, not under it.
+  for (const side of ["above", "below"] as const) {
+    for (const inner of cells.filter((c) => sideOf(c) === side && small(c.size) && c.text.trim().length <= SCRIPT_CELL_MAX && !c.limits)) {
+      let other: Cell | undefined;
+      let best = near;
+      for (const cell of cells) {
+        if (cell === inner || sideOf(cell) !== side || small(cell.size) || isOperatorFirst(cell)) continue;
+        const farther = side === "below" ? cell.y < inner.y - SUPERSCRIPT_RISE : cell.y > inner.y + SUPERSCRIPT_RISE;
+        const gap = gapBetween(inner, cell);
+        if (farther && gap <= best) [best, other] = [gap, cell];
+      }
+      if (!other) continue;
+      const joined: Cell = {
+        ...other,
+        runs: [],
+        x0: Math.min(inner.x0, other.x0),
+        x1: Math.max(inner.x1, other.x1),
+        text: side === "below" ? `${inner.text}/${textOf(other)}` : `${textOf(other)}/${inner.text}`,
+        limits: undefined,
+      };
+      cells = cells.flatMap((cell) => (cell === other ? [joined] : cell === inner ? [] : [cell]));
+    }
+  }
+
+  // The stretches of the line with none of the line's own text in them hold the stacks.
+  const own = cells.filter((cell) => sideOf(cell) === "line");
+  const ownRuns = own.flatMap((cell) => cell.runs.filter((run) => run.str.trim()));
+  const clusters: Cell[][] = [];
+  let edge = Number.NEGATIVE_INFINITY;
+  const material = cells.filter((c) => sideOf(c) !== "line" && Math.abs(c.y - baseY) <= STACK_REACH * leading);
+  for (const cell of material.sort((a, b) => a.x0 - b.x0)) {
+    const apart = ownRuns.some((run) => run.x >= edge && run.x + (run.width || 0) <= cell.x0);
+    if (clusters.length > 0 && !apart) {
+      clusters[clusters.length - 1].push(cell);
+      edge = Math.max(edge, cell.x1);
+    } else {
+      clusters.push([cell]);
+      edge = cell.x1;
+    }
+  }
+  const stacks = clusters.filter((cluster) => {
+    const above = cluster.filter((c) => sideOf(c) === "above");
+    const below = cluster.filter((c) => sideOf(c) === "below");
+    return above.some((a) => below.some((b) => gapBetween(a, b) <= near));
+  });
+  if (stacks.length === 0 && limits === 0) return null;
+
+  const sideText = (cluster: Cell[], which: "above" | "below") => {
+    const group = readingOrder(cluster.filter((c) => sideOf(c) === which));
+    const text = group.map(textOf).join(" ");
+    return group.length > 1 ? `(${text})` : text;
+  };
+  const at = stacks.map((stack) => (Math.min(...stack.map((c) => c.x0)) + Math.max(...stack.map((c) => c.x1))) / 2);
+  // The line's own cells stand either side of each stack; a stack that falls between two runs of one cell cuts it.
+  const pieces = own.flatMap((cell) =>
+    at.reduce<Cell[]>(
+      (parts, cx) =>
+        parts.flatMap((part) => {
+          if (part.limits) return [part];
+          const left = part.runs.filter((run) => run.x + (run.width || 0) / 2 < cx);
+          const a = cellOf(part.line, part.row, left);
+          const b = cellOf(part.line, part.row, part.runs.filter((run) => !left.includes(run)));
+          return a && b ? [a, b] : [part];
+        }),
+      [cell],
+    ),
+  );
+  const flow = [
+    ...pieces.map((piece) => ({ at: (piece.x0 + piece.x1) / 2, text: textOf(piece) })),
+    ...stacks.map((stack, k) => ({ at: at[k], text: `${sideText(stack, "above")} / ${sideText(stack, "below")}` })),
+  ].sort((a, b) => a.at - b.at);
+  // Whatever has no partner across the line stays after it, as the rows had it.
+  const stacked = new Set(stacks.flat());
+  const rest = cells.filter((c) => sideOf(c) !== "line" && !stacked.has(c)).sort((a, b) => a.row - b.row || a.x0 - b.x0);
+  return [...flow.map((part) => part.text), ...rest.map(textOf)].filter(Boolean).join(" ");
 }
 
 /** A sentence ends at one of these, and a closing quote or bracket after it still ends it. */

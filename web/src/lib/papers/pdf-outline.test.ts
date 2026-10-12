@@ -373,7 +373,10 @@ describe("stacked equation rows are one block, or rejoin their sentence (P9-09, 
       item("Here the symbols are defined as follows, with every term in kelvin.", { y: 599 }),
       filler(587), filler(575), filler(563),
     ]);
-    expect(outline.equations).toEqual([{ text: "Q /Q\n(ab) 0(ab)\nBC =\n(ab) 1\nM Q /Q\nm (ab) 0(ab)" }]);
+    // P9-15 re-aimed this one expectation: the island used to be written as its rows, top to bottom ("Q /Q\n(ab) 0(ab)\n
+    // BC =\n…"); it is one line now, the base line `BC =` first, then the stack over it (two rows above, two within
+    // reach below, a parenthesised side each), and the sixth row, out of reach of the base line, after it.
+    expect(outline.equations).toEqual([{ text: "BC = (Q /Q (ab) 0(ab)) / ((ab) 1 M Q /Q) m (ab) 0(ab)" }]);
     const paragraphs = paragraphsOf(outline);
     expect(paragraphs.filter((p) => p.length < 20 && p !== blockMarker(0))).toEqual([]);
     const at = paragraphs.indexOf(blockMarker(0));
