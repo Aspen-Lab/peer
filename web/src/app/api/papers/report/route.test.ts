@@ -742,3 +742,63 @@ describe("POST /api/papers/report — a failed model call degrades quietly", () 
     expect(mocks.bindFiguresToReport).not.toHaveBeenCalled();
   });
 });
+
+// P9-53 — the report is bound to a PDF's figures by the figure-image route's URL
+// (`figure-binding.ts`), and that URL names the paper whose PDF the text and the
+// pool were read from. So the route hands the binder the id it read them with:
+// the paper's own, or — where the reader attached a PDF of their own — the
+// upload's (the figure route answers an upload to its owner only). Both
+// transports, both calls.
+describe("POST /api/papers/report — the figure binder is told whose PDF it is", () => {
+  const doc = {
+    title: paper.title,
+    source: "pdf",
+    sections: [{ heading: "Results", canonical: "results", text: "Full article results." }],
+    figureCaptions: [{ ordinal: 0, label: "Figure 1", caption: "A caption.", page: 2 }],
+  };
+
+  beforeEach(() => {
+    mocks.resolveProvider.mockReturnValue({ generateJsonText: vi.fn() });
+    mocks.getFullText.mockResolvedValue({ status: "ok", doc, attempts: [] });
+    mocks.getFigurePool.mockResolvedValue({ entries: [{ imageUrl: "data:image/png;base64,test" }], attempted: true });
+    mocks.generateDeepReport.mockResolvedValue(generatedReport);
+    mocks.bindFiguresToReport.mockResolvedValue(generatedReport);
+  });
+
+  async function run(body: Record<string, unknown>, accept: string): Promise<void> {
+    const response = await POST(request(body, accept));
+    expect(response.status).toBe(200);
+    if (accept.includes("ndjson")) await readEvents(response);
+    else await response.json();
+  }
+
+  it.each(["application/json", "application/x-ndjson"])("passes a public paper's own id, with its title and the document's captions (%s)", async (accept) => {
+    await run({ paper, deepReport: true }, accept);
+
+    expect(mocks.bindFiguresToReport).toHaveBeenCalledTimes(1);
+    const args = mocks.bindFiguresToReport.mock.calls[0][0];
+    expect(args.paper).toEqual({ title: paper.title, id: paper.id });
+    expect(args.captions).toBe(doc.figureCaptions);
+  });
+
+  it.each(["application/json", "application/x-ndjson"])("passes the upload's id where a PDF of the reader's own was attached, the id the text and the pool were read with (%s)", async (accept) => {
+    const fullTextUploadId = "upload:0123456789abcdef";
+    mocks.ownedUpload.mockResolvedValue({ paperIds: [paper.id], revision: 1 });
+
+    await run({ paper: { ...paper, fullTextUploadId }, deepReport: true }, accept);
+
+    const args = mocks.bindFiguresToReport.mock.calls[0][0];
+    expect(args.paper).toEqual({ title: paper.title, id: fullTextUploadId });
+    expect(mocks.getFullText).toHaveBeenCalledWith(expect.objectContaining({ paperId: fullTextUploadId }));
+    expect(mocks.getFigurePool).toHaveBeenCalledWith(expect.objectContaining({ itemId: fullTextUploadId }));
+  });
+
+  it.each(["application/json", "application/x-ndjson"])("passes an upload's own id when the paper is the upload (%s)", async (accept) => {
+    const uploadId = "upload:fedcba9876543210";
+    mocks.ownedUpload.mockResolvedValue({ paperIds: [uploadId], revision: 1 });
+
+    await run({ paper: { ...paper, id: uploadId }, deepReport: true }, accept);
+
+    expect(mocks.bindFiguresToReport.mock.calls[0][0].paper).toEqual({ title: paper.title, id: uploadId });
+  });
+});
