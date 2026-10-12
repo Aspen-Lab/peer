@@ -5,18 +5,23 @@ const HTML_ENTITIES: Record<string, string> = {
   quot: '"',
   apos: "'",
   nbsp: " ",
-  ndash: "-",
-  mdash: "-",
-  minus: "-",
+  // P9-16: the entities name the dash and the minus sign, so the symbol is
+  // what the reader gets (U+2013, U+2014, U+2212; spelled by code point because
+  // the three look alike). Only the hyphen glyphs fold to "-" (see
+  // `normalizeUnicodeSymbols`); the evidence matcher folds every dash and minus.
+  ndash: "\u2013",
+  mdash: "\u2014",
+  minus: "\u2212",
   // Phase 3 round 6 C, ITEM 2 (Disposition 1's fired reopen threshold,
   // Rulings 123c/123g item 2). A live gemini-sourced title
   // ("MSR2022 &laquo; Molten Salt Reactor Workshop") carried this entity
   // undecoded all the way to the rendered event name — root cause: this
   // table is closed and simply lacked the key, not a missing cleaning call
-  // (Phase 3 round 5 B, Deliverable 3). Maps to a plain hyphen, matching the
-  // table's own ndash/mdash/minus convention above: the live witness is the
-  // classic WordPress wp_title() "{page title} {sep} {site name}" separator
-  // shape, not real quoted speech, so a hyphen reads correctly where an
+  // (Phase 3 round 5 B, Deliverable 3). Maps to a plain hyphen (when this was
+  // written the ndash/mdash/minus entries above were hyphens too; P9-16 gave
+  // those their own symbols, and this one stays a hyphen on purpose): the live
+  // witness is the classic WordPress wp_title() "{page title} {sep} {site
+  // name}" separator shape, not real quoted speech, so a hyphen reads correctly where an
   // actual guillemet/quote mark would insert a confusing stray character
   // mid-title. `raquo` (the right guillemet) is DELIBERATELY NOT added —
   // zero live witnesses this round, unwitnessed siblings are not added
@@ -166,7 +171,18 @@ function normalizeUnicodeSymbols(text: string): string {
     .replace(/\u2026/g, "...")
     .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
-    .replace(/[‐‑‒–—―−]/g, "-")
+    // P9-16: the author's minus sign (U+2212), en dash (U+2013) and em dash
+    // (U+2014) stay as set ("[12 −20 8 1]", "20−30 mV", "1990–2000"):
+    // folding them to "-" made a vector's minus look like a hyphen and lost the
+    // sign of every number of the owner's paper. Only the hyphen glyphs (U+2010
+    // HYPHEN, U+2011 NON-BREAKING HYPHEN) fold to "-"; the two look-alikes of a
+    // dash fold to their honest relative (U+2012 FIGURE DASH to the en dash,
+    // U+2015 HORIZONTAL BAR to the em dash). The evidence matcher folds every
+    // dash and minus to "-" itself (evidence.ts `normalizeForMatch`), so a quote
+    // typed with "-" still finds the body.
+    .replace(/[\u2010\u2011]/g, "-")
+    .replace(/\u2012/g, "\u2013")
+    .replace(/\u2015/g, "\u2014")
     // 2-03: PyMuPDF reorders a stacked inline fraction like "L/d" into
     // letters-then-fraction-slash ("Ld" + U+2044 FRACTION SLASH) as its own
     // free-floating token when lifting text from a PDF's glyph layout — a
@@ -191,7 +207,12 @@ function repairCommonMojibake(text: string): string {
     .replace(/â€˜/g, "'")
     .replace(/â€œ/g, '"')
     .replace(/â€�/g, '"')
-    .replace(/â€“|â€”|â€"/g, "-")
+    // P9-16: UTF-8 EN DASH (E2 80 93) and EM DASH (E2 80 94) read as
+    // Windows-1252 are repaired to the dash itself; with a straight quote for
+    // the third byte the two cannot be told apart and read as a hyphen.
+    .replace(/\u00E2\u20AC\u201C/g, "\u2013")
+    .replace(/\u00E2\u20AC\u201D/g, "\u2014")
+    .replace(/\u00E2\u20AC"/g, "-")
     .replace(/â€¦/g, "...")
     .replace(/â†’/g, "->")
     .replace(/â†\u0090/g, "<-")

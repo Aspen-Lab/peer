@@ -3561,12 +3561,18 @@ describe("laquo entity recovery, end to end (Phase 3 round 6 C, ITEM 2)", () => 
     );
   });
 
-  it("regression: mdash/ndash/minus still decode to a plain hyphen, unchanged", () => {
-    // The table's existing dash-family contract must survive byte-unchanged
-    // — this is an additive table entry, not a rewrite of the others.
+  // P9-16 re-aimed this test (was "regression: mdash/ndash/minus still decode
+  // to a plain hyphen, unchanged"): the display text now keeps the author's
+  // minus sign and dashes, so these entities decode to the symbol they name.
+  // The laquo entry above is still the table's one plain-hyphen separator.
+  it("regression: mdash/ndash/minus decode to the dash or minus sign they name (P9-16)", () => {
     expect(cleanDisplayText("INL 2026 &mdash; Battery Innovation Summit")).toBe(
-      "INL 2026 - Battery Innovation Summit",
+      "INL 2026 \u2014 Battery Innovation Summit",
     );
+    expect(cleanDisplayText("INL 2026 &ndash; Battery Innovation Summit")).toBe(
+      "INL 2026 \u2013 Battery Innovation Summit",
+    );
+    expect(cleanDisplayText("a bias of &minus;0.4 V")).toBe("a bias of \u22120.4 V");
   });
 
   it("raquo is deliberately NOT decoded — unwitnessed this round, not added blind", () => {

@@ -132,6 +132,27 @@ describe("normalizeForMatch", () => {
     expect(evidenceSupported(oldQuote, corpus)).toBe(true);
     expect(evidenceSupported(corpus, oldQuote)).toBe(true);
   });
+
+  // P9-16: display text keeps the author's minus sign and dashes (U+2212,
+  // U+2013, U+2014), so the matcher is the only place that folds them: a
+  // model's quote typed with "-" must still find a body set with "\u2212".
+  it("P9-16: a quote with a hyphen-minus matches a body with the minus sign, and the other way round", () => {
+    const body = "The gate was swept over 20\u221230 mV at a bias of \u22120.4 V across the whole set of cells.";
+    const quote = "The gate was swept over 20-30 mV at a bias of -0.4 V across the whole set of cells.";
+    expect(normalizeForMatch(body)).toBe(normalizeForMatch(quote));
+    expect(evidenceSupported(quote, body)).toBe(true);
+    expect(evidenceSupported(body, quote)).toBe(true);
+    // A chemical formula, as the paper sets it and as a model types it.
+    expect(normalizeForMatch("Li1\u2212xCoO2")).toBe(normalizeForMatch("Li1-xCoO2"));
+  });
+
+  it("P9-16: an en dash, an em dash and a hyphen glyph all meet the hyphen-minus", () => {
+    const hyphen = "the sweep from 1990-2000 rpm - start to finish - re-used the same cell over five days";
+    const dashes = "the sweep from 1990\u20132000 rpm \u2014 start to finish \u2014 re\u2010used the same cell over five days";
+    expect(normalizeForMatch(dashes)).toBe(normalizeForMatch(hyphen));
+    expect(evidenceSupported(hyphen, dashes)).toBe(true);
+    expect(evidenceSupported(dashes, hyphen)).toBe(true);
+  });
 });
 
 describe("evidenceSupported", () => {

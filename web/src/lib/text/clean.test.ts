@@ -185,3 +185,91 @@ describe("cleanDisplayText — braces stay outside LaTeX (P9-10)", () => {
     expect(cleanDisplayText("H_{2}O and x^{3}")).toBe("H2O and x(3)");
   });
 });
+
+// P9-16 (round P9 round-3 Theme 1; cluster D of the round-2 blind read): the
+// display text keeps the minus sign and the dashes as the author set them. The
+// cleaner folded U+2212, U+2013 and U+2014 to "-", so "[12 −20 8 1]" printed as
+// "[12 -20 8 1]" and every minus sign of the owner's paper was lost. Only the
+// hyphen glyphs fold to "-"; the two other dash look-alikes fold to their
+// nearest honest relative. The evidence matcher still folds every dash and
+// minus to "-" (evidence.ts), so a quote typed with "-" still finds the body.
+// The characters look alike, so every one is spelled by code point.
+const MINUS = "−"; // MINUS SIGN
+const EN = "–"; // EN DASH
+const EM = "—"; // EM DASH
+const HYPHEN = "‐"; // HYPHEN
+const NB_HYPHEN = "‑"; // NON-BREAKING HYPHEN
+const FIGURE = "‒"; // FIGURE DASH
+const BAR = "―"; // HORIZONTAL BAR
+
+describe("cleanDisplayText — the author's minus sign and dashes stay (P9-16)", () => {
+  it("P9-16: keeps the minus sign: a vector, a range, a charge and a formula", () => {
+    expect(cleanDisplayText(`[12 ${MINUS}20 8 1]`)).toBe(`[12 ${MINUS}20 8 1]`);
+    expect(cleanDisplayText(`20${MINUS}30 mV`)).toBe(`20${MINUS}30 mV`);
+    expect(cleanDisplayText(`Li1${MINUS}xCoO2 and a drift of ${MINUS}0.4 V`)).toBe(
+      `Li1${MINUS}xCoO2 and a drift of ${MINUS}0.4 V`,
+    );
+  });
+
+  it("P9-16: keeps the en dash and the em dash", () => {
+    expect(cleanDisplayText(`1990${EN}2000`)).toBe(`1990${EN}2000`);
+    expect(cleanDisplayText(`a ${EM} b`)).toBe(`a ${EM} b`);
+    expect(cleanDisplayText(`a${EM}b and pp. 4${EN}9`)).toBe(`a${EM}b and pp. 4${EN}9`);
+  });
+
+  it("P9-16: folds the hyphen glyphs to the hyphen-minus", () => {
+    expect(cleanDisplayText(`re${HYPHEN}use`)).toBe("re-use");
+    expect(cleanDisplayText(`non${NB_HYPHEN}breaking`)).toBe("non-breaking");
+  });
+
+  it("P9-16: folds the figure dash to an en dash and the horizontal bar to an em dash", () => {
+    expect(cleanDisplayText(`12${FIGURE}34`)).toBe(`12${EN}34`);
+    expect(cleanDisplayText(`a ${BAR} b`)).toBe(`a ${EM} b`);
+  });
+
+  it("P9-16: the ASCII hyphen-minus is what it was", () => {
+    expect(cleanDisplayText("GPT-4, a 4-2 split and x = -3")).toBe("GPT-4, a 4-2 split and x = -3");
+  });
+
+  it("P9-16: the entities and the numeric references name the same symbols", () => {
+    expect(cleanDisplayText("&minus;20 and 1990&ndash;2000 and a &mdash; b")).toBe(
+      `${MINUS}20 and 1990${EN}2000 and a ${EM} b`,
+    );
+    expect(cleanDisplayText("&#8722;20 and &#x2212;20, 4&#8211;9 and a&#x2014;b")).toBe(
+      `${MINUS}20 and ${MINUS}20, 4${EN}9 and a${EM}b`,
+    );
+    // The hyphen glyphs reached by a reference fold, as the raw glyphs do.
+    expect(cleanDisplayText("re&#8208;use and non&#x2011;breaking")).toBe("re-use and non-breaking");
+  });
+
+  it("P9-16: a dash that mojibake spoiled is repaired to the dash, and the one that cannot be told apart reads as a hyphen", () => {
+    // UTF-8 EN DASH (E2 80 93) and EM DASH (E2 80 94) read as Windows-1252.
+    expect(cleanDisplayText("1990â€“2000")).toBe(`1990${EN}2000`);
+    expect(cleanDisplayText("a â€” b")).toBe(`a ${EM} b`);
+    // The third byte arrived as a straight quote: en or em cannot be told.
+    expect(cleanDisplayText('a â€" b')).toBe("a - b");
+  });
+
+  it("P9-16: end to end, a PDF's text layer keeps its en and em dashes", async () => {
+    // WinAnsi: byte 0x96 is the en dash, 0x97 the em dash (the helper writes
+    // Latin-1, so U+0096 and U+0097 are those bytes).
+    const bytes = minimalPdf([
+      [
+        ["A Paper About Cathodes", 72, 90, 18],
+        ["1 Introduction", 72, 130, 12, true],
+        ...prose(
+          [
+            "The cells were cycled between 1990\u0096 and 2000 rpm for five days of the sweep.",
+            "Each run was timed \u0097 start to finish \u0097 over the full schedule of the furnace.",
+            "Nothing else in the furnace schedule changed between the first and the last run.",
+          ],
+          150,
+        ),
+      ],
+    ]);
+    const result = await extractPdfTextFromBytes(bytes);
+    const text = (result.doc?.sections ?? []).map((s) => s.text).join(" ");
+    expect(text).toContain(`1990${EN}`);
+    expect(text).toContain(`timed ${EM} start to finish ${EM} over`);
+  });
+});
