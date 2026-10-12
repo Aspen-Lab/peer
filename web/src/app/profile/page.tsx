@@ -369,7 +369,7 @@ export default function ProfilePage() {
 
 // ── View mode: editorial dashboard ─────────────────────────────
 
-function DashboardView({
+export function DashboardView({
   profile,
   displayName,
   onEdit,
