@@ -1520,3 +1520,72 @@ describe("ExplainBox — the window's bottom stands on the legend's top as Fit s
     }
   });
 });
+
+// ── The card between the masthead and the foot legend (P9-50; A P9-W3's N7 and §3 c) ───────────────────────────────────
+//
+// 640 to 1023 px: the card, under or above the selection (P3-02), over the page. It climbed to 12 px at 768 × 1000 with a grown thread — over
+// the masthead (`h-12`, from 768 px) — and stood 16 px into the foot legend when placed under the selection. The numbers are `placeCard`'s,
+// pinned in `explain-box.card.test.ts`; here the box hands it the window and the legend (`legendHeightPx`, Fit's zoom) and the card keeps
+// them. No DOM: the card's inline style is what the box asked for.
+
+describe("ExplainBox — the card stands between the masthead and the foot legend (P9-50, A P9-W3's N7)", () => {
+  const oneLine = (top: number, left = 40) => ({ left, top, right: left + 360, bottom: top + 20 });
+  /** A selection whose paragraph reaches the column's right edge, so no gutter stands and the control is the legend's pill. */
+  const selectedAt = (top: number, width: number): ExplainSelection => ({ ...first, rect: oneLine(top), bounds: oneLine(top), paragraph: { left: 16, top, right: width - 16, bottom: top + 260 } });
+  const topEdgeOf = (style: Look["style"], height: number) => style?.top ?? height - (style?.bottom ?? 0) - (style?.maxHeight ?? 0);
+  const bottomEdgeOf = (style: Look["style"], height: number) => (style?.top !== undefined ? style.top + (style.maxHeight ?? 0) : height - (style?.bottom ?? 0));
+
+  it("a thread grown by three replies above a low selection stands at the masthead's foot (48) and not over it: 768 × 1000 and 900 × 900", async () => {
+    for (const [width, height, top] of [[768, 1000, 944.7], [900, 900, 850]] as const) {
+      stubWindow(width, height);
+      const run = await scenario(base({ target: selectedAt(top, width), cachedTurns: pairs(3) }), [(tree) => click(tree)]);
+      await wait();
+
+      expect(run.last().dock, `${width} x ${height}`).toBe(false);
+      expect(run.last().thread?.turns, `${width} x ${height}`).toHaveLength(6);
+      expect(run.last().style?.right).toBeUndefined();
+      expect(topEdgeOf(run.last().style, height), `${width} x ${height}`).toBeCloseTo(48, 6);
+      // Above the words it explains, as P3-02 has it: 8 px clear of the selection's first line.
+      expect(bottomEdgeOf(run.last().style, height), `${width} x ${height}`).toBeCloseTo(top - 8, 6);
+      run.mounted.unmount();
+    }
+  });
+
+  it("under a selection higher up, the card ends on the legend's top and not 16 px into it: 768 × 1000 and 900 × 900", async () => {
+    for (const [width, height, top] of [[768, 1000, 400], [900, 900, 300]] as const) {
+      stubWindow(width, height);
+      const run = await scenario(base({ target: selectedAt(top, width), cachedTurns: pairs(3) }), [(tree) => click(tree)]);
+      await wait();
+
+      expect(run.last().style?.top, `${width} x ${height}`).toBe(top + 20 + 8);
+      expect(bottomEdgeOf(run.last().style, height), `${width} x ${height}`).toBe(height - 28);
+      run.mounted.unmount();
+    }
+  });
+
+  it("follows Fit's zoom: the card's bottom is the legend's top as the page scales it (28 × zoom), as the dock's is", async () => {
+    stubWindow(900, 1000);
+    (document as unknown as Record<string, unknown>).querySelector = (selector: string) => (selector === "[data-zoom-root]" ? { zoomRoot: true } : null);
+    (window as unknown as Record<string, unknown>).getComputedStyle = () => ({ getPropertyValue: (name: string) => (name === "--page-zoom" ? "1.142" : "") });
+    const run = await scenario(base({ target: selectedAt(400, 900), cachedTurns: pairs(3) }), [(tree) => click(tree)]);
+    await wait();
+
+    expect(bottomEdgeOf(run.last().style, 1000)).toBeCloseTo(1000 - legendHeightPx(1.142), 6);
+    run.mounted.unmount();
+  });
+
+  it("under 768 px (no masthead, no legend): the head is the 12-px margin and the bottom the screen's bottom", async () => {
+    stubWindow(700, 900);
+    const openRef = { current: null as (() => void) | null };
+    const above = await scenario(base({ target: selectedAt(840, 700), cachedTurns: pairs(3), openRef }), [() => openRef.current?.()]);
+    await wait();
+    expect(above.last().dock).toBe(false);
+    expect(topEdgeOf(above.last().style, 900)).toBeCloseTo(12, 6);
+    above.mounted.unmount();
+
+    const below = await scenario(base({ target: selectedAt(300, 700), cachedTurns: pairs(3), openRef }), [() => openRef.current?.()]);
+    await wait();
+    expect(bottomEdgeOf(below.last().style, 900)).toBe(900);
+    below.mounted.unmount();
+  });
+});
