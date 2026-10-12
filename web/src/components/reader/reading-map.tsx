@@ -35,7 +35,8 @@
 // count, minutes and role): a row says its words — `setup · p.2 · 1,234 words · 6 min` — the count its
 // minutes come from, the one the summary line adds up. Its meta is one list of parts, each a span with
 // the separator it owns (P9-22's rule: a wrap never leaves a line ending on "·"), joined by one plain
-// space; the meta may wrap under the heading rather than squeeze it.
+// space; the meta may wrap under the heading rather than squeeze it. And where there is no hover the
+// map's toggles — "show map" / "hide map" and each row's fold — are 44 px tall (the P9-23 rule).
 
 import { Fragment, useState } from "react";
 import type { PaperReading } from "@/lib/papers/reading";
@@ -85,6 +86,9 @@ function depthOf(heading: string): number {
 function roleLabel(role: ReadingRole): string | null {
   return role === "body" ? null : MAP.roles[role];
 }
+
+/** P9-51: the floor a toggle has where there is no hover (P9-23's rule: 44 px tall; with a mouse nothing moves). */
+const TOUCH_TALL = "[@media(hover:none)]:min-h-11";
 
 /**
  * P9-51 (F08): the parts of a row's meta, in order — the role (when Peer could place the heading), the
@@ -171,7 +175,7 @@ export function ReadingMapView({
           // P9-05 (X14): at 390 px the summary sentence and this button share one flex line, and the
           // button wrapped to "hide / map". It is a single unbreakable, unshrinkable label; the
           // summary span beside it is what wraps.
-          className="shrink-0 whitespace-nowrap underline-offset-2 transition-colors hover:text-heading hover:underline sm:hidden"
+          className={`shrink-0 whitespace-nowrap underline-offset-2 transition-colors hover:text-heading hover:underline sm:hidden ${TOUCH_TALL}`}
         >
           {shownOnPhone ? MAP.hide : MAP.show}
         </button>
@@ -208,7 +212,7 @@ export function ReadingMapView({
                       aria-expanded={expanded}
                       aria-label={expanded ? MAP.closeLines(row.heading) : MAP.openLines(row.heading)}
                       onClick={() => toggle(k)}
-                      className="annotation w-3 shrink-0 text-text-faint transition-colors hover:text-heading"
+                      className={`annotation w-3 shrink-0 text-text-faint transition-colors hover:text-heading ${TOUCH_TALL}`}
                     >
                       {expanded ? "−" : "+"}
                     </button>
