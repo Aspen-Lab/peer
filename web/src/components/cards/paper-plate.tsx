@@ -81,6 +81,18 @@ export function leadFigurePending(
 const FIGURE_BOX =
   "tile-cover cropmarks [--cm-inset:6px] [--cm-c:var(--plate-ink-faint)] overflow-hidden aspect-[16/9] @container";
 
+/**
+ * P9-49 (X3): below the spread the plate is as wide as the column (up to 712 px) and 16:9, so 337 to 400
+ * px tall at 768-1024 — a screen a reader with two settled questions scrolls before the body. On the lead
+ * picture it is capped at 240 px: the box keeps the column's width (`w-full`: left to itself, a browser
+ * that carries the cap through the 16:9 ratio would narrow the mat and leave the caption wider than its
+ * plate) and loses the height — a wide mat — and the picture stands in it `object-contain`: a landscape
+ * figure is drawn at the cap's height, a tall one (a 9:16 profile) at the cap's height too and narrower,
+ * centred; nothing is cropped. From the spread (`xl`) the panel is 320/360 px wide, the plate 180/202 px
+ * tall, and nothing changes.
+ */
+const LEAD_CAP = "max-xl:max-h-[240px] max-xl:w-full";
+
 // ── The lead picture's caption (P9-49, N8) ──────────────────────────────────────────────────────────
 //
 // A sentence or nothing. The head cut every caption to 140 characters with an ellipsis written after the
@@ -257,7 +269,9 @@ export function PaperPlate({
   // branches marks neither.
   const base =
     showFigure || pending
-      ? FIGURE_BOX
+      ? lead
+        ? `${FIGURE_BOX} ${LEAD_CAP}`
+        : FIGURE_BOX
       : "tile-cover grain overflow-hidden aspect-[2.4/1] @container";
 
   // The held slot: the box and nothing in it — no picture, no caption, no word of the paper's own

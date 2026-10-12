@@ -127,6 +127,11 @@ describe("in one column the lead plate is capped (rule 3, X3)", () => {
     expect(value as number).toBeGreaterThan(0);
   });
 
+  it("keeps the column's width and loses only height: the capped box is `max-xl:w-full`", () => {
+    expect(classes(openTag(render(lead({ figure: BOUND }))))).toContain("max-xl:w-full");
+    expect(classes(openTag(render(lead())))).toContain("max-xl:w-full");
+  });
+
   it("is the same cap on the box that holds the slot, so the picture's landing changes no height", () => {
     expect(cap(openTag(render(lead())))).toBe(cap(openTag(render(lead({ figure: BOUND })))));
     expect(cap(openTag(render(lead())))).not.toBeNull();
