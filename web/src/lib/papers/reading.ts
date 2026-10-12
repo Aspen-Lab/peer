@@ -137,7 +137,7 @@ export interface PaperReading {
    * already opened. A reading cached under 6, in the browser or on the route,
    * is read again once.
    */
-  version: 9;
+  version: 10;
   paperId: string;
   builtAt: string;
   provenance: ReadingProvenance;
@@ -751,7 +751,7 @@ export function buildReading(
   omitted.push({ block: "nextStep", reason: "needs_key" });
 
   return {
-    version: 9,
+    version: 10,
     paperId: paper.id,
     builtAt: now.toISOString(),
     provenance,

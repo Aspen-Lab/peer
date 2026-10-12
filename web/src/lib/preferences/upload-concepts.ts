@@ -24,7 +24,7 @@ import { ABBREVIATION_GROUPS, canonicalize, isGenericTerm } from "@/lib/scoring/
 // paragraph), and a glyph before an end-matter heading ("■ ACKNOWLEDGMENTS", "*sı Supporting Information")
 // no longer hides it; text cached under 5 still carries the fragments lifted out as "equations" and the
 // apparatus after a glyph-led heading.
-export const UPLOAD_CONCEPT_EXTRACTION_VERSION = 8;
+export const UPLOAD_CONCEPT_EXTRACTION_VERSION = 9;
 
 // A conservative, local phrase extractor. No document text is sent to a model
 // for preference learning. References, author blocks and boilerplate are out.
