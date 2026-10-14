@@ -9,12 +9,29 @@
 // and the take-note action. The pill is placed in the window's pixels (fixed, outside the zoomed container),
 // measured again as the page scrolls and the window resizes, from the selection's own `measure()`.
 //
+// P10-08b (P10-08's unsettled 2; §1b): "Explain this" is offered only when the page can explain. With no model key and no
+// term of the paper's own inside the selection the explain action does nothing (a locked block is hidden, never shown
+// broken), so the pill shows "Take notes" alone; with a key, or with a defined term inside the selection (the Tier 0
+// definition), both. The page hands it one boolean, `canExplain`, made by `selectionCanExplain` from the same
+// `definingTerm` check the explain box uses.
+//
 // Under 768 px the pill is not drawn: the thumb bar's cell is the explain control there (§1h.66), and "Take
 // notes" on a phone is deferred. The press keeps the selection: `mousedown` is not allowed to move the caret.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { PaperTerm } from "@/lib/papers/report";
 import type { ExplainSelection, ViewRect } from "./paper-body";
+import { definingTerm } from "./explain-box";
 import { DOCK_TOP_PX, MASTHEAD_MIN_VIEWPORT_PX } from "./explain-dock";
+
+/**
+ * Whether the page can explain the selection `passage`: it has a model key (`canAsk`), or the paper's own definition of a term
+ * lies inside the passage (`definingTerm`, the explain box's own check — the Tier 0 answer). No selection: no. Pure.
+ */
+export function selectionCanExplain(input: { canAsk: boolean; terms: readonly PaperTerm[]; passage: string | null }): boolean {
+  if (input.passage === null) return false;
+  return input.canAsk || definingTerm(input.terms, input.passage) !== null;
+}
 
 export const SELECTION_LABELS = { explain: "Explain this", note: "Take notes" } as const;
 
@@ -57,11 +74,14 @@ const BUTTON =
 
 export function SelectionToolbarView({
   place,
+  canExplain,
   onExplain,
   onTakeNote,
   innerRef,
 }: {
   place: ToolbarPlace;
+  /** The page can explain this selection (`selectionCanExplain`); when it cannot, "Explain this" is not drawn. */
+  canExplain: boolean;
   onExplain: () => void;
   onTakeNote: () => void;
   innerRef?: (el: HTMLDivElement | null) => void;
@@ -77,10 +97,12 @@ export function SelectionToolbarView({
       style={{ left: place.left, top: place.top }}
       className="fixed z-[70] flex items-stretch whitespace-nowrap border border-border-strong bg-surface font-mono text-caption shadow-card-hover"
     >
-      <button type="button" data-selection-explain="" onMouseDown={keep} onClick={onExplain} className={BUTTON}>
-        {SELECTION_LABELS.explain}
-      </button>
-      <button type="button" data-selection-note="" onMouseDown={keep} onClick={onTakeNote} className={`${BUTTON} border-l border-border-strong`}>
+      {canExplain && (
+        <button type="button" data-selection-explain="" onMouseDown={keep} onClick={onExplain} className={BUTTON}>
+          {SELECTION_LABELS.explain}
+        </button>
+      )}
+      <button type="button" data-selection-note="" onMouseDown={keep} onClick={onTakeNote} className={canExplain ? `${BUTTON} border-l border-border-strong` : BUTTON}>
         {SELECTION_LABELS.note}
       </button>
     </div>
@@ -108,10 +130,13 @@ const sameFrame = (a: Frame | null, b: Frame | null) =>
 
 export function SelectionToolbar({
   target,
+  canExplain,
   onExplain,
   onTakeNote,
 }: {
   target: ExplainSelection | null;
+  /** The page can explain this selection (`selectionCanExplain`). */
+  canExplain: boolean;
   onExplain: () => void;
   onTakeNote: (target: ExplainSelection) => void;
 }) {
@@ -148,5 +173,5 @@ export function SelectionToolbar({
   }, [shown]);
 
   if (!target || !place) return null;
-  return <SelectionToolbarView place={place} onExplain={onExplain} onTakeNote={() => onTakeNote(target)} innerRef={(el) => (box.current = el)} />;
+  return <SelectionToolbarView place={place} canExplain={canExplain} onExplain={onExplain} onTakeNote={() => onTakeNote(target)} innerRef={(el) => (box.current = el)} />;
 }

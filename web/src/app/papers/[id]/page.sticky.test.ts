@@ -12,7 +12,7 @@ function wiringProblems(page: string, body: string, editor: string): string[] {
   const has = (text: string, needle: string, why: string) => {
     if (!text.includes(needle)) problems.push(why);
   };
-  has(p, "<SelectionToolbar target={explainTarget} onExplain={openExplain} onTakeNote={takeNote} />", "the selection buttons are not mounted with the selection, the explain action and the take-note action");
+  has(p, "<SelectionToolbar target={explainTarget} canExplain={selectionCanExplain({ canAsk: explainCanAsk, terms, passage: explainTarget?.passage ?? null })} onExplain={openExplain} onTakeNote={takeNote} />", "the selection buttons are not mounted with the selection, whether the page can explain it, the explain action and the take-note action");
   has(p, "<StickyNotes key={paper.id} paper={paper} reveal={reveal} />", "the sticky notes are not mounted for the paper with the tab reveal");
   has(p, "noteAnchors={noteAnchors}", "the body is not handed the paper's note anchors");
   has(p, "useTakeNote(", "the page has no take-note action");

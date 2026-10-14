@@ -4,8 +4,7 @@ import { createElement } from "react";
 import type { ReactElement, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { SELECTION_LABELS, SelectionToolbar, SelectionToolbarView, toolbarPlace } from "./selection-toolbar";
-import * as toolbarModule from "./selection-toolbar";
+import { SELECTION_LABELS, SelectionToolbar, SelectionToolbarView, selectionCanExplain, toolbarPlace } from "./selection-toolbar";
 import type { PaperTerm } from "@/lib/papers/report";
 
 // P10-09a (review 7.1, 8.4; rubric B3; ruling §1h.78): selecting text shows one small pill just above the
@@ -63,7 +62,7 @@ describe("toolbarPlace", () => {
 describe("SelectionToolbarView", () => {
   it("is one pill with two buttons, Explain this and Take notes", () => {
     expect(SELECTION_LABELS).toEqual({ explain: "Explain this", note: "Take notes" });
-    const html = renderToStaticMarkup(createElement(SelectionToolbarView, { place: { left: 300, top: 362, below: false }, onExplain: () => {}, onTakeNote: () => {} }));
+    const html = renderToStaticMarkup(createElement(SelectionToolbarView, { place: { left: 300, top: 362, below: false }, canExplain: true, onExplain: () => {}, onTakeNote: () => {} }));
     expect(html.match(/<button\b/g)).toHaveLength(2);
     expect(html).toContain(">Explain this<");
     expect(html).toContain(">Take notes<");
@@ -75,7 +74,7 @@ describe("SelectionToolbarView", () => {
   it("calls the page's explain action and the take-note action, and keeps the selection when pressed", () => {
     const onExplain = vi.fn();
     const onTakeNote = vi.fn();
-    const tree = SelectionToolbarView({ place: { left: 0, top: 0, below: false }, onExplain, onTakeNote });
+    const tree = SelectionToolbarView({ place: { left: 0, top: 0, below: false }, canExplain: true, onExplain, onTakeNote });
     const buttons = elements(tree).filter((el) => el.type === "button");
     expect(buttons).toHaveLength(2);
     for (const button of buttons) {
@@ -92,7 +91,7 @@ describe("SelectionToolbarView", () => {
 
 describe("SelectionToolbar", () => {
   it("draws nothing without a selection", () => {
-    expect(renderToStaticMarkup(createElement(SelectionToolbar, { target: null, onExplain: () => {}, onTakeNote: () => {} }))).toBe("");
+    expect(renderToStaticMarkup(createElement(SelectionToolbar, { target: null, canExplain: true, onExplain: () => {}, onTakeNote: () => {} }))).toBe("");
   });
 });
 
@@ -101,12 +100,11 @@ describe("SelectionToolbar", () => {
 // shown broken — §1b), so the pill shows "Take notes" alone; with a key, both; with no key and a defined term, both
 // (the Tier 0 definition). The page hands the toolbar one boolean, `canExplain`, made by `selectionCanExplain` from the
 // same `definingTerm` check the explain box uses.
-type ViewProps = { place: { left: number; top: number; below: boolean }; onExplain: () => void; onTakeNote: () => void; canExplain: boolean };
 const AT = { left: 300, top: 362, below: false };
 
 describe("SelectionToolbarView — Explain this only when the page can explain (P10-08b, rule 3)", () => {
   const view = (canExplain: boolean) =>
-    renderToStaticMarkup(createElement(SelectionToolbarView as unknown as (props: ViewProps) => ReactElement, { place: AT, onExplain: () => {}, onTakeNote: () => {}, canExplain }));
+    renderToStaticMarkup(createElement(SelectionToolbarView, { place: AT, onExplain: () => {}, onTakeNote: () => {}, canExplain }));
 
   it("shows Take notes alone when the page cannot explain", () => {
     const html = view(false);
@@ -125,7 +123,7 @@ describe("SelectionToolbarView — Explain this only when the page can explain (
 
   it("keeps the note button whole when it stands alone: the same action, the press keeps the selection, no divider on its left", () => {
     const onTakeNote = vi.fn();
-    const tree = (SelectionToolbarView as unknown as (props: ViewProps) => ReactElement)({ place: AT, onExplain: () => {}, onTakeNote, canExplain: false });
+    const tree = SelectionToolbarView({ place: AT, onExplain: () => {}, onTakeNote, canExplain: false });
     const buttons = elements(tree).filter((el) => el.type === "button");
     expect(buttons).toHaveLength(1);
     const preventDefault = vi.fn();
@@ -138,7 +136,7 @@ describe("SelectionToolbarView — Explain this only when the page can explain (
 });
 
 describe("selectionCanExplain — the three states (P10-08b, rule 3)", () => {
-  const can = (toolbarModule as unknown as Record<string, (args: { canAsk: boolean; terms: readonly PaperTerm[]; passage: string | null }) => boolean>).selectionCanExplain;
+  const can = selectionCanExplain;
   const rafting: PaperTerm = { term: "rafting ratio", definition: "How much of the gauge length the plates cover.", evidence: "We define the rafting ratio as the fraction of the gauge length covered by plates." };
   const peerOnly: PaperTerm = { term: "creep", definition: "Slow deformation under load.", peer: true };
   const passage = "The rafting ratio rose as the specimen crept.";
@@ -170,5 +168,11 @@ describe("the page's hand-off (P10-08b, rule 3)", () => {
   it("gives the toolbar the one boolean, made from the same key flag and terms the explain box gets", () => {
     expect(page).toContain("canExplain={selectionCanExplain({ canAsk: explainCanAsk, terms, passage: explainTarget?.passage ?? null })}");
     expect(page).toContain("<ExplainBox key={paper.id} target={explainTarget} terms={terms} canAsk={explainCanAsk}");
+  });
+
+  it("hands the boolean on to the pill it draws, and keeps the explain check the box's own", () => {
+    const toolbar = readFileSync(resolve(process.cwd(), "src/components/reader/selection-toolbar.tsx"), "utf8").replace(/\s+/g, " ");
+    expect(toolbar).toContain("<SelectionToolbarView place={place} canExplain={canExplain}");
+    expect(toolbar).toContain("definingTerm(input.terms, input.passage)");
   });
 });
