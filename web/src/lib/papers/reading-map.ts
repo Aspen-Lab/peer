@@ -16,7 +16,7 @@
 // never rewritten.
 
 import { tokenize } from "@/lib/scoring/tokenize";
-import { canonicalize, isGenericTerm, termMatches, termOccurrences } from "@/lib/scoring/term-expand";
+import { canonicalize, expandTerm, isGenericTerm, termMatches, termOccurrences } from "@/lib/scoring/term-expand";
 import { parseBlockMarker } from "@/lib/text/math";
 import { headingNumber, numbersHeading, type ExtractedDocument, type ExtractedEquation, type ExtractedSection } from "./html-text";
 // Type only: erased at runtime, so `reading.ts` can import this module
@@ -349,8 +349,14 @@ export function buildReadingMap(doc: ExtractedDocument): ReadingMap {
 // check); the counts behind it are. It runs in the browser on the reading the
 // page already holds: the questions are the reader's own and never leave this
 // function.
+//
+// P10-06b (the owner's review 3.4): two refinements that make the strongest rows the ones that answer the
+// question. The terms meet in a paragraph (`relevanceScores`): a section's score is half the best of its
+// paragraphs' scores — a paragraph that names several of the question's terms together outscores one that
+// names one of them often — and half the section's score as a whole. A term's forms match (`termFormsMatch`):
+// "growing" is also "growth", "grown" and "grow", so a question that says growing lights the growth section.
 
-/** `strong`: among the three best sections and at least 0.6 of the best score. `medium`: at least 0.3 of it.
+/** `strong`: among the three best sections and at least 0.6 of the best score. `medium`: at least 0.4 of it.
  *  `faint`: any mention. `none`: no mention. */
 export type RouteTier = "strong" | "medium" | "faint" | "none";
 
@@ -491,11 +497,42 @@ export function specificTerms(question: string): string[] {
 
 /** The idf floor: a term in every section still counts for a little, so a section that says it more often still ranks higher. */
 const IDF_FLOOR = 0.1;
-/** A section is strong from this share of the best score, medium from the second. */
+/** A section is strong from this share of the best score, medium from the second. P10-06b: the second was 0.3; on a paper
+ *  about growth, a growth question has most of the rows within a third of the best, and the map must keep a third of them
+ *  faint or none (rubric A11), so a row is medium from 0.4. */
 const STRONG_SHARE = 0.6;
-const MEDIUM_SHARE = 0.3;
+const MEDIUM_SHARE = 0.4;
 /** At most this many rows carry the strongest tier. */
 const MAX_STRONG_ROWS = 3;
+/** P10-06b (rule 1): a section's score is this share its best paragraph's score, the rest the section's own. */
+const PARAGRAPH_SHARE = 0.5;
+/** P10-06b (rule 1): a paragraph that holds `k ≥ 2` distinct terms scores `× (1 + MEETING_BONUS × (k − 1))`. */
+const MEETING_BONUS = 0.5;
+
+/** One term's rarity among `rows`: `ln((N + 1) / (df + 1)) + 0.1`, df the rows that say it at all. */
+function idfOf(rows: ReadonlyArray<{ counts: readonly number[] }>): number[] {
+  const n = rows.length;
+  const width = rows.reduce((most, row) => Math.max(most, row.counts.length), 0);
+  const idf: number[] = [];
+  for (let i = 0; i < width; i++) {
+    const df = rows.reduce((seen, row) => seen + ((row.counts[i] ?? 0) >= 1 ? 1 : 0), 0);
+    idf.push(Math.log((n + 1) / (df + 1)) + IDF_FLOOR);
+  }
+  return idf;
+}
+
+/** `Σ idf(term) × ln(1 + count(term)) ÷ ln(2 + words / 200)`, times the meeting bonus where asked for. */
+function rowScore(counts: readonly number[], words: number, idf: readonly number[], meeting: boolean): number {
+  let sum = 0;
+  let distinct = 0;
+  for (let i = 0; i < idf.length; i++) {
+    const count = counts[i] ?? 0;
+    if (count >= 1) distinct++;
+    sum += idf[i] * Math.log(1 + count);
+  }
+  const score = sum / Math.log(2 + Math.max(0, words) / 200);
+  return meeting && distinct >= 2 ? score * (1 + MEETING_BONUS * (distinct - 1)) : score;
+}
 
 /**
  * P10-06 (rule 1; review 3.2, 3.4): a score for each of `sections` from the counts of the question's terms in it.
@@ -505,27 +542,36 @@ const MAX_STRONG_ROWS = 3;
  * two sections counts for much, one in all of them for little — and a section scores
  * `Σ idf(term) × ln(1 + count(term)) ÷ ln(2 + words / 200)`: the log keeps a term repeated thirty times from
  * outweighing three terms said twice each, and the divisor keeps a long section from winning by length alone.
+ *
+ * P10-06b (rule 1): a section that gives its `paragraphs` (the counts and words of each, the terms in the same order,
+ * the paragraphs that say nothing included) is scored `0.5 × (the best of its paragraphs' scores) + 0.5 × (the
+ * section's score above)`, where a paragraph's score is the same formula over its own counts and words — with the
+ * paper's idf — times `1 + 0.5 × (k − 1)` for the `k ≥ 2` distinct terms the paragraph holds. So a paragraph that
+ * names the growth parameters, 110 and LCO together outscores a long introduction that names each somewhere. A
+ * section that gives no paragraphs is scored as before.
+ *
  * Pure; the score is a number to order by, never shown (it is not a fact a reader can check — the counts are).
  */
-export function relevanceScores(sections: ReadonlyArray<{ counts: readonly number[]; words: number }>): number[] {
-  const n = sections.length;
-  const width = sections.reduce((most, section) => Math.max(most, section.counts.length), 0);
-  const idf: number[] = [];
-  for (let i = 0; i < width; i++) {
-    const df = sections.reduce((seen, section) => seen + ((section.counts[i] ?? 0) >= 1 ? 1 : 0), 0);
-    idf.push(Math.log((n + 1) / (df + 1)) + IDF_FLOOR);
-  }
+export function relevanceScores(
+  sections: ReadonlyArray<{
+    counts: readonly number[];
+    words: number;
+    paragraphs?: ReadonlyArray<{ counts: readonly number[]; words: number }>;
+  }>,
+): number[] {
+  const idf = idfOf(sections);
   return sections.map((section) => {
-    let sum = 0;
-    for (let i = 0; i < width; i++) sum += idf[i] * Math.log(1 + (section.counts[i] ?? 0));
-    return sum / Math.log(2 + Math.max(0, section.words) / 200);
+    const whole = rowScore(section.counts, section.words, idf, false);
+    if (!section.paragraphs || section.paragraphs.length === 0) return whole;
+    const best = section.paragraphs.reduce((most, paragraph) => Math.max(most, rowScore(paragraph.counts, paragraph.words, idf, true)), 0);
+    return PARAGRAPH_SHARE * best + (1 - PARAGRAPH_SHARE) * whole;
   });
 }
 
 /**
  * P10-06 (rule 2): the tier of each score, relative to the best of them. `strong` for a score of at least 0.6 of
  * the best and among the three highest (the earlier row first on a tie), so three rows at most; `medium` for at
- * least 0.3 of the best; `faint` for any other mention; `none` for a score of zero. A single mentioned section is
+ * least 0.4 of the best; `faint` for any other mention; `none` for a score of zero. A single mentioned section is
  * strong.
  */
 export function gradeScores(scores: readonly number[]): RouteTier[] {
@@ -547,6 +593,101 @@ export function gradeScores(scores: readonly number[]): RouteTier[] {
   });
 }
 
+// ── A term's forms (P10-06b, rule 2) ────────────────────────────────────
+//
+// "growing" in a question and "growth" in the paper are one word to a reader. The match is by stem, a small,
+// explicit rule with no dependency: strip one of the suffixes below (never down to fewer than four letters),
+// and two words match when one stem is the other's prefix and the longer is at most one letter longer —
+// growing / growth / grown / grow, deposition / deposited, parameters / parameter, electrodes / electrode.
+// Never for a term under four letters or one that is not all letters (`LCO`, `110`, `LiCoO2`: those match as
+// they did, exactly and through the abbreviation table), and never for words that only begin alike
+// (grain / grating, current / curriculum, grow / grower). The count stays under the reader's own term.
+
+const FORM_SUFFIXES: readonly string[] = ["tion", "ing", "es", "ed", "th", "s"];
+const MIN_STEM = 4;
+const STEMMABLE = /^\p{L}{4,}$/u;
+
+const stemCache = new Map<string, string>();
+
+/** A word with one of the suffixes removed, if four letters or more are left. */
+function stemOf(word: string): string {
+  const kept = stemCache.get(word);
+  if (kept !== undefined) return kept;
+  let stem = word;
+  for (const suffix of FORM_SUFFIXES) {
+    if (word.endsWith(suffix) && word.length - suffix.length >= MIN_STEM) {
+      stem = word.slice(0, word.length - suffix.length);
+      break;
+    }
+  }
+  if (stemCache.size > 20000) stemCache.clear();
+  stemCache.set(word, stem);
+  return stem;
+}
+
+function stemsMatch(a: string, b: string): boolean {
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  return long.length - short.length <= 1 && long.startsWith(short);
+}
+
+/**
+ * P10-06b (rule 2): whether the question's `term` and the paper's `word` are forms of one word — by the stem rule
+ * above. Both are compared lower-case; a term under four letters, or with anything but letters in it, is only ever
+ * its own form (the exact match `termMatches` makes), so this answers false for them.
+ */
+export function termFormsMatch(term: string, word: string): boolean {
+  const a = canonicalize(term);
+  const b = canonicalize(word);
+  if (!STEMMABLE.test(a) || !STEMMABLE.test(b)) return false;
+  return stemsMatch(stemOf(a), stemOf(b));
+}
+
+/** The words of a canonical text that can have forms (letters only, four or more), each with how often it stands. */
+function formWordsOf(canonicalText: string): Map<string, number> {
+  const words = new Map<string, number>();
+  for (const word of canonicalText.split(" ")) {
+    if (word.length >= MIN_STEM && STEMMABLE.test(word)) words.set(word, (words.get(word) ?? 0) + 1);
+  }
+  return words;
+}
+
+/** What the route needs of one question term: its words and, if it can have forms, its stem. */
+interface RouteTerm {
+  term: string;
+  /** Every canonical variant `termMatches` accepts (counted by `termOccurrences` already). */
+  variants: ReadonlySet<string>;
+  /** Set for a term of four letters or more, all letters. */
+  stem?: string;
+}
+
+function routeTermOf(term: string): RouteTerm {
+  const canonical = canonicalize(term);
+  return {
+    term,
+    variants: new Set(expandTerm(term)),
+    ...(STEMMABLE.test(canonical) ? { stem: stemOf(canonical) } : {}),
+  };
+}
+
+/** How often the text says a form of `entry` that `termOccurrences` does not already count (the same word never twice). */
+function formOccurrences(words: ReadonlyMap<string, number>, entry: RouteTerm): number {
+  if (entry.stem === undefined) return 0;
+  let extra = 0;
+  for (const [word, count] of words) {
+    if (!entry.variants.has(word) && stemsMatch(entry.stem, stemOf(word))) extra += count;
+  }
+  return extra;
+}
+
+/** The count a reader can check: the term as before (its plural, its abbreviation's long form) plus its other forms. */
+function occurrencesOf(canonicalText: string, words: ReadonlyMap<string, number>, entry: RouteTerm): number {
+  return termOccurrences(canonicalText, entry.term) + formOccurrences(words, entry);
+}
+
+function mentionedIn(canonicalText: string, words: ReadonlyMap<string, number>, entry: RouteTerm): boolean {
+  return termMatches(canonicalText, entry.term) || formOccurrences(words, entry) > 0;
+}
+
 function wordsOf(text: string): number {
   return text.split(/\s+/).filter(Boolean).length;
 }
@@ -557,32 +698,39 @@ interface RoutedSection {
   /** How often each term occurs, aligned with the question's terms. */
   counts: number[];
   words: number;
+  /** The same for each paragraph (P10-06b): the terms meeting in one paragraph raise the section's score. */
+  inParagraph: Array<{ counts: number[]; words: number }>;
   /** Whether the section has paragraphs of its own: a group row (a heading with only subsections) has none. */
   scored: boolean;
 }
 
 function routeSection(paragraphs: readonly string[], terms: readonly string[]): RoutedSection {
+  const entries = terms.map(routeTermOf);
   // Canonicalised once per section per call (joined with a space), and once
   // per paragraph and per sentence for the matches below.
   const sectionText = canonicalize(paragraphs.join(" "));
-  const hits = terms
-    .map((term) => ({ term, count: termOccurrences(sectionText, term) }))
+  const sectionWords = formWordsOf(sectionText);
+  const hits = entries
+    .map((entry) => ({ term: entry.term, count: occurrencesOf(sectionText, sectionWords, entry) }))
     .filter((hit) => hit.count >= 1)
     .sort((a, b) => b.count - a.count || (a.term < b.term ? -1 : a.term > b.term ? 1 : 0));
   const counts = terms.map((term) => hits.find((hit) => hit.term === term)?.count ?? 0);
 
   const mentioned: number[] = [];
   const matching: string[] = [];
-  // Per paragraph, for the top paragraphs (rule 3): the counts of the terms in the ones that mention any.
+  // Per paragraph, for the top paragraphs (rule 3) and the section's score (P10-06b): the counts of the terms in it.
   const inParagraph: Array<{ counts: number[]; words: number }> = [];
   paragraphs.forEach((paragraph, index) => {
     const text = canonicalize(paragraph);
-    const mentions = terms.some((term) => termMatches(text, term));
+    const words = formWordsOf(text);
+    const mentions = entries.some((entry) => mentionedIn(text, words, entry));
     if (mentions) mentioned.push(index);
-    inParagraph.push({ counts: mentions ? terms.map((term) => termOccurrences(text, term)) : terms.map(() => 0), words: wordsOf(paragraph) });
+    inParagraph.push({ counts: mentions ? entries.map((entry) => occurrencesOf(text, words, entry)) : terms.map(() => 0), words: wordsOf(paragraph) });
+    if (!mentions) return;
     for (const sentence of splitSentences(paragraph)) {
       const canonicalSentence = canonicalize(sentence);
-      if (terms.some((term) => termMatches(canonicalSentence, term))) matching.push(sentence);
+      const sentenceWords = formWordsOf(canonicalSentence);
+      if (entries.some((entry) => mentionedIn(canonicalSentence, sentenceWords, entry))) matching.push(sentence);
     }
   });
 
@@ -599,10 +747,13 @@ function routeSection(paragraphs: readonly string[], terms: readonly string[]): 
     }
   }
 
-  // The paragraphs that say most: graded by the same score over their own words, df over this section's paragraphs.
+  // The paragraphs that say most: graded by the same score over their own words, df over this section's paragraphs,
+  // and the terms that meet in one paragraph count for more (P10-06b) — the paragraph that carries the section's
+  // score is the one the map points at.
   let topParagraphs: number[] | undefined;
   if (mentioned.length > 0) {
-    const scores = relevanceScores(inParagraph);
+    const idf = idfOf(inParagraph);
+    const scores = inParagraph.map((paragraph) => rowScore(paragraph.counts, paragraph.words, idf, true));
     const top = mentioned.reduce((most, index) => Math.max(most, scores[index]), 0);
     topParagraphs = mentioned.filter((index) => scores[index] >= top - 1e-9);
   }
@@ -618,6 +769,7 @@ function routeSection(paragraphs: readonly string[], terms: readonly string[]): 
     },
     counts,
     words: wordsOf(paragraphs.join(" ")),
+    inParagraph,
     scored: paragraphs.length > 0,
   };
 }
@@ -640,7 +792,7 @@ function routeQuestion(map: ReadingMap, sections: RouteBody, question: string): 
   // Rule 1: a score for each section with paragraphs of its own, against the paper's sections that have any.
   const own = routed.map((entry, k) => ({ entry, k })).filter(({ entry }) => entry.scored);
   const scores: number[] = rows.map(() => 0);
-  relevanceScores(own.map(({ entry }) => ({ counts: entry.counts, words: entry.words }))).forEach((score, i) => {
+  relevanceScores(own.map(({ entry }) => ({ counts: entry.counts, words: entry.words, paragraphs: entry.inParagraph }))).forEach((score, i) => {
     scores[own[i].k] = score;
   });
 

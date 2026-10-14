@@ -71,16 +71,16 @@ describe("relevanceScores — Σ idf(term) × ln(1 + count) ÷ ln(2 + words / 20
   });
 });
 
-describe("gradeScores — strong ≥ 0.6 × max and in the top three, medium ≥ 0.3 × max, faint for any hit", () => {
+describe("gradeScores — strong ≥ 0.6 × max and in the top three, medium ≥ 0.4 × max, faint for any hit", () => {
   it("grades by the share of the best score", () => {
-    expect(gradeScores([10, 7, 6, 5, 4, 2.9, 0])).toEqual(["strong", "strong", "strong", "medium", "medium", "faint", "none"]);
+    expect(gradeScores([10, 7, 6, 5, 4, 3.9, 0])).toEqual(["strong", "strong", "strong", "medium", "medium", "faint", "none"]);
   });
 
   it("gives the strongest tier to three rows at most, the earlier rows first on a tie", () => {
     expect(gradeScores([5, 5, 5, 5])).toEqual(["strong", "strong", "strong", "medium"]);
     expect(gradeScores([5, 5, 5, 5, 5, 5]).filter((tier) => tier === "strong")).toHaveLength(3);
     // The top three by score, wherever they stand in the paper.
-    expect(gradeScores([1, 9, 2, 8, 3, 7, 4])).toEqual(["faint", "strong", "faint", "strong", "medium", "strong", "medium"]);
+    expect(gradeScores([1, 9, 2, 8, 3.5, 7, 4])).toEqual(["faint", "strong", "faint", "strong", "faint", "strong", "medium"]);
   });
 
   it("never grades a row without a mention above none, and a paper with no mention at all is all none", () => {

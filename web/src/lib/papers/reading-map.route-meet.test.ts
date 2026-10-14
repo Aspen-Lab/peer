@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { routeByQuestions, type ReadingMap } from "./reading-map";
+import { relevanceScores, routeByQuestions, termFormsMatch, type ReadingMap } from "./reading-map";
 
 // P10-06b (ruling §1h.81; the owner's review 3.4, rubric A11's second clause): the strongest rows are
 // the ones that answer the question. "I want to learn the parameter for growing 110 LCO" lit the
@@ -73,16 +73,89 @@ describe("routeByQuestions — the terms meet in a paragraph (P10-06b, rule 1)",
   it("names the paragraph where the terms meet as the section's top paragraph", () => {
     expect(routeOf(specs, "spinel olivine").together.topParagraphs).toEqual([0]);
   });
+});
 
-  it("leaves a section that says one term often beneath the one that says two together (the bonus is for distinct terms)", () => {
-    const more: Spec[] = [
-      { id: "often", paragraphs: [paragraphOf(100, "The spinel changed. ".repeat(4).trim()), paragraphOf(100)] },
-      { id: "both", paragraphs: [paragraphOf(100, "The spinel changed. The olivine changed."), paragraphOf(100)] },
-      ...specs.slice(2),
-    ];
-    const t = tiersOf(more, "spinel olivine");
-    expect(t.both).toBe("strong");
-    expect(t.often).not.toBe("strong");
+describe("relevanceScores — a section's paragraphs (P10-06b, rule 1)", () => {
+  // N = 2 sections, two terms, each in section 0 only (df 1): idf = ln(3 / 2) + 0.1. 200 words: ln 3.
+  const I = Math.log(3 / 2) + 0.1;
+  const L = Math.log(3);
+  const rest = { counts: [0, 0, 0], words: 200 };
+
+  it("scores a section as half its best paragraph and half the section as a whole", () => {
+    const whole = (I * Math.log(3) + 0) / L;
+    const [score] = relevanceScores([
+      { counts: [2, 0, 0], words: 200, paragraphs: [{ counts: [2, 0, 0], words: 100 }, { counts: [0, 0, 0], words: 100 }] },
+      rest,
+    ]);
+    const paragraph = (I * Math.log(3)) / Math.log(2.5);
+    expect(score).toBeCloseTo(0.5 * paragraph + 0.5 * whole, 10);
+  });
+
+  it("multiplies a paragraph's score by 1 + 0.5 × (k − 1) for k ≥ 2 distinct terms, and by nothing for one", () => {
+    const one = relevanceScores([{ counts: [3, 0, 0], words: 200, paragraphs: [{ counts: [3, 0, 0], words: 200 }] }, rest])[0];
+    const two = relevanceScores([{ counts: [3, 3, 0], words: 200, paragraphs: [{ counts: [3, 3, 0], words: 200 }] }, rest])[0];
+    const three = relevanceScores([{ counts: [3, 3, 3], words: 200, paragraphs: [{ counts: [3, 3, 3], words: 200 }] }, rest])[0];
+    const wholeOne = (I * Math.log(4)) / L;
+    expect(one).toBeCloseTo(wholeOne, 10); // a paragraph the size of the section, one term: no bonus
+    expect(two).toBeCloseTo(0.5 * (2 * wholeOne * 1.5) + 0.5 * (2 * wholeOne), 10);
+    expect(three).toBeCloseTo(0.5 * (3 * wholeOne * 2) + 0.5 * (3 * wholeOne), 10);
+  });
+
+  it("takes the best paragraph, wherever it stands", () => {
+    const a = relevanceScores([{ counts: [3, 3, 0], words: 300, paragraphs: [{ counts: [0, 0, 0], words: 100 }, { counts: [3, 0, 0], words: 100 }, { counts: [0, 3, 0], words: 100 }] }, rest])[0];
+    const b = relevanceScores([{ counts: [3, 3, 0], words: 300, paragraphs: [{ counts: [0, 3, 0], words: 100 }, { counts: [0, 0, 0], words: 100 }, { counts: [3, 0, 0], words: 100 }] }, rest])[0];
+    expect(a).toBeCloseTo(b, 12);
+  });
+
+  it("scores the terms that meet above the same counts apart, the sums being equal", () => {
+    const apart = { counts: [2, 2, 0], words: 200, paragraphs: [{ counts: [2, 0, 0], words: 100 }, { counts: [0, 2, 0], words: 100 }] };
+    const together = { counts: [2, 2, 0], words: 200, paragraphs: [{ counts: [2, 2, 0], words: 100 }, { counts: [0, 0, 0], words: 100 }] };
+    const [scoreApart, scoreTogether] = relevanceScores([apart, together, rest]);
+    expect(scoreTogether).toBeGreaterThan(scoreApart);
+    // Without the paragraphs the two sections are alike.
+    const [plainApart, plainTogether] = relevanceScores([{ counts: apart.counts, words: 200 }, { counts: together.counts, words: 200 }, rest]);
+    expect(plainTogether).toBeCloseTo(plainApart, 12);
+  });
+
+  it("scores a section that gives no paragraphs as the section alone, and a section with no mention zero", () => {
+    expect(relevanceScores([{ counts: [3, 0, 0], words: 200 }, rest])[0]).toBeCloseTo((I * Math.log(4)) / L, 10);
+    expect(relevanceScores([{ counts: [0, 0, 0], words: 200, paragraphs: [{ counts: [0, 0, 0], words: 200 }] }, rest])[0]).toBe(0);
+  });
+});
+
+describe("termFormsMatch — the stem rule (P10-06b, rule 2)", () => {
+  it.each([
+    ["growing", "growth"],
+    ["growing", "grown"],
+    ["growing", "grow"],
+    ["growth", "grown"],
+    ["deposition", "deposited"],
+    ["deposited", "deposits"],
+    ["parameters", "parameter"],
+    ["electrodes", "electrode"],
+    ["phases", "phase"],
+    ["annealing", "annealed"],
+    ["Growing", "GROWTH"],
+  ])("%s and %s are forms of one word", (a, b) => {
+    expect(termFormsMatch(a, b)).toBe(true);
+    expect(termFormsMatch(b, a)).toBe(true);
+  });
+
+  it.each([
+    ["grain", "grating"],
+    ["grain", "gray"],
+    ["current", "curriculum"],
+    ["current", "currency"],
+    ["growing", "grower"],
+    ["crystal", "crystallography"],
+    ["lco", "lcos"],
+    ["ion", "ions"],
+    ["110", "110s"],
+    ["licoo2", "licoo"],
+    ["path", "pat"],
+  ])("%s and %s are not", (a, b) => {
+    expect(termFormsMatch(a, b)).toBe(false);
+    expect(termFormsMatch(b, a)).toBe(false);
   });
 });
 
