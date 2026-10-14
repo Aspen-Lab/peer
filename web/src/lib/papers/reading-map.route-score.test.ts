@@ -789,14 +789,17 @@ describe("routeByQuestions — the favoured role wins only under its intent (P10
     expect(role).toBe(order[order.length - 1]);
   });
 
-  it("mechanism: the interpretation row first, the results next, the setup row last (1.3, 1.15, 0.9)", () => {
-    const specs = equalPaper(["setup", "method", "evidence", "interpretation"]);
-    const tiers = tiersOf(specs, QUESTION_OF.mechanism);
-    expect(tiers).toMatchObject({ r3: "strong", r2: "strong", r1: "strong", r0: "medium" });
+  // The slot rule gives the favoured role alone a place; the second role of a table row (the results on a mechanism question,
+  // the discussion on a result question) is in the three by its weight alone, and the setup row (0.9) is the one left out.
+  it("mechanism: the results (1.15) stand in the three beside the discussion (1.3), the setup row (0.9) is left out", () => {
+    const specs = equalPaper(["setup", "method", "interpretation", "evidence"]);
+    expect(tiersOf(specs, QUESTION_OF.none)).toMatchObject({ r0: "strong", r1: "strong", r2: "strong", r3: "medium" });
+    expect(tiersOf(specs, QUESTION_OF.mechanism)).toMatchObject({ r3: "strong", r2: "strong", r1: "strong", r0: "medium" });
   });
 
-  it("result: the results row first, the interpretation next, the setup row last (1.3, 1.1, 0.9)", () => {
-    const specs = equalPaper(["setup", "method", "interpretation", "evidence"]);
+  it("result: the discussion (1.1) stands in the three beside the results (1.3), the setup row (0.9) is left out", () => {
+    const specs = equalPaper(["setup", "method", "evidence", "interpretation"]);
+    expect(tiersOf(specs, QUESTION_OF.none)).toMatchObject({ r0: "strong", r1: "strong", r2: "strong", r3: "medium" });
     expect(tiersOf(specs, QUESTION_OF.result)).toMatchObject({ r3: "strong", r2: "strong", r1: "strong", r0: "medium" });
   });
 
