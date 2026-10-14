@@ -8,6 +8,7 @@ import { block, stickySpan, stickyText, stickyTitle } from "@/lib/notes/blocks";
 import type { Block } from "@/lib/notes/types";
 import { DOCK_VAR } from "@/components/reader/explain-dock";
 import { NOTES_WINDOW_ID, bindWindowsReserve, useWindows } from "@/lib/reader/windows";
+import { WysiwygField } from "./wysiwyg-field";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
 import { reconcileWindow } from "./notes-window";
 import { STICKY_SAVE_MS, StickyWindowView, closeSticky, makeStickyWriter, passageFromHash, stickyFollowText, stickyRows, takeStickyNote, withoutSticky } from "./sticky-note";
@@ -23,7 +24,8 @@ function elements(node: ReactNode): ReactElement<Props>[] {
   if (Array.isArray(node)) return node.flatMap(elements);
   if (!node || typeof node !== "object" || !("props" in node)) return [];
   const element = node as ReactElement<Props>;
-  if (typeof element.type === "function") return [element, ...elements((element.type as (p: Props) => ReactNode)(element.props))];
+  // the field has hooks (and is its own component, with its own tests): it is the leaf here
+  if (typeof element.type === "function" && element.type !== WysiwygField) return [element, ...elements((element.type as (p: Props) => ReactNode)(element.props))];
   return [element, ...elements(element.props.children)];
 }
 
@@ -58,17 +60,17 @@ describe("StickyWindowView", () => {
 
   it("has a text area focused at once, holding what was written, and the blue square before it", () => {
     const tree = elements(StickyWindowView(view()));
-    const area = tree.find((el) => el.type === "textarea")!;
+    const area = tree.find((el) => el.type === WysiwygField)!;
     expect(area.props.autoFocus).toBe(true);
     expect(area.props.value).toBe("my words");
     const onText = view().onText;
     const props = view({ onText });
-    const area2 = elements(StickyWindowView(props)).find((el) => el.type === "textarea")!;
-    (area2.props.onChange as (e: unknown) => void)({ target: { value: "more" }, currentTarget: { value: "more" } });
+    const area2 = elements(StickyWindowView(props)).find((el) => el.type === WysiwygField)!;
+    (area2.props.onChange as (text: string) => void)("more");
     expect(onText).toHaveBeenCalledWith("more");
     const html = renderToStaticMarkup(createElement(StickyWindowView, view()));
     expect(html.indexOf('aria-label="Go to the passage"')).toBeGreaterThan(-1);
-    expect(html.indexOf('aria-label="Go to the passage"')).toBeLessThan(html.indexOf("<textarea"));
+    expect(html.indexOf('aria-label="Go to the passage"')).toBeLessThan(html.indexOf('role="textbox"'));
   });
 
   it("goes back to the passage from the square, closes from the ×, raises from the header", () => {
@@ -97,7 +99,7 @@ describe("StickyWindowView", () => {
   it("shows only its header when it is behind another: no text area, no square", () => {
     const html = renderToStaticMarkup(createElement(StickyWindowView, view({ front: false, height: 40 })));
     expect(html).toContain("Note 2");
-    expect(html).not.toContain("<textarea");
+    expect(html).not.toContain('role="textbox"');
     expect(html).not.toContain("Go to the passage");
     expect(html).toContain("height:40px");
   });

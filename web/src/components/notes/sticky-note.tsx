@@ -26,6 +26,7 @@ import { DOCK_TOP_PX } from "@/components/reader/explain-dock";
 import { holdInPlace, readingAnchorTop, stackRows, useColumn, useWindows, type FloatingWindow, type StackFrame } from "@/lib/reader/windows";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
 import { AnchorSquare, goToPassage, registerPassageHost } from "./note-tags";
+import { WysiwygField } from "./wysiwyg-field";
 
 /** A sticky writes through into the paper's note no later than this long after the last keystroke. P10-09c: 150 ms, not 250 —
  *  measured in the dev server, last keystroke to the notes window showing it took 301-333 ms with 250 (the window starts its
@@ -103,13 +104,13 @@ export function StickyWindowView({
           <span className="mt-1 shrink-0">
             <AnchorSquare onClick={onGo} />
           </span>
-          <textarea
+          <WysiwygField
             autoFocus
             value={text}
-            aria-label={stickyTitle(n)}
+            ariaLabel={stickyTitle(n)}
             placeholder="Write here. It is saved in your notes."
-            onChange={(event) => onText(event.currentTarget.value)}
-            className="min-h-0 flex-1 resize-none bg-transparent font-reading text-body-sm leading-[1.6] text-text outline-none placeholder:text-text-faint/70"
+            onChange={onText}
+            className="min-h-0 flex-1 overflow-y-auto font-reading text-body-sm leading-[1.6] text-text"
           />
         </div>
       )}
