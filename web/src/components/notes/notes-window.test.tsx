@@ -158,9 +158,8 @@ describe("the window is in the stack of floating windows (P10-09c, rule 2)", () 
   const win = read("src/components/notes/notes-window.tsx");
 
   it("registers as kind notes when it stands and leaves when it closes; places itself from the stack, not by its own box", () => {
-    expect(win).toContain("NOTES_WINDOW_ID");
-    expect(win).toMatch(/kind:\s*"notes"/);
-    expect(win).toContain("useWindows");
+    expect(win).toContain('useWindows.getState().open({ id: NOTES_WINDOW_ID, kind: "notes"');
+    expect(win).toContain("useWindows.getState().close(NOTES_WINDOW_ID)");
     expect(win).toContain("stackRows(");
     expect(win).toContain("useColumn(");
     expect(win).not.toContain("notesWindowBox");
