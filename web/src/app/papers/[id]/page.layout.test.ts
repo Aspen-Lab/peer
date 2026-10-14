@@ -16,7 +16,11 @@ const text = (s: string) =>
     .replace(/(^|[^:"'`])\/\/[^\n]*/g, "$1")
     .replace(/\s+/g, " ");
 
-/** What is wrong with the decided-read observer of a page `source`; empty when it is right. */
+/**
+ * What is wrong with the decided-read observer of a page `source`; empty when it is right.
+ * Re-aimed (P10-49): the effect's list also holds `paper.id`, which the "already decided" check it hands
+ * `watchForDecision` reads; the tab is still one of the things that re-arms it.
+ */
 function decidedProblems(source: string): string[] {
   const code = text(source);
   const problems: string[] = [];
@@ -31,7 +35,7 @@ function decidedProblems(source: string): string[] {
     problems.push("the observer no longer watches the common blocks' end on Paper digestion, the abstract's footer on Summary, the decision block only without either");
   }
   if (/spread \? \(?wordsEndRef/.test(block)) problems.push("the observer still chooses the abstract's footer by the layout: in one column it would watch the decision block, which is on screen at open");
-  if (!/\}, \[decide, spread, reading, tab, hasBody\]\);/.test(block)) problems.push("the observer is not re-armed when the tab changes (the footer it watches is on the other tab)");
+  if (!/\}, \[decide, paper\.id, spread, reading, tab, hasBody\]\);/.test(block)) problems.push("the observer is not re-armed when the tab changes (the footer it watches is on the other tab)");
   return problems;
 }
 
@@ -58,7 +62,7 @@ describe("the page's decided-read observer (P7-14, R2 / Q1)", () => {
   });
 
   it("would notice the observer not re-armed by the tab", () => {
-    const wrong = source.replace("[decide, spread, reading, tab, hasBody]", "[decide, spread, reading]");
+    const wrong = source.replace("[decide, paper.id, spread, reading, tab, hasBody]", "[decide, paper.id, spread, reading]");
 
     expect(wrong).not.toBe(source);
     expect(decidedProblems(wrong)).toEqual(["the observer is not re-armed when the tab changes (the footer it watches is on the other tab)"]);
