@@ -1,7 +1,11 @@
 "use client";
 
 // Peer's gist of each paragraph, for the reading map (P3-03; ruling §1h.6;
-// user decision §1a.8).
+// user decision §1a.8) — and, for a paper with no headings of its own, Peer's division of
+// its one big section into parts (P10-07a; review 3.3). The same one request carries both;
+// the hook returns `{ gists, partition }`. A stored or fetched partition is read back
+// through `restorePartition` (the server's own sanitizer), so a corrupt entry cannot draw a
+// broken map; a guide with a partition and no gist is a guide.
 //
 // One request per paper: when the reading has a body to put the gists under, the page
 // enables the request — on `providerConfigured && deepReportRequested(...)`: the reader has
@@ -33,9 +37,12 @@ import type { Paper } from "@/types";
 import { apiFetch } from "@/lib/api";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import { GUIDE_CAPS, type GistRecord, type ParagraphGuide } from "@/lib/papers/paragraph-guide";
+import { restorePartition, type GuidePartition } from "@/lib/papers/reading-partition";
 import { buildReadingKey } from "./use-reading";
 
-export const PARAGRAPH_GUIDE_STORAGE_KEY = "peer-paragraph-guide-v1";
+// v2 (P10-07a): a guide may carry a partition. An older entry is valid gists but, without one,
+// would keep an unheaded paper at one row for up to a day; the bump makes it ask once.
+export const PARAGRAPH_GUIDE_STORAGE_KEY = "peer-paragraph-guide-v2";
 const MAX_ENTRIES = 24;
 const TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -71,7 +78,16 @@ function readOutcome(value: unknown): GuideOutcome | null {
   if (value.unavailable === true) return { unavailable: true };
   if (isRecord(value.guide)) {
     const gists = cleanGists(value.guide.gists);
-    if (gists) return { guide: { docHash: typeof value.guide.docHash === "string" ? value.guide.docHash : "", gists } };
+    const partition = restorePartition(value.guide.partition);
+    if (gists || partition) {
+      return {
+        guide: {
+          docHash: typeof value.guide.docHash === "string" ? value.guide.docHash : "",
+          gists: gists ?? {},
+          ...(partition ? { partition } : {}),
+        },
+      };
+    }
   }
   return null;
 }
@@ -119,9 +135,19 @@ export function rememberParagraphGuide(key: string, outcome: GuideOutcome): void
   }
 }
 
+/** What the hook hands the page: Peer's gists, and, for a paper with no headings, its partition. */
+export interface ParagraphGuideView {
+  gists: GistRecord | undefined;
+  partition: GuidePartition | undefined;
+}
+
+const NO_GUIDE: ParagraphGuideView = { gists: undefined, partition: undefined };
+
 /**
- * Peer's gists for the paper's paragraphs — `gists[sectionId][paragraphIndex]` — or
- * undefined (nothing kept and nothing yet, or none can be written). Asked for once, when
+ * Peer's gists for the paper's paragraphs — `gists[sectionId][paragraphIndex]` — and, for a paper
+ * with no headings of its own, its partition (P10-07a): `{ gists, partition }`, each undefined
+ * when nothing is kept and nothing yet, none can be written, or the guide has none of that kind
+ * (a partition-only guide has `gists: undefined`). Asked for once, when
  * the reading has a `body`, the page has enabled it (`enabled`: a model and a deep report
  * requested, see the header) and no answer is kept.
  * `llmOverride` is the reader's own provider and key, when they have one — the same the
@@ -140,14 +166,14 @@ export function useParagraphGuide({
    *  requested (`deepReportRequested`). */
   enabled: boolean;
   llmOverride?: ProviderOverrideConfig;
-}): GistRecord | undefined {
+}): ParagraphGuideView {
   const paperId = paper?.id;
   const key = paperId ? buildReadingKey(paperId, paper?.fullTextUploadId, paper?.revision) : "";
 
   // Read once per paper. The server renders with no window and the first client
   // render has no paper yet (the store hydrates after mount), so the two agree.
   const kept = useMemo(() => (key ? keptParagraphGuide(key) : null), [key]);
-  const [fetched, setFetched] = useState<{ id: string; gists: GistRecord } | null>(null);
+  const [fetched, setFetched] = useState<{ id: string; guide: ParagraphGuide } | null>(null);
 
   // The request reads the paper and the reader's key through a ref: the effect is
   // keyed on `key` (which carries the paper's id and its upload revision), and
@@ -179,7 +205,7 @@ export function useParagraphGuide({
         const outcome = readOutcome(answer);
         if (!outcome) return;
         rememberParagraphGuide(key, outcome);
-        if ("guide" in outcome) setFetched({ id: key, gists: outcome.guide.gists });
+        if ("guide" in outcome) setFetched({ id: key, guide: outcome.guide });
       } catch {
         // Nothing is kept: the next open of the page asks again.
       }
@@ -187,6 +213,9 @@ export function useParagraphGuide({
     return () => controller.abort();
   }, [paperId, key, hasBody, enabled, kept]);
 
-  if (kept && "guide" in kept) return kept.guide.gists;
-  return fetched && fetched.id === key ? fetched.gists : undefined;
+  const guide = kept && "guide" in kept ? kept.guide : fetched && fetched.id === key ? fetched.guide : undefined;
+  return useMemo((): ParagraphGuideView => {
+    if (!guide) return NO_GUIDE;
+    return { gists: Object.keys(guide.gists).length > 0 ? guide.gists : undefined, partition: guide.partition };
+  }, [guide]);
 }

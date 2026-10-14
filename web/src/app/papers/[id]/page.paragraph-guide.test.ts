@@ -29,8 +29,9 @@ function guideProblems(source: string): string[] {
   if (!text.includes('import { useParagraphGuide } from "@/components/reader/use-paragraph-guide";')) problems.push("the page no longer imports the hook");
   if (!text.includes('import { deepReportRequested, useModelReport } from "@/components/reader/use-model-report";')) problems.push("the page no longer imports the report's deep predicate from the report hook");
   if (text.split("useParagraphGuide({").length - 1 !== 1) problems.push("the hook is not called exactly once");
-  const call = /const paragraphGists = useParagraphGuide\(\{[^}]*\}\);/.exec(text)?.[0] ?? "";
-  if (!call) problems.push("the page no longer names the hook's result `paragraphGists`");
+  // P10-07a: the hook returns `{ gists, partition }`; the page names the gists `paragraphGists` and reads the partition.
+  const call = /const \{ gists: paragraphGists, partition: paragraphPartition \} = useParagraphGuide\(\{[^}]*\}\);/.exec(text)?.[0] ?? "";
+  if (!call) problems.push("the page no longer names the hook's gists `paragraphGists` and its partition `paragraphPartition`");
   else {
     if (!call.includes("paper: ready ? paper : undefined")) problems.push("the hook is asked about a paper whose private attachment is not yet resolved");
     if (!call.includes("hasBody,")) problems.push("the hook is no longer told whether the reading has a body");
@@ -39,7 +40,7 @@ function guideProblems(source: string): string[] {
   }
 
   // Hook order: after the two values it reads, before the page's first early return.
-  const at = text.indexOf("const paragraphGists = useParagraphGuide(");
+  const at = text.indexOf("const { gists: paragraphGists, partition: paragraphPartition } = useParagraphGuide(");
   const defined = (needle: string) => text.indexOf(needle);
   if (at >= 0 && !(defined("const hasBody =") >= 0 && defined("const hasBody =") < at)) problems.push("the hook comes before `hasBody` is known");
   if (at >= 0 && !(defined("const providerConfigured =") >= 0 && defined("const providerConfigured =") < at)) problems.push("the hook comes before `providerConfigured` is known");
@@ -100,7 +101,7 @@ describe("the page's paragraph gist wiring (P3-03)", () => {
   });
 
   it("would notice the hook moved below an early return", () => {
-    const call = /\s*const paragraphGists = useParagraphGuide\(\{[^}]*\}\);\n/.exec(source)![0];
+    const call = /\s*const \{ gists: paragraphGists, partition: paragraphPartition \} = useParagraphGuide\(\{[^}]*\}\);\n/.exec(source)![0];
     const moved = source.replace(call, "\n").replace("  if (!reading) return null;", `  if (!reading) return null;${call}`);
 
     expect(guideProblems(moved)).toContain("the hook is called after an early return (hook order)");

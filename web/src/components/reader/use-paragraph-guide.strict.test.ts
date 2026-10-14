@@ -80,7 +80,8 @@ async function open() {
   const opened = await hookRuntime.mount(() => useParagraphGuide({ paper, hasBody: true, enabled: true }));
   const aborted = sent.map((request) => request.signal?.aborted);
   opened.unmount();
-  return { gists: opened.value, aborted };
+  // Re-aimed (P10-07a): the hook returns `{ gists, partition }`; this suite is about the gists.
+  return { gists: opened.value.gists, aborted };
 }
 
 describe("useParagraphGuide under React's double effect (StrictMode, P4-00c)", () => {

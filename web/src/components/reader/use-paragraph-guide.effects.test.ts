@@ -19,6 +19,7 @@ import { hookRuntime } from "@/test-support/hook-runtime";
 import type { Paper } from "@/types";
 import type { ParagraphGuide } from "@/lib/papers/paragraph-guide";
 import { buildReadingKey } from "./use-reading";
+import type { GuidePartition } from "@/lib/papers/reading-partition";
 import { PARAGRAPH_GUIDE_STORAGE_KEY, keptParagraphGuide, rememberParagraphGuide, useParagraphGuide } from "./use-paragraph-guide";
 
 function memoryStorage(): Storage {
@@ -77,10 +78,16 @@ function stubFetch() {
 type Args = Parameters<typeof useParagraphGuide>[0];
 const defaults = (paper: Paper): Args => ({ paper, hasBody: true, enabled: true });
 
-async function open(paper: Paper, over: Partial<Args> = {}) {
+/** What the hook returns once mounted and unmounted: `{ gists, partition }` (P10-07a). */
+async function openView(paper: Paper, over: Partial<Args> = {}) {
   const opened = await hookRuntime.mount(() => useParagraphGuide({ ...defaults(paper), ...over }));
   opened.unmount();
   return opened.value;
+}
+
+/** The gists alone — the part of the return the P3-03 tests below are about. */
+async function open(paper: Paper, over: Partial<Args> = {}) {
+  return (await openView(paper, over)).gists;
 }
 
 describe("useParagraphGuide with effects running — Peer's gists, asked for once (P3-03)", () => {
@@ -134,7 +141,8 @@ describe("useParagraphGuide with effects running — Peer's gists, asked for onc
     const none = await hookRuntime.mount(() => useParagraphGuide({ paper: undefined, hasBody: true, enabled: true }));
     none.unmount();
 
-    expect(none.value).toBeUndefined();
+    // Re-aimed (P10-07a): the hook returns `{ gists, partition }`, both undefined with no paper.
+    expect(none.value).toEqual({ gists: undefined, partition: undefined });
     expect(sent).toHaveLength(0);
     // …and asked the moment all three are there.
     await open(base);
@@ -237,7 +245,8 @@ describe("useParagraphGuide with effects running — Peer's gists, asked for onc
     });
 
     expect(sent).toHaveLength(1);
-    expect(opened.value).toBeUndefined();
+    // Re-aimed (P10-07a): nothing yet is `{ gists: undefined, partition: undefined }`.
+    expect(opened.value).toEqual({ gists: undefined, partition: undefined });
     release(json({ guide, cached: false }));
     opened.unmount();
     expect(sent).toHaveLength(1);
@@ -304,5 +313,175 @@ describe("useParagraphGuide with effects running — Peer's gists, asked for onc
     expect(keptParagraphGuide(key)).toEqual({ guide });
     rememberParagraphGuide(key, { skipped: "too_many_paragraphs" });
     expect(keptParagraphGuide(key)).toEqual({ skipped: "too_many_paragraphs" });
+  });
+});
+
+// P10-07a (B P10-05 §2.6; review 3.3, second half): a guide may carry Peer's partition of a paper
+// with no headings. The store key is v2; what is read back, from the store or from the server's
+// answer, goes through the server's own sanitizer; a guide with a partition and no gist is a guide;
+// the hook returns `{ gists, partition }`.
+describe("useParagraphGuide with a partition — kept, re-read through the sanitizer, returned (P10-07a)", () => {
+  const PARTITION: GuidePartition = {
+    sectionId: "s0",
+    parts: [
+      { role: "introduction", fromParagraph: 0, toParagraph: 9 },
+      { role: "results", fromParagraph: 10, toParagraph: 19 },
+      { role: "discussion", fromParagraph: 20, toParagraph: 29 },
+    ],
+  };
+  const withPartition: ParagraphGuide = { docHash: "abc123", gists: GISTS, partition: PARTITION };
+  const partitionOnly: ParagraphGuide = { docHash: "abc123", gists: {}, partition: PARTITION };
+  const key = buildReadingKey(base.id, undefined, undefined);
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-14T12:00:00.000Z"));
+    vi.stubGlobal("localStorage", memoryStorage());
+    vi.stubGlobal("window", globalThis);
+    sent.length = 0;
+    answer = async () => json({ guide: withPartition, cached: false });
+    stubFetch();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps its guides under peer-paragraph-guide-v2: the v1 key is gone, and a v1 entry is neither read nor trusted", async () => {
+    expect(PARAGRAPH_GUIDE_STORAGE_KEY).toBe("peer-paragraph-guide-v2");
+    localStorage.setItem("peer-paragraph-guide-v1", JSON.stringify({ [key]: { at: Date.now(), guide: { docHash: "old", gists: GISTS } } }));
+    const view = await openView(base);
+
+    expect(sent).toHaveLength(1);
+    expect(view.partition).toEqual(PARTITION);
+    expect(Object.keys(JSON.parse(localStorage.getItem(PARAGRAPH_GUIDE_STORAGE_KEY) ?? "{}") as object)).toEqual([key]);
+  });
+
+  it("returns { gists, partition } from a guide with both, and asks nothing the second time", async () => {
+    expect(await openView(base)).toEqual({ gists: GISTS, partition: PARTITION });
+    expect(await openView(base)).toEqual({ gists: GISTS, partition: PARTITION });
+
+    expect(sent).toHaveLength(1);
+  });
+
+  it("returns a guide without a partition as it was: the gists, and no partition", async () => {
+    answer = async () => json({ guide, cached: false });
+
+    expect(await openView(base)).toEqual({ gists: GISTS, partition: undefined });
+  });
+
+  it("keeps a guide that has a partition and no gist: the gists are undefined, the partition is not, and it is not asked for again", async () => {
+    answer = async () => json({ guide: partitionOnly, cached: false });
+    const first = await openView(base);
+    const second = await openView(base);
+
+    expect(first).toEqual({ gists: undefined, partition: PARTITION });
+    expect(second).toEqual({ gists: undefined, partition: PARTITION });
+    expect(sent).toHaveLength(1);
+    expect(keptParagraphGuide(key)).toEqual({ guide: partitionOnly });
+  });
+
+  it("still takes no guide from an answer with neither a gist nor a partition: asked again next time", async () => {
+    answer = async () => json({ guide: { docHash: "x", gists: { s1: { 0: 5 } }, partition: { sectionId: "s0", parts: [{ role: "banana", fromParagraph: 0, toParagraph: 9 }] } }, cached: false });
+    expect(await openView(base)).toEqual({ gists: undefined, partition: undefined });
+    await openView(base);
+
+    expect(sent).toHaveLength(2);
+    expect(localStorage.getItem(PARAGRAPH_GUIDE_STORAGE_KEY)).toBeNull();
+  });
+
+  it("re-sanitizes a stored partition on read: overlapping, out-of-order and unknown parts are repaired, not drawn", () => {
+    const corrupt = {
+      sectionId: "s0",
+      parts: [
+        { role: "Results", fromParagraph: 12, toParagraph: 3 },
+        { role: "introduction", fromParagraph: 0, toParagraph: 99 },
+        { role: "banana", fromParagraph: 5, toParagraph: 6 },
+        { role: "discussion", fromParagraph: 15, toParagraph: 19 },
+      ],
+    };
+    localStorage.setItem(PARAGRAPH_GUIDE_STORAGE_KEY, JSON.stringify({ [key]: { at: Date.now(), guide: { docHash: "abc123", gists: GISTS, partition: corrupt } } }));
+
+    expect(keptParagraphGuide(key)).toEqual({
+      guide: {
+        docHash: "abc123",
+        gists: GISTS,
+        partition: {
+          sectionId: "s0",
+          parts: [
+            { role: "results", fromParagraph: 0, toParagraph: 14 },
+            { role: "discussion", fromParagraph: 15, toParagraph: 19 },
+          ],
+        },
+      },
+    });
+  });
+
+  it("reads a corrupt stored partition beside good gists as null-partition-with-gists", async () => {
+    for (const garbage of [5, "x", [], { sectionId: "s0" }, { sectionId: "s0", parts: "no" }, { sectionId: "s0", parts: [{ role: "results", fromParagraph: 0 }] }, { sectionId: "__proto__", parts: PARTITION.parts }]) {
+      localStorage.setItem(PARAGRAPH_GUIDE_STORAGE_KEY, JSON.stringify({ [key]: { at: Date.now(), guide: { docHash: "abc123", gists: GISTS, partition: garbage } } }));
+      const view = await openView(base);
+
+      expect(view).toEqual({ gists: GISTS, partition: undefined });
+    }
+    expect(sent).toHaveLength(0);
+  });
+
+  it("rejects a stored entry whose partition is corrupt and whose gists are none: asked again", async () => {
+    localStorage.setItem(PARAGRAPH_GUIDE_STORAGE_KEY, JSON.stringify({ [key]: { at: Date.now(), guide: { docHash: "abc123", gists: {}, partition: { sectionId: "s0", parts: [] } } } }));
+    await openView(base);
+
+    expect(sent).toHaveLength(1);
+  });
+
+  it("re-sanitizes the server's own answer too: a partition that arrives broken never reaches the page whole", async () => {
+    answer = async () =>
+      json({
+        guide: {
+          docHash: "x",
+          gists: GISTS,
+          partition: { sectionId: "s0", parts: [{ role: "introduction", fromParagraph: 0, toParagraph: 4 }, { role: "introduction", fromParagraph: 5, toParagraph: 9 }, { role: "results", fromParagraph: 10, toParagraph: 29 }] },
+        },
+        cached: false,
+      });
+    const view = await openView(base);
+
+    // Neighbours of one role are merged on the way in.
+    expect(view.partition).toEqual({
+      sectionId: "s0",
+      parts: [
+        { role: "introduction", fromParagraph: 0, toParagraph: 9 },
+        { role: "results", fromParagraph: 10, toParagraph: 29 },
+      ],
+    });
+  });
+
+  it("returns the same object for the same guide on every render: the page may depend on it", async () => {
+    const seen: unknown[] = [];
+    const opened = await hookRuntime.mount(() => {
+      const [again, rerender] = useState(0);
+      const view = useParagraphGuide(defaults(base));
+      // A render after the guide has arrived, and one more after that.
+      useEffect(() => {
+        if (view.partition && again < 2) rerender(again + 1);
+      }, [view.partition, again]);
+      seen.push(view);
+      return view;
+    });
+    opened.unmount();
+
+    const withGuide = seen.filter((view) => (view as { partition?: unknown }).partition !== undefined);
+    expect(withGuide.length).toBeGreaterThan(1);
+    expect(new Set(withGuide).size).toBe(1);
+  });
+
+  it("is not asked for without a model: both undefined, one shared object", async () => {
+    const a = await openView(base, { enabled: false });
+    const b = await openView(base, { hasBody: false });
+
+    expect(a).toEqual({ gists: undefined, partition: undefined });
+    expect(b).toBe(a);
+    expect(sent).toHaveLength(0);
   });
 });

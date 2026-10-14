@@ -755,12 +755,15 @@ function Reader({
   // `deepReportRequested`, the report hook's own predicate (the Deep report switch, or an
   // attached PDF, and a model), fed what the report hook is fed — the paper's text leaves
   // for a model on one switch. The reader's own key travels as the explain box sends it.
-  const paragraphGists = useParagraphGuide({
+  const { gists: paragraphGists, partition: paragraphPartition } = useParagraphGuide({
     paper: ready ? paper : undefined,
     hasBody,
     enabled: providerConfigured && deepReportRequested(profile, ready ? paper : undefined, aiMode),
     llmOverride: explainLlmOverride(profile),
   });
+  // P10-07a: the guide also carries Peer's division of an unheaded paper into parts. Nothing on
+  // the page draws it yet (C P10-07b lays it over the map); it is read here and passed nowhere.
+  void paragraphPartition;
   const projectText = useMemo(
     () => [profile.currentProject, profile.currentChallenges].filter(Boolean).join("\n"),
     [profile.currentProject, profile.currentChallenges],
