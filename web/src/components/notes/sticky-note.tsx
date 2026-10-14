@@ -27,7 +27,7 @@ import { holdInPlace, readingAnchorTop, stackRows, useColumn, useWindows, type F
 import { readingNoteFor, stripTagText, useLostPassages, useNotesStore, withoutSticky } from "@/store/notes";
 
 export { withoutSticky };
-import { AnchorSquare, goToPassage, registerPassageHost } from "./note-tags";
+import { AnchorSquare, PASSAGE_LOST_LINE, goToPassage, registerPassageHost } from "./note-tags";
 import { WysiwygField } from "./wysiwyg-field";
 
 /** A sticky writes through into the paper's note no later than this long after the last keystroke. P10-09c: 150 ms, not 250 —
@@ -121,7 +121,7 @@ export function StickyWindowView({
           />
         </div>
       )}
-      {front && lost && <p className="shrink-0 px-3 pb-2 font-reading text-body-sm italic text-text-faint">This passage is not in this version of the paper.</p>}
+      {front && lost && <p className="shrink-0 px-3 pb-2 font-reading text-body-sm italic text-text-faint">{PASSAGE_LOST_LINE}</p>}
     </div>
   );
 }

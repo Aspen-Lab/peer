@@ -18,10 +18,12 @@
 
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
+import { useSyncExternalStore } from "react";
 import { stickyTitle } from "@/lib/notes/blocks";
 import type { NoteAnchor } from "@/lib/notes/types";
 import { useWindows } from "@/lib/reader/windows";
 import { MATH_CLOSE, MATH_OPEN } from "@/lib/text/math";
+import { readingNoteFor, resolveAnchors, useLostPassages, useNotesStore } from "@/store/notes";
 
 /** How long the passage stays marked after the square scrolls to it. */
 export const FLASH_MS = 1500;
@@ -206,8 +208,121 @@ export function goToPassage(
   if (!run()) env.navigate(`/papers/${anchor.paperId}#${anchor.paragraphId}`);
 }
 
-/** The blue square wired to `goToPassage` — for the note editor's heading, which has no page of its own to ask. */
+// ── A note whose passage is gone (P10-36) ─────────────────────────────────
+
+/** P10-35's quiet line, said beside a lost note's heading and in its sticky window. */
+export const PASSAGE_LOST_LINE = "This passage is not in this version of the paper.";
+
+type Body = readonly { readonly paragraphs: readonly string[] }[];
+
+/** The key of the reading the reading page keeps in this browser (`use-reading.ts`); an entry's key starts with the paper's id. */
+const READING_CACHE_KEY = "peer-reading-v2";
+
+let parsedFrom: string | null = null;
+let parsed: Record<string, { ts?: unknown; reading?: { body?: unknown } } | undefined> = {};
+/** The cache is parsed once per change of its text, not once per heading per render. */
+function cachedReadings(raw: string | null) {
+  if (raw !== parsedFrom) {
+    parsedFrom = raw;
+    try {
+      const value: unknown = raw ? JSON.parse(raw) : {};
+      parsed = value && typeof value === "object" ? (value as typeof parsed) : {};
+    } catch {
+      parsed = {};
+    }
+  }
+  return parsed;
+}
+
+/**
+ * The body of the newest reading kept in this browser for a paper (null when there is none, it is unreadable, or its body is
+ * not sections of paragraph strings). The notes page has no paper on show, so it asks what the reader last had.
+ */
+export function storedBodyOf(paperId: string, storage?: Pick<Storage, "getItem">): Body | null {
+  try {
+    const store = storage ?? (typeof window === "undefined" ? undefined : window.localStorage);
+    if (!store) return null;
+    let best: { ts: number; body: Body } | null = null;
+    for (const [key, entry] of Object.entries(cachedReadings(store.getItem(READING_CACHE_KEY)))) {
+      if (!key.startsWith(`${paperId}|`)) continue;
+      const body = entry?.reading?.body;
+      const sound = Array.isArray(body) && body.every((one) => Array.isArray(one?.paragraphs) && one.paragraphs.every((p: unknown) => typeof p === "string"));
+      if (!sound) continue;
+      const ts = typeof entry?.ts === "number" ? entry.ts : 0;
+      if (!best || ts > best.ts) best = { ts, body: body as Body };
+    }
+    return best?.body ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether a sticky's passage is found nowhere in the paper: the reading page told the store so (`lost`, by the sticky's
+ * heading id), or the body the reader last had does not hold its words (`body`, for the notes page, which has no paper on
+ * show). The same search the paper's body makes (`resolveAnchors`). A note with no range has nothing to check.
+ */
+export function passageIsLost(anchor: NoteAnchor, id: string, lost: Readonly<Record<string, true>>, body: Body | null): boolean {
+  if (lost[id] === true) return true;
+  if (!body || anchor.start === undefined || anchor.end === undefined) return false;
+  const { start, end, quote, n, paragraphId } = anchor;
+  return resolveAnchors(body, { [paragraphId]: [{ id, n, start, end, quote }] }).lost.length > 0;
+}
+
+/**
+ * What stands at a note heading's left: the blue square that goes to the passage — or, when the passage is lost, a quiet
+ * square that goes nowhere and the line saying so, beside the heading (at the row's right edge, over no text of its own).
+ * `onOpen`, where there is a sticky to open (the reading page), opens the note in place.
+ */
+export function AnchorMarker({ lost, n, onGo, onOpen }: { lost: boolean; n: number; onGo: () => void; onOpen?: () => void }) {
+  if (!lost) return <AnchorSquare onClick={onGo} />;
+  const square = { width: SQUARE_PX, height: SQUARE_PX };
+  return (
+    <>
+      {onOpen ? (
+        <button
+          type="button"
+          aria-label={`Open note ${n}`}
+          title={PASSAGE_LOST_LINE}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={onOpen}
+          style={square}
+          className="inline-block shrink-0 border-0 bg-text-faint p-0 align-middle opacity-60"
+        />
+      ) : (
+        <span aria-hidden style={square} className="inline-block shrink-0 bg-text-faint align-middle opacity-60" />
+      )}
+      <span className="pointer-events-none absolute right-0 top-1/2 max-w-[60%] -translate-y-1/2 text-right font-reading text-meta italic leading-tight text-text-faint">
+        {PASSAGE_LOST_LINE}
+      </span>
+    </>
+  );
+}
+
+const subscribeToStorage = (onChange: () => void) => {
+  window.addEventListener("storage", onChange);
+  return () => window.removeEventListener("storage", onChange);
+};
+
+/** The blue square wired to `goToPassage` — for the note editor's heading, which has no page of its own to ask. A note whose passage is lost has no square to go to it (P10-36). */
 export function AnchorLink({ anchor }: { anchor: NoteAnchor }) {
   const router = useRouter();
-  return <AnchorSquare onClick={() => goToPassage(anchor, { doc: document, navigate: (href) => router.push(href as Route) })} />;
+  // The sticky's heading id: the note editor passes the anchor alone, and the store tells the ids apart by it.
+  const id = useNotesStore((s) =>
+    readingNoteFor(s.notes, anchor.paperId)?.blocks.find((b) => b.type === "h3" && b.anchor?.paperId === anchor.paperId && b.anchor.n === anchor.n)?.id,
+  );
+  const told = useLostPassages((s) => (id !== undefined && s.lost[id] === true));
+  const lost = useSyncExternalStore(
+    subscribeToStorage,
+    () => told || (id !== undefined && passageIsLost(anchor, id, {}, storedBodyOf(anchor.paperId))),
+    () => false,
+  );
+  return (
+    <AnchorMarker
+      lost={lost}
+      n={anchor.n}
+      onGo={() => goToPassage(anchor, { doc: document, navigate: (href) => router.push(href as Route) })}
+      onOpen={id !== undefined && host?.paperId === anchor.paperId ? () => useWindows.getState().open({ id, kind: "sticky", title: stickyTitle(anchor.n) }) : undefined}
+    />
+  );
 }
