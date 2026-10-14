@@ -300,12 +300,13 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; }
      confined to these three tokens: a background only, never a text colour,
      never used for anything else. P10-06 (review 3.2): three greens ordered by
      how much a section says about the question — strong the deepest, faint the
-     lightest (relative luminance .78 / .86 / .93) — and a fourth, a cooler
+     lightest (relative luminance .78 / .86 / .89) — and a fourth, a cooler
      green, for the model's background marks. The palette's muted text is
-     ≥ 4.5:1 on each (4.55 / 4.99 / 5.34 / 4.80), the heading text ≥ 9:1. */
+     ≥ 4.5:1 on each (4.55 / 4.99 / 5.17 / 4.80), the heading text ≥ 9:1. P10-26: the
+     faint green a step darker (#eff9f3 → #e9f6ef) so that it can be seen — 1.03:1 → 1.065:1 against the page. */
   --color-route-strong: #cbedd8;
   --color-route-medium: #dff4e8;
-  --color-route-faint: #eff9f3;
+  --color-route-faint: #e9f6ef;
   --color-route-background: #dbefea;
   /* P10-09f (review 7.1c): the highlighter — the words a sticky note was taken on stay marked in the paper. A pale
      yellow, none of the route's greens, a background only; the paragraph's own ink stays on it (muted #666 4.88:1,
