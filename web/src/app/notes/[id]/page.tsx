@@ -7,6 +7,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { NoteEditor } from "@/components/notes/note-editor";
+import { TitleOnce } from "@/components/notes/title-once";
 import { PageContainer } from "@/components/ui/page-container";
 import { EmptyState } from "@/components/ui/empty-state";
 import { COMMAND } from "@/components/ui/command";
@@ -23,8 +24,11 @@ export default function NotePage() {
     <PageContainer width="board" rhythm="reader" className="pb-24">
       {!ready ? null : note ? (
         // Keyed by the note: moving to another note starts a fresh editor
-        // rather than carrying one note's state into the next.
-        <NoteEditor key={note.id} note={note} />
+        // rather than carrying one note's state into the next. P10-21 (X-B3):
+        // the title block that repeats the title field is not drawn here.
+        <TitleOnce key={note.id} note={note}>
+          <NoteEditor key={note.id} note={note} />
+        </TitleOnce>
       ) : (
         <EmptyState
           label="Notes"
