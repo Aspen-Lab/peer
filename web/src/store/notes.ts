@@ -15,6 +15,20 @@ import { persist } from "zustand/middleware";
 import type { Citable, Note } from "@/lib/notes/types";
 import { citedKeys, stickyBlocks, stickyQuote, withStickyText } from "@/lib/notes/blocks";
 import { readingNote, type ReadingNoteExtras } from "@/lib/notes/templates";
+import { MATH_CLOSE, MATH_OPEN } from "@/lib/text/math";
+
+/**
+ * P10-09f (review 7.1c; rule 1): where a selection's words stand in the paragraph's text — the first occurrence of the
+ * passage (white space in the passage matches any white space in the paragraph; the selection arrives collapsed).
+ * A formula's TeX is not prose: no match starts or ends inside one. Null when the passage is not found whole.
+ */
+export function locatePassage(paragraph: string, passage: string): { start: number; end: number } | null {
+  const words = passage.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return null;
+  const masked = paragraph.replace(new RegExp(`${MATH_OPEN}[^${MATH_CLOSE}]*${MATH_CLOSE}`, "g"), (math) => "\u0000".repeat(math.length));
+  const found = new RegExp(words.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s+")).exec(masked);
+  return found ? { start: found.index, end: found.index + found[0].length } : null;
+}
 
 interface NotesState {
   notes: Record<string, Note>;
@@ -27,7 +41,16 @@ interface NotesState {
   ensureReadingNote: (paper: Citable, extras?: ReadingNoteExtras) => string;
   /** P10-09a (ruling §1h.78 (f)): append sticky `stickyCount + 1` to the note: an `h3` "Note N" carrying the
    *  anchor, and an empty text block. Null for a note that is not there. */
-  addSticky: (noteId: string, at: { paperId: string; paragraphId: string; passage: string }) => { id: string; n: number } | null;
+  addSticky: (
+    noteId: string,
+    at: {
+      paperId: string;
+      paragraphId: string;
+      passage: string;
+      /** P10-09f: the paragraph's text as the body renders it; the anchor then records where the passage stands in it. */
+      paragraphText?: string;
+    },
+  ) => { id: string; n: number } | null;
   /** P10-09a: write a sticky's text through into its own blocks (one per paragraph); nothing else changes. */
   setStickyText: (noteId: string, headerId: string, text: string) => void;
 }
@@ -62,7 +85,8 @@ export const useNotesStore = create<NotesState>()(
         if (!note) return null;
         const used = note.blocks.reduce((most, b) => Math.max(most, b.anchor?.n ?? 0), 0);
         const n = Math.max(note.stickyCount ?? 0, used) + 1;
-        const { header, blocks } = stickyBlocks({ paperId: at.paperId, paragraphId: at.paragraphId, quote: stickyQuote(at.passage), n });
+        const place = at.paragraphText === undefined ? null : locatePassage(at.paragraphText, at.passage);
+        const { header, blocks } = stickyBlocks({ paperId: at.paperId, paragraphId: at.paragraphId, quote: stickyQuote(at.passage), n, ...(place ?? {}) });
         set((s) => {
           const current = s.notes[noteId];
           if (!current) return s;

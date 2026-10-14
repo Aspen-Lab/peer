@@ -35,6 +35,11 @@ export interface NoteAnchor {
   quote: string;
   /** The sticky's number in the paper's note; it never changes. */
   n: number;
+  /** P10-09f (review 7.1c): where the words stand in the paragraph — character offsets, `start` inclusive and `end`
+   *  exclusive, in the paragraph's text as the body renders it. Both absent when the passage was not found whole in
+   *  the paragraph at creation: no mark is drawn then and the tag stands at the paragraph's end. */
+  start?: number;
+  end?: number;
 }
 
 export interface Block {

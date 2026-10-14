@@ -181,7 +181,8 @@ export function closeSticky(noteId: string, headerId: string, scroll?: (dy: numb
  * sticky in it, anchored to the selection's paragraph, and its window opened.
  */
 export function takeStickyNote(
-  target: Pick<ExplainSelection, "sectionIndex" | "paragraphIndex" | "passage"> & Partial<Pick<ExplainSelection, "measure">>,
+  // P10-09f: `paragraphText` is the paragraph as the body renders it; with it the anchor records where the words stand.
+  target: Pick<ExplainSelection, "sectionIndex" | "paragraphIndex" | "passage"> & Partial<Pick<ExplainSelection, "measure">> & { paragraphText?: string },
   paper: Citable,
   extras?: ReadingNoteExtras,
   scroll?: (dy: number) => void,
@@ -192,6 +193,7 @@ export function takeStickyNote(
     paperId: paper.id,
     paragraphId: paragraphAnchor(target.sectionIndex, target.paragraphIndex),
     passage: target.passage,
+    paragraphText: target.paragraphText,
   });
   if (!made) return null;
   // P10-09d (X-B1): the first window of the stack reserves the column and the text reflows; the selected words (else the first
@@ -209,16 +211,20 @@ export function useTakeNote({
   paper,
   questions,
   forYourQuestions,
+  body,
 }: {
   paper: Paper;
   questions?: readonly string[];
   forYourQuestions?: readonly QuestionAnswers[];
+  /** P10-09f: the paper's body as the page renders it; the paragraph the selection is in gives the anchor its range. */
+  body?: readonly { paragraphs: readonly string[] }[];
 }): (target: ExplainSelection) => void {
   return useCallback(
     (target: ExplainSelection) => {
-      takeStickyNote(target, citableFromPaper(paper), { questions, forYourQuestions });
+      const paragraphText = body?.[target.sectionIndex]?.paragraphs[target.paragraphIndex];
+      takeStickyNote({ ...target, paragraphText }, citableFromPaper(paper), { questions, forYourQuestions });
     },
-    [paper, questions, forYourQuestions],
+    [paper, questions, forYourQuestions, body],
   );
 }
 

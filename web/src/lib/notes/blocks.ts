@@ -295,14 +295,17 @@ export function stickyBlocks(anchor: NoteAnchor): { header: Block; blocks: Block
   return { header, blocks: [header, block("text")] };
 }
 
-/** The paper's passages that carry stickies: per paragraph, each sticky by header id and number, in order. */
-export type NoteAnchorMap = Record<string, { id: string; n: number }[]>;
+/** The paper's passages that carry stickies: per paragraph, each sticky by header id and number, in order. P10-09f:
+ *  with the words' range and the quote it was taken from (`start`, `end`, `quote`), when the anchor has them — the
+ *  body marks the words and checks the quote against the text before it draws the mark. */
+export type NoteAnchorMap = Record<string, { id: string; n: number; start?: number; end?: number; quote?: string }[]>;
 
 export function anchorMap(note: Pick<Note, "blocks"> | undefined, paperId: string): NoteAnchorMap {
   const map: NoteAnchorMap = {};
   for (const b of note?.blocks ?? []) {
     if (b.type !== "h3" || !b.anchor || b.anchor.paperId !== paperId) continue;
-    (map[b.anchor.paragraphId] ??= []).push({ id: b.id, n: b.anchor.n });
+    const { n, start, end, quote } = b.anchor;
+    (map[b.anchor.paragraphId] ??= []).push({ id: b.id, n, ...(start !== undefined && end !== undefined ? { start, end, quote } : {}) });
   }
   return map;
 }

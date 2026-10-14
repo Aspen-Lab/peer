@@ -884,7 +884,7 @@ function Reader({
   const openExplain = useCallback(() => explainOpen.current?.(), []);
   // P10-09a (review 7.1, 8.4): "Take notes" on the selection — a numbered sticky note at the right, saved into the
   // paper's own note. The pill that offers it and "Explain this" is `SelectionToolbar` (mounted by the box below).
-  const takeNote = useTakeNote({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions });
+  const takeNote = useTakeNote({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions, body: reading?.body });
   // The tags the passages carry: the sticky notes in the paper's own note, by paragraph.
   const readingNote = useNotesStore((state) => readingNoteFor(state.notes, paper.id));
   const noteAnchors = useMemo(() => anchorMap(readingNote, paper.id), [readingNote, paper.id]);
