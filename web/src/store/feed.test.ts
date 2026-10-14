@@ -1847,6 +1847,129 @@ describe("feed lane loading", () => {
     });
   });
 
+  // P10-49 (BACKLOG-94, its first part) — a paper already read is not posted as read again. The
+  // page's decided-read observer re-attaches when the reading arrives, and `decide` runs from
+  // every key and button, so `markRead` is called for the same paper more than once per load; each
+  // call used to post. The one case a repeated call must still post is the retry of a read whose
+  // first post failed (its `read:<id>` key is pending): that is kept, the same key the outbox
+  // retry (`retryPendingPushes`) reads, and the push-failed tests above prove it clears.
+  describe("one read post per paper (P10-49)", () => {
+    const readPaper: Paper = {
+      id: "paper-once",
+      title: "Read once",
+      authors: ["Researcher"],
+      relevanceReason: "Matches materials.",
+      venue: "Example Journal",
+      source: "other",
+      summaryIntro: "Intro.",
+      summaryExperimentKeywords: [],
+      summaryResultDiscussion: "Result.",
+      isSaved: false,
+    };
+
+    function readCalls(method?: string) {
+      return fetchMock.mock.calls.filter(
+        (c) =>
+          requestPath(c[0] as string).split("?")[0] === "/api/read" &&
+          (method === undefined || (c[1] as RequestInit | undefined)?.method === method),
+      );
+    }
+    async function settle() {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    function signInOnce() {
+      useSyncGate.setState({
+        settled: true,
+        authUserId: "user-once",
+        authOutcome: "signed-in",
+      });
+    }
+
+    beforeEach(() => {
+      useFeedSyncStatus.setState({ pendingKeys: {}, pushFailed: false });
+      useFeedStore.setState({ readItems: {}, readAt: {}, library: {} });
+      fetchMock.mockImplementation(async () => jsonResponse({ ok: true }));
+    });
+
+    it("the first markRead posts once; a second for the same paper posts nothing and changes nothing", async () => {
+      signInOnce();
+      useFeedStore.getState().markRead(readPaper.id, readPaper);
+      await settle();
+      expect(readCalls("POST")).toHaveLength(1);
+      const before = useFeedStore.getState();
+
+      useFeedStore.getState().markRead(readPaper.id, readPaper);
+      useFeedStore.getState().markRead(readPaper.id);
+      await settle();
+
+      expect(readCalls("POST")).toHaveLength(1);
+      const after = useFeedStore.getState();
+      expect(after.readItems).toBe(before.readItems);
+      expect(after.readAt).toBe(before.readAt);
+      expect(after.library).toBe(before.library);
+    });
+
+    it("a signed-out reader's repeated markRead posts nothing either (the first still goes up as it did)", async () => {
+      useFeedStore.getState().markRead(readPaper.id, readPaper);
+      await settle();
+      expect(readCalls("POST")).toHaveLength(1);
+      useFeedStore.getState().markRead(readPaper.id, readPaper);
+      await settle();
+      expect(readCalls("POST")).toHaveLength(1);
+    });
+
+    it("a read whose post failed is still retried by the next markRead, and only until it lands", async () => {
+      signInOnce();
+      fetchMock.mockImplementation(async () => jsonResponse({ error: "boom" }, 500));
+      useFeedStore.getState().markRead(readPaper.id, readPaper);
+      await vi.waitFor(() => {
+        expect(useFeedSyncStatus.getState().pendingKeys[`read:${readPaper.id}`]).toBe(true);
+      });
+      expect(readCalls("POST")).toHaveLength(1);
+
+      // The network is back: the same call that used to re-post for every decision re-posts now,
+      // because the first post never landed.
+      fetchMock.mockImplementation(async () => jsonResponse({ ok: true }));
+      useFeedStore.getState().markRead(readPaper.id, readPaper);
+      await vi.waitFor(() => {
+        expect(
+          useFeedSyncStatus.getState().pendingKeys[`read:${readPaper.id}`],
+        ).toBeUndefined();
+      });
+      expect(readCalls("POST")).toHaveLength(2);
+
+      // Landed: a further decision posts nothing.
+      useFeedStore.getState().markRead(readPaper.id, readPaper);
+      await settle();
+      expect(readCalls("POST")).toHaveLength(2);
+    });
+
+    it("undo of a read (markUnread, then markRead) posts the read again", async () => {
+      signInOnce();
+      useFeedStore.getState().markRead(readPaper.id, readPaper);
+      await settle();
+      useFeedStore.getState().markUnread(readPaper.id);
+      await settle();
+      expect(readCalls("DELETE")).toHaveLength(1);
+      expect(useFeedStore.getState().readItems[readPaper.id]).toBeUndefined();
+
+      useFeedStore.getState().markRead(readPaper.id, readPaper);
+      await settle();
+      expect(readCalls("POST")).toHaveLength(2);
+      expect(useFeedStore.getState().readItems[readPaper.id]).toBe(true);
+      expect(useFeedStore.getState().library[readPaper.id]).toBeDefined();
+    });
+
+    it("the first read's day stays the day of the first read", async () => {
+      useFeedStore.setState({ readAt: { [readPaper.id]: "2026-01-02" }, readItems: { [readPaper.id]: true } });
+      useFeedStore.getState().markRead(readPaper.id, readPaper);
+      await settle();
+      expect(useFeedStore.getState().readAt[readPaper.id]).toBe("2026-01-02");
+      expect(readCalls()).toHaveLength(0);
+    });
+  });
+
   // SIGNIN-MERGE (ABC-JEV-INTEGRATION.md §1af/§1aj, ruling P2/P3) — "saved
   // papers / reading history / feedback: always union, never replace —
   // mandatory" + "a failed or empty pull may never shrink local data."
