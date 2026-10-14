@@ -399,7 +399,7 @@ describe("a sticky reserves the column and holds the selection in place (P10-09d
   /** A page whose words sit 220 px lower once the column is reserved (a narrower text column wraps to more lines). */
   function page(width: number) {
     const props = new Map<string, string>();
-    const style = { setProperty: (k: string, v: string) => void props.set(k, v), removeProperty: (k: string) => void props.delete(k) };
+    const style = { setProperty: (k: string, v: string) => void props.set(k, v), removeProperty: (k: string) => (props.delete(k), "") };
     unbind = bindWindowsReserve({ root: { style }, width: () => width, onResize: () => () => {} });
     return { props, top: () => (props.has(DOCK_VAR) ? 520 : 300) };
   }

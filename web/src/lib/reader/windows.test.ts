@@ -211,7 +211,7 @@ function fakeEnv(width = 1440) {
   const props = new Map<string, string>();
   const style = {
     setProperty: (name: string, value: string) => void props.set(name, value),
-    removeProperty: (name: string) => void props.delete(name),
+    removeProperty: (name: string) => (props.delete(name), ""),
   };
   const listeners = new Set<() => void>();
   const env = {

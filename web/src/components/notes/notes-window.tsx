@@ -10,6 +10,10 @@
 // notes, 40 px apart, the raised one in front and whole, the column under the explain window. Behind another window it
 // shows its header alone (the editor stays mounted, hidden, so nothing it holds is lost); a press on the header raises it.
 //
+// P10-09d (X-B1): like the explain window it keeps the text column clear — joining the stack takes the shared reserve
+// (`reserveDock`, counted), so the paper's words move out of the column and are never covered; its header and the editor's
+// toolbar carry the window's own surface, so nothing of the text scrolling under them shows through.
+//
 // Its body is the paper's one reading note (`readingNoteFor`, the note the Saved page opens at `/notes/<id>`),
 // in the block editor with the formatting toolbar: the sticky notes' "Note N" headings and their text in order,
 // and whatever is typed here. There is no character limit anywhere in the path — blocks are strings in the store.
@@ -17,7 +21,7 @@
 // Not done: dragging the window by its header (the column is where it stands), and a phone (the row there still
 // navigates to the page).
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { DOCK_TOP_PX } from "@/components/reader/explain-dock";
 import type { Paper } from "@/types";
@@ -25,7 +29,7 @@ import type { Block, Note, Source } from "@/lib/notes/types";
 import { fileName, toMarkdown, toPlainText, toPrintHtml, toWordHtml } from "@/lib/notes/export";
 import { downloadFile, printHtml } from "@/lib/notes/print";
 import { cn } from "@/lib/cn";
-import { NOTES_WINDOW_ID, stackRows, useColumn, useWindows } from "@/lib/reader/windows";
+import { NOTES_WINDOW_ID, holdInPlace, stackRows, useColumn, useWindows } from "@/lib/reader/windows";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
 import { NoteEditor } from "./note-editor";
 
@@ -94,7 +98,7 @@ export function NotesWindowView({
       )}
       style={front ? { top, maxHeight, zIndex: z } : { top, height, maxHeight, zIndex: z }}
     >
-      <header className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border pl-4 pr-2">
+      <header className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border bg-surface pl-4 pr-2">
         <h2 className="eyebrow min-w-0 flex-1 text-heading">
           <button
             type="button"
@@ -151,10 +155,10 @@ export function NotesWindowView({
           </button>
         </div>
       </header>
-      <div hidden={!front} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-4 pt-1">
+      <div hidden={!front} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-surface px-3 pb-4 [&_[role=toolbar]]:bg-surface">
         {children}
       </div>
-      <p hidden={!front} className="annotation shrink-0 border-t border-border px-4 py-2 text-text-faint">
+      <p hidden={!front} className="annotation shrink-0 border-t border-border bg-surface px-4 py-2 text-text-faint">
         Kept in this browser
       </p>
     </section>
@@ -227,10 +231,12 @@ export function NotesWindow({ paper, onClose }: { paper: Paper; onClose: () => v
   // The blocks the editor was started from, or last saw stored: what "unsaved" is measured against.
   const base = useRef<Block[] | null>(null);
 
-  // The window is one of the stack's: it joins when it stands and leaves when it closes.
-  useEffect(() => {
-    useWindows.getState().open({ id: NOTES_WINDOW_ID, kind: "notes", title: "Your notes" });
-    return () => useWindows.getState().close(NOTES_WINDOW_ID);
+  // The window is one of the stack's: it joins when it stands and leaves when it closes. P10-09d (X-B1): joining reserves the
+  // column and the text reflows, so it joins before the first paint (no frame with the window over the words), and the reader's
+  // place — the selected words, else the first paragraph on the screen — is held across the reflow, going and coming.
+  useLayoutEffect(() => {
+    holdInPlace({ change: () => useWindows.getState().open({ id: NOTES_WINDOW_ID, kind: "notes", title: "Your notes" }) });
+    return () => holdInPlace({ change: () => useWindows.getState().close(NOTES_WINDOW_ID) });
   }, []);
   const column = useColumn(true);
   const row = note

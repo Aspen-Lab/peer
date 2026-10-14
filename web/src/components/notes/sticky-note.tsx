@@ -23,7 +23,7 @@ import type { ReadingNoteExtras } from "@/lib/notes/templates";
 import type { Citable, NoteAnchor } from "@/lib/notes/types";
 import { paragraphAnchor, type ExplainSelection } from "@/components/reader/paper-body";
 import { DOCK_TOP_PX } from "@/components/reader/explain-dock";
-import { stackRows, useColumn, useWindows, type FloatingWindow, type StackFrame } from "@/lib/reader/windows";
+import { holdInPlace, readingAnchorTop, stackRows, useColumn, useWindows, type FloatingWindow, type StackFrame } from "@/lib/reader/windows";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
 import { AnchorSquare, goToPassage, registerPassageHost } from "./note-tags";
 
@@ -165,14 +165,15 @@ export function withoutSticky(blocks: readonly Block[], headerId: string): reado
 }
 
 /** Closing a sticky: an empty one is taken out of the note; its window leaves the stack. The note keeps everything else. */
-export function closeSticky(noteId: string, headerId: string): void {
+export function closeSticky(noteId: string, headerId: string, scroll?: (dy: number) => void): void {
   const { notes, save } = useNotesStore.getState();
   const note = notes[noteId];
   if (note) {
     const blocks = withoutSticky(note.blocks, headerId);
     if (blocks !== note.blocks) save(noteId, { blocks: [...blocks] });
   }
-  useWindows.getState().close(headerId);
+  // The last window to leave frees the column (P10-09d): the words move back, and the reader's place is held.
+  holdInPlace({ change: () => useWindows.getState().close(headerId), scroll });
 }
 
 /**
@@ -180,9 +181,10 @@ export function closeSticky(noteId: string, headerId: string): void {
  * sticky in it, anchored to the selection's paragraph, and its window opened.
  */
 export function takeStickyNote(
-  target: Pick<ExplainSelection, "sectionIndex" | "paragraphIndex" | "passage">,
+  target: Pick<ExplainSelection, "sectionIndex" | "paragraphIndex" | "passage"> & Partial<Pick<ExplainSelection, "measure">>,
   paper: Citable,
   extras?: ReadingNoteExtras,
+  scroll?: (dy: number) => void,
 ): { id: string; n: number } | null {
   const { ensureReadingNote, addSticky } = useNotesStore.getState();
   const noteId = ensureReadingNote(paper, extras);
@@ -192,7 +194,13 @@ export function takeStickyNote(
     passage: target.passage,
   });
   if (!made) return null;
-  useWindows.getState().open({ id: made.id, kind: "sticky", title: stickyTitle(made.n) });
+  // P10-09d (X-B1): the first window of the stack reserves the column and the text reflows; the selected words (else the first
+  // paragraph on the screen) stay where the eyes are, as the explain window's reflow holds them (P7-15).
+  holdInPlace({
+    measure: () => target.measure?.()?.bounds.top ?? readingAnchorTop(),
+    change: () => useWindows.getState().open({ id: made.id, kind: "sticky", title: stickyTitle(made.n) }),
+    scroll,
+  });
   return made;
 }
 

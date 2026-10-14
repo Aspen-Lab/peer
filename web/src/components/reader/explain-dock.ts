@@ -175,7 +175,9 @@ export function settleHeight(guard: HeightGuard, held: number | null, reading: n
 
 // ── Making room ───────────────────────────────────────────────────────────
 //
-// The dock covers nothing (Q4): while it is open the page keeps its width clear. The box is
+// The dock covers nothing (Q4): while it is open the page keeps its width clear. P10-09d (X-B1): so does every other floating
+// window at the right — the stickies and the notes window take the same reserve through the stack (`lib/reader/windows.ts`),
+// counted: the properties stay while any of them stands. The box is
 // mounted outside the page's container on purpose (its pixels are the window's, which the
 // container's zoom would scale), so it tells the page through two custom properties on the
 // document's root, written while the dock is open and taken off when it closes:
@@ -199,17 +201,38 @@ export const DOCK_WIDTH_VAR = "--explain-dock-width";
 
 type StyleRoot = { style?: Pick<CSSStyleDeclaration, "setProperty" | "removeProperty"> } | null | undefined;
 
+/** How many takers hold the reserve on each root (keyed by the root's style, which is what is written to). */
+const takers = new WeakMap<object, number>();
+
 /**
  * Keep the dock's width clear on the page: write the two properties on `root` (the document element)
- * and return what takes them off again. Quiet where there is no root to write to (a server render,
+ * and return what gives the take back. Quiet where there is no root to write to (a server render,
  * a test with a bare document).
+ *
+ * P10-09d (X-B1; ruling §1h.87 (c)): the reserve is shared and counted. Every floating window at the right — the explain window
+ * here (`explain-box.tsx`), the stickies and the notes window through the stack (`lib/reader/windows.ts`) — takes it, the first
+ * taker writes the properties, a later one only adds to the count, and the last release takes them off. So the text column is
+ * clear of all of them while any stands, and closing one of two leaves the page as it was. A release given twice counts once.
  */
 export function reserveDock(root: StyleRoot): () => void {
   const style = root?.style;
   if (!style) return () => {};
-  style.setProperty(DOCK_VAR, `${DOCK_RESERVE_PX}px`);
-  style.setProperty(DOCK_WIDTH_VAR, `${DOCK_WIDTH_PX}px`);
+  const held = takers.get(style) ?? 0;
+  takers.set(style, held + 1);
+  if (held === 0) {
+    style.setProperty(DOCK_VAR, `${DOCK_RESERVE_PX}px`);
+    style.setProperty(DOCK_WIDTH_VAR, `${DOCK_WIDTH_PX}px`);
+  }
+  let released = false;
   return () => {
+    if (released) return;
+    released = true;
+    const left = (takers.get(style) ?? 1) - 1;
+    if (left > 0) {
+      takers.set(style, left);
+      return;
+    }
+    takers.delete(style);
     style.removeProperty(DOCK_VAR);
     style.removeProperty(DOCK_WIDTH_VAR);
   };
