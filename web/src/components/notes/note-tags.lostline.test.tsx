@@ -11,25 +11,25 @@ import { AnchorHeading, AnchorMarker, HeadingWithLostLine, PASSAGE_LOST_LINE } f
 // first, and the marker keeps only the square. Rendered with react-dom/server (no DOM in this project's Vitest). Invented text.
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
-const HEADING = createElement("div", { "data-heading": "" }, "Note 2");
+const HEADING = <div data-heading="">Note 2</div>;
 const ANCHOR = { paperId: "p1", paragraphId: "paper-section-0-p1", quote: "finest grains crept fastest", n: 2, start: 4, end: 31 };
 
 describe("HeadingWithLostLine — the heading's words, then the line", () => {
   it("puts the line after the heading's words in the DOM", () => {
-    const html = renderToStaticMarkup(createElement(HeadingWithLostLine, { lost: true, children: HEADING }));
+    const html = renderToStaticMarkup(<HeadingWithLostLine lost>{HEADING}</HeadingWithLostLine>);
     expect(html).toContain(PASSAGE_LOST_LINE);
     expect(html.indexOf("Note 2")).toBeGreaterThan(-1);
     expect(html.indexOf("Note 2")).toBeLessThan(html.indexOf(PASSAGE_LOST_LINE));
   });
 
   it("wraps under the heading at a narrow width (a wrapping row, not an absolute span at the edge)", () => {
-    const html = renderToStaticMarkup(createElement(HeadingWithLostLine, { lost: true, children: HEADING }));
+    const html = renderToStaticMarkup(<HeadingWithLostLine lost>{HEADING}</HeadingWithLostLine>);
     expect(html).toContain("flex-wrap");
     expect(html).not.toContain("absolute");
   });
 
   it("draws no line, and no wrapper, for a note whose passage the paper holds", () => {
-    const html = renderToStaticMarkup(createElement(HeadingWithLostLine, { lost: false, children: HEADING }));
+    const html = renderToStaticMarkup(<HeadingWithLostLine lost={false}>{HEADING}</HeadingWithLostLine>);
     expect(html).not.toContain(PASSAGE_LOST_LINE);
     expect(html).toBe(renderToStaticMarkup(HEADING));
   });
@@ -47,7 +47,7 @@ describe("AnchorMarker — only the square", () => {
 
 describe("AnchorHeading — the wiring", () => {
   it("shows the heading alone while the passage is not known lost (the first render, and the server's)", () => {
-    const html = renderToStaticMarkup(createElement(AnchorHeading, { anchor: ANCHOR, children: HEADING }));
+    const html = renderToStaticMarkup(<AnchorHeading anchor={ANCHOR}>{HEADING}</AnchorHeading>);
     expect(html).toBe(renderToStaticMarkup(HEADING));
   });
 
