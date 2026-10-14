@@ -211,6 +211,16 @@ describe("POST /api/papers/[id]/explain — a selection of Peer's own words (P10
     expect(JSON.parse(provider.generateJsonText.mock.calls[0][0].userPrompt).outputSchema).not.toHaveProperty("items");
   });
 
+  it("does not look for the words in the body: a Summary line that quotes the paper is still Peer's words, with no paragraph and no table", async () => {
+    setModel({ meaning: MEANING, here: { text: HERE }, items: [{ term: "rafting ratio", here: "the share of plates", read: "as a fraction" }] });
+    const answer = (await json(await call(peer("summary", { passage: PAPER_PASSAGE })))).answer as ExplainAnswer;
+    const prompt = JSON.parse(provider.generateJsonText.mock.calls[0][0].userPrompt) as Record<string, unknown>;
+
+    expect(prompt).not.toHaveProperty("context");
+    expect(String(prompt.passageFrom)).toContain("Peer's own words about this paper");
+    expect(answer).not.toHaveProperty("items");
+  });
+
   it("answers a follow-up about Peer's words, 200, with the thread in the prompt and the quote held to the paper", async () => {
     setModel({ reply: "It is the layering of the alloy's grains.", evidence: USE });
     const thread = [
