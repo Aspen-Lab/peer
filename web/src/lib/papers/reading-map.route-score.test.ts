@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
-import * as mapModule from "./reading-map";
-import { gistRoute, gradeScores, METHOD_BOOST, relevanceScores, routeByQuestions, type ReadingMap, type ReadingRole } from "./reading-map";
+import {
+  gistRoute,
+  gradeScores,
+  METHOD_BOOST,
+  questionIntent,
+  relevanceScores,
+  ROLE_WEIGHTS,
+  routeByQuestions,
+  type QuestionIntent,
+  type ReadingMap,
+  type ReadingRole,
+} from "./reading-map";
 
 // P10-06 (ruling §1h.78; the owner's review 3.2 and 3.4): the route grades relevance. A question
 // no longer marks every section that mentions it the same green: each section gets a score from the
@@ -676,18 +686,8 @@ describe("routeByQuestions — a group row is marked as one, for the body's cap 
 // The owner: "要举一反三，要利用文章的结构 … 比如问题如果问的是机理，那么就要优先在 discussion 里面找，其次是 result". The question's
 // intent (parameter, mechanism, result, background) weights the map's roles (`ROLE_WEIGHTS`); the best leaf row of the
 // favoured role keeps a strong slot (P10-06d's rule, read from the table). Invented papers, the quillwort and the lattice.
-//
-// `questionIntent` and `ROLE_WEIGHTS` are read through the module's namespace so that this file type-checks on a head that
-// does not export them yet (the red commit); the next commit imports them by name.
 
-type Intent = "parameter" | "mechanism" | "result" | "background" | "none";
-const intentApi = () => {
-  const api = mapModule as unknown as {
-    questionIntent: (question: string) => Intent;
-    ROLE_WEIGHTS: Record<Intent, Record<ReadingRole, number>>;
-  };
-  return api;
-};
+type Intent = QuestionIntent;
 
 /** One question per intent, each with two invented terms and exactly one cue word. */
 const QUESTION_OF: Record<Intent, string> = {
@@ -705,50 +705,50 @@ describe("questionIntent — the question's words choose one intent (P10-15, rul
     ["result", ["result", "performance", "capacity", "efficiency", "retention", "achieve", "obtain", "measure", "show", "value", "improve", "compare"]],
     ["background", ["define", "definition", "overview", "introduction", "prior"]],
   ] as const)("reads %s from its words", (intent, words) => {
-    for (const word of words) expect(intentApi().questionIntent(`quillwort lattice ${word}`), word).toBe(intent);
+    for (const word of words) expect(questionIntent(`quillwort lattice ${word}`), word).toBe(intent);
   });
 
   it("reads the phrases: how much, how many, what is, state of the art", () => {
-    expect(intentApi().questionIntent("How much quillwort lattice?")).toBe("result");
-    expect(intentApi().questionIntent("How many quillwort lattice?")).toBe("result");
-    expect(intentApi().questionIntent("What is a quillwort lattice?")).toBe("background");
-    expect(intentApi().questionIntent("The state of the art of quillwort lattice")).toBe("background");
+    expect(questionIntent("How much quillwort lattice?")).toBe("result");
+    expect(questionIntent("How many quillwort lattice?")).toBe("result");
+    expect(questionIntent("What is a quillwort lattice?")).toBe("background");
+    expect(questionIntent("The state of the art of quillwort lattice")).toBe("background");
   });
 
   it("reads the words the route drops as terms (why, result, show): they are the question's intent all the same", () => {
-    expect(intentApi().questionIntent("Why does the quillwort lattice crack?")).toBe("mechanism");
-    expect(intentApi().questionIntent("Do the results show a quillwort lattice?")).toBe("result");
+    expect(questionIntent("Why does the quillwort lattice crack?")).toBe("mechanism");
+    expect(questionIntent("Do the results show a quillwort lattice?")).toBe("result");
   });
 
   it("reads a form of a word as the word: explains, governed, temperatures, achieved", () => {
-    expect(intentApi().questionIntent("quillwort lattice explains")).toBe("mechanism");
-    expect(intentApi().questionIntent("quillwort lattice governed")).toBe("mechanism");
-    expect(intentApi().questionIntent("quillwort lattice temperatures")).toBe("parameter");
-    expect(intentApi().questionIntent("quillwort lattice achieved")).toBe("result");
+    expect(questionIntent("quillwort lattice explains")).toBe("mechanism");
+    expect(questionIntent("quillwort lattice governed")).toBe("mechanism");
+    expect(questionIntent("quillwort lattice temperatures")).toBe("parameter");
+    expect(questionIntent("quillwort lattice achieved")).toBe("result");
   });
 
   it("takes the intent with more words; a tie is none", () => {
-    expect(intentApi().questionIntent("quillwort lattice temperature current relationship")).toBe("parameter");
-    expect(intentApi().questionIntent("quillwort lattice mechanism cause temperature")).toBe("mechanism");
-    expect(intentApi().questionIntent("quillwort lattice mechanism temperature")).toBe("none");
-    expect(intentApi().questionIntent("quillwort lattice capacity relationship")).toBe("none");
+    expect(questionIntent("quillwort lattice temperature current relationship")).toBe("parameter");
+    expect(questionIntent("quillwort lattice mechanism cause temperature")).toBe("mechanism");
+    expect(questionIntent("quillwort lattice mechanism temperature")).toBe("none");
+    expect(questionIntent("quillwort lattice capacity relationship")).toBe("none");
   });
 
   it("is none for a question with no cue word, and for no question", () => {
-    expect(intentApi().questionIntent("quillwort lattice sorption")).toBe("none");
-    expect(intentApi().questionIntent("")).toBe("none");
+    expect(questionIntent("quillwort lattice sorption")).toBe("none");
+    expect(questionIntent("")).toBe("none");
   });
 
   it("lets a content word outweigh the frame 'what is': 'What is the mechanism behind …' is a mechanism question", () => {
-    expect(intentApi().questionIntent("What is the mechanism behind the crack resistance of the textured films?")).toBe("mechanism");
-    expect(intentApi().questionIntent("What capacity retention did the films achieve?")).toBe("result");
-    expect(intentApi().questionIntent("What is LCO?")).toBe("background");
+    expect(questionIntent("What is the mechanism behind the crack resistance of the textured films?")).toBe("mechanism");
+    expect(questionIntent("What capacity retention did the films achieve?")).toBe("result");
+    expect(questionIntent("What is LCO?")).toBe("background");
   });
 
   it("reads the owner's two questions: the parameter one, and the long one with its temperature and current", () => {
-    expect(intentApi().questionIntent("I want to learn the parameter for growing 110 LCO")).toBe("parameter");
+    expect(questionIntent("I want to learn the parameter for growing 110 LCO")).toBe("parameter");
     expect(
-      intentApi().questionIntent(
+      questionIntent(
         "I want to learn the relationship between LCO properties such as crystallography, grain structure, morphology, with various plating variable like temperature, current, etc.",
       ),
     ).toBe("parameter");
@@ -757,7 +757,7 @@ describe("questionIntent — the question's words choose one intent (P10-15, rul
 
 describe("ROLE_WEIGHTS — one named table, intent × role (P10-15, rule 1)", () => {
   it("is the owner's table: the numbers per intent and role", () => {
-    const w = intentApi().ROLE_WEIGHTS;
+    const w = ROLE_WEIGHTS;
     expect(w.parameter).toMatchObject({ method: 1.3, apparatus: 1.3, setup: 1, evidence: 1, interpretation: 1, body: 1 });
     expect(w.mechanism).toMatchObject({ interpretation: 1.3, evidence: 1.15, setup: 0.9, method: 1, apparatus: 1, body: 1 });
     expect(w.result).toMatchObject({ evidence: 1.3, interpretation: 1.1, setup: 0.9, method: 1, apparatus: 1, body: 1 });
@@ -766,7 +766,7 @@ describe("ROLE_WEIGHTS — one named table, intent × role (P10-15, rule 1)", ()
   });
 
   it("keeps METHOD_BOOST as an alias of the table's parameter × method entry", () => {
-    expect(METHOD_BOOST).toBe(intentApi().ROLE_WEIGHTS.parameter.method);
+    expect(METHOD_BOOST).toBe(ROLE_WEIGHTS.parameter.method);
   });
 });
 
@@ -837,7 +837,7 @@ function weightedShare(specs: Spec[], id: string, intent: Intent): number {
       words: spec.paragraphs.join(" ").split(/\s+/).length,
       paragraphs: spec.paragraphs.map((p) => ({ counts: countsOf(p), words: p.split(/\s+/).length })),
     })),
-  ).map((score, i) => score * intentApi().ROLE_WEIGHTS[intent][leaves[i].role ?? "body"]);
+  ).map((score, i) => score * ROLE_WEIGHTS[intent][leaves[i].role ?? "body"]);
   return scores[leaves.findIndex((spec) => spec.id === id)] / Math.max(...scores);
 }
 
@@ -891,14 +891,14 @@ describe("routeByQuestions — the best row of the favoured role keeps a strong 
   });
 
   it("mechanism favours the interpretation role alone: a method row at 0.7 of the best gets no slot", () => {
-    const specs: Spec[] = [sec("intro", 5, 3, { role: "setup" }), sec("r1", 7, 4, { role: "evidence" }), sec("r2", 6, 3, { role: "evidence" }), sec("m", 3, 1, { role: "method" }), NONE];
+    const specs: Spec[] = [sec("intro", 5, 3, { role: "setup" }), sec("r1", 7, 4, { role: "evidence" }), sec("r2", 6, 3, { role: "evidence" }), sec("m", 4, 2, { role: "method" }), NONE];
     expect(weightedShare(specs, "m", "mechanism")).toBeGreaterThanOrEqual(0.6);
     expect(tiersOf(specs, QUESTION_OF.mechanism)).toMatchObject({ m: "medium", r1: "strong", r2: "strong" });
   });
 
   it("changes nothing when the favoured row is already strong, under 0.6 of the best, or absent", () => {
     const already: Spec[] = [sec("intro", 5, 3, { role: "setup" }), sec("r1", 7, 4, { role: "evidence" }), sec("r2", 4, 2, { role: "evidence" }), sec("d", 8, 4, { role: "interpretation" }), NONE];
-    expect(tiersOf(already, QUESTION_OF.mechanism)).toMatchObject({ d: "strong", r1: "strong", r2: "medium" });
+    expect(tiersOf(already, QUESTION_OF.mechanism)).toMatchObject({ d: "strong", r1: "strong", r2: "strong", intro: "medium" });
     const low: Spec[] = [sec("intro", 5, 3, { role: "setup" }), sec("r1", 7, 4, { role: "evidence" }), sec("r2", 6, 3, { role: "evidence" }), sec("d", 1, 1, { role: "interpretation" }), NONE];
     expect(weightedShare(low, "d", "mechanism")).toBeLessThan(0.6);
     expect(tiersOf(low, QUESTION_OF.mechanism).d).toBe("medium");

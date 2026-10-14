@@ -360,6 +360,10 @@ export function buildReadingMap(doc: ExtractedDocument): ReadingMap {
 // group wears its strongest child's tier); a question that asks for parameters or conditions weighs the method and
 // apparatus sections up (`METHOD_BOOST`); a term found in nearly every section weighs the idf floor alone; and the words a
 // question is phrased with ("such as", "various", "learn") are never terms.
+//
+// P10-15 (A11 generalised; the owner's ruling §1h.89): the parameter case becomes one intent table over the map's roles
+// (`questionIntent`, `ROLE_WEIGHTS`): a mechanism question weighs the discussion first and the results next, a result question
+// the results, a background question the setup — and the best row of the favoured role keeps a strong slot.
 
 /** `strong`: among the three best sections and at least 0.6 of the best score. `medium`: at least 0.4 of it.
  *  `faint`: any mention. `none`: no mention. P10-06c: the three are counted over the leaf rows (rows with paragraphs of
@@ -798,25 +802,89 @@ function routeSection(paragraphs: readonly string[], terms: readonly string[]): 
   };
 }
 
-// ── A parameter question (P10-06c, rule 2) ──────────────────────────────
+// ── The question's intent weighs the map's roles (P10-15, A11 generalised; the owner's ruling §1h.89) ─────────────────
+//
+// P10-06c built one case: a question for parameters weighs the method and apparatus sections up. The owner asked for the
+// rule, not the case ("举一反三，要利用文章的结构 … 问机理，优先在 discussion 里面找，其次是 result"): the question's intent says
+// which roles of the paper hold its answer, and the route weighs those roles up. One table, `ROLE_WEIGHTS`, intent × role.
 
-/** A question that asks for parameters or conditions wants the sections that say how a thing was done: a section whose role is
- *  `method` or `apparatus` scores this much more (the walk's A11: "a PhD reader asking for growth parameters expects the
- *  Experimental and the growth sections darkest"). One constant, one rule; nothing changes for any other question. */
-export const METHOD_BOOST = 1.3;
+/** What the question asks for. `none`: no cue, or two intents with as many cue words. */
+export type QuestionIntent = "parameter" | "mechanism" | "result" | "background" | "none";
 
-/** The words that make a question one for parameters or conditions; a term matches by `termFormsMatch` as well (temperatures, rates). */
-const PARAMETER_WORDS: readonly string[] = [
-  "parameter", "parameters", "condition", "conditions", "temperature", "current", "voltage", "potential",
-  "concentration", "rate", "time", "thickness", "electrolyte",
+const ALL_ONE: Readonly<Record<ReadingRole, number>> = { setup: 1, method: 1, evidence: 1, interpretation: 1, apparatus: 1, body: 1 };
+
+/**
+ * P10-15 (rule 1): by intent and role, what a leaf row's score is multiplied by (a row that scores nothing stays at zero).
+ * - `parameter`: the sections that say how a thing was done — method, apparatus — 1.3 (P10-06c's number);
+ * - `mechanism`: the discussion first (interpretation 1.3), the results next (evidence 1.15), the setup a little less (0.9);
+ * - `result`: the results first (evidence 1.3), the discussion next (interpretation 1.1), the setup a little less (0.9);
+ * - `background`: the introduction and the related work (setup) 1.3;
+ * - `none`: every weight 1 — nothing changes for a question that names no intent.
+ */
+export const ROLE_WEIGHTS: Readonly<Record<QuestionIntent, Readonly<Record<ReadingRole, number>>>> = {
+  parameter: { ...ALL_ONE, method: 1.3, apparatus: 1.3 },
+  mechanism: { ...ALL_ONE, interpretation: 1.3, evidence: 1.15, setup: 0.9 },
+  result: { ...ALL_ONE, evidence: 1.3, interpretation: 1.1, setup: 0.9 },
+  background: { ...ALL_ONE, setup: 1.3 },
+  none: ALL_ONE,
+};
+
+/** P10-06c's constant, kept as an alias of the table's parameter × method entry (`apparatus` has the same weight). */
+export const METHOD_BOOST = ROLE_WEIGHTS.parameter.method;
+
+/** The words that make a question one of an intent; a word matches by `termFormsMatch` as well (temperatures, explains, achieved). */
+const INTENT_WORDS: Readonly<Record<Exclude<QuestionIntent, "none">, readonly string[]>> = {
+  parameter: [
+    "parameter", "parameters", "condition", "conditions", "temperature", "current", "voltage", "potential", "concentration", "concentrations", "rate", "time", "thickness",
+    "electrolyte", "ph",
+  ],
+  mechanism: [
+    "mechanism", "why", "cause", "origin", "explain", "because", "arise", "govern", "drive", "lead", "responsible", "role", "effect",
+    "influence", "dependence", "relationship", "correlate", "model", "theory", "kinetic", "thermodynamic",
+  ],
+  result: ["result", "performance", "capacity", "efficiency", "retention", "achieve", "obtain", "measure", "show", "value", "improve", "compare"],
+  background: ["define", "definition", "overview", "introduction", "prior"],
+};
+
+/** Cue phrases, each worth this many words; "what is" is a frame ("What is the mechanism …", "What is LCO?"), worth half a word,
+ *  so a content word beside it decides and a definition question with none is background. */
+const INTENT_PHRASES: ReadonlyArray<{ intent: Exclude<QuestionIntent, "none">; phrase: string; weight: number }> = [
+  { intent: "result", phrase: "how much", weight: 1 },
+  { intent: "result", phrase: "how many", weight: 1 },
+  { intent: "background", phrase: "state of the art", weight: 1 },
+  { intent: "background", phrase: "what is", weight: 0.5 },
+  { intent: "background", phrase: "what are", weight: 0.5 },
 ];
 
-/** Whether the question's specific terms carry a parameter word (`how` is not a term, so "how" alone never does). */
-function asksForParameters(terms: readonly string[]): boolean {
-  return terms.some((term) => {
-    const canonical = canonicalize(term);
-    return PARAMETER_WORDS.some((word) => word === canonical || termFormsMatch(word, canonical));
-  });
+/**
+ * P10-15 (rule 1): the intent of a question, read from its own words — not from `specificTerms`, which drops "why", "result",
+ * "show", "how" (a route never matches the paper on them, but they say what the reader wants). Each of the question's distinct
+ * words counts once for the intent whose list holds it (or a form of it), the phrases above count their weight; the intent
+ * with more counts wins, a tie is `none`, and no cue at all is `none`.
+ */
+export function questionIntent(question: string): QuestionIntent {
+  const words = [...new Set(question.toLowerCase().match(/\p{L}+/gu) ?? [])];
+  if (words.length === 0) return "none";
+  const padded = ` ${(question.toLowerCase().match(/\p{L}+/gu) ?? []).join(" ")} `;
+  const counts: Record<Exclude<QuestionIntent, "none">, number> = { parameter: 0, mechanism: 0, result: 0, background: 0 };
+  for (const intent of Object.keys(INTENT_WORDS) as Array<keyof typeof INTENT_WORDS>) {
+    for (const word of words) {
+      if (INTENT_WORDS[intent].some((cue) => cue === word || termFormsMatch(cue, word))) counts[intent] += 1;
+    }
+  }
+  for (const { intent, phrase, weight } of INTENT_PHRASES) {
+    if (padded.includes(` ${phrase} `)) counts[intent] += weight;
+  }
+  const ranked = (Object.entries(counts) as Array<[Exclude<QuestionIntent, "none">, number]>).sort((a, b) => b[1] - a[1]);
+  if (ranked[0][1] <= 0 || ranked[0][1] === ranked[1][1]) return "none";
+  return ranked[0][0];
+}
+
+/** The roles an intent favours: the roles with its table row's largest weight, when that is more than 1 (none for `none`). */
+function favouredRoles(intent: QuestionIntent): ReadingRole[] {
+  const row = ROLE_WEIGHTS[intent];
+  const top = Math.max(...Object.values(row));
+  return top > 1 ? (Object.keys(row) as ReadingRole[]).filter((role) => row[role] === top) : [];
 }
 
 type QuestionRoute = RouteResult["byQuestion"][number];
@@ -828,20 +896,28 @@ type RouteRow = ReadingMap["sections"][number] & { parentId?: string };
 const TIER_ORDER: Readonly<Record<RouteTier, number>> = { none: 0, faint: 1, medium: 2, strong: 3 };
 
 /**
- * P10-06d (rule 1): a reader who asks for parameters wants the experimental section among the darkest rows, and the cap of
- * three strong leaf rows held it out when the results and the Introduction (which names every term once) stood above it.
- * After the leaf grade: when the best leaf row of role `method` or `apparatus` scores at least `STRONG_SHARE` of the best
- * leaf but is not strong, it becomes strong, and — the cap still three — the lowest-scoring strong row of role `setup` is
- * medium instead (if no strong row is `setup`, the lowest-scoring strong row). `tiers` is changed in place; nothing else is.
+ * P10-06d (rule 1), read from the table (P10-15, rule 2): a reader who asks for parameters wants the experimental section among
+ * the darkest rows, and the cap of three strong leaf rows held it out when the results and the Introduction (which names every
+ * term once) stood above it; the same for the discussion on a question for a mechanism, the results on a question for a result,
+ * the introduction on a question for background. After the leaf grade: when the best leaf row of a favoured role (`favoured`,
+ * the roles of the intent's largest weight) scores at least `STRONG_SHARE` of the best leaf but is not strong, it becomes
+ * strong, and — the cap still three — the lowest-scoring strong row of role `setup` is medium instead (if no strong row is
+ * `setup`, the lowest-scoring strong row). `tiers` is changed in place; nothing else is.
  */
-function keepMethodSlot(leafAt: readonly number[], rows: readonly RouteRow[], scores: readonly number[], tiers: RouteTier[]): void {
+function keepRoleSlot(
+  leafAt: readonly number[],
+  rows: readonly RouteRow[],
+  scores: readonly number[],
+  tiers: RouteTier[],
+  favoured: readonly ReadingRole[],
+): void {
   const best = leafAt.reduce((most, k) => Math.max(most, scores[k]), 0);
   if (!(best > 0)) return;
-  let method = -1;
+  let pick = -1;
   for (const k of leafAt) {
-    if ((rows[k].role === "method" || rows[k].role === "apparatus") && (method < 0 || scores[k] > scores[method])) method = k;
+    if (favoured.includes(rows[k].role) && (pick < 0 || scores[k] > scores[pick])) pick = k;
   }
-  if (method < 0 || tiers[method] === "strong" || scores[method] < best * STRONG_SHARE - 1e-9) return;
+  if (pick < 0 || tiers[pick] === "strong" || scores[pick] < best * STRONG_SHARE - 1e-9) return;
   const strong = leafAt.filter((k) => tiers[k] === "strong");
   if (strong.length >= MAX_STRONG_ROWS) {
     const setup = strong.filter((k) => rows[k].role === "setup");
@@ -849,7 +925,7 @@ function keepMethodSlot(leafAt: readonly number[], rows: readonly RouteRow[], sc
     const giving = (setup.length > 0 ? setup : strong).reduce((low, k) => (scores[k] <= scores[low] ? k : low));
     tiers[giving] = "medium";
   }
-  tiers[method] = "strong";
+  tiers[pick] = "strong";
 }
 
 /** One question through the paper: the whole body is read for it, and for it alone. */
@@ -868,10 +944,11 @@ function routeQuestion(map: ReadingMap, sections: RouteBody, question: string): 
     scores[own[i].k] = score;
   });
 
-  // P10-06c (rule 2): a question that asks for parameters or conditions weighs the method and apparatus sections up.
-  if (asksForParameters(terms)) {
+  // P10-15 (rule 1; was P10-06c's parameter case): the question's intent weighs the map's roles.
+  const intent = questionIntent(question);
+  if (intent !== "none") {
     rows.forEach((row, k) => {
-      if (routed[k].scored && (row.role === "method" || row.role === "apparatus")) scores[k] *= METHOD_BOOST;
+      if (routed[k].scored) scores[k] *= ROLE_WEIGHTS[intent][row.role];
     });
   }
 
@@ -909,8 +986,8 @@ function routeQuestion(map: ReadingMap, sections: RouteBody, question: string): 
   gradeScores(leafAt.map((k) => scores[k])).forEach((tier, i) => {
     tiers[leafAt[i]] = tier;
   });
-  // P10-06d (rule 1): on a question for parameters, the best experimental section keeps a strong slot; the Introduction gives way.
-  if (asksForParameters(terms)) keepMethodSlot(leafAt, rows, scores, tiers);
+  // P10-06d (rule 1), P10-15 (rule 2): the best row of the intent's favoured role keeps a strong slot; the Introduction gives way.
+  keepRoleSlot(leafAt, rows, scores, tiers, favouredRoles(intent));
   for (let k = rows.length - 1; k >= 0; k--) {
     if (!isGroup[k]) continue;
     tiers[k] = (childrenOf.get(rows[k].id) ?? []).reduce<RouteTier>((most, child) => (TIER_ORDER[tiers[child]] > TIER_ORDER[most] ? tiers[child] : most), "none");
