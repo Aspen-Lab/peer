@@ -695,6 +695,57 @@ describe("specificTerms — a function word is never a term (P9-05, X12)", () =>
   });
 });
 
+// P10-06c (the walk's X-A3): the owner's second question counted "such ×3" in a tint's facts — "such" from "such as" —
+// and the first held "want" and "learn", which hit nowhere and only crowded the term list. The words a question is
+// phrased with and that name no part of the paper's content join `FUNCTION_WORDS` (which `specificTerms` reads beside
+// `ROUTE_STOPLIST`): such, various, like, etc, learn, want, know, understand, about, between.
+describe("specificTerms — the words a question is phrased with are never terms (P10-06c, X-A3)", () => {
+  const PHRASING = ["such", "various", "like", "etc", "learn", "want", "know", "understand", "about", "between"];
+  const Q1 = "I want to learn the parameter for growing 110 LCO";
+  const Q2 =
+    "I want to learn the relationship between LCO properties such as crystallography, grain structure, morphology, with various plating variable like temperature, current, etc.";
+
+  it.each(PHRASING)("drops %s, alone and between two content words, in any case", (word) => {
+    expect(specificTerms(word)).toEqual([]);
+    expect(specificTerms(`film ${word} cycles`)).toEqual(["film", "cycles"]);
+    expect(specificTerms(`film ${word.toUpperCase()}, cycles`)).toEqual(["film", "cycles"]);
+    expect(FUNCTION_WORDS.has(word)).toBe(true);
+  });
+
+  it("reads the owner's first question as parameter, growing, 110, LCO", () => {
+    expect(specificTerms(Q1)).toEqual(["parameter", "growing", "110", "lco"]);
+  });
+
+  it("reads the owner's second question without such, various, like, etc, want and learn", () => {
+    expect(specificTerms(Q2)).toEqual([
+      "relationship",
+      "lco",
+      "properties",
+      "crystallography",
+      "grain",
+      "structure",
+      "morphology",
+      "plating",
+      "variable",
+      "temperature",
+      "current",
+    ]);
+  });
+
+  it("keeps the content words that only look alike: learning, understanding, knowledge, likely", () => {
+    expect(specificTerms("learning understanding knowledge likely")).toEqual(["learning", "understanding", "knowledge", "likely"]);
+  });
+
+  it("counts none of them in the body: the tint's facts have no 'such'", () => {
+    const paperDoc = doc([{ canonical: "results", text: "Crystallography is such a tool. Such tools help. The grain structure is set by temperature, various currents and the like." }]);
+    const section = route(paperDoc, [Q2]).byQuestion[0].sections.s0;
+    const words = section.hits.map((hit) => hit.term);
+
+    expect(words).toEqual(expect.arrayContaining(["crystallography", "grain", "structure", "temperature"]));
+    for (const word of PHRASING) expect(words).not.toContain(word);
+  });
+});
+
 // P1-03 (§1f.11): "Just get the gist" routes by the generic reading order —
 // what it found and what it means first, how and why next, the apparatus
 // last — with no hits, no evidence and no answers.

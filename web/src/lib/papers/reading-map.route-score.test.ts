@@ -236,9 +236,11 @@ describe("routeByQuestions — a group row takes the best of its children (P10-0
     expect(sections.far.tier).toBe("none");
   });
 
-  it("counts a group among the rows, so three strong rows at most still holds", () => {
-    const tiers = Object.values(sections).map((section) => section.tier as string);
-    expect(tiers.filter((tier) => tier === "strong").length).toBeLessThanOrEqual(3);
+  // P10-06c (rule 1), re-aimed: "counts a group among the rows" became "counts the leaf rows" — the group row
+  // is tinted by its strongest child's tier, outside the cap (the describe below).
+  it("counts the leaf rows, so three strong leaf rows at most still holds", () => {
+    const strongLeaves = Object.entries(sections).filter(([id, section]) => id !== "g2" && section.tier === "strong");
+    expect(strongLeaves.length).toBeLessThanOrEqual(3);
   });
 });
 
@@ -273,5 +275,218 @@ describe("gistRoute — the roles on the new tiers (P10-06)", () => {
     expect(sections.r.tier as string).toBe("strong");
     expect(sections.m.tier as string).toBe("faint");
     expect(sections.a.tier as string).toBe("none");
+  });
+});
+
+// ── P10-06c (A11; the walk's X-A3 and §7 item 2) ──────────────────────────────────────────────────────────────
+// The strongest rows are the ones that answer a "parameter" question. Four rules, on invented papers.
+
+/** The same paragraph in every section that uses it: equal sections score exactly equal. */
+const SAME = para(5, 3, 120);
+const leaf = (id: string, extra: Partial<Spec> = {}): Spec => ({ id, paragraphs: [SAME], ...extra });
+const NONE: Spec = { id: "z1", paragraphs: [para(0, 0, 120)] };
+
+describe("routeByQuestions — a group row never takes a strong slot (P10-06c, rule 1)", () => {
+  // Five leaves of the same score; two of them under group rows. The cap counts the leaf rows: the first three are
+  // strong, the fourth is medium (its score is as high as theirs, the cap holds it) — and a group row wears its
+  // strongest child's tier, outside the cap, so "2." is strong with 2.1 and "4." is medium with 4.1.
+  const specs: Spec[] = [
+    { id: "g2", paragraphs: [], level: 1 },
+    leaf("g2a", { level: 2, parentId: "g2" }),
+    leaf("b", { level: 1 }),
+    leaf("c", { level: 1 }),
+    { id: "g4", paragraphs: [], level: 1 },
+    leaf("g4a", { level: 2, parentId: "g4" }),
+    { ...NONE, level: 1 },
+  ];
+  const tiers = tiersOf(specs, "quillwort lattice");
+
+  it("counts the cap over the leaf rows: three strong leaves, the group row not among them", () => {
+    expect([tiers.g2a, tiers.b, tiers.c]).toEqual(["strong", "strong", "strong"]);
+    expect(tiers.g4a).toBe("medium");
+  });
+
+  it("tints a group row by its strongest child's tier, outside the cap: strong with a strong child, medium with a medium one", () => {
+    expect(tiers.g2).toBe("strong");
+    expect(tiers.g4).toBe("medium");
+    // Four strong rows in all, three of them leaves.
+    expect(count(tiers, "strong")).toBe(4);
+  });
+
+  it("gives a nested group row the tier of the strongest row under it, and none to a group row without a mention", () => {
+    const nested: Spec[] = [
+      { id: "top", paragraphs: [], level: 1 },
+      { id: "mid", paragraphs: [], level: 2, parentId: "top" },
+      leaf("deep", { level: 3, parentId: "mid" }),
+      { id: "idle", paragraphs: [], level: 1 },
+      { ...NONE, level: 2, parentId: "idle" },
+      leaf("other", { level: 1 }),
+    ];
+    const got = tiersOf(nested, "quillwort lattice");
+    expect(got.deep).toBe("strong");
+    expect(got.mid).toBe("strong");
+    expect(got.top).toBe("strong");
+    expect(got.idle).toBe("none");
+  });
+
+  it("keeps a group row's hits, evidence and empty paragraphs as before", () => {
+    const { map, body } = paperOf(specs);
+    const sections = routeByQuestions(map, body, ["quillwort lattice"]).byQuestion[0].sections;
+    expect(sections.g2.paragraphs).toEqual([]);
+    expect(sections.g2.hits).toEqual([{ term: "quillwort", count: 5 }, { term: "lattice", count: 3 }]);
+    expect(sections.g2.evidence).toBe(sections.g2a.evidence);
+  });
+});
+
+describe("relevanceScores — a term in nearly every section weighs little (P10-06c, rule 3)", () => {
+  // Ten sections of 0 words (ln 2 in the divisor, which cancels with ln(1 + 1)): a section that says one term once
+  // scores that term's idf. Term 0 in the first `df0` sections, term 1 in the first two.
+  const sectionsOf = (df0: number, n = 10) =>
+    Array.from({ length: n }, (_, i) => ({ counts: [i < df0 ? 1 : 0, i < 2 ? 1 : 0], words: 0 }));
+
+  it("gives a term found in 9 of 10 sections the floor, 0.1, alone — and a term found in 2 of 10 its rarity", () => {
+    const scores = relevanceScores(sectionsOf(9));
+    // Section 5: term 0 only. Section 0: both terms.
+    expect(scores[5]).toBeCloseTo(0.1, 10);
+    expect(scores[0]).toBeCloseTo(0.1 + Math.log(11 / 3) + 0.1, 10);
+    expect(scores[0]).toBeGreaterThan(scores[5] * 10);
+  });
+
+  it("draws the line at 80 %: 8 of 10 is the floor, 7 of 10 is not", () => {
+    expect(relevanceScores(sectionsOf(8))[5]).toBeCloseTo(0.1, 10);
+    expect(relevanceScores(sectionsOf(7))[5]).toBeCloseTo(Math.log(11 / 8) + 0.1, 10);
+    // 4 of 5 is 80 %.
+    expect(relevanceScores(sectionsOf(4, 5))[3]).toBeCloseTo(0.1, 10);
+    expect(relevanceScores(sectionsOf(3, 5))[2]).toBeCloseTo(Math.log(6 / 4) + 0.1, 10);
+  });
+
+  it("lets one mention of a term in 2 of 10 sections outweigh ten mentions of a term in 9 of 10", () => {
+    const rows = Array.from({ length: 10 }, (_, i) => ({ counts: [i === 5 ? 10 : i < 9 ? 1 : 0, i === 0 ? 1 : i === 1 ? 1 : 0], words: 0 }));
+    const scores = relevanceScores(rows);
+    // Section 5: term 0 ×10 (floor); section 0: term 0 ×1 and term 1 ×1 (rare).
+    expect(scores[0]).toBeGreaterThan(scores[5]);
+  });
+
+  it("changes nothing for a term below the line: the rarity formula stands", () => {
+    const [a, b] = relevanceScores([
+      { counts: [3], words: 400 },
+      { counts: [0], words: 400 },
+    ]);
+    expect(a).toBeCloseTo(Math.log(3 / 2) + 0.1, 10);
+    expect(b).toBe(0);
+  });
+});
+
+describe("routeByQuestions — a parameter question favours the method sections (P10-06c, rule 2)", () => {
+  // Four sections of the same words and counts; the method one stands last. With the cap at three strong rows and
+  // the earlier row first on a tie, the last one is medium — unless the question asks for parameters.
+  const equal = (role: ReadingRole): Spec[] => [
+    leaf("a", { role: "evidence" }),
+    leaf("b", { role: "evidence" }),
+    leaf("c", { role: "evidence" }),
+    leaf("m", { role }),
+    NONE,
+  ];
+
+  it("lets the method section win only when the question carries a parameter word", () => {
+    const without = tiersOf(equal("method"), "quillwort lattice sorption");
+    expect(without).toMatchObject({ a: "strong", b: "strong", c: "strong", m: "medium" });
+    const withWord = tiersOf(equal("method"), "quillwort lattice parameters");
+    expect(withWord).toMatchObject({ a: "strong", b: "strong", c: "medium", m: "strong" });
+  });
+
+  it.each(["parameter", "parameters", "condition", "conditions", "temperature", "current", "voltage", "potential", "concentration", "rate", "time", "thickness", "electrolyte"])(
+    "reads %s as a parameter word",
+    (word) => {
+      expect(tiersOf(equal("method"), `quillwort lattice ${word}`).m).toBe("strong");
+    },
+  );
+
+  it("reads a form of the word the same way: temperatures, rates, times", () => {
+    for (const word of ["temperatures", "rates", "times"]) expect(tiersOf(equal("method"), `quillwort lattice ${word}`).m, word).toBe("strong");
+  });
+
+  it("boosts an apparatus section as it does a method one, and no other role", () => {
+    expect(tiersOf(equal("apparatus"), "quillwort lattice parameters").m).toBe("strong");
+    for (const role of ["setup", "evidence", "interpretation", "body"] as const) {
+      expect(tiersOf(equal(role), "quillwort lattice parameters").m, role).toBe("medium");
+    }
+  });
+
+  it("changes nothing else when no parameter word is asked: the tiers equal those of a paper with no method section", () => {
+    expect(tiersOf(equal("method"), "quillwort lattice sorption")).toEqual(tiersOf(equal("body"), "quillwort lattice sorption"));
+  });
+
+  it("boosts a group row's children, so the group follows: a method group is strong with its strong child", () => {
+    const specs: Spec[] = [
+      leaf("a", { role: "evidence" }),
+      leaf("b", { role: "evidence" }),
+      leaf("c", { role: "evidence" }),
+      { id: "g", paragraphs: [], role: "method", level: 1 },
+      leaf("g1", { role: "method", level: 2, parentId: "g" }),
+      NONE,
+    ];
+    const got = tiersOf(specs, "quillwort lattice parameters");
+    expect(got.g1).toBe("strong");
+    expect(got.g).toBe("strong");
+    expect(got.c).toBe("medium");
+  });
+});
+
+describe("routeByQuestions — the strongest rows answer a parameter question (P10-06c, rule 5; the owner's A11)", () => {
+  // A paper shaped like the one the owner read: a long Introduction that names each term somewhere, a results group
+  // whose subsections grow the film, a conclusion, and an experimental group whose first subsection holds the
+  // growth parameters. Every section says the material and its face (110, LCO), as the owner's does.
+  const QUESTION = "I want to learn the parameter for growing 110 LCO";
+  const FACE = "The 110 face of LCO was flat.";
+  const intro: string[] = [
+    para(0, 0, 100) + " Parameters matter. Further parameters follow.",
+    para(0, 0, 100) + " Growing films is hard. Growing them thick is harder.",
+    para(0, 0, 100) + " " + FACE + " The 110 plane is dense. LCO is layered. LCO is old.",
+    para(0, 0, 100) + " LCO is used in cells. LCO is sold. The parameter is fixed.",
+    para(0, 0, 100),
+    para(0, 0, 100),
+  ];
+  const growth = (extra: string) => [para(0, 0, 100) + " " + FACE + " " + extra, para(0, 0, 100), para(0, 0, 100)];
+  const specs: Spec[] = [
+    { id: "intro", paragraphs: intro, role: "setup", level: 1 },
+    { id: "res", paragraphs: [], role: "evidence", level: 1 },
+    { id: "r1", paragraphs: growth("Growing the 110 film of LCO took time. Growth was steady. The growth parameter was the potential. Growth of the 110 face grew."), role: "evidence", level: 2, parentId: "res" },
+    { id: "r2", paragraphs: growth("Growth of the 110 face grew. Growth was slow. The parameter was the current."), role: "evidence", level: 2, parentId: "res" },
+    { id: "r3", paragraphs: growth("Twinned growth of LCO was seen."), role: "evidence", level: 2, parentId: "res" },
+    { id: "r4", paragraphs: growth("The 110 grain was large."), role: "evidence", level: 2, parentId: "res" },
+    { id: "concl", paragraphs: growth("Growth of the 110 face was steady. The parameter held."), role: "interpretation", level: 1 },
+    { id: "exp", paragraphs: [], role: "method", level: 1 },
+    {
+      id: "e1",
+      paragraphs: [
+        para(0, 0, 100) + " " + FACE + " The film of 110 LCO was grown at 60 C and a current of 2 mA. The growth parameter was the bath. The potential was fixed.",
+        para(0, 0, 100) + " The film was grown for an hour.",
+        para(0, 0, 100),
+      ],
+      role: "method",
+      level: 2,
+      parentId: "exp",
+    },
+    { id: "e2", paragraphs: growth("Data were acquired."), role: "method", level: 2, parentId: "exp" },
+    { id: "e3", paragraphs: growth("Samples were polished."), role: "method", level: 2, parentId: "exp" },
+    { id: "e4", paragraphs: [para(0, 0, 100) + " LCO was probed. LCO was clean.", para(0, 0, 100)], role: "method", level: 2, parentId: "exp" },
+  ];
+  const tiers = tiersOf(specs, QUESTION);
+  const leafIds = specs.filter((s) => s.paragraphs.length > 0).map((s) => s.id);
+
+  it("lights the growth section of the results and the experimental growth section, and their group rows by them", () => {
+    expect(tiers.r1).toBe("strong");
+    expect(tiers.e1).toBe("strong");
+    expect(tiers.res).toBe("strong");
+    expect(tiers.exp).toBe("strong");
+  });
+
+  it("keeps at most three strong leaf rows, the Introduction not above both of those, and a third of the leaves faint or none", () => {
+    const strongLeaves = leafIds.filter((id) => tiers[id] === "strong");
+    expect(strongLeaves.length).toBeLessThanOrEqual(3);
+    expect(strongLeaves).toEqual(expect.arrayContaining(["r1", "e1"]));
+    const faintOrNone = leafIds.filter((id) => tiers[id] === "faint" || tiers[id] === "none").length;
+    expect(faintOrNone).toBeGreaterThanOrEqual(Math.ceil(leafIds.length / 3));
   });
 });
