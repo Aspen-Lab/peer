@@ -478,6 +478,26 @@ describe("partitionedMap — the trunk's row replaced in place by one row per pa
     expect(got.sections[4]).toBe(map.sections[1]);
   });
 
+  it("puts the groups where the trunk stood when it is not the first row: the rows before it first, the rows after it last", () => {
+    const doc: ExtractedDocument = {
+      source: "pdf",
+      pageCount: 6,
+      figureCaptions: [],
+      sections: [
+        { id: "a", heading: "Methods", canonical: "methods", page: 1, text: Array.from({ length: 3 }, (_, k) => invented(200 + k)).join("\n\n") },
+        { id: "b", heading: "A survey of shore ecology", canonical: "body", page: 2, text: Array.from({ length: 30 }, (_, k) => invented(k)).join("\n\n") },
+        { id: "c", heading: "Results", canonical: "results", page: 5, text: invented(300) },
+      ],
+    };
+    const later = buildReading(PAPER, { status: "ok", attempts: [], doc, sourceLink: { url: "https://example.org/l.pdf", kind: "pdf", label: "doi", rank: 1 } }, new Date("2026-10-05T00:00:00.000Z"));
+    const got = partitionedMap(later.map!, later.body, { sectionId: "b", parts: TWO.parts });
+
+    expect(got.sections.map((row) => row.id)).toEqual(["a", "b~0", "b~1", "c"]);
+    expect(partOf(got.sections[1])).toMatchObject({ sectionId: "b", sectionIndex: 1 });
+    expect(got.sections[0]).toBe(later.map!.sections[0]);
+    expect(got.sections[3]).toBe(later.map!.sections[2]);
+  });
+
   it("gives each group the level 1, no parent, no page and a part record", () => {
     const got = partitionedMap(map, reading.body, FOUR);
 
