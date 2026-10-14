@@ -48,6 +48,16 @@ describe("StickyWindowView", () => {
     expect(html).toContain("×");
   });
 
+  it("says in one quiet line that its passage is not in this version of the paper, and has no square to go to it (P10-35)", () => {
+    const lost = renderToStaticMarkup(createElement(StickyWindowView, view({ lost: true })));
+    expect(lost).toContain("This passage is not in this version of the paper.");
+    expect(lost).not.toContain('aria-label="Go to the passage"');
+    expect(lost).toContain("my words");
+    const found = renderToStaticMarkup(createElement(StickyWindowView, view()));
+    expect(found).not.toContain("not in this version");
+    expect(found).toContain('aria-label="Go to the passage"');
+  });
+
   it("is fixed at the right edge, 360 px wide, at its place in the stack", () => {
     const html = renderToStaticMarkup(createElement(StickyWindowView, view()));
     expect(html).toContain("fixed");
