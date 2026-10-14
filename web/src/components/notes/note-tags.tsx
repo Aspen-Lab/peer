@@ -69,7 +69,12 @@ function rangeOf(text: string, spot: AnchorSpot): { start: number; end: number }
   if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || start >= end || end > text.length) return null;
   if (insideFormula(text, start) || insideFormula(text, end)) return null;
   const held = text.slice(start, end).replace(/\s+/g, " ").trim();
-  return held.startsWith(quote) ? { start, end } : null;
+  if (!held.startsWith(quote)) return null;
+  // P10-20: a mark ends at its last word. The white space the selection ran on over (a double-click, a drag) stays a
+  // plain run after the tag: the browser may break a line after a space even before a word joiner, which left the tag
+  // alone at the start of the next line.
+  const last = start + text.slice(start, end).trimEnd().length;
+  return last > start ? { start, end: last } : null;
 }
 
 /**

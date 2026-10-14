@@ -92,6 +92,15 @@ describe("passageSegments — a note inside another note's words (P10-20)", () =
     );
   });
 
+  it("ends a mark at its last word: the white space the selection ran on over stays plain text after the tag", () => {
+    const trailing = { id: "h1", n: 1, start: 0, end: 17, quote: "Grain boundaries" }; // "Grain boundaries "
+    const segments = passageSegments(TEXT, [trailing]);
+    expect(tree(segments)).toBe(`[1@0 Grain boundaries]1 carry the strain.`);
+    expect(segments[0]).toMatchObject({ kind: "mark", from: 0, to: 16 });
+    const blank = { id: "h2", n: 2, start: 5, end: 6, quote: "" }; // one space: nothing to mark
+    expect(passageSegments(TEXT, [blank]).some((one) => one.kind === "mark")).toBe(false);
+  });
+
   it("still joins back to the paragraph: the outer runs and marks, in order, are exactly its text", () => {
     const segments = passageSegments(TEXT, [spot(1, 0, 22), spot(2, 6, 16), spot(3, 6, 16), spot(4, 27, 33)]);
     expect(segments.flatMap((one) => (one.kind === "tag" ? [] : [TEXT.slice(one.from, one.to)])).join("")).toBe(TEXT);

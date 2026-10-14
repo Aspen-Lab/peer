@@ -96,6 +96,11 @@ describe("PaperBody — the words a sticky was taken on are marked", () => {
     }
   });
 
+  it("ends a mark at its last word: the space the selection ran on over stands after the tag, not before it (P10-20)", () => {
+    const html = paragraphHtml(render({ [paragraphAnchor(0, 1)]: [{ id: "a", n: 1, start: 0, end: 17, quote: "Grain boundaries" }] }), 1);
+    expect(html).toMatch(new RegExp(`<p><mark data-note="1"[^>]*>Grain boundaries</mark>${TAG(1)} carry the strain\\.</p>`));
+  });
+
   it("draws overlapping, not nested, ranges as two level marks, as before (P10-20)", () => {
     const html = paragraphHtml(render({ [paragraphAnchor(0, 1)]: [spot("a", 1, P1, 0, 16), spot("b", 2, P1, 6, 22)] }), 1);
     expect(html).not.toContain("--color-note-nested");
