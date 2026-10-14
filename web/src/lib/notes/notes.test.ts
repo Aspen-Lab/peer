@@ -216,7 +216,8 @@ function noteOf(partial: Partial<Note>): Note {
 describe("export", () => {
   const sources = { rose2024applications: sourceOf(ROSE, "rose2024applications"), muller2021theory: sourceOf(SOLO, "muller2021theory") };
 
-  it("writes Markdown Obsidian and Pandoc both read, prompts left behind", () => {
+  // Re-aimed (§1c, P10-09e rule 2): the quote block in the input ("line one / line two") no longer leaves a `> ` line.
+  it("writes Markdown Obsidian and Pandoc both read, prompts and quote blocks left behind", () => {
     const md = toMarkdown(
       noteOf({
         title: 'A "draft"',
@@ -255,9 +256,6 @@ describe("export", () => {
         "2. second",
         "- [x] check",
         "",
-        "> line one",
-        "> line two",
-        "",
         "```",
         "x = 1",
         "```",
@@ -274,6 +272,7 @@ describe("export", () => {
       ].join("\n"),
     );
     expect(md).not.toContain("never exported");
+    expect(md).not.toContain("line one");
   });
 
   it("writes BibTeX with the same keys, honorifics dropped and specials escaped", () => {

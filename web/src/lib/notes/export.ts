@@ -3,7 +3,8 @@
 // P10-09b (review 7.3): and, from the notes window, plain text, Word and (through the browser's print) PDF — one
 // body, four dressings. Word is an HTML file with the Word namespaces that Word opens as a document (no docx
 // library); the PDF is the browser's print of `toPrintHtml`, which holds the note alone. A sticky note's quoted
-// passage is `anchor.quote` on its heading block and is never any block's text, so none of these reads it.
+// passage is `anchor.quote` on its heading block and is never any block's text, so none of these reads it; and
+// P10-09e (review 7.3, "the quoted text is not exported"): a `quote` block a note holds is skipped by every one.
 //
 // The Markdown keeps citations as `[@key]` — Pandoc's syntax — and the .bib
 // carries the same keys, so `pandoc draft.md --citeproc --bibliography
@@ -52,6 +53,8 @@ function isTitleLine(note: Pick<Note, "title" | "blocks">, b: Block, i: number):
 }
 
 function blockMarkdown(b: Block, blocks: Block[], i: number, sources: Record<string, Source>): string | null {
+  // P10-09e (review 7.3): quoted text is not exported — a quote block leaves no line, in any format.
+  if (b.type === "quote") return null;
   const pad = "    ".repeat(b.indent ?? 0);
   if (isTextual(b.type) && !b.text.trim()) return null;
   // Prose loses trailing spaces (a citation typed at a line's end leaves
@@ -75,10 +78,7 @@ function blockMarkdown(b: Block, blocks: Block[], i: number, sources: Record<str
     case "todo":
       return `${pad}- [${b.checked ? "x" : " "}] ${item(text)}`;
     case "quote":
-      return text
-        .split("\n")
-        .map((line) => `> ${line}`.trimEnd())
-        .join("\n");
+      return null;
     case "code":
       return `\`\`\`\n${b.text}\n\`\`\``;
     case "divider":
@@ -184,6 +184,7 @@ function wordsOf(src: string, sources: Record<string, Source>): string {
 }
 
 function blockText(b: Block, blocks: Block[], i: number, sources: Record<string, Source>): string | null {
+  if (b.type === "quote") return null; // P10-09e: quoted text is not exported
   if (isTextual(b.type) && !b.text.trim()) return null;
   const pad = "  ".repeat(b.indent ?? 0);
   const words = b.type === "code" ? b.text : wordsOf(b.text.replace(/[ \t]+$/gm, ""), sources);
@@ -202,10 +203,7 @@ function blockText(b: Block, blocks: Block[], i: number, sources: Record<string,
     case "todo":
       return `${pad}- [${b.checked ? "x" : " "}] ${item(words)}`;
     case "quote":
-      return words
-        .split("\n")
-        .map((line) => `  ${line}`.trimEnd())
-        .join("\n");
+      return null;
     case "divider":
       return "---";
     case "paper": {
@@ -286,7 +284,7 @@ function bodyHtml(note: Note): string {
     while (open.length > depth) out.push(`</li>\n</${open.pop()}>\n`);
   };
   note.blocks.forEach((b, i) => {
-    if (isTitleLine(note, b, i)) return;
+    if (isTitleLine(note, b, i) || b.type === "quote") return;
     if (isTextual(b.type) && !b.text.trim()) return;
     if (b.type === "bullet" || b.type === "numbered" || b.type === "todo") {
       const depth = Math.min(b.indent ?? 0, open.length) + 1;
@@ -313,8 +311,7 @@ function bodyHtml(note: Note): string {
         out.push(`<${b.type}>${htmlOf(b.text, note.sources)}</${b.type}>\n`);
         break;
       case "quote":
-        out.push(`<blockquote>${htmlOf(b.text, note.sources)}</blockquote>\n`);
-        break;
+        break; // P10-09e: quoted text is not exported
       case "code":
         out.push(`<pre>${esc(b.text)}</pre>\n`);
         break;
