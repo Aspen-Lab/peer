@@ -163,6 +163,55 @@ export function NotesWindowView({
 
 type Doc = { title: string; blocks: Block[]; sources: Record<string, Source> };
 
+const sameBlocks = (a: readonly Block[], b: readonly Block[]) => a === b || JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * P10-09c (rule 3, BACKLOG-69): the editor's unsaved blocks (`mine`) and a change made to the same note from outside
+ * (`theirs` — a sticky writing its words), both grown from `base`, in one list. Block by block, by id: a block only the
+ * window changed keeps the window's version, a block only the outside changed keeps the outside's, where both changed
+ * one block the outside one stands (it was written last); a block the window added stays after its neighbour, one the
+ * outside added stays, one the window deleted is gone. Pure.
+ */
+export function mergeBlocks(base: readonly Block[], mine: readonly Block[], theirs: readonly Block[]): Block[] {
+  const baseBy = new Map(base.map((b) => [b.id, b]));
+  const mineBy = new Map(mine.map((b) => [b.id, b]));
+  const out: Block[] = [];
+  for (const t of theirs) {
+    const b = baseBy.get(t.id);
+    const m = mineBy.get(t.id);
+    if (!m) {
+      if (b && sameBlocks([b], [t])) continue; // the window deleted it, the outside left it
+      out.push(t);
+      continue;
+    }
+    out.push(b && sameBlocks([b], [t]) && !sameBlocks([b], [m]) ? m : t);
+  }
+  const placed = new Set(out.map((b) => b.id));
+  mine.forEach((m, i) => {
+    if (baseBy.has(m.id) || placed.has(m.id)) return; // not the window's to add
+    const prev = mine[i - 1];
+    const at = prev ? out.findIndex((x) => x.id === prev.id) : -1;
+    out.splice(at + 1, 0, m);
+    placed.add(m.id);
+  });
+  return out;
+}
+
+export type Reconcile = { kind: "same" } | { kind: "keep" } | { kind: "restart"; blocks: Block[] } | { kind: "merge"; blocks: Block[] };
+
+/**
+ * What the window does when the note's stored blocks (`theirs`) change under its editor, which was started from
+ * `base` and holds `mine` now: nothing when its own save landed (`same`) or the store did not change (`keep`); start
+ * the editor afresh on the stored blocks when it holds nothing unsaved (`restart`); else the two merged (`merge`) —
+ * which the window then stores itself, after the old editor's own flush on unmount, so neither is lost.
+ */
+export function reconcileWindow(base: readonly Block[], mine: readonly Block[], theirs: readonly Block[]): Reconcile {
+  if (sameBlocks(theirs, mine)) return { kind: "same" };
+  if (sameBlocks(theirs, base)) return { kind: "keep" };
+  if (sameBlocks(mine, base)) return { kind: "restart", blocks: [...theirs] };
+  return { kind: "merge", blocks: mergeBlocks(base, mine, theirs) };
+}
+
 export function NotesWindow({ paper, onClose }: { paper: Paper; onClose: () => void }) {
   const note = useNotesStore((s) => readingNoteFor(s.notes, paper.id));
   const windows = useWindows((s) => s.windows);
@@ -171,8 +220,12 @@ export function NotesWindow({ paper, onClose }: { paper: Paper; onClose: () => v
   const [menuOpen, setMenuOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   // The editor keeps its own copy while it is open; a sticky note written into the same note from outside (P10-09a)
-  // changes the stored blocks under it, so the editor is started afresh when they change and it holds nothing unsaved.
-  const [rev, setRev] = useState(0);
+  // changes the stored blocks under it, so the editor is started afresh when they change (`rev`). P10-09c: when it holds
+  // unsaved typing of its own at that moment the two are merged first (`seed`) rather than the old editor's flush on
+  // unmount writing its stale copy over the sticky's words (BACKLOG-69).
+  const [fresh, setFresh] = useState<{ rev: number; seed: { blocks: Block[]; sources: Record<string, Source> } | null }>({ rev: 0, seed: null });
+  // The blocks the editor was started from, or last saw stored: what "unsaved" is measured against.
+  const base = useRef<Block[] | null>(null);
 
   // The window is one of the stack's: it joins when it stands and leaves when it closes.
   useEffect(() => {
@@ -185,11 +238,33 @@ export function NotesWindow({ paper, onClose }: { paper: Paper; onClose: () => v
     : undefined;
 
   useEffect(() => {
-    if (!note || !doc.current) return;
-    if (JSON.stringify(note.blocks) !== JSON.stringify(doc.current.blocks)) setRev((r) => r + 1);
+    if (!note) return;
+    const mine = doc.current;
+    const from = base.current ?? note.blocks;
+    if (!mine) {
+      base.current = note.blocks;
+      return;
+    }
+    const verdict = reconcileWindow(from, mine.blocks, note.blocks);
+    if (verdict.kind === "same") base.current = note.blocks;
+    else if (verdict.kind === "keep") base.current ??= note.blocks;
+    else if (verdict.kind === "restart") {
+      base.current = note.blocks;
+      setFresh((f) => ({ rev: f.rev + 1, seed: null }));
+    } else setFresh((f) => ({ rev: f.rev + 1, seed: { blocks: verdict.blocks, sources: { ...note.sources, ...mine.sources } } }));
     // Only a change of what is stored matters here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note?.blocks]);
+
+  // The merge is stored once the old editor has gone (its unmount flush has written its own copy by now), and is what
+  // the new editor started from.
+  useEffect(() => {
+    if (!fresh.seed || !note) return;
+    useNotesStore.getState().save(note.id, { blocks: fresh.seed.blocks, sources: fresh.seed.sources });
+    setFresh((f) => (f.rev === fresh.rev ? { rev: f.rev, seed: null } : f));
+    // Only a new start matters here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fresh.rev]);
 
   const flash = (text: string) => {
     setNotice(text);
@@ -231,8 +306,8 @@ export function NotesWindow({ paper, onClose }: { paper: Paper; onClose: () => v
       onRaise={() => raise(NOTES_WINDOW_ID)}
     >
       <NoteEditor
-        key={`${note.id}:${rev}`}
-        note={note as Note}
+        key={`${note.id}:${fresh.rev}`}
+        note={(fresh.seed ? { ...note, blocks: fresh.seed.blocks, sources: fresh.seed.sources } : note) as Note}
         compact
         onDoc={(d) => {
           doc.current = d;

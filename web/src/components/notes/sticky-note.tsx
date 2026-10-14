@@ -5,7 +5,8 @@
 // It imitates a sticky note: it floats while the page scrolls, it can be closed, and what is written in it is
 // saved as it is written — through into the paper's own note (`store/notes.ts`: `addSticky`, `setStickyText`),
 // as the "Note N" heading carrying the passage's anchor and the reader's paragraphs under it. Closing hides the
-// window and loses nothing; a reload shows the windows closed and the note unchanged.
+// window and loses nothing — except a sticky that was never written in, which leaves nothing behind (P10-09c); a reload
+// shows the windows closed and the note unchanged. P10-09c: a sticky follows its blocks when the notes window edits them.
 //
 // `takeStickyNote` is what the toolbar's "Take notes" does; `StickyNotes` renders the open stickies; the view
 // (`StickyWindowView`) has no state, so it is tested as markup and as an element tree.
@@ -15,7 +16,7 @@ import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import type { Paper } from "@/types";
 import type { QuestionAnswers } from "@/lib/papers/report";
-import { quoteHead, stickyText, stickyTitle } from "@/lib/notes/blocks";
+import { quoteHead, stickyParagraphs, stickySpan, stickyText, stickyTitle } from "@/lib/notes/blocks";
 import type { Block } from "@/lib/notes/types";
 import { citableFromPaper } from "@/lib/notes/cite";
 import type { ReadingNoteExtras } from "@/lib/notes/templates";
@@ -133,7 +134,43 @@ export function makeStickyWriter(write: (text: string) => void, ms = STICKY_SAVE
       timer = setTimeout(flush, ms);
     },
     flush,
+    /** A keystroke is waiting to be written. */
+    pending: () => pending !== null,
   };
+}
+
+/**
+ * P10-09c (rule 3): what a sticky's text area should show when its blocks in the paper's note are `stored`: the stored
+ * text when it changed outside (the notes window edited the blocks) and the sticky holds no keystroke of its own that is not
+ * yet written; null — keep what is there — otherwise. The store keeps paragraphs (no blank lines, no trailing spaces), so
+ * the text area's own words are compared as paragraphs: what the sticky wrote itself is never "taken back".
+ */
+export function stickyFollowText({ local, stored, pending }: { local: string; stored: string; pending: boolean }): string | null {
+  if (pending) return null;
+  return stickyParagraphs(local).join("\n") === stored ? null : stored;
+}
+
+/**
+ * P10-09c (rule 4): the blocks without the sticky's heading and its text blocks when all of those are empty — a sticky
+ * opened and never written in leaves nothing behind. The same array when it has words, or is not there. The note's
+ * `stickyCount` is not touched (the number is not reused).
+ */
+export function withoutSticky(blocks: readonly Block[], headerId: string): readonly Block[] {
+  const span = stickySpan(blocks, headerId);
+  if (!span) return blocks;
+  if (blocks.slice(span.start + 1, span.end).some((b) => b.text.trim() !== "")) return blocks;
+  return [...blocks.slice(0, span.start), ...blocks.slice(span.end)];
+}
+
+/** Closing a sticky: an empty one is taken out of the note; its window leaves the stack. The note keeps everything else. */
+export function closeSticky(noteId: string, headerId: string): void {
+  const { notes, save } = useNotesStore.getState();
+  const note = notes[noteId];
+  if (note) {
+    const blocks = withoutSticky(note.blocks, headerId);
+    if (blocks !== note.blocks) save(noteId, { blocks: [...blocks] });
+  }
+  useWindows.getState().close(headerId);
 }
 
 /**
@@ -218,8 +255,16 @@ function StickyWindow({ row, noteId, paperId }: { row: Row; noteId: string; pape
   const router = useRouter();
   const [text, setText] = useState(() => stickyText(readingNoteFor(useNotesStore.getState().notes, paperId)?.blocks ?? [], row.id));
   const [writer] = useState(() => makeStickyWriter((next) => useNotesStore.getState().setStickyText(noteId, row.id, next)));
-  const close = useWindows((s) => s.close);
   const raise = useWindows((s) => s.raise);
+  // P10-09c: the sticky follows its blocks — when the notes window edits them, the text area shows the change, unless a
+  // keystroke of the sticky's own is waiting to be written (then its write, a quarter second away, is the newer).
+  const stored = useNotesStore((s) => stickyText(readingNoteFor(s.notes, paperId)?.blocks ?? [], row.id));
+  const [seen, setSeen] = useState(stored);
+  if (stored !== seen) {
+    setSeen(stored);
+    const next = stickyFollowText({ local: text, stored, pending: writer.pending() });
+    if (next !== null) setText(next);
+  }
 
   // What is typed and not yet written is written when the window goes behind, closes or is left.
   useEffect(() => {
@@ -242,7 +287,7 @@ function StickyWindow({ row, noteId, paperId }: { row: Row; noteId: string; pape
       }}
       onClose={() => {
         writer.flush();
-        close(row.id);
+        closeSticky(noteId, row.id);
       }}
       onRaise={() => raise(row.id)}
       onGo={() => goToPassage(row.anchor, { doc: document, navigate: (href) => router.push(href as Route) })}

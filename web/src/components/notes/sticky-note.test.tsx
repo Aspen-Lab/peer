@@ -358,8 +358,9 @@ describe("a sticky and the notes window on one note (P10-09c, rule 3)", () => {
   it("no overwrite from the window: its unsaved typing and the sticky's new words are merged, not one over the other", () => {
     const { made, noteId, blocks, writer } = setup();
     const base = blocks();
-    // The window's editor holds an unsaved block of its own (typed in the last half second)...
-    const mine = [...base, block("text", "typed in the window")];
+    // The window's editor holds unsaved blocks of its own (typed in the last half second) — under a heading of its own,
+    // since a text block right after a sticky's last one would be that sticky's...
+    const mine = [...base, block("h2", "From the window"), block("text", "typed in the window")];
     // ...when the sticky's words arrive in the store.
     writer.push("typed in the sticky");
     vi.advanceTimersByTime(300);
