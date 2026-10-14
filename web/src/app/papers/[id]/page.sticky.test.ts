@@ -13,7 +13,7 @@ function wiringProblems(page: string, body: string, editor: string): string[] {
     if (!text.includes(needle)) problems.push(why);
   };
   has(p, "<SelectionToolbar target={explainTarget} onExplain={openExplain} onTakeNote={takeNote} />", "the selection buttons are not mounted with the selection, the explain action and the take-note action");
-  has(p, "<StickyNotes paper={paper} reveal={reveal} />", "the sticky notes are not mounted for the paper with the tab reveal");
+  has(p, "<StickyNotes key={paper.id} paper={paper} reveal={reveal} />", "the sticky notes are not mounted for the paper with the tab reveal");
   has(p, "noteAnchors={noteAnchors}", "the body is not handed the paper's note anchors");
   has(p, "useTakeNote(", "the page has no take-note action");
   if (p.split("<SelectionToolbar").length - 1 !== 1) problems.push("the selection buttons are not mounted exactly once");
@@ -41,8 +41,8 @@ describe("the page's wiring of the selection buttons and the sticky notes", () =
       ["toolbar", () => wiringProblems(page.replace("<SelectionToolbar", "<Nothing"), body, editor)],
       ["stickies", () => wiringProblems(page.replace("<StickyNotes", "<Nothing"), body, editor)],
       ["anchors", () => wiringProblems(page.replace("noteAnchors={noteAnchors}", ""), body, editor)],
-      ["tag", () => wiringProblems(page, body.replace("<NoteTag", "<Nothing"), editor)],
-      ["square", () => wiringProblems(page, body, editor.replace("AnchorLink", "Nothing"))],
+      ["tag", () => wiringProblems(page, body.replaceAll("<NoteTag", "<Nothing"), editor)],
+      ["square", () => wiringProblems(page, body, editor.replaceAll("AnchorLink", "Nothing"))],
     ];
     for (const [name, run] of cases) expect(run().length, name).toBeGreaterThan(0);
   });

@@ -28,7 +28,7 @@ function termsProblems(source: string): string[] {
   // P3-02 (§1h.2): the body also reports the reader's selection (`onSelect`); P4-01: "Say it plainly" is handed
   // to it through `plain={plainForBody}`. P10-02 (ruling §1h.78): the term the reader clicked in "Terms to know"
   // is gone with the strip, and the body is handed no `termMark`.
-  has("<PaperBody reading={reading} route={route} plain={plainForBody} onSelect={selectExplain} />", "the body is no longer handed its props as the page gives them");
+  has("<PaperBody reading={reading} route={route} plain={plainForBody} onSelect={selectExplain} noteAnchors={noteAnchors} />", "the body is no longer handed its props as the page gives them");
   if (/termMark|markedTerm|markTerm|clickedTerm/.test(text)) problems.push("the page still keeps a clicked term for the body to mark");
 
   // P10-02: "Terms to know" is deleted. Nothing on the page mounts the strip or hands the layout a `terms` slot;

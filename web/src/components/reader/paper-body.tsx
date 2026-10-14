@@ -30,6 +30,8 @@ import { Band } from "@/components/ui/band";
 import { paragraphKey } from "@/store/plain-rewrites";
 import { ASK, BODY, ROUTE } from "./copy";
 import { ParagraphPlainControl, PlainRewrite, plainOffered, type PlainView } from "./plain-button";
+import { NoteTag } from "@/components/notes/note-tags";
+import type { NoteAnchorMap } from "@/lib/notes/blocks";
 
 /** Each section is a destination: the map's rows jump here, and `scroll-mt`
  *  keeps the heading clear of the sticky masthead. */
@@ -552,6 +554,7 @@ function Section({
   mark,
   termMark,
   plain,
+  noteAnchors,
 }: {
   section: ReadingSection;
   index: number;
@@ -560,6 +563,8 @@ function Section({
   termMark?: TermOccurrence | null;
   /** P4-01: "Say it plainly" — absent without a model, and the section is then what it was. */
   plain?: PlainView;
+  /** P10-09a: the sticky notes taken on this paper's paragraphs, by paragraph id. */
+  noteAnchors?: NoteAnchorMap;
 }) {
   const figures = section.figures ?? [];
   const equations = section.equations ?? [];
@@ -612,7 +617,11 @@ function Section({
               {...(here ? { "data-term-mark": "" } : {})}
               className={rewrite !== undefined ? `space-y-4 scroll-mt-20 ${SIDE_BY_SIDE}` : "space-y-4 scroll-mt-20"}
             >
-              <p>{here ? <MarkedParagraph text={paragraph} mark={here} /> : <MathText text={paragraph} />}</p>
+              <p>
+                {here ? <MarkedParagraph text={paragraph} mark={here} /> : <MathText text={paragraph} />}
+                {/* P10-09a (review 7.1c): one reference tag [N] after the passage per sticky note taken on it. */}
+                {noteAnchors?.[paragraphAnchor(index, i)]?.map((tag) => <NoteTag key={tag.id} n={tag.n} id={tag.id} />)}
+              </p>
               {rewrite !== undefined && <PlainRewrite text={rewrite} />}
               {offered && plain && (
                 <ParagraphPlainControl
@@ -639,6 +648,7 @@ export function PaperBody({
   termMark,
   plain,
   onSelect,
+  noteAnchors,
 }: {
   reading: PaperReading;
   route?: DrawRoute;
@@ -651,6 +661,9 @@ export function PaperBody({
   /** P3-02 (§1h.2): told, once it holds still, what the reader has selected in
    *  the body — a target within one paragraph — or `null` for no such selection. */
   onSelect?: (selection: ExplainSelection | null) => void;
+  /** P10-09a (review 7.1c): the paper's own note's anchors — per paragraph, the sticky notes taken on it —
+   *  drawn as a small reference tag after the passage. Absent, and the body is what it was. */
+  noteAnchors?: NoteAnchorMap;
 }) {
   useSelectionListener(onSelect);
   // `?? []`: the version gate above should mean this is always an array, and
@@ -677,6 +690,7 @@ export function PaperBody({
           mark={sectionMark(route, section.id)}
           termMark={termMark?.sectionId === section.id ? termMark : null}
           plain={plain}
+          noteAnchors={noteAnchors}
         />
       ))}
     </Band>

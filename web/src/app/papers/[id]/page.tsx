@@ -115,6 +115,8 @@ import { useReaderTab } from "@/components/reader/use-reader-tab";
 import { settledQuestions, useReadingQuestionsHydrated } from "@/store/reading-questions";
 import { SelectionToolbar } from "@/components/reader/selection-toolbar";
 import { StickyNotes, useTakeNote } from "@/components/notes/sticky-note";
+import { anchorMap } from "@/lib/notes/blocks";
+import { readingNoteFor, useNotesStore } from "@/store/notes";
 import { explanationFor, passageHash, useExplainThreadsStore, type ExplainTurn } from "@/store/explain-threads";
 import { paragraphKey, usePlainRewritesStore } from "@/store/plain-rewrites";
 import { PLAIN_DEFAULT_LEVEL, isPlainLevel, type PlainLevel } from "@/lib/papers/plain-levels";
@@ -870,6 +872,9 @@ function Reader({
   // P10-09a (review 7.1, 8.4): "Take notes" on the selection — a numbered sticky note at the right, saved into the
   // paper's own note. The pill that offers it and "Explain this" is `SelectionToolbar` (mounted by the box below).
   const takeNote = useTakeNote({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions });
+  // The tags the passages carry: the sticky notes in the paper's own note, by paragraph.
+  const readingNote = useNotesStore((state) => readingNoteFor(state.notes, paper.id));
+  const noteAnchors = useMemo(() => anchorMap(readingNote, paper.id), [readingNote, paper.id]);
 
   // P7-14 (R10, the owner's review; Q5): a paper Peer has read in full has two tabs, "Summary" and
   // "Paper digestion", and opens on the second. The tab is one state of the page: the hook holds
@@ -1451,7 +1456,7 @@ function Reader({
             {reading.map && <ReadingMapView key={`map:${paper.id}`} map={reading.map} route={route} gists={paragraphGists} source={reading.provenance.sourceLabel} />}
 
             {/* The paper, when Peer reached it. */}
-            <PaperBody reading={reading} route={route} plain={plainForBody} onSelect={selectExplain} />
+            <PaperBody reading={reading} route={route} plain={plainForBody} onSelect={selectExplain} noteAnchors={noteAnchors} />
           </>
         ) : (
           <>
