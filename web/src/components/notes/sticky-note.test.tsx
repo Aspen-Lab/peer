@@ -164,6 +164,30 @@ describe("takeStickyNote", () => {
   });
 });
 
+// P10-24 (X-B2′): the header quote never shows a note's tag, whether the quote was stored with one (an older note) or not.
+describe("the sticky's header quote and passage carry no tag (P10-24, rule 1)", () => {
+  beforeEach(() => {
+    useNotesStore.setState({ notes: {} });
+    useWindows.setState({ windows: [], clock: 0 });
+  });
+  const WITH_TAG = "The finest grains\u2060[1] crept fastest when the specimens were annealed";
+
+  it("shows the quote without the tag's [n]", () => {
+    const html = renderToStaticMarkup(createElement(StickyWindowView, view({ quote: WITH_TAG })));
+    expect(html).toContain("“The finest grains crept fastest");
+    expect(html).not.toContain("[1]");
+    expect(html).not.toContain("\u2060");
+  });
+
+  it("takeStickyNote stores the passage's words and their range, never the tag", () => {
+    const paragraphText = "Creep limits the life. The finest grains crept fastest when the specimens were annealed at rest.";
+    const made = takeStickyNote({ sectionIndex: 1, paragraphIndex: 2, passage: WITH_TAG, paragraphText }, PAPER);
+    const anchor = Object.values(useNotesStore.getState().notes)[0].blocks.find((b) => b.id === made?.id)?.anchor;
+    expect(anchor?.quote).toBe("The finest grains crept fastest when the specimens were annealed");
+    expect(paragraphText.slice(anchor!.start, anchor!.end)).toBe(anchor?.quote);
+  });
+});
+
 describe("stickyRows", () => {
   const frame = { top: 100, bottom: 900, frontHeight: 260 };
   const heads: Block[] = [1, 2, 3].map((n) => block("h3", stickyTitle(n), { anchor: { paperId: "p1", paragraphId: `paper-section-0-p${n}`, quote: `quote ${n}`, n } }));

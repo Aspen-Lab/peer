@@ -158,3 +158,37 @@ describe("addSticky — the selection's place", () => {
     }
   });
 });
+
+// P10-24 (X-B2′, BACKLOG-87): a passage that still arrives with a note tag's text (the word joiner U+2060 and "[n]" a
+// browser's selection reads from the tag) is found by its words; the quote and the range never hold the tag.
+describe("a passage carrying a note tag's text (P10-24, rule 1)", () => {
+  beforeEach(() => useNotesStore.setState({ notes: {} }));
+  const PARAGRAPH = "Creep limits the life of hot parts. The finest grains crept fastest when annealed.";
+
+  it("locatePassage finds the words across the tag's text, at the paragraph's offsets", () => {
+    const hit = locatePassage(PARAGRAPH, "The finest grains\u2060[1] crept fastest");
+    expect(hit).toEqual({ start: PARAGRAPH.indexOf("The finest"), end: PARAGRAPH.indexOf("crept fastest") + "crept fastest".length });
+    expect(locatePassage(PARAGRAPH, "The finest grains\u2060[1]\u2060[2] crept")).not.toBeNull();
+  });
+
+  it("locatePassage still finds a citation that is the paper's own words", () => {
+    const paragraph = "Creep was measured in [12] and in [13] at once.";
+    expect(locatePassage(paragraph, "measured in [12] and")).toEqual({ start: 10, end: 30 });
+  });
+
+  it("addSticky stores the quote and the range without the tag", () => {
+    const { ensureReadingNote, addSticky } = useNotesStore.getState();
+    const id = ensureReadingNote(PAPER);
+    const sticky = addSticky(id, { ...AT, passage: "The finest grains\u2060[1] crept fastest", paragraphText: PARAGRAPH });
+    const anchor = useNotesStore.getState().notes[id].blocks.find((b) => b.id === sticky?.id)?.anchor;
+    expect(anchor?.quote).toBe("The finest grains crept fastest");
+    expect(PARAGRAPH.slice(anchor!.start, anchor!.end)).toBe("The finest grains crept fastest");
+  });
+
+  it("addSticky stores the quote without the tag even when the paragraph's text was not handed", () => {
+    const { ensureReadingNote, addSticky } = useNotesStore.getState();
+    const id = ensureReadingNote(PAPER);
+    const sticky = addSticky(id, { ...AT, passage: "finest grains\u2060[1] crept" });
+    expect(useNotesStore.getState().notes[id].blocks.find((b) => b.id === sticky?.id)?.anchor?.quote).toBe("finest grains crept");
+  });
+});
