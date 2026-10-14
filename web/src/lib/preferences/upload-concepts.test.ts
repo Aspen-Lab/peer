@@ -207,3 +207,11 @@ describe("the extraction version after the numbered-equation and glyph rules (P8
     expect(UPLOAD_CONCEPT_EXTRACTION_VERSION).toBeGreaterThanOrEqual(6);
   });
 });
+
+describe("the extraction version after the empty numbered parent is kept (P10-04)", () => {
+  // Text read under 9 has no section for "2. RESULTS AND DISCUSSION" (a numbered heading holding only its
+  // subsections was dropped), so the map showed no group row. 10 retires it, and the paper is read again.
+  it("is past the reading that dropped an empty numbered parent", () => {
+    expect(UPLOAD_CONCEPT_EXTRACTION_VERSION).toBeGreaterThanOrEqual(10);
+  });
+});

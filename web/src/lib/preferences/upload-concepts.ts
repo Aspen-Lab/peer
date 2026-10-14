@@ -24,7 +24,10 @@ import { ABBREVIATION_GROUPS, canonicalize, isGenericTerm } from "@/lib/scoring/
 // paragraph), and a glyph before an end-matter heading ("■ ACKNOWLEDGMENTS", "*sı Supporting Information")
 // no longer hides it; text cached under 5 still carries the fragments lifted out as "equations" and the
 // apparatus after a glyph-led heading.
-export const UPLOAD_CONCEPT_EXTRACTION_VERSION = 9;
+// 10 (P10-04): a numbered heading with no text of its own that numbers the heading after it ("2. RESULTS AND
+// DISCUSSION") is kept as a section with empty text, HTML and PDF alike; text cached under 9 has no such
+// section, so the map has no group row for it and the body no group heading.
+export const UPLOAD_CONCEPT_EXTRACTION_VERSION = 10;
 
 // A conservative, local phrase extractor. No document text is sent to a model
 // for preference learning. References, author blocks and boilerplate are out.

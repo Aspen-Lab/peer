@@ -136,8 +136,13 @@ export interface PaperReading {
    * the buckets and the findings / method chosen by them differ for papers
    * already opened. A reading cached under 6, in the browser or on the route,
    * is read again once.
+   *
+   * 10 → 11 (P10-04): the map's rows gain `level` and `parentId`, and a numbered heading with
+   * no text of its own that numbers the next ("2. RESULTS AND DISCUSSION") is a section of
+   * the body and a row of the map, so a reading cached under 10 has neither the fields nor
+   * the group rows. Read again once.
    */
-  version: 10;
+  version: 11;
   paperId: string;
   builtAt: string;
   provenance: ReadingProvenance;
@@ -761,7 +766,7 @@ export function buildReading(
   omitted.push({ block: "nextStep", reason: "needs_key" });
 
   return {
-    version: 10,
+    version: 11,
     paperId: paper.id,
     builtAt: now.toISOString(),
     provenance,
