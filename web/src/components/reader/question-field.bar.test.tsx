@@ -418,7 +418,9 @@ describe("the suggestions are a dropdown (A5, review 2.7)", () => {
         focus,
         type("Why"),
         ({ }) => void (el.value = EARLIER),
-        pick(1),
+        // P10-11 re-aim (BACKLOG-72): "Why" now filters the dropdown to the one earlier question that holds it
+        // (EARLIER, "Why does the anode crack?"), so it is the first item; it was the second of four, unfiltered.
+        pick(0),
         check((view) => {
           expect(view.bar.props.value).toBe(EARLIER);
           expect(el.focus).toHaveBeenCalledTimes(1);

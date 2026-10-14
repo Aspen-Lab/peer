@@ -15,6 +15,9 @@
 // (P1-09, §1a.7, §1f.20): questions from earlier papers, the profile asked as questions
 // (`lib/reader/question-examples.ts`), the standing questions (P5-01), and, last and set apart,
 // "Just get the gist", a reading mode of its own. Picking one fills the bar and never submits.
+// P10-11 (BACKLOG-72): with text in the bar the list follows it — only the suggestions that contain a typed word
+// (two letters or more, case-folded), the gist always last, alone when nothing matches; an empty focused bar still
+// lists the examples.
 //
 // The question is kept in this browser (`store/reading-questions.ts`); the route that reads it
 // (`lib/papers/reading-map.ts`) runs on this page, and the settled one travels with the one
@@ -136,6 +139,31 @@ export function withoutStandingRepeats(groups: readonly ChipGroup[], standing: r
   if (taken.size === 0) return [...groups];
   return groups
     .map((group) => (group.label === STANDING.chipGroup ? group : { ...group, chips: group.chips.filter((chip) => !taken.has(key(chip.text))) }))
+    .filter((group) => group.chips.length > 0);
+}
+
+/** P10-11 (BACKLOG-72): the words of the bar's text that can match a suggestion — letters and digits, two or more. */
+export function typedWords(text: string): string[] {
+  return (text.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).filter((word) => word.length >= 2);
+}
+
+/**
+ * P10-11 (X-A5, BACKLOG-72): the dropdown follows the typed text. With a typed word in the bar, a suggestion stays
+ * only if it contains one of them (case-folded, any of the words); a group left with nothing goes. With an empty
+ * bar — or text with no word of two letters yet — nothing is filtered: a focused empty bar still offers the examples
+ * (the owner's "输入问题的时候自动弹出"). "Just get the gist" is not a group; it is added after, always last.
+ */
+export function filterGroups(groups: readonly ChipGroup[], text: string): ChipGroup[] {
+  const words = typedWords(text);
+  if (words.length === 0) return [...groups];
+  return groups
+    .map((group) => ({
+      ...group,
+      chips: group.chips.filter((chip) => {
+        const own = chip.text.toLocaleLowerCase();
+        return words.some((word) => own.includes(word));
+      }),
+    }))
     .filter((group) => group.chips.length > 0);
 }
 
@@ -334,7 +362,8 @@ export function QuestionField({
 
   const standingChips = standingGroup(standing, [text]);
   // P5-04 (N5): a question under one group only.
-  const groups = withoutStandingRepeats([...(standingChips ? [standingChips] : []), ...chipGroups(examples)], standing);
+  // P10-11 (BACKLOG-72): then only the suggestions that contain a typed word; the gist stays, last.
+  const groups = filterGroups(withoutStandingRepeats([...(standingChips ? [standingChips] : []), ...chipGroups(examples)], standing), text);
   const items = suggestionItems(groups);
   const open = dropdownOpen({ focused, text, settled, count: items.length, closed });
   const listId = `ask-${paperId}-list`;

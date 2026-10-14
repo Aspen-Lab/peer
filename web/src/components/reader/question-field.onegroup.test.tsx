@@ -71,8 +71,10 @@ describe("withoutStandingRepeats", () => {
 describe("the dropdown: a standing question picked on an earlier paper is one item, not two", () => {
   beforeEach(() => useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null }));
 
-  /** The dropdown's items, in order, when the bar holds `text` and has focus. */
-  async function listed(standing?: string[], text = "Is the sample size reported?"): Promise<{ headings: string[]; options: string[] }> {
+  /** The dropdown's items, in order, when the bar holds `text` and has focus. P10-11 re-aim (BACKLOG-72): the
+   *  default text is the empty bar's — the dropdown lists every suggestion there, as these tests count them; the
+   *  "Is the sample size reported?" they typed before matches none of them now that the list follows the typed text. */
+  async function listed(standing?: string[], text = ""): Promise<{ headings: string[]; options: string[] }> {
     let seen = { headings: [] as string[], options: [] as string[] };
     await session(
       [
@@ -104,8 +106,11 @@ describe("the dropdown: a standing question picked on an earlier paper is one it
   });
 
   it("a standing question that is the bar's text is offered by no group", async () => {
-    const open = await listed([STANDING_Q, OTHER_STANDING], STANDING_Q);
+    // P10-11 re-aim (BACKLOG-72): the other standing question shares a word with the bar's text ("cohort"), as the
+    // list follows the typed text now; OTHER_STANDING shared none and would be filtered out.
+    const sharesAWord = "How was the cohort recruited?";
+    const open = await listed([STANDING_Q, sharesAWord], STANDING_Q);
     expect(count(open, STANDING_Q)).toBe(0);
-    expect(count(open, OTHER_STANDING)).toBe(1);
+    expect(count(open, sharesAWord)).toBe(1);
   });
 });

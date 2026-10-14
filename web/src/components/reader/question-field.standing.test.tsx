@@ -131,9 +131,12 @@ describe("QuestionField — with standing questions", () => {
 
   it("does not offer again a question that is the bar's text", async () => {
     withLines([STANDING_Q[0]]);
-    const open = await listed({ standing: STANDING_Q }, [({ bar }) => (bar.props.onChange as (e: unknown) => void)({ target: { value: `${STANDING_Q[0]} ` } })]);
+    // P10-11 re-aim (BACKLOG-72): the other standing question shares a word with the bar's text ("cohort"); the list
+    // follows the typed text now, and "Are negative findings reported?" shares none with it.
+    const sharesAWord = "How was the cohort recruited?";
+    const open = await listed({ standing: [STANDING_Q[0], sharesAWord] }, [({ bar }) => (bar.props.onChange as (e: unknown) => void)({ target: { value: `${STANDING_Q[0]} ` } })]);
     expect(open!.options).not.toContain(STANDING_Q[0]);
-    expect(open!.options).toContain(STANDING_Q[1]);
+    expect(open!.options).toContain(sharesAWord);
   });
 
   it("drops the group when its only questions are the bar's text", async () => {

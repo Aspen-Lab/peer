@@ -17,7 +17,7 @@ import { defaultProfile } from "@/types";
 import { useReadingQuestionsStore } from "@/store/reading-questions";
 import { useProfileStore } from "@/store/profile";
 import { ASK } from "./copy";
-import { QuestionField } from "./question-field";
+import { QuestionField, chipGroups, filterGroups, typedWords } from "./question-field";
 
 const PAPER = "upload:bbbbbbbbbbbbbbbb";
 const EXAMPLES = [
@@ -109,5 +109,22 @@ describe("the dropdown follows the typed text (P10-11, BACKLOG-72)", () => {
     f.type("a");
     expect(f.items()).toHaveLength(5);
     f.unmount();
+  });
+});
+
+describe("filterGroups and typedWords (P10-11)", () => {
+  const groups = chipGroups(EXAMPLES);
+  const texts = (g: ReturnType<typeof chipGroups>) => g.map((group) => group.chips.map((chip) => chip.text));
+
+  it("takes the words of two letters or more, case-folded", () => {
+    expect(typedWords("  GRA, a  x-ray 3d ")).toEqual(["gra", "ray", "3d"]);
+    expect(typedWords("")).toEqual([]);
+    expect(typedWords("a ?")).toEqual([]);
+  });
+
+  it("keeps a group's order, drops a group left with nothing, and filters nothing for an empty bar", () => {
+    expect(texts(filterGroups(groups, ""))).toEqual(texts(groups));
+    expect(texts(filterGroups(groups, "electrolyte"))).toEqual([["Which electrolyte is tested?"]]);
+    expect(filterGroups(groups, "zzz")).toEqual([]);
   });
 });
