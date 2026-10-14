@@ -27,7 +27,11 @@ import { ABBREVIATION_GROUPS, canonicalize, isGenericTerm } from "@/lib/scoring/
 // 10 (P10-04): a numbered heading with no text of its own that numbers the heading after it ("2. RESULTS AND
 // DISCUSSION") is kept as a section with empty text, HTML and PDF alike; text cached under 9 has no such
 // section, so the map has no group row for it and the body no group heading.
-export const UPLOAD_CONCEPT_EXTRACTION_VERSION = 10;
+// 11 (P10-33, P10-34): a running head is a band line on three pages, so a paragraph whose words repeat is kept;
+// two blocks join across a page break only when the first has not ended its sentence; and each figure carries its
+// picture's width and height. Text cached under 10 lacks the kept paragraphs and the sizes. A saved note keeps its
+// passage through the new split by its quote (P10-35).
+export const UPLOAD_CONCEPT_EXTRACTION_VERSION = 11;
 
 // A conservative, local phrase extractor. No document text is sent to a model
 // for preference learning. References, author blocks and boilerplate are out.
