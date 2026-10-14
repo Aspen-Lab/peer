@@ -248,8 +248,9 @@ describe("useModelReport — the request is read to its end, once, and the bar s
     expect(bars).toContain(75);
     // No render draws a bar at zero.
     expect(bars.filter((pct) => pct === 0)).toEqual([]);
-    // The hand-over: a stage that has words and no progress yet.
+    // The hand-over: a stage that has words and no progress yet. P10-47: re-aimed — those words now
+    // name the new request ("Your new question — reading it") rather than "Starting the report".
     const afterFirst = history.slice(history.findIndex((seen) => seen.stage?.pct === 75));
-    expect(afterFirst.some((seen) => seen.stage?.label === "Starting the report" && seen.stage.pct === null)).toBe(true);
+    expect(afterFirst.some((seen) => seen.stage?.label === "Your new question — reading it" && seen.stage.pct === null)).toBe(true);
   });
 });

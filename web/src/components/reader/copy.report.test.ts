@@ -16,6 +16,8 @@ describe("the report's stage words (P10-45, BACKLOG-93)", () => {
       writing: "Writing the report",
       figures: "Adding figures",
       again: "Trying the report once more",
+      // P10-47: re-aimed (the table gained one word) — the hand-over to a reader's queued question.
+      newQuestion: "Your new question — reading it",
     });
   });
 

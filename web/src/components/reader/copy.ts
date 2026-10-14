@@ -423,6 +423,12 @@ export const REPORT_STATUS = {
   figures: "Adding figures",
   /** The stream broke and the same request is being asked once more as plain JSON. */
   again: "Trying the report once more",
+  /**
+   * P10-47: the request the page was waiting on has ended and the reader's new question is next. The
+   * line names the hand-over instead of going blank, or showing a lower bar under the words of a stage
+   * it has already shown; the new request's own stages follow it.
+   */
+  newQuestion: "Your new question — reading it",
 } as const;
 
 export const NOT_FOUND = "Paper not found.";

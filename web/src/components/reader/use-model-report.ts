@@ -66,6 +66,13 @@ function stageLabel(stage: string, serverLabel: string, withQuestions: boolean):
   return serverLabel;
 }
 
+interface Progress {
+  base: string;
+  label: string;
+  /** `null` until a stage has said how far along it is: a request just started has no progress to draw. */
+  pct: number | null;
+}
+
 interface CachedReport {
   report: PaperReport;
   savedAt: number;
@@ -363,12 +370,7 @@ export function useModelReport({
   // key without the questions: the request a reader's new question waits behind is the same paper,
   // depth, project and provider, so its stage is what the page is waiting on until it ends. It is
   // cleared at the one place a request ends (`finally` below), so it cannot outlive its request.
-  const [progress, setProgress] = useState<{
-    base: string;
-    label: string;
-    /** `null` until a stage has said how far along it is: a request just started has no progress to draw. */
-    pct: number | null;
-  } | null>(null);
+  const [progress, setProgress] = useState<Progress | null>(null);
   const baseKey = buildReportKey(paper, depth, project, profile.feedAiProvider);
 
   // The old page's cache held fallback reports that relabelled abstract
@@ -439,6 +441,11 @@ export function useModelReport({
   // instance and removed on unmount.
   const unloading = useRef(false);
   const withheld = useRef(false);
+  // P10-47: the key the page asks for now, read where a request ends to tell whether another is owed.
+  const latestKey = useRef(reportKey);
+  useEffect(() => {
+    latestKey.current = reportKey;
+  }, [reportKey]);
   useEffect(() => {
     const hide = () => {
       unloading.current = true;
@@ -553,6 +560,12 @@ export function useModelReport({
     // sends is read and dropped. P10-45 (BACKLOG-92): returning at the report cancelled a body the
     // server was still closing, which the browser logs as `ERR_ABORTED` on every report.
     let settled = false;
+    // P10-47: a request that begins where the line already names the hand-over to the reader's new
+    // question keeps those words until its own first stage; any other request begins at "Starting".
+    const starting = (current: Progress | null): Progress =>
+      current !== null && current.base === baseKey && current.label === REPORT_STATUS.newQuestion
+        ? current
+        : { base: baseKey, label: REPORT_STATUS.starting, pct: null };
     const load = async () => {
       let modeSeen = false;
       let asked = false;
@@ -562,7 +575,7 @@ export function useModelReport({
       // not from the server's first word (which, with an earlier request ending just before this
       // one starts, would leave the line blank for a round trip). With no key, no model is asked
       // and nothing is shown; the mode event below says so for the case this guess misses.
-      if (userProviderConfigured) setProgress({ base: baseKey, label: REPORT_STATUS.starting, pct: null });
+      if (userProviderConfigured) setProgress(starting);
       try {
         for await (const event of streamPaperReport(requestBody, controller.signal)) {
           if (!active()) return;
@@ -579,7 +592,7 @@ export function useModelReport({
             asked = true;
             // A model is asked: the page waits on it from here, stage event or not. (At Tier 0 no
             // model is asked and nothing is shown, so this is not set before the mode says so.)
-            setProgress({ base: baseKey, label: REPORT_STATUS.starting, pct: null });
+            setProgress(starting);
             continue;
           }
           if (!modeSeen) throw new Error("Report stream did not begin with a mode event.");
@@ -623,8 +636,11 @@ export function useModelReport({
       if (flight.current?.controller !== controller) return;
       flight.current = null;
       finishedKey.current = reportKey;
-      // The one place a request ends, whichever way: nothing is in flight, so no stage stands.
-      setProgress(null);
+      // The one place a request ends, whichever way. Nothing is in flight, so no stage stands — unless the
+      // reader's new question is next: then the line names that hand-over (P10-47) and is never blank, so
+      // the request the question starts does not show a lower bar under the words just shown.
+      const owed = latestKey.current !== reportKey && readCached(latestKey.current) === null;
+      setProgress(owed ? { base: baseKey, label: REPORT_STATUS.newQuestion, pct: null } : null);
       setReleased((n) => n + 1);
     });
   }, [
