@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { AnchorMarker, PASSAGE_LOST_LINE, SQUARE_BLUE, passageIsLost, storedBodyOf } from "./note-tags";
+import { AnchorMarker, PASSAGE_LOST_LINE, SQUARE_COLOR, passageIsLost, storedBodyOf } from "./note-tags";
 
 // P10-36 (rule 1; P10-35's unsettled (b)): a note whose passage is found nowhere in the paper has no tag in it, so its
 // "Note N" square on the notes page and in the notes window must not jump to the old paragraph (it would land on other
@@ -106,7 +106,7 @@ describe("AnchorMarker — the square, or the line", () => {
     const html = renderToStaticMarkup(createElement(AnchorMarker, { lost: true, n: 2, onGo: go }));
     expect(html).not.toContain(PASSAGE_LOST_LINE);
     expect(html).not.toContain('aria-label="Go to the passage"');
-    expect(html.toLowerCase()).not.toContain(SQUARE_BLUE);
+    expect(html.toLowerCase()).not.toContain(SQUARE_COLOR);
     expect(go).not.toHaveBeenCalled();
   });
 

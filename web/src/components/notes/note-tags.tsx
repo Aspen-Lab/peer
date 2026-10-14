@@ -29,8 +29,8 @@ import { anchorRange, readingNoteFor, resolveAnchors, useLostPassages, useNotesS
 export const FLASH_MS = 1500;
 /** The square's side: at least 12 px. */
 export const SQUARE_PX = 14;
-/** The blue of the square: one blue that reads on the light and the dark page. */
-export const SQUARE_BLUE = "#3b82f6";
+/** The blue of the square (BACKLOG-70): the `--color-anchor` token, one blue that reads on the light and the dark page. */
+export const SQUARE_COLOR = "var(--color-anchor)";
 
 const FLASH_CLASSES = ["bg-accent-dim", "outline", "outline-2", "outline-offset-4", "outline-accent", "transition-colors"];
 /** The flash on the marked words: the mark keeps its highlighter ground and gains an outline. */
@@ -136,7 +136,7 @@ export function AnchorSquare({ onClick }: { onClick: () => void }) {
       title="Go to the passage"
       onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
-      style={{ width: SQUARE_PX, height: SQUARE_PX, backgroundColor: SQUARE_BLUE }}
+      style={{ width: SQUARE_PX, height: SQUARE_PX, backgroundColor: SQUARE_COLOR }}
       className="inline-block shrink-0 border-0 p-0 align-middle opacity-90 transition-opacity hover:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-heading"
     />
   );

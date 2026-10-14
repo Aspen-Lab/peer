@@ -317,6 +317,9 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; }
      a little deeper and warmer (muted #666 4.53:1, heading #1d1d1d 13.3:1); a background only, read by the body's nested
      note `<mark>`. P10-46: 1.097:1 against the highlighter above (it was 1.077:1, a faint step). */
   --color-note-nested: #fbe48d;
+  /* P10-46 (BACKLOG-70): the blue of the anchor square (the small button that scrolls the paper to a note's passage), a token
+     where it was a literal `#3b82f6` in `note-tags.tsx`; one blue that reads on this ground (≥ 3:1 against the page). */
+  --color-anchor: #3b82f6;
   --color-border: color-mix(in srgb, var(--color-heading) 6%, transparent);
   --color-border-strong: color-mix(in srgb, var(--color-heading) 12%, transparent);
   --color-skeleton-base: color-mix(in srgb, var(--color-heading) 5%, transparent);
@@ -373,6 +376,9 @@ html[data-mode="dark"] {
   --color-note-mark: #403a14;
   /* P10-20: the nested mark on the dark ground, a little deeper than the highlighter (muted #a9a9a9 5.61:1). */
   --color-note-nested: #3a2f10;
+  /* P10-46 (BACKLOG-70): the blue of the anchor square (the small button that scrolls the paper to a note's passage), a token
+     where it was a literal `#3b82f6` in `note-tags.tsx`; one blue that reads on this ground (≥ 3:1 against the page). */
+  --color-anchor: #3b82f6;
   --color-border: rgba(255, 255, 255, 0.09);
   --color-border-strong: rgba(255, 255, 255, 0.17);
   --color-skeleton-base: rgba(255, 255, 255, 0.05);
@@ -425,6 +431,9 @@ html[data-mode="dark"] {
   --color-note-mark: #403a14;
   /* P10-20: the nested mark on the dark ground, a little deeper than the highlighter (muted #a9a9a9 5.61:1). */
   --color-note-nested: #3a2f10;
+  /* P10-46 (BACKLOG-70): the blue of the anchor square (the small button that scrolls the paper to a note's passage), a token
+     where it was a literal `#3b82f6` in `note-tags.tsx`; one blue that reads on this ground (≥ 3:1 against the page). */
+  --color-anchor: #3b82f6;
   --color-border: rgba(255, 255, 255, 0.09);
   --color-border-strong: rgba(255, 255, 255, 0.17);
   --color-skeleton-base: rgba(255, 255, 255, 0.05);

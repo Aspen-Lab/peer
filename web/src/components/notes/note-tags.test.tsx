@@ -43,7 +43,9 @@ describe("AnchorSquare — the blue square", () => {
     expect(html).toContain('type="button"');
     expect(html).toContain(`width:${SQUARE_PX}px`);
     expect(html).toContain(`height:${SQUARE_PX}px`);
-    expect(html).toMatch(/background(-color)?:#?[0-9a-z(),. %-]*(3b82f6|2563eb|blue)/i);
+    // P10-46 (§1c, re-aimed): the blue is the `--color-anchor` token now, not a literal `#3b82f6` (globals.css.test.ts pins its value).
+    expect(html).toMatch(/background(-color)?:var\(--color-anchor\)/i);
+    expect(html).not.toMatch(/#3b82f6/i);
   });
 });
 
