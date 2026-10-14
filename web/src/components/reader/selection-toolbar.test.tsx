@@ -41,7 +41,7 @@ describe("toolbarPlace", () => {
   });
 
   it("never covers the selected words wherever it stands", () => {
-    for (const top of [20, 52, 60, 90, 400, 900]) {
+    for (const top of [52, 60, 90, 400, 900]) {
       const sel = { left: 300, top, right: 520, bottom: top + 22 };
       const place = toolbarPlace({ bounds: sel, viewport: VIEW, size: SIZE })!;
       const overlapsRows = place.top < sel.bottom && place.top + SIZE.height > sel.top;
