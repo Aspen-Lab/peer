@@ -11,9 +11,10 @@
 // caller use) with the same answer.
 //
 // Where it reads: the sections the reader's route marks strong, medium or background
-// when there is one (`routeTermScope`), otherwise the methods and results —
-// the sections where a paper puts the words a reader needs to follow its
-// numbers — and the whole body only for a paper that has neither.
+// when there is one (`routeTermScope`), otherwise the whole body. P10-11 (the walk's §7 item 7): the
+// default was the methods and results, which served the Terms strip (deleted, P10-02); a
+// no-key reader with no question who selects a term the Introduction defines has nothing but
+// this definition to read, so with no question it is in scope anywhere.
 //
 // The abbreviation logic is `term-expand.ts`'s, imported: a bracket is an
 // abbreviation of the words before it when its letters are their initials or
@@ -105,16 +106,15 @@ export function termSectionsOfReading(reading: Pick<PaperReading, "body" | "map"
   });
 }
 
-/** §1h.1: the scope's sections; with none (or none of them in the paper), the
- *  methods and results; with neither of those, the whole body. */
+/** §1h.1: the scope's sections; with none (or none of them in the paper), the whole body (P10-11: it was
+ *  the methods and results, then the whole body for a paper with neither). */
 function sectionsInScope(sections: readonly TermSection[], scope: TermScope | undefined): TermSection[] {
   const wanted = new Set(scope?.sectionIds ?? []);
   if (wanted.size > 0) {
     const named = sections.filter((section) => wanted.has(section.id));
     if (named.length > 0) return named;
   }
-  const core = sections.filter((section) => section.canonical === "methods" || section.canonical === "results");
-  return core.length > 0 ? core : [...sections];
+  return [...sections];
 }
 
 /**
@@ -122,7 +122,7 @@ function sectionsInScope(sections: readonly TermSection[], scope: TermScope | un
  * marks strong or medium (P10-06b; it was `read` before the route was graded) or marks
  * as background, or undefined when there is no such section
  * (no route, only vague questions, only the gist, or nothing above "faint") —
- * the default scope then applies. A vague question marks nothing, and the
+ * the default scope then applies: the whole body (P10-11). A vague question marks nothing, and the
  * gist is a reading order rather than a question a section could answer.
  */
 export function routeTermScope(

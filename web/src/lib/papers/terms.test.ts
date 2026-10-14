@@ -195,8 +195,9 @@ describe("paperDefinedTerms — scope (§1h.1)", () => {
     conclusion("Rafting refers to the directional coarsening of precipitates."),
   );
 
-  it("with no scope, reads the methods and results sections only", () => {
-    expect(names(paperDefinedTerms(doc))).toEqual(["dwell fatigue", "creep rate"]);
+  // P10-11 re-aim (§7 item 7): it read "the methods and results sections only"; with no scope it reads the whole body.
+  it("with no scope, reads the whole body", () => {
+    expect(names(paperDefinedTerms(doc))).toEqual(["QPU", "dwell fatigue", "creep rate", "Rafting"]);
   });
 
   it("with a scope, reads exactly the sections it names, whatever their bucket", () => {
@@ -211,8 +212,9 @@ describe("paperDefinedTerms — scope (§1h.1)", () => {
   });
 
   it("an empty scope, or one naming no section of the paper, is no scope at all", () => {
-    expect(names(paperDefinedTerms(doc, { sectionIds: [] }))).toEqual(["dwell fatigue", "creep rate"]);
-    expect(names(paperDefinedTerms(doc, { sectionIds: ["s99"] }))).toEqual(["dwell fatigue", "creep rate"]);
+    // P10-11 re-aim: no scope is the whole body now (it was the methods and results).
+    expect(names(paperDefinedTerms(doc, { sectionIds: [] }))).toEqual(["QPU", "dwell fatigue", "creep rate", "Rafting"]);
+    expect(names(paperDefinedTerms(doc, { sectionIds: ["s99"] }))).toEqual(["QPU", "dwell fatigue", "creep rate", "Rafting"]);
   });
 
   it("never reads the abstract (the page sets it from the record, not from the body)", () => {
@@ -279,7 +281,8 @@ describe("paperDefinedTermsInReading — the browser's route to the same terms",
 
     expect(paperDefinedTermsInReading(readingOf(doc))).toEqual(paperDefinedTerms(doc));
     expect(paperDefinedTermsInReading(readingOf(doc), { sectionIds: ["s1"] })).toEqual(paperDefinedTerms(doc, { sectionIds: ["s1"] }));
-    expect(paperDefinedTermsInReading(readingOf(doc)).map((term) => term.page)).toEqual([2, 3]);
+    // P10-11 re-aim: [2, 3] when the default was the methods and results; the Introduction's term (page 1) is in scope now.
+    expect(paperDefinedTermsInReading(readingOf(doc)).map((term) => term.page)).toEqual([1, 2, 3]);
   });
 
   it("reads a page with no body as having no terms", () => {
