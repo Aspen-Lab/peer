@@ -20,6 +20,7 @@
 // file on disk. The Python figure extractor (`lib/figures/pdf-extract.ts`) is
 // separate and unchanged.
 
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { cleanPaperText } from "@/lib/text/clean";
 import { buildOutline, gutterPrior, linesOfPageWith, type PdfOutline, type PdfPageText } from "./pdf-outline";
@@ -206,6 +207,27 @@ const MEASURE_BUDGET_MS = 10_000;
 /** …and the most figures it measures (the engine's own ceiling for a document is 12). */
 const MEASURE_MAX = 24;
 
+type FigureSize = { width: number; height: number } | null;
+/** P10-37: the sizes measured so far, by the PDF's own sha-256 and then `page/figure`: a paper is measured once,
+ *  whoever reads it and however many times its text is read (the upload route, the reading's first build, a new
+ *  extraction version). Nothing here belongs to a reader: the key is the file's content, the value a picture's
+ *  pixel size. What the engine found nothing for is kept as null; a measuring that threw, or that the budget cut
+ *  short, is not kept, so the next build tries it again. The most recent papers only; a restart measures again. */
+const MEASURED_KEEP = 32;
+const measured = new Map<string, Map<string, FigureSize>>();
+
+function measuredFor(hash: string): Map<string, FigureSize> {
+  const kept = measured.get(hash) ?? new Map<string, FigureSize>();
+  measured.delete(hash);
+  measured.set(hash, kept);
+  while (measured.size > MEASURED_KEEP) {
+    const oldest = measured.keys().next().value;
+    if (oldest === undefined) break;
+    measured.delete(oldest);
+  }
+  return kept;
+}
+
 /**
  * P10-34 (BACKLOG-89): each figure's caption carries its picture's width and height in pixels, measured from the
  * PDF's own bytes — already in hand — by the figure engine the figure route draws with (the same page, the same
@@ -213,23 +235,30 @@ const MEASURE_MAX = 24;
  * before the picture arrives (`figureBoxStyle`). A figure the engine finds nothing for, a caption with no
  * "Figure N" number or no page, a paper past the budget, an engine that will not load: no size, and the page's
  * fixed 32rem room — never a failed reading.
+ *
+ * P10-37: measured once per paper (`measured`), so the reading's first build, which reads the PDF again after
+ * the upload route did, asks the engine for nothing.
  */
 export async function withFigureSizes(doc: ExtractedDocument, bytes: Uint8Array): Promise<ExtractedDocument> {
   const targets = doc.figureCaptions.filter((cap) => typeof cap.page === "number" && pictureNumber(cap.label) !== null);
   if (targets.length === 0) return doc;
   try {
-    const { measurePdfFigure } = await import("@/lib/figures/pdf-engine");
-    const deadline = Date.now() + MEASURE_BUDGET_MS;
-    const sizes = new Map<string, { width: number; height: number } | null>();
-    for (const cap of targets.slice(0, MEASURE_MAX)) {
-      const key = `${cap.page}/${pictureNumber(cap.label)}`;
-      if (sizes.has(key)) continue;
-      if (Date.now() > deadline) break;
-      try {
-        sizes.set(key, await measurePdfFigure(bytes, cap.page as number, pictureNumber(cap.label) as number));
-      } catch (err) {
-        console.warn("[papers/pdf-text] a figure could not be measured:", err instanceof Error ? err.message : String(err));
-        sizes.set(key, null);
+    const sizes = measuredFor(createHash("sha256").update(bytes).digest("hex"));
+    const missing = targets.slice(0, MEASURE_MAX).filter((cap) => !sizes.has(`${cap.page}/${pictureNumber(cap.label)}`));
+    if (missing.length > 0) {
+      const { measurePdfFigure } = await import("@/lib/figures/pdf-engine");
+      const deadline = Date.now() + MEASURE_BUDGET_MS;
+      const tried = new Set<string>();
+      for (const cap of missing) {
+        const key = `${cap.page}/${pictureNumber(cap.label)}`;
+        if (tried.has(key)) continue;
+        tried.add(key);
+        if (Date.now() > deadline) break;
+        try {
+          sizes.set(key, await measurePdfFigure(bytes, cap.page as number, pictureNumber(cap.label) as number));
+        } catch (err) {
+          console.warn("[papers/pdf-text] a figure could not be measured:", err instanceof Error ? err.message : String(err));
+        }
       }
     }
     return {

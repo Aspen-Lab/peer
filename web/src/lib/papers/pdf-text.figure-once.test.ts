@@ -91,7 +91,15 @@ describe("a paper's figures are measured once (P10-37, P10-34's unsettled)", () 
   it("withFigureSizes itself keeps them: the same document and bytes twice", async () => {
     const pdf = paperPdf("direct");
     const read = await extractPdfTextFromBytes(pdf);
-    const bare = { ...read.doc!, figureCaptions: read.doc!.figureCaptions.map(({ width: _w, height: _h, ...cap }) => cap) };
+    const bare = {
+      ...read.doc!,
+      figureCaptions: read.doc!.figureCaptions.map((cap) => {
+        const copy = { ...cap };
+        delete copy.width;
+        delete copy.height;
+        return copy;
+      }),
+    };
     measure.mockClear();
     const again = await withFigureSizes(bare, new Uint8Array(pdf));
     expect(measure).not.toHaveBeenCalled();
