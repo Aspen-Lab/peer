@@ -2,53 +2,35 @@
 
 // P10-09b (the owner's review 7.2, 7.3, 7.5; B12, B13, B15): "Open your notes" opens the paper's whole note as a
 // floating window at the right — no navigation. It stands in the dock's column (360 px, flush with the right
-// edge), at the dock's top while no explain window stands and under that window's bottom while one does, and
-// takes the height its text needs down to the foot legend; past that it scrolls inside itself. It is `fixed`, so the
-// page scrolling under it never moves it: the sticky pad the reader keeps writing on while they read on.
+// edge) and takes the height its text needs down to the foot legend; past that it scrolls inside itself. It is `fixed`,
+// so the page scrolling under it never moves it: the sticky pad the reader keeps writing on while they read on.
+//
+// P10-09c (review 7.1a, B9): it is one of the floating windows (`lib/reader/windows.ts`): it registers there as
+// `kind: "notes"` while it stands and leaves when it closes, and the stack places it — in the one cascade with the sticky
+// notes, 40 px apart, the raised one in front and whole, the column under the explain window. Behind another window it
+// shows its header alone (the editor stays mounted, hidden, so nothing it holds is lost); a press on the header raises it.
 //
 // Its body is the paper's one reading note (`readingNoteFor`, the note the Saved page opens at `/notes/<id>`),
 // in the block editor with the formatting toolbar: the sticky notes' "Note N" headings and their text in order,
 // and whatever is typed here. There is no character limit anywhere in the path — blocks are strings in the store.
 //
-// Not done this round: dragging the window by its header (the column is where it stands), stacking with the sticky
-// notes (P10-09a's `windows.ts`), and a phone (the row there still navigates to the page).
+// Not done: dragging the window by its header (the column is where it stands), and a phone (the row there still
+// navigates to the page).
 
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { DOCK_TOP_PX, PAGE_ZOOM_ROOT, PAGE_ZOOM_VAR, legendHeightPx } from "@/components/reader/explain-dock";
+import { DOCK_TOP_PX } from "@/components/reader/explain-dock";
 import type { Paper } from "@/types";
 import type { Block, Note, Source } from "@/lib/notes/types";
 import { fileName, toMarkdown, toPlainText, toPrintHtml, toWordHtml } from "@/lib/notes/export";
 import { downloadFile, printHtml } from "@/lib/notes/print";
+import { cn } from "@/lib/cn";
+import { NOTES_WINDOW_ID, stackRows, useColumn, useWindows } from "@/lib/reader/windows";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
 import { NoteEditor } from "./note-editor";
 
-/** The gap between the explain window's bottom and this window's top, and between this window's bottom and the legend. */
-export const NOTES_WINDOW_GAP_PX = 8;
-
-/** The least height the window keeps for writing when the explain window stands low: it is lifted instead. */
-export const NOTES_WINDOW_MIN_HEIGHT_PX = 240;
-
-/**
- * Where the window stands, in the window's own pixels: its top, and the most height it takes before it scrolls.
- * `explainBottom` is the bottom edge of the explain window when one stands (else null), `legend` the foot legend's
- * height on screen (`legendHeightPx`). The window never stands above the dock's top, and is lifted — not
- * squeezed — when the explain window leaves less than a writable height above the legend.
- */
-export function notesWindowBox({
-  viewportHeight,
-  explainBottom,
-  legend,
-}: {
-  viewportHeight: number;
-  explainBottom: number | null;
-  legend: number;
-}): { top: number; maxHeight: number } {
-  const floor = viewportHeight - legend - NOTES_WINDOW_GAP_PX;
-  const wanted = explainBottom === null ? DOCK_TOP_PX : explainBottom + NOTES_WINDOW_GAP_PX;
-  const top = Math.max(DOCK_TOP_PX, Math.min(wanted, floor - NOTES_WINDOW_MIN_HEIGHT_PX));
-  return { top, maxHeight: Math.max(NOTES_WINDOW_MIN_HEIGHT_PX, floor - top) };
-}
+/** The sticky notes' height in front (the stack's frame needs it; the notes window in front takes what the screen leaves). */
+const STICKY_FRONT_HEIGHT_PX = 260;
 
 export type ExportKind = "copy" | "txt" | "md" | "doc" | "pdf";
 
@@ -64,46 +46,83 @@ export const EXPORT_ITEMS: readonly { id: ExportKind; label: string; detail: str
 export function NotesWindowView({
   top,
   maxHeight,
+  height,
+  z,
+  front = true,
   menuOpen,
   notice,
   onClose,
   onMenu,
   onExport,
+  onRaise,
   children,
 }: {
   top: number;
+  /** In front: the most height the window takes before its body scrolls. */
   maxHeight: number;
+  /** Behind another window: a header's height. */
+  height?: number;
+  /** Its place in the stack. */
+  z?: number;
+  /** In front and whole; else only its header shows (the note stays mounted, hidden). */
+  front?: boolean;
   menuOpen: boolean;
   /** What the last export did ("Copied"), said politely in the header. */
   notice: string | null;
   onClose: () => void;
   onMenu: () => void;
   onExport: (kind: ExportKind) => void;
+  /** A press on the header: raise the window to the front. */
+  onRaise?: () => void;
   children?: ReactNode;
 }) {
   return (
     <section
       aria-label="Your notes"
       data-notes-window=""
-      className="fixed right-0 z-[70] flex w-[360px] max-w-[calc(100vw-1rem)] flex-col border border-r-0 border-border-strong bg-surface shadow-card"
-      style={{ top, maxHeight }}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        event.stopPropagation();
+        event.preventDefault();
+        // An open export menu closes first; the window next.
+        if (menuOpen) onMenu();
+        else onClose();
+      }}
+      className={cn(
+        "fixed right-0 flex w-[360px] max-w-[calc(100vw-1rem)] flex-col border border-r-0 border-border-strong bg-surface shadow-card",
+        !front && "overflow-hidden",
+      )}
+      style={front ? { top, maxHeight, zIndex: z } : { top, height, maxHeight, zIndex: z }}
     >
-      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-2">
-        <h2 className="eyebrow text-heading">Your notes</h2>
-        <div className="relative flex items-center gap-2">
-          <span className="annotation text-text-faint" aria-live="polite">
-            {notice}
-          </span>
+      <header className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border pl-4 pr-2">
+        <h2 className="eyebrow min-w-0 flex-1 text-heading">
           <button
             type="button"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            onClick={onMenu}
-            className="eyebrow px-2 py-1 text-text-muted transition-colors hover:bg-bg-secondary hover:text-heading"
+            data-window-header=""
+            onClick={onRaise}
+            className="flex h-10 w-full items-center text-left transition-colors hover:text-text"
           >
-            Export <span aria-hidden>▾</span>
+            Your notes
           </button>
-          {menuOpen && (
+        </h2>
+        <div className="relative flex items-center gap-2">
+          {front && (
+            <span className="annotation text-text-faint" aria-live="polite">
+              {notice}
+            </span>
+          )}
+          {front && (
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              onClick={onMenu}
+              className="eyebrow px-2 py-1 text-text-muted transition-colors hover:bg-bg-secondary hover:text-heading"
+            >
+              Export <span aria-hidden>▾</span>
+            </button>
+          )}
+          {front && menuOpen && (
             <>
               <button type="button" aria-hidden tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={onMenu} />
               <div role="menu" className="absolute right-0 top-full z-20 mt-1 w-56 border border-border-strong bg-surface py-1 shadow-card">
@@ -132,30 +151,22 @@ export function NotesWindowView({
           </button>
         </div>
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-4 pt-1">{children}</div>
-      <p className="annotation shrink-0 border-t border-border px-4 py-2 text-text-faint">Kept in this browser</p>
+      <div hidden={!front} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-4 pt-1">
+        {children}
+      </div>
+      <p hidden={!front} className="annotation shrink-0 border-t border-border px-4 py-2 text-text-faint">
+        Kept in this browser
+      </p>
     </section>
   );
-}
-
-/** Measure the window's surroundings: the explain window's bottom, the legend's height, the viewport's. */
-function measure(): { viewportHeight: number; explainBottom: number | null; legend: number } {
-  const dock = document.querySelector<HTMLElement>("[data-explain-dock]");
-  const r = dock?.getBoundingClientRect();
-  const root = document.querySelector<HTMLElement>(PAGE_ZOOM_ROOT);
-  const zoom = root ? Number.parseFloat(getComputedStyle(root).getPropertyValue(PAGE_ZOOM_VAR)) : Number.NaN;
-  return {
-    viewportHeight: window.innerHeight,
-    explainBottom: r && r.height > 0 ? r.bottom : null,
-    legend: legendHeightPx(zoom),
-  };
 }
 
 type Doc = { title: string; blocks: Block[]; sources: Record<string, Source> };
 
 export function NotesWindow({ paper, onClose }: { paper: Paper; onClose: () => void }) {
   const note = useNotesStore((s) => readingNoteFor(s.notes, paper.id));
-  const [box, setBox] = useState(() => notesWindowBox({ viewportHeight: 900, explainBottom: null, legend: 28 }));
+  const windows = useWindows((s) => s.windows);
+  const raise = useWindows((s) => s.raise);
   const doc = useRef<Doc | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -163,21 +174,15 @@ export function NotesWindow({ paper, onClose }: { paper: Paper; onClose: () => v
   // changes the stored blocks under it, so the editor is started afresh when they change and it holds nothing unsaved.
   const [rev, setRev] = useState(0);
 
+  // The window is one of the stack's: it joins when it stands and leaves when it closes.
   useEffect(() => {
-    const place = () => {
-      const next = notesWindowBox(measure());
-      setBox((b) => (b.top === next.top && b.maxHeight === next.maxHeight ? b : next));
-    };
-    place();
-    window.addEventListener("resize", place);
-    // The explain window moves with the paragraph the reader selects and with the window's size: its bottom is read
-    // again a few times a second rather than watched, which is cheap and never wrong for long.
-    const t = window.setInterval(place, 250);
-    return () => {
-      window.removeEventListener("resize", place);
-      window.clearInterval(t);
-    };
+    useWindows.getState().open({ id: NOTES_WINDOW_ID, kind: "notes", title: "Your notes" });
+    return () => useWindows.getState().close(NOTES_WINDOW_ID);
   }, []);
+  const column = useColumn(true);
+  const row = note
+    ? stackRows(windows, note.blocks, { ...column, frontHeight: STICKY_FRONT_HEIGHT_PX, minTop: DOCK_TOP_PX }).find((r) => r.id === NOTES_WINDOW_ID)
+    : undefined;
 
   useEffect(() => {
     if (!note || !doc.current) return;
@@ -209,16 +214,21 @@ export function NotesWindow({ paper, onClose }: { paper: Paper; onClose: () => v
     else printHtml(toPrintHtml(n));
   };
 
-  if (!note) return null;
+  // Not in the stack yet (it registers just after it mounts): nothing to draw for that one frame.
+  if (!note || !row) return null;
   return (
     <NotesWindowView
-      top={box.top}
-      maxHeight={box.maxHeight}
+      top={row.top}
+      maxHeight={row.height}
+      height={row.height}
+      z={row.z}
+      front={row.front}
       menuOpen={menuOpen}
       notice={notice}
       onClose={onClose}
       onMenu={() => setMenuOpen((o) => !o)}
       onExport={runExport}
+      onRaise={() => raise(NOTES_WINDOW_ID)}
     >
       <NoteEditor
         key={`${note.id}:${rev}`}

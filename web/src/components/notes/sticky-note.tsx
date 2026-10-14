@@ -22,7 +22,7 @@ import type { ReadingNoteExtras } from "@/lib/notes/templates";
 import type { Citable, NoteAnchor } from "@/lib/notes/types";
 import { paragraphAnchor, type ExplainSelection } from "@/components/reader/paper-body";
 import { DOCK_TOP_PX } from "@/components/reader/explain-dock";
-import { columnTop, stackLayout, useWindows, type FloatingWindow } from "@/lib/reader/windows";
+import { stackRows, useColumn, useWindows, type FloatingWindow, type StackFrame } from "@/lib/reader/windows";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
 import { AnchorSquare, goToPassage, registerPassageHost } from "./note-tags";
 
@@ -31,8 +31,6 @@ export const STICKY_SAVE_MS = 250;
 
 /** The window's height while it is in front. */
 const FRONT_HEIGHT_PX = 260;
-/** What the column keeps clear at the window's foot: the foot legend and a margin. */
-const FOOT_PX = 40;
 
 export function StickyWindowView({
   n,
@@ -202,16 +200,13 @@ export function passageFromHash(hash: string): string | null {
 }
 
 /** The open stickies as rows of the stack: each with its number and quote from its "Note N" heading in the paper's
- *  note (a window whose heading is gone is dropped), placed as cascaded cards. */
-export function stickyRows(
-  windows: readonly FloatingWindow[],
-  blocks: readonly Block[],
-  frame: { top: number; bottom: number; frontHeight: number; minTop?: number; ceiling?: number },
-): Row[] {
-  const known = windows.filter((w) => w.kind === "sticky" && blocks.some((b) => b.id === w.id && b.type === "h3" && b.anchor));
-  const place = new Map(stackLayout(known, frame).map((row) => [row.id, row]));
+ *  note (a window whose heading is gone is dropped), placed as cascaded cards. P10-09c: the cascade holds every window
+ *  of the column — the notes window too — so the stickies' tops leave a slot for its header (`stackRows`). */
+export function stickyRows(windows: readonly FloatingWindow[], blocks: readonly Block[], frame: StackFrame): Row[] {
+  const place = new Map(stackRows(windows, blocks, frame).map((row) => [row.id, row]));
   const rows: Row[] = [];
-  for (const w of known) {
+  for (const w of windows) {
+    if (w.kind !== "sticky") continue;
     const anchor = blocks.find((b) => b.id === w.id)?.anchor;
     const at = place.get(w.id);
     if (anchor && at) rows.push({ id: w.id, n: anchor.n, quote: anchor.quote, anchor, front: at.front, top: at.top, height: at.height, z: at.z });
@@ -255,35 +250,6 @@ function StickyWindow({ row, noteId, paperId }: { row: Row; noteId: string; pape
   );
 }
 
-/** The column's frame: where it starts (under the explain window, when one stands) and where the screen ends. */
-function useColumn(active: boolean): { top: number; bottom: number; ceiling?: number } {
-  const [frame, setFrame] = useState<{ top: number; bottom: number; ceiling?: number }>({ top: columnTop(null), bottom: 1000 });
-  useEffect(() => {
-    if (!active) return;
-    const read = () => {
-      const dock = document.querySelector("[data-explain-dock]");
-      const box = dock ? dock.getBoundingClientRect() : null;
-      const next = {
-        top: columnTop(box ? { bottom: box.bottom } : null),
-        bottom: window.innerHeight - FOOT_PX,
-        ...(box && box.bottom > 0 ? { ceiling: Math.floor(box.top) } : {}),
-      };
-      setFrame((current) => (current.top === next.top && current.bottom === next.bottom && current.ceiling === next.ceiling ? current : next));
-    };
-    read();
-    const timer = setInterval(read, 250);
-    // The explain window stands level with its paragraph, so it moves as the page scrolls: the column follows.
-    window.addEventListener("scroll", read, true);
-    window.addEventListener("resize", read);
-    return () => {
-      clearInterval(timer);
-      window.removeEventListener("scroll", read, true);
-      window.removeEventListener("resize", read);
-    };
-  }, [active]);
-  return frame;
-}
-
 export function StickyNotes({ paper, reveal }: { paper: Paper; reveal: (run: () => void) => void }) {
   const windows = useWindows((s) => s.windows);
   const note = useNotesStore((s) => readingNoteFor(s.notes, paper.id));
@@ -313,10 +279,9 @@ export function StickyNotes({ paper, reveal }: { paper: Paper; reveal: (run: () 
     [],
   );
 
-  const stickies = windows.filter((w: FloatingWindow) => w.kind === "sticky");
-  const column = useColumn(stickies.length > 0);
+  const column = useColumn(windows.some((w: FloatingWindow) => w.kind === "sticky"));
   if (!note) return null;
-  const rows = stickyRows(stickies, note.blocks, { ...column, frontHeight: FRONT_HEIGHT_PX, minTop: DOCK_TOP_PX });
+  const rows = stickyRows(windows, note.blocks, { ...column, frontHeight: FRONT_HEIGHT_PX, minTop: DOCK_TOP_PX });
   return (
     <>
       {rows.map((row) => (
