@@ -140,6 +140,51 @@ describe("what the page keeps clear while the dock is open", () => {
     expect(style.removeProperty).toHaveBeenCalledWith("--explain-dock-width");
   });
 
+  // P10-09d (X-B1; ruling §1h.87 (c)): the reserve is shared by every floating window at the right and counted.
+  it("is counted: the first taker writes the properties, later ones only add to the count, the last release takes them off", () => {
+    const style = { setProperty: vi.fn(), removeProperty: vi.fn() };
+    const root = { style };
+    const a = reserveDock(root);
+    const b = reserveDock(root);
+    const c = reserveDock(root);
+    expect(style.setProperty).toHaveBeenCalledTimes(2);
+    a();
+    b();
+    expect(style.removeProperty).not.toHaveBeenCalled();
+    c();
+    expect(style.removeProperty).toHaveBeenCalledWith("--explain-dock");
+    expect(style.removeProperty).toHaveBeenCalledWith("--explain-dock-width");
+    expect(style.removeProperty).toHaveBeenCalledTimes(2);
+  });
+
+  it("a release given twice counts once, and a new take after the last release writes the properties afresh", () => {
+    const style = { setProperty: vi.fn(), removeProperty: vi.fn() };
+    const root = { style };
+    const a = reserveDock(root);
+    const b = reserveDock(root);
+    a();
+    a();
+    expect(style.removeProperty).not.toHaveBeenCalled();
+    b();
+    expect(style.removeProperty).toHaveBeenCalledTimes(2);
+    const c = reserveDock(root);
+    expect(style.setProperty).toHaveBeenCalledTimes(4);
+    c();
+    expect(style.removeProperty).toHaveBeenCalledTimes(4);
+  });
+
+  it("keeps a count for each root", () => {
+    const one = { setProperty: vi.fn(), removeProperty: vi.fn() };
+    const two = { setProperty: vi.fn(), removeProperty: vi.fn() };
+    const a = reserveDock({ style: one });
+    const b = reserveDock({ style: two });
+    a();
+    expect(one.removeProperty).toHaveBeenCalledTimes(2);
+    expect(two.removeProperty).not.toHaveBeenCalled();
+    b();
+    expect(two.removeProperty).toHaveBeenCalledTimes(2);
+  });
+
   it("does nothing, and fails at nothing, where there is no root to write to", () => {
     for (const root of [null, undefined, {}, { style: undefined }]) {
       expect(() => reserveDock(root as never)()).not.toThrow();

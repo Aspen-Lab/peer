@@ -6,7 +6,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { block, stickySpan, stickyText, stickyTitle } from "@/lib/notes/blocks";
 import type { Block } from "@/lib/notes/types";
-import { NOTES_WINDOW_ID, useWindows } from "@/lib/reader/windows";
+import { DOCK_VAR } from "@/components/reader/explain-dock";
+import { NOTES_WINDOW_ID, bindWindowsReserve, useWindows } from "@/lib/reader/windows";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
 import { reconcileWindow } from "./notes-window";
 import { STICKY_SAVE_MS, StickyWindowView, closeSticky, makeStickyWriter, passageFromHash, stickyFollowText, stickyRows, takeStickyNote, withoutSticky } from "./sticky-note";
@@ -379,5 +380,64 @@ describe("a sticky and the notes window on one note (P10-09c, rule 3)", () => {
     useNotesStore.getState().save(noteId, { blocks: verdict.blocks });
     expect(stickyText(blocks(), made.id)).toBe("typed in the sticky");
     expect(blocks().some((b) => b.text === "typed in the window")).toBe(true);
+  });
+});
+
+describe("a sticky reserves the column and holds the selection in place (P10-09d, X-B1; rules 1 and 2)", () => {
+  const target = { sectionIndex: 1, paragraphIndex: 2, passage: QUOTE };
+  let unbind: (() => void) | undefined;
+  beforeEach(() => {
+    useNotesStore.setState({ notes: {} });
+    useWindows.setState({ windows: [], clock: 0 });
+  });
+  afterEach(() => {
+    unbind?.();
+    unbind = undefined;
+    useWindows.setState({ windows: [], clock: 0 });
+  });
+
+  /** A page whose words sit 220 px lower once the column is reserved (a narrower text column wraps to more lines). */
+  function page(width: number) {
+    const props = new Map<string, string>();
+    const style = { setProperty: (k: string, v: string) => void props.set(k, v), removeProperty: (k: string) => void props.delete(k) };
+    unbind = bindWindowsReserve({ root: { style }, width: () => width, onResize: () => () => {} });
+    return { props, top: () => (props.has(DOCK_VAR) ? 520 : 300) };
+  }
+
+  it("opening a sticky takes the shared reserve, so the text moves out of the column; closing the last gives it back", () => {
+    const p = page(1440);
+    const made = takeStickyNote(target, PAPER, undefined, vi.fn())!;
+    expect(p.props.get(DOCK_VAR)).toBe("376px");
+    closeSticky(Object.values(useNotesStore.getState().notes)[0].id, made.id);
+    expect(p.props.has(DOCK_VAR)).toBe(false);
+  });
+
+  it("scrolls the page by what the reflow moved the selection, so the selected words stay where the eyes are", () => {
+    const p = page(1440);
+    const scroll = vi.fn();
+    takeStickyNote({ ...target, measure: () => ({ bounds: { top: p.top() } }) as never }, PAPER, undefined, scroll);
+    expect(scroll).toHaveBeenCalledExactlyOnceWith(220);
+  });
+
+  it("with the explain window's reserve already standing nothing moves, so nothing is scrolled", () => {
+    const p = page(1440);
+    p.props.set(DOCK_VAR, "376px");
+    const scroll = vi.fn();
+    takeStickyNote({ ...target, measure: () => ({ bounds: { top: 520 } }) as never }, PAPER, undefined, scroll);
+    expect(scroll).not.toHaveBeenCalled();
+  });
+
+  it("under 1024 px nothing is reserved and nothing is scrolled", () => {
+    const p = page(800);
+    const scroll = vi.fn();
+    takeStickyNote({ ...target, measure: () => ({ bounds: { top: p.top() } }) as never }, PAPER, undefined, scroll);
+    expect(p.props.has(DOCK_VAR)).toBe(false);
+    expect(scroll).not.toHaveBeenCalled();
+  });
+
+  it("the stickies' module opens windows through the store that the reserve is bound to", () => {
+    const src = readFileSync(resolve(process.cwd(), "src/components/notes/sticky-note.tsx"), "utf8");
+    expect(src).toContain("holdInPlace(");
+    expect(src).not.toContain("reserveDock(");
   });
 });

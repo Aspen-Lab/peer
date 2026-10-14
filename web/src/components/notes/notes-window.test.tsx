@@ -271,3 +271,29 @@ describe("export in the window", () => {
     expect(win).toContain("application/msword");
   });
 });
+
+describe("the notes window reserves the column (P10-09d, X-B1; rule 1)", () => {
+  const win = read("src/components/notes/notes-window.tsx");
+
+  it("joins the stack before the first paint, holding the reader's place across the reflow, and takes no reserve of its own", () => {
+    expect(win).toMatch(/useLayoutEffect\(\(\) => \{\s*holdInPlace\(/);
+    expect(win).toContain('useWindows.getState().open({ id: NOTES_WINDOW_ID, kind: "notes"');
+    expect(win).not.toContain("reserveDock(");
+  });
+});
+
+describe("the header and the formatting toolbar are opaque (P10-09d, rule 5; the readers' 0.25 on B12 / B15)", () => {
+  const win = read("src/components/notes/notes-window.tsx");
+
+  it("the header row carries the window's own surface, so nothing of the text under it shows through", () => {
+    const html = renderToStaticMarkup(createElement(NotesWindowView, { top: 48, maxHeight: 400, menuOpen: false, notice: null, onClose: () => {}, onMenu: () => {}, onExport: () => {} }));
+    expect(html).toMatch(/<header class="[^"]*\bbg-surface\b/);
+  });
+
+  it("the scrolling body carries it too, and leaves no strip above the editor's sticky toolbar for the text to pass through", () => {
+    const body = /<div hidden=\{!front\} className="([^"]*)"/.exec(win)?.[1] ?? "";
+    expect(body).toMatch(/\bbg-surface\b/);
+    expect(body).not.toMatch(/\bpt-1\b/);
+    expect(body).toMatch(/\[role=toolbar\]\]:bg-surface/);
+  });
+});
