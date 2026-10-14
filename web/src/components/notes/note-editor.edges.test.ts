@@ -81,8 +81,8 @@ describe("rule 1 — a sticky's heading is whole (BACKLOG-90)", () => {
 
   it("the toolbar's heading and list buttons are aria-disabled while the caret is in an anchored heading", () => {
     expect(editor).toMatch(/holdsItsType\(editingBlock\)/);
-    expect(editor).toContain('setAttribute("aria-disabled", "true")');
-    expect(editor).toContain('removeAttribute("aria-disabled")');
+    expect(editor).toMatch(/if \(typesHeld\) btn\.setAttribute\("aria-disabled", "true"\);\s*else btn\.removeAttribute\("aria-disabled"\);/);
+    expect(editor).toMatch(/const typesHeld = Boolean\(editingBlock && holdsItsType\(editingBlock\)\);/);
     // greyed
     expect(editor).toMatch(/\[aria-disabled=true\]\]:opacity-/);
   });
@@ -193,9 +193,8 @@ describe("rule 3 — undo covers a block split and a join (BACKLOG-85)", () => {
   });
 
   it("the key handler logs a split (Enter), a join (Backspace, Delete) and tries the structure when the block's own steps are spent", () => {
-    expect(caseBody("Enter")).toMatch(/recordStructure\(/);
-    expect(caseBody("Backspace")).toMatch(/recordStructure\(/);
-    expect(caseBody("Delete")).toMatch(/recordStructure\(/);
+    // each a statement of its own (not behind a condition)
+    for (const name of ["Enter", "Backspace", "Delete"]) expect(caseBody(name), name).toMatch(/\n\s*structure\.current = recordStructure\(structure\.current, \{\s*before: \[/);
     expect(editor).toMatch(/if \(!stepHistory\(id, letter === "y" \|\| e\.shiftKey\)\) stepBlocks\(id, letter === "y" \|\| e\.shiftKey\);/);
   });
 });
