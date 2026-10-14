@@ -43,10 +43,13 @@ describe("the upload page's band — the sentence the reader sees (BACKLOG-81)",
 });
 
 describe("the P2-05 comment describes the current note (BACKLOG-88)", () => {
-  const start = source.indexOf("/** P2-05:");
-  const comment = source.slice(start, source.indexOf("*/", start));
+  // The comment on `NotesInputs`, whatever its first words are.
+  const at = source.indexOf("interface NotesInputs");
+  const start = source.lastIndexOf("/**", at);
+  const comment = source.slice(start, at).replace(/\s*\n\s*\*\s*/g, " ");
 
   it("is there", () => {
+    expect(at).toBeGreaterThan(-1);
     expect(start).toBeGreaterThan(-1);
   });
 

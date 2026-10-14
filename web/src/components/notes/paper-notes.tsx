@@ -25,9 +25,10 @@ import { COMMAND } from "@/components/ui/command";
 import { citableFromPaper } from "@/lib/notes/cite";
 import { notesCiting, readingNoteFor, useNotesHydrated, useNotesStore } from "@/store/notes";
 
-/** P2-05: `questions` (the reader's settled ones, never the gist) and the
- *  report's `forYourQuestions` go into the paper's first note, as "My questions →
- *  what it said". Without them the note is what it was. */
+/** P2-05, then P10-09e: `questions` (the reader's settled ones, never the gist) and the
+ *  report's `forYourQuestions` are still handed in, but the paper's note is the title and
+ *  the reader's sticky notes, so they are not placed in it — the answers stand on the
+ *  paper's page, under each question. */
 interface NotesInputs {
   paper: Paper;
   questions?: readonly string[];
