@@ -15,7 +15,7 @@
 import type { Block, Note, Source } from "./types";
 import { isWrapping, parseInline } from "./inline";
 import { citedKeys, isList, isTextual, listNumber } from "./blocks";
-import { authorYear } from "./cite";
+import { authorYear, externalLink } from "./cite";
 
 function yaml(s: string): string {
   return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
@@ -30,18 +30,24 @@ function day(iso: string): string {
   return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`;
 }
 
+/** A link only for an address that means something outside the app: a DOI, or an `http(s)` URL that is not the app's
+ *  own `/api/` path (P10-09e, rule 4). */
 function linkOf(s: Source): string | undefined {
-  return s.url ?? (s.doi ? `https://doi.org/${s.doi}` : undefined);
+  return externalLink(s.url) ?? (s.doi ? `https://doi.org/${s.doi}` : undefined);
 }
 
 /** One reference, as the list at the end of the note gives it. A work whose
  *  record names no author leads with its title, as the author-date styles
  *  set it — "(2026). A First Course…" reads as a line that lost its start. */
 export function reference(s: Source): string {
-  const year = `(${s.year ?? "n.d."}).`;
   const venue = s.venue ? ` *${s.venue}*.` : "";
   const link = linkOf(s);
-  const lead = s.authors.length > 0 ? `${s.authors.join(", ")} ${year} ${s.title}.` : `${s.title}. ${year}`;
+  // An unknown year is left out, not written "(n.d.)" (P10-09e, rule 4).
+  const year = s.year ? `(${s.year}).` : "";
+  const lead =
+    s.authors.length > 0
+      ? `${s.authors.join(", ")}${year ? ` ${year}` : "."} ${s.title}.`
+      : `${s.title}.${year ? ` ${year}` : ""}`;
   return `${lead}${venue}${link ? ` ${link}` : ""}`;
 }
 
@@ -77,8 +83,6 @@ function blockMarkdown(b: Block, blocks: Block[], i: number, sources: Record<str
       return `${pad}${listNumber(blocks, i)}. ${item(text)}`;
     case "todo":
       return `${pad}- [${b.checked ? "x" : " "}] ${item(text)}`;
-    case "quote":
-      return null;
     case "code":
       return `\`\`\`\n${b.text}\n\`\`\``;
     case "divider":
@@ -202,8 +206,6 @@ function blockText(b: Block, blocks: Block[], i: number, sources: Record<string,
       return `${pad}${listNumber(blocks, i)}. ${item(words)}`;
     case "todo":
       return `${pad}- [${b.checked ? "x" : " "}] ${item(words)}`;
-    case "quote":
-      return null;
     case "divider":
       return "---";
     case "paper": {
@@ -310,8 +312,6 @@ function bodyHtml(note: Note): string {
       case "h3":
         out.push(`<${b.type}>${htmlOf(b.text, note.sources)}</${b.type}>\n`);
         break;
-      case "quote":
-        break; // P10-09e: quoted text is not exported
       case "code":
         out.push(`<pre>${esc(b.text)}</pre>\n`);
         break;

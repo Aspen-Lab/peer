@@ -61,8 +61,9 @@ describe("citing", () => {
     expect(authorYear(sourceOf(ROSE, "k"))).toBe("Rose et al., 2024");
     expect(authorYear(sourceOf({ ...ROSE, authors: ["A Rose", "B Ma"] }, "k"))).toBe("Rose & Ma, 2024");
     expect(authorYear(sourceOf(SOLO, "k"))).toBe("Müller, 2021");
-    expect(authorYear(sourceOf({ ...SOLO, publishedDate: undefined }, "k"))).toBe("Müller, n.d.");
-    expect(authorYear(sourceOf({ ...SOLO, authors: [] }, "k"))).toBe("The Theory of, 2021");
+    // Re-aimed (§1c, P10-09e rule 4): no ", n.d." for an unknown year; the title's first four words for no author.
+    expect(authorYear(sourceOf({ ...SOLO, publishedDate: undefined }, "k"))).toBe("Müller");
+    expect(authorYear(sourceOf({ ...SOLO, authors: [] }, "k"))).toBe("The Theory of Everything, 2021");
   });
 });
 
