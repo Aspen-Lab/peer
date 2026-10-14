@@ -29,7 +29,7 @@ import { Band } from "@/components/ui/band";
 import { paragraphKey } from "@/store/plain-rewrites";
 import { ASK, BODY, ROUTE } from "./copy";
 import { ParagraphPlainControl, PlainRewrite, plainOffered, type PlainView } from "./plain-button";
-import { NoteTag, passageSegments } from "@/components/notes/note-tags";
+import { NoteTag, passageSegments, type PassageSegment } from "@/components/notes/note-tags";
 import type { NoteAnchorMap } from "@/lib/notes/blocks";
 
 /** Each section is a destination: the map's rows jump here, and `scroll-mt`
@@ -607,22 +607,27 @@ function Figure({ figure }: { figure: ReadingFigure }) {
  */
 function NotedText({ text, spots }: { text: string; spots?: NoteAnchorMap[string] }) {
   if (!spots || spots.length === 0) return <MathText text={text} />;
-  return (
-    <>
-      {passageSegments(text, spots).map((segment, k) => {
-        if (segment.kind === "text") return <MathText key={`t${k}`} text={text.slice(segment.from, segment.to)} />;
-        if (segment.kind === "tag") return <NoteTag key={`g${segment.spot.id}`} n={segment.spot.n} id={segment.spot.id} />;
-        return (
-          <Fragment key={`m${segment.spot.id}`}>
-            <mark data-note={segment.spot.n} className="bg-[color:var(--color-note-mark)] text-inherit">
-              <MathText text={text.slice(segment.from, segment.to)} />
-            </mark>
-            <NoteTag n={segment.spot.n} id={segment.spot.id} />
-          </Fragment>
-        );
-      })}
-    </>
-  );
+  return <>{notedRuns(text, passageSegments(text, spots))}</>;
+}
+
+/** P10-20: the second shade (`--color-note-nested`) for a mark inside another's; the outer keeps the highlighter token. */
+const MARK_OUTER = "bg-[color:var(--color-note-mark)] text-inherit";
+const MARK_INNER = "bg-[color:var(--color-note-nested)] text-inherit";
+
+/** The runs of a paragraph, or of one mark: text, marks (their own nested runs inside, the tag right after), loose tags. */
+function notedRuns(text: string, segments: readonly PassageSegment[]) {
+  return segments.map((segment, k) => {
+    if (segment.kind === "text") return <MathText key={`t${k}`} text={text.slice(segment.from, segment.to)} />;
+    if (segment.kind === "tag") return <NoteTag key={`g${segment.spot.id}`} n={segment.spot.n} id={segment.spot.id} />;
+    return (
+      <Fragment key={`m${segment.spot.id}`}>
+        <mark data-note={segment.spot.n} className={segment.depth === 0 ? MARK_OUTER : MARK_INNER}>
+          {notedRuns(text, segment.inner)}
+        </mark>
+        <NoteTag n={segment.spot.n} id={segment.spot.id} />
+      </Fragment>
+    );
+  });
 }
 
 /** P4-01: a paragraph with its rewrite beside it. From the spread (xl) the anchor is two columns —

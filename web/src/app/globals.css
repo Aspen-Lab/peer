@@ -311,6 +311,10 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; }
      yellow, none of the route's greens, a background only; the paragraph's own ink stays on it (muted #666 4.88:1,
      heading #1d1d1d 14.3:1). */
   --color-note-mark: #fcee9e;
+  /* P10-20: the second shade of the highlighter — a note taken inside another note's words is a mark inside its mark,
+     a little deeper and warmer (muted #666 4.53:1, heading #1d1d1d 13.3:1); a background only, read by the body's nested
+     note `<mark>`. */
+  --color-note-nested: #fbe48d;
   --color-border: color-mix(in srgb, var(--color-heading) 6%, transparent);
   --color-border-strong: color-mix(in srgb, var(--color-heading) 12%, transparent);
   --color-skeleton-base: color-mix(in srgb, var(--color-heading) 5%, transparent);
@@ -365,6 +369,8 @@ html[data-mode="dark"] {
   --color-route-background: #173a36;
   /* P10-09f: the highlighter on the dark ground (muted #a9a9a9 4.87:1, heading #f3f3f3 10.3:1). */
   --color-note-mark: #403a14;
+  /* P10-20: the nested mark on the dark ground, a little deeper than the highlighter (muted #a9a9a9 5.61:1). */
+  --color-note-nested: #3a2f10;
   --color-border: rgba(255, 255, 255, 0.09);
   --color-border-strong: rgba(255, 255, 255, 0.17);
   --color-skeleton-base: rgba(255, 255, 255, 0.05);
@@ -415,6 +421,8 @@ html[data-mode="dark"] {
   --color-route-background: #173a36;
   /* P10-09f: the highlighter on the dark ground (muted #a9a9a9 4.87:1, heading #f3f3f3 10.3:1). */
   --color-note-mark: #403a14;
+  /* P10-20: the nested mark on the dark ground, a little deeper than the highlighter (muted #a9a9a9 5.61:1). */
+  --color-note-nested: #3a2f10;
   --color-border: rgba(255, 255, 255, 0.09);
   --color-border-strong: rgba(255, 255, 255, 0.17);
   --color-skeleton-base: rgba(255, 255, 255, 0.05);

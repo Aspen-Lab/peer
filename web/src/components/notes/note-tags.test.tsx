@@ -227,7 +227,7 @@ describe("passageSegments", () => {
   it("draws a note whose words lie wholly inside an earlier mark as its own mark inside that one (P10-20; was: its tag only)", () => {
     const segments = passageSegments(TEXT, [spot(1, 0, 16), spot(2, 6, 16)]);
     expect(shape(segments)).toEqual(["mark:Grain boundaries", `text:${TEXT.slice(16)}`]);
-    expect(tree(segments)).toBe(`[1 Grain |[2 boundaries]2]1 ${TEXT.slice(16)}`);
+    expect(tree(segments)).toBe(`[1 Grain [2 boundaries]2]1${TEXT.slice(16)}`);
   });
 
   it("draws no mark where the range no longer holds the words (the text changed), or is out of the text", () => {

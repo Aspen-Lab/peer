@@ -45,10 +45,14 @@ export interface AnchorSpot {
   quote?: string;
 }
 
-/** A paragraph's text as runs: plain `text`, a `mark` (its tag follows it), and a `tag` alone (no words to mark). */
+/**
+ * A paragraph's text as runs: plain `text`, a `mark` (its tag follows it) and a `tag` alone (no words to mark). P10-20:
+ * a mark holds its words as `inner` runs — plain text and the marks of notes taken inside it — and `depth` counts
+ * how many marks stand around it (0 the outer; the drawing shades 1 and deeper alike).
+ */
 export type PassageSegment =
   | { kind: "text"; from: number; to: number }
-  | { kind: "mark"; from: number; to: number; spot: AnchorSpot }
+  | { kind: "mark"; from: number; to: number; spot: AnchorSpot; inner: PassageSegment[]; depth: number }
   | { kind: "tag"; spot: AnchorSpot };
 
 /** Whether position `at` lies inside a formula (`⟦…⟧`) of the text: a mark must never cut one. */
@@ -69,42 +73,56 @@ function rangeOf(text: string, spot: AnchorSpot): { start: number; end: number }
 }
 
 /**
- * P10-09f (rule 2): cut a paragraph's text for the highlighter. Each note whose range the text still holds marks its
- * own words, in the order they stand; a later, overlapping note's mark starts where the earlier one ends (no
- * nesting); a note whose words lie wholly inside earlier marks keeps its tag only, after that mark; a note with no
- * range, or one the text no longer holds, has its tag at the paragraph's end. The text is never changed: the runs
- * and marks, in order, are exactly the paragraph.
+ * P10-09f (rule 2), P10-20: cut a paragraph's text for the highlighter. Each note whose range the text still holds
+ * marks its own words, in the order they stand; a note whose words lie wholly inside another's is drawn as its own
+ * mark inside that one (`inner`; equal ranges: the earlier note is the outer); a later note that only overlaps an
+ * earlier one starts its mark where the earlier ends (the pair never cross); a note with no range, or one the text no
+ * longer holds, has its tag at the paragraph's end. The text is never changed: the runs and marks, in order, are
+ * exactly the paragraph.
  */
 export function passageSegments(text: string, spots: readonly AnchorSpot[]): PassageSegment[] {
-  const ranged: { spot: AnchorSpot; start: number; end: number }[] = [];
+  const pool: { spot: AnchorSpot; start: number; end: number }[] = [];
   const loose: AnchorSpot[] = [];
   for (const spot of spots) {
     const range = rangeOf(text, spot);
-    if (range) ranged.push({ spot, ...range });
+    if (range) pool.push({ spot, ...range });
     else loose.push(spot);
   }
-  ranged.sort((a, b) => a.start - b.start || a.spot.n - b.spot.n);
-  const out: PassageSegment[] = [];
-  let at = 0;
-  for (const { spot, start, end } of ranged) {
-    const from = Math.max(start, at);
-    if (from >= end) {
-      out.push({ kind: "tag", spot });
-      continue;
+  // Outer before inner: by start, then the longer first, then the earlier note.
+  pool.sort((a, b) => a.start - b.start || b.end - a.end || a.spot.n - b.spot.n);
+  // The runs of [lo, hi): the pool's ranges that end by `hi`, taken in order, each cutting its own inside the same way.
+  const cut = (lo: number, hi: number, depth: number): PassageSegment[] => {
+    const out: PassageSegment[] = [];
+    let at = lo;
+    for (let i = pool.findIndex((one) => one.end <= hi); i >= 0; i = pool.findIndex((one) => one.end <= hi)) {
+      const [{ spot, start, end }] = pool.splice(i, 1);
+      const from = Math.max(start, at);
+      if (from >= end) {
+        out.push({ kind: "tag", spot });
+        continue;
+      }
+      if (from > at) out.push({ kind: "text", from: at, to: from });
+      const inner = cut(from, end, depth + 1);
+      out.push({ kind: "mark", from, to: end, spot, inner, depth });
+      at = end;
     }
-    if (from > at) out.push({ kind: "text", from: at, to: from });
-    out.push({ kind: "mark", from, to: end, spot });
-    at = end;
-  }
-  if (at < text.length || out.length === 0) out.push({ kind: "text", from: at, to: text.length });
+    if (at < hi || out.length === 0) out.push({ kind: "text", from: at, to: hi });
+    return out;
+  };
+  const out = cut(0, text.length, 0);
   for (const spot of loose) out.push({ kind: "tag", spot });
   return out;
 }
 
+/** U+2060, which allows no line break on either side of it. */
+const WORD_JOINER = "\u2060";
+
 /** The reference tag after a passage: [N], opens sticky N. */
 export function NoteTag({ n, id }: { n: number; id: string }) {
   return (
-    <sup className="ml-0.5 select-none align-super">
+    <sup className="ml-0.5 select-none whitespace-nowrap align-super">
+      {/* P10-20: a word joiner before the tag — no line break between the last marked word and the tag, so a line never opens with "[2]". */}
+      {WORD_JOINER}
       <button
         type="button"
         aria-label={`Open note ${n}`}
