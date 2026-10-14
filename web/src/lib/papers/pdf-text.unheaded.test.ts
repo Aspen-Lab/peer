@@ -6,6 +6,7 @@ import { chooseHtmlExtractor } from "./html-text";
 import { minimalPdf, type Run } from "./minimal-pdf.test-helper";
 import { extractPdfTextFromPath } from "./pdf-text";
 import { readableSections } from "./reading-map";
+import { unheadedTrunk } from "./reading-partition";
 
 // P10-07a (B P10-05 §1.1 and §5.2): the shape the unheaded rule depends on, pinned on the
 // extractors as they are. Read-only on `pdf-text.ts` and `html-text.ts`: a PDF with no heading
@@ -59,6 +60,9 @@ describe("the extractors on a paper with no headings (what the unheaded rule res
     expect(sections).toHaveLength(1);
     expect(sections[0].section.canonical).toBe("body");
     expect(sections[0].paragraphs.length).toBeGreaterThanOrEqual(20);
+    // The rule reads that one row as the trunk.
+    const rows = sections.map(({ id, section, paragraphs }) => ({ id, canonical: section.canonical, paragraphs }));
+    expect(unheadedTrunk(rows)).toMatchObject({ sectionId: sections[0].id, sectionIndex: 0, paragraphCount: sections[0].paragraphs.length });
   });
 
   it("reads generic HTML with no heading as one section Body", () => {
@@ -74,5 +78,7 @@ describe("the extractors on a paper with no headings (what the unheaded rule res
     expect(sections[0].section.heading).toBe("Body");
     expect(sections[0].section.canonical).toBe("body");
     expect(sections[0].paragraphs).toHaveLength(24);
+    const rows = sections.map(({ id, section, paragraphs }) => ({ id, canonical: section.canonical, paragraphs }));
+    expect(unheadedTrunk(rows)).toMatchObject({ sectionIndex: 0, paragraphCount: 24 });
   });
 });
