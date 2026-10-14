@@ -431,3 +431,80 @@ describe("the graded tint (P10-06)", () => {
     expect(sectionMark(mergeQuestionRoute(routeOf({ [ids[0]]: graded("medium", [0]) }), overlay), ids[0])?.tier).toBe("medium");
   });
 });
+
+// P10-06b (rule 6): the Tier 0 route wears the strongest tier on three rows at most. A model's verified
+// answers are marked strong too, and a report with many answers showed more than three — so the merged
+// route keeps the cap: the model's rows are counted with the route's, and beyond three they are medium.
+describe("the strongest rows stay three once a model's marks are merged (P10-06b)", () => {
+  const Q = "Does the LCO lattice crack at H1-3?";
+  const tier0 = (tiers: Record<string, "strong" | "medium" | "faint" | "none">): RouteResult => ({
+    byQuestion: [
+      {
+        question: Q,
+        vague: false,
+        sections: Object.fromEntries(Object.entries(tiers).map(([id, tier]) => [id, { tier, hits: [{ term: "lco", count: 2 }], paragraphs: [0], evidence: `Tier 0 says ${id}.` }])),
+      },
+    ],
+    vague: false,
+  });
+  const answered = (...answerIds: string[]) => [
+    {
+      question: Q,
+      verdict: "answered" as const,
+      answers: answerIds.map((sectionId) => ({ text: `Peer answer ${sectionId}.`, evidence: `Model says ${sectionId}.`, sectionId })),
+      readNext: [],
+    },
+  ];
+  const tiersOf = (route: ReturnType<typeof mergeQuestionRoute>) =>
+    Object.fromEntries(Object.entries(route!.byQuestion[0].sections).map(([id, section]) => [id, section.tier as string]));
+  const strongIds = (tiers: Record<string, string>) => Object.keys(tiers).filter((id) => tiers[id] === "strong");
+
+  it("counts the model's strong rows with the route's: three at most in all, the model's verified answers first", () => {
+    const merged = mergeQuestionRoute(tier0({ a: "strong", b: "strong", c: "strong", d: "medium", e: "none", f: "faint" }), questionRouteOverlay(answered("d", "e")));
+    const tiers = tiersOf(merged);
+
+    expect(strongIds(tiers)).toEqual(["a", "d", "e"]);
+    expect(tiers.b).toBe("medium");
+    expect(tiers.c).toBe("medium");
+    expect(tiers.f).toBe("faint");
+  });
+
+  it("keeps a demoted row's mentions, paragraphs and evidence: only its tier changes", () => {
+    const merged = mergeQuestionRoute(tier0({ a: "strong", b: "strong", c: "strong" }), questionRouteOverlay(answered("d", "e", "f")));
+    const demoted = merged!.byQuestion[0].sections.a;
+
+    expect(strongIds(tiersOf(merged))).toEqual(["d", "e", "f"]);
+    expect(demoted).toMatchObject({ tier: "medium", hits: [{ term: "lco", count: 2 }], paragraphs: [0], evidence: "Tier 0 says a." });
+  });
+
+  it("counts a section strong in both once, and leaves a merge within the cap as it was", () => {
+    const merged = mergeQuestionRoute(tier0({ a: "strong", b: "strong", c: "medium" }), questionRouteOverlay(answered("a", "c")));
+    const tiers = tiersOf(merged);
+
+    expect(strongIds(tiers)).toEqual(["a", "b", "c"]);
+    expect(merged!.byQuestion[0].sections.a.evidence).toBe("Model says a.");
+  });
+
+  it("caps the overlay on its own: five verified answers are three strong rows and two medium", () => {
+    const overlay = questionRouteOverlay(answered("a", "b", "c", "d", "e"))!;
+    const tiers = Object.fromEntries(Object.entries(overlay.byQuestion[0].sections).map(([id, section]) => [id, section.tier as string]));
+
+    expect(tiers).toEqual({ a: "strong", b: "strong", c: "strong", d: "medium", e: "medium" });
+    expect(overlay.byQuestion[0].sections.d.evidence).toBe("Model says d.");
+  });
+
+  it("does not count a background mark against the cap, and does not demote one", () => {
+    const overlay = questionRouteOverlay([
+      {
+        question: Q,
+        verdict: "partly" as const,
+        answers: [{ text: "x", evidence: "Model says a.", sectionId: "a" }],
+        readNext: [{ sectionId: "e", why: "Context.", kind: "background" as const }],
+      },
+    ]);
+    const tiers = tiersOf(mergeQuestionRoute(tier0({ a: "strong", b: "strong", c: "strong", e: "faint" }), overlay));
+
+    expect(strongIds(tiers)).toEqual(["a", "b", "c"]);
+    expect(tiers.e).toBe("background");
+  });
+});

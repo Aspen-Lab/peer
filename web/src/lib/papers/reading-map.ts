@@ -502,8 +502,8 @@ const IDF_FLOOR = 0.1;
  *  faint or none (rubric A11), so a row is medium from 0.4. */
 const STRONG_SHARE = 0.6;
 const MEDIUM_SHARE = 0.4;
-/** At most this many rows carry the strongest tier. */
-const MAX_STRONG_ROWS = 3;
+/** At most this many rows carry the strongest tier — in the Tier 0 route and, P10-06b, once a model's marks are merged over it. */
+export const MAX_STRONG_ROWS = 3;
 /** P10-06b (rule 1): a section's score is this share its best paragraph's score, the rest the section's own. */
 const PARAGRAPH_SHARE = 0.5;
 /** P10-06b (rule 1): a paragraph that holds `k ≥ 2` distinct terms scores `× (1 + MEETING_BONUS × (k − 1))`. */

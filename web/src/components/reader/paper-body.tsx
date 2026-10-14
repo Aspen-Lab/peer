@@ -22,7 +22,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { PaperReading, ReadingFigure, ReadingSection } from "@/lib/papers/reading";
-import { GIST_QUESTION, type RouteResult, type RouteSection, type RouteTier } from "@/lib/papers/reading-map";
+import { GIST_QUESTION, MAX_STRONG_ROWS, type RouteResult, type RouteSection, type RouteTier } from "@/lib/papers/reading-map";
 import type { QuestionAnswers } from "@/lib/papers/report";
 import type { TermOccurrence } from "@/lib/papers/terms";
 import { Equation, MathText } from "./math";
@@ -124,10 +124,26 @@ export function questionRouteOverlay(questions: readonly QuestionAnswers[] | und
       };
       for (const answer of entry.answers) place(answer.sectionId, "strong", answer.evidence);
       for (const next of entry.readNext) place(next.sectionId, next.kind === "background" ? "background" : "strong");
-      return { question: entry.question, vague: false, sections };
+      return { question: entry.question, vague: false, sections: withStrongCap(sections, []) };
     }),
     vague: false,
   };
+}
+
+/**
+ * P10-06b (rule 6): the strongest tier is worn by three rows at most, as in the Tier 0 route — a model that verifies
+ * five sections still shows three strongest rows, the others medium. `first` are the ids that keep it first (the
+ * verified answers of the model, over Tier 0's own strong rows); then the rows in the order they stand. Only the
+ * tier changes: a demoted row keeps its hits, paragraphs and evidence. The sections come back unchanged (the same
+ * object) when no row is over the cap.
+ */
+function withStrongCap<T extends { tier: TintTier }>(sections: Record<string, T>, first: readonly string[]): Record<string, T> {
+  const strong = Object.keys(sections).filter((id) => sections[id].tier === "strong");
+  if (strong.length <= MAX_STRONG_ROWS) return sections;
+  const order = [...first.filter((id) => strong.includes(id)), ...strong.filter((id) => !first.includes(id))];
+  const capped = { ...sections };
+  for (const id of order.slice(MAX_STRONG_ROWS)) capped[id] = { ...capped[id], tier: "medium" };
+  return capped;
 }
 
 function mergedSections(
@@ -150,7 +166,11 @@ function mergedSections(
     // answer supplies its read tier and evidence (also on an equal read).
     merged[id] = { ...tier0, tier: tier2.tier, ...(tier2.evidence ? { evidence: tier2.evidence } : {}) };
   }
-  return merged;
+  // P10-06b (rule 6): the model's strongest rows and Tier 0's together are three at most, the model's first.
+  return withStrongCap(
+    merged,
+    Object.keys(overlay).filter((id) => overlay[id].tier === "strong"),
+  );
 }
 
 /** One display route for both consumers (the map and the body; the contents rail was a

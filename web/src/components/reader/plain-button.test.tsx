@@ -170,7 +170,7 @@ describe("PlainRewrite", () => {
 
 // ── Where the control is offered ──────────────────────────────────────
 
-describe("plainOffered — only under a paragraph the route marks read", () => {
+describe("plainOffered — only under a paragraph the route marks strong or medium", () => {
   const mark = (tier: Exclude<TintTier, "none">, paragraphs: Array<[number, Exclude<TintTier, "none">]> = []): SectionMark => ({
     tier,
     title: "Q1",
@@ -178,20 +178,30 @@ describe("plainOffered — only under a paragraph the route marks read", () => {
     paragraphs: new Map(paragraphs),
   });
 
-  it("is true for a paragraph whose own tier is read", () => {
+  it("is true for a paragraph whose own tier is strong", () => {
     expect(plainOffered(mark("strong", [[2, "strong"]]), 2)).toBe(true);
     expect(plainOffered(mark("strong", [[2, "strong"], [3, "faint"]]), 2)).toBe(true);
   });
 
-  it("is false for a paragraph the section marks but the route does not mark read: skim, background, or unmarked beside marked ones", () => {
+  // P10-06b (rule 4): the owner's "Say it plainly" was offered on the "read" paragraphs of a route that marked every
+  // section naming the question; the graded route's nearer equivalent is its medium paragraphs, beside the strong ones.
+  it("is true for a paragraph whose own tier is medium, in a medium section or beside a strong one", () => {
+    expect(plainOffered(mark("medium", [[1, "medium"]]), 1)).toBe(true);
+    expect(plainOffered(mark("strong", [[2, "strong"], [3, "medium"]]), 3)).toBe(true);
+    expect(plainOffered(mark("medium", [[1, "medium"], [2, "faint"]]), 2)).toBe(false);
+  });
+
+  it("is false for a paragraph the section marks but the route does not mark strong or medium: faint, background, or unmarked beside marked ones", () => {
     expect(plainOffered(mark("strong", [[2, "strong"], [3, "faint"]]), 3)).toBe(false);
     expect(plainOffered(mark("strong", [[2, "strong"], [4, "background"]]), 4)).toBe(false);
     expect(plainOffered(mark("strong", [[2, "strong"]]), 5)).toBe(false);
   });
 
-  it("is true under every paragraph of a section the route marks read when it has no paragraph marks — a Tier 2 answer's section", () => {
+  it("is true under every paragraph of a section the route marks strong or medium when it has no paragraph marks — a Tier 2 answer's section", () => {
     expect(plainOffered(mark("strong"), 0)).toBe(true);
     expect(plainOffered(mark("strong"), 7)).toBe(true);
+    expect(plainOffered(mark("medium"), 0)).toBe(true);
+    expect(plainOffered(mark("medium"), 7)).toBe(true);
   });
 
   // P4-03 (BACKLOG-20): the route rewrites only the first `PLAIN_CAPS.paragraphChars` characters of a
@@ -218,7 +228,7 @@ describe("plainOffered — only under a paragraph the route marks read", () => {
     expect(plainOffered(section, 2, sized(40))).toBe(true);
   });
 
-  it("is false in a section marked skim or background with no paragraph marks, and with no mark at all", () => {
+  it("is false in a section marked faint or background with no paragraph marks, and with no mark at all", () => {
     expect(plainOffered(mark("faint"), 0)).toBe(false);
     expect(plainOffered(mark("background"), 0)).toBe(false);
     expect(plainOffered(null, 0)).toBe(false);

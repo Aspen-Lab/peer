@@ -10,7 +10,7 @@
 // and on a document (`paperDefinedTerms`, the one the tests and any server
 // caller use) with the same answer.
 //
-// Where it reads: the sections the reader's route marks read or background
+// Where it reads: the sections the reader's route marks strong, medium or background
 // when there is one (`routeTermScope`), otherwise the methods and results —
 // the sections where a paper puts the words a reader needs to follow its
 // numbers — and the whole body only for a paper that has neither.
@@ -119,8 +119,9 @@ function sectionsInScope(sections: readonly TermSection[], scope: TermScope | un
 
 /**
  * The sections the reader's route points at: every section some question
- * reads or marks as background, or undefined when there is no such section
- * (no route, only vague questions, only the gist, or nothing above "skim") —
+ * marks strong or medium (P10-06b; it was `read` before the route was graded) or marks
+ * as background, or undefined when there is no such section
+ * (no route, only vague questions, only the gist, or nothing above "faint") —
  * the default scope then applies. A vague question marks nothing, and the
  * gist is a reading order rather than a question a section could answer.
  */
@@ -141,7 +142,7 @@ export function routeTermScope(
   for (const entry of route.byQuestion) {
     if (entry.vague || entry.question === GIST_QUESTION) continue;
     for (const [id, section] of Object.entries(entry.sections)) {
-      if (section.tier === "read" || section.tier === "background") ids.add(id);
+      if (section.tier === "strong" || section.tier === "medium" || section.tier === "background") ids.add(id);
     }
   }
   return ids.size > 0 ? { sectionIds: [...ids] } : undefined;

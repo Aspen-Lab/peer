@@ -427,34 +427,50 @@ describe("firstOccurrence — where a term first stands in the body", () => {
   });
 });
 
-describe("routeTermScope — the sections the route marks read or background", () => {
+describe("routeTermScope — the sections the route marks strong, medium or background", () => {
   const entry = (question: string, sections: Record<string, { tier: string }>, vague = false) => ({ question, vague, sections });
 
   it("is undefined with no route, a vague route or no marked section (the default scope then applies)", () => {
     expect(routeTermScope(undefined)).toBeUndefined();
     expect(routeTermScope({ vague: true, byQuestion: [entry("q", {}, true)] })).toBeUndefined();
-    expect(routeTermScope({ vague: false, byQuestion: [entry("q", { s1: { tier: "skim" }, s2: { tier: "none" } })] })).toBeUndefined();
+    expect(routeTermScope({ vague: false, byQuestion: [entry("q", { s1: { tier: "faint" }, s2: { tier: "none" } })] })).toBeUndefined();
   });
 
-  it("names every section any question reads or marks as background, and no skim or none", () => {
+  it("names every section any question marks strong, medium or background, and no faint or none", () => {
     const scope = routeTermScope({
       vague: false,
       byQuestion: [
-        entry("Q1", { s1: { tier: "read" }, s2: { tier: "skim" } }),
-        entry("Q2", { s2: { tier: "background" }, s3: { tier: "none" }, s4: { tier: "read" } }),
+        entry("Q1", { s1: { tier: "strong" }, s2: { tier: "faint" } }),
+        entry("Q2", { s2: { tier: "background" }, s3: { tier: "none" }, s4: { tier: "strong" } }),
       ],
     });
 
     expect([...scope!.sectionIds].sort()).toEqual(["s1", "s2", "s4"]);
   });
 
+  // P10-06b (rule 5): the route's tiers are strong / medium / faint now; the scope compared `read`, which no route
+  // gives any more, so only a model's background marks scoped a term and a paper-defined term in an unmarked
+  // section lost its definition.
+  it("keeps a term the paper defines in a medium section in scope", () => {
+    const scope = routeTermScope({
+      vague: false,
+      byQuestion: [entry("Q1", { s1: { tier: "strong" }, s2: { tier: "medium" }, s3: { tier: "faint" }, s4: { tier: "none" } })],
+    });
+
+    expect([...scope!.sectionIds].sort()).toEqual(["s1", "s2"]);
+  });
+
+  it("lets a medium section alone make the scope", () => {
+    expect(routeTermScope({ vague: false, byQuestion: [entry("Q1", { s7: { tier: "medium" } })] })).toEqual({ sectionIds: ["s7"] });
+  });
+
   it("ignores a vague question and the gist (which is not a question a section could answer)", () => {
     const scope = routeTermScope({
       vague: false,
       byQuestion: [
-        entry("Q1", { s9: { tier: "read" } }, true),
-        entry(GIST_QUESTION, { s8: { tier: "read" } }),
-        entry("Q3", { s1: { tier: "read" } }),
+        entry("Q1", { s9: { tier: "strong" } }, true),
+        entry(GIST_QUESTION, { s8: { tier: "strong" } }),
+        entry("Q3", { s1: { tier: "strong" } }),
       ],
     });
 
