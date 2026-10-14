@@ -68,3 +68,4 @@ Stop: every theme ≥ 95 in two consecutive rounds. The loop's end is the manage
 | round | head | Theme A (median / director) | Theme B (median / director) | notes |
 |---|---|---|---|---|
 | 0 (the review) | 291c7c70 | 0 / 15 by the review's own count (A14 PASS) ≈ 7 | 1 / 16 (B1 FAIL) ≈ 0 (B1 is a pass requirement) | the owner's walk on their laptop with their key, 2026-10-13 |
+| 1 | 4f2ecfae (B3 / B4 at 324d2b1c) | **78.3** (readers 78.3 / 78.3 / 75.0) / A 78.3, director 78.3 | **79.7** (readers 79.7 / 84.4 / 79.7) / A 84.4, director 73.4 | A P10-10's walk `P10-10-A-20261014T0346Z.md`; FAIL: A8, A11, B13 (director), B16 (director); the director's rulings on the disputed marks §1h.87 of the state file |
