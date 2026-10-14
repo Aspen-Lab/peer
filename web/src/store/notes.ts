@@ -12,8 +12,8 @@
 import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Citable, Note } from "@/lib/notes/types";
-import { citedKeys, stickyBlocks, stickyParagraphs, stickyQuote, stickyText, withStickyText } from "@/lib/notes/blocks";
+import type { Block, Citable, Note } from "@/lib/notes/types";
+import { citedKeys, stickyBlocks, stickyParagraphs, stickyQuote, stickySpan, stickyText, withStickyText } from "@/lib/notes/blocks";
 import { readingNote, type ReadingNoteExtras } from "@/lib/notes/templates";
 import { MATH_CLOSE, MATH_OPEN } from "@/lib/text/math";
 
@@ -87,6 +87,25 @@ function mergeParagraphs(base: string, mine: string, theirs: string): string {
   return mergeText(base, mine, theirs);
 }
 
+/**
+ * P10-09c (rule 4): the blocks without the sticky's heading and its text blocks when all of those are empty — a sticky
+ * opened and never written in leaves nothing behind. The same array when it has words, or is not there. The note's
+ * `stickyCount` is not touched (the number is not reused).
+ */
+export function withoutSticky(blocks: readonly Block[], headerId: string): readonly Block[] {
+  const span = stickySpan(blocks, headerId);
+  if (!span) return blocks;
+  if (blocks.slice(span.start + 1, span.end).some((b) => b.text.trim() !== "")) return blocks;
+  return [...blocks.slice(0, span.start), ...blocks.slice(span.end)];
+}
+
+/**
+ * P10-29 (BACKLOG-71): the headings of the empty stickies taken out in this tab. An editor holding an older copy of the
+ * note (the notes window's flush as the page is left) saves it after the removal; the copy still has the empty sticky, which
+ * is taken out of it again (never one that has words by then). Not kept across a reload: a reload shows the note as stored.
+ */
+const removedEmpty = new Set<string>();
+
 interface NotesState {
   notes: Record<string, Note>;
   add: (note: Note) => void;
@@ -113,6 +132,9 @@ interface NotesState {
    *  into the same blocks meanwhile — the two are merged block by block (`mergeText`) rather than the writer's text
    *  replacing the other's words. */
   setStickyText: (noteId: string, headerId: string, text: string, base?: string) => void;
+  /** P10-09c / P10-29: take a sticky out of the note when it holds no words — its heading and anchor with it, so the paper has
+   *  no tag for a note that says nothing. A sticky with words stays. The number is not freed (`stickyCount` stands). */
+  removeEmptySticky: (noteId: string, headerId: string) => void;
 }
 
 export const useNotesStore = create<NotesState>()(
@@ -124,6 +146,11 @@ export const useNotesStore = create<NotesState>()(
         set((s) => {
           const note = s.notes[id];
           if (!note) return s;
+          if (patch.blocks && removedEmpty.size > 0) {
+            let blocks: readonly Block[] = patch.blocks;
+            for (const headerId of removedEmpty) blocks = withoutSticky(blocks, headerId);
+            if (blocks !== patch.blocks) patch = { ...patch, blocks: [...blocks] };
+          }
           return { notes: { ...s.notes, [id]: { ...note, ...patch, updatedAt: at } } };
         }),
       remove: (id) =>
@@ -171,6 +198,15 @@ export const useNotesStore = create<NotesState>()(
           const blocks = withStickyText(note.blocks, headerId, write);
           if (blocks.length === note.blocks.length && blocks.every((b, i) => b === note.blocks[i])) return s;
           return { notes: { ...s.notes, [noteId]: { ...note, blocks, updatedAt: new Date().toISOString() } } };
+        }),
+      removeEmptySticky: (noteId, headerId) =>
+        set((s) => {
+          const note = s.notes[noteId];
+          if (!note) return s;
+          const blocks = withoutSticky(note.blocks, headerId);
+          if (blocks === note.blocks) return s;
+          removedEmpty.add(headerId);
+          return { notes: { ...s.notes, [noteId]: { ...note, blocks: [...blocks], updatedAt: new Date().toISOString() } } };
         }),
     }),
     {

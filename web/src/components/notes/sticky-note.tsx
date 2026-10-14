@@ -16,7 +16,7 @@ import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import type { Paper } from "@/types";
 import type { QuestionAnswers } from "@/lib/papers/report";
-import { quoteHead, stickyParagraphs, stickySpan, stickyText, stickyTitle } from "@/lib/notes/blocks";
+import { quoteHead, stickyParagraphs, stickyText, stickyTitle } from "@/lib/notes/blocks";
 import type { Block } from "@/lib/notes/types";
 import { citableFromPaper } from "@/lib/notes/cite";
 import type { ReadingNoteExtras } from "@/lib/notes/templates";
@@ -24,7 +24,9 @@ import type { Citable, NoteAnchor } from "@/lib/notes/types";
 import { paragraphAnchor, type ExplainSelection } from "@/components/reader/paper-body";
 import { DOCK_TOP_PX } from "@/components/reader/explain-dock";
 import { holdInPlace, readingAnchorTop, stackRows, useColumn, useWindows, type FloatingWindow, type StackFrame } from "@/lib/reader/windows";
-import { readingNoteFor, stripTagText, useNotesStore } from "@/store/notes";
+import { readingNoteFor, stripTagText, useNotesStore, withoutSticky } from "@/store/notes";
+
+export { withoutSticky };
 import { AnchorSquare, goToPassage, registerPassageHost } from "./note-tags";
 import { WysiwygField } from "./wysiwyg-field";
 
@@ -164,26 +166,35 @@ export function stickyFollowText({ local, stored, pending }: { local: string; st
   return stickyParagraphs(local).join("\n") === stored ? null : stored;
 }
 
+/** The writers of the stickies that stand open, by heading id: leaving the page writes what is typed in them first. */
+const openWriters = new Map<string, Pick<ReturnType<typeof makeStickyWriter>, "flush">>();
+
+/** A standing sticky's writer, registered while it stands; the returned function takes it out again. */
+export function registerStickyWriter(headerId: string, writer: Pick<ReturnType<typeof makeStickyWriter>, "flush">): () => void {
+  openWriters.set(headerId, writer);
+  return () => {
+    if (openWriters.get(headerId) === writer) openWriters.delete(headerId);
+  };
+}
+
 /**
- * P10-09c (rule 4): the blocks without the sticky's heading and its text blocks when all of those are empty — a sticky
- * opened and never written in leaves nothing behind. The same array when it has words, or is not there. The note's
- * `stickyCount` is not touched (the number is not reused).
+ * P10-29 (BACKLOG-71, rule 2): the reader leaves the page (a route change, a tab closed where `pagehide` fires) with stickies
+ * open: what is typed and not yet written is written first, then each open sticky with no words is taken out of the paper's
+ * note with its anchor — no tag for a note that says nothing. A sticky with any words stays; the numbers of the others do not move.
  */
-export function withoutSticky(blocks: readonly Block[], headerId: string): readonly Block[] {
-  const span = stickySpan(blocks, headerId);
-  if (!span) return blocks;
-  if (blocks.slice(span.start + 1, span.end).some((b) => b.text.trim() !== "")) return blocks;
-  return [...blocks.slice(0, span.start), ...blocks.slice(span.end)];
+export function removeEmptyStickies(paperId: string): void {
+  const note = readingNoteFor(useNotesStore.getState().notes, paperId);
+  if (!note) return;
+  for (const w of useWindows.getState().windows) {
+    if (w.kind !== "sticky") continue;
+    openWriters.get(w.id)?.flush();
+    useNotesStore.getState().removeEmptySticky(note.id, w.id);
+  }
 }
 
 /** Closing a sticky: an empty one is taken out of the note; its window leaves the stack. The note keeps everything else. */
 export function closeSticky(noteId: string, headerId: string, scroll?: (dy: number) => void): void {
-  const { notes, save } = useNotesStore.getState();
-  const note = notes[noteId];
-  if (note) {
-    const blocks = withoutSticky(note.blocks, headerId);
-    if (blocks !== note.blocks) save(noteId, { blocks: [...blocks] });
-  }
+  useNotesStore.getState().removeEmptySticky(noteId, headerId);
   // The last window to leave frees the column (P10-09d): the words move back, and the reader's place is held.
   holdInPlace({ change: () => useWindows.getState().close(headerId), scroll });
 }
@@ -304,6 +315,8 @@ function StickyWindow({ row, noteId, paperId }: { row: Row; noteId: string; pape
     if (next !== null) setText(next);
   }
 
+  useEffect(() => registerStickyWriter(row.id, writer), [row.id, writer]);
+
   // What is typed and not yet written is written when the window goes behind, closes or is left.
   useEffect(() => {
     if (!row.front) writer.flush();
@@ -352,6 +365,16 @@ export function StickyNotes({ paper, reveal }: { paper: Paper; reveal: (run: () 
       if (found) goToPassage({ paperId: paper.id, paragraphId: id, quote: "", n: 0 }, { doc: document, navigate: () => {} });
     }, 250);
     return () => clearInterval(timer);
+  }, [paper.id]);
+  // P10-29 (BACKLOG-71): a sticky left open and empty when the reader leaves the page is taken out of the note, with its anchor:
+  // on a route change (this unmount — it must run before the cards are closed below) and where the tab closes (`pagehide`).
+  useEffect(() => {
+    const leave = () => removeEmptyStickies(paper.id);
+    window.addEventListener("pagehide", leave);
+    return () => {
+      window.removeEventListener("pagehide", leave);
+      leave();
+    };
   }, [paper.id]);
   // A card must not follow the reader to the next paper.
   useEffect(
