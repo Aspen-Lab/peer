@@ -823,6 +823,31 @@ type RouteRow = ReadingMap["sections"][number] & { parentId?: string };
 
 const TIER_ORDER: Readonly<Record<RouteTier, number>> = { none: 0, faint: 1, medium: 2, strong: 3 };
 
+/**
+ * P10-06d (rule 1): a reader who asks for parameters wants the experimental section among the darkest rows, and the cap of
+ * three strong leaf rows held it out when the results and the Introduction (which names every term once) stood above it.
+ * After the leaf grade: when the best leaf row of role `method` or `apparatus` scores at least `STRONG_SHARE` of the best
+ * leaf but is not strong, it becomes strong, and — the cap still three — the lowest-scoring strong row of role `setup` is
+ * medium instead (if no strong row is `setup`, the lowest-scoring strong row). `tiers` is changed in place; nothing else is.
+ */
+function keepMethodSlot(leafAt: readonly number[], rows: readonly RouteRow[], scores: readonly number[], tiers: RouteTier[]): void {
+  const best = leafAt.reduce((most, k) => Math.max(most, scores[k]), 0);
+  if (!(best > 0)) return;
+  let method = -1;
+  for (const k of leafAt) {
+    if ((rows[k].role === "method" || rows[k].role === "apparatus") && (method < 0 || scores[k] > scores[method])) method = k;
+  }
+  if (method < 0 || tiers[method] === "strong" || scores[method] < best * STRONG_SHARE - 1e-9) return;
+  const strong = leafAt.filter((k) => tiers[k] === "strong");
+  if (strong.length >= MAX_STRONG_ROWS) {
+    const setup = strong.filter((k) => rows[k].role === "setup");
+    // The lowest score; on a tie the later row gives way, as the earlier row comes first in the grade.
+    const giving = (setup.length > 0 ? setup : strong).reduce((low, k) => (scores[k] <= scores[low] ? k : low));
+    tiers[giving] = "medium";
+  }
+  tiers[method] = "strong";
+}
+
 /** One question through the paper: the whole body is read for it, and for it alone. */
 function routeQuestion(map: ReadingMap, sections: RouteBody, question: string): QuestionRoute {
   const terms = specificTerms(question);
@@ -880,6 +905,8 @@ function routeQuestion(map: ReadingMap, sections: RouteBody, question: string): 
   gradeScores(leafAt.map((k) => scores[k])).forEach((tier, i) => {
     tiers[leafAt[i]] = tier;
   });
+  // P10-06d (rule 1): on a question for parameters, the best experimental section keeps a strong slot; the Introduction gives way.
+  if (asksForParameters(terms)) keepMethodSlot(leafAt, rows, scores, tiers);
   for (let k = rows.length - 1; k >= 0; k--) {
     if (!isGroup[k]) continue;
     tiers[k] = (childrenOf.get(rows[k].id) ?? []).reduce<RouteTier>((most, child) => (TIER_ORDER[tiers[child]] > TIER_ORDER[most] ? tiers[child] : most), "none");
