@@ -70,6 +70,27 @@ describe("stackLayout", () => {
     expect(rows[2]).toMatchObject({ id: "s1", front: true, top: 180 });
   });
 
+  it("lifts the column, never above minTop, when the explain window stands so low the front would be squeezed", () => {
+    const rows = stackLayout([w("a", 1), w("b", 2), w("c", 3)], { top: 800, bottom: 960, frontHeight: 260, minTop: 48 });
+    expect(rows[0].top).toBeLessThan(800);
+    expect(rows[2].height).toBeGreaterThanOrEqual(160);
+    expect(rows[2].top + rows[2].height).toBeLessThanOrEqual(960);
+    const high = stackLayout([w("a", 1), w("b", 2)], { top: 100, bottom: 250, frontHeight: 260, minTop: 90 });
+    expect(high[0].top).toBeGreaterThanOrEqual(90);
+    // Room enough, or no minTop: the column stays where it was asked.
+    expect(stackLayout([w("a", 1), w("b", 2)], { top: 100, bottom: 900, frontHeight: 260, minTop: 48 })[0].top).toBe(100);
+  });
+
+  it("moves the column above the explain window when there is room there and none under it", () => {
+    const rows = stackLayout([w("a", 1), w("b", 2), w("c", 3)], { top: 800, bottom: 960, frontHeight: 260, minTop: 48, ceiling: 700 });
+    expect(rows[0].top).toBe(48);
+    expect(rows[2].top + rows[2].height).toBeLessThanOrEqual(700);
+    expect(rows[2].height).toBeGreaterThanOrEqual(160);
+    // No room above either: lifted under the ceiling's reach as far as the screen allows, not above minTop.
+    const tight = stackLayout([w("a", 1), w("b", 2), w("c", 3)], { top: 300, bottom: 360, frontHeight: 260, minTop: 48, ceiling: 200 });
+    expect(tight[0].top).toBeGreaterThanOrEqual(48);
+  });
+
   it("gives one window the whole front, and fits the front above the bottom", () => {
     expect(stackLayout([w("a", 1)], frame)[0]).toMatchObject({ top: 100, height: 260, front: true });
     const short = stackLayout([w("a", 1), w("b", 2)], { top: 100, bottom: 250, frontHeight: 260 });

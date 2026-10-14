@@ -21,6 +21,7 @@ import { citableFromPaper } from "@/lib/notes/cite";
 import type { ReadingNoteExtras } from "@/lib/notes/templates";
 import type { Citable, NoteAnchor } from "@/lib/notes/types";
 import { paragraphAnchor, type ExplainSelection } from "@/components/reader/paper-body";
+import { DOCK_TOP_PX } from "@/components/reader/explain-dock";
 import { columnTop, stackLayout, useWindows, type FloatingWindow } from "@/lib/reader/windows";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
 import { AnchorSquare, goToPassage, registerPassageHost } from "./note-tags";
@@ -189,12 +190,23 @@ interface Row {
   z: number;
 }
 
+/** The paragraph a page's `#hash` names (the notes page's blue square arrives with one), or null. */
+export function passageFromHash(hash: string): string | null {
+  let id = hash.replace(/^#/, "");
+  try {
+    id = decodeURIComponent(id);
+  } catch {
+    return null;
+  }
+  return /^paper-section-\d+-p\d+$/.test(id) ? id : null;
+}
+
 /** The open stickies as rows of the stack: each with its number and quote from its "Note N" heading in the paper's
  *  note (a window whose heading is gone is dropped), placed as cascaded cards. */
 export function stickyRows(
   windows: readonly FloatingWindow[],
   blocks: readonly Block[],
-  frame: { top: number; bottom: number; frontHeight: number },
+  frame: { top: number; bottom: number; frontHeight: number; minTop?: number; ceiling?: number },
 ): Row[] {
   const known = windows.filter((w) => w.kind === "sticky" && blocks.some((b) => b.id === w.id && b.type === "h3" && b.anchor));
   const place = new Map(stackLayout(known, frame).map((row) => [row.id, row]));
@@ -244,20 +256,28 @@ function StickyWindow({ row, noteId, paperId }: { row: Row; noteId: string; pape
 }
 
 /** The column's frame: where it starts (under the explain window, when one stands) and where the screen ends. */
-function useColumn(active: boolean): { top: number; bottom: number } {
-  const [frame, setFrame] = useState({ top: columnTop(null), bottom: 1000 });
+function useColumn(active: boolean): { top: number; bottom: number; ceiling?: number } {
+  const [frame, setFrame] = useState<{ top: number; bottom: number; ceiling?: number }>({ top: columnTop(null), bottom: 1000 });
   useEffect(() => {
     if (!active) return;
     const read = () => {
       const dock = document.querySelector("[data-explain-dock]");
-      const next = { top: columnTop(dock ? { bottom: dock.getBoundingClientRect().bottom } : null), bottom: window.innerHeight - FOOT_PX };
-      setFrame((current) => (current.top === next.top && current.bottom === next.bottom ? current : next));
+      const box = dock ? dock.getBoundingClientRect() : null;
+      const next = {
+        top: columnTop(box ? { bottom: box.bottom } : null),
+        bottom: window.innerHeight - FOOT_PX,
+        ...(box && box.bottom > 0 ? { ceiling: Math.floor(box.top) } : {}),
+      };
+      setFrame((current) => (current.top === next.top && current.bottom === next.bottom && current.ceiling === next.ceiling ? current : next));
     };
     read();
     const timer = setInterval(read, 250);
+    // The explain window stands level with its paragraph, so it moves as the page scrolls: the column follows.
+    window.addEventListener("scroll", read, true);
     window.addEventListener("resize", read);
     return () => {
       clearInterval(timer);
+      window.removeEventListener("scroll", read, true);
       window.removeEventListener("resize", read);
     };
   }, [active]);
@@ -270,6 +290,20 @@ export function StickyNotes({ paper, reveal }: { paper: Paper; reveal: (run: () 
 
   // The blue square asks this page to show the paper's text before it scrolls there.
   useEffect(() => registerPassageHost({ paperId: paper.id, reveal }), [paper.id, reveal]);
+  // The notes page's blue square comes here with `#paper-section-1-p2`: once the body is on the page, scroll to it.
+  useEffect(() => {
+    const id = passageFromHash(window.location.hash);
+    if (!id) return;
+    let tries = 0;
+    const timer = setInterval(() => {
+      tries += 1;
+      const found = document.getElementById(id) !== null;
+      if (!found && tries < 40) return;
+      clearInterval(timer);
+      if (found) goToPassage({ paperId: paper.id, paragraphId: id, quote: "", n: 0 }, { doc: document, navigate: () => {} });
+    }, 250);
+    return () => clearInterval(timer);
+  }, [paper.id]);
   // A card must not follow the reader to the next paper.
   useEffect(
     () => () => {
@@ -282,7 +316,7 @@ export function StickyNotes({ paper, reveal }: { paper: Paper; reveal: (run: () 
   const stickies = windows.filter((w: FloatingWindow) => w.kind === "sticky");
   const column = useColumn(stickies.length > 0);
   if (!note) return null;
-  const rows = stickyRows(stickies, note.blocks, { ...column, frontHeight: FRONT_HEIGHT_PX });
+  const rows = stickyRows(stickies, note.blocks, { ...column, frontHeight: FRONT_HEIGHT_PX, minTop: DOCK_TOP_PX });
   return (
     <>
       {rows.map((row) => (

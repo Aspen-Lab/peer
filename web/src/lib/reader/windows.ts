@@ -84,20 +84,38 @@ export interface StackRow {
 /** Under the explain window (`z-[70]`) and over the masthead (`z-50`). */
 export const STACK_Z_BASE = 60;
 
+/** What the front window keeps at least, when the column is lifted to make room for it. */
+export const MIN_FRONT_PX = 160;
+
 /**
  * Lay the windows out as cascaded cards between `top` and `bottom` (viewport pixels): by `order`, oldest at
  * the top, each later one a header lower; the last is the front, `frontHeight` tall (less where the screen is
- * short, never under a header). Pure.
+ * short, never under a header). Where the explain window stands so low that the front would keep less than
+ * `MIN_FRONT_PX` under it, and `minTop` and `ceiling` (the explain window's top) are given, the column moves
+ * ABOVE the explain window if it fits there, else is lifted until the front fits — never above `minTop` — so
+ * the front window stays usable. Pure.
  */
 export function stackLayout(
   windows: readonly FloatingWindow[],
-  frame: { top: number; bottom: number; frontHeight: number },
+  frame: { top: number; bottom: number; frontHeight: number; minTop?: number; ceiling?: number },
 ): StackRow[] {
   const ordered = [...windows].sort((a, b) => a.order - b.order);
+  const behind = Math.max(0, ordered.length - 1) * WINDOW_HEADER_PX;
+  const want = Math.min(frame.frontHeight, MIN_FRONT_PX);
+  let top0 = frame.top;
+  let bottom = frame.bottom;
+  if (frame.minTop !== undefined && top0 + behind + want > bottom) {
+    if (frame.ceiling !== undefined && frame.minTop + behind + want <= frame.ceiling - COLUMN_GAP_PX) {
+      top0 = frame.minTop;
+      bottom = frame.ceiling - COLUMN_GAP_PX;
+    } else {
+      top0 = Math.max(frame.minTop, bottom - behind - want);
+    }
+  }
   return ordered.map((w, i) => {
-    const top = frame.top + i * WINDOW_HEADER_PX;
+    const top = top0 + i * WINDOW_HEADER_PX;
     const front = i === ordered.length - 1;
-    const height = front ? Math.max(WINDOW_HEADER_PX, Math.min(frame.frontHeight, frame.bottom - top)) : WINDOW_HEADER_PX;
+    const height = front ? Math.max(WINDOW_HEADER_PX, Math.min(frame.frontHeight, bottom - top)) : WINDOW_HEADER_PX;
     return { id: w.id, top, height, front, z: STACK_Z_BASE + i };
   });
 }

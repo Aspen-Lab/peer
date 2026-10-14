@@ -6,7 +6,7 @@ import { block, stickyTitle } from "@/lib/notes/blocks";
 import type { Block } from "@/lib/notes/types";
 import { useWindows } from "@/lib/reader/windows";
 import { useNotesStore } from "@/store/notes";
-import { STICKY_SAVE_MS, StickyWindowView, makeStickyWriter, stickyRows, takeStickyNote } from "./sticky-note";
+import { STICKY_SAVE_MS, StickyWindowView, makeStickyWriter, passageFromHash, stickyRows, takeStickyNote } from "./sticky-note";
 
 // P10-09a (review 7.1; rubric B7–B10; ruling §1h.78): "Take notes" opens a numbered sticky at the right, its
 // header "Note N" with the passage's first words quoted and a Close (×), a text area focused at once; typing writes
@@ -172,5 +172,15 @@ describe("stickyRows", () => {
   it("drops a window whose note block is gone, and the other kinds", () => {
     const rows = stickyRows([...windows, { id: "gone", kind: "sticky", title: "x", order: 9 }, { id: "nn", kind: "notes", title: "n", order: 10 }], heads, frame);
     expect(rows).toHaveLength(3);
+  });
+});
+
+describe("passageFromHash — the notes page's square arrives with the paragraph in the address", () => {
+  it("reads a paragraph's id and nothing else", () => {
+    expect(passageFromHash("#paper-section-1-p2")).toBe("paper-section-1-p2");
+    expect(passageFromHash("#paper-section-1")).toBeNull();
+    expect(passageFromHash("#elsewhere")).toBeNull();
+    expect(passageFromHash("")).toBeNull();
+    expect(passageFromHash("#%E0%A4%A")).toBeNull();
   });
 });
