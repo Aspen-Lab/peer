@@ -309,12 +309,13 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; }
   --color-route-faint: #e9f6ef;
   --color-route-background: #dbefea;
   /* P10-09f (review 7.1c): the highlighter — the words a sticky note was taken on stay marked in the paper. A pale
-     yellow, none of the route's greens, a background only; the paragraph's own ink stays on it (muted #666 4.88:1,
-     heading #1d1d1d 14.3:1). */
-  --color-note-mark: #fcee9e;
+     yellow, none of the route's greens, a background only; the paragraph's own ink stays on it (P10-46: a step paler,
+     #fcee9e → #fdf0a6, so that the nested shade stands off it — muted #666 4.97:1, heading #1d1d1d 14.6:1; 1.106:1
+     against the page). */
+  --color-note-mark: #fdf0a6;
   /* P10-20: the second shade of the highlighter — a note taken inside another note's words is a mark inside its mark,
      a little deeper and warmer (muted #666 4.53:1, heading #1d1d1d 13.3:1); a background only, read by the body's nested
-     note `<mark>`. */
+     note `<mark>`. P10-46: 1.097:1 against the highlighter above (it was 1.077:1, a faint step). */
   --color-note-nested: #fbe48d;
   --color-border: color-mix(in srgb, var(--color-heading) 6%, transparent);
   --color-border-strong: color-mix(in srgb, var(--color-heading) 12%, transparent);
