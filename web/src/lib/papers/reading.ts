@@ -145,8 +145,11 @@ export interface PaperReading {
    * 11 → 12 (P10-33, P10-34): paragraphs split as printed across page breaks and running heads,
    * and each figure carries its picture's size, so a reading cached under 11 has neither. Read
    * again once; a saved note finds its passage again by its quote (P10-35).
+   *
+   * 12 → 13 (P10-40): a PMC paper's nested subsections are sections of their own and an
+   * abstract sentence holds no line break, so a reading cached under 12 has neither. Read again once.
    */
-  version: 12;
+  version: 13;
   paperId: string;
   builtAt: string;
   provenance: ReadingProvenance;
@@ -797,7 +800,7 @@ export function buildReading(
   omitted.push({ block: "nextStep", reason: "needs_key" });
 
   return {
-    version: 12,
+    version: 13,
     paperId: paper.id,
     builtAt: now.toISOString(),
     provenance,
