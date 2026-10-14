@@ -113,6 +113,8 @@ import { SectionLinks } from "@/components/reader/evidence-quote";
 import { ReaderTabs } from "@/components/reader/reader-tabs";
 import { useReaderTab } from "@/components/reader/use-reader-tab";
 import { settledQuestions, useReadingQuestionsHydrated } from "@/store/reading-questions";
+import { SelectionToolbar } from "@/components/reader/selection-toolbar";
+import { StickyNotes, useTakeNote } from "@/components/notes/sticky-note";
 import { explanationFor, passageHash, useExplainThreadsStore, type ExplainTurn } from "@/store/explain-threads";
 import { paragraphKey, usePlainRewritesStore } from "@/store/plain-rewrites";
 import { PLAIN_DEFAULT_LEVEL, isPlainLevel, type PlainLevel } from "@/lib/papers/plain-levels";
@@ -865,6 +867,9 @@ function Reader({
   );
   const explainOpen = useRef<(() => void) | null>(null);
   const openExplain = useCallback(() => explainOpen.current?.(), []);
+  // P10-09a (review 7.1, 8.4): "Take notes" on the selection — a numbered sticky note at the right, saved into the
+  // paper's own note. The pill that offers it and "Explain this" is `SelectionToolbar` (mounted by the box below).
+  const takeNote = useTakeNote({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions });
 
   // P7-14 (R10, the owner's review; Q5): a paper Peer has read in full has two tabs, "Summary" and
   // "Paper digestion", and opens on the second. The tab is one state of the page: the hook holds
@@ -1594,6 +1599,10 @@ function Reader({
     <SectionLinks headings={bodyHeadings}>
       <ExplainBox key={paper.id} target={explainTarget} terms={terms} canAsk={explainCanAsk} onAsk={askExplain} cached={explainCached} cachedTurns={explainKeptThread?.turns} onReply={replyExplain} onSayMore={moreExplain} onResetThread={resetExplain} openRef={explainOpen} reading={reading} />
     </SectionLinks>
+    {/* P10-09a (review 7.1, 8.4; ruling §1h.78): the pill above a selection with "Explain this" and "Take notes", and
+        the sticky notes it opens at the right. Fixed, in the window's pixels, like the box above. */}
+    <SelectionToolbar target={explainTarget} onExplain={openExplain} onTakeNote={takeNote} />
+    <StickyNotes key={paper.id} paper={paper} reveal={reveal} />
     {/* P7-14 (R9): the notes, as a small tab fixed at the window's right edge (from `md`; a phone has
         the row in the command stack instead). Beside the explain box, for the same reason: it is
         placed in the window's pixels, which the zoom on the page container would scale. */}
