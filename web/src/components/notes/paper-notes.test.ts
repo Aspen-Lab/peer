@@ -114,3 +114,16 @@ describe("PaperNotes — the questions go into the first note (P2-05)", () => {
     expect(read("src/app/saved/page.tsx")).toContain("open(readingNote(citableFromPaper(paper)))");
   });
 });
+
+// P10-23 rule 2 (C P10-21's unsettled 3, BACKLOG-86): the two doc comments at the top of the file described the old note.
+describe("the doc comments say what the note is now (P10-23)", () => {
+  const prose = paperNotes.replace(/^\s*(\/\/|\/?\*+\/?) ?/gm, " ").replace(/\s+/g, " ");
+
+  it("the header and openPaperNotes' comment name the paper's title and the sticky notes, not the card / abstract / questions", () => {
+    expect(prose).not.toMatch(/from its record and abstract/);
+    expect(prose).not.toMatch(/from its card, the opening of its abstract/);
+    expect(prose).toMatch(/made the first time, with the paper's title/);
+    expect(prose).toMatch(/Open the paper's own notes — made the first time, with the paper's title/);
+    expect(prose.match(/title and your sticky notes/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+  });
+});

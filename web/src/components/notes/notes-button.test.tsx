@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readingNote } from "@/lib/notes/templates";
 import type { Note } from "@/lib/notes/types";
 import type { Paper } from "@/types";
-import { NOTES_LABEL, NotesButtonView, notesLabel } from "./notes-button";
+import { NOTES_LABEL, NotesButtonView, TAKE_TITLE, notesLabel } from "./notes-button";
 import { useNotesStore } from "@/store/notes";
 import { openPaperNotes } from "./paper-notes";
 
@@ -227,5 +227,27 @@ describe("P10-09b — the edge tab opens the window, the row still navigates", (
     const closed = renderToStaticMarkup(createElement(NotesButtonView, { variant: "edge", has: true, onOpen: () => {} }));
     expect(closed).toContain('aria-expanded="false"');
     expect(closed).not.toContain("360px");
+  });
+});
+
+// P10-23 rule 2 (C P10-21's unsettled 3, BACKLOG-86): the tab's tooltip said what the old note held (the card, the
+// abstract's opening, four questions). The note is the paper's title and the reader's sticky notes.
+describe("the tab's tooltip says what the note is now (P10-23)", () => {
+  it("is exported and names the paper's title and the sticky notes, nothing of the old template", () => {
+    expect(TAKE_TITLE).toBe("Take notes on this paper: its title, and your sticky notes.");
+    expect(TAKE_TITLE).not.toMatch(/abstract|four questions|card/i);
+  });
+
+  it("is the title of the edge tab before the paper has a note, and of nothing after", () => {
+    const edge = (has: boolean) => renderToStaticMarkup(createElement(NotesButtonView, { variant: "edge", has, onOpen: () => {} }));
+    expect(edge(false)).toContain(`title="${TAKE_TITLE}"`);
+    expect(edge(true)).not.toContain(TAKE_TITLE);
+  });
+
+  it("the comment at the top of the file says it too", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/components/notes/notes-button.tsx"), "utf8");
+    const prose = source.replace(/^\s*\/\/ ?/gm, " ").replace(/\s+/g, " ");
+    expect(prose).not.toContain("the opening of its abstract and the settled questions");
+    expect(prose).toContain("the paper's title and your sticky notes");
   });
 });
