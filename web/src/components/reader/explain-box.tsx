@@ -81,7 +81,7 @@ import type { PaperReading } from "@/lib/papers/reading";
 import type { PaperTerm } from "@/lib/papers/report";
 import { MAX_EXPLAIN_MESSAGE_CHARS, threadFull, type ExplainTurn } from "@/store/explain-threads";
 import type { Paper, UserProfile } from "@/types";
-import { EXPLAIN, PEERS_READING } from "./copy";
+import { EXPLAIN, PEERS_READING, WHY_PEER_SAYS_IT } from "./copy";
 import { useReadingPrefsStore } from "@/store/reading-prefs";
 import {
   DOCK_BOTTOM_PX,
@@ -405,11 +405,6 @@ export async function requestExplanation(args: {
 }
 
 // ── The card ───────────────────────────────────────────────────────────
-
-/** P10-38 (BACKLOG-75, ruling §1h.102): the second part's title when the selection is Peer's own words (the Summary, an answer): the
- *  paper's sentence under it, when there is one, is the body paragraph the words were matched to, with its section. A selection in the
- *  paper keeps `EXPLAIN.here`. */
-const WHY_PEER_SAYS_IT = "Why Peer says it";
 
 /** A part's label, in the label face — with Peer's own label beside it when the
  *  words under it are Peer's. */

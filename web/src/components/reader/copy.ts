@@ -287,6 +287,12 @@ export const EXPLAIN = {
 } as const;
 
 /**
+ * P10-38 (BACKLOG-75, ruling §1h.102), moved here by P10-39: the second part's title, and a reply's label, when the selection is
+ * Peer's own words (the Summary, an answer). A selection in the paper keeps `EXPLAIN.here`; the replies of its thread keep `EXPLAIN.peer`.
+ */
+export const WHY_PEER_SAYS_IT = "Why Peer says it";
+
+/**
  * P4-01 (blueprint §3.6 ⑥; user decision §1a.5 (b); §3d 18): "Say it plainly" — the control under a
  * paragraph the route marks read, and the one line under it when a paragraph could not be said
  * plainly. Peer's words, in the label face; the rewrite itself is in the reading face under one
