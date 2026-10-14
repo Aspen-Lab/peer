@@ -494,3 +494,179 @@ describe("routeByQuestions — the strongest rows answer a parameter question (P
     expect(faintOrNone).toBeGreaterThanOrEqual(Math.ceil(leafIds.length / 3));
   });
 });
+
+// ── P10-06d (A11): the experimental section keeps a strong slot on a parameter question ───────────────────────
+// P10-06c made the method sections weigh 1.3 on a question for parameters, and the cap of three leaf rows still
+// held the best of them out when three results or setup rows stood above it. The ruling: a reader who asks for
+// parameters wants the experimental section among the darkest rows; the Introduction, which names every term
+// once, is the row to give way. Invented papers; the quillwort and the lattice stand for the owner's 110 and LCO.
+
+const PARAMETER_QUESTION = "quillwort lattice parameters";
+/** One section of one paragraph of `quillwort` ×q and `lattice` ×l in 120 words. */
+const sec = (id: string, q: number, l: number, extra: Partial<Spec> = {}): Spec => ({ id, paragraphs: [para(q, l, 120)], ...extra });
+
+/** The section's score as a share of the best leaf's — the question's two terms, the method boost where it applies. */
+function shareOfBest(specs: Spec[], id: string, boost = true): number {
+  const leaves = specs.filter((spec) => spec.paragraphs.length > 0);
+  const countsOf = (text: string) => [/quillwort/g, /lattice/g].map((re) => (text.match(re) ?? []).length);
+  const scores = relevanceScores(
+    leaves.map((spec) => ({
+      counts: countsOf(spec.paragraphs.join(" ")),
+      words: spec.paragraphs.join(" ").split(/\s+/).length,
+      paragraphs: spec.paragraphs.map((p) => ({ counts: countsOf(p), words: p.split(/\s+/).length })),
+    })),
+  ).map((score, i) => (boost && (leaves[i].role === "method" || leaves[i].role === "apparatus") ? score * METHOD_BOOST : score));
+  return scores[leaves.findIndex((spec) => spec.id === id)] / Math.max(...scores);
+}
+
+describe("routeByQuestions — the best method row keeps a strong slot on a parameter question (P10-06d, rule 1)", () => {
+  // An Introduction, two results and a method section at about 0.7 of the best: the cap of three held the method row
+  // out (medium); now it is strong, and the Introduction — the setup row — is the one that gives way.
+  const paper: Spec[] = [
+    sec("intro", 5, 3, { role: "setup" }),
+    sec("r1", 7, 4, { role: "evidence" }),
+    sec("r2", 6, 3, { role: "evidence" }),
+    sec("m", 3, 1, { role: "method" }),
+    NONE,
+  ];
+
+  it("is a paper where the method row stands between 0.6 and 0.8 of the best, fourth", () => {
+    const share = shareOfBest(paper, "m");
+    expect(share).toBeGreaterThanOrEqual(0.6);
+    expect(share).toBeLessThan(0.8);
+    for (const id of ["intro", "r1", "r2"]) expect(shareOfBest(paper, id), id).toBeGreaterThan(share);
+  });
+
+  it("makes the method row strong and the Introduction medium", () => {
+    expect(tiersOf(paper, PARAMETER_QUESTION)).toMatchObject({ intro: "medium", r1: "strong", r2: "strong", m: "strong", z1: "none" });
+  });
+
+  it("never carries more than three strong leaf rows", () => {
+    expect(count(tiersOf(paper, PARAMETER_QUESTION), "strong")).toBe(3);
+  });
+
+  it("a question that is not a parameter question changes nothing: the method row is medium, the Introduction strong", () => {
+    expect(tiersOf(paper, "quillwort lattice sorption")).toMatchObject({ intro: "strong", r1: "strong", r2: "strong", m: "medium" });
+  });
+
+  it("takes the slot of the setup row, not of the lowest strong row, when the Introduction is the highest", () => {
+    const specs: Spec[] = [sec("intro", 9, 6, { role: "setup" }), sec("r1", 7, 4, { role: "evidence" }), sec("r2", 7, 4, { role: "evidence" }), sec("m", 3, 2, { role: "method" }), NONE];
+    expect(shareOfBest(specs, "m")).toBeGreaterThanOrEqual(0.6);
+    expect(tiersOf(specs, PARAMETER_QUESTION)).toMatchObject({ intro: "medium", r1: "strong", r2: "strong", m: "strong" });
+  });
+
+  it("demotes the lowest-scoring of two strong setup rows", () => {
+    const specs: Spec[] = [
+      sec("intro", 7, 4, { role: "setup" }),
+      sec("bg", 5, 3, { role: "setup" }),
+      sec("r1", 8, 5, { role: "evidence" }),
+      sec("m", 3, 1, { role: "method" }),
+      NONE,
+    ];
+    expect(tiersOf(specs, PARAMETER_QUESTION)).toMatchObject({ intro: "strong", bg: "medium", r1: "strong", m: "strong" });
+  });
+
+  it("demotes the lowest-scoring strong row when none of the strong rows is a setup row", () => {
+    const specs: Spec[] = [
+      sec("r1", 8, 5, { role: "evidence" }),
+      sec("r2", 7, 4, { role: "evidence" }),
+      sec("c", 5, 3, { role: "interpretation" }),
+      sec("m", 3, 1, { role: "method" }),
+      NONE,
+    ];
+    expect(tiersOf(specs, PARAMETER_QUESTION)).toMatchObject({ r1: "strong", r2: "strong", c: "medium", m: "strong" });
+  });
+
+  it("does the same for an apparatus row", () => {
+    const specs: Spec[] = [sec("intro", 5, 3, { role: "setup" }), sec("r1", 7, 4, { role: "evidence" }), sec("r2", 6, 3, { role: "evidence" }), sec("a", 3, 1, { role: "apparatus" }), NONE];
+    expect(tiersOf(specs, PARAMETER_QUESTION)).toMatchObject({ intro: "medium", a: "strong" });
+  });
+
+  it("promotes only the best method row: the next one stays medium", () => {
+    const specs: Spec[] = [
+      sec("intro", 5, 3, { role: "setup" }),
+      sec("r1", 7, 4, { role: "evidence" }),
+      sec("r2", 6, 3, { role: "evidence" }),
+      sec("m1", 3, 1, { role: "method" }),
+      sec("m2", 3, 1, { role: "method" }),
+      NONE,
+    ];
+    const tiers = tiersOf(specs, PARAMETER_QUESTION);
+    expect(tiers).toMatchObject({ intro: "medium", m1: "strong", m2: "medium" });
+    expect(count(tiers, "strong")).toBe(3);
+  });
+
+  it("changes nothing when the best method row is already strong", () => {
+    const specs: Spec[] = [sec("intro", 5, 3, { role: "setup" }), sec("r1", 7, 4, { role: "evidence" }), sec("r2", 4, 2, { role: "evidence" }), sec("m", 8, 4, { role: "method" }), NONE];
+    expect(shareOfBest(specs, "m")).toBeGreaterThan(0.9);
+    expect(tiersOf(specs, PARAMETER_QUESTION)).toMatchObject({ intro: "strong", r1: "strong", m: "strong", r2: "medium" });
+  });
+
+  it("changes nothing when the method row is under 0.6 of the best", () => {
+    const specs: Spec[] = [sec("intro", 5, 3, { role: "setup" }), sec("r1", 7, 4, { role: "evidence" }), sec("r2", 6, 3, { role: "evidence" }), sec("m", 1, 1, { role: "method" }), NONE];
+    expect(shareOfBest(specs, "m")).toBeLessThan(0.6);
+    expect(tiersOf(specs, PARAMETER_QUESTION)).toMatchObject({ intro: "strong", r1: "strong", r2: "strong", m: "medium" });
+  });
+
+  it("changes nothing when the paper has no method or apparatus row", () => {
+    const specs: Spec[] = [sec("intro", 5, 3, { role: "setup" }), sec("r1", 7, 4, { role: "evidence" }), sec("r2", 6, 3, { role: "evidence" }), sec("b", 3, 1, { role: "body" }), NONE];
+    expect(tiersOf(specs, PARAMETER_QUESTION)).toMatchObject({ intro: "strong", r1: "strong", r2: "strong", b: "medium" });
+  });
+
+  it("changes nothing for a method row that scores nothing", () => {
+    const specs: Spec[] = [sec("intro", 5, 3, { role: "setup" }), sec("r1", 7, 4, { role: "evidence" }), sec("r2", 6, 3, { role: "evidence" }), sec("m", 0, 0, { role: "method" }), NONE];
+    expect(tiersOf(specs, PARAMETER_QUESTION)).toMatchObject({ intro: "strong", m: "none" });
+  });
+
+  it("under a group row: the method group and its strong child are strong, and the Introduction is the row that gives way", () => {
+    const specs: Spec[] = [
+      sec("intro", 5, 3, { role: "setup", level: 1 }),
+      { id: "res", paragraphs: [], role: "evidence", level: 1 },
+      sec("r1", 7, 4, { role: "evidence", level: 2, parentId: "res" }),
+      sec("r2", 6, 3, { role: "evidence", level: 2, parentId: "res" }),
+      { id: "exp", paragraphs: [], role: "method", level: 1 },
+      sec("e1", 3, 1, { role: "method", level: 2, parentId: "exp" }),
+      sec("e2", 0, 0, { role: "method", level: 2, parentId: "exp" }),
+    ];
+    const tiers = tiersOf(specs, PARAMETER_QUESTION);
+    expect(tiers).toMatchObject({ intro: "medium", res: "strong", r1: "strong", r2: "strong", exp: "strong", e1: "strong", e2: "none" });
+    expect(["intro", "r1", "r2", "e1", "e2"].filter((id) => tiers[id] === "strong")).toHaveLength(3);
+  });
+
+  it("is the owner's shape: the Introduction medium, the results and the experimental section strong", () => {
+    const specs: Spec[] = [
+      sec("intro", 5, 3, { role: "setup", level: 1 }),
+      { id: "res", paragraphs: [], role: "evidence", level: 1 },
+      sec("r1", 6, 3, { role: "evidence", level: 2, parentId: "res" }),
+      sec("r2", 7, 4, { role: "evidence", level: 2, parentId: "res" }),
+      sec("r3", 3, 2, { role: "evidence", level: 2, parentId: "res" }),
+      sec("concl", 3, 2, { role: "interpretation", level: 1 }),
+      { id: "exp", paragraphs: [], role: "method", level: 1 },
+      sec("e1", 3, 1, { role: "method", level: 2, parentId: "exp" }),
+      sec("e2", 0, 0, { role: "method", level: 2, parentId: "exp" }),
+    ];
+    const tiers = tiersOf(specs, PARAMETER_QUESTION);
+    expect(tiers).toMatchObject({ intro: "medium", r1: "strong", r2: "strong", e1: "strong", res: "strong", exp: "strong" });
+  });
+});
+
+describe("routeByQuestions — a group row is marked as one, for the body's cap (P10-06d, rule 3)", () => {
+  const specs: Spec[] = [
+    sec("intro", 5, 3, { role: "setup", level: 1 }),
+    { id: "res", paragraphs: [], role: "evidence", level: 1 },
+    sec("r1", 7, 4, { role: "evidence", level: 2, parentId: "res" }),
+    { id: "empty", paragraphs: [], role: "evidence", level: 1 },
+    NONE,
+  ];
+  const sections = (() => {
+    const { map, body } = paperOf(specs);
+    return routeByQuestions(map, body, ["quillwort lattice"]).byQuestion[0].sections;
+  })();
+
+  const groupOf = (id: string) => (sections[id] as unknown as { group?: boolean }).group;
+
+  it("marks a section with no paragraphs of its own and subsections under it, and no other", () => {
+    expect(groupOf("res")).toBe(true);
+    for (const id of ["intro", "r1", "empty", "z1"]) expect(groupOf(id), id).toBeUndefined();
+  });
+});

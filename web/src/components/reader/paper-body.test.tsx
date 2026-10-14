@@ -5,8 +5,9 @@ import { buildReading } from "@/lib/papers/reading";
 import type { ExtractedDocument } from "@/lib/papers/html-text";
 import type { FullTextResult } from "@/lib/papers/full-text";
 import type { Paper } from "@/types";
+import { routeByQuestions, type RouteResult } from "@/lib/papers/reading-map";
 import { blockMarker } from "@/lib/text/math";
-import { PaperBody, paragraphAnchor, sectionAnchor } from "./paper-body";
+import { PaperBody, mergeQuestionRoute, paragraphAnchor, questionRouteOverlay, sectionAnchor } from "./paper-body";
 
 // P1-04 (§1f.12): every paragraph of the body is a destination — the map's
 // paragraph lines scroll to it — and nothing else in the body changes.
@@ -162,5 +163,73 @@ describe("PaperBody — a group heading stands alone (P10-04, A10)", () => {
     const heading = /<section id="paper-section-1"[^>]*>(<h3\b[^>]*>)/.exec(tinted)?.[1] ?? "";
 
     expect(heading).toContain('data-route="strong"');
+  });
+});
+
+// P10-06d (the P10-06c checkpoint's unsettled 4): the strongest rows are three leaf rows at most once the model's marks are
+// merged over the route, as they are in the route itself — a group row (no paragraphs of its own, subsections under it) wears its
+// child's tier and takes no slot, or it would demote a leaf in the overlay as it once did in the route.
+describe("PaperBody — the merged route's strong cap counts leaf rows (P10-06d)", () => {
+  const Q = "Does the LCO lattice crack at H1-3?";
+  const row = (tier: "strong" | "medium" | "faint" | "none", extra: object = {}) => ({ tier, hits: [{ term: "lco", count: 2 }], paragraphs: [0], ...extra });
+  const tier0 = (sections: Record<string, ReturnType<typeof row>>): RouteResult => ({ byQuestion: [{ question: Q, vague: false, sections }], vague: false });
+  const answered = (...ids: string[]) => [
+    { question: Q, verdict: "answered" as const, answers: ids.map((sectionId) => ({ text: `Peer answer ${sectionId}.`, evidence: `Model says ${sectionId}.`, sectionId })), readNext: [] },
+  ];
+  const tiersOf = (route: ReturnType<typeof mergeQuestionRoute>) =>
+    Object.fromEntries(Object.entries(route!.byQuestion[0].sections).map(([id, section]) => [id, section.tier as string]));
+
+  it("skips a group row among four strong rows: it keeps its tier and takes no slot, so three leaves stay strong", () => {
+    const merged = mergeQuestionRoute(
+      tier0({ g: row("strong", { group: true, paragraphs: [] }), a: row("strong"), b: row("strong"), c: row("strong"), d: row("medium") }),
+      questionRouteOverlay(answered("d")),
+    );
+    const tiers = tiersOf(merged);
+
+    expect(tiers).toEqual({ g: "strong", d: "strong", a: "strong", b: "strong", c: "medium" });
+  });
+
+  it("still puts the model's strong rows first among the leaves, and keeps a demoted leaf's evidence", () => {
+    const merged = mergeQuestionRoute(
+      tier0({ a: row("strong"), g: row("strong", { group: true, paragraphs: [] }), b: row("strong"), c: row("strong"), d: row("faint"), e: row("faint") }),
+      questionRouteOverlay(answered("d", "e")),
+    );
+
+    expect(tiersOf(merged)).toEqual({ a: "strong", g: "strong", b: "medium", c: "medium", d: "strong", e: "strong" });
+    expect(merged!.byQuestion[0].sections.d.evidence).toBe("Model says d.");
+  });
+
+  it("counts a row that is not marked as a group row, so the cap of three stands for leaf rows as before", () => {
+    const merged = mergeQuestionRoute(tier0({ a: row("strong"), b: row("strong"), c: row("strong"), d: row("strong") }), questionRouteOverlay(answered("d")));
+
+    expect(tiersOf(merged)).toEqual({ a: "strong", b: "strong", c: "medium", d: "strong" });
+  });
+
+  it("carries the mark from the route itself: the route of an invented paper, merged with a verified answer", () => {
+    const text = (n: number) => `The lattice of the quillwort changed ${n} times. ${"Cells were cycled at a fixed rate. ".repeat(12)}`;
+    const specs = [
+      { id: "res", paragraphs: [] as string[], parent: undefined },
+      { id: "r1", paragraphs: [text(4)], parent: "res" },
+      { id: "r2", paragraphs: [text(3)], parent: "res" },
+      { id: "r3", paragraphs: [text(3)], parent: "res" },
+      { id: "r4", paragraphs: [text(3)], parent: "res" },
+      { id: "x", paragraphs: ["Nothing of the kind is said here. ".repeat(12)], parent: undefined },
+    ];
+    const map = {
+      sections: specs.map((s) => ({
+        id: s.id, heading: s.id, canonical: "body", role: "evidence", words: 100, minutes: 1,
+        paragraphs: s.paragraphs.map((_, index) => ({ index, opening: null })),
+        ...(s.parent ? { level: 2, parentId: s.parent } : { level: 1 }),
+      })),
+      totalMinutes: 1,
+    } as unknown as Parameters<typeof routeByQuestions>[0];
+    const route = routeByQuestions(map, specs.map((s) => ({ paragraphs: s.paragraphs })), ["quillwort lattice"]);
+    const q = route.byQuestion[0].question;
+    const merged = mergeQuestionRoute(route, questionRouteOverlay([{ question: q, verdict: "answered", answers: [{ text: "x", evidence: "Model says x.", sectionId: "x" }], readNext: [] }]));
+    const tiers = tiersOf(merged);
+
+    expect(tiers.res).toBe("strong");
+    expect(tiers.x).toBe("strong");
+    expect(["r1", "r2", "r3", "r4", "x"].filter((id) => tiers[id] === "strong")).toHaveLength(3);
   });
 });
