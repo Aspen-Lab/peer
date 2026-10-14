@@ -35,10 +35,36 @@ interface NotesInputs {
 }
 
 /**
- * Go to the paper's own notes — made the first time, from its card, the
+ * P10-09b (B12/B14): the paper's one reading note — the store's own when it has one, else made now from the
+ * paper's card, the opening of its abstract and (P2-05) the settled questions and the report's answers, and
+ * added. Nothing navigates: the window opens it where the reader stands. (`ensureReadingNote` in the store, where
+ * P10-09a puts it, is this with the store handed in; this local one is the same signature for the window until the
+ * two are reconciled.)
+ */
+export function ensureReadingNoteLocal({
+  own,
+  paper,
+  questions,
+  forYourQuestions,
+  add,
+}: NotesInputs & {
+  own: Note | undefined;
+  add: (note: Note) => void;
+}): Note {
+  if (own) return own;
+  const note = readingNote(citableFromPaper(paper), { questions, forYourQuestions });
+  add(note);
+  return note;
+}
+
+/**
+ * Open the paper's own notes — made the first time, from its card, the
  * opening of its abstract and (P2-05) the settled questions and the report's
  * answers. The router and the store are handed in, so this is the whole of
  * what pressing the button does and nothing in it needs a page to run.
+ *
+ * P10-09b (review 7.2): given `openWindow` (the reading page's edge tab), the note opens as the floating window
+ * and nothing navigates; without it (a phone's row, the upload page's band) it goes to `/notes/<id>` as before.
  */
 export function openPaperNotes({
   own,
@@ -47,25 +73,27 @@ export function openPaperNotes({
   forYourQuestions,
   add,
   push,
+  openWindow,
 }: NotesInputs & {
   own: Pick<Note, "id"> | undefined;
   add: (note: Note) => void;
   push: (href: string) => void;
+  openWindow?: () => void;
 }): void {
-  if (own) {
+  if (own && !openWindow) {
     push(`/notes/${own.id}`);
     return;
   }
-  const note = readingNote(citableFromPaper(paper), { questions, forYourQuestions });
-  add(note);
-  push(`/notes/${note.id}`);
+  const note = ensureReadingNoteLocal({ own: own as Note | undefined, paper, questions, forYourQuestions, add });
+  if (openWindow) openWindow();
+  else push(`/notes/${note.id}`);
 }
 
 /**
  * The paper's notes, as the page reads them: whether the store has loaded, the paper's own note, the
  * others that cite it, and the press that opens them.
  */
-export function usePaperNotes({ paper, questions, forYourQuestions }: NotesInputs) {
+export function usePaperNotes({ paper, questions, forYourQuestions, openWindow }: NotesInputs & { openWindow?: () => void }) {
   const router = useRouter();
   const ready = useNotesHydrated();
   const notes = useNotesStore((s) => s.notes);
@@ -74,7 +102,7 @@ export function usePaperNotes({ paper, questions, forYourQuestions }: NotesInput
   const own = readingNoteFor(notes, paper.id);
   const citing = notesCiting(notes, paper.id).filter((n) => n.id !== own?.id);
   const open = () =>
-    openPaperNotes({ own, paper, questions, forYourQuestions, add, push: (href) => router.push(href as Route) });
+    openPaperNotes({ own, paper, questions, forYourQuestions, add, push: (href) => router.push(href as Route), openWindow });
   return { ready, own, citing, open };
 }
 

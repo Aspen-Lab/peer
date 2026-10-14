@@ -403,7 +403,18 @@ const Row = memo(function Row({ block: b, first, number, editing, sources, dragg
 
 // ── The editor ────────────────────────────────────────────────────────────
 
-export function NoteEditor({ note }: { note: Note }) {
+export function NoteEditor({
+  note,
+  compact = false,
+  onDoc,
+}: {
+  note: Note;
+  /** P10-09b: the editor as the notes window holds it — the blocks and the toolbar alone, no rail, no page bar, no
+   *  title (the window has its own header). Everything about the blocks is the same. */
+  compact?: boolean;
+  /** The editor's current copy, after each change — for the window's export, which cannot wait for the save. */
+  onDoc?: (doc: { title: string; blocks: Block[]; sources: Record<string, Source> }) => void;
+}) {
   const router = useRouter();
   const saveNote = useNotesStore((s) => s.save);
   const removeNote = useNotesStore((s) => s.remove);
@@ -490,8 +501,15 @@ export function NoteEditor({ note }: { note: Note }) {
   }, [note.id, saveNote]);
 
   useEffect(() => {
+    if (compact) return;
     document.title = `${doc.title.trim() || "Untitled"} · Peer`;
-  }, [doc.title]);
+  }, [doc.title, compact]);
+
+  const onDocRef = useRef(onDoc);
+  onDocRef.current = onDoc;
+  useEffect(() => {
+    onDocRef.current?.(doc);
+  }, [doc]);
 
   // ── Focus ──
   // A render is forced even when the block is already the one being edited,
@@ -1217,8 +1235,8 @@ export function NoteEditor({ note }: { note: Note }) {
     // Three columns where the window allows: the notes rail, the note, the
     // shelf to cite from. Below that the rail is a panel the bar opens, and
     // the shelf gives way to @.
-    <div className="lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-12">
-      <aside className="hidden lg:block">
+    <div className={compact ? undefined : "lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-12"}>
+      {!compact && <aside className="hidden lg:block">
         <div className="sticky top-24 flex max-h-[calc(100vh-8rem)] flex-col">
           <EditorRail
             currentId={note.id}
@@ -1231,11 +1249,11 @@ export function NoteEditor({ note }: { note: Note }) {
             sources={doc.sources}
           />
         </div>
-      </aside>
+      </aside>}
 
       <div className="min-w-0">
         {/* The page's own bar: where it lives, that it is kept, and out. */}
-        <div className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pl-10">
+        {!compact && <div className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pl-10">
           <div className="flex items-center gap-3">
             <Link href="/saved" className="eyebrow text-text-faint hover:text-heading">
               ← Saved
@@ -1312,10 +1330,10 @@ export function NoteEditor({ note }: { note: Note }) {
               Delete
             </button>
           </div>
-        </div>
+        </div>}
 
-        <div className="mt-8 max-w-[44rem]">
-          <textarea
+        <div className={compact ? "max-w-[44rem]" : "mt-8 max-w-[44rem]"}>
+          {!compact && <textarea
             ref={titleRef}
             value={doc.title}
             rows={1}
@@ -1325,8 +1343,8 @@ export function NoteEditor({ note }: { note: Note }) {
             onChange={(e) => commit({ ...docRef.current, title: e.target.value.replace(/\n/g, " ") })}
             onKeyDown={titleKey}
             className="paper-line block w-full resize-none overflow-hidden bg-transparent pl-10 text-display leading-[1.15] text-heading outline-none placeholder:text-text-faint/60 sm:text-display-lg"
-          />
-          {note.paperId && (
+          />}
+          {note.paperId && !compact && (
             <p className="eyebrow mt-3 pl-10 text-text-faint">
               Reading notes ·{" "}
               <Link href={`/papers/${note.paperId}`} className="hover:text-heading">
@@ -1341,7 +1359,7 @@ export function NoteEditor({ note }: { note: Note }) {
             enabled={Boolean(editingBlock && isTextual(editingBlock.type))}
             onMark={(m) => editing && applyMark(editing, m)}
             onType={(t) => editing && applyType(editing, t)}
-            className="sticky top-0 z-10 -ml-1 mt-4 bg-bg py-1 md:top-12"
+            className={compact ? "sticky top-0 z-10 bg-surface py-1" : "sticky top-0 z-10 -ml-1 mt-4 bg-bg py-1 md:top-12"}
           />
 
           <div
@@ -1488,10 +1506,10 @@ export function NoteEditor({ note }: { note: Note }) {
             </section>
           )}
 
-          <p className="annotation mt-12 pl-10 leading-[1.7] text-text-faint">
+          {!compact && <p className="annotation mt-12 pl-10 leading-[1.7] text-text-faint">
             / blocks · @ cite a paper, or drag one in from the rail · [[ link a note · # - 1. [] &gt; ``` --- as you type · Tab nests · ⌘⇧↑↓ moves ·
             ⌘B ⌘I ⌘U ⌘⇧H ⌘E
-          </p>
+          </p>}
         </div>
       </div>
 

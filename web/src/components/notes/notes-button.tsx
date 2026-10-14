@@ -15,12 +15,18 @@
 //
 // What it does is the band's old `open()` (`paper-notes.tsx`): the paper's own notes, made the
 // first time from its card, the opening of its abstract and the settled questions.
+//
+// P10-09b (the owner's review 7.2): on the reading page the edge tab opens those notes as a floating window at
+// the right (`notes-window.tsx`) instead of navigating, and while the window stands the tab stands beside it
+// (360 px in), a second press closing it. The phone's row still navigates to the notes page (the phone is deferred).
 
+import { useState } from "react";
 import type { Paper } from "@/types";
 import type { QuestionAnswers } from "@/lib/papers/report";
 import { buttonVariants } from "@/components/ui/button";
 import { COMMAND } from "@/components/ui/command";
 import { cn } from "@/lib/cn";
+import { NotesWindow } from "./notes-window";
 import { usePaperNotes } from "./paper-notes";
 
 /** "Notes" until the paper has a note of its own; then it says what a press does. */
@@ -35,11 +41,14 @@ const TAKE_TITLE = "Take notes on this paper: its card, the opening of its abstr
 export function NotesButtonView({
   variant,
   has,
+  shown = false,
   onOpen,
 }: {
   variant: "edge" | "row";
   /** The paper already has a note of its own. */
   has: boolean;
+  /** The notes window stands (the edge tab only): the tab stands beside it, and a press closes it. */
+  shown?: boolean;
   onOpen: () => void;
 }) {
   const label = notesLabel(has);
@@ -62,6 +71,7 @@ export function NotesButtonView({
     <button
       type="button"
       onClick={onOpen}
+      aria-expanded={shown}
       title={has ? undefined : TAKE_TITLE}
       className={cn(
         // Fixed to the right edge — beside the AI dock instead of under it while that is open (`right` is
@@ -69,7 +79,9 @@ export function NotesButtonView({
         // 27rem down (or the window's middle, if lower), clear of the upper right 400px. The label runs down the tab (vertical writing mode), so it is as
         // narrow as a line of type: in that mode `px` pads the tab's top and bottom (the inline axis)
         // and `py` its two sides, and the tab must not reach into the page's own side margin (24px).
-        "fixed right-[var(--explain-dock-width,0px)] top-[max(27rem,50vh)] z-40 hidden md:flex items-center border border-r-0 border-border-strong bg-surface px-3 py-1 shadow-card",
+        // While the notes window stands the tab is beside it: at the larger of the dock's width and the window's.
+        shown ? "fixed right-[max(var(--explain-dock-width,0px),360px)]" : "fixed right-[var(--explain-dock-width,0px)]",
+        "top-[max(27rem,50vh)] z-40 hidden md:flex items-center border border-r-0 border-border-strong bg-surface px-3 py-1 shadow-card",
         "eyebrow text-text-muted transition-colors hover:bg-surface-hover hover:text-heading [writing-mode:vertical-rl]",
       )}
     >
@@ -92,7 +104,24 @@ export function NotesButton({
   /** P2-05: the report's answers to them. */
   forYourQuestions?: readonly QuestionAnswers[];
 }) {
-  const { ready, own, open } = usePaperNotes({ paper, questions, forYourQuestions });
+  const [shown, setShown] = useState(false);
+  // The edge tab opens the window; the row (a phone) navigates, as the band always did.
+  const { ready, own, open } = usePaperNotes({
+    paper,
+    questions,
+    forYourQuestions,
+    openWindow: variant === "edge" ? () => setShown(true) : undefined,
+  });
   if (!ready) return null;
-  return <NotesButtonView variant={variant} has={own !== undefined} onOpen={open} />;
+  return (
+    <>
+      <NotesButtonView
+        variant={variant}
+        has={own !== undefined}
+        shown={variant === "edge" && shown}
+        onOpen={variant === "edge" && shown ? () => setShown(false) : open}
+      />
+      {variant === "edge" && shown && <NotesWindow paper={paper} onClose={() => setShown(false)} />}
+    </>
+  );
 }
