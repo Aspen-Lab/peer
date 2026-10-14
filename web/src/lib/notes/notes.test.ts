@@ -303,15 +303,16 @@ describe("templates", () => {
     expect(abstractOpening("")).toBeNull();
   });
 
-  it("gives a paper its own notes: its card, its words, headings to answer", () => {
+  // Re-aimed (§1c, P10-09e rule 1) from "its card, its words, headings to answer": the note is the title line; the abstract
+  // quote, the headings and their prompts are not placed (the full pin is in templates.reading.test.ts).
+  it("gives a paper its own notes: its title line, and nothing placed after it", () => {
     const note = readingNote(ROSE, "2026-09-18T00:00:00.000Z");
     expect(note.paperId).toBe(ROSE.id);
     expect(note.title).toBe(ROSE.title);
-    expect(note.blocks[0]).toMatchObject({ type: "paper", cite: "rose2024applications" });
+    expect(note.blocks).toHaveLength(1);
+    expect(note.blocks[0]).toMatchObject({ type: "h1", text: ROSE.title });
     expect(note.sources.rose2024applications.paperId).toBe(ROSE.id);
-    expect(note.blocks[1]).toMatchObject({ type: "quote" });
-    // What the reader is to write is a prompt, not text.
-    for (const b of note.blocks.filter((x) => x.hint)) expect(b.text).toBe("");
+    expect(note.blocks.some((b) => b.type === "quote" || b.hint)).toBe(false);
   });
 
   it("drafts related work with one paragraph per paper, keys kept apart", () => {

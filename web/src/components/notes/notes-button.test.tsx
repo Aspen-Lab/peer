@@ -127,7 +127,8 @@ describe("openPaperNotes — the same open() as the band had (P2-05)", () => {
     expect(pushed).toEqual(["/notes/n-1"]);
   });
 
-  it("without one, makes the paper's note from its card, abstract and settled questions, then goes to it", () => {
+  // Re-aimed (§1c, P10-09e rule 1): the note is the paper's title line; the settled questions are not copied into it.
+  it("without one, makes the paper's note (its title line; the settled questions are not copied in), then goes to it", () => {
     const { made, pushed, args } = stubs();
 
     openPaperNotes({ ...args, paper, questions: ["Does a deeper layer keep more water?"], forYourQuestions: [] });
@@ -136,7 +137,8 @@ describe("openPaperNotes — the same open() as the band had (P2-05)", () => {
     expect(notes).toHaveLength(1);
     expect(notes[0].paperId).toBe(paper.id);
     expect(notes[0].title).toBe(paper.title);
-    expect(JSON.stringify(notes[0].blocks)).toContain("Does a deeper layer keep more water?");
+    expect(notes[0].blocks.map((b) => [b.type, b.text])).toEqual([["h1", paper.title]]);
+    expect(JSON.stringify(notes[0].blocks)).not.toContain("Does a deeper layer keep more water?");
     expect(pushed).toEqual([`/notes/${notes[0].id}`]);
   });
 

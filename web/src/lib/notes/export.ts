@@ -44,6 +44,13 @@ export function reference(s: Source): string {
   return `${lead}${venue}${link ? ` ${link}` : ""}`;
 }
 
+/** P10-09e: a reading note opens on an `h1` that is the note's own title; the export already says the title once, so
+ *  that line is not said a second time. */
+function isTitleLine(note: Pick<Note, "title" | "blocks">, b: Block, i: number): boolean {
+  const title = note.title.trim();
+  return i === 0 && b.type === "h1" && title !== "" && b.text.trim() === title;
+}
+
 function blockMarkdown(b: Block, blocks: Block[], i: number, sources: Record<string, Source>): string | null {
   const pad = "    ".repeat(b.indent ?? 0);
   if (isTextual(b.type) && !b.text.trim()) return null;
@@ -97,6 +104,7 @@ export function toMarkdown(note: Note): string {
   let body = "";
   let prev: Block | null = null;
   note.blocks.forEach((b, i) => {
+    if (isTitleLine(note, b, i)) return;
     const md = blockMarkdown(b, note.blocks, i, note.sources);
     if (md === null) return;
     // A list is one list: its items sit on consecutive lines.
@@ -218,6 +226,7 @@ export function toPlainText(note: Note): string {
   let body = "";
   let prev: Block | null = null;
   note.blocks.forEach((b, i) => {
+    if (isTitleLine(note, b, i)) return;
     const text = blockText(b, note.blocks, i, note.sources);
     if (text === null) return;
     body += body ? (prev && isList(prev.type) && isList(b.type) ? "\n" : "\n\n") : "";
@@ -276,7 +285,8 @@ function bodyHtml(note: Note): string {
   const closeTo = (depth: number) => {
     while (open.length > depth) out.push(`</li>\n</${open.pop()}>\n`);
   };
-  note.blocks.forEach((b) => {
+  note.blocks.forEach((b, i) => {
+    if (isTitleLine(note, b, i)) return;
     if (isTextual(b.type) && !b.text.trim()) return;
     if (b.type === "bullet" || b.type === "numbered" || b.type === "todo") {
       const depth = Math.min(b.indent ?? 0, open.length) + 1;

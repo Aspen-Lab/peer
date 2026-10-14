@@ -11,11 +11,12 @@ const AT = { paperId: "p1", paragraphId: "paper-section-1-p2", passage: "The fin
 describe("ensureReadingNote", () => {
   beforeEach(() => useNotesStore.setState({ notes: {} }));
 
-  it("makes the paper's note from the template the first time and returns its id", () => {
+  // Re-aimed (§1c, P10-09e rule 1): the first block is the title line (an h1), no longer a paper card.
+  it("makes the paper's note (its title line) the first time and returns its id", () => {
     const id = useNotesStore.getState().ensureReadingNote(PAPER);
     const note = useNotesStore.getState().notes[id];
     expect(note.paperId).toBe("p1");
-    expect(note.blocks[0].type).toBe("paper");
+    expect(note.blocks.map((b) => [b.type, b.text])).toEqual([["h1", "A Paper"]]);
     expect(readingNoteFor(useNotesStore.getState().notes, "p1")?.id).toBe(id);
   });
 

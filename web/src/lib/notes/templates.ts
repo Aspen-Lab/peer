@@ -1,10 +1,12 @@
 // The shapes a note can start in. Every word placed here is the paper's own
 // (its record, its abstract) or a heading; what the reader is meant to write
 // is a PROMPT — shown in an empty block, never stored as text, never exported.
-// P2-05 adds the reader's own questions and, under each, the verdict and the
-// paper's verbatim sentences that answer it — never Peer's answer prose.
+// P2-05 added the reader's own questions and, under each, the verdict and the
+// paper's verbatim sentences that answer it; P10-09e moved those answers to the
+// paper's own page, under the question, and made the paper's reading note the title
+// line and what the reader and the sticky notes add — see `readingNote`.
 
-import { questionEntryLines, type MarkdownQuestionAnswers } from "@/lib/papers/reading-markdown";
+import type { MarkdownQuestionAnswers } from "@/lib/papers/reading-markdown";
 import type { Block, Citable, Note, Source } from "./types";
 import { block, newId } from "./blocks";
 import { keyFor, sourceOf } from "./cite";
@@ -40,72 +42,27 @@ export function blankNote(now = new Date().toISOString()): Note {
   return { ...stamp(now), title: "", blocks: [block("text")], sources: {} };
 }
 
-/** What a paper's own notes can start with besides its record (P2-05). */
+/** What a paper's own notes were once offered besides its record (P2-05). */
 export interface ReadingNoteExtras {
-  /** The reader's settled questions for this paper (never the gist). */
+  /** @deprecated P10-09e: not read — the answers stand on the paper's page. Kept so the callers still compile. */
   questions?: readonly string[];
-  /** The deep report's answers to them. Used only for the questions asked. */
+  /** @deprecated P10-09e: not read. */
   forYourQuestions?: readonly MarkdownQuestionAnswers[];
   now?: string;
 }
 
-/** A question on one line: trimmed, runs of whitespace collapsed. */
-function tidy(question: string): string {
-  return question.replace(/\s+/g, " ").trim();
-}
-
-/** A question as two texts are compared (§1g.12): tidy and case-insensitive. */
-function same(question: string): string {
-  return tidy(question).toLowerCase();
-}
-
-/** "My questions → what it said": per question, the reader's own words, the
- *  verdict, and the paper's sentence behind each answer with where it sits —
- *  the words of the Markdown export. Nothing at all without questions. */
-function questionBlocks(
-  questions: readonly string[],
-  answers: readonly MarkdownQuestionAnswers[],
-): Block[] {
-  const asked = questions.map(tidy).filter(Boolean);
-  if (asked.length === 0) return [];
-  const byQuestion = new Map<string, MarkdownQuestionAnswers>();
-  for (const entry of answers) if (!byQuestion.has(same(entry.question))) byQuestion.set(same(entry.question), entry);
-  const blocks: Block[] = [block("h2", "My questions → what it said")];
-  for (const question of asked) {
-    blocks.push(block("h3", question));
-    const entry = byQuestion.get(same(question));
-    if (!entry) continue;
-    const lines = questionEntryLines({ ...entry, question });
-    blocks.push(block("text", lines.verdict));
-    for (const answer of lines.answers) if (answer.quote) blocks.push(block("quote", answer.quote));
-  }
-  return blocks;
-}
-
-/** A paper's own notes: its card, the opening of its abstract, the reader's
- *  questions with what the paper said to each (when there are any), and four
- *  headings to answer under.
+/** A paper's own notes (P10-09e, B13 / B14): the title line, and nothing after it. The sticky notes append under it
+ *  as the reader makes them, and the reader writes where they like — Peer places no abstract, no quote, no prompt and
+ *  no empty section in it, and (the answers now stand on the paper's page, under each question) no "My questions →
+ *  what it said". The paper stays in `sources` under its citation key, so `[@key]` still cites it.
  *
- *  The second argument is the time, as a string (how it was first written), or
- *  an object that may carry it as `now` beside the reader's questions. */
+ *  A note made before this (the old template) is left as it is. The second argument is the time, as a string (how it
+ *  was first written), or an object that may carry it as `now`; the questions in it are no longer read. */
 export function readingNote(paper: Citable, extras: ReadingNoteExtras | string = {}): Note {
   const options: ReadingNoteExtras = typeof extras === "string" ? { now: extras } : extras;
   const now = options.now ?? new Date().toISOString();
-  const { sources, keys } = citing([paper]);
-  const opening = abstractOpening(paper.abstract);
-  const blocks: Block[] = [
-    block("paper", "", { cite: keys[0] }),
-    ...(opening ? [block("quote", opening)] : []),
-    ...questionBlocks(options.questions ?? [], options.forYourQuestions ?? []),
-    block("h2", "What it claims"),
-    block("bullet", "", { hint: "The claim, in your own words" }),
-    block("h2", "How"),
-    block("text", "", { hint: "Method, data, setup — what you would need to repeat it" }),
-    block("h2", "What I think"),
-    block("text", "", { hint: "Where it is strong or weak for your work" }),
-    block("h2", "Questions"),
-    block("bullet", "", { hint: "What you would check next" }),
-  ];
+  const { sources } = citing([paper]);
+  const blocks: Block[] = [block("h1", paper.title)];
   return { ...stamp(now), title: paper.title, blocks, sources, paperId: paper.id };
 }
 
