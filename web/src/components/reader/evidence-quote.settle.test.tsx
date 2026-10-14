@@ -16,6 +16,7 @@ function world(docTop: number) {
   const queue: Array<() => void> = [];
   const listeners = new Set<() => void>();
   const arrivals = new Set<() => void>();
+  const pictures = { above: 0, below: 0 };
   const target: SettleTarget = {
     getBoundingClientRect: () => ({ top: scene.docTop - scene.y }),
     scrollIntoView(options) {
@@ -40,6 +41,7 @@ function world(docTop: number) {
       arrivals.add(run);
       return () => void arrivals.delete(run);
     },
+    pendingAbove: () => pictures.above,
   };
   /** One frame: the world moves (`each`), then the frame's callbacks run. */
   const step = (count: number, each?: (frame: number) => void) => {
@@ -53,7 +55,7 @@ function world(docTop: number) {
   };
   /** A picture somewhere on the page arrives. */
   const arrive = () => [...arrivals].forEach((run) => run());
-  return { scene, calls, queue, listeners, arrivals, arrive, target, env, step, top: () => scene.docTop - scene.y };
+  return { scene, calls, queue, listeners, arrivals, pictures, arrive, target, env, step, top: () => scene.docTop - scene.y };
 }
 
 /** The browser's smooth jump: `frames` frames from where the page is to where the heading stood at the press. */
@@ -185,6 +187,68 @@ describe("settleOnSection (P10-19, X-A7)", () => {
     w.step(2);
     there = false;
     expect(() => w.step(5)).not.toThrow();
+    expect(w.queue).toHaveLength(0);
+  });
+});
+
+// P10-26 (A's X-A8): the heading was landed, and a picture above it came in shorter than its room after the settle's
+// watching by frames was over — the page moved in front of the reader. The settle does not declare the landing final
+// while a picture above the heading is still loading: it goes on looking at the heading by frames (within the same
+// ten seconds), and lands it once more after the pictures have settled. A picture below the heading changes nothing.
+describe("settleOnSection waits for the pictures above the heading (P10-26, X-A8)", () => {
+  it("a picture above is still loading when the watch would end: the heading is looked at until it arrives, then lands once more", () => {
+    const w = world(3000);
+    const travel = smoothJump(w, 20);
+    w.pictures.above = 1;
+    settleOnSection(() => w.target, w.env);
+    w.step(120, travel); // 2 s: the jump, the rest, and well past the 1 s watch
+    expect(w.top()).toBe(MARGIN);
+    const settled = w.calls.length;
+    expect(w.queue).toHaveLength(1); // still watching: not final while the picture is on the way
+    w.scene.docTop -= 103; // the picture came in shorter than its room...
+    w.pictures.above = 0; // ...and has settled — no load event reached the settle
+    w.step(20);
+    expect(w.top()).toBe(MARGIN);
+    expect(w.calls.length).toBe(settled + 1);
+    w.step(120);
+    expect(w.queue).toHaveLength(0); // and once the pictures have settled the watch ends
+    expect(w.calls.length).toBe(settled + 1);
+  });
+
+  it("a picture below the heading is not waited for: the loop ends a second after the rest, as it did", () => {
+    const w = world(3000);
+    const travel = smoothJump(w, 20);
+    w.pictures.below = 1; // the world's `pendingAbove` counts only what is above the heading
+    settleOnSection(() => w.target, w.env);
+    w.step(120, travel);
+    expect(w.queue).toHaveLength(0);
+    const settled = w.calls.length;
+    w.scene.docTop -= 103;
+    w.step(40);
+    expect(w.calls.length).toBe(settled); // no more landing: nothing above was pending
+  });
+
+  it("the wait is capped at the ten seconds the late arrivals have, and the reader's input ends it at once", () => {
+    const w = world(3000);
+    const travel = smoothJump(w, 20);
+    w.pictures.above = 1; // a picture that never arrives
+    settleOnSection(() => w.target, w.env);
+    w.step(900, travel); // 14 s of frames
+    expect(w.queue).toHaveLength(0);
+    const again = world(3000);
+    again.pictures.above = 1;
+    settleOnSection(() => again.target, again.env);
+    again.step(130, smoothJump(again, 20));
+    expect(again.queue).toHaveLength(1);
+    for (const stop of [...again.listeners]) stop();
+    expect(again.queue).toHaveLength(0);
+  });
+
+  it("a settle env with no picture count (the old one) behaves as it did", () => {
+    const w = world(3000);
+    const env: SettleEnv = { ...w.env, pendingAbove: undefined };
+    settleOnSection(() => w.target, env);
+    w.step(120, smoothJump(w, 20));
     expect(w.queue).toHaveLength(0);
   });
 });

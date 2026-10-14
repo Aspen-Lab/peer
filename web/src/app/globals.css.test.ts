@@ -145,9 +145,20 @@ describe("globals.css — the route tint tokens (P1-05, P10-06)", () => {
     expect(luminance(medium)).toBeLessThan(luminance(faint));
     // P10-06 (A9): three visibly different greens, not three near-equal ones.
     expect(luminance(medium) - luminance(strong)).toBeGreaterThanOrEqual(0.06);
-    expect(luminance(faint) - luminance(medium)).toBeGreaterThanOrEqual(0.05);
+    // P10-26 (A's X-A5 / §8 item 4) RE-AIMED: the faint step was 0.05 in luminance and 1.05:1 from the medium, with the
+    // faint tint itself at 1.03:1 against the page — barely there. The faint green is now a step darker, against the
+    // page at >= 1.06:1, which closes the gap to the medium; the order stays, the step is >= 0.02 and >= 1.02:1.
+    expect(luminance(faint) - luminance(medium)).toBeGreaterThanOrEqual(0.02);
     expect(contrast(strong, medium)).toBeGreaterThanOrEqual(1.08);
-    expect(contrast(medium, faint)).toBeGreaterThanOrEqual(1.05);
+    expect(contrast(medium, faint)).toBeGreaterThanOrEqual(1.02);
+  });
+
+  it("light: the faint tint can be seen against the page (>= 1.06:1), and the ink on it is still readable", () => {
+    const faint = value(lightBlock, "--color-route-faint");
+    const page = value(lightBlock, "--color-bg");
+    expect(contrast(faint, page)).toBeGreaterThanOrEqual(1.06);
+    expect(contrast(value(lightBlock, "--color-text-muted"), faint)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(value(lightBlock, "--color-heading"), faint)).toBeGreaterThanOrEqual(4.5);
   });
 
   it("dark: low-luminance greens, strong the furthest from the dark ground, then medium, then faint — each step visibly apart", () => {
