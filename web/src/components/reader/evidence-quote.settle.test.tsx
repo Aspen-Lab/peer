@@ -15,6 +15,7 @@ function world(docTop: number) {
   const calls: Array<ScrollIntoViewOptions | undefined> = [];
   const queue: Array<() => void> = [];
   const listeners = new Set<() => void>();
+  const arrivals = new Set<() => void>();
   const target: SettleTarget = {
     getBoundingClientRect: () => ({ top: scene.docTop - scene.y }),
     scrollIntoView(options) {
@@ -35,6 +36,10 @@ function world(docTop: number) {
       listeners.add(stop);
       return () => void listeners.delete(stop);
     },
+    onArrive: (run) => {
+      arrivals.add(run);
+      return () => void arrivals.delete(run);
+    },
   };
   /** One frame: the world moves (`each`), then the frame's callbacks run. */
   const step = (count: number, each?: (frame: number) => void) => {
@@ -46,7 +51,9 @@ function world(docTop: number) {
       run?.();
     }
   };
-  return { scene, calls, queue, listeners, target, env, step, top: () => scene.docTop - scene.y };
+  /** A picture somewhere on the page arrives. */
+  const arrive = () => [...arrivals].forEach((run) => run());
+  return { scene, calls, queue, listeners, arrivals, arrive, target, env, step, top: () => scene.docTop - scene.y };
 }
 
 /** The browser's smooth jump: `frames` frames from where the page is to where the heading stood at the press. */
@@ -54,7 +61,7 @@ function smoothJump(w: ReturnType<typeof world>, frames: number) {
   const from = w.scene.y;
   const to = w.scene.docTop - MARGIN;
   return (frame: number) => {
-    w.scene.y = from + ((to - from) * Math.min(frame, frames)) / frames;
+    if (frame <= frames) w.scene.y = from + ((to - from) * frame) / frames;
   };
 }
 
@@ -63,7 +70,7 @@ describe("settleOnSection (P10-19, X-A7)", () => {
     const w = world(3000);
     const travel = smoothJump(w, 20);
     settleOnSection(() => w.target, w.env);
-    w.step(60, (frame) => {
+    w.step(120, (frame) => {
       travel(frame);
       if (frame === 22) w.scene.docTop += 1200; // the figures above the heading loaded as the page passed them
     });
@@ -71,10 +78,10 @@ describe("settleOnSection (P10-19, X-A7)", () => {
     expect(w.calls.length).toBeGreaterThan(0);
     expect(w.calls.length).toBeLessThanOrEqual(3);
     expect(w.calls.every((options) => options?.block === "start" && options.behavior === "instant")).toBe(true);
-    expect(w.queue).toHaveLength(0); // landed: the loop is over
+    expect(w.queue).toHaveLength(0); // a second after the page came to rest the loop is over
   });
 
-  it("follows a layout that grows more than once, each time after the page has come to rest", () => {
+  it("follows a layout that grows more than once, also after it has landed (a picture that arrives late)", () => {
     const w = world(3000);
     const travel = smoothJump(w, 20);
     settleOnSection(() => w.target, w.env);
@@ -99,7 +106,7 @@ describe("settleOnSection (P10-19, X-A7)", () => {
     const w = world(3000);
     w.scene.y = 3000 - MARGIN;
     settleOnSection(() => w.target, w.env);
-    w.step(30);
+    w.step(120);
     expect(w.top()).toBe(MARGIN);
     expect(w.queue).toHaveLength(0);
     expect(w.calls.length).toBeLessThanOrEqual(1);
@@ -108,16 +115,44 @@ describe("settleOnSection (P10-19, X-A7)", () => {
   it("is capped: a layout that never stops growing ends the loop about a second after the page came to rest", () => {
     const w = world(3000);
     const travel = smoothJump(w, 20);
-    const grow = w.target.scrollIntoView;
-    w.target.scrollIntoView = (options) => {
-      w.scene.docTop += 100; // every landing is undone
-      grow(options);
-    };
+    let ended: number | null = null;
     settleOnSection(() => w.target, w.env);
-    w.step(400, travel);
+    w.step(400, (frame) => {
+      travel(frame);
+      if (frame % 6 === 0) w.scene.docTop += 100; // a picture arrives every sixth frame, for ever
+      if (w.queue.length === 0 && ended === null) ended = w.scene.t;
+    });
     expect(w.queue).toHaveLength(0);
+    expect(w.calls.length).toBeGreaterThan(0);
     expect(w.calls.length).toBeLessThan(40);
-    expect(w.scene.t).toBeLessThan(20 * FRAME + 3 * FRAME + 1200);
+    expect(ended).not.toBeNull();
+    expect(ended as unknown as number).toBeLessThan(20 * FRAME + 8 * FRAME + 1000 + 8 * FRAME);
+  });
+
+  it("a picture that arrives after the watching by frames is over lands the heading again, for ten seconds", () => {
+    const w = world(3000);
+    const travel = smoothJump(w, 20);
+    settleOnSection(() => w.target, w.env);
+    w.step(120, travel);
+    expect(w.queue).toHaveLength(0);
+    expect(w.top()).toBe(MARGIN);
+    const settled = w.calls.length;
+    w.arrive(); // a picture that changed nothing
+    w.step(80);
+    expect(w.calls.length).toBe(settled);
+    w.scene.docTop -= 103; // a figure above the heading came in shorter than its room
+    w.arrive();
+    expect(w.top()).toBe(MARGIN - 103); // the layout has not been looked at yet: by frames, not at the event
+    w.step(80);
+    expect(w.top()).toBe(MARGIN);
+    expect(w.calls.length).toBe(settled + 1);
+    expect(w.queue).toHaveLength(0);
+    w.scene.t += 11000;
+    w.scene.docTop += 300;
+    w.arrive(); // too late: the loop ends and does not move the page
+    w.step(20);
+    expect(w.calls.length).toBe(settled + 1);
+    expect(w.arrivals.size).toBe(0);
   });
 
   it("stops at once when the reader scrolls, presses a key or touches the page", () => {
@@ -129,6 +164,7 @@ describe("settleOnSection (P10-19, X-A7)", () => {
     for (const stop of [...w.listeners]) stop();
     expect(w.queue).toHaveLength(0);
     expect(w.listeners.size).toBe(0);
+    expect(w.arrivals.size).toBe(0);
     w.scene.docTop += 1200;
     w.step(60, travel);
     expect(w.calls).toEqual([]);

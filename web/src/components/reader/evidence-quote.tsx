@@ -40,10 +40,155 @@ export function SectionLinks({
   return <SectionHeadings.Provider value={value}>{children}</SectionHeadings.Provider>;
 }
 
+/** What the settle needs of the heading it watches. */
+export interface SettleTarget {
+  getBoundingClientRect: () => { top: number };
+  scrollIntoView: (options?: ScrollIntoViewOptions) => void;
+}
+
+/** The settle's clock, frames and the reader's own input — in the test's hands, the browser's on the page. */
+export interface SettleEnv {
+  now: () => number;
+  /** Runs `run` on the next frame; returns the way to cancel it. */
+  frame: (run: () => void) => () => void;
+  /** Calls `stop` on the reader's own scroll input (wheel, touch, key, press); returns the way to unsubscribe. */
+  onUser: (stop: () => void) => () => void;
+  /** Calls `run` whenever a picture anywhere on the page has arrived (or failed to); returns the way to unsubscribe. */
+  onArrive: (run: () => void) => () => void;
+}
+
+/** Frames the heading's top must hold still before the page counts as at rest. */
+const REST_FRAMES = 3;
+/** A jump that has not begun moving in this long (ms) is taken as one that has nowhere to go. */
+const SETTLE_GRACE = 120;
+/** How long (ms) after the page first comes to rest the settle keeps watching for the layout to grow. */
+const SETTLE_CAP = 1000;
+/** The longest a smooth scroll is waited for (ms). */
+const SETTLE_TRAVEL_CAP = 5000;
+/** After the watching by frames is over: how long (ms) from the page's rest a figure that arrives late still lands the heading again. */
+const SETTLE_LATE_CAP = 10000;
+const SAME = 0.5;
+
+function browserSettleEnv(): SettleEnv | null {
+  if (typeof window === "undefined" || typeof requestAnimationFrame !== "function") return null;
+  return {
+    now: () => performance.now(),
+    frame: (run) => {
+      const handle = requestAnimationFrame(run);
+      return () => cancelAnimationFrame(handle);
+    },
+    onUser: (stop) => {
+      const kinds = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
+      for (const kind of kinds) window.addEventListener(kind, stop, { passive: true, capture: true });
+      return () => {
+        for (const kind of kinds) window.removeEventListener(kind, stop, { capture: true });
+      };
+    },
+    // `load` and `error` do not bubble; the capture phase on the document sees every picture's.
+    onArrive: (run) => {
+      document.addEventListener("load", run, true);
+      document.addEventListener("error", run, true);
+      return () => {
+        document.removeEventListener("load", run, true);
+        document.removeEventListener("error", run, true);
+      };
+    },
+  };
+}
+
+let settling: (() => void) | null = null;
+
+/**
+ * P10-19 (X-A7, BACKLOG-78): the landing of a jump to a section. The browser's hash jump aims at where the heading
+ * stood when it was pressed; the paper's lazy figures above it then load while the page scrolls past them, and the
+ * heading ends thousands of pixels from where the page stopped. So after the jump the page watches the heading:
+ * once its top has held still for three frames (the jump is over) it scrolls to the heading again — instantly,
+ * `block: "start"`, so the heading's own `scroll-mt` places it — and goes on watching, scrolling again whenever the
+ * layout moved it and came to rest, until a second after the page first came to rest. A figure that arrives later
+ * than that (a slow host) still lands the heading again, up to ten seconds from the rest. The reader's own scroll,
+ * touch, key or press ends it at once; a second press replaces the first. Nothing happens in a page that is not a
+ * browser's. Returns the way to end it.
+ */
+export function settleOnSection(find: () => SettleTarget | null, env: SettleEnv | null = browserSettleEnv()): () => void {
+  settling?.();
+  settling = null;
+  if (!env) return () => {};
+  const start = env.now();
+  let cancelFrame: (() => void) | null = null;
+  let unwatch: (() => void) | null = null;
+  let unarrive: (() => void) | null = null;
+  let first: number | null = null;
+  let last: number | null = null;
+  let held = 0;
+  let travelled = false;
+  let restAt: number | null = null;
+  let watchUntil = 0;
+  let landedTop: number | null = null;
+  let justScrolled = false;
+  const end = () => {
+    cancelFrame?.();
+    cancelFrame = null;
+    unwatch?.();
+    unwatch = null;
+    unarrive?.();
+    unarrive = null;
+    if (settling === end) settling = null;
+  };
+  // The watching by frames is over; a picture that arrives later starts it again (the arrival's own height reaches
+  // the layout a frame or two after its `load`, so the heading is looked at again by frames, not at the event).
+  const endFrames = () => {
+    cancelFrame = null;
+    if (restAt === null) return end();
+    unarrive ??= env.onArrive(() => {
+      if (!find() || env.now() - (restAt as number) >= SETTLE_LATE_CAP) return end();
+      watchUntil = env.now() + SETTLE_CAP;
+      held = 0;
+      last = null;
+      cancelFrame ??= env.frame(tick);
+    });
+  };
+  const tick = () => {
+    cancelFrame = null;
+    const target = find();
+    if (!target || typeof target.getBoundingClientRect !== "function") return end();
+    const now = env.now();
+    const top = target.getBoundingClientRect().top;
+    if (justScrolled) {
+      // The frame after the page's own scroll: wherever the heading is now is where it lands.
+      justScrolled = false;
+      landedTop = top;
+      last = top;
+      held = 0;
+    } else {
+      if (first === null) first = top;
+      if (Math.abs(top - first) > SAME) travelled = true;
+      held = last !== null && Math.abs(top - last) <= SAME ? held + 1 : 0;
+      last = top;
+    }
+    if (restAt === null ? now - start >= SETTLE_TRAVEL_CAP : now >= watchUntil) return restAt === null ? end() : endFrames();
+    if (held >= REST_FRAMES - 1 && (travelled || now - start >= SETTLE_GRACE)) {
+      if (restAt === null) {
+        restAt = now;
+        watchUntil = now + SETTLE_CAP;
+      }
+      if (landedTop === null || Math.abs(top - landedTop) > SAME) {
+        target.scrollIntoView({ block: "start", behavior: "instant" as ScrollBehavior });
+        justScrolled = true;
+      }
+    }
+    cancelFrame = env.frame(tick);
+  };
+  unwatch = env.onUser(end);
+  cancelFrame = env.frame(tick);
+  settling = end;
+  return end;
+}
+
 /**
  * The click on a "§Heading" link. With the section on the page it is left to the browser's anchor
  * jump. With it not on the page — the body is under the other tab — the dead anchor is stopped, and
- * the page's `reveal` brings the body in and then scrolls to the section.
+ * the page's `reveal` brings the body in and then scrolls to the section. Either way the landing is
+ * settled once the jump is under way (P10-19): see `settleOnSection`.
  */
 export function followSectionLink(
   event: { preventDefault: () => void },
@@ -51,10 +196,18 @@ export function followSectionLink(
   reveal: ((run: () => void) => void) | undefined,
   find: (id: string) => { scrollIntoView: (options?: ScrollIntoViewOptions) => void } | null = (target) =>
     document.getElementById(target),
+  settle: (find: () => SettleTarget | null) => void = (watch) => void settleOnSection(watch),
 ): void {
-  if (!reveal || find(id)) return;
+  if (find(id)) {
+    settle(() => find(id) as SettleTarget | null);
+    return;
+  }
+  if (!reveal) return;
   event.preventDefault();
-  reveal(() => find(id)?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  reveal(() => {
+    find(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    settle(() => find(id) as SettleTarget | null);
+  });
 }
 
 /** The anchor of the first body section headed `where`, or null. */

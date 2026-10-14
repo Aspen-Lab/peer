@@ -20,7 +20,7 @@
 // are the paper's too, so they are serif as well — the mono on this page is
 // Peer's voice, and none of this is Peer's.
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import type { PaperReading, ReadingFigure, ReadingSection } from "@/lib/papers/reading";
 import { GIST_QUESTION, MAX_STRONG_ROWS, type RouteResult, type RouteSection, type RouteTier } from "@/lib/papers/reading-map";
 import type { QuestionAnswers } from "@/lib/papers/report";
@@ -568,23 +568,43 @@ export function useSelectionListener(onSelect: ((selection: ExplainSelection | n
  * the page it is on where the source was a PDF, so the reader knows what
  * they are not seeing and where it is.
  */
+/**
+ * P10-19 (X-A7, BACKLOG-78): the mat of a figure whose picture has not arrived. A lazy picture has no height until it
+ * is loaded, so ten figures above a heading were 5,000 px the page did not know of when a map row's jump was aimed
+ * at the heading. While the picture is on the way the mat keeps the room of the largest picture there can be (the
+ * img's `max-h-[32rem]`, plus the mat's padding at each width); once it arrives the mat is the picture's own height.
+ * The first paint — what the server and the first client render give — is the mat as it was.
+ */
+export function figureMatClass(waiting: boolean): string {
+  const mat = "bg-[var(--plate-mat)] p-3 sm:p-4";
+  return waiting ? `${mat} min-h-[calc(32rem+1.5rem)] sm:min-h-[calc(32rem+2rem)]` : mat;
+}
+
 function Figure({ figure }: { figure: ReadingFigure }) {
   const [failed, setFailed] = useState(false);
+  const [waiting, setWaiting] = useState(false);
   const showImage = Boolean(figure.imageUrl) && !failed;
+  // Once the picture is on the page: one that is not there yet reserves its room (P10-19). Not in the first render, so
+  // that what the server drew and what the first client render draws stay as they were.
+  const onPicture = useCallback((img: HTMLImageElement | null) => {
+    if (img && !img.complete) setWaiting(true);
+  }, []);
   return (
     <figure className="my-6">
       {showImage && (
-        <div className="bg-[var(--plate-mat)] p-3 sm:p-4">
+        <div className={figureMatClass(waiting)}>
           {/* A plain img: the picture lives on the source's host (or on our
               own figure route), and `next/image` would need every host
               listed in advance. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
+            ref={onPicture}
             src={figure.imageUrl}
             alt={figure.caption}
             loading="lazy"
             decoding="async"
             referrerPolicy="no-referrer"
+            onLoad={() => setWaiting(false)}
             onError={() => setFailed(true)}
             className="mx-auto block h-auto max-h-[32rem] w-auto max-w-full object-contain"
           />

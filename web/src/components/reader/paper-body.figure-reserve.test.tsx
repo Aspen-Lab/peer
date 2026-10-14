@@ -24,6 +24,6 @@ describe("a figure's mat keeps the room of its picture until the picture arrives
     expect(figure).toMatch(/figureMatClass\(waiting\)/);
     expect(figure).toMatch(/onLoad=\{\(\) => setWaiting\(false\)\}/);
     expect(figure).toMatch(/onError=\{\(\) => setFailed\(true\)\}/);
-    expect(figure).toMatch(/\.complete/);
+    expect(figure).toMatch(/!img\.complete\) setWaiting\(true\)/);
   });
 });
