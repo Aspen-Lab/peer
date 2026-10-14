@@ -270,7 +270,7 @@ describe("ReadingMapView — a group row is marked from its paragraphs (B §4)",
     const results = rowOf(html, "Results");
 
     expect(results).toContain('data-route="strong"');
-    expect(results).toContain("mentions quillwort ×2, lattice ×2");
+    expect(results).toContain("mentions lattice ×2, quillwort ×2, crack ×1");
     expect(results).toContain("strongest");
     const line = results.slice(results.indexOf('href="#paper-section-0-p12"') - 80);
     expect(line).toContain('data-route="strong"');

@@ -17,8 +17,22 @@
 //     the partition quotes nothing and asserts no fact of the paper; it is Peer's reading, labelled
 //     on screen. The worst a wrong answer does is mislabel a range. The same function re-reads what
 //     the browser stored (`restorePartition`), so a corrupt entry cannot draw a broken map.
+//
+// P10-07b (B P10-05 §3.1, §4) lays the partition over the map and the route, still pure:
+//
+//   - `partitionedMap`: the trunk's row replaced, in place, by one row per part — the role's label
+//     for a heading, the trunk's own paragraph lines for the range (real indices, real openings),
+//     the words and minutes counted again from the paragraphs, a `part` record that tells the view
+//     where the trunk stands in the body. The totals are unchanged. The body is not touched: it
+//     keeps the trunk's section, its anchors and its heading (§1h.79 (c), option A: the map only).
+//   - `withPartitionMarks`: a group's mark, derived from the paragraphs inside it. The unit the
+//     route scores is the paragraph inside the real trunk section (P10-06), and the body reads
+//     the trunk's own id; a group is not scored as a section — three or four groups would give a
+//     term in two of them almost the weight of one in one, and the map and the body would grade one
+//     paragraph twice. The group keys are added beside the real ids, and nothing else moves.
 
-import type { ReadingRole } from "./reading-map";
+import { MAP } from "@/components/reader/copy";
+import { GIST_QUESTION, gistRoute, routeByQuestions, type ReadingMap, type ReadingMapSection, type ReadingRole, type RouteSection, type RouteTier } from "./reading-map";
 
 /** The five parts a model may name. `experimental` is materials, instruments, procedures,
  *  data processing and statistics, wherever in the section they stand. */
@@ -206,4 +220,181 @@ export function restorePartition(value: unknown): GuidePartition | null {
   const end = indexOf(last.toParagraph);
   if (end === null) return null;
   return sanitizePartition({ partition: parts }, { sectionId, paragraphCount: end + 1 });
+}
+
+// ── The overlay (P10-07b; B P10-05 §3.1) ─────────────────────────────────
+
+/** Where a group row stands in the paper: the trunk it divides, the trunk's place among the body's sections
+ *  (the anchors `paper-section-<sectionIndex>-p<n>` the body writes), the part's role and its paragraph range. */
+export interface MapPart {
+  sectionId: string;
+  sectionIndex: number;
+  role: PartitionRole;
+  from: number;
+  to: number;
+}
+
+/** A map row, and, for a group row, where it stands. */
+export type PartitionedSection = ReadingMapSection & { part?: MapPart };
+
+/** The group row's place in the paper; absent for every row the paper itself has. */
+export function partOf(row: ReadingMapSection): MapPart | undefined {
+  return (row as PartitionedSection).part;
+}
+
+/** The body as the overlay reads it: `PaperReading.body`, index-aligned with the map's rows. */
+type BodyLike = ReadonlyArray<{ id: string; canonical: string; paragraphs: readonly string[] }>;
+
+/** The map's own rate (`WORDS_PER_MINUTE` in `reading-map.ts`), which a row's minutes come from. */
+const WORDS_PER_MINUTE = 180;
+
+/** Whether the parts are two or more, contiguous, start at 0 and end at the section's last paragraph. */
+function covers(partition: GuidePartition, paragraphCount: number): boolean {
+  const { parts } = partition;
+  if (!Array.isArray(parts) || parts.length < 2) return false;
+  let next = 0;
+  for (const part of parts) {
+    if (!isRecord(part) || typeof part.role !== "string" || !Object.hasOwn(PART_ROLE, part.role)) return false;
+    if (part.fromParagraph !== next || !Number.isSafeInteger(part.toParagraph) || part.toParagraph < part.fromParagraph) return false;
+    next = part.toParagraph + 1;
+  }
+  return next === paragraphCount;
+}
+
+/**
+ * The map with the trunk's row replaced, in the same place, by one row per part (B P10-05 §3.1). The rows before
+ * and after keep their order and are the very objects they were. A group row is an ordinary map row —
+ *
+ *   - `id` `<sectionId>~<n>`, `heading` the role's label, `canonical` the role, `role` the reading role it maps to;
+ *   - `level` 1 and no `parentId`; no `page` (the trunk's page is the first part's, not the others');
+ *   - `paragraphs` the trunk's own lines for the range, with their real indices and openings;
+ *   - `words` and `minutes` counted again from the range's paragraphs, so the groups add up to the trunk;
+ *   - `part`, the record the view reads its anchors and its gist key from.
+ *
+ * The map is returned as it was (the same object) for no partition, for a partition whose section is not in the map,
+ * and for one the body does not bear out: the section is not what the rule reads as unheaded (the model is asked
+ * only about an unheaded paper's trunk, so a stored answer for any other section is not drawn), or the parts do
+ * not cover its paragraphs. The totals are unchanged.
+ */
+export function partitionedMap(map: ReadingMap, body: BodyLike | undefined, partition: GuidePartition | null | undefined): ReadingMap {
+  if (!partition || !body) return map;
+  const at = map.sections.findIndex((row) => row.id === partition.sectionId);
+  if (at < 0) return map;
+  const trunk = unheadedTrunk(body);
+  if (!trunk || trunk.sectionId !== partition.sectionId || trunk.sectionIndex !== at) return map;
+  const row = map.sections[at];
+  const text = body[at].paragraphs;
+  if (row.paragraphs.length !== text.length || !covers(partition, text.length)) return map;
+
+  const groups = partition.parts.map((part, n): PartitionedSection => {
+    const words = text.slice(part.fromParagraph, part.toParagraph + 1).reduce((sum, paragraph) => sum + paragraph.split(/\s+/).length, 0);
+    return {
+      id: `${row.id}~${n}`,
+      heading: MAP.parts.labels[part.role],
+      canonical: part.role,
+      role: PART_ROLE[part.role],
+      words,
+      minutes: words > 0 ? Math.max(1, Math.ceil(words / WORDS_PER_MINUTE)) : 0,
+      paragraphs: row.paragraphs.filter((line) => line.index >= part.fromParagraph && line.index <= part.toParagraph),
+      level: 1,
+      part: { sectionId: row.id, sectionIndex: at, role: part.role, from: part.fromParagraph, to: part.toParagraph },
+    };
+  });
+  return { sections: [...map.sections.slice(0, at), ...groups, ...map.sections.slice(at + 1)], totalMinutes: map.totalMinutes };
+}
+
+// ── The route fold (P10-07b; B P10-05 §4) ────────────────────────────────
+
+/** A route section as the page draws it: Tier 0's, or the model's with the `background` tier (`DisplayRoute`). */
+type MarkSection = Omit<RouteSection, "tier"> & { tier: RouteTier | "background" };
+
+/** The two route shapes the page holds (`RouteResult`, `DisplayRoute`), by what the fold reads and writes. */
+interface MarkRoute {
+  byQuestion: ReadonlyArray<{ question: string; vague: boolean; sections: Readonly<Record<string, MarkSection>> }>;
+  vague: boolean;
+}
+
+/**
+ * The route with a mark for each group row beside the real ids' (B P10-05 §4); the route is returned as it was (the same
+ * object) when there is no partition that applies. For every question that marks the trunk:
+ *
+ *   - the trunk's own entry is untouched — the body reads it, and it reads nothing else;
+ *   - each group's `paragraphs` and `topParagraphs` are the trunk's, those inside the group's range: the grades
+ *     of the paragraphs, which are the map's lines' tints and the body's, so the two never disagree;
+ *   - the group's `tier` is the strongest tier any of its paragraphs wears under the trunk's mark (the rule
+ *     `sectionMark` applies to a section's own paragraphs): the trunk's tier where the group holds a top
+ *     paragraph, `faint` where it only mentions, `none` where it does not (and for a trunk that marks no
+ *     paragraph, as a model's mark does not, none: the groups do not inherit it);
+ *   - `hits` are the question's terms counted over the group's paragraphs alone, and `evidence` the best
+ *     sentence among them, verbatim — `routeByQuestions` over the groups, so the counts are the ones a
+ *     reader can check in the group;
+ *   - at most `max(1, floor(N / 2))` of the N groups are `strong` (the earlier first: the paragraphs that
+ *     say most in one section tie or are one), the others `medium`. A paragraph line of a group so lowered
+ *     is drawn at the group's tier: the one place a line and the body differ, and only when more than
+ *     half the parts each hold a paragraph that says the most.
+ *
+ * "Just get the gist" names no paragraph: a group takes its tier from its role, as every row does.
+ */
+export function withPartitionMarks<R extends MarkRoute>(
+  route: R | undefined,
+  map: ReadingMap | undefined,
+  body: BodyLike | undefined,
+  partition: GuidePartition | null | undefined,
+): R | undefined {
+  if (!route || !map || !partition) return route;
+  const over = partitionedMap(map, body, partition);
+  if (over === map) return route;
+  const groups = over.sections.filter((row) => partOf(row) !== undefined);
+  const first = partOf(groups[0])!;
+  const text = body![first.sectionIndex].paragraphs;
+  const cap = Math.max(1, Math.floor(groups.length / 2));
+  const within = (list: readonly number[] | undefined, part: MapPart): number[] => (list ?? []).filter((i) => i >= part.from && i <= part.to);
+
+  let changed = false;
+  const byQuestion = route.byQuestion.map((entry) => {
+    if (entry.vague) return entry;
+    const added: Record<string, MarkSection> = {};
+
+    if (entry.question === GIST_QUESTION) {
+      const roles = gistRoute(over).byQuestion[0].sections;
+      for (const group of groups) added[group.id] = roles[group.id];
+    } else {
+      const trunk = entry.sections[first.sectionId];
+      if (!trunk) return entry;
+      const counted =
+        trunk.paragraphs.length > 0
+          ? routeByQuestions(
+              { sections: groups, totalMinutes: over.totalMinutes },
+              groups.map((group) => ({ paragraphs: text.slice(partOf(group)!.from, partOf(group)!.to + 1) })),
+              [entry.question],
+            ).byQuestion[0].sections
+          : {};
+      let strong = 0;
+      for (const group of groups) {
+        const part = partOf(group)!;
+        const paragraphs = within(trunk.paragraphs, part);
+        const top = within(trunk.topParagraphs, part);
+        let tier: RouteTier | "background" =
+          paragraphs.length === 0 || trunk.tier === "none"
+            ? "none"
+            : trunk.tier === "background" || !trunk.topParagraphs
+              ? trunk.tier
+              : top.length > 0
+                ? trunk.tier
+                : "faint";
+        if (tier === "strong" && ++strong > cap) tier = "medium";
+        const found = tier === "none" ? undefined : counted[group.id];
+        added[group.id] = {
+          tier,
+          hits: found?.hits ?? [],
+          ...(found?.evidence !== undefined ? { evidence: found.evidence } : {}),
+          paragraphs,
+          ...(trunk.topParagraphs ? { topParagraphs: top } : {}),
+        };
+      }
+    }
+    changed = true;
+    return { ...entry, sections: { ...entry.sections, ...added } };
+  });
+  return changed ? ({ ...route, byQuestion } as R) : route;
 }

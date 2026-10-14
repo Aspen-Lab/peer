@@ -200,6 +200,20 @@ export const MAP = {
   /** P3-03 (§1h.6): the accessible name of Peer's gist after a paragraph's opening —
    *  Peer's own line, beside the paper's words; labelled on screen by `PEERS_READING`. */
   gist: "Peer's gist",
+  /** P10-07b (review 3.3, second half; B P10-05 §3.1): a paper with no headings of its own is divided
+   *  by the model into parts, and the map draws them as rows. `labels` name the five roles a part may
+   *  have; `tag` stands in the row's meta where a headed row reads its role — the part is Peer's
+   *  reading of the paper, not a heading the paper wrote (`PEERS_READING` is the legend line). */
+  parts: {
+    labels: {
+      introduction: "Introduction",
+      results: "Results",
+      discussion: "Discussion",
+      conclusion: "Conclusion",
+      experimental: "Experimental",
+    },
+    tag: "Peer's reading",
+  },
 } as const;
 
 /**

@@ -1,12 +1,10 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { FullTextResult } from "@/lib/papers/full-text";
 import type { ExtractedDocument } from "@/lib/papers/html-text";
 import { buildReading } from "@/lib/papers/reading";
-import { routeByQuestions } from "@/lib/papers/reading-map";
+import { routeByQuestions, type ReadingMap } from "@/lib/papers/reading-map";
 import { partitionedMap, withPartitionMarks, type GuidePartition } from "@/lib/papers/reading-partition";
 import type { Paper } from "@/types";
 import { PaperBody, mergeQuestionRoute, questionRouteOverlay, sectionMark } from "./paper-body";
@@ -127,7 +125,7 @@ describe("the body is untouched (option A, §1h.79 (c))", () => {
   const reading = unheadedReading({ 12: HIT });
   const route = routeByQuestions(reading.map!, reading.body, [QUESTION]);
   const folded = withPartitionMarks(route, reading.map!, reading.body, FOUR);
-  const body = (r: typeof route | undefined) => renderToStaticMarkup(createElement(PaperBody, { reading, route: r }));
+  const body = (r: Parameters<typeof PaperBody>[0]["route"]) => renderToStaticMarkup(createElement(PaperBody, { reading, route: r }));
 
   it("renders the body's markup byte for byte with and without the group marks", () => {
     expect(body(folded)).toBe(body(route));
@@ -157,11 +155,17 @@ describe("the body is untouched (option A, §1h.79 (c))", () => {
 });
 
 describe("nothing else changes: a headed paper (rule 6)", () => {
-  const doc = JSON.parse(readFileSync(resolve(process.cwd(), "src/lib/papers/__fixtures__/arxiv-2609.02113.doc.json"), "utf8")) as ExtractedDocument;
-  const headed = asReading(doc);
-  const route = routeByQuestions(headed.map!, headed.body, ["How does the film grow under strain?"]);
-  const longest = headed.map!.sections.reduce((best, row) => (row.paragraphs.length > best.paragraphs.length ? row : best));
-  const stale: GuidePartition = { sectionId: longest.id, parts: [{ role: "introduction", fromParagraph: 0, toParagraph: 1 }, { role: "results", fromParagraph: 2, toParagraph: longest.paragraphs.length - 1 }] };
+  const section = (id: string, heading: string, canonical: string, base: number) => ({
+    id, heading, canonical, page: 1 + base, text: Array.from({ length: 12 }, (_, k) => invented(base + k)).join("\n\n"),
+  });
+  const headed = asReading({
+    source: "pdf",
+    pageCount: 6,
+    figureCaptions: [],
+    sections: [section("s0", "1 Introduction", "introduction", 0), section("s1", "2 Methods", "methods", 40), section("s2", "3 Results", "results", 80)],
+  });
+  const route = routeByQuestions(headed.map!, headed.body, [QUESTION]);
+  const stale: GuidePartition = { sectionId: "s0", parts: [{ role: "introduction", fromParagraph: 0, toParagraph: 4 }, { role: "results", fromParagraph: 5, toParagraph: 11 }] };
 
   it("returns the map and the route as the same objects with no partition, and for a stale one the rule does not read as unheaded", () => {
     expect(partitionedMap(headed.map!, headed.body, undefined)).toBe(headed.map);
@@ -171,8 +175,10 @@ describe("nothing else changes: a headed paper (rule 6)", () => {
   });
 
   it("draws the same map markup and the same body markup", () => {
-    const map = (m: typeof headed.map, r: typeof route) => renderToStaticMarkup(createElement(ReadingMapView, { map: m!, route: r, openRows: [0, 1] }));
+    const html = (m: ReadingMap | undefined, r: typeof route | undefined) => renderToStaticMarkup(createElement(ReadingMapView, { map: m!, route: r, openRows: [0, 1] }));
+    const body = (r: typeof route | undefined) => renderToStaticMarkup(createElement(PaperBody, { reading: headed, route: r }));
 
-    expect(map(partitionedMap(headed.map!, headed.body, stale), withPartitionMarks(route, headed.map!, headed.body, stale)!)).toBe(map(headed.map, route));
+    expect(html(partitionedMap(headed.map!, headed.body, stale), withPartitionMarks(route, headed.map!, headed.body, stale))).toBe(html(headed.map, route));
+    expect(body(withPartitionMarks(route, headed.map!, headed.body, stale))).toBe(body(route));
   });
 });

@@ -407,6 +407,20 @@ function unheadedReading(over: Record<number, string> = {}) {
   return buildReading(PAPER, fullText, new Date("2026-10-05T00:00:00.000Z"));
 }
 
+/** A paper with headings of its own: three placed sections of twelve paragraphs each. */
+function headedReading() {
+  const section = (id: string, heading: string, canonical: string, base: number) => ({
+    id, heading, canonical, page: 1 + base, text: Array.from({ length: 12 }, (_, k) => invented(base + k)).join("\n\n"),
+  });
+  const doc: ExtractedDocument = {
+    source: "pdf",
+    pageCount: 6,
+    figureCaptions: [],
+    sections: [section("s0", "1 Introduction", "introduction", 0), section("s1", "2 Methods", "methods", 40), section("s2", "3 Results", "results", 80)],
+  };
+  return buildReading(PAPER, { status: "ok", attempts: [], doc, sourceLink: { url: "https://example.org/h.pdf", kind: "pdf", label: "doi", rank: 1 } }, new Date("2026-10-05T00:00:00.000Z"));
+}
+
 const FOUR: GuidePartition = {
   sectionId: "s0",
   parts: [
@@ -514,14 +528,11 @@ describe("partitionedMap — the trunk's row replaced in place by one row per pa
   });
 
   it("is a headed paper's map as it was, whatever a store holds: the partition of a section the rule does not read as unheaded is not drawn", () => {
-    const doc = JSON.parse(readFileSync(resolve(process.cwd(), "src/lib/papers/__fixtures__/arxiv-2609.02113.doc.json"), "utf8")) as ExtractedDocument;
-    const headed = buildReading(PAPER, { status: "ok", attempts: [], doc, sourceLink: { url: "https://example.org/h.pdf", kind: "pdf", label: "doi", rank: 1 } }, new Date("2026-10-05T00:00:00.000Z"));
-    const rows = headed.map!.sections;
-    const longest = rows.reduce((best, row) => (row.paragraphs.length > best.paragraphs.length ? row : best));
-    const last = longest.paragraphs.length - 1;
-    const stale: GuidePartition = { sectionId: longest.id, parts: [{ role: "introduction", fromParagraph: 0, toParagraph: 1 }, { role: "results", fromParagraph: 2, toParagraph: last }] };
+    const headed = headedReading();
+    const stale: GuidePartition = { sectionId: "s0", parts: [{ role: "introduction", fromParagraph: 0, toParagraph: 4 }, { role: "results", fromParagraph: 5, toParagraph: 11 }] };
 
-    expect(last).toBeGreaterThan(2);
+    expect(unheadedTrunk(headed.body)).toBeNull();
+    expect(headed.map!.sections[0].paragraphs).toHaveLength(12);
     expect(partitionedMap(headed.map!, headed.body, stale)).toBe(headed.map);
     expect(partitionedMap(headed.map!, headed.body, undefined)).toBe(headed.map);
   });
@@ -570,7 +581,7 @@ describe("withPartitionMarks — a group's mark from the paragraphs inside it (B
   it("counts the question's terms over the group's own paragraphs, and the evidence is one of their sentences, verbatim", () => {
     const sections = folded.byQuestion[0].sections;
 
-    expect(sections["s0~1"].hits).toEqual([{ term: "quillwort", count: 2 }, { term: "lattice", count: 2 }]);
+    expect(sections["s0~1"].hits).toEqual([{ term: "lattice", count: 2 }, { term: "quillwort", count: 2 }, { term: "crack", count: 1 }]);
     expect(sections["s0~0"].hits).toEqual([{ term: "quillwort", count: 1 }]);
     expect(sections["s0~2"].hits).toEqual([]);
     const evidence = sections["s0~1"].evidence!;
@@ -637,7 +648,7 @@ describe("withPartitionMarks — a group's mark from the paragraphs inside it (B
       ],
       vague: false,
     };
-    const got = withPartitionMarks(display, map, reading.body, FOUR)!.byQuestion[0].sections;
+    const got = withPartitionMarks(display, map, reading.body, FOUR)!.byQuestion[0].sections as Record<string, { tier: string }>;
 
     expect(got["s0~0"].tier).toBe("background");
     expect(got["s0~1"].tier).toBe("background");
