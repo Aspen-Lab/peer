@@ -380,6 +380,10 @@ export interface RouteSection {
    *  words — they carry the section's tier on the map's paragraph lines, the others a faint one.
    *  Absent for a section with no mention (and for a mark that is not a question's). */
   topParagraphs?: number[];
+  /** P10-06d (rule 3): set on a group row only — a section with no paragraphs of its own whose subsections are present. It
+   *  wears its strongest child's tier outside the cap of three strong rows, and the body's cap (`withStrongCap`, once a
+   *  model's marks are merged over the route) skips it for the same reason. Absent on every other row. */
+  group?: true;
 }
 
 export interface RouteResult {
@@ -913,7 +917,7 @@ function routeQuestion(map: ReadingMap, sections: RouteBody, question: string): 
   }
   const result: Record<string, RouteSection> = {};
   rows.forEach((row, k) => {
-    result[row.id] = { ...routed[k].section, tier: tiers[k] };
+    result[row.id] = { ...routed[k].section, tier: tiers[k], ...(isGroup[k] ? { group: true as const } : {}) };
   });
   return { question, vague: false, sections: result };
 }

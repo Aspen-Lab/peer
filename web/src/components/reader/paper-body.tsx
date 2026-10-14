@@ -135,9 +135,13 @@ export function questionRouteOverlay(questions: readonly QuestionAnswers[] | und
  * verified answers of the model, over Tier 0's own strong rows); then the rows in the order they stand. Only the
  * tier changes: a demoted row keeps its hits, paragraphs and evidence. The sections come back unchanged (the same
  * object) when no row is over the cap.
+ *
+ * P10-06d (rule 3): the cap counts leaf rows, as the route's does. A group row (`group`, which the route sets on a section with
+ * no paragraphs of its own and subsections under it) wears its child's tier and takes no slot: it is skipped here and keeps
+ * the tier the merge gave it. A row without the mark (the model's own rows) counts.
  */
-function withStrongCap<T extends { tier: TintTier }>(sections: Record<string, T>, first: readonly string[]): Record<string, T> {
-  const strong = Object.keys(sections).filter((id) => sections[id].tier === "strong");
+function withStrongCap<T extends { tier: TintTier; group?: boolean }>(sections: Record<string, T>, first: readonly string[]): Record<string, T> {
+  const strong = Object.keys(sections).filter((id) => sections[id].tier === "strong" && !sections[id].group);
   if (strong.length <= MAX_STRONG_ROWS) return sections;
   const order = [...first.filter((id) => strong.includes(id)), ...strong.filter((id) => !first.includes(id))];
   const capped = { ...sections };
