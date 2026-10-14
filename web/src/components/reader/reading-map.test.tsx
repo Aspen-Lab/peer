@@ -664,3 +664,77 @@ describe("ReadingMapView — the paper's hierarchy (P10-04, A10)", () => {
     expect(/<ReadingMapView [^>]*\/>/.exec(page)?.[0] ?? "").toContain("reveal={reveal}");
   });
 });
+
+// P10-12 (A15; ruling §1h.87 (g)): in the keyed map of an unheaded paper each paragraph line is drawn
+// once. The doubled line the readers saw was never a second row: it was Peer's gist, which the guide's
+// reply can give as the paragraph's own first words, drawn in the label face after the opening — the
+// same words twice. A gist that only repeats the line adds nothing and is not drawn; a gist that says
+// something else is, as it was. The no-key map has no gists and is untouched.
+describe("ReadingMapView — an unheaded paper's keyed map draws each paragraph line once (P10-12, A15)", () => {
+  const OPENINGS = [
+    "Survey paragraph 0 looks at the tide pools.",
+    "Survey paragraph 1 looks at the kelp beds.",
+    "Survey paragraph 2 looks at the gull colonies.",
+    "Survey paragraph 3 looks at the sand ripples.",
+    "Survey paragraph 4 looks at the salt marsh.",
+    "Survey paragraph 5 looks at the mussel banks.",
+  ];
+  const part = (n: number, role: "introduction" | "results", from: number, to: number) => ({
+    id: `s0~${n}`, heading: role === "introduction" ? "Introduction" : "Results", canonical: role, role: role === "introduction" ? "setup" : "evidence",
+    level: 1, words: 60, minutes: 1,
+    paragraphs: OPENINGS.slice(from, to + 1).map((opening, k) => ({ index: from + k, opening })),
+    part: { sectionId: "s0", sectionIndex: 0, role, from, to },
+  });
+  const partitioned = { sections: [part(0, "introduction", 0, 2), part(1, "results", 3, 5)], totalMinutes: 2 } as unknown as ReadingMap;
+  // What the stub's guide answers, and a model may: the paragraph's own first eight words.
+  const echoed = Object.fromEntries(OPENINGS.map((opening, k) => [k, opening.split(/\s+/).slice(0, 8).join(" ")]));
+  const lineOf = (html: string, k: number): string => {
+    const start = html.lastIndexOf("<li>", html.indexOf(`href="#paper-section-0-p${k}"`));
+    return html.slice(start, html.indexOf("</li>", start));
+  };
+  const renderKeyed = (gists: Record<number, string>) =>
+    renderToStaticMarkup(createElement(ReadingMapView, { map: partitioned, gists: { s0: gists }, openRows: [0, 1] }));
+
+  it("counts one element per paragraph, in the reading serif, when the gist only repeats the opening", () => {
+    const html = renderKeyed(echoed);
+
+    for (let k = 0; k < OPENINGS.length; k += 1) {
+      const line = lineOf(html, k);
+      expect(line.split(OPENINGS[k]).length - 1).toBe(1);
+      expect(line.match(/<a /g)?.length).toBe(1);
+      expect(line).toContain('class="font-reading text-body-sm leading-[1.45]');
+      expect(line).not.toContain("annotation");
+      expect(line).not.toContain("role=\"note\"");
+    }
+    expect(html.match(/role="note"/g)).toBeNull();
+    // The rows are as they were: two group rows tagged as Peer's reading, three lines each.
+    expect(html.match(/<li data-level/g)?.length).toBe(2);
+    expect(html.match(/href="#paper-section-0-p\d"/g)?.length).toBe(OPENINGS.length);
+  });
+
+  it("drops a repeat however it is cased or punctuated, and a gist that is the line's start", () => {
+    const html = renderKeyed({
+      0: "SURVEY paragraph 0 looks at the tide pools",
+      1: "survey paragraph 1 looks at the kelp beds.",
+      2: "Survey paragraph 2 looks at",
+    });
+
+    for (const k of [0, 1, 2]) expect(lineOf(html, k)).not.toContain("role=\"note\"");
+  });
+
+  it("still draws a gist that says something else, after the line, as before", () => {
+    const html = renderKeyed({ ...echoed, 1: "Kelp beds are counted twice.", 4: "Salt marsh sites, visited in one tide." });
+
+    expect(lineOf(html, 1)).toContain('role="note"');
+    expect(lineOf(html, 1)).toContain("Kelp beds are counted twice.");
+    expect(lineOf(html, 4)).toContain("Salt marsh sites, visited in one tide.");
+    expect(lineOf(html, 0)).not.toContain('role="note"');
+    expect(html.match(/role="note"/g)?.length).toBe(2);
+  });
+
+  it("is the no-key map's line, byte for byte, when every gist is a repeat", () => {
+    const plain = renderToStaticMarkup(createElement(ReadingMapView, { map: partitioned, openRows: [0, 1] }));
+
+    expect(renderKeyed(echoed)).toBe(plain);
+  });
+});
