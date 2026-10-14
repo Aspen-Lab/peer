@@ -79,20 +79,67 @@ describe("readingNote with the reader's questions (P2-05, re-aimed P10-09e)", ()
     });
   });
 
-  // Re-aimed (§1c) from the five tests that pinned "My questions → what it said" (its entries, the questions alone,
-  // matching an answer to its question, the 'abstract' fallback, the unverified line) and the Markdown cross-check
-  // with the reading export: the section is no longer made, so none of its words reach the note or its Markdown.
-  it("makes no 'My questions → what it said' from the questions or the report's answers: no section, verdict, evidence or quote", () => {
+  // Re-aimed (§1c), one for one, from the tests that pinned "My questions → what it said" and the Markdown cross-check
+  // with the reading export: the section is no longer made, so each says the thing it pinned is absent.
+  const ALL_WORDS = ["My questions", "Does the method improve retention?", "Answered", "Retention improved", "does not address", "could not verify", "—"];
+  const noneOf = (note: Note) => {
+    expect(shape(note)).toEqual(TITLE_LINE);
+    const text = note.blocks.map((b) => b.text).join("\n");
+    for (const word of ALL_WORDS) expect(text).not.toContain(word);
+    expect(note.blocks.some((b) => b.type === "quote")).toBe(false);
+  };
+
+  // was: "adds My questions → what it said after the abstract opening, one entry per question: the verdict and the quoted evidence per answer"
+  it("adds no My questions → what it said, no entry per question, no verdict and no quoted evidence per answer", () => {
+    noneOf(readingNote(ROSE, { now: NOW, questions: QUESTIONS, forYourQuestions: ANSWERS }));
+  });
+
+  // was: "lists the questions alone when no report has come back: the entry is the question, nothing under it"
+  it("does not list the questions alone when no report has come back", () => {
+    noneOf(readingNote(ROSE, { now: NOW, questions: QUESTIONS }));
+  });
+
+  // was: "follows the reader's questions: an answer finds its question by its text (case and spacing aside); …"
+  it("does not follow the reader's questions: a question typed with other case and spacing adds nothing either", () => {
+    noneOf(readingNote(ROSE, { now: NOW, questions: ["  does IT discuss   recycling? ", "Is it cheap?"], forYourQuestions: ANSWERS }));
+  });
+
+  // was: "falls back to 'abstract' with no section named, and leaves the page off when it is not known"
+  it("has no 'abstract' fallback line and no page, because it has no evidence line at all", () => {
     const note = readingNote(ROSE, {
       now: NOW,
-      questions: [...QUESTIONS, "  does IT discuss   recycling? "],
-      forYourQuestions: ANSWERS,
+      questions: ["Is it cheap?"],
+      forYourQuestions: [
+        {
+          question: "Is it cheap?",
+          verdict: "partly",
+          answers: [
+            { text: "Peer says it is.", evidence: "It is cheap." },
+            { text: "Peer says so too.", evidence: "It is cheap in bulk.", evidenceWhere: "RESULTS AND DISCUSSION" },
+          ],
+          readNext: [],
+        },
+      ],
     });
     expect(shape(note)).toEqual(TITLE_LINE);
-    const md = toMarkdown(note);
-    for (const word of ["My questions", "Does the method improve retention?", "Answered", "Retention improved", "does not address", ">"]) {
-      expect(md).not.toContain(word);
-    }
+    expect(note.blocks.map((b) => b.text).join("\n")).not.toContain("It is cheap");
+  });
+
+  // was: "prints the unverified line, with no quote under it, the same words as the page and the export (P2-08b)"
+  it("prints no unverified line either (P2-08b): the page says it, the note does not", () => {
+    const note = readingNote(ROSE, {
+      now: NOW,
+      questions: [QUESTIONS[0]],
+      forYourQuestions: [{ question: QUESTIONS[0], verdict: "unverified", answers: [], readNext: [{ sectionId: "s2", why: "It reports the result.", kind: "answer" }] }],
+    });
+    noneOf(note);
+    expect(note.blocks.map((b) => b.text).join("\n")).not.toContain("It reports the result.");
+  });
+
+  // was: "exports as Markdown the way the reading export says it: the same verdict lines and the same quoted evidence"
+  it("exports as Markdown with none of the section: no heading, no verdict line, no quote line", () => {
+    const md = toMarkdown(readingNote(ROSE, { now: NOW, questions: QUESTIONS, forYourQuestions: ANSWERS }));
+    for (const word of [...ALL_WORDS, ">", "###"]) expect(md).not.toContain(word);
   });
 
   it("places no word of Peer's prose in the note: not an answer's text, not a Read next reason", () => {
