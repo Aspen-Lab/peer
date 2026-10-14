@@ -362,3 +362,134 @@ describe("useModelReport — the status line says what the page waits on, and cl
     expect(history[history.length - 1].stage).toBeNull();
   });
 });
+
+// P10-47 (round 5's reader 3): across a question queued behind a running request, the line the reader
+// sees never goes backwards. The first request ends at "Adding figures" 92 %; the question's own request
+// then starts from nothing. The line must not go blank between them, and a lower bar must never stand
+// under the words of a stage already shown: the move from the first request to the second is named
+// plainly ("Your new question — reading it"), and the second request's bar starts after it.
+
+const NEW_QUESTION = "Your new question — reading it";
+
+/** The request with no question rides the figures stage and is held there; the one with a question is a shorter run. */
+const firstThenQuestion: Script = async function* (body) {
+  net.open += 1;
+  try {
+    // Each event arrives on its own, as chunks do: a pause between them lets the page draw each one.
+    yield { type: "mode", aiMode: "tier2" };
+    await sleep(8);
+    if (Array.isArray(body.questions)) {
+      yield { type: "stage", stage: "reading", label: "Reading it", pct: 20 };
+      await sleep(8);
+      yield { type: "stage", stage: "writing", label: "Writing it", pct: 75 };
+      await sleep(40);
+    } else {
+      yield { type: "stage", stage: "writing", label: "Writing it", pct: 75 };
+      await sleep(8);
+      yield { type: "stage", stage: "figures", label: "Adding it", pct: 92 };
+      await sleep(250);
+    }
+  } finally {
+    net.open -= 1;
+  }
+  yield reportEvent(body);
+  yield { type: "stage", stage: "done", label: "Report ready", pct: 100 };
+};
+
+/** The lines the reader sees, in order, each once however many renders drew it. */
+function seenLines(history: Seen[]): Array<[string, number | null]> {
+  const lines: Array<[string, number | null]> = [];
+  for (const seen of history) {
+    if (seen.stage === null) continue;
+    const last = lines[lines.length - 1];
+    if (last && last[0] === seen.stage.label && last[1] === seen.stage.pct) continue;
+    lines.push([seen.stage.label, seen.stage.pct]);
+  }
+  return lines;
+}
+
+describe("useModelReport — a queued question never sends the line backwards (P10-47)", () => {
+  beforeEach(() => {
+    vi.stubGlobal("localStorage", memoryStorage());
+    vi.stubGlobal("window", quietWindow);
+    net.streamCalls.length = 0;
+    net.jsonCalls = 0;
+    net.jsonDelayMs = 0;
+    net.open = 0;
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  async function questionBehindARun() {
+    net.script = firstThenQuestion;
+    let questions: readonly string[] = [];
+    const history: Seen[] = [];
+    const { opened } = await drive([80, () => (questions = [QUESTION]), 500], () => questions, history);
+    opened.unmount();
+    return history;
+  }
+
+  it("finished request to the queued one's first stage: the sequence moves forward, naming the new request", async () => {
+    const history = await questionBehindARun();
+
+    expect(net.streamCalls.length).toBe(2);
+    expect(seenLines(history)).toEqual([
+      ["Starting the report", null],
+      ["Writing the report", 75],
+      ["Adding figures", 92],
+      [NEW_QUESTION, null],
+      ["Reading your questions", 20],
+      ["Writing the report", 75],
+    ]);
+  });
+
+  it("the line is never blank between the two requests: from the first stage to the report, a stage stands at every render", async () => {
+    const history = await questionBehindARun();
+
+    const first = history.findIndex((seen) => seen.stage !== null);
+    const reported = history.findIndex((seen) => seen.report !== null);
+    expect(first).toBeGreaterThanOrEqual(0);
+    expect(reported).toBeGreaterThan(first);
+    expect(history.slice(first, reported).every((seen) => seen.stage !== null)).toBe(true);
+  });
+
+  it("a bar never shows a lower percentage under the same words", async () => {
+    const history = await questionBehindARun();
+
+    let before: { label: string; pct: number } | null = null;
+    for (const seen of history) {
+      if (seen.stage === null || seen.stage.pct === null) continue;
+      if (before && before.label === seen.stage.label) expect(seen.stage.pct).toBeGreaterThanOrEqual(before.pct);
+      before = { label: seen.stage.label, pct: seen.stage.pct };
+    }
+  });
+
+  it("a bar that goes down is always after the words that name a new request", async () => {
+    const history = await questionBehindARun();
+
+    let previousBar: number | null = null;
+    let named = false;
+    for (const seen of history) {
+      if (seen.stage === null) continue;
+      if (seen.stage.label === NEW_QUESTION) {
+        named = true;
+        previousBar = null;
+        continue;
+      }
+      if (seen.stage.pct === null) continue;
+      if (previousBar !== null && seen.stage.pct < previousBar) expect(named).toBe(true);
+      previousBar = seen.stage.pct;
+    }
+  });
+
+  it("no queued question: nothing names a new request", async () => {
+    net.script = firstThenQuestion;
+    const { opened, history } = await drive([400]);
+    opened.unmount();
+
+    expect(history.some((seen) => seen.stage?.label === NEW_QUESTION)).toBe(false);
+    expect(history[history.length - 1].stage).toBeNull();
+  });
+});

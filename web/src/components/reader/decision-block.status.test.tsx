@@ -67,3 +67,75 @@ describe("DecisionBlock — one stage word, and a bar only with a progress (P10-
     expect(html).toContain('aria-valuenow="35"');
   });
 });
+
+// P10-47 (round 5's reader 3): the report's status is drawn once on the page at any moment — one line
+// under the bar, one bar at most — in every state, in every layout the page is drawn in.
+
+import { ReaderLayout } from "./reader-layout";
+
+const STATES: Array<[string, { label: string; pct: number | null } | null]> = [
+  ["no stage", null],
+  ["a request just started (no progress yet)", { label: "Starting the report", pct: null }],
+  ["a stage with a progress", { label: "Adding figures", pct: 92 }],
+  ["the move to a queued question", { label: "Your new question — reading it", pct: null }],
+];
+
+/** The report's status as the reader meets it: the live line, the bars, and how often its words are said. */
+function statusIn(html: string, stage: { label: string; pct: number | null } | null) {
+  const visible = html.replace(/<[^>]*>/g, "");
+  return {
+    lines: (html.match(/aria-live="polite"/g) ?? []).length,
+    bars: (html.match(/role="progressbar"/g) ?? []).length,
+    said: stage ? visible.split(stage.label).length - 1 : 0,
+  };
+}
+
+describe("the report's status line is drawn once (P10-47)", () => {
+  for (const [name, stage] of STATES) {
+    it(`${name}: one line, at most one bar, the words said once`, () => {
+      const seen = statusIn(render(stage), stage);
+
+      expect(seen.lines).toBe(stage ? 1 : 0);
+      expect(seen.bars).toBe(stage && stage.pct !== null ? 1 : 0);
+      expect(seen.said).toBe(stage ? 1 : 0);
+    });
+  }
+
+  // The page hands the decision block to the layout, which mounts it in one of three places by
+  // layout; none of them may draw it twice.
+  const layouts: Array<[string, Record<string, unknown>]> = [
+    ["one column", { spread: false }],
+    ["the spread's panel, with the strip and the map", { spread: true, tabs: createElement("i", null, "TABS"), map: createElement("i", null, "MAP"), tab: "digestion" }],
+    ["the spread's panel, no strip and no map", { spread: true }],
+  ];
+  for (const [layout, over] of layouts) {
+    for (const [name, stage] of STATES) {
+      it(`${layout}, ${name}: the page carries one status line`, () => {
+        const html = renderToStaticMarkup(
+          createElement(ReaderLayout, {
+            plate: createElement("i", null, "PLATE"),
+            title: createElement("i", null, "TITLE"),
+            decision: createElement(DecisionBlock, {
+              sentences: ["Read from the abstract."],
+              stage,
+              source: null,
+              isSaved: false,
+              showAddKey: false,
+              onSave: NOOP,
+              onCopy: NOOP,
+              onOpen: NOOP,
+            }),
+            words: createElement("i", null, "WORDS"),
+            additions: createElement("i", null, "ADDITIONS"),
+            next: createElement("i", null, "NEXT"),
+            ...over,
+          } as never),
+        );
+        const seen = statusIn(html, stage);
+
+        expect(seen.lines).toBe(stage ? 1 : 0);
+        expect(seen.said).toBe(stage ? 1 : 0);
+      });
+    }
+  }
+});
