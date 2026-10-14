@@ -56,7 +56,8 @@
 // the body's section `sectionIndex`, not the map's row number). Gists are looked up under the trunk's id.
 // The rows that are open are kept by id, not by position, so a partition arriving after the first paint
 // (one row becomes several and everything after it moves) keeps what was open, and gives the parts the
-// trunk's openness. The summary line counts the paper's own sections: the parts are not sections the paper has.
+// trunk's openness. The summary line counts the rows it draws (P10-21): the parts of a partition are sections of
+// Peer's reading, so "4 sections" stands over four "Peer's reading" rows.
 // And a map of one row (no key, or the guide not yet answered) starts open, so a headless paper's map is its
 // paragraphs under their one row, not a closed line.
 
@@ -242,8 +243,9 @@ export function ReadingMapView({
   );
   // P10-07b: the legend is also there while a part of Peer's reading is on screen.
   const partShown = map.sections.some((row) => partOf(row) !== undefined);
-  // P10-07b: the sections the paper has — a divided trunk is one, whatever the parts it was read as.
-  const ownSections = new Set(map.sections.map(gistKeyOf)).size;
+  // P10-21 (A P10-14 §8 item 7; round 2's reader 3): the summary counts the rows below it — the partition's groups
+  // count as sections (it said "1 section" over four "Peer's reading" rows; P10-07b counted the trunk once).
+  const rowCount = map.sections.length;
 
   const toggle = (id: string) =>
     setOpen((current) => {
@@ -265,7 +267,7 @@ export function ReadingMapView({
         <p className={["annotation mt-1 text-text-faint", shownOnPhone ? "" : "hidden sm:block"].join(" ").trim()}>{PEERS_READING}</p>
       )}
       <p className="annotation mt-2 flex items-baseline gap-3 text-text-faint">
-        <span>{MAP.summary(ownSections, map.totalMinutes, totalWords, source)}</span>
+        <span>{MAP.summary(rowCount, map.totalMinutes, totalWords, source)}</span>
         <button
           type="button"
           aria-expanded={shownOnPhone}

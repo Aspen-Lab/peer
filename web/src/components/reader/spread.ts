@@ -93,8 +93,14 @@ export const PANEL_CLASS = "xl:min-w-0 xl:self-stretch xl:flex-col xl:flex";
 export const PANEL_STICKY_CLASS = "xl:reader-panel";
 
 /** The sticky part when it holds the strip and the map: the strip's own 32px top gap is the holder's
- *  (`reader-layout.tsx`), so a stuck strip stands at the masthead's foot with no gap above it. */
-export const PANEL_TAIL_CLASS = `${PANEL_STICKY_CLASS} xl:[&>:first-child]:mt-0`;
+ *  (`reader-layout.tsx`), so a stuck strip stands at the masthead's foot with no gap above it.
+ *
+ *  P10-21 (A P10-14 §8 item 7): `xl:-mb-3`. At the very foot of the page the sticky part stops where its holder ends,
+ *  and the holder ends 64 px above the window's bottom at 1280 x 720, so the part (612 px tall there) stopped with its
+ *  top at 43.9 px — 4 px under the masthead's bottom (48 px), the strip's top edge hidden. A sticky element stops
+ *  when its margin box meets the holder's end; a bottom margin of -12 px lets it end 12 px below the holder, in the
+ *  page's own bottom room, so its top is 55.9 px there and the strip is never under the masthead. */
+export const PANEL_TAIL_CLASS = `${PANEL_STICKY_CLASS} xl:-mb-3 xl:[&>:first-child]:mt-0`;
 
 /** The reading column: a flex column so the Next row can take the free space
  *  on a page shorter than the panel.
