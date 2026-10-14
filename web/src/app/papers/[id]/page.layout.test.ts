@@ -121,10 +121,18 @@ function tabProblems(source: string): string[] {
   const onDigestion = split < 0 ? "" : additions.slice(0, split);
   const onSummary = split < 0 ? "" : additions.slice(split);
   if (!additions.startsWith(" additions={digestion ? (")) problems.push("the additions are not chosen by the tab");
-  for (const block of ["<ReadingMapView", "<PaperBody"]) {
+  // P10-04, RE-AIMED (review 3.1): the map left the additions for the layout's own `map` slot, directly under
+  // the strip and under BOTH tabs; the body alone is Paper digestion's.
+  for (const block of ["<PaperBody"]) {
     if (!onDigestion.includes(block)) problems.push(`${block} is not under Paper digestion`);
     if (onSummary.includes(block)) problems.push(`${block} is also under Summary`);
   }
+  const mapSlot = between(code, " map={hasBody", " terms={");
+  if (!mapSlot.startsWith(" map={hasBody && reading.map ? <ReadingMapView")) problems.push("the map is not drawn in the layout's `map` slot exactly when there is a body and a map");
+  if (count(code, "<ReadingMapView") !== 1) problems.push("the map is not mounted exactly once");
+  if (/\btab\b|digestion/.test(mapSlot)) problems.push("the map slot depends on the tab: it is shown under both");
+  if (!mapSlot.includes("reveal={reveal}")) problems.push("a row of the map cannot bring the body in from Summary");
+  if (onSummary.includes("<ReadingMapView") || onDigestion.includes("<ReadingMapView")) problems.push("<ReadingMapView is among a tab's blocks again");
   // P9-27: "What is new here" is a block of the Summary now, ahead of "What it proposes".
   for (const block of ["<NewHereBlock", "<ProposalBlock", "<ClaimList", "<GlanceBlock", "<RelatedBlock", "<RecordBlock", "<InYourLibrary"]) {
     if (!onSummary.includes(block)) problems.push(`${block} is not under Summary`);

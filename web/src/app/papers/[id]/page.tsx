@@ -1424,6 +1424,10 @@ function Reader({
         // P7-14 (R10): the strip under the decision block, only on a paper Peer has read in full.
         tabs={hasBody ? <ReaderTabs tab={tab} onSelect={selectTab} /> : undefined}
         tab={hasBody ? tab : undefined}
+        // P10-04 (review 3.1): the map (P1-04, §1f.12: from the reading the server built, absent without a body)
+        // stands directly under the strip and floats with it, under both tabs; it is the paper's one contents
+        // list (R5). A row clicked under "Summary" brings the body in first (`reveal`).
+        map={hasBody && reading.map ? <ReadingMapView key={`map:${paper.id}`} map={reading.map} route={route} gists={paragraphGists} reveal={reveal} source={reading.provenance.sourceLabel} /> : undefined}
         // The blocks both tabs share (Q6): the question field (P1-03, §1f.10 — only where Peer has
         // the paper's text; without it there is nothing to point a question at, and the Decision
         // block already says why; one field per paper) and the answers. ONE element each, built here
@@ -1450,11 +1454,8 @@ function Reader({
         )}
         additions={digestion ? (
           <>
-            {/* P7-14 (R10): Paper digestion — the map (P1-04, §1f.12: from the reading the server
-                built, absent without a body) and under it the paper: everything the extractor
-                read. The map is the paper's one contents list (R5). */}
-            {reading.map && <ReadingMapView key={`map:${paper.id}`} map={reading.map} route={route} gists={paragraphGists} source={reading.provenance.sourceLabel} />}
-
+            {/* P7-14 (R10): Paper digestion — the paper: everything the extractor read. Its map
+                (P1-04, R5) is the layout's `map` slot now (P10-04), under the strip, under both tabs. */}
             {/* The paper, when Peer reached it. */}
             <PaperBody reading={reading} route={route} plain={plainForBody} onSelect={selectExplain} noteAnchors={noteAnchors} />
           </>

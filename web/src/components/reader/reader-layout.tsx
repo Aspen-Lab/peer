@@ -34,6 +34,12 @@
 // the common blocks in one column), is deleted, and with it its `terms` slot. The paper's own definitions
 // still feed "Explain this" and the plate; they are not a block of this layout.
 //
+// P10-04 (review 3.1; A8): the reading map stands directly under the strip — in the panel on the spread, so
+// it floats with the strip (the panel is the sticky, window-bounded scroll region) and scrolls inside the
+// panel when it is taller than the window; in one column between the strip and the tabpanel, with no
+// stickiness there. It is a slot of its own, outside the tabpanel: under both tabs, never remounted by a
+// switch, and nothing of it is duplicated in the column.
+//
 // The structure is chosen in JS rather than with `display: contents` and
 // `order`, so what a screen reader announces is what the page shows. Crossing
 // 80rem remounts the blocks (the authors toggle resets); a window resize
@@ -74,6 +80,10 @@ interface ReaderLayoutProps {
    *  Present only on a paper Peer has read in full; its presence is what makes
    *  `words` and `additions` a tabpanel. */
   tabs?: ReactNode;
+  /** P10-04 (review 3.1): the reading map. Directly under the strip in the spread's panel (it floats with
+   *  the strip and scrolls inside the panel); in one column between the strip and the tabpanel. Under both
+   *  tabs, outside the tabpanel. */
+  map?: ReactNode;
   /** The tab on show, for the tabpanel's label. */
   tab?: ReaderTab;
   /** The blocks both tabs share ("Before you read" and the answers), above the
@@ -197,6 +207,9 @@ export function ReaderLayout(p: ReaderLayoutProps) {
         {/* P9-04 (X3): the strip stands directly above the panel it switches (`aria-controls`),
             after the blocks both tabs share — not four screens above it. */}
         {p.tabs}
+        {/* P10-04 (review 3.1): the map, directly under the strip it stands with and above the panel it
+            helps the reader move through; outside the panel, so it shows under both tabs. */}
+        {p.map}
         {panel}
         {p.next}
       </>
@@ -230,6 +243,9 @@ export function ReaderLayout(p: ReaderLayoutProps) {
         {p.title}
         {p.decision}
         {p.tabs}
+        {/* P10-04 (review 3.1): the map floats with the strip — it is in the panel, which is sticky and
+            window-high, and scrolls inside it when it is taller than the window. */}
+        {p.map}
       </div>
       <div className={COLUMN_CLASS}>
         {common}

@@ -37,6 +37,15 @@ function termsProblems(source: string): string[] {
   if (text.includes("TermsStrip") || text.includes("terms-strip")) problems.push("the Terms to know strip is back on the page");
   if (/ terms=\{ ?hasBody/.test(text)) problems.push("the layout is handed a `terms` slot again");
   if (!/<ExplainBox [^>]*terms=\{terms\}/.test(text)) problems.push("the explain box is no longer handed the merged terms (the Tier 0 definition)");
+
+  // P10-04 (review 3.1): the map is in the layout's own `map` slot — under the strip, under both tabs — not in
+  // the additions; the page mounts it exactly once.
+  const mapSlot = text.indexOf("map={hasBody && reading.map ?");
+  const mapMount = text.indexOf("<ReadingMapView");
+  const additions = text.indexOf("additions={");
+  if (mapMount < 0) problems.push("the map is no longer mounted");
+  else if (!(mapSlot >= 0 && mapSlot < mapMount && mapMount < additions)) problems.push("the map is no longer in the layout's map slot, under the strip, under both tabs");
+  if (text.split("<ReadingMapView").length - 1 !== 1) problems.push("the map is not mounted exactly once");
   return problems;
 }
 
@@ -64,6 +73,14 @@ describe("the page's defined-terms wiring (P3-01; P10-02: no strip)", () => {
     expect(termsProblems(source.replace("plain={plainForBody} onSelect", "termMark={termMark} plain={plainForBody} onSelect"))).toEqual(
       expect.arrayContaining(["the page still keeps a clicked term for the body to mark"]),
     );
+  });
+
+  it("would notice the map moved back into the additions, under one tab only", () => {
+    const mapLine = /\s*map=\{hasBody && reading\.map \? <ReadingMapView [^\n]*\n/.exec(source)![0];
+    const moved = source.replace(mapLine, "\n").replace("<PaperBody reading={reading}", `{reading.map && <ReadingMapView map={reading.map} />}\n<PaperBody reading={reading}`);
+
+    expect(moved).not.toBe(source);
+    expect(termsProblems(moved)).toContain("the map is no longer in the layout's map slot, under the strip, under both tabs");
   });
 
   it("would notice the explain box no longer handed the merged terms", () => {

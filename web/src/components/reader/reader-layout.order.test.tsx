@@ -267,8 +267,14 @@ describe("reader-layout.tsx source (P7-14)", () => {
   });
 
   // P9-04 (X3): the one-column return ends with the strip and the panel it labels, side by side.
-  it("one column: {p.tabs} stands directly before {panel}, after {common}", () => {
-    expect(stacked.slice(stacked.indexOf("{p.tabs}") + "{p.tabs}".length, stacked.indexOf("{panel}")).trim()).toBe("");
+  // P10-04 (review 3.1): the map stands between the strip and the panel (JSX comments aside); the terms slot is
+  // gone (P10-02).
+  it("one column: {p.tabs} stands directly before {p.map}, which stands directly before {panel}, after {common}", () => {
+    const between = (from: string, to: string) =>
+      stacked.slice(stacked.indexOf(from) + from.length, stacked.indexOf(to)).replace(/\{\/\*[\s\S]*?\*\/\}/g, "").trim();
+
+    expect(between("{p.tabs}", "{p.map}")).toBe("");
+    expect(between("{p.map}", "{panel}")).toBe("");
     expect(stacked.indexOf("{p.tabs}")).toBeGreaterThan(stacked.indexOf("{common}"));
   });
 
@@ -277,7 +283,9 @@ describe("reader-layout.tsx source (P7-14)", () => {
 
     expect(panel.slice(panel.indexOf("{p.title}") + "{p.title}".length, panel.indexOf("{p.decision}")).trim()).toBe("");
     expect(panel.indexOf("{p.tabs}")).toBeGreaterThan(panel.indexOf("{p.decision}"));
-    expect(panel.slice(panel.indexOf("{p.tabs}") + "{p.tabs}".length).replace(/<\/div>[\s\S]*$/, "").trim()).toBe("");
+    // P10-04: the map is in the panel, directly after the strip, and nothing after it (the terms slot is gone, P10-02).
+    expect(panel.indexOf("{p.map}")).toBeGreaterThan(panel.indexOf("{p.tabs}"));
+    expect(panel.slice(panel.indexOf("{p.map}") + "{p.map}".length).replace(/<\/div>[\s\S]*$/, "").trim()).toBe("");
     expect(panel).not.toContain("{p.common}");
     expect(panel).not.toContain("{common}");
   });
