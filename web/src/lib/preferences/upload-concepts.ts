@@ -33,7 +33,9 @@ import { ABBREVIATION_GROUPS, canonicalize, isGenericTerm } from "@/lib/scoring/
 // passage through the new split by its quote (P10-35).
 // 12 (P10-40): a PMC section's nested subsections are sections of their own (`extractPmc` walks `<section>` by depth),
 // and an abstract sentence holds no line break; text cached under 11 folds the first subsection into its parent.
-export const UPLOAD_CONCEPT_EXTRACTION_VERSION = 12;
+// 13 (P10-42): a block with no sentence end joins the next across a page break or a floating figure whatever the
+// next word (unless it opens a heading or a list); text cached under 12 cuts such a sentence at a capital.
+export const UPLOAD_CONCEPT_EXTRACTION_VERSION = 13;
 
 // A conservative, local phrase extractor. No document text is sent to a model
 // for preference learning. References, author blocks and boilerplate are out.

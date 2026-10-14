@@ -148,8 +148,11 @@ export interface PaperReading {
    *
    * 12 → 13 (P10-40): a PMC paper's nested subsections are sections of their own and an
    * abstract sentence holds no line break, so a reading cached under 12 has neither. Read again once.
+   *
+   * 13 → 14 (P10-42): a sentence cut by a page break or a floating figure is one paragraph
+   * again, so a reading cached under 13 can hold it in two. Read again once.
    */
-  version: 13;
+  version: 14;
   paperId: string;
   builtAt: string;
   provenance: ReadingProvenance;
@@ -800,7 +803,7 @@ export function buildReading(
   omitted.push({ block: "nextStep", reason: "needs_key" });
 
   return {
-    version: 13,
+    version: 14,
     paperId: paper.id,
     builtAt: now.toISOString(),
     provenance,
