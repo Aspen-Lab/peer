@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { STANDING } from "./copy";
 
-// P5-01 (blueprint P5): the words of the standing questions — on the Profile page and as the chip
-// group on a paper's "Before you read" box. Peer's words are English and sentence case; none
-// speaks of an allowance, a quota or a plan (§1h.10), and none says "skip" or "don't read" (§1a.4).
+// P5-01 (blueprint P5): the words of the standing questions — on the Profile page and as the group in the
+// dropdown of a paper's question bar (P10-03: "What you want to learn about this paper:"). Peer's words are
+// English and sentence case; none speaks of an allowance, a quota or a plan (§1h.10), and none says "skip" or
+// "don't read" (§1a.4).
 
 describe("STANDING — the words of the standing questions", () => {
-  it("names the Profile row, the chip group and the controls", () => {
+  it("names the Profile row, the dropdown group and the controls", () => {
     expect(STANDING.label).toBe("Standing questions");
     expect(STANDING.chipGroup).toBe("Your standing questions");
     expect(STANDING.add).toBe("Add a question");
@@ -17,7 +18,7 @@ describe("STANDING — the words of the standing questions", () => {
 
   it("says in one sentence what they are, and that they are never filled in for the reader", () => {
     expect(STANDING.hint).toBe(
-      "Up to five questions you bring to most papers. On a paper they show as buttons under “Before you read”; Peer never fills one in for you.",
+      "Questions you bring to most papers, five at most. On a paper they are listed under the question bar while you type; Peer never fills one in for you.",
     );
   });
 
@@ -37,7 +38,7 @@ describe("STANDING — the words of the standing questions", () => {
       expect(text).not.toMatch(/\bskip\b|don.t read/i);
       // Sentence case: inside a sentence no word is capitalised (the quoted box name is lower case).
       for (const sentence of text.split(/(?<=[.?!])\s+/)) {
-        const inside = sentence.replace(/^\S+/, "").replace(/\u201cBefore you read\u201d/g, "").replace(/\bPeer\b/g, "");
+        const inside = sentence.replace(/^\S+/, "").replace(/\bPeer\b/g, "");
         expect(inside).not.toMatch(/\s[A-Z][a-z]/);
       }
     }

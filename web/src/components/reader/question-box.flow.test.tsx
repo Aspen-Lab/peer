@@ -10,9 +10,9 @@
 // own key, and one more goes out for the latest set. A "charge" below is one
 // deep request: it was counted once per deep request (§1g.4), and since P4-00 it
 // is what the reader's own provider bills them for. P7-13 (R11c, the owner's order):
-// the box settles when the reader presses Submit, or presses Enter on an empty last
-// line (or the last line of a full box) — no longer on leaving the box after an idle
-// wait, and no longer on `pagehide`. Every question is synthetic.
+// the box settles when the reader presses Submit — no longer on leaving the box after an idle
+// wait, and no longer on `pagehide`. P10-03 (review 2.5): one question in one bar; Enter is
+// the Submit control's twin, and there are no lines to end. Every question is synthetic.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("react", async (importOriginal) => {
@@ -138,8 +138,9 @@ function elements(node: ReactNode): ReactElement<Props>[] {
 
 interface View {
   section: ReactElement<Props>;
+  /** The bar (one textarea). */
   inputs: ReactElement<Props>[];
-  /** The Submit button of this render, if the box shows one. */
+  /** The Submit control of this render. */
   submit: ReactElement<Props> | undefined;
 }
 type Step = ((view: View) => void) | { wait: number } | { until: () => boolean; what: string };
@@ -271,21 +272,21 @@ describe("the question box and the deep report (P2-08b, §1g.18)", () => {
     useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null });
   });
 
-  it("five questions typed with Enter between them cost one charge: the open, then one report for all five", async () => {
+  // P10-03 re-aim of "five questions typed with Enter between them cost one charge: the open, then one report for
+  // all five": five questions cannot be typed in one bar. What stays true is the point of it — typing costs
+  // nothing: five questions typed one over another, never submitted but once, are one report, for the last.
+  it("questions typed one over another cost one charge: the open, then one report, for the one submitted", async () => {
     const script: Step[] = [sleep(100)];
-    FIVE.forEach((text, index) => {
-      script.push(type(index, text));
-      if (index < FIVE.length - 1) script.push(enter(index));
-    });
+    FIVE.forEach((text) => script.push(type(0, text)));
     script.push(submit, sleep(300));
 
     await session(script);
 
-    // The open (no questions), and the one request for the five — never one per Enter.
+    // The open (no questions), and the one request — never one per keystroke or per question.
     expect(net.calls.filter((call) => call.deep === true)).toHaveLength(2);
-    expect(net.calls.map((call) => call.questions?.length ?? 0)).toEqual([0, 5]);
-    expect(net.calls[1].questions).toEqual(FIVE);
-    // None of the five intermediate sets was ever requested, and nothing was abandoned.
+    expect(net.calls.map((call) => call.questions?.length ?? 0)).toEqual([0, 1]);
+    expect(net.calls[1].questions).toEqual([FIVE[4]]);
+    // None of the four intermediate questions was ever requested, and nothing was abandoned.
     expect(net.calls.every((call) => !call.aborted)).toBe(true);
   });
 
@@ -328,29 +329,27 @@ describe("the question box and the deep report (P2-08b, §1g.18)", () => {
   });
 
   // §1g.21 (5), and the ruling's own done gesture: Enter on an empty last line. P7-13 (§1h.29
-  // Q8): it still settles, and now at once — there is no wait after it.
-  it("Enter on an empty last line is the done gesture: the questions settle at once", async () => {
+  // Q8): it settles at once — there is no wait after it. P10-03 re-aim: the bar has no last line;
+  // Enter in it is the done gesture.
+  it("Enter is the done gesture: the question settles at once", async () => {
     let atOnce: readonly string[] | undefined;
-    await session([type(0, FIVE[0]), enter(0), enter(1), () => (atOnce = settledOf()), sleep(150)]);
+    await session([type(0, FIVE[0]), enter(0), () => (atOnce = settledOf()), sleep(150)]);
 
     expect(atOnce).toEqual([FIVE[0]]);
     expect(settledOf()).toEqual([FIVE[0]]);
   });
 
-  it("Enter on the last line of a full five-line box is the done gesture too", async () => {
-    const script: Step[] = [];
-    FIVE.forEach((text, index) => {
-      script.push(type(index, text));
-      if (index < FIVE.length - 1) script.push(enter(index));
-    });
-    // The box is full: no empty line can exist to press Enter on.
-    script.push(sleep(60));
-    await session(script);
-    expect(settledOf()).toBeUndefined();
+  // P10-03 re-aim of "Enter on the last line of a full five-line box is the done gesture too": a reader who
+  // stored five questions before round P10 sees the first in the bar, and Submit sends it alone — the stored
+  // list becomes the one question.
+  it("five questions stored before round P10: the bar shows the first, and Submit asks the report that one alone", async () => {
+    useReadingQuestionsStore.getState().set(paper.id, FIVE, false);
+    await session([sleep(100), submit, sleep(300)]);
 
-    useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null });
-    await session([...script.slice(0, -1), enter(4), sleep(150)]);
-    expect(settledOf()).toEqual(FIVE);
+    expect(settledOf()).toEqual([FIVE[0]]);
+    expect(useReadingQuestionsStore.getState().byPaper[paper.id]?.items).toEqual([FIVE[0]]);
+    expect(net.calls.map((call) => call.questions?.length ?? 0)).toEqual([0, 1]);
+    expect(net.calls[1].questions).toEqual([FIVE[0]]);
   });
 
   // P7-13 (R11c): the three ways the box used to settle by itself are gone — leaving it and

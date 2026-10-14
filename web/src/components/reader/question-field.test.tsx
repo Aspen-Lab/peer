@@ -9,22 +9,12 @@ import { MAX_QUESTION_CHARS, useReadingQuestionsStore } from "@/store/reading-qu
 import zenodoDocJson from "@/lib/papers/__fixtures__/zenodo-W7208807247.doc.json";
 import { ASK, ROUTE } from "./copy";
 import { PaperBody } from "./paper-body";
-import {
-  QuestionField,
-  addLineAfter,
-  chipGroups,
-  fillNextLine,
-  nextGist,
-  removeLine,
-  settleLine,
-  showChips,
-  vagueHintShown,
-} from "./question-field";
+import { QuestionField, chipGroups, nextGist, settleLine, suggestionItems, vagueHintShown } from "./question-field";
 
-// P1-03 (§1f.10): the question field. This project's Vitest has no DOM, so
-// what the field shows is checked by rendering it (react-dom/server), and
-// what a key or a click does is checked on the pure functions the field's
-// handlers call.
+// P1-03 (§1f.10): the question field; round P10 (P10-03) made it one bar. This project's Vitest
+// has no DOM, so what the field shows is checked by rendering it (react-dom/server), and what a
+// key or a click does on the pure functions the field's handlers call
+// (`question-field.bar.test.tsx` runs the gestures themselves on a scripted reader).
 
 const PAPER = "openalex:W1";
 
@@ -43,7 +33,9 @@ function render(paperId = PAPER, examples: typeof EXAMPLES = []): string {
 describe("QuestionField — what it shows", () => {
   beforeEach(() => useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null }));
 
-  it("with no questions, is one quiet line: the label and an empty textarea, nothing else", () => {
+  // P10-03 re-aim of "with no questions, is one quiet line … nothing else": the bar is now always the
+  // bordered search bar, with its Submit control (inert) inside it; the label and the bar are all there is.
+  it("with no questions, is the label and one empty bar with an inert Submit inside it — nothing listed under it", () => {
     const html = render();
 
     expect(html).toContain(ASK.heading);
@@ -51,14 +43,16 @@ describe("QuestionField — what it shows", () => {
     // P7-13 (R11a): the line is a textarea that grows, no longer an input.
     expect(html.match(/<textarea/g)).toHaveLength(1);
     expect(html).not.toContain("<input");
-    expect(html).not.toContain("<button");
-    expect(html).not.toContain(ASK.hint);
+    expect(html.match(/<button/g)).toHaveLength(1);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Submit<\/button>/);
     expect(html).not.toContain(ASK.chips.gist);
-    // Examples wait for focus or a question, like every chip.
+    // Examples wait for focus and are a dropdown (question-field.bar.test.tsx).
     expect(render(PAPER, EXAMPLES)).not.toContain(ASK.fromProfile);
   });
 
-  it("with a question, shows its line with a remove control, the hint and the gist control — and no generic chip", () => {
+  // P10-03 re-aim of "with a question, shows its line with a remove control, the hint and the gist control —
+  // and no generic chip": there is no remove control, no hint and no gist control under the bar any more.
+  it("with a question, shows it whole in the bar and nothing under the bar — no remove control, no hint, no gist, no generic example", () => {
     useReadingQuestionsStore.setState({
       byPaper: { [PAPER]: { items: ["How does LCO degrade?"], gist: false, updatedAt: "2026-10-05T00:00:00.000Z" } },
       lastPaperId: PAPER,
@@ -66,58 +60,50 @@ describe("QuestionField — what it shows", () => {
     const html = render();
 
     expect(html).toContain(">How does LCO degrade?</textarea>");
-    expect(html).toContain(`aria-label="${ASK.remove(1)}"`);
-    expect(html).toContain(ASK.hint);
-    expect(html).toContain(ASK.chips.gist);
+    expect(html).not.toContain("×");
+    expect(html).not.toContain(ASK.chips.gist);
     for (const chip of GENERIC) expect(html).not.toContain(chip);
-    // No examples from the page: no group heading.
     expect(html).not.toContain(ASK.fromEarlier);
     expect(html).not.toContain(ASK.fromProfile);
   });
 
-  it("offers the example groups only when the page passes some (P1-09)", () => {
+  // P10-03 re-aim of "offers the example groups only when the page passes some" and "renders both groups in
+  // order, each example a button, and the gist control after them": the groups are the dropdown's, drawn
+  // only while the bar has focus on an unsettled question — never at rest, whatever the page passes.
+  it("draws no example at rest, whatever groups the page passes (they are the dropdown's, open only with focus)", () => {
     useReadingQuestionsStore.setState({
       byPaper: { [PAPER]: { items: ["How does LCO degrade?"], gist: false, updatedAt: "2026-10-05T00:00:00.000Z" } },
       lastPaperId: PAPER,
     });
 
-    expect(render(PAPER, [])).not.toContain(ASK.fromProfile);
-    const html = render(PAPER, [EXAMPLES[1]]);
-    expect(html).toContain(ASK.fromProfile);
-    expect(html).toContain(">Does this help with dendrite growth?<");
-    expect(html).not.toContain(ASK.fromEarlier);
+    for (const groups of [[], [EXAMPLES[1]], EXAMPLES]) {
+      const html = render(PAPER, groups);
+      for (const text of [ASK.fromEarlier, ASK.fromProfile, "Why does the anode crack?", "Does this help with dendrite growth?", "Could I use XRD here?", ASK.chips.gist]) {
+        expect(html).not.toContain(text);
+      }
+      expect(html).not.toContain('role="option"');
+    }
   });
 
-  it("renders both groups in order, each example a button, and the gist control after them (P1-09)", () => {
-    useReadingQuestionsStore.setState({
-      byPaper: { [PAPER]: { items: ["How does LCO degrade?"], gist: false, updatedAt: "2026-10-05T00:00:00.000Z" } },
-      lastPaperId: PAPER,
-    });
-    const html = render(PAPER, EXAMPLES);
-
-    const order = [ASK.fromEarlier, "Why does the anode crack?", ASK.fromProfile, "Does this help with dendrite growth?", "Could I use XRD here?", ASK.chips.gist].map((text) => html.indexOf(text));
-    expect(order.every((at) => at > 0)).toBe(true);
-    expect([...order].sort((a, b) => a - b)).toEqual(order);
-    expect(html).toMatch(/<button type="button"[^>]*>Why does the anode crack\?<\/button>/);
-    for (const chip of GENERIC) expect(html).not.toContain(chip);
-  });
-
-  it("shows a chosen gist as a selected chip, not as a line", () => {
+  // P10-03 re-aim of "shows a chosen gist as a selected chip, not as a line": the chosen gist stands in the bar
+  // where the placeholder stood, and is not text in it.
+  it("shows a chosen gist in the bar as its placeholder, not as the bar's text", () => {
     useReadingQuestionsStore.setState({
       byPaper: { [PAPER]: { items: [], gist: true, updatedAt: "2026-10-05T00:00:00.000Z" } },
       lastPaperId: PAPER,
     });
     const html = render();
 
-    expect(html).toMatch(/aria-pressed="true"[^>]*>Just get the gist</);
+    expect(html).toContain(`placeholder="${ASK.chips.gist}"`);
     expect(html).not.toMatch(/<textarea[^>]*>Just get the gist<\/textarea>/);
+    expect(html).toContain("></textarea>");
   });
 
   // P7-13 (R11a, §1h.29 Q7): 200 rose to 500, and the counter moved from 160 to 400.
   it("counts characters only past 400", () => {
     const line = "q".repeat(450);
     useReadingQuestionsStore.setState({
-      byPaper: { [PAPER]: { items: ["Short.", line], gist: false, updatedAt: "2026-10-05T00:00:00.000Z" } },
+      byPaper: { [PAPER]: { items: [line], gist: false, updatedAt: "2026-10-05T00:00:00.000Z" } },
       lastPaperId: PAPER,
     });
     const html = render();
@@ -154,23 +140,23 @@ describe("QuestionField — the line is a growing textarea (P7-13, R11a)", () =>
   beforeEach(() => useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null }));
   const tags = (html: string) => html.match(/<textarea[^>]*>/g) ?? [];
 
-  it("each line is a one-row textarea carrying the data-ask-line mark, the id and the shared limit", () => {
+  // P10-03 re-aim of "each line is a one-row textarea …": the bar is the one line.
+  it("the bar is a one-row textarea carrying the data-ask-line mark, the id and the shared limit", () => {
     useReadingQuestionsStore.setState({
       byPaper: { [PAPER]: { items: ["First question here?", "Second question here?"], gist: false, updatedAt: "2026-10-05T00:00:00.000Z" } },
       lastPaperId: PAPER,
     });
     const html = render();
 
-    expect(tags(html)).toHaveLength(2);
-    tags(html).forEach((tag, index) => {
-      expect(tag).toContain('rows="1"');
-      expect(tag).toContain('data-ask-line=""');
-      expect(tag).toContain(`id="ask-${PAPER}-${index}"`);
-      expect(tag).toContain(`maxLength="${MAX_QUESTION_CHARS}"`);
-      expect(tag).not.toContain("type=");
-    });
-    // The line of a question is no longer an input; the only inputs are the checkboxes.
-    expect(html.match(/<input[^>]*data-ask-line/g)).toBeNull();
+    expect(tags(html)).toHaveLength(1);
+    const tag = tags(html)[0];
+    expect(tag).toContain('rows="1"');
+    expect(tag).toContain('data-ask-line=""');
+    expect(tag).toContain(`id="ask-${PAPER}-0"`);
+    expect(tag).toContain(`maxLength="${MAX_QUESTION_CHARS}"`);
+    expect(tag).not.toContain("type=");
+    // The bar is not an input, and nothing in the box is one.
+    expect(html.match(/<input/g)).toBeNull();
   });
 
   it("a 300-character question is kept whole by the store and shown whole in its line", () => {
@@ -185,23 +171,22 @@ describe("QuestionField — the line is a growing textarea (P7-13, R11a)", () =>
     expect(html).not.toContain(ASK.counter(question.length));
   });
 
-  it("the placeholder stays on the first line only", () => {
+  // P10-03 re-aim of "the placeholder stays on the first line only": there is one bar, and it has the placeholder.
+  it("the bar carries the placeholder, and no line is named by number", () => {
     useReadingQuestionsStore.setState({
       byPaper: { [PAPER]: { items: ["First question here?", "Second question here?"], gist: false, updatedAt: "2026-10-05T00:00:00.000Z" } },
       lastPaperId: PAPER,
     });
-    const [first, second] = tags(render());
+    const [only] = tags(render());
 
-    expect(first).toContain(`placeholder="${ASK.placeholder}"`);
-    expect(second).not.toContain("placeholder=");
-    expect(second).toContain(`aria-label="${ASK.line(2)}"`);
+    expect(only).toContain(`placeholder="${ASK.placeholder}"`);
+    expect(only).not.toContain("aria-label=");
   });
 });
 
-// P7-13 (R11c, the owner's R11; §1h.29 Q8): a Submit button settles the questions. Below the
-// lines and right-aligned (full width on a phone), in the label face; disabled when there is
-// nothing new to send; shown with no key too — it settles the ledger; and not in the quiet box
-// (no question, nothing focused), which stays one label and one line.
+// P7-13 (R11c, the owner's R11; §1h.29 Q8): a Submit button settles the question. P10 (review 2.6): inside the
+// right end of the bar, in the label face, inert (grey) when there is nothing new to send; shown with no key
+// too — it settles the ledger.
 describe("QuestionField — the Submit button (P7-13, R11c)", () => {
   const AT = "2026-10-05T00:00:00.000Z";
   const button = (html: string) => /<button[^>]*>Submit<\/button>/.exec(html)?.[0];
@@ -210,27 +195,33 @@ describe("QuestionField — the Submit button (P7-13, R11c)", () => {
     useProfileStore.setState({ profile: { ...defaultProfile } });
   });
 
-  it("is not in the quiet box: no question, nothing focused", () => {
-    expect(render()).not.toContain(ASK.submit);
+  // P10-03 re-aim of "is not in the quiet box: no question, nothing focused": the bar always has its control.
+  it("is in the bar even when it is empty, inert", () => {
+    expect(button(render())).toContain('disabled=""');
   });
 
-  it("shows under the lines of a question, before the hint and the chips, in the label face", () => {
+  // P10-03 re-aim of "shows under the lines of a question, before the hint and the chips": it is inside the
+  // bar, at its right end, and there is no hint or example under it.
+  it("is inside the bar, after the textarea, in the label face", () => {
     useReadingQuestionsStore.getState().set(PAPER, ["How does LCO degrade?"], false, AT);
     const html = render();
 
     expect(button(html)).toBeDefined();
-    expect(html.indexOf(">Submit</button>")).toBeGreaterThan(html.indexOf("</ol>"));
-    expect(html.indexOf(">Submit</button>")).toBeLessThan(html.indexOf(ASK.hint));
+    expect(html).toMatch(/<\/textarea><button[^>]*>Submit<\/button><\/div>/);
     expect(button(html)).toMatch(/class="[^"]*\bannotation\b/);
     expect(button(html)).toContain('type="button"');
+    expect(html).not.toContain(ASK.chips.gist);
   });
 
-  it("is full width on a phone and right-aligned from the sm breakpoint", () => {
+  // P10-03 re-aim of "is full width on a phone and right-aligned from the sm breakpoint": the control no longer
+  // spans a row; it is the bar's right end at every width.
+  it("does not span a row of its own: it is a shrink-0 pill at the bar's right end", () => {
     useReadingQuestionsStore.getState().set(PAPER, ["How does LCO degrade?"], false, AT);
     const html = render();
 
-    expect(button(html)).toMatch(/class="[^"]*\bw-full\b[^"]*\bsm:w-auto\b|class="[^"]*\bsm:w-auto\b[^"]*\bw-full\b/);
-    expect(html).toMatch(/<div class="[^"]*\bsm:justify-end\b[^"]*">\s*<button[^>]*>Submit<\/button>/);
+    expect(button(html)).toMatch(/\bshrink-0\b/);
+    expect(button(html)).not.toMatch(/\bw-full\b/);
+    expect(html).not.toMatch(/\bsm:justify-end\b/);
   });
 
   // P7-18 (F6, §1h.39 e): 26 px tall on a phone, beside Notes at 44 and the page's other commands
@@ -241,13 +232,13 @@ describe("QuestionField — the Submit button (P7-13, R11c)", () => {
     expect(button(render())).toMatch(/class="[^"]*\[@media\(hover:none\)\]:min-h-11(?:\s|")/);
   });
 
-  it("is enabled while the typed questions are not the settled ones", () => {
+  it("is enabled while the typed question is not the settled one", () => {
     useReadingQuestionsStore.getState().set(PAPER, ["How does LCO degrade?"], false, AT);
 
     expect(button(render())).not.toContain('disabled=""');
   });
 
-  it("is disabled when the cleaned items equal the settled set", () => {
+  it("is disabled when the cleaned item equals the settled set", () => {
     useReadingQuestionsStore.getState().set(PAPER, ["How does LCO degrade?"], false, AT);
     useReadingQuestionsStore.getState().settle(PAPER);
 
@@ -274,13 +265,13 @@ describe("QuestionField — the vague hint (P1-05)", () => {
     }),
   );
 
-  it("shows the hint when the route is vague, under the question lines", () => {
+  it("shows the hint when the route is vague, under the bar", () => {
     const html = renderToStaticMarkup(createElement(QuestionField, { paperId: PAPER, examples: [], vague: true }));
 
     expect(ROUTE.vague).toBe("Ask something more specific and Peer can point you to the right sections.");
     expect(html).toContain(ROUTE.vague);
-    expect(html.indexOf(ROUTE.vague)).toBeGreaterThan(html.lastIndexOf("<input"));
-    expect(html.indexOf(ROUTE.vague)).toBeLessThan(html.indexOf(ASK.chips.gist));
+    expect(html.indexOf(ROUTE.vague)).toBeGreaterThan(html.indexOf("</textarea>"));
+    expect(html.indexOf(ROUTE.vague)).toBeGreaterThan(html.indexOf(">Submit</button>"));
   });
 
   it("shows no hint for a route that points somewhere, or with no route", () => {
@@ -330,48 +321,28 @@ describe("QuestionField — the hint waits for a settled line (P1-07)", () => {
 });
 
 describe("QuestionField — what the handlers do", () => {
-  it("shows the chips while the field has focus, holds a question, or the gist is chosen", () => {
-    expect(showChips({ focused: false, lines: [""], gist: false })).toBe(false);
-    expect(showChips({ focused: true, lines: [""], gist: false })).toBe(true);
-    expect(showChips({ focused: false, lines: ["A question"], gist: false })).toBe(true);
-    expect(showChips({ focused: false, lines: [""], gist: true })).toBe(true);
-  });
+  // P10-03 re-aim of "shows the chips while the field has focus, holds a question, or the gist is chosen",
+  // `showChips`: the dropdown rule is `dropdownOpen` (question-field.bar.test.tsx pins it).
+  // P10-03 re-aim of "adds a line on Enter …", "removes a line …" and "fills the next empty line with a chip …"
+  // (`addLineAfter`, `removeLine`, `fillNextLine`): there are no lines to add, remove or fill; the bar's
+  // handlers are pinned on the scripted reader.
 
-  it("adds a line on Enter after a written line, up to five, and moves to an empty one that exists", () => {
-    expect(addLineAfter(["First"], 0)).toEqual({ lines: ["First", ""], focus: 1 });
-    expect(addLineAfter(["First", "", "Third"], 0)).toEqual({ lines: ["First", "", "Third"], focus: 1 });
-    expect(addLineAfter([""], 0)).toEqual({ lines: [""], focus: 0 });
-    expect(addLineAfter(["1", "2", "3", "4", "5"], 4)).toEqual({ lines: ["1", "2", "3", "4", "5"], focus: 4 });
-  });
-
-  it("removes a line, and leaves one empty line when the last goes", () => {
-    expect(removeLine(["A", "B", "C"], 1)).toEqual(["A", "C"]);
-    expect(removeLine(["A"], 0)).toEqual([""]);
-  });
-
-  it("fills the next empty line with a chip, never more than five, and never by itself", () => {
-    const example = "Does this help with dendrite growth?";
-    expect(fillNextLine([""], example)).toEqual({ lines: [example], focus: 0 });
-    expect(fillNextLine(["A", ""], example)).toEqual({ lines: ["A", example], focus: 1 });
-    expect(fillNextLine(["A"], example)).toEqual({ lines: ["A", example], focus: 1 });
-    expect(fillNextLine(["1", "2", "3", "4", "5"], "Six")).toEqual({ lines: ["1", "2", "3", "4", "5"], focus: -1 });
-  });
-
-  it("offers none of the three generic blueprint chips: every example is the reader's own (P1-09, §1a.7)", () => {
+  it("offers none of the three generic blueprint examples: every example is the reader's own (P1-09, §1a.7)", () => {
     const chips = chipGroups(EXAMPLES).flatMap((group) => group.chips.map((chip) => chip.label));
     expect(chips).toEqual(["Why does the anode crack?", "Does this help with dendrite growth?", "Could I use XRD here?"]);
     for (const chip of GENERIC) expect(chips).not.toContain(chip);
     expect(JSON.stringify(ASK)).not.toMatch(/Can I use this method|Do the conclusions hold up|How does this differ from/);
   });
 
-  it("'Just get the gist' is a toggle of its own, not an example, and typing any question turns it off", () => {
+  it("'Just get the gist' is the dropdown's own last item, not an example, and typing any question turns it off", () => {
     expect(chipGroups(EXAMPLES).flatMap((group) => group.chips).some((chip) => chip.label === ASK.chips.gist)).toBe(false);
+    expect(suggestionItems(chipGroups(EXAMPLES)).at(-1)).toEqual({ kind: "gist", text: ASK.chips.gist });
     expect(nextGist(true, [""])).toBe(true);
     expect(nextGist(true, ["A question"])).toBe(false);
     expect(nextGist(false, [""])).toBe(false);
   });
 
-  it("keeps the page's groups in order, each example a fill chip, and leaves out an empty group", () => {
+  it("keeps the page's groups in order, each example a pick, and leaves out an empty group", () => {
     expect(chipGroups(EXAMPLES).map((group) => group.label)).toEqual([ASK.fromEarlier, ASK.fromProfile]);
     expect(chipGroups([{ label: ASK.fromEarlier, items: [] }, EXAMPLES[1]]).map((group) => group.label)).toEqual([ASK.fromProfile]);
     expect(chipGroups([])).toEqual([]);

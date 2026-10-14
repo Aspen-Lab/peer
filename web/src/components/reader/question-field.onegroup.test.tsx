@@ -1,9 +1,15 @@
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react")>();
+  const { hookRuntime } = await import("@/test-support/hook-runtime");
+  return { ...actual, ...hookRuntime.hooks };
+});
+
 import { useReadingQuestionsStore } from "@/store/reading-questions";
+import { check, focus, optionTexts, session } from "@/test-support/question-session";
 import { ASK, STANDING } from "./copy";
-import { QuestionField, chipGroups, standingGroup, withoutStandingRepeats } from "./question-field";
+import { chipGroups, standingGroup, withoutStandingRepeats } from "./question-field";
 
 // P5-04 (N5, §1h.15 (g)): a standing question pressed on one paper is stored as that paper's
 // question, so on the next paper it was offered twice — under "Your standing questions" and under
@@ -60,39 +66,46 @@ describe("withoutStandingRepeats", () => {
   });
 });
 
-describe("the box: a standing question pressed on an earlier paper is one chip, not two", () => {
+// P10-03 re-aim of "the box: a standing question pressed on an earlier paper is one chip, not two": the box is the
+// bar's dropdown, and the count is of its items while the bar has focus.
+describe("the dropdown: a standing question picked on an earlier paper is one item, not two", () => {
   beforeEach(() => useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null }));
 
-  const chips = (html: string, text: string) => html.split(`>${text}</button>`).length - 1;
-  const render = (standing?: string[], line = "Is the sample size reported?") => {
-    // A line of the box, so the chips show.
-    useReadingQuestionsStore.setState({
-      byPaper: { [PAPER]: { items: [line], gist: false, updatedAt: "2026-10-07T00:00:00.000Z" } },
-      lastPaperId: PAPER,
-    });
-    return renderToStaticMarkup(createElement(QuestionField, { paperId: PAPER, examples: EXAMPLES, standing }));
-  };
+  /** The dropdown's items, in order, when the bar holds `text` and has focus. */
+  async function listed(standing?: string[], text = "Is the sample size reported?"): Promise<{ headings: string[]; options: string[] }> {
+    let seen = { headings: [] as string[], options: [] as string[] };
+    await session(
+      [
+        focus,
+        ({ bar }) => (bar.props.onChange as (e: unknown) => void)({ target: { value: text } }),
+        check((view) => void (seen = { headings: view.headings, options: optionTexts(view) })),
+      ],
+      { paperId: PAPER, examples: EXAMPLES, standing },
+    );
+    return seen;
+  }
+  const count = (open: { options: string[] }, text: string) => open.options.filter((option) => option === text).length;
 
-  it("A's measure: the standing question was on the page twice; now once, under the standing group, and the others stay", () => {
-    const html = render([STANDING_Q, OTHER_STANDING]);
-    expect(chips(html, STANDING_Q)).toBe(1);
-    expect(html.indexOf(`>${STANDING_Q}</button>`)).toBeGreaterThan(html.indexOf(STANDING.chipGroup));
-    expect(html.indexOf(`>${STANDING_Q}</button>`)).toBeLessThan(html.indexOf(ASK.fromEarlier));
-    expect(chips(html, EARLIER_Q)).toBe(1);
-    expect(chips(html, PROFILE_Q)).toBe(1);
+  it("A's measure: the standing question was on the page twice; now once, under the standing group, and the others stay", async () => {
+    const open = await listed([STANDING_Q, OTHER_STANDING]);
+    expect(count(open, STANDING_Q)).toBe(1);
+    expect(open.options.indexOf(STANDING_Q)).toBeLessThan(open.options.indexOf(EARLIER_Q));
+    expect(open.headings[0]).toBe(STANDING.chipGroup);
+    expect(count(open, EARLIER_Q)).toBe(1);
+    expect(count(open, PROFILE_Q)).toBe(1);
   });
 
-  it("with no standing questions the box is as it was: the question stays an earlier chip, and nothing else differs", () => {
-    const today = render(undefined);
-    expect(chips(today, STANDING_Q)).toBe(1);
-    expect(today).not.toContain(STANDING.chipGroup);
-    expect(render([])).toBe(today);
-    expect(render(["", "   "])).toBe(today);
+  it("with no standing questions the dropdown is as it was: the question stays an earlier one, and nothing else differs", async () => {
+    const today = await listed(undefined);
+    expect(count(today, STANDING_Q)).toBe(1);
+    expect(today.headings).not.toContain(STANDING.chipGroup);
+    expect(await listed([])).toEqual(today);
+    expect(await listed(["", "   "])).toEqual(today);
   });
 
-  it("a standing question that is already a line of the box is offered by no group", () => {
-    const html = render([STANDING_Q, OTHER_STANDING], STANDING_Q);
-    expect(chips(html, STANDING_Q)).toBe(0);
-    expect(chips(html, OTHER_STANDING)).toBe(1);
+  it("a standing question that is the bar's text is offered by no group", async () => {
+    const open = await listed([STANDING_Q, OTHER_STANDING], STANDING_Q);
+    expect(count(open, STANDING_Q)).toBe(0);
+    expect(count(open, OTHER_STANDING)).toBe(1);
   });
 });

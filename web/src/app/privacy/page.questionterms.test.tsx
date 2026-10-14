@@ -16,7 +16,7 @@ import PrivacyPage from "./page";
 // purpose. The sentences are invented.
 
 const TEXT =
-  "When your questions on a paper settle, the specific words in them — one word at a time, in lower case, without common words and the words every question uses — are added to the small ledger Peer keeps of what interests you, at a small fraction of the weight of a like, so one question changes nothing you can see. The question itself is never added, and neither is anything from the paper. Tick “Not for recommendations” beside a question and its words are not added, or are taken out at once if they were. The ledger is part of your profile and is kept in this browser, and it reaches Peer's server in two ways. It travels in each request for your briefing, signed in or not, so Peer can rank papers for you: the server uses these words for that one request and keeps none of it, so for a reader who is not signed in nothing of it is stored. When you are signed in it is also stored against your account with the rest of your profile, so these words go with it, each filed under a marker that stands for the paper, not its name. The next sync replaces your account's copy, and signing out clears it from this browser.";
+  "When your questions on a paper settle, the specific words in them — one word at a time, in lower case, without common words and the words every question uses — are added to the small ledger Peer keeps of what interests you, at a small fraction of the weight of a like, so one question changes nothing you can see. The question itself is never added, and neither is anything from the paper. The ledger is part of your profile and is kept in this browser, and it reaches Peer's server in two ways. It travels in each request for your briefing, signed in or not, so Peer can rank papers for you: the server uses these words for that one request and keeps none of it, so for a reader who is not signed in nothing of it is stored. When you are signed in it is also stored against your account with the rest of your profile, so these words go with it, each filed under a marker that stands for the paper, not its name. The next sync replaces your account's copy, and signing out clears it from this browser.";
 
 const root = process.cwd();
 const read = (file: string) => readFileSync(join(root, file), "utf8");
@@ -70,7 +70,7 @@ describe("/privacy — what your questions teach Peer (P5-02)", () => {
 
   it("only the terms are handed to the ledger: the field passes questionTerms' result, never a question", () => {
     const field = squash(read("src/components/reader/question-field.tsx"));
-    expect(field).toContain("recordQuestionTerms(paperId, questionTerms(settledQuestions(entry), notForRecommendations(entry)));");
+    expect(field).toContain("recordQuestionTerms(paperId, questionTerms(settledQuestions(entry)));");
     expect(squash(read("src/store/profile.ts"))).toContain("recordQuestionTerms: (paperId, terms) =>");
     expect(squash(read("src/lib/preferences/ledger.ts"))).toContain("export function applyQuestionTermSignal(ledger: PreferenceLedger | undefined, paperId: string, terms: readonly QuestionTerm[]");
   });
@@ -93,11 +93,13 @@ describe("/privacy — what your questions teach Peer (P5-02)", () => {
     expect(users).toEqual(["src/lib/preferences/ledger.ts", "src/types/index.ts"]);
   });
 
-  it("the tick is what keeps a question out, and the label says so", () => {
+  // P10-03 (review 2.3) re-aim of "the tick is what keeps a question out, and the label says so": the per-question tick is
+  // gone from the box, and with it the sentence that named it. (The Profile's switch is the next commit's.)
+  it("the box has no per-question opt-out, and /privacy names none", () => {
     const field = squash(read("src/components/reader/question-field.tsx"));
-    expect(field).toContain("onChange={(event) => onMark(index, event.target.checked)}");
-    expect(field).toContain("{ASK.notForRecs}");
-    expect(squash(read("src/lib/preferences/question-terms.ts"))).toContain("if (out.has(question.trim().toLocaleLowerCase())) continue;");
+    expect(field).not.toContain("onMark");
+    expect(field).not.toContain("notForRecs");
+    expect(renderToStaticMarkup(createElement(PrivacyPage))).not.toContain(["Not for", "recommendations"].join(" "));
   });
 
   it("signing out clears the ledger with the profile: logOut resets to a default with none", () => {

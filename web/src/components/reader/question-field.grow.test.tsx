@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// P7-13 (R11a, the owner's R11): each question line is a textarea that grows with its text.
+// P7-13 (R11a, the owner's R11): the question bar is a textarea that grows with its text (P10: the one bar).
 // jsdom does not exist here, so a browser's layout cannot be measured; what is pinned is what
 // the field does with the element it renders — it folds a pasted newline to a space (an
 // `<input>` stripped one, a textarea keeps it), keeps Enter from adding one, fits the element's
@@ -43,17 +43,19 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-describe("the line is a textarea of one row with the shared limit", () => {
-  it("renders a <textarea rows=1 maxLength=MAX_QUESTION_CHARS> for every line, with the data-ask-line mark", async () => {
+describe("the bar is a textarea of one row with the shared limit", () => {
+  // P10-03 re-aim of "renders a <textarea …> for every line": there is one line, whatever is stored.
+  it("renders ONE <textarea rows=1 maxLength=MAX_QUESTION_CHARS> with the data-ask-line mark, however many questions are stored", async () => {
     useReadingQuestionsStore.getState().set(PAPER, ["First question here?", "Second question here?"], false, AT);
     const { lines, mounted } = await field();
 
-    expect(lines).toHaveLength(2);
+    expect(lines).toHaveLength(1);
     for (const line of lines) {
       expect(line.type).toBe("textarea");
       expect(line.props.rows).toBe(1);
       expect(line.props.maxLength).toBe(MAX_QUESTION_CHARS);
       expect(line.props.type).toBeUndefined();
+      expect(line.props.value).toBe("First question here?");
     }
     mounted.unmount();
   });
@@ -79,25 +81,31 @@ describe("a pasted newline is folded to a space", () => {
     mounted.unmount();
   });
 
-  it("a ticked line stays ticked through a paste, on the folded text", async () => {
-    useReadingQuestionsStore.getState().set(PAPER, ["Why does it crack?"], false, AT, ["Why does it crack?"]);
+  // P10-03 re-aim of "a ticked line stays ticked through a paste, on the folded text" (the tick is gone): a paste
+  // into a bar that holds a settled question is folded, stored as the one question, and leaves the settled set alone.
+  it("a paste into a settled question is folded and leaves the settled set as it was until Submit", async () => {
+    useReadingQuestionsStore.getState().set(PAPER, ["Why does it crack?"], false, AT);
+    useReadingQuestionsStore.getState().settle(PAPER);
     const { lines, mounted } = await field();
     (lines[0].props.onChange as (e: unknown) => void)({ target: { value: "Why does it crack?\nAt what rate?" } });
 
     expect(stored().items).toEqual(["Why does it crack? At what rate?"]);
-    expect(stored().notForRecs).toEqual(["Why does it crack? At what rate?"]);
+    expect(stored().settled).toEqual(["Why does it crack?"]);
     mounted.unmount();
   });
 });
 
-describe("Enter still adds a line and never a line break", () => {
-  it("prevents the default of Enter, and moves on as before", async () => {
+describe("Enter never adds a line break", () => {
+  // P10-03 re-aim of "prevents the default of Enter, and moves on as before" (moving on was adding a line): Enter
+  // prevents the default and submits the question.
+  it("prevents the default of Enter, and submits", async () => {
     useReadingQuestionsStore.getState().set(PAPER, ["First question here?"], false, AT);
     const { lines, mounted } = await field();
     const preventDefault = vi.fn();
     (lines[0].props.onKeyDown as (e: unknown) => void)({ key: "Enter", preventDefault });
 
     expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(stored().settled).toEqual(["First question here?"]);
     mounted.unmount();
   });
 
@@ -157,54 +165,47 @@ describe("the height follows the content", () => {
     expect(el.heights).toEqual(["auto", "73px"]);
   });
 
+  // P10-03: a placeholder that wraps on a narrow screen (390 px) made the empty bar two rows tall (78 px measured).
+  it("an empty bar is one row whatever its placeholder: the explicit height is cleared, nothing is measured", () => {
+    const el = { value: "", style: { height: "78px" }, scrollHeight: 60, offsetHeight: 64, clientHeight: 60 } as unknown as HTMLTextAreaElement;
+    fitHeight(el);
+    expect(el.style.height).toBe("");
+  });
+
   it("does nothing for an element that is not there, or has no style (the tests' own tree)", () => {
     expect(() => fitHeight(null)).not.toThrow();
     expect(() => fitHeight({} as unknown as HTMLTextAreaElement)).not.toThrow();
   });
 });
 
-describe("the page's q command finds a line by its mark, whatever the element", () => {
+describe("the page's q command finds the bar by its mark, whatever the element", () => {
   /** A fake document: only the selector the function asks for is answered. */
-  function documentWith(lines: Array<{ value: string; focus: () => void }>) {
+  function documentWith(bar: { value: string; focus: () => void } | null) {
     const asked: string[] = [];
     vi.stubGlobal("document", {
-      querySelectorAll: (selector: string) => {
+      querySelector: (selector: string) => {
         asked.push(selector);
-        return selector === "[data-ask-line]" ? lines : [];
+        return selector === "[data-ask-line]" ? bar : null;
       },
     });
     return asked;
   }
 
-  it("asks for [data-ask-line], not input[data-ask-line], and focuses the first empty line", () => {
-    const focus = [vi.fn(), vi.fn(), vi.fn()];
-    const asked = documentWith([
-      { value: "A question", focus: focus[0] },
-      { value: "   ", focus: focus[1] },
-      { value: "", focus: focus[2] },
-    ]);
-    focusFirstEmptyQuestion();
+  // P10-03 re-aim of "asks for [data-ask-line] … and focuses the first empty line" and "with every line written,
+  // focuses the last one": there is one bar; it is focused, empty or not.
+  it("asks for [data-ask-line], not input[data-ask-line], and focuses the bar, empty or written", () => {
+    for (const value of ["", "A question"]) {
+      const focus = vi.fn();
+      const asked = documentWith({ value, focus });
+      focusFirstEmptyQuestion();
 
-    expect(asked).toEqual(["[data-ask-line]"]);
-    expect(focus[1]).toHaveBeenCalledTimes(1);
-    expect(focus[0]).not.toHaveBeenCalled();
-    expect(focus[2]).not.toHaveBeenCalled();
+      expect(asked).toEqual(["[data-ask-line]"]);
+      expect(focus).toHaveBeenCalledTimes(1);
+    }
   });
 
-  it("with every line written, focuses the last one", () => {
-    const focus = [vi.fn(), vi.fn()];
-    documentWith([
-      { value: "One", focus: focus[0] },
-      { value: "Two", focus: focus[1] },
-    ]);
-    focusFirstEmptyQuestion();
-
-    expect(focus[1]).toHaveBeenCalledTimes(1);
-    expect(focus[0]).not.toHaveBeenCalled();
-  });
-
-  it("with no line on the page, does nothing", () => {
-    documentWith([]);
+  it("with no bar on the page, does nothing", () => {
+    documentWith(null);
     expect(() => focusFirstEmptyQuestion()).not.toThrow();
   });
 });

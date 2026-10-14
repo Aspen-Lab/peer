@@ -1,20 +1,35 @@
 import { describe, expect, it } from "vitest";
 import { ASK } from "./copy";
 
-// P5-02 (blueprint P5): the words of the per-question checkbox in the question box.
+// P5-02 (blueprint P5) had the words of the per-question opt-out checkbox in the question box.
+// P10-03 (round P10, review 2.3, 2.4, 2.5): the checkbox is gone — those three tests ("says it in plain words, in
+// sentence case", "says nothing of skipping, an allowance or a plan", "is named for the one question it belongs
+// to") are re-aimed below to what replaced it: the box's words carry no such control.
 
-describe("ASK.notForRecs — the checkbox beside a question", () => {
-  it("says it in plain words, in sentence case", () => {
-    expect(ASK.notForRecs).toBe("Not for recommendations");
-    expect(ASK.notForRecs).not.toMatch(/^[A-Z ]+$/);
-    expect(ASK.notForRecs.slice(1)).toBe(ASK.notForRecs.slice(1).toLowerCase());
+describe("ASK — the question bar's words", () => {
+  it("carries no per-question opt-out, no line names and no 'five questions'", () => {
+    const keys = Object.keys(ASK);
+    expect(keys).not.toEqual(expect.arrayContaining(["notForRecs"]));
+    for (const gone of ["notForRecs", "notForRecsFor", "line", "remove"]) expect(keys).not.toContain(gone);
+    expect(JSON.stringify(ASK)).not.toMatch(/Not for\s+recommendations|five questions|Up\s+to\s+five/i);
   });
 
-  it("says nothing of skipping, an allowance or a plan", () => {
-    expect(ASK.notForRecs).not.toMatch(/\bskip\b|don.t read|\ballowance\b|\bquota\b|\bplan\b|\bupgrade\b/i);
+  it("labels the bar exactly 'What you want to learn about this paper:' and nothing says the old label", () => {
+    expect(ASK.heading).toBe("What you want to learn about this paper:");
+    expect(JSON.stringify(ASK)).not.toContain(["Before", "you read"].join(" "));
   });
 
-  it("is named for the one question it belongs to", () => {
-    expect(ASK.notForRecsFor(2)).toBe("Not for recommendations: question 2");
+  // On a 390-px screen the placeholder shares the bar with Submit; a longer one wrapped and grew the empty bar to two rows.
+  it("has a placeholder short enough to stay on one row beside Submit at 390 px", () => {
+    expect(ASK.placeholder).toBe("What should this paper answer?");
+    expect(ASK.placeholder.length).toBeLessThanOrEqual(32);
+  });
+
+  it("names the dropdown and keeps its group labels and the gist item", () => {
+    expect(ASK.suggestions).toBe("Suggested questions");
+    expect(ASK.fromEarlier).toBe("From your earlier questions");
+    expect(ASK.fromProfile).toBe("From your profile");
+    expect(ASK.chips.gist).toBe("Just get the gist");
+    expect(ASK.submit).toBe("Submit");
   });
 });

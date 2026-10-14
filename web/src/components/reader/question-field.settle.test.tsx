@@ -1,15 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// P2-03 (§1g.11 a): the field settles the questions — the ones a deep report
-// is asked about. P2-08b (§1g.18) timed that to the box as a whole (not every
-// Enter, blur or removal: five questions typed with Enter between them were
-// five deep reports). P7-13 (R11c, the owner's order) takes the guessing out:
-// a set is sent only by what the reader does on purpose — the Submit button, Enter
-// on an empty last line (or the last line of a full box), a × or a tick. Leaving
-// the box settles nothing, and neither does a wait (there is none) or leaving the
-// page. Never on a keystroke, never on the gist toggle. No DOM here: the field
-// runs on the minimal hook runtime and its own handlers are called on the
-// element tree it returns.
+// P2-03 (§1g.11 a): the field settles the question — the one a deep report
+// is asked about. P2-08b (§1g.18) timed that to the box as a whole. P7-13 (R11c, the
+// owner's order) takes the guessing out: it is sent only by what the reader does on
+// purpose. P10-03 (review 2.5): that is the Submit control and Enter — there is one
+// question, so no line to end, and no × or tick any more. Leaving the box settles
+// nothing, and neither does a wait (there is none) or leaving the page. Never on a
+// keystroke, never on the gist pick. No DOM here: the field runs on the minimal hook
+// runtime and its own handlers are called on the element tree it returns.
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { hookRuntime } = await import("@/test-support/hook-runtime");
@@ -22,7 +20,8 @@ import { defaultProfile } from "@/types";
 import { useProfileStore } from "@/store/profile";
 import { useReadingQuestionsStore } from "@/store/reading-questions";
 import { ASK } from "./copy";
-import { QuestionField, enterEndsTheBox, leftTheBox } from "./question-field";
+import { check as step, focus as focusStep, pick, session } from "@/test-support/question-session";
+import { QuestionField, enterAction, leftTheBox } from "./question-field";
 
 const PAPER = "openalex:W1";
 const AT = "2026-10-05T00:00:00.000Z";
@@ -49,7 +48,7 @@ async function field() {
   const all = elements(mounted.value);
   const inputs = all.filter((el) => "data-ask-line" in el.props);
   const section = all.find((el) => el.type === "section")!;
-  const button = (label: string) => all.find((el) => el.type === "button" && (el.props["aria-label"] === label || el.props.children === label));
+  const button = (label: string) => all.find((el) => el.type === "button" && el.props.children === label);
   const submit = () => (button(ASK.submit)!.props.onClick as () => void)();
   /** Focus leaves the box: the section's own blur, with nothing receiving focus. */
   const leave = () => (section.props.onBlur as (e: unknown) => void)({ currentTarget: { contains: () => false }, relatedTarget: null });
@@ -89,26 +88,19 @@ describe("the field settles the questions (P2-03)", () => {
   // removal. P7-13 (R11c): leaving the box no longer settles it, so the test
   // names what does and what does not, through the same pure functions the
   // handlers use. (It also pinned `BOX_IDLE_MS`, the wait after leaving the
-  // box, 1500 ms: that constant is gone with the wait.)
-  it("names what ends the box: Enter on an empty last line or on the last line of a full box — nothing a line does", () => {
+  // box, 1500 ms: that constant is gone with the wait.) P10-03 re-aim of "names what ends
+  // the box: Enter on an empty last line or on the last line of a full box": there is no
+  // last line; Enter submits unless it picks a highlighted item (`enterAction`).
+  it("names what ends the box: Enter (unless it picks an item) and the Submit control — nothing a focus does", () => {
     // Focus moving to another control inside the box is not leaving it.
     expect(leftTheBox({ contains: () => true } as unknown as Node, {} as EventTarget)).toBe(false);
     expect(leftTheBox({ contains: () => false } as unknown as Node, {} as EventTarget)).toBe(true);
     expect(leftTheBox({ contains: () => false } as unknown as Node, null)).toBe(true);
-    // Enter on an empty last line: nothing more to add — the reader is done.
-    expect(enterEndsTheBox(["Q1", ""], 1)).toBe(true);
-    expect(enterEndsTheBox([""], 0)).toBe(true);
-    // Enter in a filled line adds one (or moves on): the reader is not done.
-    expect(enterEndsTheBox(["Q1"], 0)).toBe(false);
-    expect(enterEndsTheBox(["", "Q2"], 0)).toBe(false);
-    expect(enterEndsTheBox(["Q1", "Q2"], 0)).toBe(false);
-    // §1g.21 (5): on the last line of a full five-line box there is no room for
-    // another line, so Enter there is the done gesture — and only there.
-    const five = ["Q1", "Q2", "Q3", "Q4", "Q5"];
-    expect(enterEndsTheBox(five, 4)).toBe(true);
-    expect(enterEndsTheBox(five, 3)).toBe(false);
-    expect(enterEndsTheBox(["Q1", "", "Q3", "Q4", "Q5"], 4)).toBe(false);
-    expect(enterEndsTheBox(["Q1", "Q2", "Q3", "Q4", ""], 4)).toBe(true);
+    // Enter submits; with the dropdown open and an item highlighted it picks that item, which settles nothing.
+    expect(enterAction(false, -1)).toBe("submit");
+    expect(enterAction(true, -1)).toBe("submit");
+    expect(enterAction(true, 0)).toBe("pick");
+    expect(enterAction(false, 0)).toBe("submit");
   });
 
   it("typing writes through to items and settles nothing", async () => {
@@ -120,15 +112,16 @@ describe("the field settles the questions (P2-03)", () => {
     mounted.unmount();
   });
 
-  // P2-08b (§1g.18): used to say Enter settles the line it was pressed in. It
-  // settles nothing now: pressing Enter between questions is how a reader types
-  // five of them, and each settle was a deep report.
-  it("Enter in a line settles nothing, however long the reader then stays", async () => {
+  // P2-08b (§1g.18): used to say Enter settles nothing — pressing Enter between questions was how a reader
+  // typed five of them, and each settle was a deep report. P10-03 re-aim: there is one question, and Enter is
+  // the reader saying it is done, so it settles on the spot (P7-13's Enter on the empty last line).
+  it("Enter settles the question at once: no wait, no timer", async () => {
     const { inputs, mounted } = await field();
     (inputs[0].props.onKeyDown as (e: unknown) => void)({ key: "Enter", preventDefault: () => {} });
-    await sleep(WAIT);
 
-    expect(stored().settled).toBeUndefined();
+    expect(stored().settled).toEqual(["Does tungsten delay rafting?"]);
+    await sleep(WAIT);
+    expect(stored().settled).toEqual(["Does tungsten delay rafting?"]);
     mounted.unmount();
   });
 
@@ -146,28 +139,10 @@ describe("the field settles the questions (P2-03)", () => {
     mounted.unmount();
   });
 
-  // P2-08b (§1g.18): used to say removing a line settles nothing — the old set
-  // stood until the box settled. P5-04 (S3, §1h.15 (c)) rules the × a finished
-  // gesture, like a tick: the focused button leaves with its line, so no blur
-  // ever reached the box and the deleted question's words stayed in the
-  // preference ledger until the box was next left. The × now settles the box as
-  // it stands, at once (`question-field.remove.test.tsx` pins the ledger side);
-  // this test is rewritten to that contract, and what it pinned about leaving
-  // the box afterwards (the settled set is what is left) is unchanged.
-  it("removing a line settles what is left at once; leaving the box afterwards changes nothing", async () => {
-    useReadingQuestionsStore.getState().set(PAPER, ["Does tungsten delay rafting?", "Why 1100 C?"], false, AT);
-    useReadingQuestionsStore.getState().settle(PAPER);
-    const { button, leave, mounted } = await field();
-    (button(ASK.remove(1))?.props.onClick as () => void)();
-
-    expect(stored().items).toEqual(["Why 1100 C?"]);
-    expect(stored().settled).toEqual(["Why 1100 C?"]);
-
-    leave();
-    await sleep(WAIT);
-    expect(stored().settled).toEqual(["Why 1100 C?"]);
-    mounted.unmount();
-  });
+  // P2-08b (§1g.18): used to say removing a line settles nothing, and P5-04 (S3, §1h.15 (c)) ruled the × a
+  // finished gesture that settles at once ("removing a line settles what is left at once; leaving the box
+  // afterwards changes nothing"). P10-03: the × is gone with the lines. Emptying the bar is typing like any other
+  // and settles nothing; that test is re-aimed in `question-field.remove.test.tsx` ("emptying the bar …").
 
   // P7-13 (R11c): replaces "an unmount with no wait pending settles nothing"
   // and "leaving the page during the wait settles at once" (§1g.21 (5)). There
@@ -181,48 +156,46 @@ describe("the field settles the questions (P2-03)", () => {
     expect(stored().items).toEqual(["Does tungsten delay rafting?"]);
   });
 
-  it("the gist toggle settles nothing", async () => {
-    const { button, mounted } = await field();
-    (button(ASK.chips.gist)?.props.onClick as () => void)();
-
-    expect(stored().gist).toBe(true);
-    expect(stored().settled).toBeUndefined();
-    mounted.unmount();
+  // P10-03 re-aim of "the gist toggle settles nothing" and "an example chip fills the next line and settles nothing
+  // until the reader submits (P1-09)": the gist and the examples are the dropdown's items, picked on the scripted reader.
+  it("picking the gist settles nothing", async () => {
+    await session(
+      [focusStep, pick(1), step(() => {
+        expect(stored().gist).toBe(true);
+        expect(stored().settled).toBeUndefined();
+      })],
+      { paperId: PAPER, examples: EXAMPLES },
+    );
   });
 
-  // P2-08b (§1g.18): used to say the chip settles when its line blurs or on
-  // Enter in it. Neither does now; the reader pressing Submit does (P7-13).
-  it("an example chip fills the next line and settles nothing until the reader submits (P1-09)", async () => {
-    const { button, mounted } = await field();
-    (button(EXAMPLE)?.props.onClick as () => void)();
-    expect(stored().items).toEqual(["Does tungsten delay rafting?", EXAMPLE]);
-    expect(stored().settled).toBeUndefined();
-    mounted.unmount();
-
-    // The reader leaves the line the chip filled, or presses Enter in it: nothing.
-    const again = await field();
-    (again.inputs[1].props.onBlur as () => void)();
-    (again.inputs[1].props.onKeyDown as (e: unknown) => void)({ key: "Enter", preventDefault: () => {} });
-    again.leave();
-    await sleep(WAIT);
-    expect(stored().settled).toBeUndefined();
-    again.mounted.unmount();
-
-    // Submit does.
-    const third = await field();
-    third.submit();
-    expect(stored().settled).toEqual(["Does tungsten delay rafting?", EXAMPLE]);
-    third.mounted.unmount();
+  it("an example picked from the dropdown fills the bar and settles nothing until the reader submits (P1-09)", async () => {
+    useReadingQuestionsStore.getState().clear(PAPER);
+    await session(
+      [
+        focusStep,
+        pick(0),
+        step(() => {
+          expect(stored().items).toEqual([EXAMPLE]);
+          expect(stored().settled).toBeUndefined();
+        }),
+        // The reader leaves the bar, or presses Enter after the pick: leaving settles nothing.
+        ({ section }) => (section.props.onBlur as (e: unknown) => void)({ currentTarget: { contains: () => false }, relatedTarget: null }),
+        step(() => expect(stored().settled).toBeUndefined()),
+        // Submit does.
+        ({ submit }) => (submit.props.onClick as () => void)(),
+        step(() => expect(stored().settled).toEqual([EXAMPLE])),
+      ],
+      { paperId: PAPER, examples: EXAMPLES },
+    );
   });
 });
 
-// P7-13 (R11c, §1h.29 Q8): the Submit button settles the questions at once — what
-// × already does — and so does Enter on the empty last line of the box.
+// P7-13 (R11c, §1h.29 Q8): the Submit button settles the question at once, and so does Enter (P10).
 describe("Submit settles the questions at once (P7-13)", () => {
   beforeEach(() => {
     useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null });
     useProfileStore.setState({ profile: { ...defaultProfile } });
-    useReadingQuestionsStore.getState().set(PAPER, ["Does tungsten delay rafting?", "Why 1100 C?"], false, AT);
+    useReadingQuestionsStore.getState().set(PAPER, ["Does tungsten delay rafting?"], false, AT);
   });
 
   const ledgerWrites = () => {
@@ -239,7 +212,7 @@ describe("Submit settles the questions at once (P7-13)", () => {
 
     submit();
 
-    expect(stored().settled).toEqual(["Does tungsten delay rafting?", "Why 1100 C?"]);
+    expect(stored().settled).toEqual(["Does tungsten delay rafting?"]);
     mounted.unmount();
   });
 
@@ -270,10 +243,9 @@ describe("Submit settles the questions at once (P7-13)", () => {
   });
 
   it("registers no pagehide listener, before or after, and a pagehide settles nothing", async () => {
-    const { inputs, section, submit, button, mounted } = await field();
+    const { inputs, section, submit, mounted } = await field();
     (section.props.onFocus as () => void)();
     (inputs[0].props.onChange as (e: unknown) => void)({ target: { value: "Does tungsten delay rafting at 1100 C?" } });
-    (button(ASK.chips.gist)?.props.onClick as () => void)();
     expect(listenerCount("pagehide")).toBe(0);
 
     fireOnWindow("pagehide");
@@ -291,8 +263,8 @@ describe("Submit settles the questions at once (P7-13)", () => {
     leave();
     await sleep(WAIT);
 
-    expect(stored().items).toEqual(["Does tungsten delay rafting at 1100 C?", "Why 1100 C?"]);
-    expect(stored().settled).toEqual(["Does tungsten delay rafting?", "Why 1100 C?"]);
+    expect(stored().items).toEqual(["Does tungsten delay rafting at 1100 C?"]);
+    expect(stored().settled).toEqual(["Does tungsten delay rafting?"]);
     mounted.unmount();
   });
 
@@ -303,7 +275,7 @@ describe("Submit settles the questions at once (P7-13)", () => {
 
     submit();
 
-    expect(stored().settled).toEqual(["Does tungsten delay rafting?", "Why 1100 C?"]);
+    expect(stored().settled).toEqual(["Does tungsten delay rafting?"]);
     expect(writes.count()).toBe(0);
     writes.stop();
     mounted.unmount();
