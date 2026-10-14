@@ -99,10 +99,12 @@ describe("AnchorMarker — the square, or the line", () => {
     expect(html).not.toContain(PASSAGE_LOST_LINE);
   });
 
-  it("says the line beside the heading and has no blue square to go to the old paragraph when the passage is lost", () => {
+  // P10-39 (§1c, re-aimed): the line is no longer the marker's — the note editor draws it after the heading's words
+  // (note-tags.lostline.test.tsx); the marker keeps the quiet square and the rest of this test.
+  it("has no blue square to go to the old paragraph when the passage is lost (the line follows the heading, drawn by the editor)", () => {
     const go = vi.fn();
     const html = renderToStaticMarkup(createElement(AnchorMarker, { lost: true, n: 2, onGo: go }));
-    expect(html).toContain(PASSAGE_LOST_LINE);
+    expect(html).not.toContain(PASSAGE_LOST_LINE);
     expect(html).not.toContain('aria-label="Go to the passage"');
     expect(html.toLowerCase()).not.toContain(SQUARE_BLUE);
     expect(go).not.toHaveBeenCalled();
@@ -118,7 +120,7 @@ describe("AnchorMarker — the square, or the line", () => {
     expect(open).toHaveBeenCalledTimes(1);
     const bare = renderToStaticMarkup(createElement(AnchorMarker, { lost: true, n: 2, onGo: () => {} }));
     expect(bare).not.toContain("<button");
-    expect(bare).toContain(PASSAGE_LOST_LINE);
+    expect(bare).toContain("<span");
   });
 });
 
