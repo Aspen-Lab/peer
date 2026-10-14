@@ -97,6 +97,10 @@ describe("the editor's keys use them (wiring)", () => {
     expect(code).toMatch(/const next = blocks\[i \+ 1\];\s*if \(!next \|\| !isTextual\(next\.type\) \|\| next\.id === hiddenBlockId\) return;/);
   });
 
+  it("the move-block key does not carry the first visible block above the hidden one", () => {
+    expect(code).toMatch(/if \(e\.key === "ArrowUp" && blocks\[i - 1\]\?\.id === hiddenBlockId\) return;/);
+  });
+
   it("the title field's Enter, with no visible block, adds one after the hidden block", () => {
     expect(code).toContain("insertAt(slotAfterHidden(docRef.current.blocks, hiddenBlockId), added)");
   });

@@ -25,9 +25,10 @@ export default function NotePage() {
       {!ready ? null : note ? (
         // Keyed by the note: moving to another note starts a fresh editor
         // rather than carrying one note's state into the next. P10-21 (X-B3):
-        // the title block that repeats the title field is not drawn here.
+        // the title block that repeats the title field is not drawn here, and (P10-23) the editor is told which it is,
+        // so no key moves the caret into it or joins text into it.
         <TitleOnce key={note.id} note={note}>
-          <NoteEditor key={note.id} note={note} />
+          {(hiddenBlockId) => <NoteEditor key={note.id} note={note} hiddenBlockId={hiddenBlockId} />}
         </TitleOnce>
       ) : (
         <EmptyState

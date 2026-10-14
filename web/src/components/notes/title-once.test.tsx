@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { createElement } from "react";
+import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { block } from "@/lib/notes/blocks";
@@ -52,6 +52,17 @@ describe("TitleOnce — the page hides the repeated block, only that one", () =>
     expect(out).toContain(`[data-row="${reading.blocks[0].id}"]{display:none}`);
   });
 
+  it("hands a function child the id it hides, or null (P10-23)", () => {
+    const reading = note();
+    let got: string | null | undefined;
+    // a function child is TitleOnce's own; createElement's overloads only know ReactNode children
+    const spy = ((id: string | null) => { got = id; return createElement("p", null, "x"); }) as unknown as ReactNode;
+    renderToStaticMarkup(createElement(TitleOnce, { note: reading }, spy));
+    expect(got).toBe(reading.blocks[0].id);
+    renderToStaticMarkup(createElement(TitleOnce, { note: note({ title: "Renamed" }) }, spy));
+    expect(got).toBeNull();
+  });
+
   it("writes no rule for a note whose first block is not its title", () => {
     expect(html(note({ title: "Renamed" }))).not.toContain("display:none");
     expect(html(note({ blocks: [block("text", "x")] }))).not.toContain("display:none");
@@ -69,7 +80,8 @@ describe("the notes page", () => {
 
   it("hands the editor to TitleOnce, keyed by the note, and leaves the window's NoteEditor alone", () => {
     expect(page).toContain('import { TitleOnce } from "@/components/notes/title-once"');
-    expect(page).toMatch(/<TitleOnce key=\{note\.id\} note=\{note\}>\s*<NoteEditor key=\{note\.id\} note=\{note\} \/>\s*<\/TitleOnce>/);
+    // Re-aimed (§1c, P10-23): TitleOnce hands the editor the id it hides, as a function child.
+    expect(page).toMatch(/<TitleOnce key=\{note\.id\} note=\{note\}>\s*\{\(hiddenBlockId\) => <NoteEditor key=\{note\.id\} note=\{note\} hiddenBlockId=\{hiddenBlockId\} \/>\}\s*<\/TitleOnce>/);
     expect(read("src/components/notes/notes-window.tsx")).not.toContain("TitleOnce");
   });
 });

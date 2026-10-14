@@ -23,12 +23,20 @@ export function titleBlockId(note: Pick<Note, "title" | "blocks">): string | nul
   return /^[\w-]+$/.test(first.id) ? first.id : null;
 }
 
-export function TitleOnce({ note, children }: { note: Pick<Note, "title" | "blocks">; children?: ReactNode }) {
+/** P10-23: the children may be a function of the id that is hidden (null when none), so the editor can be told: a
+ *  hidden block is out of the editor's reach (`NoteEditor`'s `hiddenBlockId`), not only out of sight. */
+export function TitleOnce({
+  note,
+  children,
+}: {
+  note: Pick<Note, "title" | "blocks">;
+  children?: ReactNode | ((hiddenBlockId: string | null) => ReactNode);
+}) {
   const [hidden] = useState(() => titleBlockId(note));
   return (
     <>
       {hidden && <style>{`[data-row="${hidden}"]{display:none}`}</style>}
-      {children}
+      {typeof children === "function" ? children(hidden) : children}
     </>
   );
 }

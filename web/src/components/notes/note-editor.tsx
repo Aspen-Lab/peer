@@ -458,10 +458,32 @@ const Row = memo(function Row({ block: b, first, number, editing, sources, dragg
 
 // ── The editor ────────────────────────────────────────────────────────────
 
+/** P10-23: the neighbouring textual block in `step`'s direction from index `from`, skipping the hidden block (the notes
+ *  page hides a reading note's title block, P10-21): the caret is never sent into a block the reader cannot see. -1 when
+ *  there is none (the editor then goes to the title field, or stays). */
+export function nearestVisibleTextual(blocks: readonly Block[], from: number, step: 1 | -1, hiddenBlockId?: string | null): number {
+  for (let i = from + step; i >= 0 && i < blocks.length; i += step) {
+    if (isTextual(blocks[i].type) && blocks[i].id !== hiddenBlockId) return i;
+  }
+  return -1;
+}
+
+/** P10-23: where the first block the reader writes goes when the title field's Enter finds none: after the hidden
+ *  block when it stands at the top (so the title block stays the note's first), else at 0. */
+export function slotAfterHidden(blocks: readonly Block[], hiddenBlockId?: string | null): number {
+  return hiddenBlockId && blocks[0]?.id === hiddenBlockId ? 1 : 0;
+}
+
+/** P10-23: the footer's count of words, with the hidden block (the title the page already says once) left out. */
+export function visibleWordCount(note: Pick<Note, "blocks" | "sources">, hiddenBlockId?: string | null): number {
+  return wordCount(hiddenBlockId ? { ...note, blocks: note.blocks.filter((b) => b.id !== hiddenBlockId) } : note);
+}
+
 export function NoteEditor({
   note,
   compact = false,
   onDoc,
+  hiddenBlockId = null,
 }: {
   note: Note;
   /** P10-09b: the editor as the notes window holds it — the blocks and the toolbar alone, no rail, no page bar, no
@@ -469,6 +491,10 @@ export function NoteEditor({
   compact?: boolean;
   /** The editor's current copy, after each change — for the window's export, which cannot wait for the save. */
   onDoc?: (doc: { title: string; blocks: Block[]; sources: Record<string, Source> }) => void;
+  /** P10-23: a block the page does not draw (P10-21's title block, hidden by a rule on its row). The editor still holds
+   *  and saves it, but it is out of reach: the caret never moves into it, no key joins text into or out of it, and the
+   *  word count leaves it out. The window does not pass one. */
+  hiddenBlockId?: string | null;
 }) {
   const router = useRouter();
   const saveNote = useNotesStore((s) => s.save);
@@ -638,11 +664,8 @@ export function NoteEditor({
   }, []);
 
   const indexOf = (id: string) => docRef.current.blocks.findIndex((b) => b.id === id);
-  const nearestTextual = (from: number, step: 1 | -1): number => {
-    const blocks = docRef.current.blocks;
-    for (let i = from + step; i >= 0 && i < blocks.length; i += step) if (isTextual(blocks[i].type)) return i;
-    return -1;
-  };
+  const nearestTextual = (from: number, step: 1 | -1): number =>
+    nearestVisibleTextual(docRef.current.blocks, from, step, hiddenBlockId);
   const patch = (id: string, change: Partial<Block>) => {
     setBlocks(docRef.current.blocks.map((b) => (b.id === id ? { ...b, ...change } : b)));
   };
@@ -1193,6 +1216,8 @@ export function NoteEditor({
         e.preventDefault();
         const gap = e.key === "ArrowUp" ? i - 1 : i + 2;
         if (gap < 0 || gap > blocks.length) return;
+        // The first visible block does not move above the hidden one, as the first block does not move above the top.
+        if (e.key === "ArrowUp" && blocks[i - 1]?.id === hiddenBlockId) return;
         setBlocks(moveBlock(blocks, i, gap));
         focusBlock(id, { plain: sel.from, to: sel.to });
         return;
@@ -1244,11 +1269,12 @@ export function NoteEditor({
             focusBlock(id, 0);
             return;
           }
-          if (i === 0) {
-            if (!b.text && blocks.length === 1) {
+          // The first block, or the first the page draws (the one before it is hidden): nothing to join into.
+          if (i === 0 || blocks[i - 1].id === hiddenBlockId) {
+            if (!b.text && blocks.filter((x) => x.id !== hiddenBlockId).length === 1) {
               e.preventDefault();
               titleRef.current?.focus();
-            }
+            } else if (i > 0) e.preventDefault();
             return;
           }
           const prev = blocks[i - 1];
@@ -1270,7 +1296,7 @@ export function NoteEditor({
         case "Delete": {
           if (!collapsed || sel.to !== sel.len) return;
           const next = blocks[i + 1];
-          if (!next || !isTextual(next.type)) return;
+          if (!next || !isTextual(next.type) || next.id === hiddenBlockId) return;
           e.preventDefault();
           const both = joined(b, next);
           setBlocks(blocks.filter((x) => x.id !== next.id).map((x) => (x.id === id ? { ...x, text: both.text } : x)));
@@ -1410,7 +1436,7 @@ export function NoteEditor({
       if (first >= 0) focusBlock(docRef.current.blocks[first].id, "start");
       else {
         const added = block("text");
-        insertAt(0, added);
+        insertAt(slotAfterHidden(docRef.current.blocks, hiddenBlockId), added);
         focusBlock(added.id, "start");
       }
     }
@@ -1453,7 +1479,7 @@ export function NoteEditor({
 
   // ── Derived ──
   const refs = useMemo(() => citedKeys(doc).map((k) => doc.sources[k]).filter((s): s is Source => Boolean(s)), [doc]);
-  const words = useMemo(() => wordCount(doc), [doc]);
+  const words = useMemo(() => visibleWordCount(doc, hiddenBlockId), [doc, hiddenBlockId]);
   const editingBlock = editing ? doc.blocks.find((b) => b.id === editing) : undefined;
   return (
     // Three columns where the window allows: the notes rail, the note, the
