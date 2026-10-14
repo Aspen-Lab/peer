@@ -619,7 +619,7 @@ function isWhole(n: unknown): n is number {
 
 /** The number a "Figure 3" / "Fig 3" label names, or null where the figure
  *  route has nothing to look for: "Figure IV", "Figure S3", "Table 1". */
-function pictureNumber(label: string): number | null {
+export function pictureNumber(label: string): number | null {
   const m = /^fig(?:ure)?\.?\s*([1-9]\d{0,2})$/i.exec(label.trim());
   return m ? Number(m[1]) : null;
 }

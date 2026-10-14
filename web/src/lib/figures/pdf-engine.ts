@@ -59,6 +59,10 @@ export interface PdfEngineOptions {
   /** Return only the region(s) whose caption opens with this figure number:
    *  "Figure 3", "Fig. 3", "3" and "3a" all name figure 3 / 3a. */
   label?: string;
+  /** P10-34: find and size the regions, draw none. Each figure comes back with its `width` and `height` (the
+   *  pixels the render would have) and an empty `png`; the regions, the captions, the clip, the scale and the
+   *  stretch are the render's own, so the size is the picture's. */
+  measureOnly?: boolean;
 }
 
 export interface PdfEngineFigure {
@@ -72,8 +76,12 @@ export interface PdfEngineFigure {
   caption: string;
   /** "image" (an embedded raster) or "drawing" (clustered vector paths). */
   kind: string;
-  /** The rendered region as PNG bytes. */
+  /** The rendered region as PNG bytes (empty when the call only measured). */
   png: Uint8Array;
+  /** P10-34: the picture's size in pixels — the PNG's own width and height, or, when only measured, what they
+   *  would be. */
+  width: number;
+  height: number;
   /** The detected region on its page, [x0, y0, x1, y1] in points from the
    *  page's top-left, before the 10 pt padding the render adds. */
   box?: [number, number, number, number];
@@ -539,6 +547,7 @@ function renderRegion(
   pageRect: Rect,
   rect: Rect,
   stretch: number,
+  measureOnly = false,
 ): { png: Uint8Array; width: number; height: number } | null {
   const clip: Rect = [
     Math.max(pageRect[0], rect[0] - CLIP_PADDING),
@@ -569,6 +578,9 @@ function renderRegion(
     scale *= 0.99; // rounding outward pushed a capped render a few pixels over
   }
   if (bbox[2] - bbox[0] < 1 || bbox[3] - bbox[1] < 1 || (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]) > MAX_PIXELS) return null;
+
+  // P10-34: the size the pixmap below would have (it is made with this `bbox`), without drawing it.
+  if (measureOnly) return { png: new Uint8Array(0), width: bbox[2] - bbox[0], height: bbox[3] - bbox[1] };
 
   const matrix: Matrix = [scale * gainX, 0, 0, scale * gainY, 0, 0];
   const pixmap = new mupdf.Pixmap(mupdf.ColorSpace.DeviceRGB, bbox, false);
@@ -675,7 +687,7 @@ async function readDocument(
         break;
       }
       try {
-        const found = readPage(mupdf, doc.loadPage(pageIndex), pageIndex, wanted, opts.maxFigures - figures.length, deadline);
+        const found = readPage(mupdf, doc.loadPage(pageIndex), pageIndex, wanted, opts.maxFigures - figures.length, deadline, opts.measureOnly === true);
         for (const figure of found.figures) figures.push({ ...figure, ordinal: figures.length });
         if (found.outOfTime) outOfTime = true;
       } catch (error) {
@@ -717,6 +729,7 @@ function readPage(
   wanted: string | null,
   room: number,
   deadline: number,
+  measureOnly: boolean,
 ): { figures: Omit<PdfEngineFigure, "ordinal">[]; outOfTime: boolean } {
   const figures: Omit<PdfEngineFigure, "ordinal">[] = [];
   try {
@@ -729,7 +742,7 @@ function readPage(
       if (performance.now() > deadline) return { figures, outOfTime: true };
       let rendered: ReturnType<typeof renderRegion> = null;
       try {
-        rendered = renderRegion(mupdf, page, pageRect, candidate.rect, candidate.stretch);
+        rendered = renderRegion(mupdf, page, pageRect, candidate.rect, candidate.stretch, measureOnly);
       } catch (error) {
         console.warn("[figures/pdf-engine] a region would not render:", error);
       }
@@ -739,6 +752,8 @@ function readPage(
         caption: candidate.caption ?? "",
         kind: candidate.kind,
         png: rendered.png,
+        width: rendered.width,
+        height: rendered.height,
         box: [roundTo(candidate.rect[0]), roundTo(candidate.rect[1]), roundTo(candidate.rect[2]), roundTo(candidate.rect[3])],
       });
     }
@@ -750,4 +765,20 @@ function readPage(
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * P10-34: the picture the figure route would draw for "Figure `fig`" on `page`, measured and not drawn — its
+ * width and height in pixels (the PNG's own), or null where the route would find nothing. The same call the
+ * route makes (one page, one label), so the size is the route's picture's; nothing is rendered, so it costs
+ * the page's analysis and not the render.
+ */
+export async function measurePdfFigure(
+  bytes: Uint8Array,
+  page: number,
+  fig: number,
+): Promise<{ width: number; height: number } | null> {
+  const { figures } = await extractPdfFigures(bytes, { maxPages: 300, maxFigures: 1, onlyPage: page, label: `Figure ${fig}`, measureOnly: true });
+  const found = figures[0];
+  return found && found.width > 0 && found.height > 0 ? { width: found.width, height: found.height } : null;
 }

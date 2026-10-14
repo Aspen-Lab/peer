@@ -25,6 +25,7 @@ import { cleanPaperText } from "@/lib/text/clean";
 import { buildOutline, gutterPrior, linesOfPageWith, type PdfOutline, type PdfPageText } from "./pdf-outline";
 import { dropStrayHeadings, withSectionIds } from "./html-text";
 import type { ExtractedDocument, ExtractedSection, ExtractedFigureCaption } from "./html-text";
+import { pictureNumber } from "./reading";
 
 const FETCH_TIMEOUT_MS = 12_000;
 const MAX_PDF_BYTES = 18_000_000;
@@ -200,6 +201,50 @@ function normalize(extractor: PdfOutline): ExtractedDocument {
   };
 }
 
+/** P10-34: the longest the measuring of a paper's figures may take; what is not measured by then carries no size. */
+const MEASURE_BUDGET_MS = 10_000;
+/** …and the most figures it measures (the engine's own ceiling for a document is 12). */
+const MEASURE_MAX = 24;
+
+/**
+ * P10-34 (BACKLOG-89): each figure's caption carries its picture's width and height in pixels, measured from the
+ * PDF's own bytes — already in hand — by the figure engine the figure route draws with (the same page, the same
+ * label, so the same region, the same clip and scale), without drawing. The page then draws the figure's box
+ * before the picture arrives (`figureBoxStyle`). A figure the engine finds nothing for, a caption with no
+ * "Figure N" number or no page, a paper past the budget, an engine that will not load: no size, and the page's
+ * fixed 32rem room — never a failed reading.
+ */
+export async function withFigureSizes(doc: ExtractedDocument, bytes: Uint8Array): Promise<ExtractedDocument> {
+  const targets = doc.figureCaptions.filter((cap) => typeof cap.page === "number" && pictureNumber(cap.label) !== null);
+  if (targets.length === 0) return doc;
+  try {
+    const { measurePdfFigure } = await import("@/lib/figures/pdf-engine");
+    const deadline = Date.now() + MEASURE_BUDGET_MS;
+    const sizes = new Map<string, { width: number; height: number } | null>();
+    for (const cap of targets.slice(0, MEASURE_MAX)) {
+      const key = `${cap.page}/${pictureNumber(cap.label)}`;
+      if (sizes.has(key)) continue;
+      if (Date.now() > deadline) break;
+      try {
+        sizes.set(key, await measurePdfFigure(bytes, cap.page as number, pictureNumber(cap.label) as number));
+      } catch (err) {
+        console.warn("[papers/pdf-text] a figure could not be measured:", err instanceof Error ? err.message : String(err));
+        sizes.set(key, null);
+      }
+    }
+    return {
+      ...doc,
+      figureCaptions: doc.figureCaptions.map((cap) => {
+        const size = typeof cap.page === "number" ? sizes.get(`${cap.page}/${pictureNumber(cap.label)}`) : null;
+        return size ? { ...cap, width: size.width, height: size.height } : cap;
+      }),
+    };
+  } catch (err) {
+    console.warn("[papers/pdf-text] figures were not measured:", err instanceof Error ? err.message : String(err));
+    return doc;
+  }
+}
+
 /**
  * Download a legal PDF and extract sectioned text + figure captions. The
  * URL path: pdf.js over a server-safe build (`unpdf`), so it reads the same
@@ -219,7 +264,7 @@ export async function tryExtractPdfText(url: string): Promise<PdfTextResult> {
       // "no full text" as if the paper had none.
       return { ok: false, reason: outline.reason ?? "no-sections" };
     }
-    return { ok: true, doc: normalize(outline) };
+    return { ok: true, doc: await withFigureSizes(normalize(outline), download.bytes) };
   } catch (err) {
     console.warn("[papers/pdf-text] read failed:", err);
     return { ok: false, reason: String(err) };
@@ -260,7 +305,7 @@ export async function extractPdfTextFromBytes(bytes: Buffer): Promise<PdfTextRes
     if (!outline.sections || outline.sections.length === 0) {
       return { ok: false, reason: outline.reason ?? "no-sections", page1Text: page1Text || undefined };
     }
-    return { ok: true, doc: normalize(outline), page1Text: page1Text || undefined };
+    return { ok: true, doc: await withFigureSizes(normalize(outline), bytes), page1Text: page1Text || undefined };
   } catch (err) {
     // The file is not a PDF pdf.js can open. Not a scan: say it failed. The
     // error names the problem, never the text.

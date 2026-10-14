@@ -27,8 +27,8 @@ function paperPdf(): Buffer {
     shapes: barChart(110, 250),
   };
   const third: FigurePage = {
-    text: [["2. Results", 72, 80, 13], ...bodyText(["More invented prose on the third page, long enough to read as a paragraph of text."], 100), ["Figure 2. A synthetic wide panel of another ratio.", 100, 262, 9]],
-    shapes: panel(100, 100 + 40, 370, 100),
+    text: [["2. Results", 72, 80, 13], ...bodyText(["More invented prose on the third page, long enough to read as a paragraph of text."], 100), ["Figure 2. A synthetic wide panel of another ratio.", 100, 280, 9]],
+    shapes: panel(100, 130, 370, 130),
   };
   return figurePdf([first, second, third]);
 }
@@ -50,6 +50,8 @@ describe("a placed figure carries its picture's size (P10-34)", () => {
       const { figures } = await extractPdfFigures(new Uint8Array(pdf), { maxPages: 300, maxFigures: 1, onlyPage: cap.page, label: `Figure ${fig}` });
       const info = pngInfo(figures[0].png);
       expect(Math.abs(ratio(cap.width!, cap.height!) / ratio(info.width, info.height) - 1)).toBeLessThanOrEqual(0.02);
+      // measured, not drawn, yet the picture's own pixels
+      expect([cap.width, cap.height]).toEqual([info.width, info.height]);
       ratios.push(ratio(cap.width!, cap.height!));
     }
     // two figures of different ratios: the sizes are each figure's own, not one shared box
