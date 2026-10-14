@@ -509,7 +509,7 @@ describe("the stack on short screens (P10-31, BACKLOG-86)", () => {
   });
 
   it("with the explain window and four windows on a screen under 560 px high, no header is lower than the screen", () => {
-    // At 480 the fourth header's foot (466) passes the column's foot (440) by 14 px, into the legend's strip, and stays 14 px above the
+    // At 480 the fourth header's foot (466) passes the column's foot (440) by 26 px, into the legend's strip, and stays 14 px above the
     // screen's end (BACKLOG-86's remainder: a header over the legend's strip, never one off-screen).
     const four = [stk(1, 1), stk(2, 2), stk(3, 3), nts(4)];
     for (const height of [520, 480]) {
