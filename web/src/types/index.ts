@@ -241,8 +241,8 @@ export interface UserProfile {
   currentChallenges?: string;
   /**
    * P5-01 (blueprint P5): questions the reader brings to most papers — up to
-   * five, 200 characters each, kept as typed. They show as one chip group on a
-   * paper's "Before you read" box and are never filled in. Browser only: the
+   * five, 500 characters each, kept as typed. They show as one group in the dropdown
+   * of a paper's question bar and are never filled in. Browser only: the
    * sync's payload leaves the field out (`remoteProfilePayload`). Read through
    * `cleanQuestions`; absent means none.
    */

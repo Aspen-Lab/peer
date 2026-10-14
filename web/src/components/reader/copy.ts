@@ -112,18 +112,21 @@ export const TABS = {
 } as const;
 
 /**
- * P1-03 (§1f.10): "Before you read" — the question field.
+ * P1-03 (§1f.10): the question field, labelled since round P10 (ruling §1h.78; the owner's
+ * review 2.4) "What you want to learn about this paper:".
  *
- * P1-09 (user decision §1a.7, ruling §1f.20): the example tags come only from
- * the reader — questions they wrote on earlier papers, and their profile
- * turned into questions by the templates below. The blueprint's generic
- * chips are gone. "Just get the gist" is a reading mode, not an example, and
- * stays as a control of its own.
+ * P1-09 (user decision §1a.7, ruling §1f.20): the examples come only from the reader —
+ * questions they wrote on earlier papers, and their profile turned into questions by the
+ * templates below. The blueprint's generic examples are gone. "Just get the gist" is a reading
+ * mode, not an example, and is the dropdown's last item.
  */
 export const ASK = {
-  heading: "Before you read",
-  placeholder: "What do you want this paper to answer?",
-  hint: "Up to five questions. Peer points you to the sections that mention them.",
+  heading: "What you want to learn about this paper:",
+  placeholder: "What should this paper answer?",
+  /** Read to a screen reader with the bar; not drawn. */
+  hint: "Peer points you to the sections that mention it.",
+  /** The dropdown's name. */
+  suggestions: "Suggested questions",
   fromEarlier: "From your earlier questions",
   fromProfile: "From your profile",
   /** The profile, asked as questions (`lib/reader/question-examples.ts`). */
@@ -136,28 +139,22 @@ export const ASK = {
   chips: {
     gist: "Just get the gist",
   },
-  line: (n: number) => `Question ${n}`,
-  remove: (n: number) => `Remove question ${n}`,
   /** The count a long question shows (P7-13: 500 is `MAX_QUESTION_CHARS`). */
   counter: (n: number) => `${n}/500`,
-  /** P7-13 (R11c): the button that sends the questions — the only thing that does,
-   *  besides Enter on an empty last line, a × and a tick. */
+  /** P7-13 (R11c): the control, inside the bar, that sends the question — the only thing that
+   *  does, besides Enter. */
   submit: "Submit",
-  /** P5-02: the checkbox beside a question. Ticked, that question's words never
-   *  enter what Peer learns for your feed. */
-  notForRecs: "Not for recommendations",
-  notForRecsFor: (n: number) => `Not for recommendations: question ${n}`,
 } as const;
 
 /**
- * P5-01 (blueprint P5): standing questions — the ones a reader brings to most
- * papers. Kept on the Profile; on a paper they are one chip group under
- * "Before you read" and are never filled in.
+ * P5-01 (blueprint P5): standing questions — the ones a reader brings to most papers. Kept on
+ * the Profile; on a paper they are one group in the question bar's dropdown and are never
+ * filled in.
  */
 export const STANDING = {
   label: "Standing questions",
   chipGroup: "Your standing questions",
-  hint: "Up to five questions you bring to most papers. On a paper they show as buttons under \u201cBefore you read\u201d; Peer never fills one in for you.",
+  hint: "Questions you bring to most papers, five at most. On a paper they are listed under the question bar while you type; Peer never fills one in for you.",
   add: "Add a question",
   placeholder: "A question you bring to most papers",
   line: (n: number) => `Standing question ${n}`,

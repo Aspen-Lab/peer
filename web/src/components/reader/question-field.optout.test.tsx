@@ -34,12 +34,10 @@ import { settleQuestions } from "./question-field";
 const PAPER = "openalex:W7";
 const AT = "2026-10-07T00:00:00.000Z";
 const A = "Does annealing coarsen the grain boundaries?";
-const B = "Is the electrolyte stable against dendrites?";
 
 const session = (script: Step[]) => run(script, { paperId: PAPER });
 const ledger = () => useProfileStore.getState().profile.preferenceLedger;
 const terms = () => questionTermsOf(ledger(), PAPER).sort();
-const storedEntry = () => useReadingQuestionsStore.getState().byPaper[PAPER];
 
 const realRecord = useProfileStore.getState().recordQuestionTerms;
 

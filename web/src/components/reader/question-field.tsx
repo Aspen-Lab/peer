@@ -1,41 +1,40 @@
 "use client";
 
-// "Before you read" — what the reader wants from this paper (P1-03, ruling
-// §1f.10; blueprint §3.1 ① 问).
+// "What you want to learn about this paper:" — the one question a reader brings to a paper
+// (P1-03, ruling §1f.10; blueprint §3.1 ① 问; round P10, ruling §1h.78, the owner's review 2.2–2.7).
 //
-// Asked per paper, and it may be left empty: with no question it is one
-// quiet line — a label and a box — and nothing else, and the page below
-// is the page it was. Up to five questions, one per line; Enter adds a line.
-// P7-13 (R11a): a line is a textarea that grows with its text, and takes 500
-// characters (`MAX_QUESTION_CHARS`), so a long question is read whole.
-// The chips are suggestions, shown while the field has focus or holds a
-// question, and they only ever fill a line when clicked — never by
-// themselves. P1-09 (§1a.7, §1f.20): they are the reader's own — questions
-// from earlier papers, and the profile asked as questions — built by the
-// page (`lib/reader/question-examples.ts`); "Just get the gist" sits after
-// them as a reading mode of its own.
+// Asked per paper, and it may be left empty: the page below is the page it was. P10: ONE question,
+// in ONE bar — a search bar, not a strip of tags. A bordered, raised field the full width of the
+// column, one row at rest, with the Submit control inside its right end; Enter submits. P7-13
+// (R11a): the bar is a textarea that grows with its text and takes 500 characters
+// (`MAX_QUESTION_CHARS`), so a long question is read whole; a pasted line break is folded to a space.
 //
-// The questions are kept in this browser (`store/reading-questions.ts`); the
-// route that reads them (`lib/papers/reading-map.ts`) runs on this page, and
-// the settled ones travel with the one deep-report request that answers
-// them (P2-03, §1g.11). The field keeps its lines in local state and writes them
-// through; it reads the store once, when it mounts (the page mounts it per
-// paper, after the stores have loaded).
+// The suggestions are a dropdown, open under the bar only while the field has focus and the
+// question is not settled — the text differs from the last submitted question, or nothing was
+// submitted — and closed after Submit, on blur and on Escape. They are the reader's own
+// (P1-09, §1a.7, §1f.20): questions from earlier papers, the profile asked as questions
+// (`lib/reader/question-examples.ts`), the standing questions (P5-01), and, last and set apart,
+// "Just get the gist", a reading mode of its own. Picking one fills the bar and never submits.
 //
-// P7-13 (R11c, the owner's order): the reader says when the questions are done.
-// A Submit button settles them at once, as Enter on an empty last line, a × and a
-// tick do; leaving the box, a wait after leaving it and leaving the page settle
-// nothing any more.
+// The question is kept in this browser (`store/reading-questions.ts`); the route that reads it
+// (`lib/papers/reading-map.ts`) runs on this page, and the settled one travels with the one
+// deep-report request that answers it (P2-03, §1g.11). The field keeps its text in local state
+// and writes it through; it reads the store once, when it mounts (the page mounts it per paper,
+// after the stores have loaded). A reader who stored several questions before round P10 sees the
+// first; the rest stay in storage until the reader first changes the bar, when the stored list
+// becomes the one question.
 //
-// This project's tests have no DOM: what the field shows is tested by
-// rendering it, and what its handlers do through the pure functions below.
+// P7-13 (R11c): the reader says when the question is done — the Submit control or Enter. Leaving
+// the box, a wait and leaving the page settle nothing. A submit with the text already submitted
+// does nothing.
+//
+// This project's tests have no DOM: what the field shows is tested by rendering it, and what its
+// handlers do through the pure functions below and the scripted hook runtime.
 
 import { useEffect, useRef, useState } from "react";
 import {
   MAX_QUESTION_CHARS,
-  MAX_QUESTIONS,
   cleanQuestions,
-  notForRecommendations,
   settledQuestions,
   useReadingQuestionsStore,
   type PaperQuestions,
@@ -44,25 +43,30 @@ import { useProfileStore } from "@/store/profile";
 import { questionTerms } from "@/lib/preferences/question-terms";
 import { ASK, ROUTE, STANDING } from "./copy";
 
-/** Past this many characters a line shows its count (P7-13: 400 of the 500). */
+/** Past this many characters the bar shows its count (P7-13: 400 of the 500). */
 const COUNTER_FROM = 400;
 
 /**
- * P7-13 (R11a): a pasted line break becomes a space. A line of the box is one
- * question; an `<input>` stripped a newline on its own, a textarea keeps it.
+ * P7-13 (R11a): a pasted line break becomes a space. The bar holds one question; an `<input>`
+ * stripped a newline on its own, a textarea keeps it.
  */
 export function oneLine(text: string): string {
   return text.replace(/\s*[\r\n\u2028\u2029]+\s*/g, " ");
 }
 
 /**
- * P7-13 (R11a): the line's height follows its content, as the explain box's
- * input does (`explain-box.tsx`). Reset to `auto` first so it can shrink, then
- * take `scrollHeight` plus the border the box adds around it. A box that is not
- * laid out (hidden, `scrollHeight` 0) keeps the height it had.
+ * P7-13 (R11a): the bar's height follows its content, as the explain box's input does
+ * (`explain-box.tsx`). Reset to `auto` first so it can shrink, then take `scrollHeight` plus the
+ * border the box adds around it. A box that is not laid out (hidden, `scrollHeight` 0) keeps the
+ * height it had.
  */
 export function fitHeight(el: HTMLTextAreaElement | null | undefined): void {
   if (!el?.style) return;
+  // An empty bar is one row, whatever its placeholder: a placeholder that wraps on a narrow screen must not grow it.
+  if (el.value === "") {
+    el.style.height = "";
+    return;
+  }
   const before = el.style.height;
   el.style.height = "auto";
   const content = el.scrollHeight;
@@ -73,7 +77,7 @@ export function fitHeight(el: HTMLTextAreaElement | null | undefined): void {
   el.style.height = `${content + (el.offsetHeight - el.clientHeight)}px`;
 }
 
-/** An example tag: a click puts `text` on the next empty line. */
+/** An example in the dropdown: picking it puts `text` in the bar. */
 export interface Chip {
   label: string;
   text: string;
@@ -90,51 +94,14 @@ export interface ExampleGroupProp {
   items: readonly string[];
 }
 
-/** While the field has focus, holds a question, or the gist is chosen. */
-export function showChips({ focused, lines, gist }: { focused: boolean; lines: readonly string[]; gist: boolean }): boolean {
-  return focused || gist || lines.some((line) => line.trim().length > 0);
-}
-
 /** Typing any question turns the gist off. */
 export function nextGist(gist: boolean, lines: readonly string[]): boolean {
   return gist && !lines.some((line) => line.trim().length > 0);
 }
 
-/** Enter on line `index`: a new line after it when it holds something and
- *  there is room; an empty line that already exists is used instead. */
-export function addLineAfter(lines: readonly string[], index: number): { lines: string[]; focus: number } {
-  const copy = [...lines];
-  const empty = copy.findIndex((line, i) => i !== index && line.trim() === "");
-  if (empty >= 0) return { lines: copy, focus: empty };
-  if (!copy[index]?.trim() || copy.length >= MAX_QUESTIONS) return { lines: copy, focus: index };
-  copy.splice(index + 1, 0, "");
-  return { lines: copy, focus: index + 1 };
-}
-
-/** The last line removed leaves one empty line to type into. */
-export function removeLine(lines: readonly string[], index: number): string[] {
-  const rest = lines.filter((_, i) => i !== index);
-  return rest.length > 0 ? rest : [""];
-}
-
-/** A chip's text on the next empty line, or a new line when there is room;
- *  `focus: -1` when all five are taken. */
-export function fillNextLine(lines: readonly string[], text: string): { lines: string[]; focus: number } {
-  const copy = [...lines];
-  const empty = copy.findIndex((line) => line.trim() === "");
-  if (empty >= 0) {
-    copy[empty] = text;
-    return { lines: copy, focus: empty };
-  }
-  if (copy.length >= MAX_QUESTIONS) return { lines: copy, focus: -1 };
-  copy.push(text);
-  return { lines: copy, focus: copy.length - 1 };
-}
-
-/** The chip groups, in the page's order (the reader's earlier questions,
- *  then the profile's); an empty group is left out. P1-09 (§1a.7): every
- *  example is the reader's own — there are no generic chips — and the gist
- *  is not among them (it is a reading mode, a control of its own). */
+/** The groups, in the page's order (the reader's earlier questions, then the profile's); an empty
+ *  group is left out. P1-09 (§1a.7): every example is the reader's own — there are no generic
+ *  ones — and the gist is not among them (it is a reading mode, the dropdown's last item). */
 export function chipGroups(examples: readonly ExampleGroupProp[]): ChipGroup[] {
   return examples
     .filter((group) => group.items.length > 0)
@@ -142,11 +109,10 @@ export function chipGroups(examples: readonly ExampleGroupProp[]): ChipGroup[] {
 }
 
 /**
- * P5-01 (blueprint P5): the reader's standing questions as one more chip group,
- * or null when there is none to offer. A chip puts its text on a line when
- * pressed — the example tags' own action — and nothing else ever does. A
- * question that is already a line of the box is not offered again. The list is
- * read defensively (it comes from a stored profile): text only, at most five.
+ * P5-01 (blueprint P5): the reader's standing questions as one more group, or null when there is
+ * none to offer. Picking one puts its text in the bar — the examples' own action — and nothing
+ * else ever does. A question that is already the bar's text is not offered again. The list is read
+ * defensively (it comes from a stored profile): text only, at most five.
  */
 export function standingGroup(standing: readonly string[] | undefined, lines: readonly string[]): ChipGroup | null {
   const taken = new Set(lines.map((line) => line.trim().toLocaleLowerCase()));
@@ -157,13 +123,12 @@ export function standingGroup(standing: readonly string[] | undefined, lines: re
 }
 
 /**
- * P5-04 (N5): a question appears under one group only. A standing question
- * pressed on one paper is stored as that paper's question, so on the next paper
- * it was also an example under "From your earlier questions"; the example groups
- * leave out a text that is one of the standing questions (trimmed, case-folded,
- * spaces folded), and a group left with nothing goes. The standing list is read
- * as the standing group reads it (text only, cleaned, at most five). With none
- * the groups come back as they were.
+ * P5-04 (N5): a question appears under one group only. A standing question picked on one paper is
+ * stored as that paper's question, so on the next paper it was also an example under "From your
+ * earlier questions"; the example groups leave out a text that is one of the standing questions
+ * (trimmed, case-folded, spaces folded), and a group left with nothing goes. The standing list is
+ * read as the standing group reads it (text only, cleaned, at most five). With none the groups
+ * come back as they were.
  */
 export function withoutStandingRepeats(groups: readonly ChipGroup[], standing: readonly string[] | undefined): ChipGroup[] {
   const key = (text: string) => text.replace(/\s+/g, " ").trim().toLocaleLowerCase();
@@ -174,10 +139,24 @@ export function withoutStandingRepeats(groups: readonly ChipGroup[], standing: r
     .filter((group) => group.chips.length > 0);
 }
 
+/** One item of the dropdown, in listing order: an example, or the gist (always last). */
+export interface Suggestion {
+  kind: "example" | "gist";
+  text: string;
+}
+
+/** The dropdown's items as one list, the groups in order and "Just get the gist" last. */
+export function suggestionItems(groups: readonly ChipGroup[]): Suggestion[] {
+  return [
+    ...groups.flatMap((group) => group.chips.map((chip): Suggestion => ({ kind: "example", text: chip.text }))),
+    { kind: "gist", text: ASK.chips.gist },
+  ];
+}
+
 /**
- * P1-07 (§1f.18 a): the line still being written — the one with focus, until
- * Enter settles it — or null when every line is settled. A blur settles the
- * line it leaves; typing unsettles the line it is in.
+ * P1-07 (§1f.18 a): the bar while it is still being written — `0` from a focus or a change until
+ * Enter or a blur — or null when it is settled. The index is the bar's (always 0) and is kept so
+ * the vague hint's rule reads as it did.
  */
 export type SettleEvent = { type: "focus" | "change" | "enter" | "blur"; index: number };
 
@@ -193,10 +172,9 @@ export function settleLine(unsettled: number | null, event: SettleEvent): number
 }
 
 /**
- * The vague hint is for settled questions only: never for the line being
- * typed — half a word is not a vague question — and only when some settled
- * line holds a question. `vague` is the page's route verdict (every stored
- * question too vague to point anywhere); the store still takes every
+ * The vague hint is for a settled question only: never for the text being typed — half a word is
+ * not a vague question — and only when the bar holds a question. `vague` is the page's route
+ * verdict (the stored question too vague to point anywhere); the store still takes every
  * keystroke, so the tints follow the typing live.
  */
 export function vagueHintShown({
@@ -211,86 +189,84 @@ export function vagueHintShown({
   return vague && lines.some((line, i) => i !== unsettled && line.trim().length > 0);
 }
 
-/**
- * P2-08b (§1g.18) timed the deep report's questions to the box as a whole; P7-13 (R11c, the
- * owner's order) puts the reader in charge of it. A set is settled — and so asked about, on
- * the reader's own key — only by what they do on purpose: the Submit button, Enter on the
- * line that ends the box (below), a × or a tick. A line finished by Enter, by leaving it or by
- * removing one settles nothing by itself, nor does a keystroke, the gist or a chip, nor does
- * leaving the box (P2-08b's 1.5 s wait, `BOX_IDLE_MS`, is gone) or the page (P2-10's `pagehide`
- * settle is gone): five questions typed with Enter between them are one deep report, and it
- * goes out when the reader presses Submit.
- */
-
-/** `next` is the element that receives focus (null when none does). The box is
- *  "focused" while focus is anywhere inside it; leaving it hides the chips. */
+/** `next` is the element that receives focus (null when none does). The box is "focused" while
+ *  focus is anywhere inside it; leaving it closes the dropdown. */
 export function leftTheBox(box: Node, next: EventTarget | null): boolean {
   return !box.contains(next as Node | null);
 }
 
 /**
- * Enter on line `index` is the "done" gesture when there is nothing more to
- * add after it: the empty line at the end, or (§1g.21 (5)) the last line of a
- * full box, which has no room for another line. Anywhere else Enter moves on.
+ * P10 (review 2.7): whether the dropdown is open. It opens under the bar while the field has
+ * focus and the question is not settled — the text differs from the last submitted question, or
+ * nothing was submitted — and is closed otherwise: after Submit, on blur, after Escape, and with
+ * nothing to show.
  */
-export function enterEndsTheBox(lines: readonly string[], index: number): boolean {
-  if (index !== lines.length - 1) return false;
-  if (lines[index].trim() === "") return true;
-  return lines.length >= MAX_QUESTIONS && lines.every((line) => line.trim() !== "");
+export function dropdownOpen({
+  focused,
+  text,
+  settled,
+  count,
+  closed = false,
+}: {
+  focused: boolean;
+  text: string;
+  settled: readonly string[];
+  count: number;
+  closed?: boolean;
+}): boolean {
+  if (!focused || closed || count <= 0) return false;
+  return !(text.trim() !== "" && !hasNewQuestions(text, settled));
+}
+
+/** Down and Up move the highlight through the `count` items and the bar itself (−1), and wrap. */
+export function moveActive(active: number, count: number, key: "ArrowDown" | "ArrowUp"): number {
+  if (count <= 0) return -1;
+  if (key === "ArrowDown") return active + 1 >= count ? -1 : active + 1;
+  return active <= -1 ? count - 1 : active - 1;
+}
+
+/** Enter picks the highlighted item when the dropdown is open and one is highlighted; otherwise it
+ *  submits the question. */
+export function enterAction(open: boolean, active: number): "pick" | "submit" {
+  return open && active >= 0 ? "pick" : "submit";
 }
 
 /**
- * P5-02 (blueprint P5): tell the preference ledger what the paper's settled
- * questions hold — their specific terms, less those of any question marked "Not
- * for recommendations". Replaces the paper's earlier terms; a call that changes
- * nothing changes nothing. Runs when the questions settle and when a mark moves,
- * never on a keystroke.
+ * P5-02 (blueprint P5): tell the preference ledger what the paper's settled question holds —
+ * its specific terms. Replaces the paper's earlier terms; a call that changes nothing changes
+ * nothing. Runs when the question settles, never on a keystroke.
  */
 export function syncQuestionTerms(paperId: string): void {
   const entry = useReadingQuestionsStore.getState().byPaper[paperId];
-  useProfileStore.getState().recordQuestionTerms(paperId, questionTerms(settledQuestions(entry), notForRecommendations(entry)));
+  useProfileStore.getState().recordQuestionTerms(paperId, questionTerms(settledQuestions(entry)));
 }
 
-/** Settle the paper's questions (P2-03), then let the ledger hear of them. */
+/** Settle the paper's question (P2-03), then let the ledger hear of it. */
 export function settleQuestions(paperId: string): void {
   useReadingQuestionsStore.getState().settle(paperId);
   syncQuestionTerms(paperId);
 }
 
-const sameQuestion = (a: string, b: string) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
-
-/** P7-13 (R11c): what the field last settled — the questions, and which of them were
- *  marked "Not for recommendations" when they were. */
-export interface SettledSet {
-  questions: readonly string[];
-  marks: readonly string[];
-}
-
-/** The settled set of a stored entry; none for a paper that has no entry. */
-export function settledSetOf(entry: PaperQuestions | undefined): SettledSet {
-  return { questions: settledQuestions(entry), marks: entry?.settledNotForRecs ?? [] };
+/** The questions a stored entry last settled; none for a paper that has no entry. */
+export function settledOf(entry: PaperQuestions | undefined): readonly string[] {
+  return settledQuestions(entry);
 }
 
 const sameList = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((q, i) => q === b[i]);
 
 /**
- * P7-13 (R11c): whether Submit has anything to send — the box as it stands (the cleaned
- * lines, and which of them are marked) is not the settled set. Spaces and case at the edges
- * of a line change nothing; a mark moved does, because the ledger waits for it. A box cleared
- * of everything that was settled has something to send too: the ledger still holds those words.
+ * P7-13 (R11c): whether Submit has anything to send — the bar's text, cleaned, is not what was
+ * last settled. Spaces at the edges change nothing. A bar cleared of everything that was settled
+ * has something to send too: the ledger still holds those words.
  */
-export function hasNewQuestions(lines: readonly string[], marked: readonly string[], settled: SettledSet): boolean {
-  const questions = cleanQuestions(lines);
-  const marks = questions.filter((question) => marked.some((m) => sameQuestion(m, question)));
-  return !sameList(questions, settled.questions) || !sameList(marks, settled.marks);
+export function hasNewQuestions(text: string, settled: readonly string[]): boolean {
+  return !sameList(cleanQuestions([text]), settled);
 }
 
-/** The page's `q`: the first empty question line, else the last one. */
+/** The page's `q`: focus the question bar. */
 export function focusFirstEmptyQuestion(): void {
-  // By the mark, not the tag: a line is a textarea since P7-13.
-  const inputs = Array.from(document.querySelectorAll<HTMLTextAreaElement>("[data-ask-line]"));
-  const target = inputs.find((input) => input.value.trim() === "") ?? inputs[inputs.length - 1];
-  target?.focus();
+  // By the mark, not the tag: the bar is a textarea since P7-13.
+  document.querySelector<HTMLTextAreaElement>("[data-ask-line]")?.focus();
 }
 
 export function QuestionField({
@@ -300,119 +276,103 @@ export function QuestionField({
   vague = false,
 }: {
   paperId: string;
-  /** P1-09 (§1f.20): the example tags, from the reader's earlier questions
-   *  and profile only. */
+  /** P1-09 (§1f.20): the examples, from the reader's earlier questions and profile only. */
   examples: readonly ExampleGroupProp[];
-  /** P5-01: the reader's standing questions (the profile's); one more chip
-   *  group, never filled in. */
+  /** P5-01: the reader's standing questions (the profile's); one more group in the dropdown,
+   *  never filled in. */
   standing?: readonly string[];
-  /** P1-05 (§1f.6, §1f.13): every question is too vague to route — the page
-   *  tints nothing and the field says what would help. */
+  /** P1-05 (§1f.6, §1f.13): the question is too vague to route — the page tints nothing and the
+   *  field says what would help. */
   vague?: boolean;
 }) {
-  // Read once, at mount: the page mounts this per paper, after the stores
-  // have loaded.
+  // Read once, at mount: the page mounts this per paper, after the stores have loaded. A reader
+  // with several stored questions (before round P10) sees the first.
   const [initial] = useState(() => {
     const own = useReadingQuestionsStore.getState().byPaper[paperId];
-    return {
-      lines: own && own.items.length > 0 ? [...own.items] : [""],
-      gist: own?.gist ?? false,
-      marked: own?.notForRecs ? [...own.notForRecs] : [],
-      settled: settledSetOf(own),
-    };
+    return { text: own?.items[0] ?? "", gist: own?.gist ?? false, settled: settledOf(own) };
   });
-  const [lines, setLines] = useState<string[]>(initial.lines);
+  const [text, setText] = useState(initial.text);
   const [gist, setGist] = useState(initial.gist);
-  // P5-02: the questions (their text) marked "Not for recommendations".
-  const [marked, setMarked] = useState<string[]>(initial.marked);
-  // P7-13 (R11c): what was last settled, to tell whether Submit has anything to send. It
-  // follows the settles this field makes; nothing else settles a paper's questions.
-  const [settled, setSettled] = useState<SettledSet>(initial.settled);
-  const unsent = hasNewQuestions(lines, marked, settled);
-  const isMarked = (line: string) => marked.some((m) => sameQuestion(m, line));
+  // P7-13 (R11c): what was last settled, to tell whether Submit has anything to send. It follows
+  // the submits this field makes; nothing else settles a paper's question.
+  const [settled, setSettled] = useState<readonly string[]>(initial.settled);
+  const unsent = hasNewQuestions(text, settled);
   const [focused, setFocused] = useState(false);
-  // P1-07 (§1f.18 a): the line being written, which the vague hint waits for.
+  // P1-07 (§1f.18 a): 0 while the bar is being written, which the vague hint waits for.
   const [unsettled, setUnsettled] = useState<number | null>(null);
   const trackLine = (event: SettleEvent) => setUnsettled((current) => settleLine(current, event));
-  const inputs = useRef<Array<HTMLTextAreaElement | null>>([]);
-  // P9-11 (B P9-07): a request to focus a line belongs to the render that adds that line, so it
-  // travels with the lines as state set in the same batch — never as a ref that another render's
-  // effect can read and clear. (It was a ref read by an effect with no dependency: an Enter that
-  // landed after the page's debounced render had committed and before that commit's passive effects
-  // ran had its request read and cleared by the older commit's effect, which found no line yet; the
-  // render that added the line had nothing to focus, and the next question was typed onto the
-  // previous line.) An older commit's effect holds an older request and, its dependency unchanged,
-  // does not run again; a repeated request is a new object, so it fires again.
-  const [focusLine, setFocusLine] = useState<{ index: number; caretAtEnd: boolean } | null>(null);
+  // The dropdown: the highlighted item (−1: none, the bar itself) and Escape.
+  const [active, setActive] = useState(-1);
+  const [closed, setClosed] = useState(false);
+  const input = useRef<HTMLTextAreaElement | null>(null);
+  // P9-11 (B P9-07): a request to focus the bar belongs to the render that makes it, so it travels
+  // as state, a new object for each request, and fires once.
+  const [focusBar, setFocusBar] = useState<{ caretAtEnd: boolean } | null>(null);
 
   useEffect(() => {
-    if (!focusLine) return;
-    const input = inputs.current[focusLine.index];
-    if (!input) return;
-    input.focus();
-    if (focusLine.caretAtEnd) input.setSelectionRange(input.value.length, input.value.length);
-  }, [focusLine]);
+    if (!focusBar) return;
+    const el = input.current;
+    if (!el) return;
+    el.focus();
+    if (focusBar.caretAtEnd) el.setSelectionRange(el.value.length, el.value.length);
+  }, [focusBar]);
 
-  // P7-13 (R11a): every line grows or shrinks to its text — after each change of
-  // the lines, and when the window is resized (the lines wrap differently).
+  // P7-13 (R11a): the bar grows or shrinks to its text — after each change of it, and when the
+  // window is resized (the text wraps differently).
   useEffect(() => {
-    inputs.current.forEach(fitHeight);
-  }, [lines]);
+    fitHeight(input.current);
+  }, [text]);
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const refit = () => inputs.current.forEach(fitHeight);
+    const refit = () => fitHeight(input.current);
     window.addEventListener("resize", refit);
     return () => window.removeEventListener("resize", refit);
   }, []);
 
-  // P7-13 (R11c): the reader says the questions are done — Submit, Enter on the line that
-  // ends the box, a × or a tick. The questions settle on the spot (the deep report is asked
-  // about them), the ledger hears of them, and the button knows what was sent.
-  const submit = () => {
-    settleQuestions(paperId);
-    setSettled(settledSetOf(useReadingQuestionsStore.getState().byPaper[paperId]));
-  };
-
-  const commit = (next: string[], nextGistValue: boolean, nextMarked: string[] = marked) => {
-    setLines(next);
-    setGist(nextGistValue);
-    setMarked(nextMarked);
-    useReadingQuestionsStore.getState().set(paperId, next, nextGistValue, undefined, nextMarked);
-  };
-  // P5-02: ticking or unticking a question is a finished gesture of its own: the
-  // ledger hears of it at once (a tick takes the question's terms out; an untick
-  // lets them in when the questions next settle).
-  // P5-04 (S5): a tick settles the box as it stands before the ledger hears of it
-  // — the settled questions and the marks as they are now. Without that the sync
-  // read the marks as at the last settle, an edit had moved the live mark to the
-  // new text, and the old text of an edited, ticked question came back into the
-  // ledger at the next tick of another box. The untick keeps its P5-02 rule (its
-  // words come in at the next settle), and the two-list rule for an edit with no
-  // tick is unchanged.
-  const onMark = (index: number, on: boolean) => {
-    const rest = marked.filter((m) => !sameQuestion(m, lines[index]));
-    commit(lines, gist, on ? [...rest, lines[index].trim()] : rest);
-    if (on) submit();
-    else syncQuestionTerms(paperId);
-  };
-
-  // The gist is a reading mode: it changes no line and settles nothing.
-  const onGist = () => commit(lines, !gist);
-  // An example fills the next empty line and focuses it; like typing, it
-  // settles nothing until the box settles as a whole.
-  const onChip = (chip: Chip) => {
-    const filled = fillNextLine(lines, chip.text);
-    if (filled.focus < 0) return;
-    setFocusLine({ index: filled.focus, caretAtEnd: true });
-    commit(filled.lines, nextGist(gist, filled.lines));
-  };
-
-  const standingChips = standingGroup(standing, lines);
-  const groups = [...(standingChips ? [standingChips] : []), ...chipGroups(examples)];
+  const standingChips = standingGroup(standing, [text]);
   // P5-04 (N5): a question under one group only.
-  const shownGroups = withoutStandingRepeats(groups, standing);
-  const chipsShown = showChips({ focused, lines, gist });
-  const full = lines.length >= MAX_QUESTIONS && lines.every((line) => line.trim() !== "");
+  const groups = withoutStandingRepeats([...(standingChips ? [standingChips] : []), ...chipGroups(examples)], standing);
+  const items = suggestionItems(groups);
+  const open = dropdownOpen({ focused, text, settled, count: items.length, closed });
+  const listId = `ask-${paperId}-list`;
+  const optionId = (index: number) => `ask-${paperId}-option-${index}`;
+
+  useEffect(() => {
+    if (!open || active < 0 || typeof document === "undefined") return;
+    document.getElementById(`ask-${paperId}-option-${active}`)?.scrollIntoView?.({ block: "nearest" });
+  }, [open, active, paperId]);
+
+  // The reader says the question is done: the Submit control or Enter. It settles on the spot (the
+  // deep report is asked about it), the ledger hears of it, and the control knows what was sent.
+  // The text submitted again does nothing. The stored list becomes the one question.
+  const submit = () => {
+    if (!hasNewQuestions(text, settled)) return;
+    useReadingQuestionsStore.getState().set(paperId, [text], gist);
+    settleQuestions(paperId);
+    setSettled(settledOf(useReadingQuestionsStore.getState().byPaper[paperId]));
+    setActive(-1);
+  };
+
+  const commit = (nextText: string, nextGistValue: boolean) => {
+    setText(nextText);
+    setGist(nextGistValue);
+    useReadingQuestionsStore.getState().set(paperId, [nextText], nextGistValue);
+  };
+
+  // Picking fills the bar and focuses it with the caret at the end; like typing, it submits nothing.
+  // The gist is a reading mode: it changes no text and settles nothing; picking it again turns it off.
+  const pick = (index: number) => {
+    const item = items[index];
+    if (!item) return;
+    setActive(-1);
+    setClosed(true);
+    if (item.kind === "gist") {
+      commit("", !gist);
+    } else {
+      commit(item.text, nextGist(gist, [item.text]));
+    }
+    setFocusBar({ caretAtEnd: true });
+  };
 
   return (
     <section
@@ -420,153 +380,171 @@ export function QuestionField({
       className="mt-6"
       onFocus={() => setFocused(true)}
       onBlur={(event) => {
-        // Focus moving to another line, chip or button of the box is not leaving it.
-        // Leaving it settles nothing (P7-13): the reader presses Submit.
+        // Focus moving to another part of the box is not leaving it.
+        // Leaving it closes the dropdown and settles nothing (P7-13): the reader presses Submit.
         if (!leftTheBox(event.currentTarget, event.relatedTarget)) return;
         setFocused(false);
+        setActive(-1);
+        setClosed(false);
       }}
     >
-      <label className="eyebrow inline-flex items-center gap-2 text-text-faint" htmlFor={`ask-${paperId}-0`}>
+      <label className="eyebrow inline-flex items-center gap-2 text-text-muted" htmlFor={`ask-${paperId}-0`}>
         <span aria-hidden className="block h-[6px] w-[6px] shrink-0 bg-current" />
         {ASK.heading}
       </label>
-      <ol className="mt-2 space-y-1">
-        {lines.map((line, index) => (
-          <li key={index} className={line.trim() !== "" ? "flex flex-wrap items-baseline gap-2" : "flex items-baseline gap-2"}>
-            <textarea
-              id={`ask-${paperId}-${index}`}
-              ref={(el) => {
-                inputs.current[index] = el;
-              }}
-              data-ask-line=""
-              rows={1}
-              value={line}
-              maxLength={MAX_QUESTION_CHARS}
-              placeholder={index === 0 ? ASK.placeholder : undefined}
-              aria-label={index === 0 ? undefined : ASK.line(index + 1)}
-              onFocus={() => trackLine({ type: "focus", index })}
-              onBlur={() => trackLine({ type: "blur", index })}
-              onChange={(event) => {
-                const text = oneLine(event.target.value);
-                const next = [...lines];
-                next[index] = text;
-                trackLine({ type: "change", index });
-                // A ticked line stays ticked as the reader edits it.
-                const carried = isMarked(lines[index])
-                  ? [...marked.filter((m) => !sameQuestion(m, lines[index])), text.trim()]
-                  : marked;
-                commit(next, nextGist(gist, next), carried);
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter") return;
-                event.preventDefault();
-                trackLine({ type: "enter", index });
-                const added = addLineAfter(lines, index);
-                if (added.lines.length !== lines.length) {
-                  setFocusLine({ index: added.focus, caretAtEnd: true });
-                  commit(added.lines, gist);
-                } else {
-                  inputs.current[added.focus]?.focus();
+      <div className="relative mt-2">
+        {/* P10 (review 2.2, 2.6): a search bar. A 2-px border in the heading ink and the raised
+            surface — the strongest edge on the page — one row of at least 48 px at rest, the
+            full width of the column, the Submit control inside its right end. */}
+        <div
+          data-ask-bar=""
+          className="flex min-h-12 items-center gap-2 rounded-3xl border-2 border-heading bg-surface py-1 pl-4 pr-1.5 focus-within:ring-2 focus-within:ring-heading/25"
+        >
+          <textarea
+            id={`ask-${paperId}-0`}
+            ref={(el) => {
+              input.current = el;
+            }}
+            data-ask-line=""
+            role="combobox"
+            aria-autocomplete="list"
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            aria-controls={open ? listId : undefined}
+            aria-activedescendant={open && active >= 0 ? optionId(active) : undefined}
+            aria-describedby={`ask-${paperId}-hint`}
+            rows={1}
+            value={text}
+            maxLength={MAX_QUESTION_CHARS}
+            placeholder={gist && text === "" ? ASK.chips.gist : ASK.placeholder}
+            onFocus={() => trackLine({ type: "focus", index: 0 })}
+            onBlur={() => trackLine({ type: "blur", index: 0 })}
+            onChange={(event) => {
+              const next = oneLine(event.target.value);
+              trackLine({ type: "change", index: 0 });
+              setClosed(false);
+              setActive(-1);
+              commit(next, nextGist(gist, [next]));
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                if (!open) {
+                  // Escape closed it: an arrow opens it again. A settled question has nothing to show, and
+                  // there the arrows stay the caret's.
+                  if (closed && dropdownOpen({ focused, text, settled, count: items.length })) {
+                    event.preventDefault();
+                    setClosed(false);
+                  }
+                  return;
                 }
-                if (enterEndsTheBox(lines, index)) submit();
-              }}
-              className="min-w-0 flex-1 resize-none overflow-hidden border-b border-border bg-transparent py-1 font-reading text-body-sm text-text placeholder:text-text-faint focus:border-heading focus:outline-none"
-            />
-            {line.length > COUNTER_FROM && (
-              <span className="annotation shrink-0 text-text-faint">{ASK.counter(line.length)}</span>
-            )}
-            {/* P9-52 (A P9-W3's N5): the × is a lone glyph, 7 x 16 px; where there is no hover it is a 44 x 44 target
-                (the glyph centred in it), and the row's textarea gives it the room (it is `flex-1 min-w-0`). */}
-            {(lines.length > 1 || line.trim() !== "") && (
-              <button
-                type="button"
-                aria-label={ASK.remove(index + 1)}
-                onClick={() => {
-                  const next = removeLine(lines, index);
-                  // The lines move up: nothing is mid-sentence any more.
-                  setUnsettled(null);
-                  commit(next, nextGist(gist, next));
-                  // P5-04 (S3): deleting a question is a finished gesture, like a tick. The
-                  // focused button goes with the line, so no blur reaches the box: the question's
-                  // words would stay in the ledger. Settle and sync now, so they go at once.
-                  submit();
-                }}
-                className="annotation shrink-0 text-text-faint transition-colors hover:text-heading [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
-              >
-                ×
-              </button>
-            )}
-            {/* P9-52 (N5): the label is the box: a 44 px row where there is no hover, and a tap anywhere on it ticks
-                the checkbox, which stays the native 13 px control (a checkbox's own box does not grow with padding). */}
-            {line.trim() !== "" && (
-              <label className="annotation inline-flex basis-full items-center gap-2 text-text-faint [@media(hover:none)]:min-h-11">
-                <input
-                  type="checkbox"
-                  checked={isMarked(line)}
-                  aria-label={ASK.notForRecsFor(index + 1)}
-                  onChange={(event) => onMark(index, event.target.checked)}
-                />
-                {ASK.notForRecs}
-              </label>
-            )}
-          </li>
-        ))}
-      </ol>
-      {/* P7-13 (R11c): below the lines, right-aligned (full width on a phone), in the label face.
-          Not in the quiet box (no question, nothing focused) — unless a cleared box still has
-          something to send. Shown with no key too: it settles the ledger. P7-18 (F6): a 44-px
-          target on touch, as the page's other commands are. */}
-      {(chipsShown || unsent) && (
-        <div className="mt-2 flex sm:justify-end">
+                event.preventDefault();
+                setActive(moveActive(active, items.length, event.key));
+                return;
+              }
+              if (event.key === "Escape") {
+                // The page's own Escape blurs a field the reader is typing in (`components/keyboard.tsx`, on
+                // `window`). With the dropdown open, the first Escape is the dropdown's: it closes it and stops there;
+                // the next one is the page's.
+                if (!open) return;
+                event.preventDefault();
+                event.stopPropagation?.();
+                setClosed(true);
+                setActive(-1);
+                return;
+              }
+              if (event.key !== "Enter") return;
+              // A composition (CJK input) ends with its own Enter; that one is not a submit.
+              if ((event as { nativeEvent?: { isComposing?: boolean } }).nativeEvent?.isComposing) return;
+              event.preventDefault();
+              trackLine({ type: "enter", index: 0 });
+              if (enterAction(open, active) === "pick") pick(active);
+              else submit();
+            }}
+            className="min-w-0 flex-1 resize-none self-center overflow-hidden bg-transparent py-2 font-reading text-body text-text placeholder:text-text-muted focus:outline-none"
+          />
+          {text.length > COUNTER_FROM && (
+            <span className="annotation shrink-0 text-text-faint">{ASK.counter(text.length)}</span>
+          )}
+          {/* P7-13 (R11c): in the label face; shown with no key too — it settles the ledger. P7-18 (F6): a
+              44-px target on touch. P10: inside the bar's right end; grey and inert (§1h.77 (g)) until the
+              text is a question not yet submitted. */}
           <button
             type="button"
             onClick={submit}
             disabled={!unsent}
-            className="annotation w-full rounded-full border border-border-strong px-3 py-1 text-heading transition-colors hover:bg-surface-hover disabled:opacity-50 sm:w-auto [@media(hover:none)]:min-h-11"
+            className="annotation shrink-0 rounded-full bg-heading px-4 py-2 text-bg transition-colors hover:bg-heading/90 disabled:cursor-default disabled:bg-bg-secondary disabled:text-text-faint disabled:hover:bg-bg-secondary [@media(hover:none)]:min-h-11"
           >
             {ASK.submit}
           </button>
         </div>
-      )}
-      {vagueHintShown({ vague, lines, unsettled }) && (
+        <p id={`ask-${paperId}-hint`} className="sr-only">
+          {ASK.hint}
+        </p>
+        {open && (
+          <div
+            id={listId}
+            role="listbox"
+            aria-label={ASK.suggestions}
+            className="absolute left-0 right-0 top-full z-30 mt-2 flex max-h-80 flex-col overflow-hidden rounded-2xl border border-border-strong bg-surface py-1 shadow-card-hover"
+          >
+            {/* The examples scroll; the gist stays in view below them, set apart by a rule. */}
+            {groups.length > 0 && (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                {groups.map((group) => (
+                  <div key={group.label} role="group" aria-label={group.label}>
+                    <p aria-hidden className="annotation px-4 pb-1 pt-2 text-text-faint">
+                      {group.label}
+                    </p>
+                    {group.chips.map((chip) => {
+                      const index = items.findIndex((item) => item.kind === "example" && item.text === chip.text);
+                      return (
+                        <div
+                          key={chip.label}
+                          id={optionId(index)}
+                          role="option"
+                          aria-selected={active === index}
+                          data-suggestion=""
+                          tabIndex={-1}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => pick(index)}
+                          className={`flex cursor-pointer items-center px-4 py-2 font-reading text-body-sm text-text hover:bg-surface-hover [@media(hover:none)]:min-h-11 ${active === index ? "bg-surface-hover" : ""}`}
+                        >
+                          {chip.label}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* "Just get the gist": the last item, set apart from the questions by a rule (with no question listed, it stands alone). */}
+            <div
+              role="group"
+              aria-label={ASK.chips.gist}
+              className={`shrink-0 ${groups.length > 0 ? "mt-1 border-t border-border-strong pt-1" : ""}`}
+            >
+              <div
+                id={optionId(items.length - 1)}
+                role="option"
+                aria-selected={active === items.length - 1}
+                aria-checked={gist}
+                data-suggestion=""
+                data-gist=""
+                tabIndex={-1}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => pick(items.length - 1)}
+                className={`annotation flex cursor-pointer items-center px-4 py-2 text-text-muted hover:bg-surface-hover hover:text-heading [@media(hover:none)]:min-h-11 ${active === items.length - 1 ? "bg-surface-hover" : ""}`}
+              >
+                {ASK.chips.gist}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      {vagueHintShown({ vague, lines: [text], unsettled }) && (
         <p role="status" className="annotation mt-2 text-text-muted">
           {ROUTE.vague}
         </p>
-      )}
-      {chipsShown && (
-        <div className="mt-3 space-y-2">
-          <p className="annotation text-text-faint">{ASK.hint}</p>
-          {shownGroups.map((group) => (
-            <div key={group.label}>
-              <p className="annotation text-text-faint">{group.label}</p>
-              <div className="mt-1 flex flex-wrap gap-2">
-                {group.chips.map((chip) => (
-                  <button
-                    key={chip.label}
-                    type="button"
-                    onClick={() => onChip(chip)}
-                    disabled={full}
-                    className="annotation rounded-full border border-border px-3 py-1 text-text-muted transition-colors hover:text-heading disabled:opacity-50"
-                  >
-                    {chip.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={onGist}
-              aria-pressed={gist}
-              className={`annotation rounded-full border px-3 py-1 transition-colors ${
-                gist ? "border-heading text-heading" : "border-border text-text-muted hover:text-heading"
-              }`}
-            >
-              {ASK.chips.gist}
-            </button>
-          </div>
-        </div>
       )}
     </section>
   );

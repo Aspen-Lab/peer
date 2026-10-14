@@ -1,4 +1,4 @@
-// The example tags under "Before you read" (P1-09; user decision §1a.7,
+// The examples in the question bar's dropdown (P1-09; user decision §1a.7,
 // ruling §1f.20).
 //
 // Every example is the reader's own: a question they wrote on an earlier
@@ -7,7 +7,7 @@
 // nothing invented; a reader with no profile and no earlier questions gets
 // no examples at all. Pure: the page builds them from its two stores.
 //
-// An example only ever fills a line when the reader clicks it, and it is a
+// An example only ever fills the bar when the reader picks it, and it is a
 // question like any other once there — it settles with the box as a whole
 // (§1g.18), like every question the reader types.
 //
