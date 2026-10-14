@@ -102,3 +102,34 @@ describe("a figure with no known size keeps the room it had (P10-26)", () => {
     expect(figureMatClass(true)).toContain("min-h-[calc(32rem+1.5rem)]");
   });
 });
+
+// P10-43 (A P10-27 §5 (c)): a tall figure is drawn wide enough to read. The 32rem height cap drew the owner's Figure 3
+// (465 × 1556) 153 px wide in a 640-px column. A figure whose width at the 32rem cap would fall under half the column takes
+// half the column's width (its height following its ratio, the box still exactly its picture's ratio); every other figure
+// is as it was.
+describe("a tall figure is drawn wide enough to read (P10-43)", () => {
+  const fig = (width?: number, height?: number) => ({ ordinal: 0, label: "Figure 3", caption: "", after: 0, width, height });
+
+  it("a tall figure takes half the column, never wider than its own picture or the column, its box still its ratio", () => {
+    const style = figureBoxStyle(fig(465, 1556));
+    expect(style?.aspectRatio).toBe("465 / 1556");
+    expect(style?.width).toBe("min(100%, 465px, max(calc(32rem * 465 / 1556), 50%))");
+  });
+
+  it("a wide figure and one whose 32rem width is already half the column or more are exactly as they were", () => {
+    expect(figureBoxStyle(fig(1400, 900))).toEqual({ aspectRatio: "1400 / 900", width: "min(100%, 1400px, calc(32rem * 1400 / 900))" });
+    expect(figureBoxStyle(fig(800, 1200))).toEqual({ aspectRatio: "800 / 1200", width: "min(100%, 800px, calc(32rem * 800 / 1200))" });
+  });
+
+  it("an unsized figure has no box and keeps its fixed room", () => {
+    expect(figureBoxStyle(fig())).toBeNull();
+    expect(figureBoxStyle(fig(465))).toBeNull();
+  });
+
+  it("the tall figure's rendered box carries the new width and the same ratio", () => {
+    const tall = readingWith([{ ordinal: 0, label: "Figure 1", caption: "A tall one.", page: 1, width: 465, height: 1556 }]);
+    const html = renderToStaticMarkup(createElement(PaperBody, { reading: tall }));
+    expect(html).toContain("aspect-ratio:465 / 1556");
+    expect(html).toContain("width:min(100%, 465px, max(calc(32rem * 465 / 1556), 50%))");
+  });
+});

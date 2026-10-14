@@ -8,6 +8,7 @@ import { buildReading } from "@/lib/papers/reading";
 import { inlineMath } from "@/lib/text/math";
 import type { Paper } from "@/types";
 import { PaperBody, paragraphAnchor, readSelection, type SelectionLike } from "./paper-body";
+import * as paperBody from "./paper-body";
 
 // P10-09f (review 7.1c; walk X-B3, B11; rules 2 and 4): the highlighter. The words a sticky note was taken on stay
 // marked in the paper — a `<mark data-note="N">` in the highlighter token — with the note's tag [N] right after
@@ -234,5 +235,83 @@ describe("the nested mark's token", () => {
       expect(contrast(value(block, "--color-heading"), value(block, TOKEN))).toBeGreaterThanOrEqual(7);
     }
     expect(value(systemBlock, TOKEN)).toBe(value(darkBlock, TOKEN));
+  });
+});
+
+// ── P10-43 (A P10-27 §5 (a)): an overlapping note's mark covers all its words ──────────────────────────────────────
+// A note whose selection starts inside an earlier note's mark and ends after it used to draw its own mark only over the
+// words after the earlier tag; its first words wore the earlier note's mark alone. Now the later note's mark covers all its
+// words: where the two overlap, the overlap carries both (the nested shade P10-20 uses for a mark inside a mark), and each
+// tag still stands right after its own note's last word.
+describe("an overlapping note's mark covers all its words (P10-43)", () => {
+  // The segment function is reached through the module's namespace so that this file compiles on the head, where it is not yet there.
+  type Seg =
+    | { kind: "text"; from: number; to: number }
+    | { kind: "tag"; spot: { n: number } }
+    | { kind: "mark"; from: number; to: number; spot: { n: number }; inner: Seg[]; depth: number; part?: boolean };
+  const coveringSegments = (paperBody as unknown as { coveringSegments: (text: string, spots: unknown[]) => Seg[] }).coveringSegments;
+  /** `[n@depth …]n` a note's mark with its tag after; `(n@depth …)` the part of a later note's mark that lies inside an earlier mark (no tag). */
+  const tree = (segments: Seg[]): string =>
+    segments
+      .map((one) => {
+        if (one.kind === "text") return P1.slice(one.from, one.to);
+        if (one.kind === "tag") return `<tag${one.spot.n}>`;
+        return one.part ? `(${one.spot.n}@${one.depth} ${tree(one.inner)})` : `[${one.spot.n}@${one.depth} ${tree(one.inner)}]${one.spot.n}`;
+      })
+      .join("");
+  const words = (segments: Seg[]): string => segments.map((one) => (one.kind === "text" ? P1.slice(one.from, one.to) : one.kind === "mark" ? words(one.inner) : "")).join("");
+  const partsOf = (segments: Seg[], n: number): string[] =>
+    segments.flatMap((one) =>
+      one.kind === "mark" ? [...(one.spot.n === n ? [words(one.inner)] : []), ...partsOf(one.inner, n)] : [],
+    );
+
+  it("outer: a note taken inside another's words is its own mark inside it, as before", () => {
+    expect(tree(coveringSegments(P1, [spot("a", 1, P1, 0, 22), spot("b", 2, P1, 6, 16)]))).toBe(`[1@0 Grain [2@1 boundaries]2 carry]1 the strain.`);
+  });
+
+  it("overlapping-start: the later note's first words, inside the earlier mark, carry both; the rest follows the earlier tag", () => {
+    const segments = coveringSegments(P1, [spot("a", 1, P1, 0, 16), spot("b", 2, P1, 6, 22)]);
+    expect(tree(segments)).toBe(`[1@0 Grain (2@1 boundaries)]1[2@0  carry]2 the strain.`);
+    expect(partsOf(segments, 2).join("")).toBe("boundaries carry");
+  });
+
+  it("overlapping-end: the same when the later-numbered note is the one that starts first", () => {
+    const segments = coveringSegments(P1, [spot("a", 2, P1, 0, 16), spot("b", 1, P1, 6, 22)]);
+    expect(tree(segments)).toBe(`[2@0 Grain (1@1 boundaries)]2[1@0  carry]1 the strain.`);
+  });
+
+  it("after: a note on later words is untouched", () => {
+    expect(tree(coveringSegments(P1, [spot("a", 1, P1, 0, 16), spot("b", 3, P1, 27, 33)]))).toBe(`[1@0 Grain boundaries]1 carry the [3@0 strain]3.`);
+  });
+
+  it("four on one paragraph (outer, inside, overlapping, after): every note's words are all marked, and the text is the paragraph", () => {
+    const segments = coveringSegments(P1, [spot("a", 1, P1, 0, 16), spot("b", 2, P1, 6, 12), spot("c", 3, P1, 8, 22), spot("d", 4, P1, 27, 33)]);
+    expect(tree(segments)).toBe(`[1@0 Grain [2@1 bo(3@2 unda)]2(3@1 ries)]1[3@0  carry]3 the [4@0 strain]4.`);
+    expect(partsOf(segments, 3).join("")).toBe(P1.slice(8, 22));
+    expect(words(segments)).toBe(P1);
+  });
+
+  it("DOM: the later mark's first words sit inside the earlier mark, each tag right after its own note's last word, in order", () => {
+    const html = paragraphHtml(render({ [paragraphAnchor(0, 1)]: [spot("a", 1, P1, 0, 16), spot("b", 2, P1, 6, 22)] }), 1);
+    expect(html).toMatch(
+      new RegExp(
+        `<p><mark data-note="1"[^>]*>Grain <mark data-note-part="2"[^>]*>boundaries</mark></mark>${TAG(1)}<mark data-note="2"[^>]*> carry</mark>${TAG(2)} the strain\\.</p>`,
+      ),
+    );
+    expect(html.match(/<mark\b/g)).toHaveLength(3);
+    expect(html.indexOf("Open note 1")).toBeLessThan(html.indexOf("Open note 2"));
+  });
+
+  it("DOM: the overlap wears the nested shade; the part after the earlier tag keeps the highlighter", () => {
+    const html = paragraphHtml(render({ [paragraphAnchor(0, 1)]: [spot("a", 1, P1, 0, 16), spot("b", 2, P1, 6, 22)] }), 1);
+    expect(/<mark data-note-part="2"[^>]*>/.exec(html)![0]).toContain("bg-[color:var(--color-note-nested)]");
+    expect(/<mark data-note="2"[^>]*>/.exec(html)![0]).toContain("bg-[color:var(--color-note-mark)]");
+  });
+
+  it("DOM: the text and the tags of the paragraph are unchanged by the extra mark", () => {
+    const bare = paragraphHtml(render(), 1).replace(/<[^>]+>/g, "");
+    const marked = paragraphHtml(render({ [paragraphAnchor(0, 1)]: [spot("a", 1, P1, 0, 16), spot("b", 2, P1, 6, 22)] }), 1);
+    expect(marked.replace(/<sup[^>]*>.*?<\/sup>/g, "").replace(/<[^>]+>/g, "")).toBe(bare);
+    expect(marked.match(/Open note \d/g)).toEqual(["Open note 1", "Open note 2"]);
   });
 });
