@@ -142,6 +142,7 @@ export function settleOnSection(find: () => SettleTarget | null, env: SettleEnv 
   let watchUntil = 0;
   let landedTop: number | null = null;
   let justScrolled = false;
+  let pendingBefore = false;
   const end = () => {
     cancelFrame?.();
     cancelFrame = null;
@@ -185,8 +186,20 @@ export function settleOnSection(find: () => SettleTarget | null, env: SettleEnv 
     // P10-26 (X-A8): a picture above the heading that is still loading will move it when it comes in. The landing is
     // not final while there is one — the watch by frames goes on, a second at a time, inside the late cap — and is
     // over a second after the last of them has settled, by which time the heading has been landed once more.
-    if (restAt !== null && now - restAt < SETTLE_LATE_CAP && (env.pendingAbove?.(target) ?? 0) > 0) {
-      watchUntil = Math.max(watchUntil, now + SETTLE_CAP);
+    // The heading that moves on the frame a picture above settles is moved by that picture, not by the reader's
+    // scroll: it is landed again on the first frame that sees it, with no wait for it to hold still (the page would
+    // twitch for those frames).
+    if (restAt !== null && now - restAt < SETTLE_LATE_CAP) {
+      const pending = (env.pendingAbove?.(target) ?? 0) > 0;
+      if (pending) watchUntil = Math.max(watchUntil, now + SETTLE_CAP);
+      const settlingPictures = pending || pendingBefore;
+      pendingBefore = pending;
+      if (settlingPictures && landedTop !== null && Math.abs(top - landedTop) > SAME) {
+        target.scrollIntoView({ block: "start", behavior: "instant" as ScrollBehavior });
+        justScrolled = true;
+        cancelFrame = env.frame(tick);
+        return;
+      }
     }
     if (restAt === null ? now - start >= SETTLE_TRAVEL_CAP : now >= watchUntil) return restAt === null ? end() : endFrames();
     if (held >= REST_FRAMES - 1 && (travelled || now - start >= SETTLE_GRACE)) {
