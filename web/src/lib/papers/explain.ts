@@ -82,6 +82,16 @@
 //   - `explainCacheKey` carries the long form, so a short and a long reply to the same
 //     message are two entries.
 //
+// P10-08b (the owner's review 8.4; rulings §1h.78 (i), §1h.85) lets the reader select Peer's OWN words — a line of the
+// Summary, an answer to a question — and ask what they mean. Those words are not in the body, so they are not
+// located (`locatePassage` would refuse them); the route knows them by the client's `source` (`peerWordsSource`:
+// "summary" or "answer", nothing else) and the two prompt builders then carry the passage as "Peer's own words about
+// this paper" with the abstract and the map's one line per section as the context, in the same budget as a paper
+// passage. The first answer keeps its two parts; the quote is still held to the paper by the verifier, and one that
+// does not verify leaves the prose labelled Peer's reading. No term table: a row has no paragraph of the paper to
+// be held to. The memory's key carries the source, so a paper passage and the same words in the Summary are two
+// entries. A paper passage is built exactly as before.
+//
 // Pure apart from the hash and the clock the cache reads: no I/O, no logging.
 // Server-side — the browser imports this module for its types only.
 
@@ -247,6 +257,15 @@ export function clipPassage(passage: string): string {
   return cutAtWord(passage.replace(/\s+/g, " ").trim(), EXPLAIN_CAPS.passageChars);
 }
 
+/** P10-08b: where a selection of Peer's own words is from — a line of the Summary, or an answer. */
+export type PeerWordsSource = "summary" | "answer";
+
+/** The client's `source` as the route reads it: only a literal "summary" or "answer" says the selection is Peer's own words;
+ *  anything else (absent, "paper", a word it does not know, a non-string) is a passage of the paper, which must be found in it. */
+export function peerWordsSource(value: unknown): PeerWordsSource | null {
+  return value === "summary" || value === "answer" ? value : null;
+}
+
 // ── The thread (P3-02b) ────────────────────────────────────────────────
 
 /** What the server read of a request's `thread`. */
@@ -399,6 +418,16 @@ const EXPLAIN_SYSTEM = [
   "Return only valid JSON.",
 ].join(" ");
 
+const EXPLAIN_PEER_SYSTEM = [
+  "You are Peer, a calm research assistant who sits beside a reader.",
+  "The reader selected some of Peer's own words about a paper, a line of the summary Peer wrote of it or an answer Peer gave to the reader's question about it, and asked what they mean.",
+  "Explain them in plain English, for a thoughtful reader who is not in this field: first what the term or passage means in general, then why Peer's words say it about this paper.",
+  ...EXPLAIN_BREVITY_RULES,
+  "Never quote the paper except with words copied character-for-character from the text supplied.",
+  "Do not fabricate numbers, citations or experimental details.",
+  "Return only valid JSON.",
+].join(" ");
+
 /**
  * The system and user prompts for one explanation. The user prompt is the
  * paper's title, its abstract, the map's lines, the paragraph around the
@@ -406,15 +435,17 @@ const EXPLAIN_SYSTEM = [
  * before it is serialised, so the schema and the rules are never what gets cut.
  * Nothing about the reader is a parameter, so nothing about the reader can be in it.
  */
-export function buildExplainPrompt(args: {
-  paper: { title: string; abstract: string };
-  map: readonly ExplainMapLine[];
-  located: Pick<LocatedPassage, "paragraph" | "before" | "after">;
-  passage: string;
-}): { systemPrompt: string; userPrompt: string } {
+export function buildExplainPrompt(
+  args: {
+    paper: { title: string; abstract: string };
+    map: readonly ExplainMapLine[];
+    passage: string;
+  } & PassageFrame,
+): { systemPrompt: string; userPrompt: string } {
+  if (args.peerWords !== undefined) return buildPeerWordsPrompt({ ...args, peerWords: args.peerWords });
   const userPrompt = JSON.stringify({
     task: "Explain the reader's selected passage in two parts: what it means in general, and why the author brings it up here.",
-    ...promptContext(args),
+    ...promptContext({ ...args, located: args.located }),
     passage: clipPassage(args.passage),
     outputSchema: {
       meaning: "at most two sentences (one sentence when `items` is present), in plain words, saying what the selected term or passage means in general, as a good textbook would, not specific to this paper",
@@ -437,6 +468,43 @@ export function buildExplainPrompt(args: {
   return { systemPrompt: EXPLAIN_SYSTEM, userPrompt };
 }
 
+/**
+ * P10-08b: the first answer's prompt for a selection of Peer's own words. The same two parts, the same brevity rules and the
+ * same bounded title, abstract and map as a paper passage, but the passage is labelled Peer's (`passageFrom`) and there is no
+ * paragraph of the paper around it: the second part says why Peer's summary or answer says it about this paper, and a quote is
+ * asked for only from the map's openings — which are the paper's own words — and is held to the paper by the verifier as ever.
+ * No table: a row would have no paragraph to be held to.
+ */
+function buildPeerWordsPrompt(args: {
+  paper: { title: string; abstract: string };
+  map: readonly ExplainMapLine[];
+  passage: string;
+  peerWords: PeerWordsSource;
+}): { systemPrompt: string; userPrompt: string } {
+  const userPrompt = JSON.stringify({
+    task: "Explain the reader's selected passage, which is Peer's own wording, in two parts: what it means in general, and why Peer's words say it about this paper.",
+    ...promptOrientation(args),
+    passageFrom: PEER_WORDS_FROM[args.peerWords],
+    passage: clipPassage(args.passage),
+    outputSchema: {
+      meaning: "at most two sentences, in plain words, saying what the selected term or passage means in general, as a good textbook would, not specific to this paper",
+      here: {
+        text: "at most two sentences, in plain words, saying why Peer's words say it about this paper, in terms of what the paper studies and finds",
+        evidence: "one sentence copied character-for-character from an `opening` in `sections`, only when that sentence shows the paper saying what Peer's words say; otherwise leave this key out",
+      },
+    },
+    rules: [
+      "Return ONLY valid JSON.",
+      "Use plain words a thoughtful non-specialist understands; define nothing with another unexplained term.",
+      "`passage` is Peer's wording, not the author's: never present it as the paper's own words, and never quote it.",
+      "`here.evidence` is one sentence copied character-for-character from an `opening` in `sections`. Do not paraphrase it, shorten it, or merge sentences.",
+      "Omit `evidence` when no opening shows the paper saying it. Never quote the abstract, a heading or `passage`; they are there for orientation only.",
+      "No LaTeX, no links, no advice, no verdict on whether the reader should read on.",
+    ],
+  });
+  return { systemPrompt: EXPLAIN_PEER_SYSTEM, userPrompt };
+}
+
 /** What both prompts share: the title, the abstract, the map's lines and the
  *  paragraph around the passage — every piece bounded before it is serialised. */
 function promptContext(args: {
@@ -444,7 +512,21 @@ function promptContext(args: {
   map: readonly ExplainMapLine[];
   located: Pick<LocatedPassage, "paragraph" | "before" | "after">;
 }) {
-  const { paper, map, located } = args;
+  const { located } = args;
+  return {
+    ...promptOrientation(args),
+    context: {
+      ...(located.before ? { before: cutAtWord(located.before, EXPLAIN_CAPS.neighbourChars) } : {}),
+      paragraph: cutAtWord(located.paragraph, EXPLAIN_CAPS.paragraphChars),
+      ...(located.after ? { after: cutAtWord(located.after, EXPLAIN_CAPS.neighbourChars) } : {}),
+    },
+  };
+}
+
+/** The title, the abstract and the map's lines — what orients the model whether the passage is the paper's or Peer's own words;
+ *  every piece bounded before it is serialised. */
+function promptOrientation(args: { paper: { title: string; abstract: string }; map: readonly ExplainMapLine[] }) {
+  const { paper, map } = args;
   return {
     paper: {
       title: cutAtWord(cleanDisplayText(paper.title), EXPLAIN_CAPS.titleChars),
@@ -454,18 +536,35 @@ function promptContext(args: {
       heading: cutAtWord(line.heading, EXPLAIN_CAPS.headingChars),
       ...(line.opening ? { opening: cutAtWord(line.opening, EXPLAIN_CAPS.openingChars) } : {}),
     })),
-    context: {
-      ...(located.before ? { before: cutAtWord(located.before, EXPLAIN_CAPS.neighbourChars) } : {}),
-      paragraph: cutAtWord(located.paragraph, EXPLAIN_CAPS.paragraphChars),
-      ...(located.after ? { after: cutAtWord(located.after, EXPLAIN_CAPS.neighbourChars) } : {}),
-    },
   };
 }
+
+/** What the selection is, for the prompt of Peer's own words (P10-08b): never the paper's. */
+const PEER_WORDS_FROM: Record<PeerWordsSource, string> = {
+  summary: "Peer's own words about this paper: a line of the summary Peer wrote of it. They are not the author's words.",
+  answer: "Peer's own words about this paper: part of an answer Peer gave the reader about it. They are not the author's words.",
+};
+
+/** How a prompt knows where the passage is from: the paper's body, found at `located`; or Peer's own words (P10-08b), which sit
+ *  in no paragraph of the paper, so the context is the abstract and the map alone. */
+export type PassageFrame =
+  | { located: Pick<LocatedPassage, "paragraph" | "before" | "after">; peerWords?: undefined }
+  | { peerWords: PeerWordsSource; located?: undefined };
 
 const EXPLAIN_REPLY_SYSTEM = [
   "You are Peer, a calm research assistant who sits beside a reader.",
   "The reader selected a passage of a paper and is asking follow-up questions about it.",
   "Answer the reader's last message about that passage in plain English, for a thoughtful reader who is not in this field.",
+  ...EXPLAIN_BREVITY_RULES,
+  "Never quote the paper except with words copied character-for-character from the text supplied.",
+  "Do not fabricate numbers, citations or experimental details.",
+  "Return only valid JSON.",
+].join(" ");
+
+const EXPLAIN_PEER_REPLY_SYSTEM = [
+  "You are Peer, a calm research assistant who sits beside a reader.",
+  "The reader selected some of Peer's own words about a paper, a line of the summary Peer wrote of it or an answer Peer gave to the reader's question about it, and is asking follow-up questions about them.",
+  "Answer the reader's last message about those words in plain English, for a thoughtful reader who is not in this field.",
   ...EXPLAIN_BREVITY_RULES,
   "Never quote the paper except with words copied character-for-character from the text supplied.",
   "Do not fabricate numbers, citations or experimental details.",
@@ -487,28 +586,23 @@ const EXPLAIN_REPLY_SYSTEM = [
  * optional table, `items`, for a reader who asks about several terms or quantities.
  * `detail` changes the cap and nothing else.
  */
-export function buildExplainReplyPrompt(args: {
-  paper: { title: string; abstract: string };
-  map: readonly ExplainMapLine[];
-  located: Pick<LocatedPassage, "paragraph" | "before" | "after">;
-  passage: string;
-  thread: readonly ExplainMessage[];
-  /** P3-02c: this reply may use web search for general background. */
-  search?: boolean;
-  /** P3-07: the reader asked for more, so the reply may run to the long cap. */
-  detail?: boolean;
-}): { systemPrompt: string; userPrompt: string } {
-  // The cap follows the message's place in the thread as sent: the first answer
-  // keeps its 841 only while it is in the prompt, and once the oldest are dropped
-  // no later message is read at its length.
-  const dropped = Math.max(0, args.thread.length - EXPLAIN_CAPS.threadMessages);
-  const thread = args.thread
-    .slice(dropped)
-    .map((message, index) => ({ role: message.role, text: cutAtWord(collapse(message.text), messageCap(dropped + index)) }));
-  const last = [...thread].reverse().find((message) => message.role === "reader");
+export function buildExplainReplyPrompt(
+  args: {
+    paper: { title: string; abstract: string };
+    map: readonly ExplainMapLine[];
+    passage: string;
+    thread: readonly ExplainMessage[];
+    /** P3-02c: this reply may use web search for general background. */
+    search?: boolean;
+    /** P3-07: the reader asked for more, so the reply may run to the long cap. */
+    detail?: boolean;
+  } & PassageFrame,
+): { systemPrompt: string; userPrompt: string } {
+  const { thread, last } = promptThread(args.thread);
+  if (args.peerWords !== undefined) return buildPeerWordsReplyPrompt({ ...args, peerWords: args.peerWords, thread, last });
   const userPrompt = JSON.stringify({
     task: "Answer the reader's last message in `thread` about the selected passage.",
-    ...promptContext(args),
+    ...promptContext({ ...args, located: args.located }),
     passage: clipPassage(args.passage),
     thread,
     lastReaderMessage: last?.text ?? "",
@@ -535,6 +629,62 @@ export function buildExplainReplyPrompt(args: {
     ],
   });
   return { systemPrompt: EXPLAIN_REPLY_SYSTEM, userPrompt };
+}
+
+/** The thread as a reply's prompt carries it, and the reader's last message in it. The cap follows the message's place in the
+ *  thread as sent: the first answer keeps its 841 only while it is in the prompt, and once the oldest are dropped no later
+ *  message is read at its length. */
+function promptThread(sent: readonly ExplainMessage[]): { thread: ExplainMessage[]; last: ExplainMessage | undefined } {
+  const dropped = Math.max(0, sent.length - EXPLAIN_CAPS.threadMessages);
+  const thread = sent
+    .slice(dropped)
+    .map((message, index) => ({ role: message.role, text: cutAtWord(collapse(message.text), messageCap(dropped + index)) }));
+  return { thread, last: [...thread].reverse().find((message) => message.role === "reader") };
+}
+
+/**
+ * P10-08b: a reply's prompt for a thread about Peer's own words. The same thread, the same caps and the same search rule as a paper
+ * passage's; the context is the abstract and the map, the passage is labelled Peer's, a quote is asked for only from the map's
+ * openings (the verifier holds it to the paper as ever), and there is no table.
+ */
+function buildPeerWordsReplyPrompt(args: {
+  paper: { title: string; abstract: string };
+  map: readonly ExplainMapLine[];
+  passage: string;
+  peerWords: PeerWordsSource;
+  thread: readonly ExplainMessage[];
+  last: ExplainMessage | undefined;
+  search?: boolean;
+  detail?: boolean;
+}): { systemPrompt: string; userPrompt: string } {
+  const userPrompt = JSON.stringify({
+    task: "Answer the reader's last message in `thread` about the selected passage, which is Peer's own wording.",
+    ...promptOrientation(args),
+    passageFrom: PEER_WORDS_FROM[args.peerWords],
+    passage: clipPassage(args.passage),
+    thread: args.thread,
+    lastReaderMessage: args.last?.text ?? "",
+    outputSchema: {
+      reply: args.detail
+        ? "at most eight sentences and 1,400 characters, in plain words, answering the reader's last message about this passage; the reader asked for more, so give the detail they asked for"
+        : "at most three sentences and 560 characters, in plain words, answering the reader's last message about this passage",
+      evidence: "one sentence copied character-for-character from an `opening` in `sections`, only when the reply rests on something the paper says; otherwise leave this key out",
+    },
+    rules: [
+      "Return ONLY valid JSON.",
+      args.detail
+        ? "Answer `lastReaderMessage`, the reader's last message in `thread`, about the selected passage, in plain words a thoughtful non-specialist understands. The reader asked for more, so `reply` may run to at most eight sentences and 1,400 characters; still no preamble and one idea per sentence. The earlier messages are there for what has been said so far."
+        : "Answer `lastReaderMessage`, the reader's last message in `thread`, about the selected passage, in at most three sentences (560 characters) of plain words a thoughtful non-specialist understands; the reader has not asked for more. The earlier messages are there for what has been said so far.",
+      "`passage` is Peer's wording, not the author's: never present it as the paper's own words, and never quote it.",
+      "`evidence` is one sentence copied character-for-character from an `opening` in `sections`, and only when the reply rests on something the paper says. Do not paraphrase it, shorten it, or merge sentences.",
+      "Omit `evidence` when the reply does not rest on a sentence of the paper. Never quote the abstract, a heading, `passage` or the thread.",
+      args.search
+        ? "You may use web search for general background. The paper's own words still come only from `sections`; `evidence` is still one sentence copied from it. Name no URL and no source by name. No advice, no verdict on whether the reader should read on."
+        : "Do not search the web or rely on anything outside the text supplied. No advice, no verdict on whether the reader should read on.",
+      "No LaTeX, no links.",
+    ],
+  });
+  return { systemPrompt: EXPLAIN_PEER_REPLY_SYSTEM, userPrompt };
 }
 
 // ── The answer ─────────────────────────────────────────────────────────
@@ -679,9 +829,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * empties it, the parts keep their two sentences. Whether a row is the paper's is the
  * verifier's question (`verifyExplainAnswer`).
  */
-export function sanitizeExplainAnswer(raw: unknown): ExplainAnswer | null {
+export function sanitizeExplainAnswer(raw: unknown, options: { items?: boolean } = {}): ExplainAnswer | null {
   if (!isRecord(raw) || !isRecord(raw.here)) return null;
-  const items = sanitizeItems(raw.items);
+  // P10-08b: Peer's own words have no paragraph of the paper to hold a row to, so a table the model sent anyway is not read.
+  const items = options.items === false ? [] : sanitizeItems(raw.items);
   const sentences = items.length > 0 ? EXPLAIN_CAPS.itemsPartSentences : EXPLAIN_CAPS.partSentences;
   const meaning = part(raw.meaning, sentences);
   const text = part(raw.here.text, sentences);
@@ -832,10 +983,10 @@ function sanitizeItems(raw: unknown): ExplainItem[] {
  * model said — a place, a page, a "peer" flag — is dropped: only the verifier says where a
  * quote sits and which rows the paper grounds. Null without words.
  */
-export function sanitizeExplainReply(raw: unknown, options: { detail?: boolean } = {}): ExplainReply | null {
+export function sanitizeExplainReply(raw: unknown, options: { detail?: boolean; items?: boolean } = {}): ExplainReply | null {
   if (!isRecord(raw)) return null;
   const detail = options.detail === true;
-  const items = sanitizeItems(raw.items);
+  const items = options.items === false ? [] : sanitizeItems(raw.items);
   const sentences = items.length > 0 ? EXPLAIN_CAPS.itemsReplySentences : detail ? EXPLAIN_CAPS.replyDetailSentences : EXPLAIN_CAPS.replySentences;
   const chars = detail ? EXPLAIN_CAPS.replyDetailChars : EXPLAIN_CAPS.replyChars;
   const reply = words(typeof raw.reply === "string" ? withoutWebAddresses(raw.reply) : raw.reply, sentences, chars);
@@ -944,12 +1095,21 @@ export function explainDocHash(doc: ExtractedDocument): string {
  * the reply searched the web: the same thread answered with and without search
  * are two entries, so the memory never hands a plain reply to a request that
  * asked to search nor the reverse. P3-07: and whether the reply is the long form (the
- * reader asked for more), so a short and a long reply to the same message are two entries.
+ * reader asked for more), so a short and a long reply to the same message are two entries. P10-08b: and, for a selection
+ * of Peer's own words, where they are from (`peer:summary`, `peer:answer`), so the same words selected in the paper, in the
+ * Summary and in an answer are three entries; a paper passage's key has nothing added and is what it was.
  * A hash of all of it — nothing in it is a reader's identity, and nothing of the passage or
  * the thread can be read back from it.
  */
-export function explainCacheKey(docHash: string, passage: string, thread: readonly string[], searched = false, detail = false): string {
-  return sha256(`${docHash}|${normalizeForMatch(passage)}|${sha256(JSON.stringify(thread))}${searched ? "|search" : ""}${detail ? "|detail" : ""}`);
+export function explainCacheKey(
+  docHash: string,
+  passage: string,
+  thread: readonly string[],
+  searched = false,
+  detail = false,
+  peerWords?: PeerWordsSource,
+): string {
+  return sha256(`${docHash}|${normalizeForMatch(passage)}|${sha256(JSON.stringify(thread))}${searched ? "|search" : ""}${detail ? "|detail" : ""}${peerWords ? `|peer:${peerWords}` : ""}`);
 }
 
 /** What the memory holds: a first answer, or (P3-02b) a reply turn — both

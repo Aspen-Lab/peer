@@ -13,6 +13,13 @@
 // paragraph around the passage, the passage and, for a reply, the words of the
 // thread the reader chose to send.
 //
+// P10-08b (review 8.4): the reader may also select Peer's OWN words — a line of the Summary, an answer to a question
+// — and ask what they mean. The client marks such a selection (`source: "summary" | "answer"`); those words are not in
+// the paper's body, so they are not located: the model is told they are Peer's own words about this paper and is given
+// the abstract and the map's one line per section as context, in the same budget. The first answer keeps its two parts,
+// its quote is held to the paper as ever (one that does not verify leaves the prose Peer's reading), and the memory's key
+// carries the source. A passage with no such mark must still be the paper's text, or it is refused.
+//
 // Gated like the report route, in the same order: the owner checks on an
 // upload (the claim, the attachment, the revision), the shared sign-in and
 // hourly-limit check, then the provider — only a provider that can write answers.
@@ -56,6 +63,7 @@ import {
   explainMapLines,
   locatePassage,
   parseModelJson,
+  peerWordsSource,
   readThread,
   sanitizeExplainAnswer,
   sanitizeExplainReply,
@@ -104,6 +112,9 @@ interface ExplainRequest {
    *  anywhere else if it is wrong. */
   sectionId?: string;
   paragraphIndex?: number;
+  /** P10-08b: where a selection of Peer's own words is from — only a literal "summary" or "answer" counts (`peerWordsSource`);
+   *  absent, "paper" or anything else is a passage of the paper's body, which must be found in it. */
+  source?: unknown;
   /** P3-02b's thread, read by `readThread`: the first message has none, and
    *  anything malformed is taken for none. */
   thread?: unknown;
@@ -245,11 +256,17 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   if (!doc || doc.sections.length === 0) return reply({ unavailable: true } satisfies ExplainResult);
 
   const passage = clipPassage(body.passage);
-  const located = locatePassage(doc, passage, {
-    sectionId: typeof body.sectionId === "string" ? body.sectionId : undefined,
-    paragraphIndex: typeof body.paragraphIndex === "number" ? body.paragraphIndex : undefined,
-  });
-  if (!located) return reply({ error: "not_in_paper" } satisfies ExplainResult, 422);
+  // Peer's own words (P10-08b) are not looked for in the body; the paper's must be found in it.
+  const peerWords = peerWordsSource(body.source);
+  const located = peerWords
+    ? null
+    : locatePassage(doc, passage, {
+        sectionId: typeof body.sectionId === "string" ? body.sectionId : undefined,
+        paragraphIndex: typeof body.paragraphIndex === "number" ? body.paragraphIndex : undefined,
+      });
+  // How the prompt knows where the passage is from: Peer's words (with something in them), or the paragraph found.
+  const frame = peerWords ? (passage === "" ? null : { peerWords }) : located ? { located } : null;
+  if (!frame) return reply({ error: "not_in_paper" } satisfies ExplainResult, 422);
 
   // Whether this turn searches the web: the reader asked (a literal `true`), it is
   // a reply (the first message never searches) and the provider can. A request that
@@ -264,7 +281,7 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
 
   // The server's memory: the document, the passage, the thread's texts, whether the
   // reply searched and whether it is the long form — never the reader.
-  const key = explainCacheKey(explainDocHash(doc), passage, thread.map((message) => message.text), searched, detail);
+  const key = explainCacheKey(explainDocHash(doc), passage, thread.map((message) => message.text), searched, detail, peerWords ?? undefined);
   const logTurn = (fields: { promptChars: number; answerChars: number; cached: boolean }) =>
     console.debug("[papers/explain] turn", {
       ...(userId ? { userId: shortHash(userId) } : {}),
@@ -284,7 +301,8 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   }
 
   const abstract = [body.paper.summaryIntro, body.paper.summaryResultDiscussion].filter(Boolean).join(" ");
-  const context = { paper: { title: body.paper.title, abstract }, map: explainMapLines(doc), located, passage };
+  const base = { paper: { title: body.paper.title, abstract }, map: explainMapLines(doc), passage };
+  const context = { ...base, ...frame };
   const { systemPrompt, userPrompt } = replying ? buildExplainReplyPrompt({ ...context, thread, search: searched, detail }) : buildExplainPrompt(context);
   const maxTokens = replying ? (detail ? REPLY_DETAIL_MAX_TOKENS : REPLY_MAX_TOKENS) : MAX_TOKENS;
 
@@ -300,13 +318,17 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   // Sanitised, then held to the paper: the quote must be the paper's own words
   // or the prose is labelled Peer's. Nonsense is no answer — nothing is kept.
   const parsed = parseModelJson(raw);
-  const sanitizedReply = replying ? sanitizeExplainReply(parsed, { detail }) : null;
-  const sanitizedAnswer = replying ? null : sanitizeExplainAnswer(parsed);
+  // Peer's own words have no paragraph of the paper to hold a table's rows to, so they get none (P10-08b).
+  const sanitizedReply = replying ? sanitizeExplainReply(parsed, { detail, ...(peerWords ? { items: false } : {}) }) : null;
+  const sanitizedAnswer = replying ? null : sanitizeExplainAnswer(parsed, peerWords ? { items: false } : {});
   let result: ExplainCached;
   // A table's rows — a reply's (P3-07) or, since P4-00c (§1h.11 (a)), the first answer's — are
   // held to the paper in the scope the passage was found in.
-  if (sanitizedReply) result = { ...verifyExplainReply(sanitizedReply, doc, located.sectionId, { passage, located }), searched, ...(detail ? { detail: true as const } : {}) };
-  else if (sanitizedAnswer) result = verifyExplainAnswer(sanitizedAnswer, doc, located.sectionId, { passage, located });
+  // A quote is held to the whole paper either way; the section the passage sits in only orders the search, and Peer's words sit in none.
+  const preferSectionId = located?.sectionId;
+  const scope = located ? { passage, located } : undefined;
+  if (sanitizedReply) result = { ...verifyExplainReply(sanitizedReply, doc, preferSectionId, scope), searched, ...(detail ? { detail: true as const } : {}) };
+  else if (sanitizedAnswer) result = verifyExplainAnswer(sanitizedAnswer, doc, preferSectionId, scope);
   else return reply({ unavailable: true } satisfies ExplainResult);
 
   logTurn({ promptChars: systemPrompt.length + userPrompt.length, answerChars: raw.length, cached: false });

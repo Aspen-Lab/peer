@@ -61,7 +61,7 @@ describe("/privacy — Your questions (P2-03)", () => {
 // double quotes in the text are the typographic ones, which are not escaped.
 
 const EXPLAIN_PARAGRAPHS = [
-  "Selecting a passage sends nothing, and neither does typing in the box. Peer sends a request only when you press “Explain this” above a selection (or press E on one) and, for a follow-up, when you press Enter or Send, or Say more under a reply. A reply is short unless you ask for more, in your own words or with Say more. The request carries the passage you selected, the paragraph it sits in and the one on either side of it, the paper's title and abstract, one line for each section of the paper's map and, for a follow-up, the messages of that thread. The request also carries the paper's record as this page holds it — its title, authors, venue, where it came from and your save and feedback marks on it — so Peer's server can find the paper; of that record the model sees only the title and the abstract. The answer is written with your own model key, which goes with the request.",
+  "Selecting a passage sends nothing, and neither does typing in the box. Peer sends a request only when you press “Explain this” above a selection (or press E on one) and, for a follow-up, when you press Enter or Send, or Say more under a reply. A reply is short unless you ask for more, in your own words or with Say more. The request carries the passage you selected, the paragraph it sits in and the one on either side of it, the paper's title and abstract, one line for each section of the paper's map and, for a follow-up, the messages of that thread. A selection in the Summary or in an answer is sent the same way, with no paragraph of the paper around it: the request carries those words, the paper's title and abstract and one line for each section of the paper's map. The request also carries the paper's record as this page holds it — its title, authors, venue, where it came from and your save and feedback marks on it — so Peer's server can find the paper; of that record the model sees only the title and the abstract. The answer is written with your own model key, which goes with the request.",
   "The request goes to Peer's server and on to the model provider whose key you added. The answer runs on your own key, and it is short unless you ask for more.",
   "Peer's server keeps three things. First, each answer it gives, in memory, for up to an hour, so the same passage asked about again is answered without another model call; it is filed under hashes of the document, the passage and the thread, never under who asked.",
   "Second, one log line for each answer it gives: how many characters went out and came back and, if you are signed in, a shortened hash of your account id — never the passage, the paper's words or anything you wrote.",
@@ -105,6 +105,14 @@ describe("/privacy — Explain this (P3-02d)", () => {
     for (const sent of ["the passage you selected", "the paragraph it sits in and the one on either side of it", "the paper's title and abstract".replace(/'/g, "&#x27;"), "one line for each section of the paper", "the messages of that thread", "your own model key"]) {
       expect(entry).toContain(sent);
     }
+  });
+
+  // P10-08b (review 8.4): a selection in the Summary or in an answer can be explained too. It is not a paragraph of the paper,
+  // so the request carries those words, the title and abstract and the map's lines, and no paragraph around them. The
+  // paragraph above is re-aimed to hold the sentence (it was pinned whole without it); this names it on its own.
+  it("says a selection in the Summary or in an answer is sent the same way, with no paragraph of the paper around it", () => {
+    expect(entry).toContain("A selection in the Summary or in an answer is sent the same way, with no paragraph of the paper around it");
+    expect(entry).toContain("the request carries those words, the paper&#x27;s title and abstract and one line for each section of the paper&#x27;s map");
   });
 
   // P3-07 (§1h.9 (5)): the sentence about sending gains "Say more" — the third thing
