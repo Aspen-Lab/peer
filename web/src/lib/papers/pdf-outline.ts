@@ -352,17 +352,22 @@ const SUPERSCRIPT_RISE = 1;
 const CITATION_MARK = /^\d+(?:[\s,\u2013\u2212-]+\d+)*$/;
 const CITATION_MARK_MAX = 12;
 /** What a citation number stands after: the end of a clause, a bracket or a
- *  quote ("materials.12", "films,3−5", "“fatigue”16"), a suspended hyphen
- *  ("inter-5,6 and intragranular"), a word of three letters or more
+ *  quote ("materials.12", "films,3−5", "“fatigue”16"), a suspended hyphen of any kind (- ‐ ‑ −,
+ *  P10-37) ("inter-5,6 and intragranular"), a word of three letters or more
  *  ("degradation17"), a capitalised pair, which is an element ("Fe30"), or a
  *  formula that already ends in digits ("ZnTiO335"). After a digit, a
  *  one-letter variable or one or two lower-case letters ("10−3", "R2", "cm2",
  *  "s−1") a raised digit is an exponent, and it is kept. */
-const CITED = /(?:[.,;:!?)\]\u201D\u2019"']|\p{L}-|\p{L}{3,}|\p{Lu}\p{Ll}|[\p{L})][\d\u2080-\u2089]+)$/u;
+const CITED = /(?:[.,;:!?)\]\u201D\u2019"']|\p{L}[-\u2010\u2011\u2212]|\p{L}{3,}|\p{Lu}\p{Ll}|[\p{L})][\d\u2080-\u2089]+)$/u;
 /** A bracketed group with a slash in it and no space: "(i/imax)", and one that holds a bracketed
  *  label of its own, "(j/j(limiting))" (P9-13b). One raised digit after it is an exponent
  *  ("(i/imax)2"), not a citation of the group. */
 const RATIO_GROUP = /\([^()\s]*\/[^()\s]*(?:\([^()\s]*\)[^()\s]*)?\)$/;
+/** ...and a bracketed group with a maths symbol in it and no space (P10-37, BACKLOG-28): an operator between two
+ *  operands, "(x+y)", "(E−Ef)", "(a×b)", or a symbol that is maths wherever it stands, "(ΔT)". An ASCII hyphen and an en
+ *  dash are no operator here ("(Ni-rich)", "(1990–2000)" are names and ranges); the group's one raised digit is an
+ *  exponent, as the ratio's is. */
+const MATH_GROUP = /\((?:[^()\s]+[+\u2212\u00D7\u00B7=<>\u00B1][^()\s]+|[^()\s]*[\u0394\u2202\u2207\u2211\u222B\u221A][^()\s]*)\)$/;
 /** A run made only of combining marks: the overbar of a Miller index (U+0305), an accent, a
  *  vector arrow. The PDF draws it as a run of its own, with no width, and stores a space run
  *  behind it in the mark's own face. */
@@ -639,7 +644,7 @@ function lineOf(
       const mark = runs.slice(i, end).map((run) => run.str).join("").trim();
       const shape = mark.length <= CITATION_MARK_MAX && CITATION_MARK.test(mark);
       const before = text.trimEnd();
-      if (shape && CITED.test(before) && !(mark.length === 1 && RATIO_GROUP.test(before))) {
+      if (shape && CITED.test(before) && !(mark.length === 1 && (RATIO_GROUP.test(before) || MATH_GROUP.test(before)))) {
         const last = runs[end - 1];
         // The space a raised run carried is the one the next word needs.
         if (text && /\s$/.test(last.str) && !/\s$/.test(text)) text += " ";
