@@ -132,6 +132,11 @@ export function useReading(paper: Paper | undefined): {
     if (!paperId || cached) return;
     const controller = new AbortController();
     (async () => {
+      // The first tick, as `use-model-report.ts` has it (P10-40, BACKLOG-04): a double effect
+      // (StrictMode in dev, or a key that changes at once) cleans the first run up before
+      // this line, so only the run that is kept goes on to ask.
+      await Promise.resolve();
+      if (controller.signal.aborted) return;
       try {
         // `v` first, so a private request keeps its `upload` parameter after it.
         const res = await fetch(`/api/papers/${encodeURIComponent(paperId)}/reading?v=${READING_VERSION}${uploadId ? `&upload=${encodeURIComponent(uploadId)}` : ""}`, {
