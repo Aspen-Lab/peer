@@ -36,7 +36,7 @@ function readingWith(captions: ExtractedDocument["figureCaptions"]) {
 
 describe("the figure's size travels with its record (P10-26)", () => {
   it("placeFigures carries a caption's picture width and height to the figure", () => {
-    const sections: ReadingSection[] = [{ heading: "1", canonical: "introduction", paragraphs: ["Figure 1 shows it."] }];
+    const sections: ReadingSection[] = [{ id: "s1", heading: "1", canonical: "introduction", paragraphs: ["Figure 1 shows it."] }];
     const out = placeFigures(sections, [{ ordinal: 0, label: "Figure 1", caption: "Rate.", page: 1, width: 1400, height: 900 }], { paperId: "openalex:W1" });
     const figure = out[0].figures?.[0] as ReadingFigure;
     expect(figure.width).toBe(1400);
@@ -44,7 +44,7 @@ describe("the figure's size travels with its record (P10-26)", () => {
   });
 
   it("a size that is not two positive whole numbers is not carried", () => {
-    const sections: ReadingSection[] = [{ heading: "1", canonical: "introduction", paragraphs: ["Figure 1 shows it. Figure 2 and Figure 3."] }];
+    const sections: ReadingSection[] = [{ id: "s1", heading: "1", canonical: "introduction", paragraphs: ["Figure 1 shows it. Figure 2 and Figure 3."] }];
     const out = placeFigures(
       sections,
       [

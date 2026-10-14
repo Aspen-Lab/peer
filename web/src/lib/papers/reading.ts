@@ -220,6 +220,10 @@ export interface ReadingFigure {
   label: string;
   caption: string;
   imageUrl?: string;
+  /** P10-26 (X-A8): the picture's own width and height in pixels, when the extractor knew them — together or not at
+   *  all. The page reserves exactly that room until the picture arrives; a figure without them keeps the fixed one. */
+  width?: number;
+  height?: number;
   page?: number;
   /** Index of the paragraph this figure follows; -1 puts it before the first. */
   after: number;
@@ -608,6 +612,11 @@ export function pdfFigureUrl(paperId: string, page: number, fig: number): string
   return `/api/papers/${encodeURIComponent(paperId)}/figure-image?page=${page}&fig=${fig}`;
 }
 
+/** A picture's width or height: a positive whole number of pixels, nothing else. */
+function isWhole(n: unknown): n is number {
+  return typeof n === "number" && Number.isInteger(n) && n > 0;
+}
+
 /** The number a "Figure 3" / "Fig 3" label names, or null where the figure
  *  route has nothing to look for: "Figure IV", "Figure S3", "Table 1". */
 function pictureNumber(label: string): number | null {
@@ -687,6 +696,10 @@ export function placeFigures(
       after: at.after,
       ...(typeof c.page === "number" ? { page: c.page } : {}),
     };
+    if (isWhole(c.width) && isWhole(c.height)) {
+      figure.width = c.width;
+      figure.height = c.height;
+    }
     if (c.imageUrl) figure.imageUrl = c.imageUrl;
     else if (pdf && typeof c.page === "number") {
       const pictureOf = pictureNumber(c.label);

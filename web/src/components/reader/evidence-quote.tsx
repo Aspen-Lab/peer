@@ -55,6 +55,11 @@ export interface SettleEnv {
   onUser: (stop: () => void) => () => void;
   /** Calls `run` whenever a picture anywhere on the page has arrived (or failed to); returns the way to unsubscribe. */
   onArrive: (run: () => void) => () => void;
+  /**
+   * P10-26 (X-A8): how many pictures above `target` in the document are still loading (`complete === false`). The
+   * settle does not take the landing as final while there are any. Optional: an env without it counts none.
+   */
+  pendingAbove?: (target: SettleTarget) => number;
 }
 
 /** Frames the heading's top must hold still before the page counts as at rest. */
@@ -93,6 +98,16 @@ function browserSettleEnv(): SettleEnv | null {
         document.removeEventListener("error", run, true);
       };
     },
+    pendingAbove: (target) => {
+      if (typeof Node === "undefined" || !(target instanceof Node)) return 0;
+      let pending = 0;
+      for (const img of Array.from(document.images)) {
+        if (img.complete) continue;
+        // The heading follows the picture in document order: the picture is above it.
+        if (img.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING) pending += 1;
+      }
+      return pending;
+    },
   };
 }
 
@@ -105,7 +120,9 @@ let settling: (() => void) | null = null;
  * once its top has held still for three frames (the jump is over) it scrolls to the heading again — instantly,
  * `block: "start"`, so the heading's own `scroll-mt` places it — and goes on watching, scrolling again whenever the
  * layout moved it and came to rest, until a second after the page first came to rest. A figure that arrives later
- * than that (a slow host) still lands the heading again, up to ten seconds from the rest. The reader's own scroll,
+ * than that (a slow host) still lands the heading again, up to ten seconds from the rest; and while a picture above
+ * the heading is still loading the page goes on watching it by frames, so the landing is not final until the pictures
+ * above it have settled (P10-26, X-A8). The reader's own scroll,
  * touch, key or press ends it at once; a second press replaces the first. Nothing happens in a page that is not a
  * browser's. Returns the way to end it.
  */
@@ -164,6 +181,12 @@ export function settleOnSection(find: () => SettleTarget | null, env: SettleEnv 
       if (Math.abs(top - first) > SAME) travelled = true;
       held = last !== null && Math.abs(top - last) <= SAME ? held + 1 : 0;
       last = top;
+    }
+    // P10-26 (X-A8): a picture above the heading that is still loading will move it when it comes in. The landing is
+    // not final while there is one — the watch by frames goes on, a second at a time, inside the late cap — and is
+    // over a second after the last of them has settled, by which time the heading has been landed once more.
+    if (restAt !== null && now - restAt < SETTLE_LATE_CAP && (env.pendingAbove?.(target) ?? 0) > 0) {
+      watchUntil = Math.max(watchUntil, now + SETTLE_CAP);
     }
     if (restAt === null ? now - start >= SETTLE_TRAVEL_CAP : now >= watchUntil) return restAt === null ? end() : endFrames();
     if (held >= REST_FRAMES - 1 && (travelled || now - start >= SETTLE_GRACE)) {

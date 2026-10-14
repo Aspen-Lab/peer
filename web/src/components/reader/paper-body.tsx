@@ -21,6 +21,7 @@
 // Peer's voice, and none of this is Peer's.
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import type { PaperReading, ReadingFigure, ReadingSection } from "@/lib/papers/reading";
 import { GIST_QUESTION, MAX_STRONG_ROWS, type RouteResult, type RouteSection, type RouteTier } from "@/lib/papers/reading-map";
 import type { QuestionAnswers } from "@/lib/papers/report";
@@ -614,34 +615,59 @@ export function figureMatClass(waiting: boolean): string {
   return waiting ? `${mat} min-h-[calc(32rem+1.5rem)] sm:min-h-[calc(32rem+2rem)]` : mat;
 }
 
+/**
+ * P10-26 (X-A8, BACKLOG-89): the box of a figure whose picture's own width and height are known. An aspect-ratio box
+ * the size the picture will be — its own size, never wider than the mat's column or than `max-h-[32rem]` lets it be
+ * at its ratio — so the page is the same height before and after the picture arrives. Null without both numbers.
+ */
+export function figureBoxStyle(figure: ReadingFigure): CSSProperties | null {
+  const { width, height } = figure;
+  if (typeof width !== "number" || typeof height !== "number" || !(width > 0) || !(height > 0)) return null;
+  return { aspectRatio: `${width} / ${height}`, width: `min(100%, ${width}px, calc(32rem * ${width} / ${height}))` };
+}
+
 function Figure({ figure }: { figure: ReadingFigure }) {
   const [failed, setFailed] = useState(false);
   const [waiting, setWaiting] = useState(false);
   const showImage = Boolean(figure.imageUrl) && !failed;
+  const box = figureBoxStyle(figure);
   // Once the picture is on the page: one that is not there yet reserves its room (P10-19). Not in the first render, so
-  // that what the server drew and what the first client render draws stay as they were.
+  // that what the server drew and what the first client render draws stay as they were. A figure with a known size
+  // (P10-26) has its own room from the first paint and needs no guess.
   const onPicture = useCallback((img: HTMLImageElement | null) => {
     if (img && !img.complete) setWaiting(true);
   }, []);
+  const picture = (
+    // A plain img: the picture lives on the source's host (or on our own figure route), and `next/image` would need
+    // every host listed in advance.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      ref={onPicture}
+      src={figure.imageUrl}
+      alt={figure.caption}
+      loading="lazy"
+      decoding="async"
+      referrerPolicy="no-referrer"
+      onLoad={() => setWaiting(false)}
+      onError={() => setFailed(true)}
+      className={
+        box
+          ? "block h-full w-full object-contain"
+          : "mx-auto block h-auto max-h-[32rem] w-auto max-w-full object-contain"
+      }
+    />
+  );
   return (
     <figure className="my-6">
       {showImage && (
-        <div className={figureMatClass(waiting)}>
-          {/* A plain img: the picture lives on the source's host (or on our
-              own figure route), and `next/image` would need every host
-              listed in advance. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            ref={onPicture}
-            src={figure.imageUrl}
-            alt={figure.caption}
-            loading="lazy"
-            decoding="async"
-            referrerPolicy="no-referrer"
-            onLoad={() => setWaiting(false)}
-            onError={() => setFailed(true)}
-            className="mx-auto block h-auto max-h-[32rem] w-auto max-w-full object-contain"
-          />
+        <div className={box ? figureMatClass(false) : figureMatClass(waiting)}>
+          {box ? (
+            <div className="mx-auto" style={box}>
+              {picture}
+            </div>
+          ) : (
+            picture
+          )}
         </div>
       )}
       <figcaption className="annotation mt-2 leading-[1.6] text-text-faint measure-mono">

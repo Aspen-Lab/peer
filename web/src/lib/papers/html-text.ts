@@ -49,6 +49,10 @@ export interface ExtractedFigureCaption {
   imageUrl?: string;
   /** PDFs only: the page the caption was read from. */
   page?: number;
+  /** P10-26: the picture's own width and height in pixels, where the extractor knows them (the page draws the
+   *  picture's room from them before it arrives). Absent where it does not. */
+  width?: number;
+  height?: number;
   /** Where in the document the caption sits, 0–1: the character offset in
    *  an HTML page, the page in a PDF. How a figure nobody mentions by number
    *  still lands near the prose it belongs to. */
