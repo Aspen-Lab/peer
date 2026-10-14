@@ -114,6 +114,18 @@ function levelOfRow(row: ReadingMapSection): 1 | 2 | 3 {
 }
 
 /**
+ * P10-12 (A15): a gist that only says the line again — the paragraph's own first words, whatever the case or
+ * punctuation — adds nothing under it, and read as the line drawn twice (once in the serif, once in the label face).
+ * It is not drawn; a gist that says something else is.
+ */
+function repeatsLine(gist: string, opening: string): boolean {
+  const words = (text: string): string => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const said = words(gist);
+  const line = words(opening);
+  return said !== "" && (line === said || line.startsWith(`${said} `));
+}
+
+/**
  * P10-07b: the rows that are open after the map changed (a partition arrived, or went), kept by id. A row of the
  * new map stays open when it was; a group row is open when the trunk it divides was, so the parts of an open row
  * are open; an id the new map no longer has (the trunk's, once it is divided) is let go.
@@ -218,14 +230,15 @@ export function ReadingMapView({
 
   // A gist renders for a paragraph line of an open row that has one; the legend
   // under the heading is there when at least one does (the lines below use the same test).
-  const gistOf = (sectionId: string, index: number): string | undefined => {
+  // P10-12: not one that only repeats the line it follows (`repeatsLine`).
+  const gistOf = (sectionId: string, index: number, opening: string): string | undefined => {
     const gist = gists?.[sectionId]?.[index];
-    return typeof gist === "string" && gist !== "" ? gist : undefined;
+    return typeof gist === "string" && gist !== "" && !repeatsLine(gist, opening) ? gist : undefined;
   };
   // P10-07b: a part's gists are the trunk's (the guide knows the section, not the part).
   const gistKeyOf = (row: ReadingMapSection): string => partOf(row)?.sectionId ?? row.id;
   const gistShown = map.sections.some(
-    (row) => open.has(row.id) && row.paragraphs.some((line) => line.opening !== null && gistOf(gistKeyOf(row), line.index) !== undefined),
+    (row) => open.has(row.id) && row.paragraphs.some((line) => line.opening !== null && gistOf(gistKeyOf(row), line.index, line.opening) !== undefined),
   );
   // P10-07b: the legend is also there while a part of Peer's reading is on screen.
   const partShown = map.sections.some((row) => partOf(row) !== undefined);
@@ -356,7 +369,7 @@ export function ReadingMapView({
                   <ol className="mt-1 mb-2 space-y-1 pl-5">
                     {lines.map((line) => {
                       const tier = mark?.paragraphs.get(line.index);
-                      const gist = gistOf(gistKeyOf(row), line.index);
+                      const gist = gistOf(gistKeyOf(row), line.index, line.opening ?? "");
                       return (
                         <li key={line.index}>
                           <a

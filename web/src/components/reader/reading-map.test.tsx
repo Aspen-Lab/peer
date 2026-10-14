@@ -689,7 +689,8 @@ describe("ReadingMapView — an unheaded paper's keyed map draws each paragraph 
   // What the stub's guide answers, and a model may: the paragraph's own first eight words.
   const echoed = Object.fromEntries(OPENINGS.map((opening, k) => [k, opening.split(/\s+/).slice(0, 8).join(" ")]));
   const lineOf = (html: string, k: number): string => {
-    const start = html.lastIndexOf("<li>", html.indexOf(`href="#paper-section-0-p${k}"`));
+    // The line's own `<li>` (a group row's heading link points at its first paragraph too).
+    const start = html.indexOf(`<li><a href="#paper-section-0-p${k}"`);
     return html.slice(start, html.indexOf("</li>", start));
   };
   const renderKeyed = (gists: Record<number, string>) =>
@@ -709,7 +710,7 @@ describe("ReadingMapView — an unheaded paper's keyed map draws each paragraph 
     expect(html.match(/role="note"/g)).toBeNull();
     // The rows are as they were: two group rows tagged as Peer's reading, three lines each.
     expect(html.match(/<li data-level/g)?.length).toBe(2);
-    expect(html.match(/href="#paper-section-0-p\d"/g)?.length).toBe(OPENINGS.length);
+    expect(html.match(/<li><a href="#paper-section-0-p\d"/g)?.length).toBe(OPENINGS.length);
   });
 
   it("drops a repeat however it is cased or punctuated, and a gist that is the line's start", () => {
