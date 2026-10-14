@@ -177,10 +177,16 @@ export function goToPassage(
     const el = env.doc.getElementById(anchor.paragraphId);
     if (!el) return false;
     el.scrollIntoView({ behavior: "smooth", block: "start" });
-    // P10-09f (rule 3): the paragraph is scrolled to as before; the flash lands on the marked words when the paragraph
-    // draws a mark for this note, else on the whole paragraph.
-    const mark = anchor.start !== undefined ? el.querySelector(`mark[data-note="${anchor.n}"]`) : null;
-    if (mark) flash(mark, MARK_FLASH_CLASSES);
+    // P10-09f (rule 3): the paragraph is scrolled to as before (it holds every mark of the note, so its top is at or
+    // before the first of them in reading order); the flash lands on the marked words when the paragraph draws a mark
+    // for this note, else on the whole paragraph. P10-46: a note's words can stand in more than one mark — the first
+    // ones nested inside an earlier note's mark (`data-note-part`), the rest in its own (`data-note`) — and the flash
+    // covers them all.
+    const marks =
+      anchor.start !== undefined
+        ? Array.from(el.querySelectorAll(`mark[data-note="${anchor.n}"], mark[data-note-part="${anchor.n}"]`))
+        : [];
+    if (marks.length > 0) for (const mark of marks) flash(mark, MARK_FLASH_CLASSES);
     else flash(el);
     return true;
   };

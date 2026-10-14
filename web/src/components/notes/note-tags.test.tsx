@@ -281,9 +281,10 @@ describe("goToPassage — the flash lands on the marked words", () => {
     const paragraph = {
       scrollIntoView: vi.fn(),
       classList: set(paragraphClasses),
-      querySelector: (selector: string) => {
+      // P10-46 (§1c, re-aimed): the flash asks for every mark of the note (`querySelectorAll`), not the first alone.
+      querySelectorAll: (selector: string) => {
         asked.push(selector);
-        return withMark && selector === 'mark[data-note="2"]' ? mark : null;
+        return withMark && selector.includes('mark[data-note="2"]') ? [mark] : [];
       },
     };
     return { paragraph, paragraphClasses, markClasses, asked, doc: { getElementById: (id: string) => (id === ANCHOR.paragraphId ? paragraph : null) } as unknown as Document };
