@@ -12,8 +12,9 @@
 import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Note } from "@/lib/notes/types";
-import { citedKeys } from "@/lib/notes/blocks";
+import type { Citable, Note } from "@/lib/notes/types";
+import { citedKeys, stickyBlocks, stickyQuote, withStickyText } from "@/lib/notes/blocks";
+import { readingNote, type ReadingNoteExtras } from "@/lib/notes/templates";
 
 interface NotesState {
   notes: Record<string, Note>;
@@ -21,11 +22,19 @@ interface NotesState {
   /** Write the editor's state back. Stamps `updatedAt`. */
   save: (id: string, patch: Partial<Pick<Note, "title" | "blocks" | "sources">>, at?: string) => void;
   remove: (id: string) => void;
+  /** P10-09a: the paper's own note — made from its template the first time, without navigating — and its id.
+   *  Both "Take notes" paths (a sticky, the notes window) call it. */
+  ensureReadingNote: (paper: Citable, extras?: ReadingNoteExtras) => string;
+  /** P10-09a (ruling §1h.78 (f)): append sticky `stickyCount + 1` to the note: an `h3` "Note N" carrying the
+   *  anchor, and an empty text block. Null for a note that is not there. */
+  addSticky: (noteId: string, at: { paperId: string; paragraphId: string; passage: string }) => { id: string; n: number } | null;
+  /** P10-09a: write a sticky's text through into its own blocks (one per paragraph); nothing else changes. */
+  setStickyText: (noteId: string, headerId: string, text: string) => void;
 }
 
 export const useNotesStore = create<NotesState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       notes: {},
       add: (note) => set((s) => ({ notes: { ...s.notes, [note.id]: note } })),
       save: (id, patch, at = new Date().toISOString()) =>
@@ -40,6 +49,35 @@ export const useNotesStore = create<NotesState>()(
           const notes = { ...s.notes };
           delete notes[id];
           return { notes };
+        }),
+      ensureReadingNote: (paper, extras) => {
+        const own = readingNoteFor(get().notes, paper.id);
+        if (own) return own.id;
+        const note = readingNote(paper, extras);
+        set((s) => ({ notes: { ...s.notes, [note.id]: note } }));
+        return note.id;
+      },
+      addSticky: (noteId, at) => {
+        const note = get().notes[noteId];
+        if (!note) return null;
+        const used = note.blocks.reduce((most, b) => Math.max(most, b.anchor?.n ?? 0), 0);
+        const n = Math.max(note.stickyCount ?? 0, used) + 1;
+        const { header, blocks } = stickyBlocks({ paperId: at.paperId, paragraphId: at.paragraphId, quote: stickyQuote(at.passage), n });
+        set((s) => {
+          const current = s.notes[noteId];
+          if (!current) return s;
+          const updatedAt = new Date().toISOString();
+          return { notes: { ...s.notes, [noteId]: { ...current, blocks: [...current.blocks, ...blocks], stickyCount: n, updatedAt } } };
+        });
+        return { id: header.id, n };
+      },
+      setStickyText: (noteId, headerId, text) =>
+        set((s) => {
+          const note = s.notes[noteId];
+          if (!note) return s;
+          const blocks = withStickyText(note.blocks, headerId, text);
+          if (blocks.length === note.blocks.length && blocks.every((b, i) => b === note.blocks[i])) return s;
+          return { notes: { ...s.notes, [noteId]: { ...note, blocks, updatedAt: new Date().toISOString() } } };
         }),
     }),
     {

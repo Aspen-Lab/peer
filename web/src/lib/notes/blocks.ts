@@ -1,7 +1,7 @@
 // What can be done to a note's blocks, as pure functions — the editor calls
 // these and renders the result, so every rule here is testable without a DOM.
 
-import type { Block, BlockType, Note, Source } from "./types";
+import type { Block, BlockType, Note, NoteAnchor, Source } from "./types";
 import { citedIn, plainInline } from "./inline";
 import { authorYear } from "./cite";
 
@@ -214,4 +214,95 @@ export function isUntouched(note: Pick<Note, "title" | "blocks">): boolean {
     !note.title.trim() &&
     note.blocks.every((b) => isTextual(b.type) && b.type === "text" && !b.text.trim() && !b.cite)
   );
+}
+
+// ── Sticky notes (P10-09a; ruling §1h.78 (f)) ─────────────────────────────
+//
+// A sticky note lives in the paper's own note as ONE `h3` block "Note N" that carries `anchor` (the passage it
+// was taken on), followed by its text as `text` blocks, one per paragraph the reader typed. A sticky owns its
+// header and the `text` blocks right after it, up to the next block of any other kind (the next sticky's header
+// included); it edits those and no others. The quote is the anchor's, never a block's text — no export has it.
+
+/** The longest quote an anchor keeps: the passage's start. */
+export const STICKY_QUOTE_MAX = 300;
+/** The most characters of the quote a sticky's header shows. */
+export const STICKY_HEAD_MAX = 80;
+
+export function stickyTitle(n: number): string {
+  return `Note ${n}`;
+}
+
+/** The passage's start for an anchor: whitespace collapsed, at most `STICKY_QUOTE_MAX` characters. */
+export function stickyQuote(passage: string): string {
+  return passage.replace(/\s+/g, " ").trim().slice(0, STICKY_QUOTE_MAX).trimEnd();
+}
+
+/** The first words of a quote in at most `max` characters, the cut marked with an ellipsis. */
+export function quoteHead(quote: string, max = STICKY_HEAD_MAX): string {
+  if (quote.length <= max) return quote;
+  let cut = quote.slice(0, max - 1);
+  const space = cut.lastIndexOf(" ");
+  if (space > max / 2) cut = cut.slice(0, space);
+  return `${cut.trimEnd()}…`;
+}
+
+/** What the reader typed, as paragraphs: one per line, blank lines dropped. */
+export function stickyParagraphs(text: string): string[] {
+  return text
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim() !== "");
+}
+
+/** A sticky's blocks: its header at `start` and its text blocks up to `end` (exclusive). */
+export function stickySpan(blocks: readonly Block[], headerId: string): { start: number; end: number } | null {
+  const start = blocks.findIndex((b) => b.id === headerId && b.type === "h3");
+  if (start < 0) return null;
+  let end = start + 1;
+  while (end < blocks.length && blocks[end].type === "text" && !blocks[end].anchor) end++;
+  return { start, end };
+}
+
+/** What a sticky holds, its paragraphs joined by line breaks (what its text area shows). */
+export function stickyText(blocks: readonly Block[], headerId: string): string {
+  const span = stickySpan(blocks, headerId);
+  if (!span) return "";
+  return blocks
+    .slice(span.start + 1, span.end)
+    .map((b) => b.text)
+    .join("\n");
+}
+
+/** The blocks with the sticky's text rewritten as one `text` block per paragraph; its header, the other
+ *  stickies and everything else are the same objects. At least one (empty) text block always stays, so
+ *  the sticky can be written in again. */
+export function withStickyText(blocks: readonly Block[], headerId: string, text: string): Block[] {
+  const span = stickySpan(blocks, headerId);
+  if (!span) return blocks.slice();
+  const old = blocks.slice(span.start + 1, span.end);
+  const paragraphs = stickyParagraphs(text);
+  const next: Block[] = (paragraphs.length > 0 ? paragraphs : [""]).map((line, i) => {
+    const had = old[i];
+    if (!had) return block("text", line);
+    return had.text === line ? had : { ...had, text: line };
+  });
+  return [...blocks.slice(0, span.start + 1), ...next, ...blocks.slice(span.end)];
+}
+
+/** A new sticky's blocks: the numbered header carrying the anchor, and an empty text block under it. */
+export function stickyBlocks(anchor: NoteAnchor): { header: Block; blocks: Block[] } {
+  const header = block("h3", stickyTitle(anchor.n), { anchor });
+  return { header, blocks: [header, block("text")] };
+}
+
+/** The paper's passages that carry stickies: per paragraph, each sticky by header id and number, in order. */
+export type NoteAnchorMap = Record<string, { id: string; n: number }[]>;
+
+export function anchorMap(note: Pick<Note, "blocks"> | undefined, paperId: string): NoteAnchorMap {
+  const map: NoteAnchorMap = {};
+  for (const b of note?.blocks ?? []) {
+    if (b.type !== "h3" || !b.anchor || b.anchor.paperId !== paperId) continue;
+    (map[b.anchor.paragraphId] ??= []).push({ id: b.id, n: b.anchor.n });
+  }
+  return map;
 }
