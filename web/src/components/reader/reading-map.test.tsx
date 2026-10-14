@@ -208,7 +208,9 @@ describe("ReadingMapView — the route (P1-05)", () => {
     const html = render({ route });
 
     expect(rowOf(html, "1 Introduction")).toContain(`${ROUTE.tiers.strong} · mentions LCO ×3, H1-3 ×3, creep ×2`);
-    expect(rowOf(html, "2.1 Samples")).toContain(`${ROUTE.tiers.faint} · mentions samples ×1`);
+    // P10-06 (re-aimed, §1c): the faintest tier states no tier word, only the counts.
+    expect(rowOf(html, "2.1 Samples")).toContain(">mentions samples ×1<");
+    expect(rowOf(html, "2.1 Samples")).not.toContain(`${ROUTE.tiers.faint} ·`);
     expect(rowOf(html, "Problem Statement")).toContain(`>${ROUTE.tiers.none}<`);
   });
 

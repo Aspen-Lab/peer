@@ -82,7 +82,8 @@ export interface SectionMark {
   hits: { term: string; count: number }[];
   /** The verbatim sentence of the highest-tier question that has one. */
   evidence?: string;
-  /** Paragraph index → the highest tier of a question that mentions it. */
+  /** Paragraph index → the highest tier of a question that mentions it: the section's own for the paragraphs that
+   *  say most in it, `faint` for the others (P10-06). */
   paragraphs: ReadonlyMap<number, Exclude<TintTier, "none">>;
 }
 
@@ -210,8 +211,11 @@ export function sectionMark(route: DrawRoute | undefined, sectionId: string): Se
       hits.set(term, Math.max(hits.get(term) ?? 0, hit.count));
     }
     for (const index of section.paragraphs) {
+      // P10-06 (rule 3): the paragraphs that say most in the section carry its tier, the others that mention
+      // a term a faint one. A section with no such list (a hand-built route, a model's mark) tints them all alike.
+      const here = at === "background" || !section.topParagraphs || section.topParagraphs.includes(index) ? at : "faint";
       const was = paragraphs.get(index);
-      if (!was || TIER_RANK[at] > TIER_RANK[was]) paragraphs.set(index, at);
+      if (!was || TIER_RANK[here] > TIER_RANK[was]) paragraphs.set(index, here);
     }
   }
 

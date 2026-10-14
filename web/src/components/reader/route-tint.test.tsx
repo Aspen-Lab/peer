@@ -43,7 +43,7 @@ const section = (tier: "strong" | "faint" | "none", paragraphs: number[] = [], e
   tier, hits: [], paragraphs, ...extra,
 });
 
-/** Q1 reads s1 and skims s2; Q2 is vague; Q3 skims s1 and s3. */
+/** Q1 marks s1 strong and s2 faint; Q2 is vague; Q3 marks s1 and s3 faint. */
 const ROUTE_RESULT: RouteResult = {
   byQuestion: [
     {
@@ -70,8 +70,9 @@ const ROUTE_RESULT: RouteResult = {
 };
 
 describe("the tier → tint table (§1f.13)", () => {
-  it("maps read, background and skim to their own token as a background, and none to no style", () => {
+  it("maps strong, medium, faint and background to their own token as a background, and none to no style", () => {
     expect(ROUTE_TINT.strong).toBe("bg-[color:var(--color-route-strong)]");
+    expect(ROUTE_TINT.medium).toBe("bg-[color:var(--color-route-medium)]");
     expect(ROUTE_TINT.background).toBe("bg-[color:var(--color-route-background)]");
     expect(ROUTE_TINT.faint).toBe("bg-[color:var(--color-route-faint)]");
     expect(ROUTE_TINT.none).toBeNull();
@@ -348,5 +349,85 @@ describe("the route copy never tells the reader not to read (§1f.13, §3d 8)", 
       expect(all).toContain(line);
     }
     for (const line of all) expect(line).not.toMatch(/skip|don['’]t read|ignore|not worth/i);
+  });
+});
+
+// P10-06 (review 3.2, 3.4; rule 3): the tint is graded — three greens ordered by relevance — and the map's
+// paragraph lines are graded inside a section the same way: the paragraphs that say most carry the section's
+// tier, the others that mention a term a faint one.
+describe("the graded tint (P10-06)", () => {
+  const graded = (tier: "strong" | "medium" | "faint", paragraphs: number[], topParagraphs?: number[]) => ({
+    tier, hits: [{ term: "lco", count: 2 }], paragraphs, ...(topParagraphs ? { topParagraphs } : {}),
+  });
+  const routeOf = (...sections: Array<Record<string, object>>): RouteResult => ({
+    byQuestion: sections.map((entry, i) => ({ question: `question ${i}`, vague: false, sections: entry as RouteResult["byQuestion"][number]["sections"] })),
+    vague: false,
+  });
+  const mapOf = (route: RouteResult, openRows: number[] = []) =>
+    renderToStaticMarkup(createElement(ReadingMapView, { map: reading.map!, route, openRows }));
+
+  it("draws the three tiers with three different tints, in the map and on the headings", () => {
+    const route = routeOf({ [ids[0]]: graded("strong", [0]), [ids[1]]: graded("medium", [0]), [ids[2]]: graded("faint", [0]) });
+    const map = mapOf(route);
+    const body = renderToStaticMarkup(createElement(PaperBody, { reading, route }));
+
+    for (const html of [map, body]) {
+      expect(html).toMatch(/data-route="strong"[^>]*bg-\[color:var\(--color-route-strong\)\]/);
+      expect(html).toMatch(/data-route="medium"[^>]*bg-\[color:var\(--color-route-medium\)\]/);
+      expect(html).toMatch(/data-route="faint"[^>]*bg-\[color:var\(--color-route-faint\)\]/);
+    }
+    expect(new Set([ROUTE_TINT.strong, ROUTE_TINT.medium, ROUTE_TINT.faint, ROUTE_TINT.background]).size).toBe(4);
+  });
+
+  it("states the facts: 'strongest · mentions …', 'relevant · mentions …', and for the faintest only 'mentions …'", () => {
+    const html = mapOf(routeOf({ [ids[0]]: graded("strong", [0]), [ids[1]]: graded("medium", [0]), [ids[2]]: graded("faint", [0]) }));
+    const fact = (heading: string) => new RegExp(`>${heading}</a>[\\s\\S]*?<p class="annotation pl-5 text-text-faint">([^<]*)</p>`).exec(html)?.[1];
+
+    expect(fact("1 Introduction")).toBe("strongest · mentions lco ×2");
+    expect(fact("2 Methods")).toBe("relevant · mentions lco ×2");
+    expect(fact("3 Results")).toBe("mentions lco ×2");
+    expect(ROUTE.tiers.strong).toBe("strongest");
+    expect(ROUTE.tiers.medium).toBe("relevant");
+  });
+
+  it("grades a section's paragraphs: the top ones take its tier, the rest that mention a term are faint", () => {
+    const route = routeOf({ [ids[0]]: graded("strong", [0, 1], [1]) });
+    const mark = sectionMark(route, ids[0]);
+
+    expect(mark?.paragraphs.get(1)).toBe("strong");
+    expect(mark?.paragraphs.get(0)).toBe("faint");
+    expect(mark?.paragraphs.has(2)).toBe(false);
+
+    const medium = sectionMark(routeOf({ [ids[0]]: graded("medium", [0, 1], [0]) }), ids[0]);
+    expect(medium?.paragraphs.get(0)).toBe("medium");
+    expect(medium?.paragraphs.get(1)).toBe("faint");
+  });
+
+  it("tints a paragraph line by its own grade in the opened row, and leaves an unmentioned line untinted", () => {
+    const html = mapOf(routeOf({ [ids[0]]: graded("strong", [0, 1], [1]) }), [0]);
+    const line = (index: number) => new RegExp(`<a href="#paper-section-0-p${index}"([^>]*)>`).exec(html)?.[1] ?? "";
+
+    expect(line(1)).toContain('data-route="strong"');
+    expect(line(1)).toContain(ROUTE_TINT.strong!);
+    expect(line(0)).toContain('data-route="faint"');
+    expect(line(0)).toContain(ROUTE_TINT.faint!);
+    expect(line(0)).not.toContain("--color-route-strong");
+  });
+
+  it("takes each paragraph at its highest grade across the questions", () => {
+    const route = routeOf({ [ids[0]]: graded("strong", [0, 1], [1]) }, { [ids[0]]: graded("medium", [0, 1], [0]) });
+    const mark = sectionMark(route, ids[0]);
+
+    expect(mark?.tier).toBe("strong");
+    expect(mark?.paragraphs.get(0)).toBe("medium");
+    expect(mark?.paragraphs.get(1)).toBe("strong");
+  });
+
+  it("ranks the tiers strong over medium over faint when questions meet, and keeps the model's background between faint and medium", () => {
+    const route = routeOf({ [ids[0]]: graded("faint", [0]) }, { [ids[0]]: graded("medium", [0]) });
+    expect(sectionMark(route, ids[0])?.tier).toBe("medium");
+    const overlay = { byQuestion: [{ question: "question 0", vague: false, sections: { [ids[0]]: { tier: "background" as const, hits: [], paragraphs: [] } } }], vague: false };
+    expect(sectionMark(mergeQuestionRoute(routeOf({ [ids[0]]: graded("faint", [0]) }), overlay), ids[0])?.tier).toBe("background");
+    expect(sectionMark(mergeQuestionRoute(routeOf({ [ids[0]]: graded("medium", [0]) }), overlay), ids[0])?.tier).toBe("medium");
   });
 });

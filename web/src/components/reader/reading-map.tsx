@@ -194,7 +194,10 @@ export function ReadingMapView({
             // counts to state, so it says what the mark is for, not the bare tier.
             const fact = mark
               ? mark.hits.length > 0
-                ? `${ROUTE.tiers[mark.tier]} · ${ROUTE.mentions(mark.hits)}`
+                ? // P10-06: "strongest · mentions …", "relevant · mentions …", and for the faintest just "mentions …".
+                  mark.tier === "faint"
+                  ? ROUTE.mentions(mark.hits)
+                  : `${ROUTE.tiers[mark.tier]} · ${ROUTE.mentions(mark.hits)}`
                 : mark.tier === "background"
                   ? ROUTE.backgroundWhy
                   : ROUTE.tiers[mark.tier]
