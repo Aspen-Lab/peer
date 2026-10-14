@@ -7,8 +7,7 @@ import type { ExtractedDocument } from "@/lib/papers/html-text";
 import { buildReading } from "@/lib/papers/reading";
 import { inlineMath } from "@/lib/text/math";
 import type { Paper } from "@/types";
-import { PaperBody, paragraphAnchor, readSelection, type SelectionLike } from "./paper-body";
-import * as paperBody from "./paper-body";
+import { PaperBody, coveringSegments, paragraphAnchor, readSelection, type CoveringSegment, type SelectionLike } from "./paper-body";
 
 // P10-09f (review 7.1c; walk X-B3, B11; rules 2 and 4): the highlighter. The words a sticky note was taken on stay
 // marked in the paper — a `<mark data-note="N">` in the highlighter token — with the note's tag [N] right after
@@ -54,11 +53,14 @@ describe("PaperBody — the words a sticky was taken on are marked", () => {
     );
   });
 
-  it("starts a later, overlapping note's mark where the earlier ends, and gives it its own tag after its own end", () => {
+  // Re-aimed (§1c, P10-43): the later note's mark no longer starts only where the earlier ends; its first words, inside the
+  // earlier mark, are marked too (a nested part, `data-note-part`). Kept: the earlier mark and its tag, then the later note's
+  // mark after that tag and its own tag after its own end; two marks of `data-note`, and the marks never cross.
+  it("gives an overlapping note's mark after the earlier tag, and its own tag after its own end (P10-43: its first words are marked inside the earlier mark as well)", () => {
     const html = paragraphHtml(render({ [paragraphAnchor(0, 1)]: [spot("a", 1, P1, 0, 16), spot("b", 2, P1, 6, 22)] }), 1);
-    expect(html).toMatch(new RegExp(`<mark data-note="1"[^>]*>Grain boundaries</mark>${TAG(1)}<mark data-note="2"[^>]*> carry</mark>${TAG(2)} the strain\\.</p>`));
-    expect(html.match(/<mark\b/g)).toHaveLength(2);
-    expect(html).not.toMatch(/<mark[^>]*>[^<]*<mark/);
+    expect(html).toMatch(new RegExp(`</mark>${TAG(1)}<mark data-note="2"[^>]*> carry</mark>${TAG(2)} the strain\\.</p>`));
+    expect(html.match(/<mark data-note=/g)).toHaveLength(2);
+    expect(html.match(/<mark\b/g)).toHaveLength(3);
   });
 
   it("draws a note taken inside another's words as its own mark inside the outer one, its tag right after its own words (P10-20)", () => {
@@ -102,9 +104,12 @@ describe("PaperBody — the words a sticky was taken on are marked", () => {
     expect(html).toMatch(new RegExp(`<p><mark data-note="1"[^>]*>Grain boundaries</mark>${TAG(1)} carry the strain\\.</p>`));
   });
 
-  it("draws overlapping, not nested, ranges as two level marks, as before (P10-20)", () => {
+  // Re-aimed (§1c, P10-43): an overlapping pair used to draw no nested shade; the overlap now does (the later note's words inside the earlier mark).
+  it("draws an overlapping pair's marks level, the overlap alone in the nested shade (P10-20, P10-43)", () => {
     const html = paragraphHtml(render({ [paragraphAnchor(0, 1)]: [spot("a", 1, P1, 0, 16), spot("b", 2, P1, 6, 22)] }), 1);
-    expect(html).not.toContain("--color-note-nested");
+    expect(html.match(/--color-note-nested/g)).toHaveLength(1);
+    expect(/<mark data-note="1"[^>]*>/.exec(html)![0]).toContain("--color-note-mark");
+    expect(/<mark data-note="2"[^>]*>/.exec(html)![0]).toContain("--color-note-mark");
   });
 
   // Re-aimed (§1c, P10-35 rule 1): the second half — a range the text no longer holds — used to draw the tag at the paragraph's
@@ -244,12 +249,7 @@ describe("the nested mark's token", () => {
 // words: where the two overlap, the overlap carries both (the nested shade P10-20 uses for a mark inside a mark), and each
 // tag still stands right after its own note's last word.
 describe("an overlapping note's mark covers all its words (P10-43)", () => {
-  // The segment function is reached through the module's namespace so that this file compiles on the head, where it is not yet there.
-  type Seg =
-    | { kind: "text"; from: number; to: number }
-    | { kind: "tag"; spot: { n: number } }
-    | { kind: "mark"; from: number; to: number; spot: { n: number }; inner: Seg[]; depth: number; part?: boolean };
-  const coveringSegments = (paperBody as unknown as { coveringSegments: (text: string, spots: unknown[]) => Seg[] }).coveringSegments;
+  type Seg = CoveringSegment;
   /** `[n@depth …]n` a note's mark with its tag after; `(n@depth …)` the part of a later note's mark that lies inside an earlier mark (no tag). */
   const tree = (segments: Seg[]): string =>
     segments

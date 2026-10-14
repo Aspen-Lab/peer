@@ -31,7 +31,7 @@ import { paragraphKey } from "@/store/plain-rewrites";
 import { repairAnchors, resolveAnchors, useLostPassages } from "@/store/notes";
 import { ASK, BODY, ROUTE } from "./copy";
 import { ParagraphPlainControl, PlainRewrite, plainOffered, type PlainView } from "./plain-button";
-import { NoteTag, passageSegments, type PassageSegment } from "@/components/notes/note-tags";
+import { NoteTag, passageSegments, rangeOf, type AnchorSpot } from "@/components/notes/note-tags";
 import type { NoteAnchorMap } from "@/lib/notes/blocks";
 
 /** Each section is a destination: the map's rows jump here, and `scroll-mt`
@@ -688,7 +688,70 @@ function Figure({ figure }: { figure: ReadingFigure }) {
  */
 function NotedText({ text, spots }: { text: string; spots?: NoteAnchorMap[string] }) {
   if (!spots || spots.length === 0) return <MathText text={text} />;
-  return <>{notedRuns(text, passageSegments(text, spots))}</>;
+  return <>{notedRuns(text, coveringSegments(text, spots))}</>;
+}
+
+/**
+ * P10-43 (A P10-27 §5 (a)): a run of `passageSegments` plus the part of a later note's mark that lies inside an earlier
+ * mark. `part` marks that piece: it draws the note's own words in the nested shade and carries no tag (the tag stays
+ * after the note's last word, with its main mark).
+ */
+export type CoveringSegment =
+  | { kind: "text"; from: number; to: number }
+  | { kind: "tag"; spot: AnchorSpot }
+  | { kind: "mark"; from: number; to: number; spot: AnchorSpot; inner: CoveringSegment[]; depth: number; part?: true };
+
+/** The pieces of `[lo, hi)` in `segments`, a mark of `spot` laid over each run of plain text there and inside every mark it meets. */
+function overlay(segments: readonly CoveringSegment[], lo: number, hi: number, spot: AnchorSpot, depth: number): CoveringSegment[] {
+  const out: CoveringSegment[] = [];
+  for (const one of segments) {
+    if (one.kind === "tag") {
+      out.push(one);
+      continue;
+    }
+    const a = Math.max(lo, one.from);
+    const b = Math.min(hi, one.to);
+    if (a >= b) {
+      out.push(one);
+    } else if (one.kind === "mark") {
+      out.push({ ...one, inner: overlay(one.inner, a, b, spot, depth + 1) });
+    } else {
+      if (a > one.from) out.push({ kind: "text", from: one.from, to: a });
+      out.push({ kind: "mark", from: a, to: b, spot, inner: [{ kind: "text", from: a, to: b }], depth, part: true });
+      if (b < one.to) out.push({ kind: "text", from: b, to: one.to });
+    }
+  }
+  return out;
+}
+
+/** The mark segment of `spot` (the one with its tag), wherever it stands in the tree. */
+function markOf(segments: readonly CoveringSegment[], spot: AnchorSpot): Extract<CoveringSegment, { kind: "mark" }> | null {
+  for (const one of segments) {
+    if (one.kind !== "mark") continue;
+    if (one.spot === spot && !one.part) return one;
+    const inside = markOf(one.inner, spot);
+    if (inside) return inside;
+  }
+  return null;
+}
+
+/**
+ * `passageSegments`, with every note's mark over all its words. `passageSegments` never lets two marks cross, so a note
+ * that starts inside an earlier note's mark and ends after it is cut to start where the earlier mark ends. Here the words
+ * it lost — from its own start to that cut — are laid back as nested marks inside the earlier mark(s): the overlap carries
+ * both notes (the nested shade, as a mark inside a mark), and each tag stays right after its own note's last word.
+ */
+export function coveringSegments(text: string, spots: readonly AnchorSpot[]): CoveringSegment[] {
+  let tree: CoveringSegment[] = passageSegments(text, spots);
+  const clipped = spots
+    .map((spot) => ({ spot, range: rangeOf(text, spot) }))
+    .filter((one): one is { spot: AnchorSpot; range: { start: number; end: number } } => one.range !== null)
+    .sort((a, b) => a.range.start - b.range.start || a.spot.n - b.spot.n);
+  for (const { spot, range } of clipped) {
+    const mark = markOf(tree, spot);
+    if (mark && mark.from > range.start) tree = overlay(tree, range.start, mark.from, spot, 0);
+  }
+  return tree;
 }
 
 /** P10-20: the second shade (`--color-note-nested`) for a mark inside another's; the outer keeps the highlighter token. */
@@ -696,10 +759,18 @@ const MARK_OUTER = "bg-[color:var(--color-note-mark)] text-inherit";
 const MARK_INNER = "bg-[color:var(--color-note-nested)] text-inherit";
 
 /** The runs of a paragraph, or of one mark: text, marks (their own nested runs inside, the tag right after), loose tags. */
-function notedRuns(text: string, segments: readonly PassageSegment[]) {
+function notedRuns(text: string, segments: readonly CoveringSegment[]) {
   return segments.map((segment, k) => {
     if (segment.kind === "text") return <MathText key={`t${k}`} text={text.slice(segment.from, segment.to)} />;
     if (segment.kind === "tag") return <NoteTag key={`g${segment.spot.id}`} n={segment.spot.n} id={segment.spot.id} />;
+    // A part of a later note's mark inside an earlier mark: its words in the nested shade, no tag (the note's tag stands after its last word).
+    if (segment.part) {
+      return (
+        <mark key={`p${segment.spot.id}:${k}`} data-note-part={segment.spot.n} className={MARK_INNER}>
+          {notedRuns(text, segment.inner)}
+        </mark>
+      );
+    }
     return (
       <Fragment key={`m${segment.spot.id}`}>
         <mark data-note={segment.spot.n} className={segment.depth === 0 ? MARK_OUTER : MARK_INNER}>
