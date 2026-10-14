@@ -237,6 +237,9 @@ export function enterAction(open: boolean, active: number): "pick" | "submit" {
  * nothing. Runs when the question settles, never on a keystroke.
  */
 export function syncQuestionTerms(paperId: string): void {
+  // P10-03 (review 2.3): the Profile's switch "Use my questions to tune recommendations" (absent = on). Off, the
+  // ledger learns nothing from the questions submitted — and nothing it already learned is taken out.
+  if (useProfileStore.getState().profile.questionsTuneRecommendations === false) return;
   const entry = useReadingQuestionsStore.getState().byPaper[paperId];
   useProfileStore.getState().recordQuestionTerms(paperId, questionTerms(settledQuestions(entry)));
 }

@@ -103,6 +103,8 @@ interface ProfileState {
   updateCurrentChallenges: (text: string) => void;
   /** P5-01: the reader's standing questions, cleaned like any question (trimmed, distinct, five of 500 since P7-13). */
   updateStandingQuestions: (questions: readonly string[]) => void;
+  /** P10-03 (review 2.3): the switch "Use my questions to tune recommendations". On removes the key (absent = on). */
+  updateQuestionsTuneRecommendations: (on: boolean) => void;
   recordPaperPreference: (
     paper: Paper,
     signal: "positive" | "negative",
@@ -332,8 +334,11 @@ export function parseExportedProfile(
   }
   // Malformed input must leave the existing profile untouched, so only known
   // keys survive and anything else in the file is ignored.
-  // `standingQuestions` is absent from `defaultProfile` (an optional field), so it is named here.
-  const known = [...Object.keys(defaultProfile), "feedIntent", "standingQuestions"] as Array<keyof UserProfile>;
+  // `standingQuestions` and `questionsTuneRecommendations` are absent from `defaultProfile` (optional fields), so
+  // they are named here.
+  const known = [...Object.keys(defaultProfile), "feedIntent", "standingQuestions", "questionsTuneRecommendations"] as Array<
+    keyof UserProfile
+  >;
   const source = profile as Record<string, unknown>;
   const result: Record<string, unknown> = {};
   for (const key of known) {
@@ -347,6 +352,11 @@ export function parseExportedProfile(
       // The reader's own questions, kept as typed; anything that is not a list of text is ignored.
       const list = source[key];
       if (Array.isArray(list)) result[key] = cleanQuestions(list.filter((q): q is string => typeof q === "string"));
+      continue;
+    }
+    if (key === "questionsTuneRecommendations") {
+      // A switch: anything that is not a boolean is ignored.
+      if (typeof source[key] === "boolean") result[key] = source[key];
       continue;
     }
     result[key] = source[key];
@@ -462,6 +472,13 @@ export const useProfileStore = create<ProfileState>()(
         set((s) => ({
           profile: { ...s.profile, standingQuestions: cleanQuestions(questions) },
         })),
+
+      updateQuestionsTuneRecommendations: (on) =>
+        set((s) => {
+          const { questionsTuneRecommendations: _was, ...rest } = s.profile;
+          void _was;
+          return { profile: on ? rest : { ...rest, questionsTuneRecommendations: false } };
+        }),
 
       recordPaperPreference: (paper, signal, at) =>
         set((s) => ({

@@ -14,6 +14,7 @@
 import { useState } from "react";
 import { useProfileStore } from "@/store/profile";
 import { MAX_QUESTION_CHARS, MAX_QUESTIONS, cleanQuestions } from "@/store/reading-questions";
+import { Toggle } from "@/components/ui/toggle";
 import { ASK, STANDING } from "@/components/reader/copy";
 
 /** Past this many characters a line shows its count (as on a paper's question box). */
@@ -36,12 +37,14 @@ export function dropEmptyDrafts(lines: readonly string[]): string[] {
 }
 
 export function StandingQuestionsField() {
-  const update = useProfileStore((s) => s.updateStandingQuestions);
+  // P10-03 (review 2.3): the one switch for what the submitted questions teach Peer; absent means on. Read once, when
+  // the field mounts, like the lines below.
+  const [tune, setTune] = useState(() => useProfileStore.getState().profile.questionsTuneRecommendations !== false);
   const [lines, setLines] = useState<string[]>(() => cleanQuestions(useProfileStore.getState().profile.standingQuestions ?? []));
 
   const commit = (next: string[]) => {
     setLines(next);
-    update(next);
+    useProfileStore.getState().updateStandingQuestions(next);
   };
 
   return (
@@ -92,6 +95,22 @@ export function StandingQuestionsField() {
         </button>
       )}
       <p className="annotation mt-2 text-text-faint">{STANDING.hint}</p>
+      {/* P10-03 (review 2.3): replaces the opt-out tick that stood beside each question on a paper. */}
+      <div className="mt-4 flex items-start justify-between gap-4 border-t border-border pt-3">
+        <div className="min-w-0">
+          <p className="annotation text-text-muted">{STANDING.tuneLabel}</p>
+          <p className="annotation mt-1 text-text-faint">{STANDING.tuneHint}</p>
+        </div>
+        <Toggle
+          checked={tune}
+          onChange={(on) => {
+            setTune(on);
+            useProfileStore.getState().updateQuestionsTuneRecommendations(on);
+          }}
+          aria-label={STANDING.tuneLabel}
+          className="mt-1"
+        />
+      </div>
     </div>
   );
 }

@@ -16,7 +16,7 @@ import PrivacyPage from "./page";
 // purpose. The sentences are invented.
 
 const TEXT =
-  "When your questions on a paper settle, the specific words in them — one word at a time, in lower case, without common words and the words every question uses — are added to the small ledger Peer keeps of what interests you, at a small fraction of the weight of a like, so one question changes nothing you can see. The question itself is never added, and neither is anything from the paper. The ledger is part of your profile and is kept in this browser, and it reaches Peer's server in two ways. It travels in each request for your briefing, signed in or not, so Peer can rank papers for you: the server uses these words for that one request and keeps none of it, so for a reader who is not signed in nothing of it is stored. When you are signed in it is also stored against your account with the rest of your profile, so these words go with it, each filed under a marker that stands for the paper, not its name. The next sync replaces your account's copy, and signing out clears it from this browser.";
+  "When your questions on a paper settle, the specific words in them — one word at a time, in lower case, without common words and the words every question uses — are added to the small ledger Peer keeps of what interests you, at a small fraction of the weight of a like, so one question changes nothing you can see. The question itself is never added, and neither is anything from the paper. Switch off “Use my questions to tune recommendations” on your Profile and the words of the questions you submit after that are not added; the words already added stay. The ledger is part of your profile and is kept in this browser, and it reaches Peer's server in two ways. It travels in each request for your briefing, signed in or not, so Peer can rank papers for you: the server uses these words for that one request and keeps none of it, so for a reader who is not signed in nothing of it is stored. When you are signed in it is also stored against your account with the rest of your profile, so these words go with it, each filed under a marker that stands for the paper, not its name. The next sync replaces your account's copy, and signing out clears it from this browser.";
 
 const root = process.cwd();
 const read = (file: string) => readFileSync(join(root, file), "utf8");
@@ -93,13 +93,18 @@ describe("/privacy — what your questions teach Peer (P5-02)", () => {
     expect(users).toEqual(["src/lib/preferences/ledger.ts", "src/types/index.ts"]);
   });
 
-  // P10-03 (review 2.3) re-aim of "the tick is what keeps a question out, and the label says so": the per-question tick is
-  // gone from the box, and with it the sentence that named it. (The Profile's switch is the next commit's.)
-  it("the box has no per-question opt-out, and /privacy names none", () => {
+  // P10-03 (review 2.3) re-aim of "the tick is what keeps a question out, and the label says so": the per-question
+  // tick is gone; the Profile's switch is what keeps the questions out, and /privacy names it by its label.
+  it("the Profile's switch is what keeps the questions out, and /privacy names it by its label", () => {
     const field = squash(read("src/components/reader/question-field.tsx"));
+    expect(field).toContain("if (useProfileStore.getState().profile.questionsTuneRecommendations === false) return;");
     expect(field).not.toContain("onMark");
     expect(field).not.toContain("notForRecs");
-    expect(renderToStaticMarkup(createElement(PrivacyPage))).not.toContain(["Not for", "recommendations"].join(" "));
+    expect(squash(read("src/components/profile/standing-questions-field.tsx"))).toContain("{STANDING.tuneLabel}");
+    expect(squash(read("src/components/reader/copy.ts"))).toContain('tuneLabel: "Use my questions to tune recommendations",');
+    const html = renderToStaticMarkup(createElement(PrivacyPage));
+    expect(html).toContain("Switch off “Use my questions to tune recommendations” on your Profile");
+    expect(html).not.toContain(["Not for", "recommendations"].join(" "));
   });
 
   it("signing out clears the ledger with the profile: logOut resets to a default with none", () => {

@@ -247,6 +247,13 @@ export interface UserProfile {
    * `cleanQuestions`; absent means none.
    */
   standingQuestions?: string[];
+  /**
+   * P10-03 (ruling §1h.78; the owner's review 2.3): whether the words of the questions the reader
+   * submits on papers tune the recommendations (`syncQuestionTerms`). Absent means on; `false`
+   * means the ledger learns nothing from submitted questions (and removes nothing it learned).
+   * It replaces the per-question opt-out tick.
+   */
+  questionsTuneRecommendations?: boolean;
   /** Local v1 selection metadata; profile API persistence remains a separate P1 item. */
   selectedSenseConcepts?: SelectedSenseConcept[];
   /** Canonical v1 retrieval card; server persistence is intentionally opt-in. */

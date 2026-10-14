@@ -159,6 +159,9 @@ export const STANDING = {
   placeholder: "A question you bring to most papers",
   line: (n: number) => `Standing question ${n}`,
   remove: (n: number) => `Remove standing question ${n}`,
+  /** P10 (review 2.3): the one opt-out of what the questions teach Peer, beside the standing questions. */
+  tuneLabel: "Use my questions to tune recommendations",
+  tuneHint: "Peer learns a little from the words of the questions you submit on papers. Off: it learns nothing from them.",
 } as const;
 
 /**
