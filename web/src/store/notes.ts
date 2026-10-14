@@ -309,6 +309,27 @@ export const useLostPassages = create<{ lost: Record<string, true>; setLost: (id
   },
 }));
 
+/**
+ * The owner (2026-10-14): every reading note made before P10-09e is deleted when Peer opens. Such a note is tied to a paper
+ * (`paperId`) and opens with the old template's paper card — `readingNote` then wrote a `paper` block first; since P10-09e it
+ * writes the title line (`h1`). A note tied to no paper (the reader's own writing) stays, and so does a reading note in the new
+ * shape, even with a paper block the reader added further down. The notes live only in this browser, so this cannot be undone.
+ */
+export function isOldReadingNote(note: Note | undefined): boolean {
+  return Boolean(note && note.paperId && note.blocks?.[0]?.type === "paper");
+}
+
+/** The stored notes' version: 1 until the old reading notes were dropped, 2 since. */
+export const NOTES_STORE_VERSION = 2;
+
+/** `persist`'s migration: a store written before version 2 loses its old reading notes, once; nothing else changes. */
+export function migrateNotes(persisted: unknown, version: number): unknown {
+  const notes = (persisted as { notes?: Record<string, Note> } | undefined)?.notes;
+  const base = notes && typeof notes === "object" ? notes : {};
+  if (version >= NOTES_STORE_VERSION) return persisted;
+  return { ...(persisted as object), notes: Object.fromEntries(Object.entries(base).filter(([, n]) => !isOldReadingNote(n))) };
+}
+
 export const useNotesStore = create<NotesState>()(
   persist(
     (set, get) => ({
@@ -383,7 +404,8 @@ export const useNotesStore = create<NotesState>()(
     }),
     {
       name: "peer-notes",
-      version: 1,
+      version: NOTES_STORE_VERSION,
+      migrate: migrateNotes as (persisted: unknown, version: number) => NotesState,
       skipHydration: true,
       partialize: (s) => ({ notes: s.notes }),
     },
