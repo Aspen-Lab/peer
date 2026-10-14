@@ -89,7 +89,8 @@ describe("joinProse — \"et al.\", an abbreviation or an initial at a page's fo
 
   it("still starts a new paragraph when a real sentence ends at the foot", () => {
     expect(paragraphs("The team counted ten sites near the marsh.", "the next paragraph begins in lower case by accident.")).toHaveLength(2);
-    expect(paragraphs("The survey followed the earlier one by Ortega et al.", "Then the tide came in and the count stopped.")).toHaveLength(2);
+    // P10-42 (re-aimed, X-A9): "et al." is no sentence end (above), so a capital after it joins; a real end splits
+    expect(paragraphs("The survey followed the earlier one by Ortega et al. in 2019.", "Then the tide came in and the count stopped.")).toHaveLength(2);
     expect(paragraphs("The team kept to the one rule of the visit, namely this.", "the next paragraph begins in lower case by accident.")).toHaveLength(2);
     // a one-letter word that is no initial, at the foot, ends the sentence as it always did
     expect(paragraphs("The team counted every site marked a.", "the next paragraph begins in lower case by accident.")).toHaveLength(2);

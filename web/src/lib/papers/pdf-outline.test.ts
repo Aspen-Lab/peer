@@ -283,7 +283,8 @@ describe("a line cut at a slash, a double bar, a minus or a digit-dash joins wit
 // cuts the sentence is the figure's own height, a gap of dozens of line pitches that the paragraph rule
 // read as a paragraph break; the figure was then filed after the first half, the one that names it.
 // A gap of more than three pitches is a float, not a paragraph, while the sentence above is unfinished
-// and the line below it goes on in lower case, a digit or a bracket. A capital still breaks.
+// and the line below it goes on in lower case, a digit or a bracket (P10-42, X-A9: a capital too, unless it opens
+// a heading or a list item).
 describe("a float's gap inside an unfinished sentence is not a paragraph break (P9-09, cluster E)", () => {
   const flow = (texts: string[], y0: number, step = 12): PdfLine[] => texts.map((text, i) => line(text, { y: y0 - i * step }));
   const sentenceCut = (after: string, gap = 300) => [
@@ -297,10 +298,11 @@ describe("a float's gap inside an unfinished sentence is not a paragraph break (
     expect(paragraphs[0]).toContain("expanded view of Figure 4C(iii)) reveals");
   });
 
-  it("goes on across the gap at a lower-case letter, a digit or a bracket, and not at a capital", () => {
+  // P10-42 (re-aimed, X-A9): a capital after the gap goes on too, a cut sentence being a cut sentence whatever its next word.
+  it("goes on across the gap at a lower-case letter, a digit, a bracket or a capital", () => {
     expect(joinProse(sentenceCut("and the orientation of the first region")).split("\n\n")).toHaveLength(1);
     expect(joinProse(sentenceCut("(iii)) reveals the orientation of the first region")).split("\n\n")).toHaveLength(1);
-    expect(joinProse(sentenceCut("Raman maps then show that the first region")).split("\n\n")).toHaveLength(2);
+    expect(joinProse(sentenceCut("Raman maps then show that the first region")).split("\n\n")).toHaveLength(1);
   });
 
   it("still breaks after a finished sentence", () => {

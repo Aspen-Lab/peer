@@ -88,8 +88,10 @@ describe("joinProse — a paragraph crosses a page break only when it continues 
     expect(paragraphs("The team counted ten sites near the marsh (see the map).", "Then the tide came in.")).toHaveLength(2);
   });
 
+  // P10-42 (re-aimed, X-A9): the first block ends its sentence now; with no sentence end it joins whatever the next
+  // block opens with (pdf-outline.cutsentence.test.ts).
   it("starts a new paragraph when the second block opens a sentence of its own", () => {
-    expect(paragraphs("The team counted ten sites near the marsh", "Then the tide came in and the count stopped.")).toHaveLength(2);
+    expect(paragraphs("The team counted ten sites near the marsh.", "Then the tide came in and the count stopped.")).toHaveLength(2);
   });
 
   it("leaves the lines of one page as they were", () => {

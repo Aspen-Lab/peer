@@ -1607,21 +1607,22 @@ const PAGE_END = /[.!?]["')\]”’]*$/;
 /** ...but not when the full stop closes an abbreviation (P10-37): "et al.", "e.g.", "i.e.", "Fig.", "Eq.", "Ref.", or a
  *  single capital initial ("J."). What follows is the rest of the same sentence, so the block on the next page goes on. */
 const ABBREVIATION_END = /(?:^|[\s(\[])(?:[Ee]t\s+al|e\.g|i\.e|[Ff]ig|[Ee]q|[Rr]ef|\p{Lu})\.["')\]”’]*$/u;
-/** What a block carried over a page break may open with and still be the same paragraph: lower case, a digit, an
- *  opening or closing bracket, a comma or a semicolon... */
-const CONTINUING_OPENER = /^[\p{Ll}\p{N}()[\],;:]/u;
-/** ...or a word that only continues a sentence, set capital by nothing but a new line ("And the gull colonies once."). */
-const CONTINUING_WORD = /^(?:and|or|but|nor|of|to|in|on|for|with|that|which|whereas|where|while|as|by|at|from|than)\b/i;
+/** A line that opens a heading or a list item (P10-42): a bullet, "1." or "2)", "iv.", "a)" / "(A)"-style letter marker, a
+ *  numbered heading ("3.2 Annealing"), or a line set in capitals alone ("MATERIALS AND METHODS"). It starts a block of its
+ *  own, so a cut sentence above it is not carried on into it. */
+const HEADING_OR_LIST_OPENER =
+  /^(?:[•▪◦‣●■–—*-]\s|(?:\d{1,2}|[ivx]{1,4})[.)]\s|\p{L}\)\s|[IVX]{2,4}\)\s|\d+(?:\.\d+)+\.?\s+\p{Lu}\p{Ll}{2,}|\p{Lu}[\p{Lu}\d-]+(?:\s+[\p{Lu}\d&,:-]+)+$)/u;
 
 /**
- * P10-33 (BACKLOG-84): whether the block on the next page carries the paragraph `current` began on. It does when
- * `current` stops short of a sentence's end and the line opens in lower case, or with a continuing word. Two
- * paragraphs that happen to meet at a page break (the foot of one, the head of the next) stay two.
+ * P10-33 (BACKLOG-84), widened by P10-42 (X-A9): whether the block on the next page carries the paragraph `current`
+ * began on. It does when `current` stops short of a sentence's end (no `. ? !`, a closing quote or bracket allowed,
+ * an abbreviation's stop not counted), whatever the block opens with (a technique's name, a symbol, a number, a
+ * capital), unless that line opens a heading or a list item. Two paragraphs that happen to meet at a page break (the
+ * foot of one, the head of the next) stay two: the first ends its sentence.
  */
 function continuesAcrossPage(current: string, next: string): boolean {
   const before = current.trim();
-  const after = next.trim();
-  return (!PAGE_END.test(before) || ABBREVIATION_END.test(before)) && (CONTINUING_OPENER.test(after) || CONTINUING_WORD.test(after));
+  return (!PAGE_END.test(before) || ABBREVIATION_END.test(before)) && !HEADING_OR_LIST_OPENER.test(next.trim());
 }
 /** A gap this many line pitches high is a float's, not a paragraph's (a real paragraph gap is 1.5-2). */
 const FLOAT_GAP_PITCHES = 3;
@@ -1665,10 +1666,11 @@ export function joinProse(lines: readonly FlowLine[], options: JoinOptions = {})
     const gap = previous && samePage ? previous.y - line.y : 0;
     const bigGap = pitch > 0 && samePage && gap > pitch * 1.6;
     // P9-09 (cluster E): a gap of more than three pitches is a float the page left in the column (a
-    // figure, a table, a box), not a paragraph, while the sentence above it is unfinished and the
-    // line below goes on in lower case, a digit or a bracket. A capital after it still breaks.
+    // figure, a table, a box), not a paragraph, while the sentence above it is unfinished and the line
+    // below goes on. P10-42 (X-A9): it goes on whatever it opens with (a capital too), unless it opens a
+    // heading or a list item.
     const floatGap =
-      bigGap && gap > pitch * FLOAT_GAP_PITCHES && current.trim() !== "" && !SENTENCE_END.test(current.trim()) && /^[\p{Ll}\p{N}([]/u.test(line.text);
+      bigGap && gap > pitch * FLOAT_GAP_PITCHES && current.trim() !== "" && !SENTENCE_END.test(current.trim()) && !HEADING_OR_LIST_OPENER.test(line.text.trim());
     const breaks =
       previous !== null &&
       !line.continues &&
