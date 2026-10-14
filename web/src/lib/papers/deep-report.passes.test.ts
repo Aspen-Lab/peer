@@ -834,10 +834,11 @@ describe("the question pass spends its budget by the route (P10-15, rule 3)", ()
 
   it("cuts a strong section only when the strong sections alone are over the budget", async () => {
     // One strong section of 70 000 characters and a faint one: the faint one goes, then the strong one is cut as before.
-    const { ids, sections } = await sent([
+    const { ids, sections, tiers } = await sent([
       { id: "f1", n: 1, chars: 20_000 },
       { id: "g1", n: 12, chars: 70_000 },
     ]);
+    expect(tiers).toMatchObject({ f1: "faint", g1: "strong" });
     expect(ids).toEqual(["g1"]);
     expect(JSON.stringify(sections).length).toBeLessThanOrEqual(60_000);
     expect(sections[0].text.length).toBeLessThan(70_000);
@@ -856,22 +857,37 @@ describe("the question pass spends its budget by the route (P10-15, rule 3)", ()
   });
 
   it("takes a section's best tier across the questions: a section strong for any question is read before one that is medium for all", async () => {
-    // g (strong for the first question), h (strong for the second question only, medium for the first), m (medium for both).
+    // g: strong for the first question, medium for the second; h: the other way about; m: medium for both. In the paper m stands first.
+    const QUILL = "The quillwort lattice was seen again. ";
+    const OSPREY = "The osprey nest was seen again. ";
+    const part = (id: string, quill: number, osprey: number) => ({
+      id,
+      heading: `Section ${id}`,
+      canonical: "body",
+      text: QUILL.repeat(quill) + OSPREY.repeat(osprey) + PAD.repeat(80),
+    });
     const doc: ExtractedDocument = {
       source: "pdf",
       pageCount: 9,
       figureCaptions: [],
       sections: [
         { id: "s0", heading: "Abstract", canonical: "abstract", text: "We charged quillwort cells fast and opened them." },
-        { id: "m", heading: "Section m", canonical: "body", text: "The quillwort lattice was seen again. ".repeat(4) + "The osprey nest was seen again. ".repeat(4) + PAD.repeat(80) },
-        { id: "h", heading: "Section h", canonical: "body", text: "The quillwort lattice was seen again. ".repeat(4) + "The osprey nest was seen again. ".repeat(12) + PAD.repeat(80) },
-        { id: "g", heading: "Section g", canonical: "body", text: "The quillwort lattice was seen again. ".repeat(12) + "The osprey nest was seen again. ".repeat(1) + PAD.repeat(80) },
+        part("m", 3, 3),
+        part("h", 3, 12),
+        part("g", 12, 3),
       ],
     };
+    const questions = ["quillwort lattice", "osprey nest"];
+    const rendered = readableSections(doc);
+    const byQuestion = routeByQuestions(readingMapOf(rendered), rendered, questions).byQuestion;
+    expect(byQuestion.map((entry) => ["m", "h", "g"].map((id) => entry.sections[id].tier))).toEqual([
+      ["medium", "medium", "strong"],
+      ["medium", "strong", "medium"],
+    ]);
     const stub = countingProvider();
-    await generateDeepReport({ paper, doc, provider: stub.provider, questions: ["quillwort lattice", "osprey nest"] });
+    await generateDeepReport({ paper, doc, provider: stub.provider, questions });
     const ids = (stub.last("pass1q")!.prompt.sections as Array<{ id: string }>).map((section) => section.id);
-    expect(ids.indexOf("g")).toBeLessThan(ids.indexOf("m"));
-    expect(ids.indexOf("h")).toBeLessThan(ids.indexOf("m"));
+    // The paper's order within the strong tier (h before g in the sorted question order does not matter: h is before g in the paper).
+    expect(ids).toEqual(["h", "g", "m"]);
   });
 });

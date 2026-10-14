@@ -42,7 +42,7 @@ import {
 } from "./report";
 import { locateSection, sectionCorpus, verifyReportEvidence, type SectionCorpusEntry } from "./evidence";
 import type { ExtractedDocument } from "./html-text";
-import { readableSections, readingMapOf, routeByQuestions } from "./reading-map";
+import { readableSections, readingMapOf, routeByQuestions, type RouteTier } from "./reading-map";
 
 const PASS1_TRIGGER_CHARS = 10_000;
 // S3 (2026-09-15 ruling): ~400k chars (~100k tokens) is the accepted budget
@@ -394,23 +394,51 @@ const PASS1Q_SYSTEM = [
   "Copy each sentence verbatim. Do not paraphrase, do not invent, do not answer the questions. Return only valid JSON.",
 ].join(" ");
 
+/** P10-15 (rule 3): the route's tiers, strongest first. */
+const TIER_RANK: Readonly<Record<RouteTier, number>> = { none: 0, faint: 1, medium: 2, strong: 3 };
+
+/** The serialised size of a body, as `buildQuestionPrompt` measures it against `PASS1Q_MAX_BODY_CHARS`. */
+function bodySize(sections: readonly BodySection[]): number {
+  return JSON.stringify(sections).length;
+}
+
 /**
  * The sections the Tier 0 route marks (any tier but `none`) for any question — the
  * same route the page draws (`routeByQuestions` over the rendered body; the
  * map is `buildReadingMap(doc)`, made from the one split) — or, when it marks
  * none, every section.
+ *
+ * P10-15 (rule 3; the owner, §1h.89: 节省 token): the marked sections come ordered by the route's best tier across the
+ * questions — strong, medium, faint, the paper's order within a tier; the prompt lists them in this array's order — and
+ * when their text is over `PASS1Q_MAX_BODY_CHARS` the faint ones are dropped first, whole, from the paper's end, then the
+ * medium ones the same way, before any cut inside a strong section. A strong section is cut only when the strong ones alone
+ * are over the budget (`buildQuestionPrompt`'s `fitTexts`, as before). With no section marked, the paper's order, all of it.
  */
 function questionSections(doc: ExtractedDocument, questions: readonly string[]): BodySection[] {
   const rendered = readableSections(doc);
   const route = routeByQuestions(readingMapOf(rendered), rendered, questions);
-  const marked = new Set<string>();
+  const best = new Map<string, RouteTier>();
   for (const entry of route.byQuestion) {
     for (const [id, section] of Object.entries(entry.sections)) {
-      if (section.tier !== "none") marked.add(id);
+      if (section.tier !== "none" && TIER_RANK[section.tier] > TIER_RANK[best.get(id) ?? "none"]) best.set(id, section.tier);
     }
   }
   const all = bodySections(doc);
-  return marked.size > 0 ? all.filter((section) => marked.has(section.id)) : all;
+  if (best.size === 0) return all;
+  const tierOf = (section: BodySection): RouteTier => best.get(section.id) ?? "none";
+  // Array.prototype.sort is stable: within a tier the paper's order stays.
+  const ordered = all.filter((section) => best.has(section.id)).sort((a, b) => TIER_RANK[tierOf(b)] - TIER_RANK[tierOf(a)]);
+  for (const tier of ["faint", "medium"] as const) {
+    while (bodySize(ordered) > PASS1Q_MAX_BODY_CHARS) {
+      let last = -1;
+      ordered.forEach((section, i) => {
+        if (tierOf(section) === tier) last = i;
+      });
+      if (last < 0) break;
+      ordered.splice(last, 1);
+    }
+  }
+  return ordered;
 }
 
 function buildQuestionPrompt(paper: Paper, sections: BodySection[], questions: readonly string[]): string {
