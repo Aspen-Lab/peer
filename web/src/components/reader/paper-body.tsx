@@ -20,7 +20,7 @@
 // are the paper's too, so they are serif as well — the mono on this page is
 // Peer's voice, and none of this is Peer's.
 
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { PaperReading, ReadingFigure, ReadingSection } from "@/lib/papers/reading";
 import { GIST_QUESTION, MAX_STRONG_ROWS, type RouteResult, type RouteSection, type RouteTier } from "@/lib/papers/reading-map";
@@ -28,6 +28,7 @@ import type { QuestionAnswers } from "@/lib/papers/report";
 import { Equation, MathText } from "./math";
 import { Band } from "@/components/ui/band";
 import { paragraphKey } from "@/store/plain-rewrites";
+import { repairAnchors, resolveAnchors, useLostPassages } from "@/store/notes";
 import { ASK, BODY, ROUTE } from "./copy";
 import { ParagraphPlainControl, PlainRewrite, plainOffered, type PlainView } from "./plain-button";
 import { NoteTag, passageSegments, type PassageSegment } from "@/components/notes/note-tags";
@@ -828,7 +829,16 @@ export function PaperBody({
   useSelectionListener(onSelect);
   // `?? []`: the version gate above should mean this is always an array, and
   // a missing optional block is still not worth taking the page down for.
-  const body = reading.body ?? [];
+  const body = useMemo(() => reading.body ?? [], [reading.body]);
+  // P10-35 (BACKLOG-91): a note's anchor is positional; the body draws a note only on the words it was taken on. An anchor whose
+  // paragraph no longer holds them finds its quote again here (nearest first); it is written back once (the next load needs no
+  // search), and one the paper no longer holds is drawn nowhere and told to its sticky.
+  const resolved = useMemo(() => (noteAnchors ? resolveAnchors(body, noteAnchors) : null), [body, noteAnchors]);
+  useEffect(() => {
+    if (!resolved) return;
+    if (resolved.fixes.length > 0) repairAnchors(resolved.fixes);
+    useLostPassages.getState().setLost(resolved.lost);
+  }, [resolved]);
   if (body.length === 0) return null;
 
   return (
@@ -849,7 +859,7 @@ export function PaperBody({
           index={i}
           mark={sectionMark(route, section.id)}
           plain={plain}
-          noteAnchors={noteAnchors}
+          noteAnchors={resolved?.map}
         />
       ))}
     </Band>

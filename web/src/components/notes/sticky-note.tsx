@@ -24,7 +24,7 @@ import type { Citable, NoteAnchor } from "@/lib/notes/types";
 import { paragraphAnchor, type ExplainSelection } from "@/components/reader/paper-body";
 import { DOCK_TOP_PX } from "@/components/reader/explain-dock";
 import { holdInPlace, readingAnchorTop, stackRows, useColumn, useWindows, type FloatingWindow, type StackFrame } from "@/lib/reader/windows";
-import { readingNoteFor, stripTagText, useNotesStore, withoutSticky } from "@/store/notes";
+import { readingNoteFor, stripTagText, useLostPassages, useNotesStore, withoutSticky } from "@/store/notes";
 
 export { withoutSticky };
 import { AnchorSquare, goToPassage, registerPassageHost } from "./note-tags";
@@ -50,6 +50,7 @@ export function StickyWindowView({
   onClose,
   onRaise,
   onGo,
+  lost = false,
 }: {
   n: number;
   quote: string;
@@ -63,6 +64,8 @@ export function StickyWindowView({
   onClose: () => void;
   onRaise: () => void;
   onGo: () => void;
+  /** P10-35: the paper on show does not hold the passage this note was taken on: no square to go to it, one quiet line says so. */
+  lost?: boolean;
 }) {
   return (
     <div
@@ -103,9 +106,11 @@ export function StickyWindowView({
       </div>
       {front && (
         <div className="flex min-h-0 flex-1 gap-2 border-t border-border-strong p-3">
-          <span className="mt-1 shrink-0">
-            <AnchorSquare onClick={onGo} />
-          </span>
+          {!lost && (
+            <span className="mt-1 shrink-0">
+              <AnchorSquare onClick={onGo} />
+            </span>
+          )}
           <WysiwygField
             autoFocus
             value={text}
@@ -116,6 +121,7 @@ export function StickyWindowView({
           />
         </div>
       )}
+      {front && lost && <p className="shrink-0 px-3 pb-2 font-reading text-body-sm italic text-text-faint">This passage is not in this version of the paper.</p>}
     </div>
   );
 }
@@ -303,6 +309,8 @@ function StickyWindow({ row, noteId, paperId }: { row: Row; noteId: string; pape
     return made;
   });
   const raise = useWindows((s) => s.raise);
+  // P10-35: the paper on show does not hold this note's passage.
+  const lost = useLostPassages((s) => s.lost[row.id] === true);
   // P10-09c: the sticky follows its blocks — when the notes window edits them, the text area shows the change, unless a
   // keystroke of the sticky's own is waiting to be written (then its write, a quarter second away, is the newer).
   const stored = useNotesStore((s) => stickyText(readingNoteFor(s.notes, paperId)?.blocks ?? [], row.id));
@@ -340,6 +348,7 @@ function StickyWindow({ row, noteId, paperId }: { row: Row; noteId: string; pape
         writer.flush();
         closeSticky(noteId, row.id);
       }}
+      lost={lost}
       onRaise={() => raise(row.id)}
       onGo={() => goToPassage(row.anchor, { doc: document, navigate: (href) => router.push(href as Route) })}
     />

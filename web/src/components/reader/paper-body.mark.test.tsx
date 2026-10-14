@@ -106,13 +106,17 @@ describe("PaperBody — the words a sticky was taken on are marked", () => {
     expect(html).not.toContain("--color-note-nested");
   });
 
-  it("draws the tag at the paragraph's end, and no mark, for a note with no range or a range the text no longer holds", () => {
+  // Re-aimed (§1c, P10-35 rule 1): the second half — a range the text no longer holds — used to draw the tag at the paragraph's
+  // end; a mark and a tag are never drawn where the paragraph does not hold the note's words, so it now draws neither (the quote
+  // "Grains" is nowhere in this body). A note with no range keeps its tag at the paragraph's end.
+  it("draws the tag at the paragraph's end, and no mark, for a note with no range; nothing at all for a range the text no longer holds", () => {
     const none = paragraphHtml(render({ [paragraphAnchor(0, 1)]: [{ id: "a", n: 1 }] }), 1);
     expect(none).not.toContain("<mark");
     expect(none).toMatch(new RegExp(`<p>${P1.replace(".", "\\.")}${TAG(1)}</p>`));
     const stale = paragraphHtml(render({ [paragraphAnchor(0, 1)]: [{ id: "a", n: 1, start: 0, end: 5, quote: "Grains" }] }), 1);
     expect(stale).not.toContain("<mark");
-    expect(stale).toMatch(new RegExp(`<p>${P1.replace(".", "\\.")}${TAG(1)}</p>`));
+    expect(stale).not.toContain("Open note");
+    expect(stale).toContain(`<p>${P1}</p>`);
   });
 
   it("marks words that follow a formula without disturbing it, and never a range that cuts one", () => {

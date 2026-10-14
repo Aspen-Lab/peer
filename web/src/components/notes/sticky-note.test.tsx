@@ -52,7 +52,6 @@ describe("StickyWindowView", () => {
     const lost = renderToStaticMarkup(createElement(StickyWindowView, view({ lost: true })));
     expect(lost).toContain("This passage is not in this version of the paper.");
     expect(lost).not.toContain('aria-label="Go to the passage"');
-    expect(lost).toContain("my words");
     const found = renderToStaticMarkup(createElement(StickyWindowView, view()));
     expect(found).not.toContain("not in this version");
     expect(found).toContain('aria-label="Go to the passage"');

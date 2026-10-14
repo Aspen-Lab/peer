@@ -13,7 +13,7 @@ import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Block, Citable, Note } from "@/lib/notes/types";
-import { citedKeys, stickyBlocks, stickyParagraphs, stickyQuote, stickySpan, stickyText, withStickyText } from "@/lib/notes/blocks";
+import { citedKeys, type NoteAnchorMap, stickyBlocks, stickyParagraphs, stickyQuote, stickySpan, stickyText, withStickyText } from "@/lib/notes/blocks";
 import { readingNote, type ReadingNoteExtras } from "@/lib/notes/templates";
 import { MATH_CLOSE, MATH_OPEN } from "@/lib/text/math";
 
@@ -34,14 +34,131 @@ export function stripTagText(passage: string): string {
  * P10-09f (review 7.1c; rule 1): where a selection's words stand in the paragraph's text — the first occurrence of the
  * passage (white space in the passage matches any white space in the paragraph; the selection arrives collapsed).
  * A formula's TeX is not prose: no match starts or ends inside one. Null when the passage is not found whole.
+ * P10-35: `from` starts the search at that position, so the next occurrence can be asked for.
  */
-export function locatePassage(paragraph: string, passage: string): { start: number; end: number } | null {
+export function locatePassage(paragraph: string, passage: string, from = 0): { start: number; end: number } | null {
   // P10-24: a passage that still arrives with a tag's text (an older caller) is searched by its words.
   const words = stripTagText(passage).split(/\s+/).filter(Boolean);
   if (words.length === 0) return null;
   const masked = paragraph.replace(new RegExp(`${MATH_OPEN}[^${MATH_CLOSE}]*${MATH_CLOSE}`, "g"), (math) => "\u0000".repeat(math.length));
-  const found = new RegExp(words.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s+")).exec(masked);
-  return found ? { start: found.index, end: found.index + found[0].length } : null;
+  const found = new RegExp(words.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s+"), "g");
+  found.lastIndex = Math.max(0, from);
+  const hit = found.exec(masked);
+  return hit ? { start: hit.index, end: hit.index + hit[0].length } : null;
+}
+
+// ── P10-35 (BACKLOG-91): a note finds its passage again by its quote ──────
+
+/** Whether `text` still holds the words a ranged anchor was taken on: the range is in it, whole formulas at both ends, and
+ *  the words at `[start, end)` begin with the quote. The test the body's marks use (`rangeOf`, in `note-tags.tsx`). */
+export function anchorHolds(text: string, spot: { start: number; end: number; quote: string }): boolean {
+  const { start, end, quote } = spot;
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || start >= end || end > text.length) return false;
+  const inside = (at: number) => {
+    if (at <= 0) return false;
+    const open = text.lastIndexOf(MATH_OPEN, at - 1);
+    return open > text.lastIndexOf(MATH_CLOSE, at - 1) && text.indexOf(MATH_CLOSE, at) >= 0;
+  };
+  if (inside(start) || inside(end)) return false;
+  return text.slice(start, end).replace(/\s+/g, " ").trim().startsWith(quote) && text.slice(start, end).trim() !== "";
+}
+
+/** One anchor's repair: where it stood (`was`, to know it is still the stored one) and where its words stand now. */
+export interface AnchorFix {
+  /** The sticky's heading id. */
+  id: string;
+  was: { paragraphId: string; start: number; end: number };
+  paragraphId: string;
+  start: number;
+  end: number;
+}
+
+const PARAGRAPH_ID = /^paper-section-(\d+)-p(\d+)$/;
+
+/**
+ * P10-35 (rules 1-3): the anchors a paper body can draw. An anchor whose paragraph holds its words at `[start, end)` is kept
+ * as it is, with no search (it reads only its own paragraph). One whose paragraph does not — the paragraphs moved, because a
+ * paragraph id is positional — looks for its quote: the same section's paragraphs, nearest to the old one first; else the
+ * whole body, nearest section first. The words found once repair the anchor (`fixes`); found more than once, the occurrence
+ * nearest the old position; not found, the anchor is `lost` and drawn nowhere. An anchor with no range (its passage crossed
+ * paragraphs) has nothing to check and stays at its paragraph. Pure; the body is only read.
+ */
+export function resolveAnchors(
+  body: readonly { readonly paragraphs: readonly string[] }[],
+  anchors: NoteAnchorMap,
+): { map: NoteAnchorMap; fixes: AnchorFix[]; lost: string[] } {
+  const map: NoteAnchorMap = {};
+  const fixes: AnchorFix[] = [];
+  const lost: string[] = [];
+  const put = (paragraphId: string, spot: NoteAnchorMap[string][number]) => (map[paragraphId] ??= []).push(spot);
+  for (const [paragraphId, spots] of Object.entries(anchors)) {
+    const at = PARAGRAPH_ID.exec(paragraphId);
+    const [si, pj] = at ? [Number(at[1]), Number(at[2])] : [-1, -1];
+    const text = at ? body[si]?.paragraphs[pj] : undefined;
+    for (const spot of spots) {
+      const { start, end, quote } = spot;
+      if (start === undefined || end === undefined || quote === undefined) {
+        put(paragraphId, spot);
+        continue;
+      }
+      if (text !== undefined && anchorHolds(text, { start, end, quote })) {
+        put(paragraphId, spot);
+        continue;
+      }
+      const found = findQuote(body, quote, si, pj, start);
+      if (!found) {
+        lost.push(spot.id);
+        continue;
+      }
+      const there = paragraphAnchorId(found.section, found.paragraph);
+      put(there, { ...spot, start: found.start, end: found.end });
+      fixes.push({ id: spot.id, was: { paragraphId, start, end }, paragraphId: there, start: found.start, end: found.end });
+    }
+  }
+  return { map, fixes, lost };
+}
+
+function paragraphAnchorId(section: number, paragraph: number): string {
+  return `paper-section-${section}-p${paragraph}`;
+}
+
+/** Whether rank `a` is nearer than `b`: compared in order, the first difference decides. */
+function nearer(a: readonly number[], b: readonly number[]): boolean {
+  for (let k = 0; k < a.length; k++) if (a[k] !== b[k]) return a[k] < b[k];
+  return false;
+}
+
+/** Where the quote stands in the body, nearest to `(si, pj)` / `start`: the anchor's own section first, then the whole body. */
+function findQuote(
+  body: readonly { readonly paragraphs: readonly string[] }[],
+  quote: string,
+  si: number,
+  pj: number,
+  start: number,
+): { section: number; paragraph: number; start: number; end: number } | null {
+  type Hit = { section: number; paragraph: number; start: number; end: number; rank: number[] };
+  /** The nearest occurrence in one section: the nearest paragraph to the old one, then the nearest offset. */
+  const within = (section: number): Hit | null => {
+    let best: Hit | null = null;
+    const paragraphs = body[section]?.paragraphs ?? [];
+    for (let j = 0; j < paragraphs.length; j++) {
+      for (let place = locatePassage(paragraphs[j], quote); place; place = locatePassage(paragraphs[j], quote, place.start + 1)) {
+        if (!anchorHolds(paragraphs[j], { ...place, quote })) continue;
+        const rank = [Math.abs(section - si), Math.abs(j - pj), Math.abs(place.start - start)];
+        if (!best || nearer(rank, best.rank)) best = { section, paragraph: j, ...place, rank };
+      }
+    }
+    return best;
+  };
+  const own = si >= 0 ? within(si) : null;
+  if (own) return own;
+  let best: Hit | null = null;
+  for (let section = 0; section < body.length; section++) {
+    if (section === si) continue;
+    const hit = within(section);
+    if (hit && (!best || nearer(hit.rank, best.rank))) best = hit;
+  }
+  return best;
 }
 
 /** Where `next` differs from `base`: the span of `base` it replaces (`start`..`end`) and the words it puts there. */
@@ -136,6 +253,49 @@ interface NotesState {
    *  no tag for a note that says nothing. A sticky with words stays. The number is not freed (`stickyCount` stands). */
   removeEmptySticky: (noteId: string, headerId: string) => void;
 }
+
+/**
+ * P10-35 (BACKLOG-91, rule 2): write repaired anchors back, once, so the next load needs no search. Each fix applies only to
+ * the anchor it was worked out from (`was` is still what is stored: a sticky written or moved meanwhile is left alone). The
+ * note's `updatedAt` is not touched — a repair is not the reader's edit. The same state when nothing changes.
+ */
+export function repairAnchors(fixes: readonly AnchorFix[]): void {
+  if (fixes.length === 0) return;
+  const byId = new Map(fixes.map((fix) => [fix.id, fix]));
+  useNotesStore.setState((s) => {
+    let changed = false;
+    const notes: Record<string, Note> = {};
+    for (const [key, note] of Object.entries(s.notes)) {
+      let touched = false;
+      const blocks = note.blocks.map((b) => {
+        const fix = b.type === "h3" && b.anchor ? byId.get(b.id) : undefined;
+        if (!fix || !b.anchor) return b;
+        const { paragraphId, start, end } = b.anchor;
+        if (paragraphId !== fix.was.paragraphId || start !== fix.was.start || end !== fix.was.end) return b;
+        if (paragraphId === fix.paragraphId && start === fix.start && end === fix.end) return b;
+        touched = true;
+        return { ...b, anchor: { ...b.anchor, paragraphId: fix.paragraphId, start: fix.start, end: fix.end } };
+      });
+      notes[key] = touched ? { ...note, blocks } : note;
+      changed ||= touched;
+    }
+    return changed ? { notes } : s;
+  });
+}
+
+/**
+ * P10-35 (rule 2): the stickies whose passage the paper on show does not hold, by heading id. Not stored (it is what the body
+ * found this time, and a different version of the paper may hold the words), not per-user data: the sticky window reads it to
+ * say so in one quiet line.
+ */
+export const useLostPassages = create<{ lost: Record<string, true>; setLost: (ids: readonly string[]) => void }>()((set, get) => ({
+  lost: {},
+  setLost: (ids) => {
+    const now = get().lost;
+    const same = ids.length === Object.keys(now).length && ids.every((id) => now[id]);
+    if (!same) set({ lost: Object.fromEntries(ids.map((id) => [id, true as const])) });
+  },
+}));
 
 export const useNotesStore = create<NotesState>()(
   persist(
