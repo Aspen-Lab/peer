@@ -112,17 +112,19 @@ interface Leaf {
   node: WText | WChip;
   /** The marks around this leaf, outermost first. */
   marks: MarkName[];
+  /** The same marks as nodes, to tell two leaves in one mark from two in marks of the same kind. */
+  chain: WMark[];
   /** Plain offsets `[p, q)` this leaf covers. */
   p: number;
   q: number;
 }
-function leavesOf(nodes: readonly WNode[], marks: MarkName[] = [], out: Leaf[] = []): Leaf[] {
+function leavesOf(nodes: readonly WNode[], chain: WMark[] = [], out: Leaf[] = []): Leaf[] {
   for (const n of nodes) {
-    if (n.kind === "mark") leavesOf(n.kids, [...marks, n.mark], out);
+    if (n.kind === "mark") leavesOf(n.kids, [...chain, n], out);
     else {
       const p = out.length > 0 ? out[out.length - 1].q : 0;
       const len = n.kind === "text" ? n.text.length : n.label.length;
-      if (len > 0) out.push({ node: n, marks, p, q: p + len });
+      if (len > 0) out.push({ node: n, marks: chain.map((m) => m.mark), chain, p, q: p + len });
     }
   }
   return out;
@@ -518,12 +520,27 @@ export function mountInline(doc: Document, root: Node, tree: readonly WNode[]): 
   padRoot(doc, root);
 }
 
+/** The last text (not empty) or chip the surface holds, in document order. */
+function lastLeaf(parent: Node): Node | null {
+  for (let i = parent.childNodes.length - 1; i >= 0; i--) {
+    const c = parent.childNodes[i];
+    if (isText(c)) {
+      if (c.data !== "") return c;
+    } else if (isElement(c)) {
+      if (isChip(c)) return c;
+      if (c.nodeName === "BR") continue;
+      const inner = lastLeaf(c);
+      if (inner) return inner;
+    }
+  }
+  return null;
+}
+
 /** A last line that is blank (the text ends in a line break, or in a citation) needs a `<br>` to be drawn and to take a caret. */
 export function padRoot(doc: Document, root: Node): void {
   const old = root.lastChild;
   if (old && isElement(old) && old.getAttribute(PAD_ATTR) !== null) root.removeChild(old);
-  let tail: Node | null = root.lastChild;
-  while (tail && isElement(tail) && !isChip(tail) && tail.lastChild) tail = tail.lastChild;
+  const tail = lastLeaf(root);
   if (tail && ((isText(tail) && tail.data.endsWith("\n")) || (isElement(tail) && isChip(tail)))) {
     const br = doc.createElement("br");
     br.setAttribute(PAD_ATTR, "");
@@ -770,6 +787,18 @@ export function marksAt(src: string, p: number, label: Label = identity): MarkNa
   return leafAt(leavesOf(treeOf(src, label)), p, "end")?.marks ?? [];
 }
 
+/** The marks still open at plain offset `p`: those around both the character before it and the one after. Text typed
+ *  there, after the reader has just closed a mark by typing its delimiter, wears these and not the one just closed. */
+export function marksOpenAt(src: string, p: number, label: Label = identity): MarkName[] {
+  const leaves = leavesOf(treeOf(src, label));
+  const before = leaves.find((l) => l.q === p);
+  const after = leaves.find((l) => l.p === p);
+  if (!before || !after) return [];
+  const open: MarkName[] = [];
+  for (let i = 0; i < before.chain.length && before.chain[i] === after.chain[i]; i++) open.push(before.chain[i].mark);
+  return open;
+}
+
 /** `typed` put in at plain offset `p` wearing the marks `want`: the cut at `p` closes the marks around it and the
  *  text is wrapped in `want` (outermost first). The new source, and the plain offset after the text. */
 export function insertMarked(src: string, p: number, typed: string, want: readonly MarkName[], label: Label = identity): { text: string; plain: number } {
@@ -883,8 +912,16 @@ export function newHistory(state: HistoryState): History {
 }
 
 /** The history after `state` was reached by an edit of `kind` at `now`: typing, or deleting, in a run is one step,
- *  anything else (a mark, a menu pick, a split) a step of its own; going back and editing drops what was ahead. */
-export function recordState(h: History, state: HistoryState, kind: "type" | "delete" | "edit", now: number, gap = HISTORY_GAP_MS): History {
+ *  anything else (a mark, a menu pick, a split) a step of its own; going back and editing drops what was ahead.
+ *  `was` is the selection just before this edit — what undoing it gives back — set on the state it leaves. */
+export function recordState(
+  h: History,
+  state: HistoryState,
+  kind: "type" | "delete" | "edit",
+  now: number,
+  was?: { from: number; to: number },
+  gap = HISTORY_GAP_MS,
+): History {
   const kept = h.states.slice(0, h.at + 1);
   if (kept[kept.length - 1].text === state.text) {
     kept[kept.length - 1] = state;
@@ -894,6 +931,7 @@ export function recordState(h: History, state: HistoryState, kind: "type" | "del
     kept[kept.length - 1] = state;
     return { states: kept, at: kept.length - 1, kind, time: now };
   }
+  if (was) kept[kept.length - 1] = { ...kept[kept.length - 1], ...was };
   kept.push(state);
   const states = kept.length > HISTORY_LIMIT ? kept.slice(kept.length - HISTORY_LIMIT) : kept;
   return { states, at: states.length - 1, kind, time: now };

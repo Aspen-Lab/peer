@@ -3,12 +3,19 @@
 // The note editor: blocks, the way Notion and Logseq cut a page, over
 // Markdown, the way Obsidian keeps one.
 //
-// The model is Logseq's. Every block is rendered — headings, lists,
-// citations as "Rose et al., 2024" — except the one being typed in, which
-// shows its Markdown source in a textarea set in the same type, so for plain
-// prose the switch is invisible. A textarea per block is the robust choice:
-// undo, IME, spellcheck, selection and the phone keyboard are the browser's
-// own, and nothing has to be reconciled from contentEditable's DOM.
+// The model is Logseq's: every block is rendered — headings, lists, citations
+// as "Rose et al., 2024" — and the one being typed in is the same rendering,
+// made editable. P10-16 (the owner's ruling, §1h.90 (a): "what the reader sees,
+// and what is exported, is always the final look, like a Word document, never
+// the raw code"): a block being edited is a `contentEditable` element drawn from
+// its source by `lib/notes/wysiwyg.ts` — bold, italic, underline, highlight, code
+// and chips for citations and links, never a `**`, `__`, `==` or backtick — and
+// the DOM the reader edits is written back to the same source on every input
+// (the stored format, and the `.md` export, are unchanged: Markdown is the
+// format). The toolbar and the keys act on the words selected in the formatted
+// text and leave them selected. Undo is a stack of sources per block (the
+// browser's cannot survive the surface being drawn again). A code block keeps a
+// textarea: nothing in it is markup.
 //
 // What a reader can do, and where it is handled:
 //   type            onChange — Markdown at a block's start converts it (`# `,
@@ -62,7 +69,35 @@ import {
 } from "@/lib/notes/blocks";
 import { authorYear, citableFromPaper, keyFor, sourceOf } from "@/lib/notes/cite";
 import { carriesPaper, gapAt, readPaperDrag } from "@/lib/notes/drag";
-import { markEdit, plainInline, type MarkName } from "@/lib/notes/inline";
+import { plainInline, type MarkName } from "@/lib/notes/inline";
+import {
+  caretBox,
+  caretLines,
+  getPlainSelection,
+  insertMarked,
+  joinSources,
+  marksAt,
+  marksOpenAt,
+  markSource,
+  mountInline,
+  newHistory,
+  padRoot,
+  plainLength,
+  plainOfSource,
+  plainOfSourceOffset,
+  readsDifferently,
+  recordState,
+  setPlainSelection,
+  snapshot,
+  sourceOfPlain,
+  spliceSource,
+  splitSource,
+  stepBack,
+  stepForward,
+  treeOf,
+  type History,
+  type Label,
+} from "@/lib/notes/wysiwyg";
 import { fileName, reference, toBibtex, toMarkdown } from "@/lib/notes/export";
 import { blankNote } from "@/lib/notes/templates";
 import { newestFirst, useNotesStore } from "@/store/notes";
@@ -75,7 +110,9 @@ import { NoteToolbar, markForKey, typeAfterToggle } from "./note-toolbar";
 import { EditorRail, type RailTab } from "./notes-rail";
 
 type Doc = { title: string; blocks: Block[]; sources: Record<string, Source> };
-type Caret = number | "start" | "end";
+/** Where the caret goes: a source offset, either end, or a plain (visible-character) range, which stays over the same
+ *  words whatever marks now wrap them. */
+type Caret = number | "start" | "end" | { plain: number; to?: number };
 
 type Menu =
   | { kind: "slash"; blockId: string; from: number; query: string; index: number }
@@ -178,11 +215,18 @@ function matches(words: string, query: string): boolean {
 // ── The block row ─────────────────────────────────────────────────────────
 
 interface RowApi {
-  register: (id: string, el: HTMLTextAreaElement | null) => void;
+  register: (id: string, el: HTMLElement | null) => void;
+  /** A code block's textarea. */
   change: (e: ChangeEvent<HTMLTextAreaElement>, id: string) => void;
-  key: (e: KeyboardEvent<HTMLTextAreaElement>, id: string) => void;
-  paste: (e: ClipboardEvent<HTMLTextAreaElement>, id: string) => void;
-  caret: (id: string, pos: number) => void;
+  /** The editing surface was edited: its source (written from the DOM), the visible text, and how it was edited. */
+  input: (id: string, edit: SurfaceEdit) => void;
+  key: (e: KeyboardEvent<HTMLElement>, id: string) => void;
+  paste: (e: ClipboardEvent<HTMLElement>, id: string) => void;
+  /** The text to be typed is about to go in: true when the editor wrote it itself (a mark toggled with nothing selected). */
+  typing: (id: string, data: string) => boolean;
+  /** What a citation key reads as in this note. */
+  label: Label;
+  caret: (id: string, el: HTMLElement) => void;
   blur: (id: string) => void;
   edit: (id: string, caret: Caret) => void;
   toggle: (id: string) => void;
@@ -217,12 +261,149 @@ function Grip() {
   );
 }
 
+/** What the surface tells the editor after the reader edited it. */
+export interface SurfaceEdit {
+  /** The block's source, written from the DOM. */
+  text: string;
+  /** The caret as a source offset, and the selection as visible-character offsets. */
+  caret: number;
+  from: number;
+  to: number;
+  /** The browser's `inputType` ("insertText", "deleteContentBackward"...). */
+  kind: string;
+  /** The character typed, when one was. */
+  data: string | null;
+  /** What was typed read as a mark and the surface was drawn again: the caret is where the mark closed. */
+  closed: boolean;
+}
+
+/**
+ * The block being edited: its source drawn as the formatted text (`mountInline`) in a `contentEditable` element, and
+ * written back on every input (`snapshot`). The DOM is the truth while the reader types — it is drawn again only when
+ * the block's text is not what it last wrote (an edit made by the editor itself: a mark, a pick from a menu, undo),
+ * or when what was typed reads as a mark (a pasted `**b**`; the dialect has no escape).
+ */
+function Surface({
+  id,
+  text,
+  sources,
+  api,
+  label,
+  placeholder,
+  className,
+}: {
+  id: string;
+  text: string;
+  sources: Record<string, Source>;
+  api: MutableRefObject<RowApi>;
+  label: string;
+  placeholder: string;
+  className?: string;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  /** The source the DOM was last drawn from, or last wrote. */
+  const drawn = useRef<string | null>(null);
+  const composing = useRef(false);
+  const cite = (key: string) => (sources[key] ? authorYear(sources[key]) : `@${key}`);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || drawn.current === text) return;
+    drawn.current = text;
+    mountInline(document, el, treeOf(text, cite));
+  });
+
+  /** The DOM was edited: write it back to the source, and draw it again where the source reads differently. */
+  const sync = (kind: string, data: string | null) => {
+    const el = ref.current;
+    if (!el) return;
+    const snap = snapshot(el);
+    const sel = getPlainSelection(el) ?? { from: snap.plain.length, to: snap.plain.length };
+    let caret = sourceOfPlain(snap.tree, sel.to, "end");
+    let { from, to } = sel;
+    drawn.current = snap.src;
+    const redrawn = !composing.current && readsDifferently(snap.src, snap.plain, cite);
+    if (redrawn) {
+      // a delimiter typed as characters is a mark now: the surface shows it as one, the caret after what was typed
+      const tree = treeOf(snap.src, cite);
+      mountInline(document, el, tree);
+      from = plainOfSourceOffset(tree, sourceOfPlain(snap.tree, sel.from, "start"));
+      to = plainOfSourceOffset(tree, caret);
+      setPlainSelection(el, from, to);
+      caret = sourceOfPlain(tree, to, "end");
+    } else padRoot(document, el);
+    api.current.input(id, { text: snap.src, caret, from, to, kind, data, closed: redrawn });
+  };
+  const syncRef = useRef(sync);
+  useLayoutEffect(() => {
+    syncRef.current = sync;
+  });
+
+  // `beforeinput` and composition are native events (React's onBeforeInput is not the input event)
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const before = (e: Event) => {
+      const ev = e as InputEvent;
+      if (composing.current) return;
+      if (ev.inputType === "insertText" && ev.data && api.current.typing(id, ev.data)) {
+        e.preventDefault();
+        return;
+      }
+      // the browser's own undo cannot follow a surface that is drawn again: the editor keeps the steps
+      if (ev.inputType === "historyUndo" || ev.inputType === "historyRedo") e.preventDefault();
+    };
+    const start = () => {
+      composing.current = true;
+    };
+    const end = () => {
+      composing.current = false;
+      syncRef.current("insertCompositionText", null);
+    };
+    el.addEventListener("beforeinput", before);
+    el.addEventListener("compositionstart", start);
+    el.addEventListener("compositionend", end);
+    return () => {
+      el.removeEventListener("beforeinput", before);
+      el.removeEventListener("compositionstart", start);
+      el.removeEventListener("compositionend", end);
+    };
+  }, [api, id]);
+
+  return (
+    <div
+      ref={(el) => {
+        ref.current = el;
+        api.current.register(id, el);
+      }}
+      contentEditable
+      suppressContentEditableWarning
+      role="textbox"
+      aria-multiline="true"
+      aria-label={label}
+      data-typeset=""
+      data-placeholder={placeholder}
+      spellCheck
+      onInput={(e) => sync((e.nativeEvent as InputEvent).inputType ?? "", (e.nativeEvent as InputEvent).data ?? null)}
+      onKeyDown={(e) => api.current.key(e, id)}
+      onPaste={(e) => api.current.paste(e, id)}
+      onSelect={(e) => api.current.caret(id, e.currentTarget)}
+      onBlur={() => api.current.blur(id)}
+      className={cn(
+        className,
+        "block min-h-[1lh] w-full whitespace-pre-wrap break-words bg-transparent p-0 outline-none",
+        "empty:before:pointer-events-none empty:before:text-text-faint/70 empty:before:content-[attr(data-placeholder)]",
+      )}
+    />
+  );
+}
+
 const Row = memo(function Row({ block: b, first, number, editing, sources, dragging, dropBefore, dropAfter, api }: RowProps) {
   const area = useRef<HTMLTextAreaElement | null>(null);
   const view = useRef<HTMLDivElement | null>(null);
   const cls = textClass(b.type);
 
-  // Grow with its text; never scroll inside itself.
+  // A code block's textarea grows with its text; never scrolls inside itself.
   useLayoutEffect(() => {
     const el = area.current;
     if (!editing || !el) return;
@@ -264,7 +445,7 @@ const Row = memo(function Row({ block: b, first, number, editing, sources, dragg
     ) : (
       <p className="annotation py-2 text-text-faint">A paper card whose source is missing.</p>
     );
-  } else if (editing) {
+  } else if (editing && b.type === "code") {
     content = (
       <textarea
         ref={(el) => {
@@ -280,14 +461,25 @@ const Row = memo(function Row({ block: b, first, number, editing, sources, dragg
         onChange={(e) => api.current.change(e, b.id)}
         onKeyDown={(e) => api.current.key(e, b.id)}
         onPaste={(e) => api.current.paste(e, b.id)}
-        onSelect={(e) => api.current.caret(b.id, e.currentTarget.selectionStart)}
+        onSelect={(e) => api.current.caret(b.id, e.currentTarget)}
         onBlur={() => api.current.blur(b.id)}
         className={cn(
           cls,
           "block w-full resize-none overflow-hidden bg-transparent p-0 outline-none placeholder:text-text-faint/70",
-          b.type === "code" && "whitespace-pre",
-          b.type === "todo" && b.checked && "text-text-faint line-through",
+          "whitespace-pre",
         )}
+      />
+    );
+  } else if (editing) {
+    content = (
+      <Surface
+        id={b.id}
+        text={b.text}
+        sources={sources}
+        api={api}
+        label={TYPE_LABEL[b.type]}
+        placeholder={b.hint ?? PLACEHOLDER[b.type] ?? ""}
+        className={cn(cls, b.type === "todo" && b.checked && "text-text-faint line-through")}
       />
     );
   } else {
@@ -405,6 +597,22 @@ const Row = memo(function Row({ block: b, first, number, editing, sources, dragg
   );
 });
 
+/** Puts `text` at the reader's selection in a surface, replacing what is selected, and tells the surface it was typed
+ *  (the `input` event the browser would have sent). */
+function insertText(el: HTMLElement, text: string): void {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+  range.deleteContents();
+  const node = document.createTextNode(text);
+  range.insertNode(node);
+  range.setStartAfter(node);
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+  el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
+}
+
 // ── The editor ────────────────────────────────────────────────────────────
 
 export function NoteEditor({
@@ -443,12 +651,24 @@ export function NoteEditor({
     setDoc(next);
   }, []);
   const setBlocks = (blocks: Block[]) => commit({ ...docRef.current, blocks });
+  /** What a citation key reads as in the text: the read view's "Rose et al., 2024", or its key. */
+  const label: Label = (key) => {
+    const source = docRef.current.sources[key];
+    return source ? authorYear(source) : `@${key}`;
+  };
+  const srcOf = (id: string) => docRef.current.blocks.find((x) => x.id === id)?.text ?? "";
 
   const [editing, setEditing] = useState<string | null>(null);
-  const areas = useRef(new Map<string, HTMLTextAreaElement>());
+  /** Each block being edited: its surface (a `contentEditable`), or a code block's textarea. */
+  const areas = useRef(new Map<string, HTMLElement>());
   const titleRef = useRef<HTMLTextAreaElement | null>(null);
   const pendingFocus = useRef<{ id: string; caret: Caret } | null>(null);
-  const lastCaret = useRef<{ id: string; pos: number } | null>(null);
+  /** The caret last seen, as a visible-character offset, which stays true across a change of marks. */
+  const lastCaret = useRef<{ id: string; plain: number } | null>(null);
+  /** Each block's steps to undo: the source and the selection at each (the browser's undo cannot follow a surface that is drawn again). */
+  const histories = useRef(new Map<string, History>());
+  /** A mark toggled with nothing selected: the marks the next typed text wears, at the plain offset it was asked at. */
+  const pendingMarks = useRef<{ id: string; plain: number; marks: MarkName[] } | null>(null);
   const [menu, setMenuState] = useState<Menu | null>(null);
   const menuRef = useRef<Menu | null>(null);
   const setMenu = (m: Menu | null) => {
@@ -540,9 +760,21 @@ export function NoteEditor({
     if (!el) return;
     pendingFocus.current = null;
     el.focus({ preventScroll: true });
-    const pos = want.caret === "start" ? 0 : want.caret === "end" ? el.value.length : Math.min(want.caret, el.value.length);
-    el.setSelectionRange(pos, pos);
-    lastCaret.current = { id: want.id, pos };
+    if (el instanceof HTMLTextAreaElement) {
+      const c = want.caret;
+      const pos = c === "start" ? 0 : c === "end" ? el.value.length : typeof c === "number" ? Math.min(c, el.value.length) : Math.min(c.plain, el.value.length);
+      const to = typeof c === "object" && c.to !== undefined ? Math.min(c.to, el.value.length) : pos;
+      el.setSelectionRange(pos, to);
+      lastCaret.current = { id: want.id, plain: pos };
+    } else {
+      const c = want.caret;
+      const total = plainLength(el);
+      const from =
+        c === "start" ? 0 : c === "end" ? total : typeof c === "number" ? plainOfSourceOffset(treeOf(srcOf(want.id), label), c) : Math.min(c.plain, total);
+      const to = typeof c === "object" && c.to !== undefined ? Math.min(c.to, total) : from;
+      setPlainSelection(el, from, to);
+      lastCaret.current = { id: want.id, plain: from };
+    }
     const r = el.getBoundingClientRect();
     if (r.bottom > window.innerHeight - 24 || r.top < 72) el.scrollIntoView({ block: "nearest" });
   });
@@ -632,7 +864,10 @@ export function NoteEditor({
     const el = areas.current.get(menu.blockId);
     const body = bodyRef.current;
     if (!el || !body) return;
-    const c = caretCoords(el, Math.min(menu.from, el.value.length));
+    const c =
+      el instanceof HTMLTextAreaElement
+        ? caretCoords(el, Math.min(menu.from, el.value.length))
+        : caretBox(el, plainOfSourceOffset(treeOf(srcOf(menu.blockId), label), menu.from));
     const er = el.getBoundingClientRect();
     const br = body.getBoundingClientRect();
     const top = er.top - br.top + c.top;
@@ -644,32 +879,84 @@ export function NoteEditor({
     });
   }, [menu]);
 
+  /** Where the reader's selection is in a block: source offsets (what the store and the menus speak) and visible-character offsets. */
+  const selection = (id: string): { start: number; end: number; from: number; to: number; len: number } | null => {
+    const el = areas.current.get(id);
+    if (!el) return null;
+    if (el instanceof HTMLTextAreaElement) return { start: el.selectionStart, end: el.selectionEnd, from: el.selectionStart, to: el.selectionEnd, len: el.value.length };
+    const sel = getPlainSelection(el);
+    if (!sel) return null;
+    const tree = treeOf(srcOf(id), label);
+    return { start: sourceOfPlain(tree, sel.from, "start"), end: sourceOfPlain(tree, sel.to, "end"), from: sel.from, to: sel.to, len: plainLength(el) };
+  };
+
+  /** One more step to undo in a block: its source and selection, as an edit of `kind`. `was` is the selection before it
+   *  (what undo gives back): the words a mark was laid over, else the caret last seen. */
+  const remember = (id: string, before: string, text: string, from: number, to: number, kind: "type" | "delete" | "edit", was?: { from: number; to: number }) => {
+    const seen = lastCaret.current?.id === id ? lastCaret.current.plain : plainOfSource(before, label).length;
+    const start = was ?? { from: seen, to: seen };
+    let h = histories.current.get(id);
+    if (!h || h.states[h.at].text !== before) h = newHistory({ text: before, ...start });
+    histories.current.set(id, recordState(h, { text, from, to }, kind, Date.now(), start));
+  };
+
+  /** One step back (or forward) in a block's history: its source comes back and the words that were selected are selected. */
+  const stepHistory = (id: string, forward: boolean) => {
+    const b = docRef.current.blocks.find((x) => x.id === id);
+    const h = histories.current.get(id);
+    if (!b || !h || h.states[h.at].text !== b.text) return;
+    const step = forward ? stepForward(h) : stepBack(h);
+    if (!step) return;
+    histories.current.set(id, step.history);
+    pendingMarks.current = null;
+    patch(id, { text: step.state.text });
+    focusBlock(id, { plain: step.state.from, to: step.state.to });
+  };
+
   const replaceRange = (id: string, from: number, to: number, text: string, caretAfter?: number) => {
     const el = areas.current.get(id);
-    // Through the browser's own editing command where it has one, so ⌘Z
-    // takes the insertion back like anything typed.
-    if (el && document.activeElement === el) {
+    const b = docRef.current.blocks.find((x) => x.id === id);
+    if (!b) return;
+    // A code block's textarea: through the browser's own editing command, so ⌘Z takes the insertion back.
+    if (el instanceof HTMLTextAreaElement && document.activeElement === el) {
       el.setSelectionRange(from, to);
       if (document.execCommand("insertText", false, text)) {
         if (caretAfter !== undefined) el.setSelectionRange(caretAfter, caretAfter);
         return;
       }
     }
-    const b = docRef.current.blocks.find((x) => x.id === id);
-    if (!b) return;
-    patch(id, { text: b.text.slice(0, from) + text + b.text.slice(to) });
-    focusBlock(id, caretAfter ?? from + text.length);
+    if (b.type === "code") {
+      patch(id, { text: b.text.slice(0, from) + text + b.text.slice(to) });
+      focusBlock(id, caretAfter ?? from + text.length);
+      return;
+    }
+    // Through the tree: a mark the edit lands in stays whole.
+    const next = spliceSource(b.text, from, to, text, label);
+    remember(id, b.text, next.text, next.plain, next.plain, "edit");
+    patch(id, { text: next.text });
+    focusBlock(id, { plain: next.plain });
   };
 
-  /** The toolbar's marks and the keys': wrap or unwrap the block's selection (`markEdit`: marks nest, the selection grows to a mark's edges), the caret after. */
+  /** The toolbar's marks and the keys': mark the words selected in the formatted text (`markEdit`: marks nest, the selection grows to a mark's edges) and leave the same words selected. With nothing selected the mark is toggled for what is typed next. */
   const applyMark = (id: string, mark: MarkName) => {
     const b = docRef.current.blocks.find((x) => x.id === id);
     const el = areas.current.get(id);
-    if (!b || !el || b.type === "code") return;
-    const edit = markEdit(b.text, el.selectionStart, el.selectionEnd, mark);
-    // An edit that would have left a delimiter unmatched comes back empty: nothing is written.
-    if (edit.from === edit.to && edit.text === "" && edit.caret !== edit.from) return el.setSelectionRange(edit.caret, edit.caret);
-    replaceRange(id, edit.from, edit.to, edit.text, edit.caret);
+    if (!b || !el || b.type === "code" || el instanceof HTMLTextAreaElement) return;
+    const sel = getPlainSelection(el);
+    if (!sel) return;
+    const words = plainOfSource(b.text, label).slice(sel.from, sel.to);
+    if (words.trim() === "") {
+      // nothing selected (or only spaces): the mark is toggled for what is typed next, as in a word processor
+      const now = pendingMarks.current?.id === id && pendingMarks.current.plain === sel.from ? pendingMarks.current.marks : marksAt(b.text, sel.from, label);
+      pendingMarks.current = { id, plain: sel.from, marks: now.includes(mark) ? now.filter((m) => m !== mark) : [...now, mark] };
+      return;
+    }
+    const edit = markSource(b.text, sel.from, sel.to, mark, label);
+    // An edit that would have left a delimiter unmatched writes nothing.
+    if (!edit || edit.text === b.text) return;
+    remember(id, b.text, edit.text, sel.from, sel.to, "edit", sel);
+    patch(id, { text: edit.text });
+    focusBlock(id, { plain: sel.from, to: sel.to });
   };
 
   /** Bullets, numbering and the heading turn the block that holds the caret; pressing the same one again turns it back. */
@@ -677,23 +964,25 @@ export function NoteEditor({
     const b = docRef.current.blocks.find((x) => x.id === id);
     if (!b || !isTextual(b.type)) return;
     const next = typeAfterToggle(b.type, type);
+    const sel = selection(id);
     patch(id, { type: next, checked: undefined, indent: canIndent(next) ? b.indent : undefined });
-    focusBlock(id, areas.current.get(id)?.selectionStart ?? "end");
+    focusBlock(id, sel ? { plain: sel.from, to: sel.to } : "end");
   };
 
   const pick = (choice: number) => {
     const m = menuRef.current;
     if (!m) return;
-    const el = areas.current.get(m.blockId);
     const i = indexOf(m.blockId);
     if (i === -1) return setMenu(null);
     const b = docRef.current.blocks[i];
-    const caret = el ? el.selectionStart : b.text.length;
+    const caret = selection(m.blockId)?.end ?? b.text.length;
+    // The block's text without the trigger and what was typed after it (cut through the tree, so no mark is left open).
+    const without = () => (b.type === "code" ? b.text.slice(0, m.from) + b.text.slice(caret) : spliceSource(b.text, m.from, caret, "", label).text);
     if (m.kind === "slash") {
       const item = slashItems[choice];
       if (!item) return setMenu(null);
       setMenu(null);
-      const rest = b.text.slice(0, m.from) + b.text.slice(caret);
+      const rest = without();
       if (item.id === "cite" || item.id === "paper") {
         patch(b.id, { text: rest });
         focusBlock(b.id, m.from);
@@ -735,7 +1024,7 @@ export function NoteEditor({
     const key = keyFor(c.citable, sources);
     if (!sources[key]) commit({ ...docRef.current, sources: { ...sources, [key]: sourceOf(c.citable, key) } });
     if (m.mode === "card") {
-      const rest = b.text.slice(0, m.from) + b.text.slice(caret);
+      const rest = without();
       const card = block("paper", "", { cite: key });
       const after = block("text");
       const blocks = docRef.current.blocks.slice();
@@ -758,11 +1047,13 @@ export function NoteEditor({
     const at = lastCaret.current;
     const b = at ? docRef.current.blocks.find((x) => x.id === at.id) : undefined;
     if (b && isTextual(b.type) && b.type !== "code") {
-      const pos = Math.min(at!.pos, b.text.length);
-      const lead = pos > 0 && !/\s/.test(b.text[pos - 1]) ? " " : "";
-      const text = `${lead}[@${key}] `;
-      patch(b.id, { text: b.text.slice(0, pos) + text + b.text.slice(pos) });
-      focusBlock(b.id, pos + text.length);
+      const words = plainOfSource(b.text, label);
+      const plain = Math.min(at!.plain, words.length);
+      const pos = sourceOfPlain(treeOf(b.text, label), plain, "end");
+      const lead = plain > 0 && !/\s/.test(words[plain - 1]) ? " " : "";
+      const next = spliceSource(b.text, pos, pos, `${lead}[@${key}] `, label);
+      patch(b.id, { text: next.text });
+      focusBlock(b.id, { plain: next.plain });
       return;
     }
     const added = block("text", `[@${key}] `);
@@ -816,6 +1107,48 @@ export function NoteEditor({
     setRailOpen(true);
   };
 
+  /** The block's text is now `text`, the caret at source offset `caret`: Markdown at its start converts the block (`# `, `- `, `---`...), and `/`, `@` or `[[` open a menu. */
+  const typed = (id: string, text: string, caret: number, typedOne: boolean) => {
+    const i = indexOf(id);
+    if (i === -1) return;
+    const b = docRef.current.blocks[i];
+
+    if (b.type === "text" && text === "---") {
+      const after = block("text");
+      const blocks = docRef.current.blocks.slice();
+      blocks.splice(i, 1, { ...block("divider"), id: b.id }, after);
+      setBlocks(blocks);
+      setMenu(null);
+      focusBlock(after.id, "start");
+      return;
+    }
+    if (b.type === "text" && typedOne) {
+      const s = shortcut(text);
+      if (s) {
+        patch(id, { type: s.type, text: s.text, checked: s.checked, indent: canIndent(s.type) ? b.indent : undefined });
+        setMenu(null);
+        focusBlock(id, Math.max(0, caret - (text.length - s.text.length)));
+        return;
+      }
+    }
+    patch(id, { text });
+
+    const m = menuRef.current;
+    if (typedOne && text[caret - 1] === "/" && (caret === 1 || /\s/.test(text[caret - 2])) && b.type !== "code") {
+      setMenu({ kind: "slash", blockId: id, from: caret - 1, query: "", index: 0 });
+    } else if (typedOne && text[caret - 1] === "@" && (caret === 1 || /[\s(]/.test(text[caret - 2])) && b.type !== "code") {
+      setMenu({ kind: "cite", blockId: id, from: caret - 1, trigger: "@", mode: "inline", query: "", index: 0 });
+    } else if (typedOne && text.slice(caret - 2, caret) === "[[" && b.type !== "code") {
+      setMenu({ kind: "cite", blockId: id, from: caret - 2, trigger: "[[", mode: "inline", query: "", index: 0 });
+    } else if (m && m.blockId === id) {
+      const lead = m.kind === "slash" ? 1 : m.trigger.length;
+      const opened = m.kind === "slash" ? text[m.from] === "/" : text.slice(m.from, m.from + lead) === m.trigger;
+      const query = text.slice(m.from + lead, caret);
+      if (!opened || caret < m.from + lead || query.includes("\n") || query.length > (m.kind === "slash" ? 24 : 60)) setMenu(null);
+      else setMenu({ ...m, query, index: 0 });
+    }
+  };
+
   // ── Row handlers, read through a ref so the rows can stay memoised ──
   const api = useRef<RowApi>(null as unknown as RowApi);
   api.current = {
@@ -824,8 +1157,18 @@ export function NoteEditor({
       else areas.current.delete(id);
     },
 
-    caret: (id, pos) => {
-      lastCaret.current = { id, pos };
+    label,
+
+    caret: (id, el) => {
+      if (el instanceof HTMLTextAreaElement) {
+        lastCaret.current = { id, plain: el.selectionStart };
+        return;
+      }
+      const sel = getPlainSelection(el);
+      if (!sel) return;
+      lastCaret.current = { id, plain: sel.from };
+      // a toggled mark is for the place it was asked at; the caret moving away drops it
+      if (pendingMarks.current && (pendingMarks.current.id !== id || pendingMarks.current.plain !== sel.from || sel.from !== sel.to)) pendingMarks.current = null;
     },
 
     blur: (id) => {
@@ -859,93 +1202,102 @@ export function NoteEditor({
       router.push(`/notes/${made.id}`);
     },
 
+    /** A code block's textarea was typed in. */
     change: (e, id) => {
       const el = e.currentTarget;
-      const text = el.value;
-      const caret = el.selectionStart;
-      const i = indexOf(id);
-      if (i === -1) return;
-      const b = docRef.current.blocks[i];
-      const typedOne = text.length === b.text.length + 1;
+      typed(id, el.value, el.selectionStart, el.value.length === (docRef.current.blocks.find((x) => x.id === id)?.text.length ?? 0) + 1);
+    },
 
-      if (b.type === "text" && text === "---") {
-        const after = block("text");
-        const blocks = docRef.current.blocks.slice();
-        blocks.splice(i, 1, { ...block("divider"), id: b.id }, after);
-        setBlocks(blocks);
-        setMenu(null);
-        focusBlock(after.id, "start");
-        return;
-      }
-      if (b.type === "text" && typedOne) {
-        const s = shortcut(text);
-        if (s) {
-          patch(id, { type: s.type, text: s.text, checked: s.checked, indent: canIndent(s.type) ? b.indent : undefined });
-          setMenu(null);
-          focusBlock(id, Math.max(0, caret - (text.length - s.text.length)));
-          return;
-        }
-      }
-      patch(id, { text });
+    /** The surface was typed in (or cut, or deleted from): its source is what the DOM now says. */
+    input: (id, edit) => {
+      const b = docRef.current.blocks.find((x) => x.id === id);
+      if (!b) return;
+      const typedOne = edit.kind === "insertText" && edit.data !== null && edit.data.length === 1;
+      if (edit.text !== b.text) remember(id, b.text, edit.text, edit.from, edit.to, edit.kind.startsWith("delete") ? "delete" : "type");
+      typed(id, edit.text, edit.caret, typedOne);
+      // A mark the reader just closed by typing its delimiter ends there: what is typed next is outside it (the caret
+      // itself can only sit at the end of the text before it).
+      if (edit.closed && edit.from === edit.to) pendingMarks.current = { id, plain: edit.to, marks: marksOpenAt(edit.text, edit.to, label) };
+    },
 
-      const m = menuRef.current;
-      if (typedOne && text[caret - 1] === "/" && (caret === 1 || /\s/.test(text[caret - 2])) && b.type !== "code") {
-        setMenu({ kind: "slash", blockId: id, from: caret - 1, query: "", index: 0 });
-      } else if (typedOne && text[caret - 1] === "@" && (caret === 1 || /[\s(]/.test(text[caret - 2])) && b.type !== "code") {
-        setMenu({ kind: "cite", blockId: id, from: caret - 1, trigger: "@", mode: "inline", query: "", index: 0 });
-      } else if (typedOne && text.slice(caret - 2, caret) === "[[" && b.type !== "code") {
-        setMenu({ kind: "cite", blockId: id, from: caret - 2, trigger: "[[", mode: "inline", query: "", index: 0 });
-      } else if (m && m.blockId === id) {
-        const lead = m.kind === "slash" ? 1 : m.trigger.length;
-        const opened = m.kind === "slash" ? text[m.from] === "/" : text.slice(m.from, m.from + lead) === m.trigger;
-        const query = text.slice(m.from + lead, caret);
-        if (!opened || caret < m.from + lead || query.includes("\n") || query.length > (m.kind === "slash" ? 24 : 60)) setMenu(null);
-        else setMenu({ ...m, query, index: 0 });
-      }
+    /** Text is about to be typed. After a mark was toggled with nothing selected the editor writes it, wearing the toggled marks. */
+    typing: (id, data) => {
+      const want = pendingMarks.current;
+      if (!want || want.id !== id) return false;
+      pendingMarks.current = null;
+      const el = areas.current.get(id);
+      const b = docRef.current.blocks.find((x) => x.id === id);
+      const sel = el && !(el instanceof HTMLTextAreaElement) ? getPlainSelection(el) : null;
+      if (!b || !sel || sel.from !== sel.to || sel.from !== want.plain) return false;
+      const next = insertMarked(b.text, sel.from, data, want.marks, label);
+      remember(id, b.text, next.text, next.plain, next.plain, "type");
+      patch(id, { text: next.text });
+      focusBlock(id, { plain: next.plain });
+      return true;
     },
 
     paste: (e, id) => {
-      const pasted = e.clipboardData.getData("text/plain");
+      const el = e.currentTarget;
       const i = indexOf(id);
       const b = docRef.current.blocks[i];
-      if (!pasted.includes("\n") || !b || b.type === "code") return;
-      const parsed = parseMarkdown(pasted);
-      if (parsed.length === 0) return;
+      // A code block's textarea takes the browser's own paste.
+      if (!b || el instanceof HTMLTextAreaElement || b.type === "code") return;
+      // The surface takes text only: HTML pasted is reduced to its words (the dialect has no escape, so a pasted
+      // `**b**` is read as a mark on the next draw, as the same text stored would be).
       e.preventDefault();
-      const el = e.currentTarget;
-      const before = b.text.slice(0, el.selectionStart);
-      const after = b.text.slice(el.selectionEnd);
+      const pasted = e.clipboardData.getData("text/plain").replace(/\r\n?/g, "\n");
+      const parsed = pasted.includes("\n") ? parseMarkdown(pasted) : [];
+      if (parsed.length === 0) {
+        if (pasted && !document.execCommand("insertText", false, pasted.replace(/\n/g, " "))) insertText(el, pasted.replace(/\n/g, " "));
+        return;
+      }
+      const sel = selection(id);
+      const { head: before, tail: after } = splitSource(b.text, sel?.from ?? 0, sel?.to ?? 0, label);
       const blocks = docRef.current.blocks.slice();
       let replaced: Block[];
       if (!before && !after) {
         replaced = [{ ...parsed[0], id: b.id }, ...parsed.slice(1)];
       } else {
         const [head, ...tail] = parsed;
-        const first = isTextual(head.type) ? { ...b, text: before + head.text } : null;
+        const first = isTextual(head.type) ? { ...b, text: joinSources(before, head.text, label).text } : null;
         replaced = first ? [first, ...tail] : [{ ...b, text: before }, head, ...tail];
       }
       const last = replaced[replaced.length - 1];
-      const lastLength = isTextual(last.type) ? last.text.length : 0;
+      const lastLength = isTextual(last.type) ? plainOfSource(last.text, label).length : 0;
       if (after) {
-        if (isTextual(last.type)) replaced[replaced.length - 1] = { ...last, text: last.text + after };
+        if (isTextual(last.type)) replaced[replaced.length - 1] = { ...last, text: joinSources(last.text, after, label).text };
         else replaced.push(block("text", after));
       }
       blocks.splice(i, 1, ...replaced);
       setBlocks(blocks);
       const end = replaced[replaced.length - 1];
-      if (isTextual(end.type)) focusBlock(end.id, isTextual(last.type) ? lastLength : 0);
+      if (isTextual(end.type)) focusBlock(end.id, { plain: isTextual(last.type) ? lastLength : 0 });
     },
 
     key: (e, id) => {
+      // A letter, a digit or a symbol is the browser's to type; the editor reads only the keys that do something else.
+      const mod = e.metaKey || e.ctrlKey;
+      const menuOpen = menuRef.current?.blockId === id;
+      if (!mod && !e.altKey && !menuOpen && e.key.length === 1) return;
+      if (e.key === "Shift" || e.key === "Control" || e.key === "Alt" || e.key === "Meta") return;
       const el = e.currentTarget;
+      const area = el instanceof HTMLTextAreaElement;
       const i = indexOf(id);
       if (i === -1) return;
       const blocks = docRef.current.blocks;
       const b = blocks[i];
-      const pos = el.selectionStart;
-      const end = el.selectionEnd;
-      const collapsed = pos === end;
-      const mod = e.metaKey || e.ctrlKey;
+      // The selection: source offsets (pos, end), and the visible characters (sel.from, sel.to of sel.len).
+      const sel = selection(id) ?? { start: 0, end: 0, from: 0, to: 0, len: 0 };
+      const pos = sel.start;
+      const end = sel.end;
+      const collapsed = sel.from === sel.to;
+      /** A block's visible text; a code block's is its text. */
+      const visible = (x: Block) => (x.type === "code" ? x.text : plainOfSource(x.text, label));
+      /** Two blocks' text as one, and where they were joined (in visible characters). */
+      const joined = (x: Block, y: Block) =>
+        x.type === "code" || y.type === "code"
+          ? { text: x.text + y.text, plain: x.text.length }
+          : joinSources(x.text, y.text, label);
 
       const m = menuRef.current;
       if (m && m.blockId === id) {
@@ -970,6 +1322,13 @@ export function NoteEditor({
       }
       if (e.nativeEvent.isComposing) return;
 
+      // ⌘/Ctrl+Z (Shift+Z, Y): the block's own steps; the browser's cannot follow a surface that is drawn again.
+      const letter = e.key.toLowerCase();
+      if (!area && mod && !e.altKey && (letter === "z" || letter === "y")) {
+        e.preventDefault();
+        stepHistory(id, letter === "y" || e.shiftKey);
+        return;
+      }
       // ⌘/Ctrl+B I E U and ⌘/Ctrl+Shift+H: the toolbar's marks (P10-09b); a code block takes none.
       const mark = markForKey(e);
       if (mark && b.type !== "code") {
@@ -988,13 +1347,19 @@ export function NoteEditor({
         const gap = e.key === "ArrowUp" ? i - 1 : i + 2;
         if (gap < 0 || gap > blocks.length) return;
         setBlocks(moveBlock(blocks, i, gap));
-        focusBlock(id, pos);
+        focusBlock(id, { plain: sel.from, to: sel.to });
         return;
       }
 
       switch (e.key) {
         case "Enter": {
-          if (e.shiftKey || b.type === "code") return;
+          if (b.type === "code") return;
+          if (e.shiftKey) {
+            // a line break inside the block (the textarea's own Enter did this); the surface writes it as text
+            e.preventDefault();
+            if (!area) insertText(el, "\n");
+            return;
+          }
           e.preventDefault();
           if (isList(b.type) && b.text === "") {
             if ((b.indent ?? 0) > 0) setBlocks(indentBlock(blocks, i, -1));
@@ -1004,20 +1369,22 @@ export function NoteEditor({
           }
           const type = nextType(b.type);
           const indentKept = canIndent(type) ? b.indent : undefined;
-          if (pos === 0 && collapsed && b.text.length > 0) {
+          if (sel.from === 0 && collapsed && b.text.length > 0) {
             insertAt(i, block(isList(b.type) ? b.type : "text", "", { indent: indentKept }));
             focusBlock(id, 0);
             return;
           }
-          const added = block(type, b.text.slice(end), { indent: indentKept });
+          // the words either side of the selection, each with the marks that were around the cut closed on its own side
+          const cut = area ? { head: b.text.slice(0, pos), tail: b.text.slice(end) } : splitSource(b.text, sel.from, sel.to, label);
+          const added = block(type, cut.tail, { indent: indentKept });
           const next = blocks.slice();
-          next.splice(i, 1, { ...b, text: b.text.slice(0, pos) }, added);
+          next.splice(i, 1, { ...b, text: cut.head }, added);
           setBlocks(next);
           focusBlock(added.id, "start");
           return;
         }
         case "Backspace": {
-          if (!collapsed || pos !== 0) return;
+          if (!collapsed || sel.from !== 0) return;
           if (b.type !== "text") {
             e.preventDefault();
             patch(id, { type: "text", checked: undefined });
@@ -1040,10 +1407,11 @@ export function NoteEditor({
           const prev = blocks[i - 1];
           e.preventDefault();
           if (isTextual(prev.type)) {
+            const both = joined(prev, b);
             const next = blocks.slice();
-            next.splice(i - 1, 2, { ...prev, text: prev.text + b.text });
+            next.splice(i - 1, 2, { ...prev, text: both.text });
             setBlocks(next);
-            focusBlock(prev.id, prev.text.length);
+            focusBlock(prev.id, { plain: both.plain });
           } else if (!b.text) {
             const back = nearestTextual(i, -1);
             setBlocks(blocks.filter((x) => x.id !== id));
@@ -1053,12 +1421,13 @@ export function NoteEditor({
           return;
         }
         case "Delete": {
-          if (!collapsed || pos !== b.text.length) return;
+          if (!collapsed || sel.to !== sel.len) return;
           const next = blocks[i + 1];
           if (!next || !isTextual(next.type)) return;
           e.preventDefault();
-          setBlocks(blocks.filter((x) => x.id !== next.id).map((x) => (x.id === id ? { ...x, text: x.text + next.text } : x)));
-          focusBlock(id, pos);
+          const both = joined(b, next);
+          setBlocks(blocks.filter((x) => x.id !== next.id).map((x) => (x.id === id ? { ...x, text: both.text } : x)));
+          focusBlock(id, { plain: both.plain });
           return;
         }
         case "ArrowUp":
@@ -1067,10 +1436,11 @@ export function NoteEditor({
         case "ArrowRight": {
           if (e.shiftKey || mod || e.altKey || !collapsed) return;
           const back = e.key === "ArrowUp" || e.key === "ArrowLeft";
-          if (e.key === "ArrowLeft" && pos !== 0) return;
-          if (e.key === "ArrowRight" && pos !== b.text.length) return;
-          if (e.key === "ArrowUp" && !caretLine(el).first) return;
-          if (e.key === "ArrowDown" && !caretLine(el).last) return;
+          if (e.key === "ArrowLeft" && sel.from !== 0) return;
+          if (e.key === "ArrowRight" && sel.to !== sel.len) return;
+          const lines = area ? caretLine(el) : caretLines(el);
+          if (e.key === "ArrowUp" && !lines.first) return;
+          if (e.key === "ArrowDown" && !lines.last) return;
           const target = nearestTextual(i, back ? -1 : 1);
           if (target === -1) {
             if (back) {
@@ -1080,19 +1450,20 @@ export function NoteEditor({
             return;
           }
           e.preventDefault();
-          const t = blocks[target].text;
+          const t = visible(blocks[target]);
           let caret: Caret;
           if (e.key === "ArrowLeft") caret = "end";
           else if (e.key === "ArrowRight") caret = "start";
           else {
             // Keep the column, within the line the caret arrives on.
-            const col = pos - (b.text.lastIndexOf("\n", pos - 1) + 1);
+            const here = visible(b);
+            const col = sel.from - (here.lastIndexOf("\n", sel.from - 1) + 1);
             if (back) {
               const start = t.lastIndexOf("\n") + 1;
-              caret = start + Math.min(col, t.length - start);
+              caret = { plain: start + Math.min(col, t.length - start) };
             } else {
               const stop = t.indexOf("\n");
-              caret = Math.min(col, stop === -1 ? t.length : stop);
+              caret = { plain: Math.min(col, stop === -1 ? t.length : stop) };
             }
           }
           focusBlock(blocks[target].id, caret);
