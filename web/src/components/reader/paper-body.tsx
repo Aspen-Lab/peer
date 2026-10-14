@@ -20,7 +20,7 @@
 // are the paper's too, so they are serif as well — the mono on this page is
 // Peer's voice, and none of this is Peer's.
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import type { PaperReading, ReadingFigure, ReadingSection } from "@/lib/papers/reading";
 import { GIST_QUESTION, MAX_STRONG_ROWS, type RouteResult, type RouteSection, type RouteTier } from "@/lib/papers/reading-map";
 import type { QuestionAnswers } from "@/lib/papers/report";
@@ -30,7 +30,7 @@ import { Band } from "@/components/ui/band";
 import { paragraphKey } from "@/store/plain-rewrites";
 import { ASK, BODY, ROUTE } from "./copy";
 import { ParagraphPlainControl, PlainRewrite, plainOffered, type PlainView } from "./plain-button";
-import { NoteTag } from "@/components/notes/note-tags";
+import { NoteTag, passageSegments } from "@/components/notes/note-tags";
 import type { NoteAnchorMap } from "@/lib/notes/blocks";
 
 /** Each section is a destination: the map's rows jump here, and `scroll-mt`
@@ -616,6 +616,32 @@ function MarkedParagraph({ text, mark }: { text: string; mark: TermOccurrence })
   );
 }
 
+/**
+ * P10-09a / P10-09f (review 7.1c; walk X-B3): a paragraph's text with its sticky notes. The words each note was taken
+ * on stay marked (`<mark data-note="N">`, the highlighter token) and the note's tag [N] stands right after them; a
+ * note with no words to mark (no range, or the text no longer holds it) has its tag at the paragraph's end. The text
+ * is the same text in the same order — only cut into runs — and with no notes it is the paragraph as it was.
+ */
+function NotedText({ text, spots }: { text: string; spots?: NoteAnchorMap[string] }) {
+  if (!spots || spots.length === 0) return <MathText text={text} />;
+  return (
+    <>
+      {passageSegments(text, spots).map((segment, k) => {
+        if (segment.kind === "text") return <MathText key={`t${k}`} text={text.slice(segment.from, segment.to)} />;
+        if (segment.kind === "tag") return <NoteTag key={`g${segment.spot.id}`} n={segment.spot.n} id={segment.spot.id} />;
+        return (
+          <Fragment key={`m${segment.spot.id}`}>
+            <mark data-note={segment.spot.n} className="bg-[color:var(--color-note-mark)] text-inherit">
+              <MathText text={text.slice(segment.from, segment.to)} />
+            </mark>
+            <NoteTag n={segment.spot.n} id={segment.spot.id} />
+          </Fragment>
+        );
+      })}
+    </>
+  );
+}
+
 /** P4-01: a paragraph with its rewrite beside it. From the spread (xl) the anchor is two columns —
  *  the paper's paragraph and Peer's — with the control and whatever the paper set after the
  *  paragraph across both; below it nothing is a grid and the blocks stack, as paragraphs already do.
@@ -698,9 +724,7 @@ function Section({
               className={rewrite !== undefined ? `space-y-4 scroll-mt-20 ${SIDE_BY_SIDE}` : "space-y-4 scroll-mt-20"}
             >
               <p>
-                {here ? <MarkedParagraph text={paragraph} mark={here} /> : <MathText text={paragraph} />}
-                {/* P10-09a (review 7.1c): one reference tag [N] after the passage per sticky note taken on it. */}
-                {noteAnchors?.[paragraphAnchor(index, i)]?.map((tag) => <NoteTag key={tag.id} n={tag.n} id={tag.id} />)}
+                {here ? <MarkedParagraph text={paragraph} mark={here} /> : <NotedText text={paragraph} spots={noteAnchors?.[paragraphAnchor(index, i)]} />}
               </p>
               {rewrite !== undefined && <PlainRewrite text={rewrite} />}
               {offered && plain && (

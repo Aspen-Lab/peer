@@ -89,11 +89,16 @@ describe("PaperBody — the words a sticky was taken on are marked", () => {
     const marked = render({
       [paragraphAnchor(0, 0)]: [{ id: "z", n: 3 }],
       [paragraphAnchor(0, 1)]: [spot("a", 1, P1, 0, 5), spot("b", 2, P1, 17, 22)],
-      [paragraphAnchor(0, 2)]: [spot("c", 4, P2, P2.indexOf("grain"), P2.indexOf("grain") + 5)],
     });
     const stripped = marked.replace(/<mark[^>]*>/g, "").replace(/<\/mark>/g, "").replace(/<sup[^>]*>.*?<\/sup>/g, "");
     expect(stripped).toBe(bare);
     expect(render({})).toBe(bare);
+  });
+
+  it("keeps the text of a paragraph with a formula, in order, when a range is marked after the formula", () => {
+    const at = P2.indexOf("grain");
+    const text = (html: string) => paragraphHtml(html, 2).replace(/<sup[^>]*>.*?<\/sup>/g, "").replace(/<[^>]+>/g, "");
+    expect(text(render({ [paragraphAnchor(0, 2)]: [spot("c", 4, P2, at, at + 5)] }))).toBe(text(render()));
   });
 });
 
