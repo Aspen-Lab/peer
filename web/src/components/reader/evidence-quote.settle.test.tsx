@@ -215,6 +215,30 @@ describe("settleOnSection waits for the pictures above the heading (P10-26, X-A8
     expect(w.calls.length).toBe(settled + 1);
   });
 
+  it("a picture that settles above the heading moves it: it is landed again on the first frame that sees it, not after three still ones", () => {
+    const w = world(3000);
+    const travel = smoothJump(w, 20);
+    w.pictures.above = 1;
+    settleOnSection(() => w.target, w.env);
+    w.step(60, travel);
+    expect(w.top()).toBe(MARGIN);
+    const settled = w.calls.length;
+    w.scene.docTop -= 103; // the picture came in shorter than its room: the next frame finds the heading moved...
+    w.pictures.above = 0;
+    w.step(1);
+    expect(w.calls.length).toBe(settled + 1); // ...and lands it at once (three held frames would be the page twitching)
+    expect(w.top()).toBe(MARGIN);
+  });
+
+  it("while the smooth scroll is still travelling, a picture pending above does not make the settle jump", () => {
+    const w = world(3000);
+    const travel = smoothJump(w, 40);
+    w.pictures.above = 1;
+    settleOnSection(() => w.target, w.env);
+    w.step(39, travel);
+    expect(w.calls).toEqual([]);
+  });
+
   it("a picture below the heading is not waited for: the loop ends a second after the rest, as it did", () => {
     const w = world(3000);
     const travel = smoothJump(w, 20);
