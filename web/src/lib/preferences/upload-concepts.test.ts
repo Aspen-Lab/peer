@@ -232,3 +232,11 @@ describe("the extraction version after a PMC section's nested subsections are ke
     expect(UPLOAD_CONCEPT_EXTRACTION_VERSION).toBeGreaterThanOrEqual(12);
   });
 });
+
+describe("the extraction version after a cut sentence is joined across a page break or a figure (P10-42)", () => {
+  // Text read under 12 breaks a sentence with no full stop where a page break or a floating figure falls and the next
+  // line opens with a capital (round 4's X-A9); 13 retires it. A saved note keeps its passage by its quote (P10-35).
+  it("is past the reading that cut a sentence at a capital after a page break or a figure", () => {
+    expect(UPLOAD_CONCEPT_EXTRACTION_VERSION).toBeGreaterThanOrEqual(13);
+  });
+});
