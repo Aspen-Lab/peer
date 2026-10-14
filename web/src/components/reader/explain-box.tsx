@@ -454,8 +454,8 @@ function ItemsTable({ items }: { items: readonly ExplainItem[] }) {
  *  paper's own sentence through `EvidenceQuote` when it was verified, else Peer's
  *  reading label beside the prose and no quote (§1f.17). A reply's term table (P3-07)
  *  sits under its prose and above its quote. P10-39: on a selection in Peer's own words (the
- *  Summary, an answer) Peer's replies carry the label of the first answer's second part,
- *  "Why Peer says it", not "Peer"; on a selection in the paper they keep "Peer". */
+ *  Summary, an answer) Peer's replies carry the label of the first answer's second part (`WHY_PEER_SAYS_IT`),
+ *  not "Peer"; on a selection in the paper they keep "Peer". */
 function TurnView({ turn, source }: { turn: ExplainTurn; source?: ExplainSource }) {
   if (turn.role === "reader") {
     return (
