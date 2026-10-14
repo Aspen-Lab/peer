@@ -315,8 +315,9 @@ export function markEdit(src: string, start: number, end: number, mark: MarkName
   return { from: a, to: a, text: "", caret: b };
 }
 
-/** Text runs, at any depth of nesting, that hold a delimiter of underline or highlight which matched nothing. */
-function strayCount(src: string): number {
+/** Text runs, at any depth of nesting, that hold a delimiter of underline or highlight which matched nothing.
+ *  (P10-16: exported — the WYSIWYG surface's tests assert it is 0 after every edit.) */
+export function strayCount(src: string): number {
   let n = 0;
   for (const t of parseInline(src)) {
     if (t.kind === "text") n += /__|==/.test(t.text) ? 1 : 0;
