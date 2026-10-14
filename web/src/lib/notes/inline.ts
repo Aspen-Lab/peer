@@ -151,11 +151,66 @@ export interface MarkEdit {
   caret: number;
 }
 
+/** A token of the block's source with its place, nested ones included: what the edit has to see to nest a mark. */
+interface Span {
+  kind: Inline["kind"];
+  from: number;
+  /** Where the content starts (after the opening markers) and ends (before the closing ones); a link, a citation
+   *  or a code run has no content to nest into, so both are its edges. */
+  inner: number;
+  close: number;
+  to: number;
+  wraps: boolean;
+  children: Span[];
+}
+
+function spansOf(src: string, base = 0): Span[] {
+  const out: Span[] = [];
+  for (const t of parseInline(src)) {
+    if (t.kind === "text") continue;
+    if (isWrapping(t)) {
+      const inner = base + t.inner;
+      out.push({ kind: t.kind, from: base + t.from, inner, close: inner + t.text.length, to: base + t.to, wraps: true, children: spansOf(t.text, inner) });
+    } else {
+      out.push({ kind: t.kind, from: base + t.from, inner: base + t.from, close: base + t.to, to: base + t.to, wraps: false, children: [] });
+    }
+  }
+  return out;
+}
+
+function flatten(spans: Span[]): Span[] {
+  return spans.flatMap((s) => [s, ...flatten(s.children)]);
+}
+
+/** What underline's regex wants outside its markers: not a letter, digit or underscore. */
+const WORD = /[\p{L}\p{N}_]/u;
+
+/** `piece` with the mark around its words and its edge spaces left outside (`** a **` would not read as bold). */
+function wrapWords(piece: string, m: string): string {
+  const lead = piece.length - piece.trimStart().length;
+  const core = piece.trim();
+  return core === "" ? piece : piece.slice(0, lead) + m + core + m + piece.slice(lead + core.length);
+}
+
+/** `src.slice(a, b)` with the markers of `spans` (all inside that range) taken off. */
+function without(src: string, a: number, b: number, spans: Span[]): string {
+  let out = src.slice(a, b);
+  for (const s of [...spans].sort((x, y) => y.from - x.from)) {
+    out = out.slice(0, s.from - a) + out.slice(s.inner - a, s.close - a) + out.slice(s.to - a);
+  }
+  return out;
+}
+
 /**
- * What pressing a mark's button (or key) does to the selection `[start, end)` of `src`: wrap it in the mark's
- * markers, or — when it is already wrapped, with the markers just outside or inside the selection — take them off.
- * A selection's edge spaces stay outside the markers (`** word **` would not read as bold), and with nothing
- * selected the pair is written and the caret left between.
+ * What pressing a mark's button (or key) does to the selection `[start, end)` of `src`.
+ *
+ * Marks nest, they never split: the selection first grows to the edges of any mark (or link, citation, code run) it
+ * only partly covers, so no delimiter is left without its pair; one that is the content of a mark of another kind
+ * (`__alpha__` selected inside its markers) is taken as that whole mark, so highlight over it is `==__alpha__==`;
+ * a range already carrying the mark loses it (around it, or inside the markers, or a part of a longer run, which
+ * keeps the rest marked); anything else is wrapped, the same mark inside it folded into the new one. A selection's
+ * edge spaces stay outside the markers (`** word **` would not read as bold), and with nothing selected the pair is
+ * written and the caret left between.
  */
 export function markEdit(src: string, start: number, end: number, mark: MarkName): MarkEdit {
   const m = MARKERS[mark];
@@ -173,11 +228,142 @@ export function markEdit(src: string, start: number, end: number, mark: MarkName
     }
     return { from: at, to: at, text: m + m, caret: at + m.length };
   }
+  if (mark === "code") return codeEdit(src, a, b);
+
+  const tree = spansOf(src);
+  const all = flatten(tree);
+  // Grow the selection until it cuts nothing: to the edges of a token it crosses, to the whole word where underline
+  // would otherwise start inside one, and out to a mark whose whole content it is (that is the mark, not its text).
+  for (let moved = true; moved; ) {
+    moved = false;
+    for (const s of all) {
+      if (a >= s.to || b <= s.from) continue;
+      const inContent = s.wraps && a >= s.inner && b <= s.close;
+      const covers = a <= s.from && b >= s.to;
+      if (inContent && !(a === s.inner && b === s.close && s.kind !== mark)) continue;
+      if (covers && !inContent) continue;
+      const na = Math.min(a, s.from);
+      const nb = Math.max(b, s.to);
+      if (na !== a || nb !== b) {
+        a = na;
+        b = nb;
+        moved = true;
+      }
+    }
+    if (mark === "underline") {
+      while (a > 0 && WORD.test(src[a - 1])) {
+        a--;
+        moved = true;
+      }
+      while (b < src.length && WORD.test(src[b])) {
+        b++;
+        moved = true;
+      }
+    }
+  }
+
+  const holders = all.filter((s) => s.wraps && s.inner <= a && b <= s.close);
+  const own = holders.filter((s) => s.kind === mark).sort((x, y) => y.from - x.from)[0];
+  const candidates: MarkEdit[] = [];
+  if (own) {
+    if (a === own.inner && b === own.close) {
+      // The whole content of the mark: take the mark off.
+      const bare = src.slice(own.inner, own.close);
+      candidates.push({ from: own.from, to: own.to, text: bare, caret: own.from + bare.length });
+    } else {
+      // A part of a longer run: it comes out, the rest stays marked. When the part sits inside another mark within
+      // this one, that mark comes out with it (it cannot be cut).
+      for (const h of holders) {
+        if (h.from > own.from && h.inner <= a && b <= h.close) {
+          a = Math.min(a, h.from);
+          b = Math.max(b, h.to);
+        }
+      }
+      const left = wrapWords(src.slice(own.inner, a), m);
+      const mid = src.slice(a, b);
+      const right = wrapWords(src.slice(b, own.close), m);
+      candidates.push({ from: own.from, to: own.to, text: left + mid + right, caret: own.from + left.length + mid.length });
+    }
+  } else {
+    // The same mark inside the selection: a selection wholly under it loses it, any other has it folded into the one
+    // being written (or, where folding would join a word to a marker and unmatch it, written around the parts that
+    // lack it).
+    const inside = all.filter((s) => s.kind === mark && s.from >= a && s.to <= b);
+    const bare = without(src, a, b, inside);
+    if (inside.length && carries(src, a, b, mark, tree)) {
+      candidates.push({ from: a, to: b, text: bare, caret: a + bare.length });
+    } else {
+      // `_em_` cannot sit in underline's markers (`___x___` is not underline), so it is written with a star there.
+      const text = mark === "underline" ? bare.replace(UNDER_EM, "$1*$2*") : bare;
+      candidates.push({ from: a, to: b, text: `${m}${text}${m}`, caret: a + text.length + m.length * 2 });
+      if (inside.length) {
+        let text2 = "";
+        let at = a;
+        for (const s of [...inside].sort((x, y) => x.from - y.from)) {
+          if (s.from < at) continue;
+          text2 += wrapWords(src.slice(at, s.from), m) + src.slice(s.from, s.to);
+          at = s.to;
+        }
+        text2 += wrapWords(src.slice(at, b), m);
+        candidates.push({ from: a, to: b, text: text2, caret: a + text2.length });
+      }
+    }
+  }
+  // Never leave a delimiter that matches nothing: the first edit that parses clean, else the selection untouched.
+  const before = strayCount(src);
+  for (const c of candidates) if (strayCount(src.slice(0, c.from) + c.text + src.slice(c.to)) <= before) return c;
+  return { from: a, to: a, text: "", caret: b };
+}
+
+/** Text runs, at any depth of nesting, that hold a delimiter of underline or highlight which matched nothing. */
+function strayCount(src: string): number {
+  let n = 0;
+  for (const t of parseInline(src)) {
+    if (t.kind === "text") n += /__|==/.test(t.text) ? 1 : 0;
+    else if (isWrapping(t)) n += strayCount(t.text);
+  }
+  return n;
+}
+
+const UNDER_EM = /(^|[^\p{L}\p{N}_])_(?=[^\s_])([^_\n*]*?[^\s_])_(?![\p{L}\p{N}_])/gu;
+
+/** Does every word of `[a, b)` already sit under `mark`? Walks the tokens the range holds, into the other marks. */
+function carries(src: string, a: number, b: number, mark: MarkName, tree: Span[]): boolean {
+  const level = (spans: Span[], from: number, to: number): boolean => {
+    let at = from;
+    for (const s of spans) {
+      if (s.to <= from || s.from >= to) continue;
+      if (src.slice(at, s.from).trim() !== "") return false;
+      if (s.kind !== mark) {
+        if (!s.wraps || !level(s.children, s.inner, s.close)) return false;
+      }
+      at = s.to;
+    }
+    return src.slice(at, to).trim() === "";
+  };
+  // the range sits among the children of the innermost token that holds it, or among the roots
+  let spans = tree;
+  for (let deeper = true; deeper; ) {
+    deeper = false;
+    for (const s of spans) {
+      if (s.wraps && s.inner <= a && b <= s.close) {
+        spans = s.children;
+        deeper = true;
+        break;
+      }
+    }
+  }
+  return level(spans, a, b);
+}
+
+/** Code is not nested into (its text is literal): wrap the selection, or take the backticks off, as before. */
+function codeEdit(src: string, a: number, b: number): MarkEdit {
+  const m = MARKERS.code;
   const inner = src.slice(a, b);
-  if (src.slice(a - m.length, a) === m && src.slice(b, b + m.length) === m && !beyond(src, a - m.length, b + m.length, m)) {
+  if (src.slice(a - m.length, a) === m && src.slice(b, b + m.length) === m) {
     return { from: a - m.length, to: b + m.length, text: inner, caret: a - m.length + inner.length };
   }
-  if (inner.length > 2 * m.length && inner.startsWith(m) && inner.endsWith(m) && !beyond(src, a, b, m)) {
+  if (inner.length > 2 * m.length && inner.startsWith(m) && inner.endsWith(m)) {
     const bare = inner.slice(m.length, inner.length - m.length);
     return { from: a, to: b, text: bare, caret: a + bare.length };
   }

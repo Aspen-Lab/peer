@@ -661,12 +661,14 @@ export function NoteEditor({
     focusBlock(id, caretAfter ?? from + text.length);
   };
 
-  /** The toolbar's marks and the keys': wrap or unwrap the block's selection (`markEdit`), the caret after. */
+  /** The toolbar's marks and the keys': wrap or unwrap the block's selection (`markEdit`: marks nest, the selection grows to a mark's edges), the caret after. */
   const applyMark = (id: string, mark: MarkName) => {
     const b = docRef.current.blocks.find((x) => x.id === id);
     const el = areas.current.get(id);
     if (!b || !el || b.type === "code") return;
     const edit = markEdit(b.text, el.selectionStart, el.selectionEnd, mark);
+    // An edit that would have left a delimiter unmatched comes back empty: nothing is written.
+    if (edit.from === edit.to && edit.text === "" && edit.caret !== edit.from) return el.setSelectionRange(edit.caret, edit.caret);
     replaceRange(id, edit.from, edit.to, edit.text, edit.caret);
   };
 
