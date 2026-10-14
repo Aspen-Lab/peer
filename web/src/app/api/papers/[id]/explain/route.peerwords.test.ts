@@ -211,12 +211,17 @@ describe("POST /api/papers/[id]/explain — a selection of Peer's own words (P10
     expect(JSON.parse(provider.generateJsonText.mock.calls[0][0].userPrompt).outputSchema).not.toHaveProperty("items");
   });
 
-  it("does not look for the words in the body: a Summary line that quotes the paper is still Peer's words, with no paragraph and no table", async () => {
+  // P10-38 (BACKLOG-75), re-aimed (§1c): this test said a Summary line that quotes the paper carries "no paragraph". The first half
+  // stands — the words are not located in the body, they stay Peer's, and no table is read — but the second is the very thing
+  // BACKLOG-75 changes: a selection that matches a body paragraph now carries it (`route.peermatch.test.ts`), and this one matches
+  // the Methods paragraph that defines the ratio.
+  it("does not locate the words in the body: a Summary line that quotes the paper is still Peer's words, with no table; its matching paragraph is context, not the passage's place", async () => {
     setModel({ meaning: MEANING, here: { text: HERE }, items: [{ term: "rafting ratio", here: "the share of plates", read: "as a fraction" }] });
     const answer = (await json(await call(peer("summary", { passage: PAPER_PASSAGE })))).answer as ExplainAnswer;
-    const prompt = JSON.parse(provider.generateJsonText.mock.calls[0][0].userPrompt) as Record<string, unknown>;
+    const prompt = JSON.parse(provider.generateJsonText.mock.calls[0][0].userPrompt) as { context?: { paragraph: string; section: string }; passageFrom: string; passage: string };
 
-    expect(prompt).not.toHaveProperty("context");
+    expect(prompt.context).toEqual({ section: "2 Methods", paragraph: DEF });
+    expect(prompt.passage).toBe(PAPER_PASSAGE);
     expect(String(prompt.passageFrom)).toContain("Peer's own words about this paper");
     expect(answer).not.toHaveProperty("items");
   });
