@@ -118,17 +118,24 @@ export function StickyWindowView({
   );
 }
 
-/** A debounced write: `push` the latest text, it is written once `ms` after the last push; `flush` writes it now. */
-export function makeStickyWriter(write: (text: string) => void, ms = STICKY_SAVE_MS) {
+/**
+ * A debounced write: `push` the latest text, it is written once `ms` after the last push; `flush` writes it now.
+ * P10-29 (BACKLOG-71): a write carries the text the sticky last saw stored (`base`, set by `sync`), so the store can merge it
+ * with words the notes window wrote into the same blocks meanwhile. `write` may return what the store holds after the write:
+ * that is the next base (the sticky never merges its own words with themselves).
+ */
+export function makeStickyWriter(write: (text: string, base?: string) => string | void, ms = STICKY_SAVE_MS) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let pending: string | null = null;
+  let base: string | undefined;
   const flush = () => {
     clearTimeout(timer);
     timer = undefined;
     if (pending === null) return;
     const text = pending;
     pending = null;
-    write(text);
+    const stored = base === undefined ? write(text) : write(text, base);
+    if (typeof stored === "string") base = stored;
   };
   return {
     push(text: string) {
@@ -139,6 +146,10 @@ export function makeStickyWriter(write: (text: string) => void, ms = STICKY_SAVE
     flush,
     /** A keystroke is waiting to be written. */
     pending: () => pending !== null,
+    /** The text the store held when the sticky last took it: what the next write is measured against. */
+    sync(stored: string) {
+      base = stored;
+    },
   };
 }
 
@@ -272,7 +283,14 @@ export function stickyRows(windows: readonly FloatingWindow[], blocks: readonly 
 function StickyWindow({ row, noteId, paperId }: { row: Row; noteId: string; paperId: string }) {
   const router = useRouter();
   const [text, setText] = useState(() => stickyText(readingNoteFor(useNotesStore.getState().notes, paperId)?.blocks ?? [], row.id));
-  const [writer] = useState(() => makeStickyWriter((next) => useNotesStore.getState().setStickyText(noteId, row.id, next)));
+  const [writer] = useState(() => {
+    const made = makeStickyWriter((next, base) => {
+      useNotesStore.getState().setStickyText(noteId, row.id, next, base);
+      return stickyText(useNotesStore.getState().notes[noteId]?.blocks ?? [], row.id);
+    });
+    made.sync(stickyText(readingNoteFor(useNotesStore.getState().notes, paperId)?.blocks ?? [], row.id));
+    return made;
+  });
   const raise = useWindows((s) => s.raise);
   // P10-09c: the sticky follows its blocks — when the notes window edits them, the text area shows the change, unless a
   // keystroke of the sticky's own is waiting to be written (then its write, a quarter second away, is the newer).
@@ -280,6 +298,8 @@ function StickyWindow({ row, noteId, paperId }: { row: Row; noteId: string; pape
   const [seen, setSeen] = useState(stored);
   if (stored !== seen) {
     setSeen(stored);
+    // P10-29: with no keystroke of its own waiting, what is stored now is what the next write is measured against.
+    if (!writer.pending()) writer.sync(stored);
     const next = stickyFollowText({ local: text, stored, pending: writer.pending() });
     if (next !== null) setText(next);
   }

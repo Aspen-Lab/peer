@@ -30,7 +30,7 @@ import { fileName, toMarkdown, toPlainText, toPrintHtml, toWordHtml } from "@/li
 import { downloadFile, printHtml } from "@/lib/notes/print";
 import { cn } from "@/lib/cn";
 import { NOTES_WINDOW_ID, holdInPlace, stackRows, useColumn, useWindows } from "@/lib/reader/windows";
-import { readingNoteFor, useNotesStore } from "@/store/notes";
+import { mergeText, readingNoteFor, useNotesStore } from "@/store/notes";
 import { NoteEditor } from "./note-editor";
 
 /** The sticky notes' height in front (the stack's frame needs it; the notes window in front takes what the screen leaves). */
@@ -169,11 +169,25 @@ type Doc = { title: string; blocks: Block[]; sources: Record<string, Source> };
 
 const sameBlocks = (a: readonly Block[], b: readonly Block[]) => a === b || JSON.stringify(a) === JSON.stringify(b);
 
+/** A block's kind and marks — everything but its words — as one comparable string. */
+const apartFromText = (b: Block) => JSON.stringify(Object.entries(b).filter(([key]) => key !== "text").sort(([x], [y]) => (x < y ? -1 : 1)));
+
+/**
+ * P10-29 (BACKLOG-71): one block changed in the window (`m`) and from outside (`t`), both grown from `b`. The words are
+ * merged (`mergeText`: what each side added stays; only a rewrite of the same words is the outside one's, written last);
+ * the kind and marks are the side's that changed them, the outside's where both did.
+ */
+function mergeBlock(b: Block, m: Block, t: Block): Block {
+  const text = mergeText(b.text, m.text, t.text, "theirs");
+  const kept = apartFromText(m) === apartFromText(b) ? t : apartFromText(t) === apartFromText(b) ? m : t;
+  return kept.text === text ? kept : { ...kept, text };
+}
+
 /**
  * P10-09c (rule 3, BACKLOG-69): the editor's unsaved blocks (`mine`) and a change made to the same note from outside
  * (`theirs` — a sticky writing its words), both grown from `base`, in one list. Block by block, by id: a block only the
  * window changed keeps the window's version, a block only the outside changed keeps the outside's, where both changed
- * one block the outside one stands (it was written last); a block the window added stays after its neighbour, one the
+ * one block the words are merged (`mergeBlock`: the outside's only where both rewrote the same words, written last); a block the window added stays after its neighbour, one the
  * outside added stays, one the window deleted is gone. Pure.
  */
 export function mergeBlocks(base: readonly Block[], mine: readonly Block[], theirs: readonly Block[]): Block[] {
@@ -188,7 +202,8 @@ export function mergeBlocks(base: readonly Block[], mine: readonly Block[], thei
       out.push(t);
       continue;
     }
-    out.push(b && sameBlocks([b], [t]) && !sameBlocks([b], [m]) ? m : t);
+    if (b && !sameBlocks([b], [t]) && !sameBlocks([b], [m])) out.push(mergeBlock(b, m, t));
+    else out.push(b && sameBlocks([b], [t]) && !sameBlocks([b], [m]) ? m : t);
   }
   const placed = new Set(out.map((b) => b.id));
   mine.forEach((m, i) => {

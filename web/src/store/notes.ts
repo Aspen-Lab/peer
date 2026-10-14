@@ -13,7 +13,7 @@ import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Citable, Note } from "@/lib/notes/types";
-import { citedKeys, stickyBlocks, stickyQuote, withStickyText } from "@/lib/notes/blocks";
+import { citedKeys, stickyBlocks, stickyParagraphs, stickyQuote, stickyText, withStickyText } from "@/lib/notes/blocks";
 import { readingNote, type ReadingNoteExtras } from "@/lib/notes/templates";
 import { MATH_CLOSE, MATH_OPEN } from "@/lib/text/math";
 
@@ -44,6 +44,49 @@ export function locatePassage(paragraph: string, passage: string): { start: numb
   return found ? { start: found.index, end: found.index + found[0].length } : null;
 }
 
+/** Where `next` differs from `base`: the span of `base` it replaces (`start`..`end`) and the words it puts there. */
+function changeOf(base: string, next: string): { start: number; end: number; text: string } {
+  const room = Math.min(base.length, next.length);
+  let start = 0;
+  while (start < room && base[start] === next[start]) start++;
+  // A pair of surrogates is one character: never cut between its halves.
+  if (start > 0 && /[\uD800-\uDBFF]/.test(base[start - 1])) start--;
+  let tail = 0;
+  while (tail < room - start && base[base.length - 1 - tail] === next[next.length - 1 - tail]) tail++;
+  if (tail > 0 && /[\uDC00-\uDFFF]/.test(base[base.length - tail])) tail--;
+  return { start, end: base.length - tail, text: next.slice(start, next.length - tail) };
+}
+
+/**
+ * P10-29 (BACKLOG-71): two writers' texts for one block, grown from the same `base`, in one. Each side's change is the span
+ * of the words it touched; when the two spans are apart both stay, when both only added words at the one place both stay (the
+ * stored `theirs` first, a space between when the words would run together), and where both changed the same words the later
+ * one stands: `mine`, the write being made now, unless `later` says `theirs`. The same text both arrived at is kept once. Pure.
+ */
+export function mergeText(base: string, mine: string, theirs: string, later: "mine" | "theirs" = "mine"): string {
+  if (mine === theirs || theirs === base) return mine;
+  if (mine === base) return theirs;
+  const m = changeOf(base, mine);
+  const t = changeOf(base, theirs);
+  if (m.start === m.end && t.start === t.end && m.start === t.start) {
+    const join = /\S$/.test(t.text) && /^\S/.test(m.text) ? " " : "";
+    return base.slice(0, m.start) + t.text + join + m.text + base.slice(m.start);
+  }
+  if (t.end < m.start) return base.slice(0, t.start) + t.text + base.slice(t.end, m.start) + m.text + base.slice(m.end);
+  if (m.end < t.start) return base.slice(0, m.start) + m.text + base.slice(m.end, t.start) + t.text + base.slice(t.end);
+  return later === "mine" ? mine : theirs;
+}
+
+/** `mergeText` block by block: a sticky's paragraphs are blocks, so when the three keep the same paragraphs each is merged
+ *  on its own — a block both rewrote is `mine` only for that block. Else the whole text is merged as one. */
+function mergeParagraphs(base: string, mine: string, theirs: string): string {
+  const b = base.split("\n");
+  const m = mine.split("\n");
+  const t = theirs.split("\n");
+  if (b.length === m.length && b.length === t.length) return b.map((line, i) => mergeText(line, m[i], t[i])).join("\n");
+  return mergeText(base, mine, theirs);
+}
+
 interface NotesState {
   notes: Record<string, Note>;
   add: (note: Note) => void;
@@ -65,8 +108,11 @@ interface NotesState {
       paragraphText?: string;
     },
   ) => { id: string; n: number } | null;
-  /** P10-09a: write a sticky's text through into its own blocks (one per paragraph); nothing else changes. */
-  setStickyText: (noteId: string, headerId: string, text: string) => void;
+  /** P10-09a: write a sticky's text through into its own blocks (one per paragraph); nothing else changes.
+   *  P10-29: `base` is the text the writer last saw stored. When the stored text is no longer that — the notes window wrote
+   *  into the same blocks meanwhile — the two are merged block by block (`mergeText`) rather than the writer's text
+   *  replacing the other's words. */
+  setStickyText: (noteId: string, headerId: string, text: string, base?: string) => void;
 }
 
 export const useNotesStore = create<NotesState>()(
@@ -111,11 +157,18 @@ export const useNotesStore = create<NotesState>()(
         });
         return { id: header.id, n };
       },
-      setStickyText: (noteId, headerId, text) =>
+      setStickyText: (noteId, headerId, text, base) =>
         set((s) => {
           const note = s.notes[noteId];
           if (!note) return s;
-          const blocks = withStickyText(note.blocks, headerId, text);
+          let write = text;
+          if (base !== undefined) {
+            const stored = stickyText(note.blocks, headerId);
+            const mine = stickyParagraphs(text).join("\n");
+            const seen = stickyParagraphs(base).join("\n");
+            if (stored !== seen && stored !== mine) write = mergeParagraphs(seen, mine, stored);
+          }
+          const blocks = withStickyText(note.blocks, headerId, write);
           if (blocks.length === note.blocks.length && blocks.every((b, i) => b === note.blocks[i])) return s;
           return { notes: { ...s.notes, [noteId]: { ...note, blocks, updatedAt: new Date().toISOString() } } };
         }),
