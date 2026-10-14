@@ -22,8 +22,7 @@ import { useSyncExternalStore } from "react";
 import { stickyTitle } from "@/lib/notes/blocks";
 import type { NoteAnchor } from "@/lib/notes/types";
 import { useWindows } from "@/lib/reader/windows";
-import { MATH_CLOSE, MATH_OPEN } from "@/lib/text/math";
-import { readingNoteFor, resolveAnchors, useLostPassages, useNotesStore } from "@/store/notes";
+import { anchorRange, readingNoteFor, resolveAnchors, useLostPassages, useNotesStore } from "@/store/notes";
 
 /** How long the passage stays marked after the square scrolls to it. */
 export const FLASH_MS = 1500;
@@ -57,26 +56,11 @@ export type PassageSegment =
   | { kind: "mark"; from: number; to: number; spot: AnchorSpot; inner: PassageSegment[]; depth: number }
   | { kind: "tag"; spot: AnchorSpot };
 
-/** Whether position `at` lies inside a formula (`⟦…⟧`) of the text: a mark must never cut one. */
-function insideFormula(text: string, at: number): boolean {
-  if (at <= 0) return false;
-  const open = text.lastIndexOf(MATH_OPEN, at - 1);
-  return open > text.lastIndexOf(MATH_CLOSE, at - 1) && text.indexOf(MATH_CLOSE, at) >= 0;
-}
-
-/** The range of a note the text still holds: in the text, not empty, whole formulas, and the words the anchor was taken on. */
-function rangeOf(text: string, spot: AnchorSpot): { start: number; end: number } | null {
+/** The range of a note the text still holds (P10-36: the store's `anchorRange`, the one check): the marked words, ending at the last word. */
+export function rangeOf(text: string, spot: AnchorSpot): { start: number; end: number } | null {
   const { start, end, quote } = spot;
   if (start === undefined || end === undefined || quote === undefined) return null;
-  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || start >= end || end > text.length) return null;
-  if (insideFormula(text, start) || insideFormula(text, end)) return null;
-  const held = text.slice(start, end).replace(/\s+/g, " ").trim();
-  if (!held.startsWith(quote)) return null;
-  // P10-20: a mark ends at its last word. The white space the selection ran on over (a double-click, a drag) stays a
-  // plain run after the tag: the browser may break a line after a space even before a word joiner, which left the tag
-  // alone at the start of the next line.
-  const last = start + text.slice(start, end).trimEnd().length;
-  return last > start ? { start, end: last } : null;
+  return anchorRange(text, { start, end, quote });
 }
 
 /**

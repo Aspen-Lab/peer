@@ -49,18 +49,30 @@ export function locatePassage(paragraph: string, passage: string, from = 0): { s
 
 // ── P10-35 (BACKLOG-91): a note finds its passage again by its quote ──────
 
-/** Whether `text` still holds the words a ranged anchor was taken on: the range is in it, whole formulas at both ends, and
- *  the words at `[start, end)` begin with the quote. The test the body's marks use (`rangeOf`, in `note-tags.tsx`). */
-export function anchorHolds(text: string, spot: { start: number; end: number; quote: string }): boolean {
+/**
+ * P10-36: the one check of a ranged anchor, which the store (`anchorHolds`, `resolveAnchors`) and the paper's marks (`rangeOf`,
+ * in `note-tags.tsx`) both make. `text` still holds the words the anchor was taken on when the range is in it, is not empty,
+ * has whole formulas at both ends, and the words at `[start, end)` begin with the quote. Returns the range a mark covers — it
+ * ends at its last word, the white space a selection ran on over left out — or null when the text does not hold the words.
+ */
+export function anchorRange(text: string, spot: { start: number; end: number; quote: string }): { start: number; end: number } | null {
   const { start, end, quote } = spot;
-  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || start >= end || end > text.length) return false;
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || start >= end || end > text.length) return null;
   const inside = (at: number) => {
     if (at <= 0) return false;
     const open = text.lastIndexOf(MATH_OPEN, at - 1);
     return open > text.lastIndexOf(MATH_CLOSE, at - 1) && text.indexOf(MATH_CLOSE, at) >= 0;
   };
-  if (inside(start) || inside(end)) return false;
-  return text.slice(start, end).replace(/\s+/g, " ").trim().startsWith(quote) && text.slice(start, end).trim() !== "";
+  if (inside(start) || inside(end)) return null;
+  const held = text.slice(start, end);
+  if (!held.replace(/\s+/g, " ").trim().startsWith(quote)) return null;
+  const last = start + held.trimEnd().length;
+  return last > start ? { start, end: last } : null;
+}
+
+/** Whether `text` still holds the words a ranged anchor was taken on (`anchorRange` has a range for it). */
+export function anchorHolds(text: string, spot: { start: number; end: number; quote: string }): boolean {
+  return anchorRange(text, spot) !== null;
 }
 
 /** One anchor's repair: where it stood (`was`, to know it is still the stored one) and where its words stand now. */
