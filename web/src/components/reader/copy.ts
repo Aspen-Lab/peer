@@ -398,14 +398,32 @@ export const TOAST = {
   copied: (words: number) => `Copied · ${words.toLocaleString("en-US")} words`,
 };
 
-/** Appended to the availability sentence while the model works. */
-export function progressSuffix(stageLabel: string): string {
-  return ` — ${stageLabel}…`;
+/**
+ * Appended to the availability sentence while the model works. It names no stage: the stage is said
+ * once, in the status line under the progress bar (`REPORT_STATUS` below), and a sentence that said it
+ * again put the same words on the page twice.
+ */
+export function progressSuffix(): string {
+  return " — your model is at work…";
 }
 
-/** S19: the fixed label under the relocated progress bar — always this
- * exact string, never the pipeline-stage label `progressSuffix` names. */
-export const PROGRESS_LABEL = "loading report...";
+/**
+ * P10-41 / P10-45: what the status line under the progress bar says, by what the page waits on. These
+ * are the page's own words for the server's stages (the stage's `label` is the server's and says
+ * "Reading it"); a stage this table does not know keeps its server label.
+ */
+export const REPORT_STATUS = {
+  /** A model has been asked; the server has not yet said which stage it is in. */
+  starting: "Starting the report",
+  source: "Finding the paper",
+  reading: "Reading the paper",
+  /** The reading stage while the reader's own questions ride the request. */
+  readingQuestions: "Reading your questions",
+  writing: "Writing the report",
+  figures: "Adding figures",
+  /** The stream broke and the same request is being asked once more as plain JSON. */
+  again: "Trying the report once more",
+} as const;
 
 export const NOT_FOUND = "Paper not found.";
 

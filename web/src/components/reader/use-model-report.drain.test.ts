@@ -233,6 +233,8 @@ describe("useModelReport — the request is read to its end, once, and the bar s
   it("a queued request starts from no bar: after the earlier one's 75 %, the new one's first words carry no progress, never a 0 % bar", async () => {
     net.script = async function* (body: Record<string, unknown>) {
       yield { type: "mode", aiMode: "tier2" };
+      // The server's first stage takes a moment to come: the page waits on words alone meanwhile.
+      await sleep(10);
       yield { type: "stage", stage: "writing", label: "Writing the report", pct: 75 };
       await sleep(net.calls.length === 1 ? 120 : 30);
       yield reportEvent(body);

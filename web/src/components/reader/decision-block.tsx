@@ -63,7 +63,7 @@ export function DecisionBlock({
   ref?: Ref<HTMLDivElement>;
   sentences: string[];
   /** While the model works: the stream's stage under the sentence. */
-  stage: { label: string; pct: number } | null;
+  stage: { label: string; pct: number | null } | null;
   /** The paper's own text, where Peer holds it: the command that keeps the
    *  reader here rather than sending them to a PDF viewer. */
   onRead?: () => void;
@@ -113,7 +113,7 @@ export function DecisionBlock({
         }
       >
         {sentences.join(" ")}
-        {stage && <span className="text-text-faint">{progressSuffix(stage.label)}</span>}
+        {stage && <span className="text-text-faint">{progressSuffix()}</span>}
         {showAddKey && (
           <>
             {" "}
@@ -162,21 +162,26 @@ export function DecisionBlock({
         // P10-41: the label says what the page is waiting on (the stage it is
         // given), not a fixed "loading report..."; it is drawn only while a
         // stage stands, which the hook ends with the request.
+        // P10-45: the bar is drawn once a stage has said how far along it is (`pct`); a request that has
+        // just started (the first one, or a queued one behind an earlier one that ended) shows its
+        // words alone, so the bar never returns to 0.
         <>
-          <div
-            role="progressbar"
-            aria-valuenow={Math.round(stage.pct)}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={stage.label}
-            className="h-[6px] mt-3 overflow-hidden rounded-full bg-bg-secondary"
-          >
+          {stage.pct !== null && (
             <div
-              className="h-full rounded-full bg-accent transition-[width] duration-300 ease-snap motion-reduce:transition-none"
-              style={{ width: `${Math.max(0, Math.min(100, stage.pct))}%` }}
-            />
-          </div>
-          <p aria-live="polite" className="font-mono text-meta text-text-muted mt-1.5">
+              role="progressbar"
+              aria-valuenow={Math.round(stage.pct)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={stage.label}
+              className="h-[6px] mt-3 overflow-hidden rounded-full bg-bg-secondary"
+            >
+              <div
+                className="h-full rounded-full bg-accent transition-[width] duration-300 ease-snap motion-reduce:transition-none"
+                style={{ width: `${Math.max(0, Math.min(100, stage.pct))}%` }}
+              />
+            </div>
+          )}
+          <p aria-live="polite" className={cn("font-mono text-meta text-text-muted", stage.pct === null ? "mt-3" : "mt-1.5")}>
             {stage.label}…
           </p>
         </>

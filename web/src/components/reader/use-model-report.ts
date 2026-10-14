@@ -19,6 +19,7 @@ import { streamPaperReport } from "@/lib/papers/report-stream";
 import { reportOutcome } from "@/lib/reader/report-outcome";
 import { aiAvailability, type AiMode } from "@/lib/feed/ai-tier";
 import { useSyncGate } from "@/components/profile-sync";
+import { REPORT_STATUS } from "./copy";
 
 // v6: S6 merged "what is new" into "what it proposes" (whatItProposes.newHere
 // replaces .novelty) and deleted "why it fits you" — a v5 report still has
@@ -56,25 +57,6 @@ const ABSTRACT_TTL_MS = 6 * 60 * 60 * 1000;
  * clears. Nothing a request could still finish is cut: the platform ends it at 180 s.
  */
 export const REPORT_DEADLINE_MS = 200_000;
-
-/**
- * P10-41 (BACKLOG-39): what the status line under the progress bar says, by what the page waits
- * on. These are the page's own words for the server's stages (the stage's `label` is the server's
- * and says "Reading it"); a stage this table does not know keeps its server label. The words belong
- * with the rest of the reader's copy in `copy.ts`, which is another item's file this round.
- */
-export const REPORT_STATUS = {
-  /** A model has been asked; the server has not yet said which stage it is in. */
-  starting: "Starting the report",
-  source: "Finding the paper",
-  reading: "Reading the paper",
-  /** The reading stage while the reader's own questions ride the request. */
-  readingQuestions: "Reading your questions",
-  writing: "Writing the report",
-  figures: "Adding figures",
-  /** The stream broke and the same request is being asked once more as plain JSON. */
-  again: "Trying the report once more",
-} as const;
 
 function stageLabel(stage: string, serverLabel: string, withQuestions: boolean): string {
   if (stage === "reading") return withQuestions ? REPORT_STATUS.readingQuestions : REPORT_STATUS.reading;
@@ -284,7 +266,7 @@ export interface ModelReportState {
   /** A verified, model-written report; null when there is no model layer. */
   report: PaperReport | null;
   /** The stream's current stage while the model works. */
-  stage: { label: string; pct: number } | null;
+  stage: { label: string; pct: number | null } | null;
   /** The model was asked and could not finish; the paper's own text stands. */
   failed: boolean;
   /**
@@ -384,7 +366,8 @@ export function useModelReport({
   const [progress, setProgress] = useState<{
     base: string;
     label: string;
-    pct: number;
+    /** `null` until a stage has said how far along it is: a request just started has no progress to draw. */
+    pct: number | null;
   } | null>(null);
   const baseKey = buildReportKey(paper, depth, project, profile.feedAiProvider);
 
@@ -550,7 +533,7 @@ export function useModelReport({
       // The stream broke and the request is asked once more: the line says so rather than
       // standing on the stage the broken one reached. Only where a model was to be asked.
       if (userProviderConfigured) {
-        setProgress((current) => ({ base: baseKey, label: REPORT_STATUS.again, pct: current?.pct ?? 0 }));
+        setProgress((current) => ({ base: baseKey, label: REPORT_STATUS.again, pct: current?.pct ?? null }));
       }
       try {
         const report = await apiFetch<PaperReport>("/api/papers/report", {
@@ -576,7 +559,7 @@ export function useModelReport({
       // not from the server's first word (which, with an earlier request ending just before this
       // one starts, would leave the line blank for a round trip). With no key, no model is asked
       // and nothing is shown; the mode event below says so for the case this guess misses.
-      if (userProviderConfigured) setProgress({ base: baseKey, label: REPORT_STATUS.starting, pct: 0 });
+      if (userProviderConfigured) setProgress({ base: baseKey, label: REPORT_STATUS.starting, pct: null });
       try {
         for await (const event of streamPaperReport(requestBody, controller.signal)) {
           if (!active()) return;
@@ -592,18 +575,21 @@ export function useModelReport({
             asked = true;
             // A model is asked: the page waits on it from here, stage event or not. (At Tier 0 no
             // model is asked and nothing is shown, so this is not set before the mode says so.)
-            setProgress({ base: baseKey, label: REPORT_STATUS.starting, pct: 0 });
+            setProgress({ base: baseKey, label: REPORT_STATUS.starting, pct: null });
             continue;
           }
           if (!modeSeen) throw new Error("Report stream did not begin with a mode event.");
 
           if (event.type === "stage") {
-            const pct = Number.isFinite(event.pct) ? Math.max(0, Math.min(100, event.pct)) : 0;
+            const pct = Number.isFinite(event.pct) ? Math.max(0, Math.min(100, event.pct)) : null;
             const label = stageLabel(event.stage, event.label, sentQuestions.length > 0);
-            // The bar never moves backwards.
-            setProgress((current) =>
-              current && current.base === baseKey && pct < current.pct ? current : { base: baseKey, label, pct },
-            );
+            // The bar never moves backwards within a request; a request that has not yet said how far
+            // it is (the one a queued question starts, behind an earlier one that ended) has no bar.
+            setProgress((current) => {
+              const same = current !== null && current.base === baseKey;
+              if (same && current.pct !== null && pct !== null && pct < current.pct) return current;
+              return { base: baseKey, label, pct: pct ?? (same ? current.pct : null) };
+            });
             continue;
           }
           if (event.type === "report") {

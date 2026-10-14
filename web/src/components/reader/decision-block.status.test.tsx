@@ -8,7 +8,7 @@ import { DecisionBlock } from "./decision-block";
 
 const NOOP = () => {};
 
-function render(stage: { label: string; pct: number } | null) {
+function render(stage: { label: string; pct: number | null } | null) {
   return renderToStaticMarkup(
     createElement(DecisionBlock, {
       sentences: ["Read from the abstract."],
@@ -41,9 +41,7 @@ describe("DecisionBlock — the status line (P10-41)", () => {
 });
 
 // P10-45 (BACKLOG-93): the stage is named once, and the bar is drawn only once it has a progress to show.
-// `pct: null` is "no progress yet" (a request has started and the server has not said a stage); the
-// type allows it from this item on, so the tests below pass it through the `render` helper's cast.
-const NO_PROGRESS = null as unknown as number;
+// `pct: null` is "no progress yet" (a request has started and the server has not said a stage).
 
 describe("DecisionBlock — one stage word, and a bar only with a progress (P10-45)", () => {
   it("names the stage once in the text the reader sees: under the bar, not again in the sentence", () => {
@@ -55,7 +53,7 @@ describe("DecisionBlock — one stage word, and a bar only with a progress (P10-
   });
 
   it("a stage with no progress yet draws its words and no bar (a queued request starts from nothing, not from 0)", () => {
-    const html = render({ label: "Starting the report", pct: NO_PROGRESS });
+    const html = render({ label: "Starting the report", pct: null });
     const status = html.match(/<p aria-live="polite"[^>]*>([^<]*)<\/p>/);
 
     expect(status?.[1]).toBe("Starting the report…");
