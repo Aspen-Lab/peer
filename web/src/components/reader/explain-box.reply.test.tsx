@@ -10,8 +10,7 @@ import { SectionLinks } from "./evidence-quote";
 import { ExplainCard, type ExplainStatus } from "./explain-box";
 
 // P10-39 (rules 2, 3; P10-38's unsettled): "Why Peer says it" lives in copy.ts beside EXPLAIN.here, and the card reads it from there;
-// in a thread on a selection in Peer's own words, Peer's later replies carry the same label as the first answer's second part (the
-// paper's selections keep "Peer"). Rendered with react-dom/server. Invented text.
+// a reply is headed "Peer" whatever the selection's source (rule 3, a different label for a reply, was withdrawn by the manager). Rendered with react-dom/server. Invented text.
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 const PASSAGE = "Tungsten slowed plate formation, so the rafting ratio stays low for longer.";
@@ -62,25 +61,18 @@ describe("WHY_PEER_SAYS_IT — the copy lives with its kin", () => {
   });
 });
 
-describe("a thread's replies name their source (rule 3)", () => {
-  it.each(["summary", "answer"] as const)("labels each of Peer's replies \"Why Peer says it\" on a selection in %s, as the first answer's second part", (source) => {
+describe("a thread's replies keep \"Peer\" (P10-39: rule 3, a different label for a reply, was withdrawn)", () => {
+  it.each([undefined, "paper", "summary", "answer"] as const)("heads each of Peer's replies \"Peer\" on a selection from %s, and the reader's words \"You\"", (source) => {
     const html = markup({ source });
-    expect(count(html, WHY_PEER_SAYS_IT)).toBe(1 + 2);
-    expect(html).not.toContain(`>${EXPLAIN.peer}</p>`);
-    expect(html).toContain(`>${EXPLAIN.you}</p>`);
+    expect(count(html, `>${EXPLAIN.peer}</p>`)).toBe(2);
     expect(count(html, `>${EXPLAIN.you}</p>`)).toBe(2);
-  });
-
-  it("keeps the reader's words and the reply's words as they were", () => {
-    const html = markup({ source: "summary" });
     for (const turn of turns) expect(html).toContain(turn.text);
   });
 
-  it("keeps \"Peer\" for the replies on a selection in the paper, marked or not", () => {
-    for (const html of [markup(), markup({ source: "paper" })]) {
-      expect(count(html, `>${EXPLAIN.peer}</p>`)).toBe(2);
-      expect(html).not.toContain(WHY_PEER_SAYS_IT);
-      expect(html).toContain(EXPLAIN.here);
-    }
+  it("names the source only in the second part of the first answer", () => {
+    expect(count(markup({ source: "summary" }), WHY_PEER_SAYS_IT)).toBe(1);
+    expect(count(markup({ source: "answer" }), WHY_PEER_SAYS_IT)).toBe(1);
+    expect(markup({ source: "paper" })).not.toContain(WHY_PEER_SAYS_IT);
+    expect(markup()).toContain(EXPLAIN.here);
   });
 });
