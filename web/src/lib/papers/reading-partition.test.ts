@@ -1,15 +1,22 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import type { Paper } from "@/types";
+import { MAP } from "@/components/reader/copy";
+import type { FullTextResult } from "./full-text";
 import type { ExtractedDocument } from "./html-text";
-import { readableSections } from "./reading-map";
+import { buildReading } from "./reading";
+import { GIST_QUESTION, gistRoute, readableSections, routeByQuestions, type RouteResult } from "./reading-map";
 import {
   PARTITION_ROLES,
   PART_ROLE,
   TRUNK,
+  partOf,
+  partitionedMap,
   restorePartition,
   sanitizePartition,
   unheadedTrunk,
+  withPartitionMarks,
   type GuidePartition,
 } from "./reading-partition";
 
@@ -371,5 +378,276 @@ describe("restorePartition — what the browser reads back from its store (B §2
     for (const raw of [null, undefined, 5, "x", [], {}, { sectionId: "s0" }, { sectionId: 4, parts: good.parts }, { sectionId: "", parts: good.parts }, { sectionId: "__proto__", parts: good.parts }, { sectionId: "s0", parts: "no" }, { sectionId: "s0", parts: [] }, { sectionId: "s0", parts: [{ role: "results", fromParagraph: 0 }] }]) {
       expect(restorePartition(raw)).toBeNull();
     }
+  });
+});
+
+// ── P10-07b (B P10-05 §3.1, §4; review 3.3, second half; rubric A15) ──────────────────────────
+//
+// The overlay: the model's partition of an unheaded paper laid over the map in place of the trunk's
+// row, and the route fold that gives a group row its mark from the paragraphs inside it. Both pure.
+// The paper below is invented ("a survey of shore ecology"); no sentence of any paper.
+
+const PAPER: Paper = {
+  id: "upload:00000000000000bb", title: "T", authors: [], relevanceReason: "", venue: "", source: "other",
+  summaryIntro: "", summaryExperimentKeywords: [], summaryResultDiscussion: "", isSaved: false,
+};
+
+/** An unheaded paper: a 30-paragraph `body` trunk (the title is its heading) and a Methods section of 4. */
+function unheadedReading(over: Record<number, string> = {}) {
+  const doc: ExtractedDocument = {
+    source: "pdf",
+    pageCount: 6,
+    figureCaptions: [],
+    sections: [
+      { id: "s0", heading: "A survey of shore ecology", canonical: "body", page: 1, text: Array.from({ length: 30 }, (_, k) => over[k] ?? invented(k)).join("\n\n") },
+      { id: "s1", heading: "Methods", canonical: "methods", page: 4, text: Array.from({ length: 4 }, (_, k) => invented(100 + k)).join("\n\n") },
+    ],
+  };
+  const fullText: FullTextResult = { status: "ok", attempts: [], doc, sourceLink: { url: "https://example.org/shore.pdf", kind: "pdf", label: "doi", rank: 1 } };
+  return buildReading(PAPER, fullText, new Date("2026-10-05T00:00:00.000Z"));
+}
+
+const FOUR: GuidePartition = {
+  sectionId: "s0",
+  parts: [
+    { role: "introduction", fromParagraph: 0, toParagraph: 5 },
+    { role: "results", fromParagraph: 6, toParagraph: 19 },
+    { role: "discussion", fromParagraph: 20, toParagraph: 26 },
+    { role: "conclusion", fromParagraph: 27, toParagraph: 29 },
+  ],
+};
+const TWO: GuidePartition = {
+  sectionId: "s0",
+  parts: [
+    { role: "introduction", fromParagraph: 0, toParagraph: 14 },
+    { role: "results", fromParagraph: 15, toParagraph: 29 },
+  ],
+};
+
+describe("partitionedMap — the trunk's row replaced in place by one row per part (B §3.1)", () => {
+  const reading = unheadedReading();
+  const map = reading.map!;
+  const before = JSON.stringify(map);
+
+  it("is the invented paper: an unheaded trunk of 30 paragraphs, then Methods", () => {
+    expect(map.sections.map((row) => row.id)).toEqual(["s0", "s1"]);
+    expect(unheadedTrunk(reading.body)).toMatchObject({ sectionId: "s0", sectionIndex: 0, paragraphCount: 30 });
+  });
+
+  it("returns the same map object for no partition", () => {
+    expect(partitionedMap(map, reading.body, null)).toBe(map);
+    expect(partitionedMap(map, reading.body, undefined)).toBe(map);
+  });
+
+  it("returns the same map object for a partition whose section is not in the map", () => {
+    expect(partitionedMap(map, reading.body, { ...FOUR, sectionId: "s9" })).toBe(map);
+  });
+
+  it("returns the same map object for a partition that does not cover the section (a stale one), or one the body does not bear out", () => {
+    expect(partitionedMap(map, reading.body, { sectionId: "s0", parts: FOUR.parts.slice(0, 3) })).toBe(map);
+    expect(partitionedMap(map, reading.body, { sectionId: "s0", parts: [FOUR.parts[0]] })).toBe(map);
+    // The trunk is a short section the rule does not read as unheaded: the model is never asked, so a stored answer is not drawn.
+    expect(partitionedMap(map, reading.body, { sectionId: "s1", parts: [{ role: "experimental", fromParagraph: 0, toParagraph: 1 }, { role: "results", fromParagraph: 2, toParagraph: 3 }] })).toBe(map);
+    // No body to count the words from.
+    expect(partitionedMap(map, undefined, FOUR)).toBe(map);
+    expect(partitionedMap(map, [], FOUR)).toBe(map);
+  });
+
+  it("replaces the trunk by one row per part, in the same place, the rows after it in their order", () => {
+    const got = partitionedMap(map, reading.body, FOUR);
+
+    expect(got.sections.map((row) => row.id)).toEqual(["s0~0", "s0~1", "s0~2", "s0~3", "s1"]);
+    expect(got.sections.map((row) => row.heading)).toEqual([MAP.parts.labels.introduction, MAP.parts.labels.results, MAP.parts.labels.discussion, MAP.parts.labels.conclusion, "Methods"]);
+    expect(got.sections.map((row) => row.canonical)).toEqual(["introduction", "results", "discussion", "conclusion", "methods"]);
+    expect(got.sections.map((row) => row.role)).toEqual(["setup", "evidence", "interpretation", "interpretation", "method"]);
+    // The paper's own row after the trunk is the very object it was.
+    expect(got.sections[4]).toBe(map.sections[1]);
+  });
+
+  it("gives each group the level 1, no parent, no page and a part record", () => {
+    const got = partitionedMap(map, reading.body, FOUR);
+
+    got.sections.slice(0, 4).forEach((row, n) => {
+      expect(row.level).toBe(1);
+      expect(row).not.toHaveProperty("parentId");
+      expect(row).not.toHaveProperty("page");
+      expect(partOf(row)).toEqual({ sectionId: "s0", sectionIndex: 0, role: FOUR.parts[n].role, from: FOUR.parts[n].fromParagraph, to: FOUR.parts[n].toParagraph });
+    });
+    expect(partOf(got.sections[4])).toBeUndefined();
+  });
+
+  it("keeps the trunk's lines for the range, with their real indices and openings", () => {
+    const got = partitionedMap(map, reading.body, FOUR);
+
+    FOUR.parts.forEach((part, n) => {
+      expect(got.sections[n].paragraphs).toEqual(map.sections[0].paragraphs.slice(part.fromParagraph, part.toParagraph + 1));
+    });
+    expect(got.sections[1].paragraphs[0].index).toBe(6);
+    expect(got.sections[1].paragraphs[0].opening).toBe(map.sections[0].paragraphs[6].opening);
+    expect(got.sections[3].paragraphs.map((line) => line.index)).toEqual([27, 28, 29]);
+  });
+
+  it("recomputes each group's words and minutes from its paragraphs; the groups add up to the trunk", () => {
+    const got = partitionedMap(map, reading.body, FOUR);
+
+    FOUR.parts.forEach((part, n) => {
+      const text = reading.body[0].paragraphs.slice(part.fromParagraph, part.toParagraph + 1);
+      expect(got.sections[n].words).toBe(wordsOf(text));
+      expect(got.sections[n].minutes).toBe(Math.max(1, Math.ceil(wordsOf(text) / 180)));
+    });
+    expect(got.sections.slice(0, 4).reduce((sum, row) => sum + row.words, 0)).toBe(map.sections[0].words);
+  });
+
+  it("leaves the totals unchanged: the words over all the rows, and the map's minutes", () => {
+    const got = partitionedMap(map, reading.body, FOUR);
+
+    expect(got.sections.reduce((sum, row) => sum + row.words, 0)).toBe(map.sections.reduce((sum, row) => sum + row.words, 0));
+    expect(got.totalMinutes).toBe(map.totalMinutes);
+  });
+
+  it("changes nothing it is given, and is the same answer twice", () => {
+    const got = partitionedMap(map, reading.body, TWO);
+
+    expect(JSON.stringify(map)).toBe(before);
+    expect(got.sections.map((row) => row.id)).toEqual(["s0~0", "s0~1", "s1"]);
+    expect(partitionedMap(map, reading.body, TWO)).toEqual(got);
+  });
+
+  it("is a headed paper's map as it was, whatever a store holds: the partition of a section the rule does not read as unheaded is not drawn", () => {
+    const doc = JSON.parse(readFileSync(resolve(process.cwd(), "src/lib/papers/__fixtures__/arxiv-2609.02113.doc.json"), "utf8")) as ExtractedDocument;
+    const headed = buildReading(PAPER, { status: "ok", attempts: [], doc, sourceLink: { url: "https://example.org/h.pdf", kind: "pdf", label: "doi", rank: 1 } }, new Date("2026-10-05T00:00:00.000Z"));
+    const rows = headed.map!.sections;
+    const longest = rows.reduce((best, row) => (row.paragraphs.length > best.paragraphs.length ? row : best));
+    const last = longest.paragraphs.length - 1;
+    const stale: GuidePartition = { sectionId: longest.id, parts: [{ role: "introduction", fromParagraph: 0, toParagraph: 1 }, { role: "results", fromParagraph: 2, toParagraph: last }] };
+
+    expect(last).toBeGreaterThan(2);
+    expect(partitionedMap(headed.map!, headed.body, stale)).toBe(headed.map);
+    expect(partitionedMap(headed.map!, headed.body, undefined)).toBe(headed.map);
+  });
+});
+
+describe("withPartitionMarks — a group's mark from the paragraphs inside it (B §4)", () => {
+  // Paragraph 3 says one of the question's terms; paragraph 12 says both, twice. The question: "quillwort lattice".
+  const QUESTION = "How does the quillwort lattice crack?";
+  const reading = unheadedReading({
+    3: "Invented paragraph 3 about the quillwort. A single note names it once and moves on.",
+    12: "The quillwort lattice shows cracks. The quillwort lattice was measured twice on the sand ripples.",
+  });
+  const map = reading.map!;
+  const route = routeByQuestions(map, reading.body, [QUESTION]);
+  const folded = withPartitionMarks(route, map, reading.body, FOUR)!;
+  const ids = (entry: RouteResult["byQuestion"][number]) => Object.keys(entry.sections);
+
+  it("has Tier 0's own route to fold: the trunk is strong, its paragraph 12 the top one", () => {
+    const trunk = route.byQuestion[0].sections.s0;
+
+    expect(trunk.tier).toBe("strong");
+    expect(trunk.paragraphs).toEqual([3, 12]);
+    expect(trunk.topParagraphs).toEqual([12]);
+  });
+
+  it("leaves the real trunk's mark as it was (the body reads it) and adds the group keys beside the real ids", () => {
+    expect(folded.byQuestion[0].sections.s0).toBe(route.byQuestion[0].sections.s0);
+    expect(folded.byQuestion[0].sections.s1).toBe(route.byQuestion[0].sections.s1);
+    expect(ids(folded.byQuestion[0])).toEqual(["s0", "s1", "s0~0", "s0~1", "s0~2", "s0~3"]);
+  });
+
+  it("marks the group that holds the top paragraph with the trunk's tier, a group that only mentions faint, and the others none", () => {
+    const sections = folded.byQuestion[0].sections;
+
+    expect(sections["s0~1"].tier).toBe("strong");
+    expect(sections["s0~1"].paragraphs).toEqual([12]);
+    expect(sections["s0~1"].topParagraphs).toEqual([12]);
+    expect(sections["s0~0"].tier).toBe("faint");
+    expect(sections["s0~0"].paragraphs).toEqual([3]);
+    expect(sections["s0~0"].topParagraphs).toEqual([]);
+    expect(sections["s0~2"].tier).toBe("none");
+    expect(sections["s0~3"].tier).toBe("none");
+    expect(sections["s0~3"].paragraphs).toEqual([]);
+  });
+
+  it("counts the question's terms over the group's own paragraphs, and the evidence is one of their sentences, verbatim", () => {
+    const sections = folded.byQuestion[0].sections;
+
+    expect(sections["s0~1"].hits).toEqual([{ term: "quillwort", count: 2 }, { term: "lattice", count: 2 }]);
+    expect(sections["s0~0"].hits).toEqual([{ term: "quillwort", count: 1 }]);
+    expect(sections["s0~2"].hits).toEqual([]);
+    const evidence = sections["s0~1"].evidence!;
+    expect(reading.body[0].paragraphs.slice(6, 20).some((paragraph) => paragraph.includes(evidence))).toBe(true);
+    const introEvidence = sections["s0~0"].evidence!;
+    expect(reading.body[0].paragraphs.slice(0, 6).some((paragraph) => paragraph.includes(introEvidence))).toBe(true);
+    expect(sections["s0~2"]).not.toHaveProperty("evidence");
+  });
+
+  it("returns the same route object for no route, no partition, a partition that does not apply and a route with nothing to fold", () => {
+    expect(withPartitionMarks(undefined, map, reading.body, FOUR)).toBeUndefined();
+    expect(withPartitionMarks(route, map, reading.body, null)).toBe(route);
+    expect(withPartitionMarks(route, map, reading.body, undefined)).toBe(route);
+    expect(withPartitionMarks(route, map, reading.body, { ...FOUR, sectionId: "s9" })).toBe(route);
+  });
+
+  it("leaves a vague question as it was, and changes nothing it is given", () => {
+    const mixed = routeByQuestions(map, reading.body, ["What is it?", QUESTION]);
+    const frozen = JSON.stringify(mixed);
+    const got = withPartitionMarks(mixed, map, reading.body, FOUR)!;
+
+    expect(JSON.stringify(mixed)).toBe(frozen);
+    expect(got.byQuestion[0]).toBe(mixed.byQuestion[0]);
+    expect(got.byQuestion[1].sections["s0~1"].tier).toBe("strong");
+    expect(got.vague).toBe(mixed.vague);
+  });
+
+  it("allows strong on at most max(1, floor(N / 2)) groups, the earlier first (the top paragraphs of one section can only tie); the rest are medium", () => {
+    // One identical paragraph in each of the four groups: a tie that makes all four hold a top paragraph.
+    const same = "The quillwort lattice shows cracks. The quillwort lattice was measured on the sand ripples.";
+    const tied = unheadedReading({ 2: same, 10: same, 22: same, 28: same });
+    const tiedRoute = routeByQuestions(tied.map!, tied.body, [QUESTION]);
+    expect(tiedRoute.byQuestion[0].sections.s0.topParagraphs).toEqual([2, 10, 22, 28]);
+
+    const four = withPartitionMarks(tiedRoute, tied.map!, tied.body, FOUR)!.byQuestion[0].sections;
+    expect(["s0~0", "s0~1", "s0~2", "s0~3"].map((id) => four[id].tier)).toEqual(["strong", "strong", "medium", "medium"]);
+
+    const two = withPartitionMarks(tiedRoute, tied.map!, tied.body, { sectionId: "s0", parts: [{ role: "introduction", fromParagraph: 0, toParagraph: 14 }, { role: "results", fromParagraph: 15, toParagraph: 29 }] })!.byQuestion[0].sections;
+    expect(["s0~0", "s0~1"].map((id) => two[id].tier)).toEqual(["strong", "medium"]);
+    // The trunk's own mark is not the cap's business.
+    expect(four.s0.tier).toBe("strong");
+  });
+
+  it("takes the gist question's tier from each group's role, with no counts", () => {
+    const gist = gistRoute(map);
+    const got = withPartitionMarks(gist, map, reading.body, FOUR)!.byQuestion[0];
+
+    expect(got.question).toBe(GIST_QUESTION);
+    expect(got.sections["s0~0"]).toEqual({ tier: "faint", hits: [], paragraphs: [] });
+    expect(got.sections["s0~1"].tier).toBe("strong");
+    expect(got.sections["s0~2"].tier).toBe("strong");
+    expect(got.sections["s0~3"].tier).toBe("strong");
+    expect(got.sections.s0).toBe(gist.byQuestion[0].sections.s0);
+  });
+
+  it("reads the trunk's mark across a model's overlay as the body does: a background trunk gives every group with a mentioning paragraph the background tint", () => {
+    const display = {
+      byQuestion: [
+        {
+          question: QUESTION,
+          vague: false,
+          sections: { ...route.byQuestion[0].sections, s0: { ...route.byQuestion[0].sections.s0, tier: "background" as const } },
+        },
+      ],
+      vague: false,
+    };
+    const got = withPartitionMarks(display, map, reading.body, FOUR)!.byQuestion[0].sections;
+
+    expect(got["s0~0"].tier).toBe("background");
+    expect(got["s0~1"].tier).toBe("background");
+    expect(got["s0~2"].tier).toBe("none");
+  });
+
+  it("gives no group a mark when the trunk has none for the question", () => {
+    const silent = routeByQuestions(map, reading.body, ["Does cobalt oxide crumble?"]);
+    const got = withPartitionMarks(silent, map, reading.body, FOUR)!.byQuestion[0].sections;
+
+    expect(["s0~0", "s0~1", "s0~2", "s0~3"].map((id) => got[id].tier)).toEqual(["none", "none", "none", "none"]);
   });
 });
