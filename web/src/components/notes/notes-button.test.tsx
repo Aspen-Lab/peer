@@ -7,7 +7,7 @@ import { readingNote } from "@/lib/notes/templates";
 import type { Note } from "@/lib/notes/types";
 import type { Paper } from "@/types";
 import { NOTES_LABEL, NotesButtonView, notesLabel } from "./notes-button";
-import { openPaperNotes } from "./paper-notes";
+import { ensureReadingNoteLocal, openPaperNotes } from "./paper-notes";
 
 // P7-14 (R9, the owner's review): "Your notes" at the far right of the screen, as a button, not a band
 // at the top of the column. A small tab fixed at the viewport's right edge (from `md`; on a phone a
@@ -154,5 +154,59 @@ describe("the source (P7-14, R9)", () => {
     expect(notes.split("readingNote(").length - 1).toBe(1);
     expect(button).not.toContain("readingNote(");
     expect(button).toContain("usePaperNotes");
+  });
+});
+
+// P10-09b (review 7.2, 7.5; B12): the edge tab opens the paper's whole note as a floating window instead of
+// navigating; the phone's row still navigates (the phone is deferred).
+describe("P10-09b — the edge tab opens the window, the row still navigates", () => {
+  const stubs = (own?: Pick<Note, "id">) => {
+    const added: Note[] = [];
+    const pushed: string[] = [];
+    let opened = 0;
+    return { added, pushed, opened: () => opened, args: { own, add: (note: Note) => added.push(note), push: (href: string) => pushed.push(href), openWindow: () => { opened += 1; } } };
+  };
+
+  it("with an openWindow, a note already made is opened in the window: nothing made, nothing navigated", () => {
+    const { added, pushed, opened, args } = stubs({ id: "n-1" });
+    openPaperNotes({ ...args, paper });
+    expect(added).toEqual([]);
+    expect(pushed).toEqual([]);
+    expect(opened()).toBe(1);
+  });
+
+  it("with an openWindow and no note, makes the paper's note first and still does not navigate", () => {
+    const { added, pushed, opened, args } = stubs();
+    openPaperNotes({ ...args, paper, questions: ["Does a deeper layer keep more water?"] });
+    expect(added).toHaveLength(1);
+    expect(added[0].paperId).toBe(paper.id);
+    expect(pushed).toEqual([]);
+    expect(opened()).toBe(1);
+  });
+
+  it("ensureReadingNoteLocal returns the note it was given, or makes one from the same template", () => {
+    const made: Note[] = [];
+    const own = { id: "n-1" } as Note;
+    expect(ensureReadingNoteLocal({ own, paper, add: (n) => made.push(n) })).toBe(own);
+    expect(made).toEqual([]);
+    const fresh = ensureReadingNoteLocal({ own: undefined, paper, add: (n) => made.push(n) });
+    expect(made).toEqual([fresh]);
+    expect(fresh.paperId).toBe(paper.id);
+  });
+
+  it("the tab's source mounts the window and the edge press toggles it; only the row navigates", () => {
+    const src = readFileSync(resolve(process.cwd(), "src/components/notes/notes-button.tsx"), "utf8");
+    expect(src).toContain("<NotesWindow");
+    expect(src).toMatch(/variant === "edge"/);
+    expect(src).toContain("openWindow");
+  });
+
+  it("the open tab stands beside the window, not under it", () => {
+    const html = renderToStaticMarkup(createElement(NotesButtonView, { variant: "edge", has: true, shown: true, onOpen: () => {} }));
+    expect(html).toContain('aria-expanded="true"');
+    expect(html).toContain("360px");
+    const closed = renderToStaticMarkup(createElement(NotesButtonView, { variant: "edge", has: true, onOpen: () => {} }));
+    expect(closed).toContain('aria-expanded="false"');
+    expect(closed).not.toContain("360px");
   });
 });
