@@ -7,8 +7,8 @@
 //
 // The grid is `1fr auto 1fr` so the centre cell sits on the window's centre
 // whatever the side cells measure. A hairline under it at rest — a title bar
-// is drawn, like every other surface — and glass once scrolled 8px,
-// background only, so the height never changes: nothing on the page moves
+// is drawn, like every other surface — and the surface colour, opaque, once
+// scrolled 8px (P10-21: it was glass, and the paper's words showed through it), background only, so the height never changes: nothing on the page moves
 // and the reading panel's 4rem sticky top still clears it. Scroll state is a
 // data attribute written by a passive listener: no React state, no re-render
 // per scroll tick.
@@ -163,11 +163,11 @@ export function Masthead() {
         // nav began — 0px at 768, 900 and 1024 (P9-W2 N2). The gap holds the
         // line wherever the three fit; where they cannot (below `lg`) the
         // wordmark gives way to its mark (see the wordmark below), not the gap.
-        className="hidden md:grid sticky top-0 z-50 h-12 px-6 gap-x-4 grid-cols-[1fr_auto_1fr] items-center border-b border-border transition-[background-color,box-shadow] data-[scrolled=true]:glass-bar data-[scrolled=true]:shadow-[0_1px_0_var(--color-border-strong)]"
+        className="hidden md:grid sticky top-0 z-50 h-12 px-6 gap-x-4 grid-cols-[1fr_auto_1fr] items-center border-b border-border transition-[background-color,box-shadow] data-[scrolled=true]:bg-surface data-[scrolled=true]:shadow-[0_1px_0_var(--color-border-strong)]"
       >
         {/* The bar's tooth, under its words. It cannot ride on the header
-            itself: `glass-bar` sets `background` as a shorthand, which resets
-            the image. Every cell below is positioned, so the words paint over
+            itself: a background shorthand (the glass it once was) resets
+            the image, and it keeps its own fade. Every cell below is positioned, so the words paint over
             it. */}
         <span
           aria-hidden

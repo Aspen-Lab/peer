@@ -22,7 +22,7 @@ export function KeyLegend({ keys = PAPER_KEYS }: { keys?: readonly PaperKey[] })
   return (
     <div
       aria-hidden
-      className="hidden md:flex fixed inset-x-0 bottom-0 z-30 h-[var(--legend-h)] items-center justify-center gap-x-5 overflow-hidden glass-bar border-t border-border px-6 eyebrow text-text-faint"
+      className="hidden md:flex fixed inset-x-0 bottom-0 z-30 h-[var(--legend-h)] items-center justify-center gap-x-5 overflow-hidden bg-surface border-t border-border px-6 eyebrow text-text-faint"
     >
       {keys.map((entry) => (
         <span key={entry.action} className="whitespace-nowrap">
