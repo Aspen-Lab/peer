@@ -35,6 +35,20 @@ describe("page.tsx source — the copy action passes the settled questions (P2-0
   });
 });
 
+// P10-21 rule 5 (BACKLOG-80, BACKLOG-81): two sentences that said what the code no longer does.
+describe("the two stale sentences (P10-21)", () => {
+  it("the band's caption says what the reading note holds now: the paper's title and the reader's sticky notes (BACKLOG-81)", () => {
+    expect(paperNotes).toContain("The note holds the paper&apos;s title and your sticky notes.");
+    expect(paperNotes).not.toContain("four questions to answer");
+    expect(paperNotes).not.toContain("the opening of its abstract");
+  });
+
+  it("the paper page's comment on the defined terms' scope says the whole body (BACKLOG-80)", () => {
+    expect(page).toContain("(the whole body when there is no such route)");
+    expect(page).not.toContain("the methods and results when there is no such route");
+  });
+});
+
 describe("PaperNotes — the questions go into the first note (P2-05)", () => {
   // P10-09c (rule 1, re-aimed, §1c): the same two props reach the template through the store's `ensureReadingNote`
   // (it calls `readingNote`) instead of this file's own `readingNote(...)` call.

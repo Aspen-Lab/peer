@@ -160,14 +160,28 @@ describe("ReadingMapView — a partition's group rows (B P10-05 §3.1)", () => {
     expect(legends(render({ map, ...opened() }))).toBe(0);
   });
 
-  it("says the paper's own section count in the summary line, not the number of rows", () => {
+  // P10-21 re-aim (rule 4; round 2's reader 3: "1 section · 633 words" over four "Peer's reading" rows) of "says the
+  // paper's own section count in the summary line, not the number of rows": the partition's groups count as sections, so
+  // the line counts the rows it draws (the five of `over`: four parts and Methods); the undivided map's two rows say 2.
+  it("says in the summary line as many sections as it draws rows: the partition's groups count", () => {
     const totalWords = map.sections.reduce((sum, row) => sum + row.words, 0);
-    const expected = escaped(MAP.summary(2, map.totalMinutes, totalWords, "PDF"));
 
-    expect(render({ map: over, source: "PDF" })).toContain(expected);
-    expect(render({ map, source: "PDF" })).toContain(expected);
     expect(over.sections).toHaveLength(5);
-    expect(render({ map: over, source: "PDF" })).not.toContain("5 sections");
+    expect(render({ map: over, source: "PDF" })).toContain(escaped(MAP.summary(5, map.totalMinutes, totalWords, "PDF")));
+    expect(render({ map: over, source: "PDF" })).toContain("5 sections");
+    expect(render({ map, source: "PDF" })).toContain(escaped(MAP.summary(2, map.totalMinutes, totalWords, "PDF")));
+  });
+
+  it("the keyed unheaded map: four \"Peer's reading\" rows under \"4 sections\"; the no-key single row says \"1 section\"", () => {
+    const trunkOnly: ReadingMap = { sections: [map.sections[0]], totalMinutes: map.totalMinutes };
+    const four = partitionedMap(trunkOnly, reading.body, FOUR);
+    const keyed = render({ map: four, source: "PDF" });
+
+    expect(four.sections).toHaveLength(4);
+    expect(keyed.split(`>${escaped(MAP.parts.tag)}<`).length - 1).toBe(4);
+    expect(keyed).toContain("Read from PDF · 4 sections ·");
+    expect(keyed).not.toContain("1 section");
+    expect(render({ map: trunkOnly, source: "PDF" })).toContain("Read from PDF · 1 section ·");
   });
 
   it("indents a group row as a level-1 row and marks no row a group of the paper's hierarchy", () => {

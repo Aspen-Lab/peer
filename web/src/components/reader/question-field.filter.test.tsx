@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // P10-11 rule 2 (the walk's X-A5, BACKLOG-72): the dropdown listed every suggestion whatever was typed. It now follows the
 // typed text: with text in the bar it lists only the suggestions that contain a typed word (case-folded, any word of two
-// letters or more), "Just get the gist" always last; an empty focused bar still offers the examples (the owner's
-// "输入问题的时候自动弹出"); text that matches nothing leaves "Just get the gist" alone. No DOM: the scripted runtime of
+// letters or more), "Just get the gist" always last; an empty focused bar lists nothing and the first typed character
+// opens the list (P10-21, X-A6: the owner's "输入问题的时候自动弹出", read as while typing); text that matches nothing leaves "Just get the gist" alone. No DOM: the scripted runtime of
 // `question-field.focus.test.tsx`. Every question is invented.
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
@@ -69,10 +69,14 @@ afterEach(() => vi.unstubAllGlobals());
 const GIST = ASK.chips.gist;
 
 describe("the dropdown follows the typed text (P10-11, BACKLOG-72)", () => {
-  it("an empty bar with focus still offers every example, the gist last", () => {
+  // P10-21 re-aim (X-A6) of "an empty bar with focus still offers every example, the gist last": the empty focused bar
+  // lists nothing; the first character (one letter is no word yet, so nothing is filtered) lists every example.
+  it("an empty bar with focus lists nothing; the first typed character opens the list: every example, the gist last", () => {
     const f = field();
     expect(f.items()).toBeNull();
     f.focus();
+    expect(f.items()).toBeNull();
+    f.type("g");
     expect(f.items()).toEqual([
       "Does the film keep its capacity after cycling?",
       "How does crack density change?",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SPREAD_GRID, TWO_XL_PANEL_PX, XL_CAP_PX } from "./spread";
+import { PANEL_STICKY_CLASS, PANEL_TAIL_CLASS, SPREAD_GRID, TWO_XL_PANEL_PX, XL_CAP_PX } from "./spread";
 
 // P6-03 (A P6-02 S1, mutation M8): the spread's panel tracks were pinned by no
 // test. Widening the xl panel from 320 to 360 left every test green, although
@@ -57,5 +57,20 @@ describe("SPREAD_GRID's tracks against the caps spread.ts documents", () => {
   it("at 2xl: the 360 panel, the 96 gap and 48 padding are the fixed 504 share", () => {
     expect(TWO_XL_GAP_PX).toBe(96);
     expect(TWO_XL_PANEL_TRACK_PX + TWO_XL_GAP_PX + PAGE_PADDING_PX).toBe(TWO_XL_PANEL_PX);
+  });
+});
+
+// P10-21 rule 3 (A P10-14 §8 item 7): at the very foot of the page, at 1280 x 720, the sticky part stops where its
+// holder ends, 64 px above the window's bottom, and its top (43.9 px) stood 4 px under the masthead's bottom (48 px).
+// The part's bottom margin is -12 px, so it ends 12 px below the holder: its top is 55.9 px there. The layout is not
+// computed in this runtime; the page's pixels are measured in docs/reading-helper-abc/P10-21-C-*.md.
+describe("PANEL_TAIL_CLASS keeps the strip under the masthead at the foot of the page", () => {
+  it("the sticky part has a negative bottom margin, so the holder's end never lifts its top into the masthead", () => {
+    expect(PANEL_TAIL_CLASS.split(/\s+/)).toContain("xl:-mb-3");
+  });
+
+  it("still pins under the masthead and drops the strip's own top gap, as P10-04b built it", () => {
+    expect(PANEL_TAIL_CLASS.split(/\s+/)).toContain(PANEL_STICKY_CLASS);
+    expect(PANEL_TAIL_CLASS).toContain("xl:[&>:first-child]:mt-0");
   });
 });

@@ -14,7 +14,7 @@ vi.mock("react", async (importOriginal) => {
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useReadingQuestionsStore } from "@/store/reading-questions";
-import { check, focus, optionTexts, pick, session, type SessionProps, type Step, type View } from "@/test-support/question-session";
+import { check, focus, optionTexts, pick, session, type as typeStep, type SessionProps, type Step, type View } from "@/test-support/question-session";
 import { ASK, STANDING } from "./copy";
 import { QuestionField, standingGroup } from "./question-field";
 
@@ -32,6 +32,9 @@ function withLines(items: string[]) {
 function render(props: { standing?: readonly string[]; examples?: typeof EXAMPLES } = {}): string {
   return renderToStaticMarkup(createElement(QuestionField, { paperId: PAPER, examples: props.examples ?? [], standing: props.standing }));
 }
+
+/** P10-21 (X-A6): the first typed character opens the list — one letter is no word to filter by, so every suggestion. */
+const firstCharacter: Step = typeStep("g");
 
 /** What the dropdown lists when the bar has focus: its group headings and its items, or null when it is closed. */
 async function listed(props: Partial<SessionProps> = {}, script: Step[] = []): Promise<{ headings: string[]; options: string[] } | null> {
@@ -72,6 +75,7 @@ describe("standingGroup — the one group", () => {
     await session(
       [
         focus,
+        firstCharacter,
         pick(0),
         check((view) => {
           expect(view.bar.props.value).toBe(STANDING_Q[0]);
@@ -97,16 +101,16 @@ describe("QuestionField — with standing questions", () => {
       expect(render({ examples: EXAMPLES, standing: [] })).toBe(today);
       expect(render({ examples: EXAMPLES, standing: ["", "   "] })).toBe(today);
       // …and the dropdown lists the same, with no standing group.
-      const open = await listed({ examples: EXAMPLES });
-      expect(await listed({ examples: EXAMPLES, standing: [] })).toEqual(open);
-      expect(await listed({ examples: EXAMPLES, standing: ["", "   "] })).toEqual(open);
+      const open = await listed({ examples: EXAMPLES }, [firstCharacter]);
+      expect(await listed({ examples: EXAMPLES, standing: [] }, [firstCharacter])).toEqual(open);
+      expect(await listed({ examples: EXAMPLES, standing: ["", "   "] }, [firstCharacter])).toEqual(open);
       expect(open?.headings).not.toContain(STANDING.chipGroup);
     }
     expect(render()).not.toContain(STANDING.chipGroup);
   });
 
   it("shows one labelled group, before the profile's examples, in the dropdown", async () => {
-    const open = await listed({ standing: STANDING_Q, examples: EXAMPLES });
+    const open = await listed({ standing: STANDING_Q, examples: EXAMPLES }, [firstCharacter]);
     expect(open!.headings).toEqual([STANDING.chipGroup, ASK.fromProfile]);
     expect(open!.options).toEqual([...STANDING_Q, "Could I use XRD here?", ASK.chips.gist]);
   });
@@ -114,7 +118,7 @@ describe("QuestionField — with standing questions", () => {
   it("is in the label face, like the other group labels", async () => {
     let className = "";
     await session(
-      [focus, check((view) => void (className = String(view.all.find((el) => el.props.children === STANDING.chipGroup)?.props.className)))],
+      [focus, firstCharacter, check((view) => void (className = String(view.all.find((el) => el.props.children === STANDING.chipGroup)?.props.className)))],
       { paperId: PAPER, examples: EXAMPLES, standing: STANDING_Q },
     );
     expect(className).toMatch(/\bannotation\b/);

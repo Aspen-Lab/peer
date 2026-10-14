@@ -20,7 +20,7 @@ import { defaultProfile } from "@/types";
 import { useProfileStore } from "@/store/profile";
 import { useReadingQuestionsStore } from "@/store/reading-questions";
 import { ASK } from "./copy";
-import { check as step, focus as focusStep, pick, session } from "@/test-support/question-session";
+import { check as step, focus as focusStep, pick, session, type as typeStep } from "@/test-support/question-session";
 import { QuestionField, enterAction, leftTheBox } from "./question-field";
 
 const PAPER = "openalex:W1";
@@ -173,6 +173,7 @@ describe("the field settles the questions (P2-03)", () => {
     await session(
       [
         focusStep,
+        typeStep("g"), // P10-21 re-aim (X-A6): the first character opens the list
         pick(0),
         step(() => {
           expect(stored().items).toEqual([EXAMPLE]);

@@ -220,6 +220,7 @@ describe("the suggestions are a dropdown (A5, review 2.7)", () => {
     await run(
       [
         focus,
+        type("g"),
         check((view) => {
           expect(view.bar.props["aria-expanded"]).toBe(true);
           expect(view.bar.props["aria-controls"]).toBe(view.listbox!.props.id);
@@ -229,10 +230,13 @@ describe("the suggestions are a dropdown (A5, review 2.7)", () => {
     );
   });
 
-  it("opens under the bar with focus and nothing submitted: the groups as headings, the examples as options, the gist last and set apart", async () => {
+  it("opens under the bar with the first typed character and nothing submitted: the groups as headings, the examples as options, the gist last and set apart", async () => {
     await run(
       [
         focus,
+        // P10-21 re-aim (X-A6): the focused empty bar lists nothing; the first character opens the list.
+        check((view) => expect(view.listbox).toBeUndefined()),
+        type("g"),
         check((view) => {
           expect(view.listbox).toBeDefined();
           expect(view.listbox!.props["aria-label"]).toBe(ASK.suggestions);
@@ -290,7 +294,10 @@ describe("the suggestions are a dropdown (A5, review 2.7)", () => {
         type(A),
         check((view) => expect(view.listbox).toBeUndefined()),
         type(""),
-        // Cleared of a settled question: something to send, so the suggestions help again.
+        // P10-21 re-aim (X-A6): cleared of a settled question the bar is empty again, and an empty bar lists nothing;
+        // it was open ("something to send, so the suggestions help again") before the first character opened it.
+        check((view) => expect(view.listbox).toBeUndefined()),
+        type("g"),
         check((view) => expect(view.listbox).toBeDefined()),
       ],
       props,
@@ -301,6 +308,7 @@ describe("the suggestions are a dropdown (A5, review 2.7)", () => {
     await run(
       [
         focus,
+        type("g"),
         key("ArrowDown"),
         check((view) => {
           expect(view.options.map((o) => o.props["aria-selected"])).toEqual([true, false, false, false]);
@@ -343,7 +351,7 @@ describe("the suggestions are a dropdown (A5, review 2.7)", () => {
 
   it("Escape closes the dropdown and Down opens it again", async () => {
     await run(
-      [focus, key("Escape"), check((view) => expect(view.listbox).toBeUndefined()), key("ArrowDown"), check((view) => expect(view.listbox).toBeDefined())],
+      [focus, type("g"), key("Escape"), check((view) => expect(view.listbox).toBeUndefined()), key("ArrowDown"), check((view) => expect(view.listbox).toBeDefined())],
       props,
     );
   });
@@ -357,6 +365,7 @@ describe("the suggestions are a dropdown (A5, review 2.7)", () => {
     await run(
       [
         focus,
+        type("g"),
         key("Escape"),
         check((view) => {
           expect(view.listbox).toBeUndefined();
@@ -373,6 +382,7 @@ describe("the suggestions are a dropdown (A5, review 2.7)", () => {
     await run(
       [
         focus,
+        type("g"),
         check((view) => {
           const scroller = view.all.find((el) => String(el.props.className ?? "").includes("overflow-y-auto"))!;
           const inScroller = (node: unknown): boolean => JSON.stringify((node as { props?: unknown })?.props ?? {}, (k, v) => (k === "_owner" ? undefined : v)).includes("data-gist");
@@ -392,6 +402,7 @@ describe("the suggestions are a dropdown (A5, review 2.7)", () => {
     await run(
       [
         focus,
+        type("g"),
         ({ options }) => (options[2].props.onMouseDown as (e: unknown) => void)({ preventDefault: () => void (down.prevented += 1) }),
         pick(2),
         check((view) => {
@@ -440,6 +451,7 @@ describe("the suggestions are a dropdown (A5, review 2.7)", () => {
     await run(
       [
         focus,
+        type("g"),
         pick(3),
         check((view) => {
           expect(stored()).toEqual(expect.objectContaining({ items: [], gist: true }));
@@ -448,17 +460,17 @@ describe("the suggestions are a dropdown (A5, review 2.7)", () => {
           // The bar says so: the gist stands where the placeholder stood.
           expect(view.bar.props.placeholder).toBe(ASK.chips.gist);
         }),
-        // A reader who focuses again sees it offered as a toggle.
+        // P10-21 re-aim (X-A6): a reader who focuses the (empty) bar again sees nothing listed; the list needs a first
+        // character, and a typed character turns the gist off, so the dropdown never shows the gist as checked.
+        // ("offered as a toggle, checked → pick again turns it off" was reachable only from the empty-bar list.)
         leave,
         focus,
-        check((view) => expect(view.options[3].props["aria-checked"]).toBe(true)),
-        pick(3),
+        check((view) => expect(view.listbox).toBeUndefined()),
+        type("g"),
         check((view) => {
-          expect(stored()).toBeUndefined();
-          expect(view.bar.props.placeholder).toBe(ASK.placeholder);
+          expect(view.options[3].props["aria-checked"]).toBe(false);
+          expect(stored()).toEqual(expect.objectContaining({ items: ["g"], gist: false }));
         }),
-        leave,
-        focus,
         pick(3),
         check(() => expect(stored().gist).toBe(true)),
         type(A),
@@ -479,7 +491,7 @@ describe("the suggestions are a dropdown (A5, review 2.7)", () => {
     );
     useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null });
     await run(
-      [focus, check((view) => expect(optionTexts(view).filter((t) => t === STANDING_Q)).toHaveLength(1))],
+      [focus, type("g"), check((view) => expect(optionTexts(view).filter((t) => t === STANDING_Q)).toHaveLength(1))],
       { examples: [{ label: ASK.fromEarlier, items: [STANDING_Q, EARLIER] }], standing: [STANDING_Q] },
     );
   });
@@ -490,7 +502,7 @@ describe("the suggestions are a dropdown (A5, review 2.7)", () => {
 });
 
 describe("the pure rules of the dropdown", () => {
-  it("is open with focus unless settled, closed, or empty of items", () => {
+  it("is open with focus and a typed character unless settled, closed, or empty of items", () => {
     const base = { focused: true, text: A, settled: [] as string[], count: 3 };
     expect(dropdownOpen(base)).toBe(true);
     expect(dropdownOpen({ ...base, focused: false })).toBe(false);
@@ -499,10 +511,12 @@ describe("the pure rules of the dropdown", () => {
     expect(dropdownOpen({ ...base, settled: [A] })).toBe(false);
     expect(dropdownOpen({ ...base, settled: [`  ${A}  `.trim()], text: `  ${A}  ` })).toBe(false);
     expect(dropdownOpen({ ...base, settled: [B] })).toBe(true);
-    // Nothing submitted and nothing typed: the reader has focus, the suggestions help.
-    expect(dropdownOpen({ ...base, text: "" })).toBe(true);
-    // Emptied after a submit: something to send, suggestions help again.
-    expect(dropdownOpen({ ...base, text: "", settled: [A] })).toBe(true);
+    // P10-21 re-aim (X-A6; it expected true for both): nothing typed lists nothing — with focus, with nothing submitted,
+    // emptied after a submit, or holding only white space; the first character opens the list.
+    expect(dropdownOpen({ ...base, text: "" })).toBe(false);
+    expect(dropdownOpen({ ...base, text: "", settled: [A] })).toBe(false);
+    expect(dropdownOpen({ ...base, text: "   " })).toBe(false);
+    expect(dropdownOpen({ ...base, text: "g" })).toBe(true);
   });
 
   it("moves the highlight through the items and the bar, and wraps", () => {

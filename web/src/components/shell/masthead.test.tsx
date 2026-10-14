@@ -347,3 +347,17 @@ describe("the phone's in-flow wordmark on the home page is a touch target where 
     expect(bar).not.toContain("[@media(hover:none)]:min-h-11");
   });
 });
+
+// P10-21 rule 7 (round 2's reader, confirmed by the director): once scrolled, the bar was glass (60% of the
+// secondary ground, blurred), and the paper's words showed through it. Scrolled, it takes the surface colour, opaque.
+describe("the masthead is opaque once the page is scrolled", () => {
+  it("takes the surface background when scrolled, and is not glass", () => {
+    const header = classes(open(render(), "header"));
+
+    expect(header).toContain("data-[scrolled=true]:bg-surface");
+    expect(header).not.toContain("data-[scrolled=true]:glass-bar");
+    expect(header.some((c) => /backdrop|glass/.test(c))).toBe(false);
+    expect(header).toContain("sticky");
+    expect(header).toContain("top-0");
+  });
+});

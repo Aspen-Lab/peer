@@ -316,10 +316,13 @@ describe("Enter keeps the text and the focus whatever the page's render is doing
 describe("a bar an example filled has the caret at its end (P9-19)", () => {
   const examples = [{ label: "From your earlier questions", items: [Q2] }];
 
-  it("the pick fills the empty bar, focuses it, and the caret stands at its end", () => {
+  // P10-21 re-aim (X-A6) of "the pick fills the empty bar...": an empty focused bar lists nothing, so the reader's
+  // first character ("W") opens the list; the pick then replaces it.
+  it("the pick fills the bar a first character opened, focuses it, and the caret stands at its end", () => {
     const r = reader({ examples });
     r.click();
-    r.pick(Q2); // the bar is empty, so the pick fills it
+    r.type("W");
+    r.pick(Q2); // the list is open on the first character; the pick replaces it
     r.effectsRun();
     expect(r.text()).toBe(Q2);
     expect(r.active).toBe(true);
@@ -350,6 +353,7 @@ describe("a bar an example filled has the caret at its end (P9-19)", () => {
   it("what the reader types next continues the question: it is added after the words the pick put there", () => {
     const r = reader({ examples });
     r.click();
+    r.type("W"); // P10-21 re-aim (X-A6): the first character opens the list
     r.pick(Q2);
     r.effectsRun();
     r.typeAtCaret(" And in air?");
@@ -364,6 +368,7 @@ describe("a request to focus the bar fires once (P9-11)", () => {
     // focus back to the bar, whatever the reader did since. It is keyed on the request.
     const r = reader({ examples: [{ label: "From your earlier questions", items: [Q2] }] });
     r.click();
+    r.type("W"); // P10-21 re-aim (X-A6): the first character opens the list
     r.pick(Q2);
     r.effectsRun();
     expect(r.active).toBe(true);

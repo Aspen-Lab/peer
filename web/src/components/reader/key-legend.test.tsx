@@ -28,3 +28,20 @@ describe("KeyLegend", () => {
     expect(entries(html)).toEqual(expect.arrayContaining(["j next", "s save", "c copy", "q ask"]));
   });
 });
+
+// P10-21 rule 7 (round 2's reader, confirmed by the director): the fixed strip at the foot of the page was a
+// translucent, blurred bar (`glass-bar`), and the paper's words showed through it, garbled, while the page was
+// scrolled. It takes the page's surface colour, opaque.
+describe("KeyLegend — an opaque strip", () => {
+  it("takes the surface background and is not glass", () => {
+    const html = renderToStaticMarkup(createElement(KeyLegend));
+    const tag = /<footer\b[^>]*>|<div\b[^>]*fixed[^>]*>|<nav\b[^>]*fixed[^>]*>/.exec(html)?.[0] ?? "";
+    const classes = (/\bclass="([^"]*)"/.exec(tag)?.[1] ?? "").split(/\s+/);
+
+    expect(classes).toContain("bottom-0");
+    expect(classes).toContain("fixed");
+    expect(classes).toContain("bg-surface");
+    expect(classes).not.toContain("glass-bar");
+    expect(classes.some((c) => /^bg-\S+\/\d+$/.test(c) || /backdrop/.test(c))).toBe(false);
+  });
+});

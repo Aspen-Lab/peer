@@ -17,7 +17,7 @@ vi.mock("react", async (importOriginal) => {
 import { defaultProfile } from "@/types";
 import { useProfileStore } from "@/store/profile";
 import { useReadingQuestionsStore } from "@/store/reading-questions";
-import { check, focus, session, type El } from "@/test-support/question-session";
+import { check, focus, session, type as typeStep, type El } from "@/test-support/question-session";
 import { ASK } from "./copy";
 
 const PAPER = "openalex:W52";
@@ -43,6 +43,7 @@ describe("the bar's controls are 44 px targets where there is no hover (P9-52, N
     await session(
       [
         focus,
+        typeStep("g"), // P10-21 re-aim (X-A6): the first character opens the list
         check((view) => {
           expect(classesOf(view.submit)).toContain(TOUCH_H);
           expect(view.options).toHaveLength(2);

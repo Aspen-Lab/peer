@@ -72,9 +72,10 @@ describe("the dropdown: a standing question picked on an earlier paper is one it
   beforeEach(() => useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null }));
 
   /** The dropdown's items, in order, when the bar holds `text` and has focus. P10-11 re-aim (BACKLOG-72): the
-   *  default text is the empty bar's — the dropdown lists every suggestion there, as these tests count them; the
-   *  "Is the sample size reported?" they typed before matches none of them now that the list follows the typed text. */
-  async function listed(standing?: string[], text = ""): Promise<{ headings: string[]; options: string[] }> {
+   *  default text is one letter — the dropdown lists every suggestion there (one letter is no word to filter by), as
+   *  these tests count them; the "Is the sample size reported?" they typed before matches none of them now that the
+   *  list follows the typed text. P10-21 re-aim (X-A6): it was the empty bar's text, which now lists nothing. */
+  async function listed(standing?: string[], text = "g"): Promise<{ headings: string[]; options: string[] }> {
     let seen = { headings: [] as string[], options: [] as string[] };
     await session(
       [
