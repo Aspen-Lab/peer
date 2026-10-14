@@ -56,7 +56,7 @@ describe("where the window stands", () => {
 describe("NotesWindowView", () => {
   const view = (props: Partial<Omit<Parameters<typeof NotesWindowView>[0], "children">> = {}) =>
     renderToStaticMarkup(
-      createElement(NotesWindowView, { top: 48, maxHeight: 900, menuOpen: false, notice: null, onClose: () => {}, onMenu: () => {}, onExport: () => {}, children: createElement("p", null, "THE NOTE"), ...props }),
+      createElement(NotesWindowView, { top: 48, maxHeight: 900, menuOpen: false, notice: null, onClose: () => {}, onMenu: () => {}, onExport: () => {}, ...props }, createElement("p", null, "THE NOTE")),
     );
 
   it("is fixed at the right edge, 360 wide, above the page, and scrolls inside itself", () => {

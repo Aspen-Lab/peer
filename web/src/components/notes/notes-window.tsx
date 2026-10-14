@@ -79,7 +79,7 @@ export function NotesWindowView({
   onClose: () => void;
   onMenu: () => void;
   onExport: (kind: ExportKind) => void;
-  children: ReactNode;
+  children?: ReactNode;
 }) {
   return (
     <section
