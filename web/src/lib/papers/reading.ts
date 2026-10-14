@@ -719,6 +719,20 @@ export function placeFigures(
 }
 
 /**
+ * The abstract's sentences, each one line (P10-40, BACKLOG-38). `splitSentences`
+ * breaks only at `. ! ?` and keeps what lies between, so a soft line break the
+ * source put inside a sentence reached the page as a newline. Here a paragraph
+ * break (a blank line) is a boundary of its own — a paragraph with no closing
+ * full stop is still a sentence apart from the next — and every other run of
+ * whitespace inside a paragraph, a soft break included, is one space.
+ */
+function abstractSentences(text: string): string[] {
+  return text
+    .split(/\r?\n[ \t]*\r?\n/)
+    .flatMap((paragraph) => splitSentences(paragraph.replace(/\s+/g, " ").trim()));
+}
+
+/**
  * `options.figuresFrom` is the id of the PDF the figure pictures are drawn
  * from; it defaults to the paper's own id. A supplement reading — a public
  * paper with the reader's own PDF attached — takes its captions and their
@@ -735,8 +749,8 @@ export function buildReading(
 ): PaperReading {
   const intro = paper.summaryIntro?.trim() ?? "";
   const discussion = paper.summaryResultDiscussion?.trim() ?? "";
-  const sentences = splitSentences([intro, discussion].filter(Boolean).join(" "));
-  const introCount = intro ? splitSentences(intro).length : 0;
+  const sentences = abstractSentences([intro, discussion].filter(Boolean).join("\n\n"));
+  const introCount = intro ? abstractSentences(intro).length : 0;
   const marks = pickSkimMarks(sentences);
 
   const provenance = buildProvenance(paper, sentences, fullText);
