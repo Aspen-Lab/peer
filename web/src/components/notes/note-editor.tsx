@@ -38,7 +38,7 @@
 // notes store half a second after the last change, and on leaving.
 
 import Link from "next/link";
-import { AnchorLink } from "./note-tags";
+import { AnchorHeading, AnchorLink } from "./note-tags";
 import { useRouter } from "next/navigation";
 import {
   memo,
@@ -382,6 +382,8 @@ const Row = memo(function Row({ block: b, first, number, editing, sources, dragg
   } else if (b.type === "h3" && b.anchor) {
     // P10-09a (review 7.1c): a sticky note's heading carries the blue square back to the passage it was taken on.
     marker = <AnchorLink anchor={b.anchor} />;
+    // P10-39: a lost passage's line follows the heading's words, in the heading's row, drawn here and not by the marker.
+    content = <AnchorHeading anchor={b.anchor}>{content}</AnchorHeading>;
   } else if (b.type === "todo") {
     marker = (
       <button

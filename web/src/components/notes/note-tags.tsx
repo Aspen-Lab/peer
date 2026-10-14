@@ -18,7 +18,7 @@
 
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
 import type { PaperReading } from "@/lib/papers/reading";
 import { stickyTitle } from "@/lib/notes/blocks";
 import type { NoteAnchor } from "@/lib/notes/types";
@@ -267,31 +267,39 @@ export function passageIsLost(anchor: NoteAnchor, id: string, lost: Readonly<Rec
 
 /**
  * What stands at a note heading's left: the blue square that goes to the passage — or, when the passage is lost, a quiet
- * square that goes nowhere and the line saying so, beside the heading (at the row's right edge, over no text of its own).
- * `onOpen`, where there is a sticky to open (the reading page), opens the note in place.
+ * square that goes nowhere (P10-36). The line saying so is not drawn here (P10-39): it follows the heading's words, drawn by
+ * the note editor (`AnchorHeading`). `onOpen`, where there is a sticky to open (the reading page), opens the note in place.
  */
 export function AnchorMarker({ lost, n, onGo, onOpen }: { lost: boolean; n: number; onGo: () => void; onOpen?: () => void }) {
   if (!lost) return <AnchorSquare onClick={onGo} />;
   const square = { width: SQUARE_PX, height: SQUARE_PX };
+  return onOpen ? (
+    <button
+      type="button"
+      aria-label={`Open note ${n}`}
+      title={PASSAGE_LOST_LINE}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onOpen}
+      style={square}
+      className="inline-block shrink-0 border-0 bg-text-faint p-0 align-middle opacity-60"
+    />
+  ) : (
+    <span aria-hidden style={square} className="inline-block shrink-0 bg-text-faint align-middle opacity-60" />
+  );
+}
+
+/**
+ * P10-39: a note's heading words and, when the passage is lost, P10-35's quiet line after them, in the heading's row — beside
+ * the words while there is room, under them when there is not. After them in the DOM too, so a screen reader hears the heading
+ * first. A note whose passage is there gets the words alone, nothing around them.
+ */
+export function HeadingWithLostLine({ lost, children }: { lost: boolean; children: ReactNode }) {
+  if (!lost) return <>{children}</>;
   return (
-    <>
-      {onOpen ? (
-        <button
-          type="button"
-          aria-label={`Open note ${n}`}
-          title={PASSAGE_LOST_LINE}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={onOpen}
-          style={square}
-          className="inline-block shrink-0 border-0 bg-text-faint p-0 align-middle opacity-60"
-        />
-      ) : (
-        <span aria-hidden style={square} className="inline-block shrink-0 bg-text-faint align-middle opacity-60" />
-      )}
-      <span className="pointer-events-none absolute right-0 top-1/2 max-w-[60%] -translate-y-1/2 text-right font-reading text-meta italic leading-tight text-text-faint">
-        {PASSAGE_LOST_LINE}
-      </span>
-    </>
+    <div className="flex flex-wrap items-baseline gap-x-3">
+      <div className="min-w-[6ch] max-w-full">{children}</div>
+      <span className="min-w-0 font-reading text-meta italic leading-tight text-text-faint">{PASSAGE_LOST_LINE}</span>
+    </div>
   );
 }
 
@@ -300,10 +308,8 @@ const subscribeToStorage = (onChange: () => void) => {
   return () => window.removeEventListener("storage", onChange);
 };
 
-/** The blue square wired to `goToPassage` — for the note editor's heading, which has no page of its own to ask. A note whose passage is lost has no square to go to it (P10-36). */
-export function AnchorLink({ anchor }: { anchor: NoteAnchor }) {
-  const router = useRouter();
-  // The sticky's heading id: the note editor passes the anchor alone, and the store tells the ids apart by it.
+/** Whether a note's passage is lost, and the id of the sticky heading that carries its anchor (the store tells the ids apart by the anchor). */
+function useAnchorLost(anchor: NoteAnchor): { id: string | undefined; lost: boolean } {
   const id = useNotesStore((s) =>
     readingNoteFor(s.notes, anchor.paperId)?.blocks.find((b) => b.type === "h3" && b.anchor?.paperId === anchor.paperId && b.anchor.n === anchor.n)?.id,
   );
@@ -313,6 +319,13 @@ export function AnchorLink({ anchor }: { anchor: NoteAnchor }) {
     () => told || (id !== undefined && passageIsLost(anchor, id, {}, storedBodyOf(anchor.paperId))),
     () => false,
   );
+  return { id, lost };
+}
+
+/** The blue square wired to `goToPassage` — for the note editor's heading, which has no page of its own to ask. A note whose passage is lost has no square to go to it (P10-36). */
+export function AnchorLink({ anchor }: { anchor: NoteAnchor }) {
+  const router = useRouter();
+  const { id, lost } = useAnchorLost(anchor);
   return (
     <AnchorMarker
       lost={lost}
@@ -321,4 +334,9 @@ export function AnchorLink({ anchor }: { anchor: NoteAnchor }) {
       onOpen={id !== undefined && host?.paperId === anchor.paperId ? () => useWindows.getState().open({ id, kind: "sticky", title: stickyTitle(anchor.n) }) : undefined}
     />
   );
+}
+
+/** P10-39: the note editor's anchored heading — its words, then, for a lost passage, the line after them. */
+export function AnchorHeading({ anchor, children }: { anchor: NoteAnchor; children: ReactNode }) {
+  return <HeadingWithLostLine lost={useAnchorLost(anchor).lost}>{children}</HeadingWithLostLine>;
 }

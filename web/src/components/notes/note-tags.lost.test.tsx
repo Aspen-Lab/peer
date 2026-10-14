@@ -113,10 +113,10 @@ describe("AnchorMarker — the square, or the line", () => {
   it("opens the note in place where there is a sticky to open (the reading page), and is not a button where there is not", () => {
     const open = vi.fn();
     const withOpen = createElement(AnchorMarker, { lost: true, n: 2, onGo: () => {}, onOpen: open });
-    const tree = AnchorMarker({ lost: true, n: 2, onGo: () => {}, onOpen: open }) as unknown as { props: { children: { props: { onClick?: () => void } }[] } };
+    // P10-39 (§1c, re-aimed): the marker is now the button itself, not a button and the line in a fragment.
+    const tree = AnchorMarker({ lost: true, n: 2, onGo: () => {}, onOpen: open }) as unknown as { props: { onClick?: () => void } };
     expect(renderToStaticMarkup(withOpen)).toContain('aria-label="Open note 2"');
-    const button = tree.props.children.find((c) => c && typeof c === "object" && "props" in c && c.props.onClick);
-    button?.props.onClick?.();
+    tree.props.onClick?.();
     expect(open).toHaveBeenCalledTimes(1);
     const bare = renderToStaticMarkup(createElement(AnchorMarker, { lost: true, n: 2, onGo: () => {} }));
     expect(bare).not.toContain("<button");

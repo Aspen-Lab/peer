@@ -16,37 +16,38 @@ const ANCHOR = { paperId: "p1", paragraphId: "paper-section-0-p1", quote: "fines
 
 describe("HeadingWithLostLine — the heading's words, then the line", () => {
   it("puts the line after the heading's words in the DOM", () => {
-    const html = renderToStaticMarkup(createElement(HeadingWithLostLine, { lost: true }, HEADING));
+    const html = renderToStaticMarkup(createElement(HeadingWithLostLine, { lost: true, children: HEADING }));
     expect(html).toContain(PASSAGE_LOST_LINE);
     expect(html.indexOf("Note 2")).toBeGreaterThan(-1);
     expect(html.indexOf("Note 2")).toBeLessThan(html.indexOf(PASSAGE_LOST_LINE));
   });
 
   it("wraps under the heading at a narrow width (a wrapping row, not an absolute span at the edge)", () => {
-    const html = renderToStaticMarkup(createElement(HeadingWithLostLine, { lost: true }, HEADING));
+    const html = renderToStaticMarkup(createElement(HeadingWithLostLine, { lost: true, children: HEADING }));
     expect(html).toContain("flex-wrap");
     expect(html).not.toContain("absolute");
   });
 
   it("draws no line, and no wrapper, for a note whose passage the paper holds", () => {
-    const html = renderToStaticMarkup(createElement(HeadingWithLostLine, { lost: false }, HEADING));
+    const html = renderToStaticMarkup(createElement(HeadingWithLostLine, { lost: false, children: HEADING }));
     expect(html).not.toContain(PASSAGE_LOST_LINE);
     expect(html).toBe(renderToStaticMarkup(HEADING));
   });
 });
 
 describe("AnchorMarker — only the square", () => {
-  it("carries no line, lost or not", () => {
+  it("carries no line as text, lost or not (the open button's tooltip may repeat it)", () => {
+    const text = (html: string) => html.replace(/<[^>]*>/g, "|");
     for (const lost of [true, false]) {
-      expect(renderToStaticMarkup(createElement(AnchorMarker, { lost, n: 2, onGo: () => {} }))).not.toContain(PASSAGE_LOST_LINE);
+      expect(text(renderToStaticMarkup(createElement(AnchorMarker, { lost, n: 2, onGo: () => {} })))).not.toContain(PASSAGE_LOST_LINE);
     }
-    expect(renderToStaticMarkup(createElement(AnchorMarker, { lost: true, n: 2, onGo: () => {}, onOpen: () => {} }))).not.toContain(PASSAGE_LOST_LINE);
+    expect(text(renderToStaticMarkup(createElement(AnchorMarker, { lost: true, n: 2, onGo: () => {}, onOpen: () => {} })))).not.toContain(PASSAGE_LOST_LINE);
   });
 });
 
 describe("AnchorHeading — the wiring", () => {
   it("shows the heading alone while the passage is not known lost (the first render, and the server's)", () => {
-    const html = renderToStaticMarkup(createElement(AnchorHeading, { anchor: ANCHOR }, HEADING));
+    const html = renderToStaticMarkup(createElement(AnchorHeading, { anchor: ANCHOR, children: HEADING }));
     expect(html).toBe(renderToStaticMarkup(HEADING));
   });
 
