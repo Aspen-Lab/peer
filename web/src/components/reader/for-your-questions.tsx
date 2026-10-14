@@ -13,7 +13,7 @@
 
 import { Fragment, useState } from "react";
 import type { PaperReport, QuestionAnswers } from "@/lib/papers/report";
-import type { ReadingMap, ReadingMapSection } from "@/lib/papers/reading-map";
+import { groupTotals, type ReadingMap, type ReadingMapSection } from "@/lib/papers/reading-map";
 import { EvidenceQuote } from "./evidence-quote";
 import { FOR_YOUR_QUESTIONS } from "./copy";
 
@@ -25,23 +25,33 @@ type MetaPart = "section" | "page" | "minutes" | "role";
  * introduces — "· p.3", "· 11 min", "· background" — so a part never opens a line without it and no line can end
  * on a "·": a line breaks only at the plain space the markup puts between two parts, never inside one. The
  * minutes still ride on a no-break space (P9-05), so "11" and "min" stay together even where the part is not
- * nowrap; the page keeps its plain `p.N`. */
+ * nowrap; the page keeps its plain `p.N`.
+ *
+ * P10-11 (the walk's X-A2): `minutes` is the number the row shows — a group row ("2. RESULTS AND DISCUSSION", a
+ * heading with no text of its own) has 0 minutes of its own, and what it stands for is its children's summed words,
+ * which is what the map's row shows (`groupTotals`). The component passes that; a leaf row's own minutes are the
+ * default. */
 export function readNextParts(
   section: ReadingMapSection,
   kind: QuestionAnswers["readNext"][number]["kind"],
+  minutes: number = section.minutes,
 ): { part: MetaPart; text: string }[] {
   return [
     { part: "section", text: `§${section.heading}` },
     ...(typeof section.page === "number" ? [{ part: "page" as const, text: `· p.${section.page}` }] : []),
-    { part: "minutes", text: `· ${section.minutes}\u00a0min` },
+    { part: "minutes", text: `· ${minutes}\u00a0min` },
     ...(kind === "background" ? [{ part: "role" as const, text: `· ${FOR_YOUR_QUESTIONS.background}` }] : []),
   ];
 }
 
 /** The row as one string — what a screen reader and a copy hear: `§heading · p.N · N min`, then the role word for
  * a background row (P9-05). The markup is these same parts, joined by the same single space. */
-export function readNextLabel(section: ReadingMapSection, kind: QuestionAnswers["readNext"][number]["kind"]): string {
-  return readNextParts(section, kind)
+export function readNextLabel(
+  section: ReadingMapSection,
+  kind: QuestionAnswers["readNext"][number]["kind"],
+  minutes: number = section.minutes,
+): string {
+  return readNextParts(section, kind, minutes)
     .map(({ text }) => text)
     .join(" ");
 }
@@ -77,6 +87,8 @@ export function ForYourQuestions({
   const questions = report.forYourQuestions;
   if (!questions || questions.length === 0) return null;
   const sections = new Map(map?.sections.map((section) => [section.id, section]));
+  // P10-11 (X-A2): a group row's minutes are its children's sum, as the map shows them; a leaf row's are its own.
+  const groups = map ? groupTotals(map) : new Map<string, { words: number; minutes: number }>();
 
   return (
     <section className="mt-4 animate-fade-in-up" style={{ "--i": 0 } as React.CSSProperties}>
@@ -131,7 +143,7 @@ export function ForYourQuestions({
                             Each short part is unbreakable and carries its own leading "·". The section's title is the one
                             part left free to wrap inside itself: a long heading must not run off a phone. */}
                         <p className="font-mono text-meta text-text-muted">
-                          {readNextParts(section, item.kind).map(({ part, text }, index) => (
+                          {readNextParts(section, item.kind, groups.get(section.id)?.minutes ?? section.minutes).map(({ part, text }, index) => (
                             <Fragment key={part}>
                               {index > 0 ? " " : null}
                               <span data-meta-part={part} className={part === "section" ? undefined : "whitespace-nowrap"}>

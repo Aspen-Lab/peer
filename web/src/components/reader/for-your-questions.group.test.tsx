@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { PaperReport } from "@/lib/papers/report";
 import { groupTotals, type ReadingMap } from "@/lib/papers/reading-map";
 import { SectionLinks } from "./evidence-quote";
-import { ForYourQuestions } from "./for-your-questions";
+import { ForYourQuestions, readNextLabel } from "./for-your-questions";
 
 // P10-11 rule 1 (the walk's X-A2): a Read-next line that names a GROUP row — "2. RESULTS AND DISCUSSION", a numbered heading
 // with no text of its own — said "0 min", while the map's row for it shows what its children add up to. The line now
@@ -51,5 +51,10 @@ describe("a Read-next line's minutes for a group row (P10-11, X-A2)", () => {
   it("leaves a leaf row as it was: its own minutes", () => {
     expect(metaRow(render("s1"))).toBe(`§1. INTRODUCTION · p.2 · 2${NB}min`);
     expect(metaRow(render("s21"))).toBe(`§2.1 Capacity · p.3 · 2${NB}min`);
+  });
+
+  it("readNextLabel, given the minutes, names the same line the row reads", () => {
+    expect(readNextLabel(map.sections[1], "answer", 3)).toBe(`§2. RESULTS AND DISCUSSION · p.3 · 3${NB}min`);
+    expect(readNextLabel(map.sections[0], "answer")).toBe(`§1. INTRODUCTION · p.2 · 2${NB}min`);
   });
 });
