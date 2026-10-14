@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { FakeNode, fakeDocument, h, show, textNodes } from "@/test-support/fake-dom";
+import { block } from "./blocks";
+import { toPlainText } from "./export";
 import { markEdit, parseInline, plainInline, strayCount, type MarkName } from "./inline";
+import type { Note } from "./types";
 import {
   HISTORY_GAP_MS,
   canonical,
@@ -13,6 +16,7 @@ import {
   newHistory,
   plainAt,
   plainOfSource,
+  pressMark,
   positionAt,
   readTree,
   readsDifferently,
@@ -215,9 +219,10 @@ describe("rule 2: the DOM serialises back to the source, losslessly", () => {
     expect(draw("abc").lastChild?.nodeType).toBe(3);
   });
 
-  it("italic inside bold is written with an underscore, bold inside italic too, so the dialect reads both back", () => {
+  it("bold with only italic in it is `***x***`; italic beside other words inside bold is `_x_`, and bold inside italic is `_**x**_`, so the dialect reads all back", () => {
     const a = h("div", {}, h("strong", {}, h("em", {}, "x")));
-    expect(down(a)).toBe("**_x_**");
+    expect(down(a)).toBe("***x***");
+    expect(down(h("div", {}, h("strong", {}, h("em", {}, "x"), " y")))).toBe("**_x_ y**");
     const b = h("div", {}, h("em", {}, h("strong", {}, "x")));
     expect(down(b)).toBe("_**x**_");
     for (const src of [down(a), down(b)]) {
@@ -234,10 +239,10 @@ describe("rule 2: the DOM serialises back to the source, losslessly", () => {
   });
 
   it("a mark the dialect cannot read back is left unwritten, never shown (underline beside a word in another mark; a star inside bold)", () => {
-    const hidden = h("div", {}, "x ", h("u", {}, "a_b"), " y");
+    const hidden = h("div", {}, "x ", h("u", {}, "a__b"), " y");
     const src = down(hidden);
-    expect(plainInline(src)).toBe("x a_b y");
-    expect(src).toBe("x a_b y");
+    expect(plainInline(src)).toBe("x a__b y");
+    expect(src).toBe("x a__b y");
     expect(plainInline(down(h("div", {}, h("strong", {}, "b"), h("u", {}, "u"), h("strong", {}, "c"))))).toBe("buc");
     expect(down(h("div", {}, h("strong", {}, "a*b")))).not.toContain("**a*b**");
     expect(plainInline(down(h("div", {}, h("strong", {}, "a*b"))))).toBe("a*b");
@@ -415,12 +420,12 @@ describe("rule 3: the selection is the words, mapped between the DOM and the sou
       ["strong", "alpha **beta** gamma"],
       ["underline", "alpha __**beta**__ gamma"],
       ["mark", "alpha ==__**beta**__== gamma"],
-      // bold, underline and italic together have no spelling in the dialect (no star in bold, no underscore in underline): refused
-      ["em", null],
-      ["underline", "alpha ==**beta**== gamma"],
-      ["em", "alpha _==**beta**==_ gamma"],
-      ["strong", "alpha _==beta==_ gamma"],
-      ["mark", "alpha _beta_ gamma"],
+      // bold, underline and italic together: italic goes beside the bold, `***x***`
+      ["em", "alpha ==__***beta***__== gamma"],
+      ["underline", "alpha ==***beta***== gamma"],
+      ["em", "alpha ==**beta**== gamma"],
+      ["strong", "alpha ==beta== gamma"],
+      ["mark", "alpha beta gamma"],
     ];
     for (const [m, want] of steps) {
       const next = markSource(src, 6, 10, m);
@@ -433,11 +438,14 @@ describe("rule 3: the selection is the words, mapped between the DOM and the sou
     }
   });
 
-  it("italic over bold is spelled so the dialect reads it (`**_beta_**`), not `***beta***` with its stars shown", () => {
+  it("italic over bold, and bold over italic, are `***beta***` — the dialect reads it as bold with italic inside, no star shown", () => {
     const next = press("alpha **beta** gamma", 6, 10, "em");
-    expect(next).toBe("alpha **_beta_** gamma");
+    expect(next).toBe("alpha ***beta*** gamma");
     expect(plainInline(next!)).toBe("alpha beta gamma");
-    expect(press("alpha *beta* gamma", 6, 10, "strong")).toBe("alpha **_beta_** gamma");
+    expect(parseInline("***beta***").map((t) => t.kind)).toEqual(["strong"]);
+    expect(press("alpha *beta* gamma", 6, 10, "strong")).toBe("alpha ***beta*** gamma");
+    expect(down(draw("alpha ***beta*** gamma"))).toBe("alpha ***beta*** gamma");
+    expect(show(draw("***beta***"))).toBe("<strong><em>beta</em></strong>");
   });
 
   it("an edit that would leave a delimiter unmatched writes nothing", () => {
@@ -471,6 +479,86 @@ describe("rule 3: the selection is the words, mapped between the DOM and the sou
     expect(c.text).toBe("alpha **__beXta__** gamma"); // underline is read across the whole word
     expect(strayCount(c.text)).toBe(0);
     expect(plainInline(c.text)).toBe("alpha beXta gamma");
+  });
+});
+
+describe("rule 3: bold, italic, underline and highlight stacked on one selection, in every order", () => {
+  const FOUR: MarkName[] = ["strong", "em", "underline", "mark"];
+  const TAGS: Record<MarkName, string> = { strong: "<strong>", em: "<em>", underline: "<u>", mark: "<mark>", code: "<code>" };
+  const orders = (items: MarkName[]): MarkName[][] =>
+    items.length <= 1 ? [items] : items.flatMap((x, i) => orders([...items.slice(0, i), ...items.slice(i + 1)]).map((rest) => [x, ...rest]));
+  const note = (src: string) => ({ id: "n", title: "T", blocks: [block("text", src)], sources: {}, createdAt: "", updatedAt: "" }) as unknown as Note;
+
+  it("all 24 orders leave every mark on 'beta', no mark refused, and no `*`, `_`, `=` or backtick in the editor's text, plainInline or the .txt / copy export", () => {
+    expect(orders(FOUR)).toHaveLength(24);
+    for (const order of orders(FOUR)) {
+      let src = "alpha beta gamma";
+      order.forEach((m, i) => {
+        const next = markSource(src, 6, 10, m);
+        expect(next, `${order.join(">")} step ${i + 1} (${m}) from ${src}`).not.toBeNull();
+        src = next!.text;
+        // after every step: the surface and the words are clean, and what was marked stays marked
+        expect(draw(src).textContent, `${order.join(">")} ${src}`).toBe("alpha beta gamma");
+        expect(plainInline(src)).toBe("alpha beta gamma");
+        expect(toPlainText(note(src))).not.toMatch(/[*_=`]/);
+        expect(strayCount(src)).toBe(0);
+        expect(down(draw(src))).toBe(src);
+        const tags = show(draw(src));
+        for (const done of order.slice(0, i + 1)) expect(tags, `${order.join(">")} ${src}`).toContain(TAGS[done]);
+      });
+    }
+  });
+
+  it("the dialect reads `***x***` as bold with italic in it, and a single underscore inside underline", () => {
+    expect(parseInline("***x*** y").map((t) => t.kind)).toEqual(["strong", "text"]);
+    expect(plainInline("a ***x*** b")).toBe("a x b");
+    expect(plainInline("__**_x_**__")).toBe("x");
+    expect(plainInline("__a__ b __c__")).toBe("a b c");
+  });
+
+  it("and each can be taken off again in any order, leaving the others", () => {
+    for (const on of orders(FOUR)) {
+      for (const off of [on, [...on].reverse()]) {
+        let src = "alpha beta gamma";
+        for (const m of on) src = markSource(src, 6, 10, m)!.text;
+        const left = new Set(on);
+        for (const m of off) {
+          const next = markSource(src, 6, 10, m);
+          expect(next, `${on.join(">")} off ${m} from ${src}`).not.toBeNull();
+          src = next!.text;
+          left.delete(m);
+          expect(draw(src).textContent).toBe("alpha beta gamma");
+          const tags = show(draw(src));
+          for (const k of FOUR) expect(tags.includes(TAGS[k]), `${on.join(">")} ${src}`).toBe(left.has(k));
+        }
+        expect(src).toBe("alpha beta gamma");
+      }
+    }
+  });
+});
+
+describe("rule 3: a mark key with nothing selected toggles the mark for what is typed next (pinned)", () => {
+  it("a collapsed caret, or only spaces selected, makes a pending toggle — never an empty `****` pair in the source", () => {
+    expect(pressMark("alpha beta", { from: 6, to: 6 }, "strong", null)).toEqual({ kind: "pending", marks: ["strong"] });
+    expect(pressMark("alpha beta", { from: 5, to: 6 }, "strong", null)).toEqual({ kind: "pending", marks: ["strong"] });
+    // inside a bold word the caret follows bold: the key turns it off for what is typed next
+    expect(pressMark("alpha **beta** gamma", { from: 8, to: 8 }, "strong", null)).toEqual({ kind: "pending", marks: [] });
+    // asked again at the same caret: back on (the pending set is what is toggled, not the source's)
+    expect(pressMark("alpha beta", { from: 6, to: 6 }, "strong", ["strong"])).toEqual({ kind: "pending", marks: [] });
+    // several marks pile up
+    expect(pressMark("alpha beta", { from: 6, to: 6 }, "underline", ["strong"])).toEqual({ kind: "pending", marks: ["strong", "underline"] });
+  });
+
+  it("then the text typed there is written wearing exactly those marks", () => {
+    const on = insertMarked("alpha ", 6, "b", ["strong", "underline"]);
+    expect(on.text).toBe("alpha **__b__**");
+    const off = insertMarked("alpha **beta** gamma", 10, "!", []);
+    expect(off.text).toBe("alpha **beta**! gamma");
+  });
+
+  it("a selection of words is an edit; a refused one is none", () => {
+    expect(pressMark("alpha beta", { from: 6, to: 10 }, "strong", null)).toEqual({ kind: "edit", text: "alpha **beta**" });
+    expect(pressMark("__alpha__==beta==", { from: 5, to: 9 }, "mark", null)).toEqual({ kind: "none" });
   });
 });
 

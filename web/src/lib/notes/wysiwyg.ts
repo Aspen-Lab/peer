@@ -359,12 +359,23 @@ function writeMark(m: WMark, inStrong: boolean, dropped: ReadonlySet<WMark>): Wr
   // Each mark's content cannot hold its own delimiter character (`[^*\n]`, `[^_\n]`, `[^=\n]`): where it does, the
   // mark is not written.
   if (m.mark === "strong") {
+    // bold whose only content is italic written with stars is `***x***` (the dialect reads it as bold with italic in it)
+    const only = m.kids.length === 1 ? m.kids[0] : null;
+    if (only?.kind === "mark" && only.mark === "em" && only.delim !== "_" && !dropped.has(only)) {
+      const words = write(only.kids, true, dropped);
+      if (!words.s.includes("*")) {
+        const s = `***${words.s}***`;
+        const em: WMark = { ...only, delim: "*", kids: shifted(words.nodes, 3), from: 2, inner: 3, close: 3 + words.s.length, to: 4 + words.s.length };
+        return { s, nodes: [{ ...m, kids: [em], from: 0, inner: 2, close: 4 + words.s.length, to: s.length }] };
+      }
+    }
     const inner = write(m.kids, true, dropped);
     return inner.s.includes("*") ? bare() : wrap("**", inner);
   }
   if (m.mark === "underline") {
+    // a single `_` may sit inside underline (italic written `_x_` inside bold), never two together or at its edges
     const inner = write(m.kids, inStrong, dropped);
-    return inner.s.includes("_") ? bare() : wrap("__", inner);
+    return inner.s.includes("__") || /^_|_$/.test(inner.s) ? bare() : wrap("__", inner);
   }
   if (m.mark === "mark") {
     const inner = write(m.kids, inStrong, dropped);
@@ -852,32 +863,104 @@ export function markSource(src: string, from: number, to: number, mark: MarkName
   const respelled = respellEms(src, label);
   const retry = respelled !== src ? attempt(respelled) : null;
   if (retry !== null) return { text: retry };
-  // Last: the mark around the words themselves, innermost (italic inside bold-and-underline has no spelling around them)
-  const around = serializeTree(wrapRange(treeOf(src, label), from, to, mark)).src;
-  return around !== src && ok(around) && survivesMark(around, mark) ? { text: around } : null;
+  // Last: the marks of each word set afresh and nested in the one order the dialect can always spell
+  // (highlight, underline, bold, italic — bold and italic side by side are `***x***`)
+  const around = serializeTree(setMark(treeOf(src, label), from, to, mark)).src;
+  // exact for the other marks here: no mark is lost, and none is laid on words the reader did not select
+  const strip = (rs: { n: number; k: string }[]) => rs.map((r) => ({ n: r.n, k: r.k.split("+").filter((k) => k !== mark).join("+") }));
+  const after = strip(runs(treeOf(around, label)));
+  return around !== src && ok(around) && covers(after, strip(runs(treeOf(src, label)))) ? { text: around } : null;
 }
 
-/** The tree with `mark` laid directly round the plain range `[from, to)`, as deep as the range allows. */
-export function wrapRange(nodes: readonly WNode[], from: number, to: number, mark: MarkName): WNode[] {
+const NEST: MarkName[] = ["mark", "underline", "strong", "em", "code"];
+
+interface Item {
+  leaf: WText | WChip;
+  marks: Set<MarkName>;
+}
+
+function itemsOf(nodes: readonly WNode[], marks: Set<MarkName> = new Set(), out: Item[] = []): Item[] {
+  for (const n of nodes) {
+    if (n.kind === "mark") itemsOf(n.kids, new Set([...marks, n.mark]), out);
+    else out.push({ leaf: n, marks });
+  }
+  return out;
+}
+
+/** Items nested by `NEST` from level `k`: a run of neighbours that carry the mark are inside one node of it. */
+function nest(items: readonly Item[], k: number): WNode[] {
+  if (k >= NEST.length) return items.map((i) => i.leaf);
+  const mark = NEST[k];
+  const out: WNode[] = [];
+  let inside: Item[] = [];
+  let outside: Item[] = [];
+  const flush = () => {
+    if (inside.length > 0) out.push({ kind: "mark", mark, kids: nest(inside, k + 1), ...blank });
+    if (outside.length > 0) out.push(...nest(outside, k + 1));
+    inside = [];
+    outside = [];
+  };
+  for (const item of items) {
+    if (item.marks.has(mark)) {
+      if (outside.length > 0) flush();
+      inside.push({ leaf: item.leaf, marks: new Set([...item.marks].filter((m) => m !== mark)) });
+    } else {
+      if (inside.length > 0) flush();
+      outside.push(item);
+    }
+  }
+  flush();
+  return out;
+}
+
+/** The tree with `mark` taken off the words of `[from, to)` when all of them carry it, else laid over all of them. */
+export function setMark(tree: readonly WNode[], from: number, to: number, mark: MarkName): WNode[] {
+  const words = plainOfTree(tree);
+  let a = from;
+  let b = to;
+  while (a < b && /\s/.test(words[a])) a++;
+  while (b > a && /\s/.test(words[b - 1])) b--;
+  const items: Item[] = [];
   let at = 0;
-  for (let i = 0; i < nodes.length; i++) {
-    const n = nodes[i];
-    const len = plainOfTree([n]).length;
-    if (n.kind === "mark" && from >= at && to <= at + len && len > 0) {
-      const out = nodes.slice();
-      out[i] = { ...n, kids: wrapRange(n.kids, from - at, to - at, mark) };
-      return out;
+  for (const it of itemsOf(tree)) {
+    const len = it.leaf.kind === "text" ? it.leaf.text.length : it.leaf.label.length;
+    const cuts = it.leaf.kind === "text" ? [a - at, b - at].filter((c) => c > 0 && c < len) : [];
+    let prev = 0;
+    for (const c of [...cuts, len]) {
+      if (c > prev || len === 0) items.push({ leaf: it.leaf.kind === "text" ? text(it.leaf.text.slice(prev, c)) : it.leaf, marks: new Set(it.marks) });
+      prev = c;
     }
     at += len;
   }
-  const total = plainOfTree(nodes).length;
-  return [...sliceTree(nodes, 0, from), { kind: "mark", mark, kids: sliceTree(nodes, from, to), ...blank }, ...sliceTree(nodes, to, total)];
+  const chosen: Item[] = [];
+  at = 0;
+  for (const it of items) {
+    const len = it.leaf.kind === "text" ? it.leaf.text.length : it.leaf.label.length;
+    if (at >= a && at + len <= b && len > 0) chosen.push(it);
+    at += len;
+  }
+  const all = chosen.length > 0 && chosen.every((i) => i.marks.has(mark));
+  for (const it of chosen) {
+    if (all) it.marks.delete(mark);
+    else it.marks.add(mark);
+  }
+  return nest(items, 0);
 }
 
-/** Does `src` read with at least one `mark` in it? */
-function survivesMark(src: string, mark: MarkName): boolean {
-  const has = (nodes: readonly WNode[]): boolean => nodes.some((n) => n.kind === "mark" && (n.mark === mark || has(n.kids)));
-  return has(treeOf(src));
+/** What pressing a mark's key does at the reader's selection (plain offsets): an `edit` to the block's source, a `pending`
+ *  toggle (nothing selected, or only spaces: the mark is turned on or off for what is typed next, from `pending` — the
+ *  marks already asked for at this caret — or else the ones the caret follows), or `none` (refused: it would leave a
+ *  delimiter unmatched, or cost another mark its place). */
+export type MarkOutcome = { kind: "edit"; text: string } | { kind: "pending"; marks: MarkName[] } | { kind: "none" };
+
+export function pressMark(src: string, sel: { from: number; to: number }, mark: MarkName, pending: readonly MarkName[] | null, label: Label = identity): MarkOutcome {
+  const words = plainOfSource(src, label).slice(sel.from, sel.to);
+  if (words.trim() === "") {
+    const now = pending ?? marksAt(src, sel.from, label);
+    return { kind: "pending", marks: now.includes(mark) ? now.filter((m) => m !== mark) : [...now, mark] };
+  }
+  const edit = markSource(src, sel.from, sel.to, mark, label);
+  return edit && edit.text !== src ? { kind: "edit", text: edit.text } : { kind: "none" };
 }
 
 /** Italic written with stars, respelled with underscores wherever the dialect still reads it (`*x*` → `_x_`): it can

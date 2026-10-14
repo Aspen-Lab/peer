@@ -76,19 +76,14 @@ import {
   getPlainSelection,
   insertMarked,
   joinSources,
-  marksAt,
   marksOpenAt,
-  markSource,
-  mountInline,
+  pressMark,
   newHistory,
-  padRoot,
   plainLength,
   plainOfSource,
   plainOfSourceOffset,
-  readsDifferently,
   recordState,
   setPlainSelection,
-  snapshot,
   sourceOfPlain,
   spliceSource,
   splitSource,
@@ -107,6 +102,7 @@ import { cn } from "@/lib/cn";
 import { caretCoords, caretLine, offsetFromPoint } from "./caret";
 import { InlineText } from "./inline-text";
 import { NoteToolbar, markForKey, typeAfterToggle } from "./note-toolbar";
+import { Surface, insertText, type SurfaceEdit } from "./wysiwyg-field";
 import { EditorRail, type RailTab } from "./notes-rail";
 
 type Doc = { title: string; blocks: Block[]; sources: Record<string, Source> };
@@ -258,143 +254,6 @@ function Grip() {
     <svg width="8" height="12" viewBox="0 0 8 12" aria-hidden fill="currentColor">
       {[0, 5].map((x) => [0, 5, 10].map((y) => <rect key={`${x}${y}`} x={x} y={y} width="2.5" height="2.5" />))}
     </svg>
-  );
-}
-
-/** What the surface tells the editor after the reader edited it. */
-export interface SurfaceEdit {
-  /** The block's source, written from the DOM. */
-  text: string;
-  /** The caret as a source offset, and the selection as visible-character offsets. */
-  caret: number;
-  from: number;
-  to: number;
-  /** The browser's `inputType` ("insertText", "deleteContentBackward"...). */
-  kind: string;
-  /** The character typed, when one was. */
-  data: string | null;
-  /** What was typed read as a mark and the surface was drawn again: the caret is where the mark closed. */
-  closed: boolean;
-}
-
-/**
- * The block being edited: its source drawn as the formatted text (`mountInline`) in a `contentEditable` element, and
- * written back on every input (`snapshot`). The DOM is the truth while the reader types — it is drawn again only when
- * the block's text is not what it last wrote (an edit made by the editor itself: a mark, a pick from a menu, undo),
- * or when what was typed reads as a mark (a pasted `**b**`; the dialect has no escape).
- */
-function Surface({
-  id,
-  text,
-  sources,
-  api,
-  label,
-  placeholder,
-  className,
-}: {
-  id: string;
-  text: string;
-  sources: Record<string, Source>;
-  api: MutableRefObject<RowApi>;
-  label: string;
-  placeholder: string;
-  className?: string;
-}) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  /** The source the DOM was last drawn from, or last wrote. */
-  const drawn = useRef<string | null>(null);
-  const composing = useRef(false);
-  const cite = (key: string) => (sources[key] ? authorYear(sources[key]) : `@${key}`);
-
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el || drawn.current === text) return;
-    drawn.current = text;
-    mountInline(document, el, treeOf(text, cite));
-  });
-
-  /** The DOM was edited: write it back to the source, and draw it again where the source reads differently. */
-  const sync = (kind: string, data: string | null) => {
-    const el = ref.current;
-    if (!el) return;
-    const snap = snapshot(el);
-    const sel = getPlainSelection(el) ?? { from: snap.plain.length, to: snap.plain.length };
-    let caret = sourceOfPlain(snap.tree, sel.to, "end");
-    let { from, to } = sel;
-    drawn.current = snap.src;
-    const redrawn = !composing.current && readsDifferently(snap.src, snap.plain, cite);
-    if (redrawn) {
-      // a delimiter typed as characters is a mark now: the surface shows it as one, the caret after what was typed
-      const tree = treeOf(snap.src, cite);
-      mountInline(document, el, tree);
-      from = plainOfSourceOffset(tree, sourceOfPlain(snap.tree, sel.from, "start"));
-      to = plainOfSourceOffset(tree, caret);
-      setPlainSelection(el, from, to);
-      caret = sourceOfPlain(tree, to, "end");
-    } else padRoot(document, el);
-    api.current.input(id, { text: snap.src, caret, from, to, kind, data, closed: redrawn });
-  };
-  const syncRef = useRef(sync);
-  useLayoutEffect(() => {
-    syncRef.current = sync;
-  });
-
-  // `beforeinput` and composition are native events (React's onBeforeInput is not the input event)
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const before = (e: Event) => {
-      const ev = e as InputEvent;
-      if (composing.current) return;
-      if (ev.inputType === "insertText" && ev.data && api.current.typing(id, ev.data)) {
-        e.preventDefault();
-        return;
-      }
-      // the browser's own undo cannot follow a surface that is drawn again: the editor keeps the steps
-      if (ev.inputType === "historyUndo" || ev.inputType === "historyRedo") e.preventDefault();
-    };
-    const start = () => {
-      composing.current = true;
-    };
-    const end = () => {
-      composing.current = false;
-      syncRef.current("insertCompositionText", null);
-    };
-    el.addEventListener("beforeinput", before);
-    el.addEventListener("compositionstart", start);
-    el.addEventListener("compositionend", end);
-    return () => {
-      el.removeEventListener("beforeinput", before);
-      el.removeEventListener("compositionstart", start);
-      el.removeEventListener("compositionend", end);
-    };
-  }, [api, id]);
-
-  return (
-    <div
-      ref={(el) => {
-        ref.current = el;
-        api.current.register(id, el);
-      }}
-      contentEditable
-      suppressContentEditableWarning
-      role="textbox"
-      aria-multiline="true"
-      aria-label={label}
-      data-typeset=""
-      data-placeholder={placeholder}
-      spellCheck
-      onInput={(e) => sync((e.nativeEvent as InputEvent).inputType ?? "", (e.nativeEvent as InputEvent).data ?? null)}
-      onKeyDown={(e) => api.current.key(e, id)}
-      onPaste={(e) => api.current.paste(e, id)}
-      onSelect={(e) => api.current.caret(id, e.currentTarget)}
-      onBlur={() => api.current.blur(id)}
-      className={cn(
-        className,
-        "block min-h-[1lh] w-full whitespace-pre-wrap break-words bg-transparent p-0 outline-none",
-        "empty:before:pointer-events-none empty:before:text-text-faint/70 empty:before:content-[attr(data-placeholder)]",
-      )}
-    />
   );
 }
 
@@ -596,22 +455,6 @@ const Row = memo(function Row({ block: b, first, number, editing, sources, dragg
     </div>
   );
 });
-
-/** Puts `text` at the reader's selection in a surface, replacing what is selected, and tells the surface it was typed
- *  (the `input` event the browser would have sent). */
-function insertText(el: HTMLElement, text: string): void {
-  const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) return;
-  const range = sel.getRangeAt(0);
-  range.deleteContents();
-  const node = document.createTextNode(text);
-  range.insertNode(node);
-  range.setStartAfter(node);
-  range.collapse(true);
-  sel.removeAllRanges();
-  sel.addRange(range);
-  el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
-}
 
 // ── The editor ────────────────────────────────────────────────────────────
 
@@ -944,18 +787,16 @@ export function NoteEditor({
     if (!b || !el || b.type === "code" || el instanceof HTMLTextAreaElement) return;
     const sel = getPlainSelection(el);
     if (!sel) return;
-    const words = plainOfSource(b.text, label).slice(sel.from, sel.to);
-    if (words.trim() === "") {
+    const out = pressMark(b.text, sel, mark, pendingMarks.current?.id === id && pendingMarks.current.plain === sel.from ? pendingMarks.current.marks : null, label);
+    if (out.kind === "pending") {
       // nothing selected (or only spaces): the mark is toggled for what is typed next, as in a word processor
-      const now = pendingMarks.current?.id === id && pendingMarks.current.plain === sel.from ? pendingMarks.current.marks : marksAt(b.text, sel.from, label);
-      pendingMarks.current = { id, plain: sel.from, marks: now.includes(mark) ? now.filter((m) => m !== mark) : [...now, mark] };
+      pendingMarks.current = { id, plain: sel.from, marks: out.marks };
       return;
     }
-    const edit = markSource(b.text, sel.from, sel.to, mark, label);
-    // An edit that would have left a delimiter unmatched writes nothing.
-    if (!edit || edit.text === b.text) return;
-    remember(id, b.text, edit.text, sel.from, sel.to, "edit", sel);
-    patch(id, { text: edit.text });
+    // an edit that would have left a delimiter unmatched writes nothing
+    if (out.kind === "none") return;
+    remember(id, b.text, out.text, sel.from, sel.to, "edit", sel);
+    patch(id, { text: out.text });
     focusBlock(id, { plain: sel.from, to: sel.to });
   };
 

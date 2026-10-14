@@ -14,6 +14,8 @@ import type { Note } from "@/lib/notes/types";
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 const editor = read("src/components/notes/note-editor.tsx");
+// the surface itself (one per block being edited) lives in wysiwyg-field.tsx, which also builds the sticky note's field from it
+const surface = read("src/components/notes/wysiwyg-field.tsx");
 
 describe("the editing surface (rule 1)", () => {
   it("a text block being edited is a contentEditable element, not a textarea of its source", () => {
@@ -25,10 +27,11 @@ describe("the editing surface (rule 1)", () => {
   });
 
   it("the surface is drawn from the block's source and its DOM written back to it on every input", () => {
-    expect(editor).toContain("mountInline(document, el, treeOf(text, cite))");
-    expect(editor).toContain("snapshot(el)");
-    expect(editor).toContain("onInput=");
-    expect(editor).toContain("readsDifferently(");
+    expect(surface).toContain("mountInline(document, el, tree)");
+    expect(surface).toContain("snapshot(el)");
+    expect(surface).toContain("onInput=");
+    expect(surface).toContain("readsDifferently(");
+    expect(editor).toContain('import { Surface, insertText, type SurfaceEdit } from "./wysiwyg-field"');
   });
 
   it("the surface takes plain text only: a paste is cancelled and its words inserted", () => {
@@ -36,8 +39,8 @@ describe("the editing surface (rule 1)", () => {
   });
 
   it("the placeholder is drawn by CSS from the surface's own attribute, so an empty block shows no markup either", () => {
-    expect(editor).toContain("data-placeholder");
-    expect(editor).toContain("empty:before:content-[attr(data-placeholder)]");
+    expect(surface).toContain("data-placeholder");
+    expect(surface).toContain("empty:before:content-[attr(data-placeholder)]");
   });
 
   it("the header says what the editor is now (the textarea per block is gone) and that Markdown stays the format", () => {
@@ -49,7 +52,8 @@ describe("the editing surface (rule 1)", () => {
 
 describe("the keys and the toolbar act on the selected words (rule 3)", () => {
   it("a mark is applied by plain offsets through markSource and the same words are selected again", () => {
-    expect(editor).toContain("markSource(b.text, sel.from, sel.to, mark, label)");
+    expect(editor).toContain("pressMark(b.text, sel, mark,");
+    expect(read("src/lib/notes/wysiwyg.ts")).toContain("markSource(src, sel.from, sel.to, mark, label)");
     expect(editor).toMatch(/focusBlock\(id, \{ plain: sel\.from, to: sel\.to \}\)/);
     expect(editor).toContain("getPlainSelection(el)");
   });
@@ -57,7 +61,7 @@ describe("the keys and the toolbar act on the selected words (rule 3)", () => {
   it("with nothing selected the mark is toggled for what is typed next, and that text is written by the editor wearing it", () => {
     expect(editor).toContain("pendingMarks");
     expect(editor).toContain("insertMarked(");
-    expect(editor).toContain('ev.inputType === "insertText"');
+    expect(surface).toContain('ev.inputType === "insertText"');
   });
 
   it("the caret target can be a plain range, which is how a selection survives a change of marks", () => {
@@ -71,12 +75,12 @@ describe("undo and the caret (rule 4)", () => {
     expect(editor).toContain("stepHistory(id, letter === \"y\" || e.shiftKey)");
     expect(editor).toContain("stepBack(h)");
     expect(editor).toContain("stepForward(h)");
-    expect(editor).toContain('"historyUndo"');
+    expect(surface).toContain('"historyUndo"');
   });
 
   it("typing, deleting and each mark are remembered; the save and the sticky's write never touch the caret (the surface is drawn again only when its source is not the one it wrote)", () => {
     expect(editor).toContain("remember(id, b.text, edit.text");
-    expect(editor).toContain("if (!el || drawn.current === text) return;");
+    expect(surface).toContain("if (!el || drawn.current === text) return;");
   });
 
   it("Enter cuts the words at the selection with the marks closed either side; Backspace and Delete join them whole", () => {

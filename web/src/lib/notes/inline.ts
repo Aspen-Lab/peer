@@ -24,9 +24,13 @@ export type Inline =
 
 const CODE = /`([^`\n]+)`/y;
 const STRONG = /\*\*(?=\S)([^*\n]*?\S)\*\*/y;
+// P10-16: `***x***` is bold with italic inside it (bold and italic stacked on one word), not a star, bold, a star.
+const STRONG_EM = /\*\*\*(?=[^\s*])([^*\n]*?[^\s*])\*\*\*/y;
 const EM_STAR = /\*(?=[^\s*])([^*\n]*?[^\s*])\*/y;
 const EM_UNDER = /(?<![\p{L}\p{N}_])_(?=\S)([^_\n]*?\S)_(?![\p{L}\p{N}_])/uy;
-const UNDERLINE = /(?<![\p{L}\p{N}_])__(?=[^\s_])([^_\n]*?[^\s_])__(?![\p{L}\p{N}_])/uy;
+// P10-16: a single `_` may sit inside the content (underline over italic written `_x_` inside bold: `__**_x_**__`),
+// never two together and never at its edges.
+const UNDERLINE = /(?<![\p{L}\p{N}_])__(?=[^\s_])((?:[^_\n]|_(?!_))*?[^\s_])__(?![\p{L}\p{N}_])/uy;
 const MARK = /==(?=[^\s=])([^=\n]*?[^\s=])==/y;
 const CITE = /\[@([^\]\n]+)\]/y;
 const WIKI = /\[\[([^\]\n]+)\]\]/y;
@@ -52,6 +56,9 @@ function tokenAt(src: string, i: number): Inline | null {
     return { kind: "code", text: m[1], from: i, inner: i + 1, to: i + m[0].length };
   }
   if (c === "*") {
+    if ((m = at(STRONG_EM, src, i))) {
+      return { kind: "strong", text: `*${m[1]}*`, from: i, inner: i + 2, to: i + m[0].length };
+    }
     if ((m = at(STRONG, src, i))) {
       return { kind: "strong", text: m[1], from: i, inner: i + 2, to: i + m[0].length };
     }

@@ -110,8 +110,8 @@ describe("the editor wires them", () => {
   it("mounts the toolbar above the blocks and takes the keys from markForKey", () => {
     expect(editor).toContain("<NoteToolbar");
     expect(editor).toContain("markForKey(");
-    // P10-16 (re-aimed, §1c): the editor reaches `markEdit` through `markSource`, which maps the words selected in the formatted text to it
-    expect(editor).toContain("markSource(");
+    // P10-16 (re-aimed, §1c): the editor reaches `markEdit` through `pressMark` / `markSource`, which map the words selected in the formatted text to it
+    expect(editor).toContain("pressMark(");
     expect(read("src/lib/notes/wysiwyg.ts")).toContain("markEdit(");
     expect(editor.indexOf("<NoteToolbar")).toBeLessThan(editor.indexOf("{doc.blocks.map((b, i) => ("));
   });
