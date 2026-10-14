@@ -477,3 +477,32 @@ describe("routeTermScope — the sections the route marks strong, medium or back
     expect(scope).toEqual({ sectionIds: ["s1"] });
   });
 });
+
+// P10-11 rule 3 (the walk's §7 item 7): with no question asked there is no route, and the default scope was the methods and
+// results — so a no-key reader who selected a term the Introduction defines ("Quantum Processing Units (QPU)") got no
+// Tier 0 definition in Explain. The Terms strip that scope served is deleted (P10-02); with no question the definition is
+// in scope anywhere in the body. With a question the route's scope stands as P10-06b left it.
+describe("the term scope with no question asked (P10-11)", () => {
+  const doc = docOf(
+    intro("Quantum Processing Units (QPU) are the target hardware."),
+    methods("We define dwell fatigue as cycling with a hold at peak load."),
+    results("The creep rate, defined as the strain accumulated per hour, rose with stress."),
+    conclusion("Rafting refers to the directional coarsening of precipitates."),
+  );
+  const entry = (question: string, sections: Record<string, { tier: string }>) => ({ question, vague: false, sections });
+
+  it("with no route, a vague route or no marked section, a term the Introduction (or the Conclusion) defines is in scope", () => {
+    const all = ["QPU", "dwell fatigue", "creep rate", "Rafting"];
+    expect(names(paperDefinedTerms(doc, routeTermScope(undefined)))).toEqual(all);
+    expect(names(paperDefinedTerms(doc, routeTermScope({ vague: true, byQuestion: [] })))).toEqual(all);
+    expect(names(paperDefinedTerms(doc, routeTermScope({ vague: false, byQuestion: [entry("q", { s0: { tier: "faint" } })] })))).toEqual(all);
+    expect(names(paperDefinedTerms(doc))).toEqual(all);
+  });
+
+  it("with a question, the sections the route marks strong, medium or background, as before", () => {
+    const route = { vague: false, byQuestion: [entry("What creep rate?", { s0: { tier: "faint" }, s1: { tier: "none" }, s2: { tier: "strong" }, s3: { tier: "background" } })] };
+    expect(names(paperDefinedTerms(doc, routeTermScope(route)))).toEqual(["creep rate", "Rafting"]);
+    const medium = { vague: false, byQuestion: [entry("Which fatigue?", { s1: { tier: "medium" } })] };
+    expect(names(paperDefinedTerms(doc, routeTermScope(medium)))).toEqual(["dwell fatigue"]);
+  });
+});
