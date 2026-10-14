@@ -619,13 +619,23 @@ export function figureMatClass(waiting: boolean): string {
 /**
  * P10-26 (X-A8, BACKLOG-89): the box of a figure whose picture's own width and height are known. An aspect-ratio box
  * the size the picture will be — its own size, never wider than the mat's column or than `max-h-[32rem]` lets it be
- * at its ratio — so the page is the same height before and after the picture arrives. Null without both numbers.
+ * at its ratio (P10-43: a tall one takes half the column) — so the page is the same height before and after the
+ * picture arrives. Null without both numbers.
  */
 export function figureBoxStyle(figure: ReadingFigure): CSSProperties | null {
   const { width, height } = figure;
   if (typeof width !== "number" || typeof height !== "number" || !(width > 0) || !(height > 0)) return null;
-  return { aspectRatio: `${width} / ${height}`, width: `min(100%, ${width}px, calc(32rem * ${width} / ${height}))` };
+  // P10-43: a tall figure — one whose width at the 32rem cap falls under half the column — takes half the column's width
+  // (never past its own picture), its height following its ratio; the 32rem cap would draw the owner's 465 × 1556 Figure 3
+  // 153 px wide, too small to read. The column is at most 40rem (the measure), so a ratio of 40rem / 2 / 32rem = 0.625 or more
+  // can never be tall, and such a figure's width stays exactly as it was. The box is still exactly the picture's ratio.
+  const capped = `calc(32rem * ${width} / ${height})`;
+  const tall = width / height < FIGURE_TALL_RATIO;
+  return { aspectRatio: `${width} / ${height}`, width: `min(100%, ${width}px, ${tall ? `max(${capped}, 50%)` : capped})` };
 }
+
+/** The picture ratio (width / height) under which a figure may be narrower than half the column at the 32rem cap: (40rem column / 2) / 32rem. */
+const FIGURE_TALL_RATIO = 20 / 32;
 
 function Figure({ figure }: { figure: ReadingFigure }) {
   const [failed, setFailed] = useState(false);
