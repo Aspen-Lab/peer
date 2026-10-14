@@ -196,12 +196,12 @@ describe("ReaderLayout, the spread, a paper with a body (R10)", () => {
 describe("ReaderLayout, the map under the strip (P10-04, A8)", () => {
   const withMap = (spread: boolean, over: Record<string, unknown> = {}) => tabbed(spread, { map: mark("MAP"), ...over });
 
-  it("on the spread: in the panel, directly after the tab strip and before the terms", () => {
+  it("on the spread: in the panel, directly after the tab strip (the terms slot is gone, P10-02)", () => {
     const html = withMap(true);
     const panelAt = html.indexOf("data-reader-panel");
     const columnAt = html.indexOf("xl:flex xl:flex-col");
 
-    expect(ascending(order(html, ["PLATE", "TITLE", "DECISION", "TABS", "MAP", "TERMS"]))).toBe(true);
+    expect(ascending(order(html, ["PLATE", "TITLE", "DECISION", "TABS", "MAP"]))).toBe(true);
     expect(html).toContain('<i data-mark="TABS">TABS</i><i data-mark="MAP">MAP</i>');
     expect(at(html, "MAP")).toBeGreaterThan(panelAt);
     expect(at(html, "MAP")).toBeLessThan(columnAt);
@@ -213,7 +213,7 @@ describe("ReaderLayout, the map under the strip (P10-04, A8)", () => {
   it("in one column: directly under the strip and above the tabpanel, outside it", () => {
     const html = withMap(false);
 
-    expect(ascending(order(html, ["PLATE", "TITLE", "DECISION", "COMMON", "TERMS", "TABS", "MAP", "WORDS", "ADDITIONS", "NEXT"]))).toBe(true);
+    expect(ascending(order(html, ["PLATE", "TITLE", "DECISION", "COMMON", "TABS", "MAP", "WORDS", "ADDITIONS", "NEXT"]))).toBe(true);
     expect(html).toContain('<i data-mark="TABS">TABS</i><i data-mark="MAP">MAP</i><div role="tabpanel"');
     expect(html.split('data-mark="MAP"').length - 1).toBe(1);
   });

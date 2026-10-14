@@ -214,12 +214,12 @@ describe("PaperBody — a group heading stands alone (P10-04, A10)", () => {
 
   it("tints the group heading by the same class path as any heading", () => {
     const route = {
-      byQuestion: [{ question: "q", vague: false, sections: { s2: { tier: "read" as const, hits: [], paragraphs: [] } } }],
+      byQuestion: [{ question: "q", vague: false, sections: { s2: { tier: "strong" as const, hits: [], paragraphs: [] } } }],
       vague: false,
     };
     const tinted = renderToStaticMarkup(createElement(PaperBody, { reading: groupedReading, route }));
     const heading = /<section id="paper-section-1"[^>]*>(<h3\b[^>]*>)/.exec(tinted)?.[1] ?? "";
 
-    expect(heading).toContain('data-route="read"');
+    expect(heading).toContain('data-route="strong"');
   });
 });

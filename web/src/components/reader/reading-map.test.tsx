@@ -640,7 +640,7 @@ describe("ReadingMapView — the paper's hierarchy (P10-04, A10)", () => {
         question: "Which films were grown?",
         vague: false,
         sections: {
-          g2: { tier: "read", hits: [{ term: "films", count: 4 }], paragraphs: [0] },
+          g2: { tier: "strong", hits: [{ term: "films", count: 4 }], paragraphs: [0] },
           g1: { tier: "none", hits: [], paragraphs: [] },
           g6: { tier: "none", hits: [], paragraphs: [] },
         },
