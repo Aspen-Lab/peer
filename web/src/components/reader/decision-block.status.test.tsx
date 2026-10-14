@@ -139,3 +139,19 @@ describe("the report's status line is drawn once (P10-47)", () => {
     }
   }
 });
+
+// P10-47 (the manager's ruling): while a stage shows, the sentence is the availability sentence and
+// nothing more: the page's wait is said once, in the status line under the bar, never also at the
+// sentence's end ("— your model is at work…" is gone with `progressSuffix`).
+
+describe("the sentence carries no status words while a stage shows (P10-47)", () => {
+  for (const [name, stage] of STATES) {
+    it(`${name}: the sentence paragraph is exactly the sentence`, () => {
+      const html = render(stage);
+      const sentence = html.match(/<p class="[^"]*(?:measure-lede|border-l)[^"]*">([\s\S]*?)<\/p>/);
+
+      expect(sentence?.[1]).toBe("Read from the abstract.");
+      expect(html.replace(/<[^>]*>/g, "")).not.toMatch(/at work/i);
+    });
+  }
+});

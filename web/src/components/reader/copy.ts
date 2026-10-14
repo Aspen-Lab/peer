@@ -399,15 +399,6 @@ export const TOAST = {
 };
 
 /**
- * Appended to the availability sentence while the model works. It names no stage: the stage is said
- * once, in the status line under the progress bar (`REPORT_STATUS` below), and a sentence that said it
- * again put the same words on the page twice.
- */
-export function progressSuffix(): string {
-  return " — your model is at work…";
-}
-
-/**
  * P10-41 / P10-45: what the status line under the progress bar says, by what the page waits on. These
  * are the page's own words for the server's stages (the stage's `label` is the server's and says
  * "Reading it"); a stage this table does not know keeps its server label.

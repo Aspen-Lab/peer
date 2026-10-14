@@ -28,12 +28,4 @@ describe("the report's stage words (P10-45, BACKLOG-93)", () => {
   it("the unused fixed label is gone", () => {
     expect(copy).not.toHaveProperty("PROGRESS_LABEL");
   });
-
-  it("the sentence's own suffix names no stage (the status line under the bar names it once)", () => {
-    // Whatever stage word it is handed (the head took one), the suffix does not repeat it.
-    const suffix = (copy.progressSuffix as unknown as (stageLabel?: string) => string)("Writing the report");
-    for (const word of Object.values(words ?? {})) expect(suffix).not.toContain(word);
-    expect(suffix).not.toContain("Writing the report");
-    expect(suffix.length).toBeGreaterThan(0);
-  });
 });

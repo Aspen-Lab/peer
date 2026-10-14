@@ -21,7 +21,7 @@ import type { PaperReading } from "@/lib/papers/reading";
 import { useSpread } from "./reader-layout";
 import { ReaderCommands } from "./reader-commands";
 import { ReadingControls } from "./reading-controls";
-import { BUTTON, progressSuffix } from "./copy";
+import { BUTTON } from "./copy";
 
 /**
  * Touch room for a line of text that is a control, without moving the type:
@@ -113,7 +113,6 @@ export function DecisionBlock({
         }
       >
         {sentences.join(" ")}
-        {stage && <span className="text-text-faint">{progressSuffix()}</span>}
         {showAddKey && (
           <>
             {" "}
