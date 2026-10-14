@@ -835,12 +835,12 @@ export const METHOD_BOOST = ROLE_WEIGHTS.parameter.method;
 /** The words that make a question one of an intent; a word matches by `termFormsMatch` as well (temperatures, explains, achieved). */
 const INTENT_WORDS: Readonly<Record<Exclude<QuestionIntent, "none">, readonly string[]>> = {
   parameter: [
-    "parameter", "parameters", "condition", "conditions", "temperature", "current", "voltage", "potential", "concentration", "concentrations", "rate", "time", "thickness",
+    "parameter", "parameters", "condition", "conditions", "temperature", "voltage", "potential", "concentration", "concentrations", "thickness",
     "electrolyte", "ph",
   ],
   mechanism: [
-    "mechanism", "why", "cause", "origin", "explain", "because", "arise", "govern", "drive", "lead", "responsible", "role", "effect",
-    "influence", "dependence", "relationship", "correlate", "model", "theory", "kinetic", "thermodynamic",
+    "mechanism", "why", "cause", "origin", "explain", "because", "arise", "govern", "drive", "lead", "responsible", "effect",
+    "influence", "dependence", "relationship", "correlate", "theory", "kinetic", "thermodynamic",
   ],
   result: ["result", "performance", "capacity", "efficiency", "retention", "achieve", "obtain", "measure", "show", "value", "improve", "compare"],
   background: ["define", "definition", "overview", "introduction", "prior"],
@@ -857,8 +857,64 @@ const INTENT_PHRASES: ReadonlyArray<{ intent: Exclude<QuestionIntent, "none">; p
 ];
 
 /**
+ * P10-32 (rule 2, BACKLOG-83): the words that are cues only in the phrases that mean the intent. `current`, `time`, `rate`,
+ * `model` and `role` are everyday words — "the current literature", "at the same time", "rate capability", "a machine learning
+ * model", "a role model" — and as bare cue words they misread a question (P10-15's list had them). Each counts once for its
+ * intent when any of its phrases is in the question (a phrase matches whole words, and its last word in the plural too:
+ * "scan rates"). The parameter words also count beside another process variable in a list ("temperature, current, etc.",
+ * "time and temperature"; `besideVariable`). Never by themselves, and "current density" is no parameter cue: it is a quantity
+ * a paper reports as often as one it sets.
+ */
+const EVERYDAY_CUES: ReadonlyArray<{ intent: Exclude<QuestionIntent, "none">; word: string; phrases: readonly string[] }> = [
+  {
+    intent: "parameter",
+    word: "current",
+    phrases: ["applied current", "plating current", "deposition current", "pulse current", "constant current", "limiting current", "galvanostatic current", "what current"],
+  },
+  {
+    intent: "parameter",
+    word: "time",
+    phrases: [
+      "how long", "time constant", "reaction time", "growth time", "deposition time", "annealing time", "heating time", "residence time", "holding time", "soaking time",
+    ],
+  },
+  {
+    intent: "parameter",
+    word: "rate",
+    phrases: [
+      "what rate", "growth rate", "deposition rate", "plating rate", "scan rate", "sweep rate", "heating rate", "cooling rate", "ramp rate", "flow rate",
+    ],
+  },
+  { intent: "mechanism", word: "model", phrases: ["theoretical model", "physical model", "mechanistic model", "model of the", "model for the"] },
+  { intent: "mechanism", word: "role", phrases: ["the role of", "role of", "role in", "roles of", "plays a role", "play a role", "playing a role", "played a role", "key role"] },
+];
+
+/** The process variables a question lists: an everyday parameter word beside one of these is a cue. */
+const LIST_VARIABLES = ["temperature", "voltage", "potential", "concentration", "pressure", "thickness", "ph", "current", "time", "rate"] as const;
+
+/** Whether `phrase` (lower-case words) stands in `padded` (the question's words, one space apart, a space at each end), or its plural. */
+function hasPhrase(padded: string, phrase: string): boolean {
+  return padded.includes(` ${phrase} `) || padded.includes(` ${phrase}s `);
+}
+
+/**
+ * Whether `word` stands in the lower-cased question next to another process variable in a list: "temperature, current",
+ * "time and temperature", "voltage or current" — a comma, a slash, "and" or "or" between them, in either order. "current
+ * density" after the word is not the word (the quantity, not the setting).
+ */
+function besideVariable(question: string, word: string): boolean {
+  const others = LIST_VARIABLES.filter((variable) => variable !== word).join("|");
+  const joint = String.raw`\s*(?:[,;/&]|\band\b|\bor\b)\s*(?:(?:and|or)\s+)?`;
+  const own = String.raw`${word}s?(?![\p{L}])(?!\s+density)`;
+  const other = String.raw`(?:${others})s?(?![\p{L}])`;
+  const edge = String.raw`(?<![\p{L}])`;
+  return new RegExp(`${edge}${other}${joint}${edge}${own}|${edge}${own}${joint}${edge}${other}`, "u").test(question);
+}
+
+/**
  * The cue counts of a question, by intent: each distinct word of the question counts once for the intent whose list holds it
- * (or a form of it), a phrase counts its weight (`INTENT_PHRASES`).
+ * (or a form of it), a phrase counts its weight (`INTENT_PHRASES`), and a word that is also an everyday word counts only where
+ * its phrase says the intent (`EVERYDAY_CUES`, P10-32).
  */
 function intentCounts(question: string): Record<Exclude<QuestionIntent, "none">, number> {
   const tokens = question.toLowerCase().match(/\p{L}+/gu) ?? [];
@@ -872,6 +928,11 @@ function intentCounts(question: string): Record<Exclude<QuestionIntent, "none">,
   }
   for (const { intent, phrase, weight } of INTENT_PHRASES) {
     if (padded.includes(` ${phrase} `)) counts[intent] += weight;
+  }
+  // P10-32 (rule 2): an everyday word is a cue in its phrases (one count however many name it), or, for a parameter, beside another variable.
+  const lower = question.toLowerCase();
+  for (const { intent, word, phrases } of EVERYDAY_CUES) {
+    if (phrases.some((phrase) => hasPhrase(padded, phrase)) || (intent === "parameter" && besideVariable(lower, word))) counts[intent] += 1;
   }
   return counts;
 }

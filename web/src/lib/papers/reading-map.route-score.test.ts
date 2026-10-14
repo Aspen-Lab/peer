@@ -410,15 +410,18 @@ describe("routeByQuestions — a parameter question favours the method sections 
     expect(withWord).toMatchObject({ a: "strong", b: "strong", c: "medium", m: "strong" });
   });
 
-  it.each(["parameter", "parameters", "condition", "conditions", "temperature", "current", "voltage", "potential", "concentration", "rate", "time", "thickness", "electrolyte"])(
+  // P10-32 re-aim (rule 2, §1c): `current`, `rate` and `time` left this list — they are everyday words, parameter cues only in their
+  // phrases (the cases are under "the cue words that are everyday words count only in their phrases").
+  it.each(["parameter", "parameters", "condition", "conditions", "temperature", "voltage", "potential", "concentration", "thickness", "electrolyte"])(
     "reads %s as a parameter word",
     (word) => {
       expect(tiersOf(equal("method"), `quillwort lattice ${word}`).m).toBe("strong");
     },
   );
 
-  it("reads a form of the word the same way: temperatures, rates, times", () => {
-    for (const word of ["temperatures", "rates", "times"]) expect(tiersOf(equal("method"), `quillwort lattice ${word}`).m, word).toBe("strong");
+  // P10-32 re-aim (rule 2, §1c): "rates" and "times" are the plurals of the everyday words (`scan rates` is tested under rule 2).
+  it("reads a form of the word the same way: temperatures, voltages, potentials", () => {
+    for (const word of ["temperatures", "voltages", "potentials"]) expect(tiersOf(equal("method"), `quillwort lattice ${word}`).m, word).toBe("strong");
   });
 
   it("boosts an apparatus section as it does a method one, and no other role", () => {
@@ -700,8 +703,8 @@ const QUESTION_OF: Record<Intent, string> = {
 
 describe("questionIntent — the question's words choose one intent (P10-15, rule 1)", () => {
   it.each([
-    ["parameter", ["parameter", "parameters", "condition", "temperature", "current", "voltage", "potential", "concentration", "rate", "time", "thickness", "electrolyte", "pH"]],
-    ["mechanism", ["mechanism", "why", "cause", "origin", "explain", "because", "arise", "govern", "drive", "lead", "responsible", "role", "effect", "influence", "dependence", "relationship", "correlate", "model", "theory", "kinetic", "thermodynamic"]],
+    ["parameter", ["parameter", "parameters", "condition", "temperature", "voltage", "potential", "concentration", "thickness", "electrolyte", "pH"]],
+    ["mechanism", ["mechanism", "why", "cause", "origin", "explain", "because", "arise", "govern", "drive", "lead", "responsible", "effect", "influence", "dependence", "relationship", "correlate", "theory", "kinetic", "thermodynamic"]],
     ["result", ["result", "performance", "capacity", "efficiency", "retention", "achieve", "obtain", "measure", "show", "value", "improve", "compare"]],
     ["background", ["define", "definition", "overview", "introduction", "prior"]],
   ] as const)("reads %s from its words", (intent, words) => {
@@ -728,7 +731,8 @@ describe("questionIntent — the question's words choose one intent (P10-15, rul
   });
 
   it("takes the intent with more words; a tie is none", () => {
-    expect(questionIntent("quillwort lattice temperature current relationship")).toBe("parameter");
+    // P10-32 re-aim (rule 2, §1c): "current" is a cue beside another variable in a list, not as a bare word.
+    expect(questionIntent("quillwort lattice temperature, current, relationship")).toBe("parameter");
     expect(questionIntent("quillwort lattice mechanism cause temperature")).toBe("mechanism");
     expect(questionIntent("quillwort lattice mechanism temperature")).toBe("none");
     expect(questionIntent("quillwort lattice capacity relationship")).toBe("none");
