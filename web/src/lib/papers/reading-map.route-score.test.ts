@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gistRoute, gradeScores, relevanceScores, routeByQuestions, type ReadingMap, type ReadingRole } from "./reading-map";
+import { gistRoute, gradeScores, METHOD_BOOST, relevanceScores, routeByQuestions, type ReadingMap, type ReadingRole } from "./reading-map";
 
 // P10-06 (ruling §1h.78; the owner's review 3.2 and 3.4): the route grades relevance. A question
 // no longer marks every section that mentions it the same green: each section gets a score from the
@@ -378,6 +378,10 @@ describe("relevanceScores — a term in nearly every section weighs little (P10-
 });
 
 describe("routeByQuestions — a parameter question favours the method sections (P10-06c, rule 2)", () => {
+  it("names the constant: METHOD_BOOST is 1.3", () => {
+    expect(METHOD_BOOST).toBe(1.3);
+  });
+
   // Four sections of the same words and counts; the method one stands last. With the cap at three strong rows and
   // the earlier row first on a tie, the last one is medium — unless the question asks for parameters.
   const equal = (role: ReadingRole): Spec[] => [
@@ -482,7 +486,7 @@ describe("routeByQuestions — the strongest rows answer a parameter question (P
     expect(tiers.exp).toBe("strong");
   });
 
-  it("keeps at most three strong leaf rows, the Introduction not above both of those, and a third of the leaves faint or none", () => {
+  it("keeps at most three strong leaf rows, both of those among them, and a third of the leaves faint or none", () => {
     const strongLeaves = leafIds.filter((id) => tiers[id] === "strong");
     expect(strongLeaves.length).toBeLessThanOrEqual(3);
     expect(strongLeaves).toEqual(expect.arrayContaining(["r1", "e1"]));

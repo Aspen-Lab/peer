@@ -355,9 +355,15 @@ export function buildReadingMap(doc: ExtractedDocument): ReadingMap {
 // paragraphs' scores — a paragraph that names several of the question's terms together outscores one that
 // names one of them often — and half the section's score as a whole. A term's forms match (`termFormsMatch`):
 // "growing" is also "growth", "grown" and "grow", so a question that says growing lights the growth section.
+//
+// P10-06c (the walk's A11, X-A3): a group row never takes a strong slot (the cap of three is counted over the leaf rows; the
+// group wears its strongest child's tier); a question that asks for parameters or conditions weighs the method and
+// apparatus sections up (`METHOD_BOOST`); a term found in nearly every section weighs the idf floor alone; and the words a
+// question is phrased with ("such as", "various", "learn") are never terms.
 
 /** `strong`: among the three best sections and at least 0.6 of the best score. `medium`: at least 0.4 of it.
- *  `faint`: any mention. `none`: no mention. */
+ *  `faint`: any mention. `none`: no mention. P10-06c: the three are counted over the leaf rows (rows with paragraphs of
+ *  their own); a group row wears its strongest child's tier outside the count. */
 export type RouteTier = "strong" | "medium" | "faint" | "none";
 
 export interface RouteSection {
@@ -458,12 +464,19 @@ const TOKENIZE_STOPWORDS: readonly string[] = [
  * - adverbs and connectives: "also", "only", "very", "more", "most", "less", "than", "then",
  *   "when", "where", "while", "however", "therefore".
  * A content word stays, "change" included: a verb a reader asks about is a term.
+ *
+ * P10-06c (the walk's X-A3): the words a question is phrased with, which name nothing in the paper — "such" (from
+ * "such as": the owner's second question counted "such ×3"), "various", "like", "etc", "learn", "want", "know",
+ * "understand", "about", "between". They join this list, not `ROUTE_STOPLIST`; `specificTerms` reads both, and the
+ * facts line, the route and the preference ledger's question terms all go through `specificTerms`. "learning",
+ * "understanding" and "knowledge" are other words and stay.
  */
 const FUNCTION_WORDS_BEYOND_TOKENIZE: readonly string[] = [
   "after", "before", "during", "between", "within", "through", "across", "against", "among", "without",
   "does", "did", "could", "would", "should", "might", "must",
   "these", "those", "their", "there", "which", "what", "whose",
   "also", "only", "very", "more", "most", "less", "than", "then", "when", "where", "while", "however", "therefore",
+  "such", "various", "like", "etc", "learn", "want", "know", "understand", "about",
 ];
 
 /** Compared on the canonical form, like `ROUTE_STOPLIST`. */
@@ -497,6 +510,9 @@ export function specificTerms(question: string): string[] {
 
 /** The idf floor: a term in every section still counts for a little, so a section that says it more often still ranks higher. */
 const IDF_FLOOR = 0.1;
+/** P10-06c (rule 3): a term found in at least this share of the scored sections weighs the floor alone — on the owner's paper
+ *  `110` and `LCO` are in nearly every section and say nothing about which one answers. */
+const UBIQUITOUS_SHARE = 0.8;
 /** A section is strong from this share of the best score, medium from the second. P10-06b: the second was 0.3; on a paper
  *  about growth, a growth question has most of the rows within a third of the best, and the map must keep a third of them
  *  faint or none (rubric A11), so a row is medium from 0.4. */
@@ -509,14 +525,15 @@ const PARAGRAPH_SHARE = 0.5;
 /** P10-06b (rule 1): a paragraph that holds `k ≥ 2` distinct terms scores `× (1 + MEETING_BONUS × (k − 1))`. */
 const MEETING_BONUS = 0.5;
 
-/** One term's rarity among `rows`: `ln((N + 1) / (df + 1)) + 0.1`, df the rows that say it at all. */
-function idfOf(rows: ReadonlyArray<{ counts: readonly number[] }>): number[] {
+/** One term's rarity among `rows`: `ln((N + 1) / (df + 1)) + 0.1`, df the rows that say it at all — and, with `ubiquity`
+ *  (the sections of the paper, P10-06c), the floor alone when df is at least `UBIQUITOUS_SHARE` of N. */
+function idfOf(rows: ReadonlyArray<{ counts: readonly number[] }>, ubiquity = false): number[] {
   const n = rows.length;
   const width = rows.reduce((most, row) => Math.max(most, row.counts.length), 0);
   const idf: number[] = [];
   for (let i = 0; i < width; i++) {
     const df = rows.reduce((seen, row) => seen + ((row.counts[i] ?? 0) >= 1 ? 1 : 0), 0);
-    idf.push(Math.log((n + 1) / (df + 1)) + IDF_FLOOR);
+    idf.push(ubiquity && df >= n * UBIQUITOUS_SHARE - 1e-9 ? IDF_FLOOR : Math.log((n + 1) / (df + 1)) + IDF_FLOOR);
   }
   return idf;
 }
@@ -550,6 +567,9 @@ function rowScore(counts: readonly number[], words: number, idf: readonly number
  * names the growth parameters, 110 and LCO together outscores a long introduction that names each somewhere. A
  * section that gives no paragraphs is scored as before.
  *
+ * P10-06c (rule 3): a term found in at least 80 % of the sections weighs the floor, 0.1, alone — `ln((N + 1) / (df + 1))`
+ * for df = 9 of 10 would still be 0.095 on top of it; a term everywhere says nothing about which section answers.
+ *
  * Pure; the score is a number to order by, never shown (it is not a fact a reader can check — the counts are).
  */
 export function relevanceScores(
@@ -559,7 +579,7 @@ export function relevanceScores(
     paragraphs?: ReadonlyArray<{ counts: readonly number[]; words: number }>;
   }>,
 ): number[] {
-  const idf = idfOf(sections);
+  const idf = idfOf(sections, true);
   return sections.map((section) => {
     const whole = rowScore(section.counts, section.words, idf, false);
     if (!section.paragraphs || section.paragraphs.length === 0) return whole;
@@ -774,11 +794,34 @@ function routeSection(paragraphs: readonly string[], terms: readonly string[]): 
   };
 }
 
+// ── A parameter question (P10-06c, rule 2) ──────────────────────────────
+
+/** A question that asks for parameters or conditions wants the sections that say how a thing was done: a section whose role is
+ *  `method` or `apparatus` scores this much more (the walk's A11: "a PhD reader asking for growth parameters expects the
+ *  Experimental and the growth sections darkest"). One constant, one rule; nothing changes for any other question. */
+export const METHOD_BOOST = 1.3;
+
+/** The words that make a question one for parameters or conditions; a term matches by `termFormsMatch` as well (temperatures, rates). */
+const PARAMETER_WORDS: readonly string[] = [
+  "parameter", "parameters", "condition", "conditions", "temperature", "current", "voltage", "potential",
+  "concentration", "rate", "time", "thickness", "electrolyte",
+];
+
+/** Whether the question's specific terms carry a parameter word (`how` is not a term, so "how" alone never does). */
+function asksForParameters(terms: readonly string[]): boolean {
+  return terms.some((term) => {
+    const canonical = canonicalize(term);
+    return PARAMETER_WORDS.some((word) => word === canonical || termFormsMatch(word, canonical));
+  });
+}
+
 type QuestionRoute = RouteResult["byQuestion"][number];
 type RouteBody = ReadonlyArray<{ paragraphs: readonly string[] }>;
 
 /** A map row as the route reads it: `parentId` is the hierarchy's field (a child names its group row). */
 type RouteRow = ReadingMap["sections"][number] & { parentId?: string };
+
+const TIER_ORDER: Readonly<Record<RouteTier, number>> = { none: 0, faint: 1, medium: 2, strong: 3 };
 
 /** One question through the paper: the whole body is read for it, and for it alone. */
 function routeQuestion(map: ReadingMap, sections: RouteBody, question: string): QuestionRoute {
@@ -795,6 +838,13 @@ function routeQuestion(map: ReadingMap, sections: RouteBody, question: string): 
   relevanceScores(own.map(({ entry }) => ({ counts: entry.counts, words: entry.words, paragraphs: entry.inParagraph }))).forEach((score, i) => {
     scores[own[i].k] = score;
   });
+
+  // P10-06c (rule 2): a question that asks for parameters or conditions weighs the method and apparatus sections up.
+  if (asksForParameters(terms)) {
+    rows.forEach((row, k) => {
+      if (routed[k].scored && (row.role === "method" || row.role === "apparatus")) scores[k] *= METHOD_BOOST;
+    });
+  }
 
   // A group row (no paragraphs, with subsections under it) takes its strongest child's score, the union of the
   // children's mentions and that child's evidence. A child comes after its group, so the last row is settled first.
@@ -821,8 +871,19 @@ function routeQuestion(map: ReadingMap, sections: RouteBody, question: string): 
     };
   }
 
-  // Rule 2: the tier is the row's grade among all the rows.
-  const tiers = gradeScores(scores);
+  // Rule 2: the tier is the row's grade among the leaf rows — the rows with paragraphs of their own, so the cap of three strong
+  // rows is counted over them. P10-06c (rule 1): a group row takes no slot of its own; it wears its strongest child's tier,
+  // outside the cap (a group row ties its best child in score, and used to take a slot with it, demoting a leaf).
+  const isGroup = rows.map((row, k) => !routed[k].scored && (childrenOf.get(row.id)?.length ?? 0) > 0);
+  const leafAt = rows.map((_, k) => k).filter((k) => !isGroup[k]);
+  const tiers: RouteTier[] = rows.map(() => "none");
+  gradeScores(leafAt.map((k) => scores[k])).forEach((tier, i) => {
+    tiers[leafAt[i]] = tier;
+  });
+  for (let k = rows.length - 1; k >= 0; k--) {
+    if (!isGroup[k]) continue;
+    tiers[k] = (childrenOf.get(rows[k].id) ?? []).reduce<RouteTier>((most, child) => (TIER_ORDER[tiers[child]] > TIER_ORDER[most] ? tiers[child] : most), "none");
+  }
   const result: Record<string, RouteSection> = {};
   rows.forEach((row, k) => {
     result[row.id] = { ...routed[k].section, tier: tiers[k] };
