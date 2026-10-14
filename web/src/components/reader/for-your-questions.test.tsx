@@ -516,13 +516,20 @@ describe("the answers under the question: one collapsed control and a bullet lis
     const common = source.indexOf("common={hasBody");
     const field = source.indexOf("<QuestionField", common);
     const end = source.indexOf("</>", common);
-    const between = source.slice(source.indexOf("/>", field) + 2, source.indexOf("{answers}", common)).replace(/\s+/g, " ").trim();
+    // P10-08 wraps the answers in an explain container (`data-explain-source="answer"`, `contents`: no box of its own); the
+    // JSX comment above it is not a block either, so it is stripped before the pin.
+    const between = source
+      .slice(source.indexOf("/>", field) + 2, source.indexOf("{answers}", common))
+      .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
 
     expect(common).toBeGreaterThan(-1);
     expect(field).toBeGreaterThan(common);
     expect(source.indexOf("{answers}", common)).toBeLessThan(end);
-    // The field's own closing, then only the end of its hydration guard: no block between the bar and the control.
-    expect(between).toBe(")}");
+    // The field's own closing, the end of its hydration guard, then only the answers' explain container (P10-08): no block
+    // between the bar and the control.
+    expect(between).toBe(')} <div data-explain-source="answer" className="contents">');
   });
 
   // §4.1: "all the answers … in a bullet format, directly under the question".
