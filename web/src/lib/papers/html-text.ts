@@ -629,6 +629,44 @@ function extractLatexml(page: string, pageUrl?: string): ExtractedDocument {
 // PMC uses JATS-flavored HTML. Body sections are <section class="tsec sec">
 // (rendered NXML) with <h2> or <h3> child headings.
 
+/** A `<section>` of a PMC page, found by its tags: where it opens and closes, and whether it is a body section. */
+interface PmcSection {
+  /** Index of the opening tag's `<`. */
+  open: number;
+  /** Index just past the opening tag. */
+  inner: number;
+  /** Index of the closing tag's `<`. */
+  close: number;
+  /** Index just past the closing tag. */
+  end: number;
+  body: boolean;
+}
+
+/**
+ * Every balanced `<section>…</section>` of the page, with its own span. The
+ * match is by depth, not by the first closing tag: a section's first nested
+ * subsection used to end the outer match and was folded into the parent's text
+ * (P10-40, BACKLOG-35). A section with no closing tag is left out.
+ */
+function pmcSections(html: string): PmcSection[] {
+  const found: PmcSection[] = [];
+  const stack: Array<Pick<PmcSection, "open" | "inner" | "body">> = [];
+  for (const tag of html.matchAll(/<(\/?)section\b[^>]*>/gi)) {
+    const at = tag.index ?? 0;
+    if (tag[1]) {
+      const opened = stack.pop();
+      if (opened) found.push({ ...opened, close: at, end: at + tag[0].length });
+    } else {
+      stack.push({
+        open: at,
+        inner: at + tag[0].length,
+        body: /id=["']sec\d+[^"']*["']|class=["'][^"']*\b(?:sec|tsec|abstract)\b[^"']*["']/i.test(tag[0]),
+      });
+    }
+  }
+  return found.sort((a, b) => a.open - b.open);
+}
+
 function extractPmc(html: string, pageUrl?: string): ExtractedDocument {
   const baseUrl = resolveBase(html, pageUrl);
   const sections: DraftSection[] = [];
@@ -636,22 +674,31 @@ function extractPmc(html: string, pageUrl?: string): ExtractedDocument {
   //   <section id="sec1">...</section>          (new PMC layout)
   //   <section class="sec">...</section>        (older variant)
   // Abstracts are `<section class="abstract" id="abstractN">` — we keep those
-  // when they're the only body source.
-  const sectionRe =
-    /<section\b[^>]*(?:id=["']sec\d+[^"']*["']|class=["'][^"']*\b(?:sec|tsec|abstract)\b[^"']*["'])[^>]*>([\s\S]*?)<\/section>/gi;
+  // when they're the only body source. A body section nests: its words are its
+  // own, up to its first subsection and between and after them; each
+  // subsection is a section of its own, in document order. A nested section
+  // that is not a body section (a box) stays in its parent's words.
+  const all = pmcSections(html);
+  const bodies = all.filter((section) => section.body);
 
   const draft = sectionDrafter();
-  for (const match of html.matchAll(sectionRe)) {
-    const inner = match[1];
-    // Skip nested sections inside an outer one (we'll catch them on their own
-    // iteration of the regex too — pick the heading at this level).
+  for (const section of bodies) {
+    // The nearest body descendants are the spans to leave out; deeper ones lie inside them.
+    let inner = "";
+    let cursor = section.inner;
+    for (const child of bodies) {
+      if (child.open < cursor || child.end > section.close) continue;
+      inner += html.slice(cursor, child.open) + " ";
+      cursor = child.end;
+    }
+    inner += html.slice(cursor, section.close);
     const headingMatch = inner.match(/<h[234]\b[^>]*>([\s\S]*?)<\/h[234]>/i);
     if (!headingMatch) continue;
     const heading = oneLine(stripTags(headingMatch[1]));
     if (!heading) continue;
     const text = stripTags(withoutCaptions(inner.replace(headingMatch[0], " ")));
-    const section = draft(heading, text);
-    if (section) sections.push(section);
+    const drafted = draft(heading, text);
+    if (drafted) sections.push(drafted);
   }
 
   return {
