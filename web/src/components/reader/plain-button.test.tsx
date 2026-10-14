@@ -179,19 +179,19 @@ describe("plainOffered — only under a paragraph the route marks read", () => {
   });
 
   it("is true for a paragraph whose own tier is read", () => {
-    expect(plainOffered(mark("read", [[2, "read"]]), 2)).toBe(true);
-    expect(plainOffered(mark("read", [[2, "read"], [3, "skim"]]), 2)).toBe(true);
+    expect(plainOffered(mark("strong", [[2, "strong"]]), 2)).toBe(true);
+    expect(plainOffered(mark("strong", [[2, "strong"], [3, "faint"]]), 2)).toBe(true);
   });
 
   it("is false for a paragraph the section marks but the route does not mark read: skim, background, or unmarked beside marked ones", () => {
-    expect(plainOffered(mark("read", [[2, "read"], [3, "skim"]]), 3)).toBe(false);
-    expect(plainOffered(mark("read", [[2, "read"], [4, "background"]]), 4)).toBe(false);
-    expect(plainOffered(mark("read", [[2, "read"]]), 5)).toBe(false);
+    expect(plainOffered(mark("strong", [[2, "strong"], [3, "faint"]]), 3)).toBe(false);
+    expect(plainOffered(mark("strong", [[2, "strong"], [4, "background"]]), 4)).toBe(false);
+    expect(plainOffered(mark("strong", [[2, "strong"]]), 5)).toBe(false);
   });
 
   it("is true under every paragraph of a section the route marks read when it has no paragraph marks — a Tier 2 answer's section", () => {
-    expect(plainOffered(mark("read"), 0)).toBe(true);
-    expect(plainOffered(mark("read"), 7)).toBe(true);
+    expect(plainOffered(mark("strong"), 0)).toBe(true);
+    expect(plainOffered(mark("strong"), 7)).toBe(true);
   });
 
   // P4-03 (BACKLOG-20): the route rewrites only the first `PLAIN_CAPS.paragraphChars` characters of a
@@ -205,21 +205,21 @@ describe("plainOffered — only under a paragraph the route marks read", () => {
     const cap = PLAIN_CAPS.paragraphChars;
     expect(sized(cap)).toHaveLength(cap);
     expect(sized(cap + 1)).toHaveLength(cap + 1);
-    expect(plainOffered(mark("read", [[2, "read"]]), 2, sized(cap))).toBe(true);
-    expect(plainOffered(mark("read", [[2, "read"]]), 2, sized(cap + 1))).toBe(false);
-    expect(plainOffered(mark("read"), 0, sized(cap))).toBe(true);
-    expect(plainOffered(mark("read"), 0, sized(cap + 1))).toBe(false);
+    expect(plainOffered(mark("strong", [[2, "strong"]]), 2, sized(cap))).toBe(true);
+    expect(plainOffered(mark("strong", [[2, "strong"]]), 2, sized(cap + 1))).toBe(false);
+    expect(plainOffered(mark("strong"), 0, sized(cap))).toBe(true);
+    expect(plainOffered(mark("strong"), 0, sized(cap + 1))).toBe(false);
   });
 
   it("applies the cap per paragraph in a section with no paragraph marks: a long one beside a short one", () => {
-    const section = mark("read");
+    const section = mark("strong");
     expect(plainOffered(section, 0, sized(40))).toBe(true);
     expect(plainOffered(section, 1, sized(PLAIN_CAPS.paragraphChars + 1))).toBe(false);
     expect(plainOffered(section, 2, sized(40))).toBe(true);
   });
 
   it("is false in a section marked skim or background with no paragraph marks, and with no mark at all", () => {
-    expect(plainOffered(mark("skim"), 0)).toBe(false);
+    expect(plainOffered(mark("faint"), 0)).toBe(false);
     expect(plainOffered(mark("background"), 0)).toBe(false);
     expect(plainOffered(null, 0)).toBe(false);
   });

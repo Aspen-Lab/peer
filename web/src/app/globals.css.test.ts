@@ -89,12 +89,15 @@ describe("globals.css — --color-positive tokens for the green tone (9-32)", ()
   });
 });
 
-// P1-05 (§1f.13, §1f.14): the route's three tints. Light greens on the light
-// palette (read the deepest, skim the faintest), low-luminance greens on the
-// dark one, in every palette block (the dark palette is written twice), and
-// used as a background only — never as a text colour, never anywhere else.
-describe("globals.css — the route tint tokens (P1-05)", () => {
-  const TOKENS = ["--color-route-read", "--color-route-background", "--color-route-skim"] as const;
+// P1-05 (§1f.13, §1f.14): the route's tints. Light greens on the light
+// palette, low-luminance greens on the dark one, in every palette block (the
+// dark palette is written twice), and used as a background only — never as a
+// text colour, never anywhere else. P10-06 (review 3.2): three of them are
+// ordered by how much a section says about the question (strong the deepest,
+// faint the lightest) and the fourth is the model's background mark.
+describe("globals.css — the route tint tokens (P1-05, P10-06)", () => {
+  const GRADED = ["--color-route-strong", "--color-route-medium", "--color-route-faint"] as const;
+  const TOKENS = [...GRADED, "--color-route-background"] as const;
   const lightBlock = css.slice(css.indexOf(":root {"), css.indexOf("/* Dark palette"));
   const darkBlock = css.slice(css.indexOf('html[data-mode="dark"] {'), css.indexOf('/* Dark palette — "system"'));
   const systemStart = css.indexOf('html[data-mode="system"] {');
@@ -122,7 +125,7 @@ describe("globals.css — the route tint tokens (P1-05)", () => {
     return g > r && g > b;
   };
 
-  it("declares the three tokens in the light palette and in both dark palettes", () => {
+  it("declares the four tokens in the light palette and in both dark palettes", () => {
     for (const block of [lightBlock, darkBlock, systemBlock]) {
       for (const token of TOKENS) expect(() => value(block, token)).not.toThrow();
     }
@@ -132,26 +135,42 @@ describe("globals.css — the route tint tokens (P1-05)", () => {
     for (const token of TOKENS) expect(value(systemBlock, token)).toBe(value(darkBlock, token));
   });
 
-  it("light: three light greens, read the deepest and skim the faintest", () => {
-    const [read, background, skim] = TOKENS.map((token) => value(lightBlock, token));
-    for (const tint of [read, background, skim]) {
-      expect(isGreen(tint)).toBe(true);
-      expect(luminance(tint)).toBeGreaterThan(0.7);
+  it("light: light greens, strong the deepest, then medium, then faint — each step visibly apart", () => {
+    const [strong, medium, faint] = GRADED.map((token) => value(lightBlock, token));
+    for (const token of TOKENS) {
+      expect(isGreen(value(lightBlock, token))).toBe(true);
+      expect(luminance(value(lightBlock, token))).toBeGreaterThan(0.7);
     }
-    expect(luminance(read)).toBeLessThan(luminance(background));
-    expect(luminance(background)).toBeLessThan(luminance(skim));
+    expect(luminance(strong)).toBeLessThan(luminance(medium));
+    expect(luminance(medium)).toBeLessThan(luminance(faint));
+    // P10-06 (A9): three visibly different greens, not three near-equal ones.
+    expect(luminance(medium) - luminance(strong)).toBeGreaterThanOrEqual(0.06);
+    expect(luminance(faint) - luminance(medium)).toBeGreaterThanOrEqual(0.05);
+    expect(contrast(strong, medium)).toBeGreaterThanOrEqual(1.08);
+    expect(contrast(medium, faint)).toBeGreaterThanOrEqual(1.05);
   });
 
-  it("dark: three low-luminance greens, read the furthest from the dark ground", () => {
-    const [read, background, skim] = TOKENS.map((token) => value(darkBlock, token));
+  it("dark: low-luminance greens, strong the furthest from the dark ground, then medium, then faint — each step visibly apart", () => {
+    const [strong, medium, faint] = GRADED.map((token) => value(darkBlock, token));
     const ground = value(darkBlock, "--color-bg");
-    for (const tint of [read, background, skim]) {
+    for (const token of TOKENS) {
+      const tint = value(darkBlock, token);
       expect(isGreen(tint)).toBe(true);
       expect(luminance(tint)).toBeLessThan(0.1);
       expect(luminance(tint)).toBeGreaterThan(luminance(ground));
     }
-    expect(luminance(read)).toBeGreaterThan(luminance(background));
-    expect(luminance(background)).toBeGreaterThan(luminance(skim));
+    expect(luminance(strong)).toBeGreaterThan(luminance(medium));
+    expect(luminance(medium)).toBeGreaterThan(luminance(faint));
+    expect(luminance(strong) - luminance(medium)).toBeGreaterThanOrEqual(0.01);
+    expect(luminance(medium) - luminance(faint)).toBeGreaterThanOrEqual(0.01);
+    expect(contrast(strong, medium)).toBeGreaterThanOrEqual(1.1);
+    expect(contrast(medium, faint)).toBeGreaterThanOrEqual(1.1);
+  });
+
+  it("the model's background mark is a fourth green, none of the three graded ones", () => {
+    for (const block of [lightBlock, darkBlock]) {
+      for (const token of GRADED) expect(value(block, "--color-route-background")).not.toBe(value(block, token));
+    }
   });
 
   it("keeps the tinted text readable: the palette's muted and heading text on every tint ≥ 4.5:1", () => {
@@ -182,9 +201,10 @@ describe("globals.css — the route tint tokens (P1-05)", () => {
     };
     walk(root.replace(/\/$/, ""));
     expect(reads).toEqual([
-      "components/reader/paper-body.tsx: bg-[color:var(--color-route-read)]",
+      "components/reader/paper-body.tsx: bg-[color:var(--color-route-strong)]",
+      "components/reader/paper-body.tsx: bg-[color:var(--color-route-medium)]",
       "components/reader/paper-body.tsx: bg-[color:var(--color-route-background)]",
-      "components/reader/paper-body.tsx: bg-[color:var(--color-route-skim)]",
+      "components/reader/paper-body.tsx: bg-[color:var(--color-route-faint)]",
     ]);
   });
 });
@@ -227,7 +247,7 @@ describe("globals.css — the term highlight token (P3-01)", () => {
     for (const block of [lightBlock, darkBlock]) {
       const [r, g, b] = channels(value(block, TOKEN));
       expect(r === g && g === b).toBe(true);
-      for (const green of ["--color-route-read", "--color-route-background", "--color-route-skim"]) {
+      for (const green of ["--color-route-strong", "--color-route-medium", "--color-route-faint", "--color-route-background"]) {
         expect(value(block, TOKEN)).not.toBe(value(block, green));
       }
     }

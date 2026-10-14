@@ -398,30 +398,34 @@ describe("routeByQuestions — tiers, hits and evidence (§1f.7)", () => {
     const section = result.byQuestion[0].sections.s0;
 
     expect(section.hits).toEqual([{ term: "lco", count: 2 }, { term: "degradation", count: 1 }]);
-    expect(section.tier).toBe("read");
+    // P10-06: the only section there is, and it is mentioned: strong.
+    expect(section.tier).toBe("strong");
   });
 
-  it("is skim with two terms in only one sentence", () => {
+  // P10-06 (re-aimed, §1c): the tier was `read` / `skim` by how many terms and sentences a section had; it is now the
+  // section's grade among the paper's sections by a score (reading-map.route-score.test.ts), so the three tests of the
+  // old rule keep their papers and their counts, and say what the new rule makes of them: the only section mentioned is strong.
+  it("is strong, the only section there is, with two terms in only one sentence", () => {
     const paperDoc = doc([{ text: "The LCO cathode cracks under load. Nothing else in this section bears on it at all." }]);
     const section = route(paperDoc, ["LCO cathode"]).byQuestion[0].sections.s0;
 
     expect(section.hits.map((h) => h.term)).toEqual(["cathode", "lco"]);
-    expect(section.tier).toBe("skim");
+    expect(section.tier).toBe("strong");
   });
 
-  it("is skim with one term in five sentences", () => {
+  it("is strong, the only section there is, with one term in five sentences", () => {
     const paperDoc = doc([{ text: "LCO is layered. LCO is common. LCO is stable. LCO is costly. LCO is studied." }]);
     const section = route(paperDoc, ["LCO cathode"]).byQuestion[0].sections.s0;
 
     expect(section.hits).toEqual([{ term: "lco", count: 5 }]);
-    expect(section.tier).toBe("skim");
+    expect(section.tier).toBe("strong");
   });
 
-  it("is read with two terms in two sentences", () => {
+  it("is strong, the only section there is, with two terms in two sentences", () => {
     const paperDoc = doc([{ text: "The LCO layer cracks first. Then the cathode swells." }]);
     const section = route(paperDoc, ["LCO cathode"]).byQuestion[0].sections.s0;
 
-    expect(section.tier).toBe("read");
+    expect(section.tier).toBe("strong");
   });
 
   it("calls a section that mentions none of the terms not mentioned, with no evidence", () => {
@@ -453,7 +457,7 @@ describe("routeByQuestions — tiers, hits and evidence (§1f.7)", () => {
       .toBe("The LCO cathode is grey.");
   });
 
-  it("keeps each question's own entry: a section can be read for one and not mentioned for another", () => {
+  it("keeps each question's own entry: a section can be strong for one and not mentioned for another", () => {
     const paperDoc = doc([
       { heading: "A", text: "The LCO layer cracks first. Then the cathode swells." },
       { heading: "B", text: "Grain boundaries set the creep rate. Creep slows as grain boundaries thin." },
@@ -461,10 +465,10 @@ describe("routeByQuestions — tiers, hits and evidence (§1f.7)", () => {
     const result = route(paperDoc, ["LCO cathode", "grain boundaries creep"]);
 
     expect(result.byQuestion.map((q) => q.question)).toEqual(["LCO cathode", "grain boundaries creep"]);
-    expect(result.byQuestion[0].sections.s0.tier).toBe("read");
+    expect(result.byQuestion[0].sections.s0.tier).toBe("strong");
     expect(result.byQuestion[0].sections.s1.tier).toBe("none");
     expect(result.byQuestion[1].sections.s0.tier).toBe("none");
-    expect(result.byQuestion[1].sections.s1.tier).toBe("read");
+    expect(result.byQuestion[1].sections.s1.tier).toBe("strong");
   });
 
   it("reads the body it is given, aligned with the map — a hand-built one will do", () => {
@@ -476,10 +480,12 @@ describe("routeByQuestions — tiers, hits and evidence (§1f.7)", () => {
 
     expect(result.byQuestion[0].sections).toEqual({
       s3: {
-        tier: "read",
+        tier: "strong",
         hits: [{ term: "cathode", count: 1 }, { term: "lco", count: 1 }],
         evidence: "The LCO layer cracks first.",
         paragraphs: [0, 1],
+        // P10-06: one mention each; the shorter paragraph says it in fewer words.
+        topParagraphs: [1],
       },
     });
   });
@@ -533,7 +539,8 @@ describe("routeByQuestions — the committed fixtures", () => {
         expect(section.tier).toBe("none");
         expect(section.evidence).toBeUndefined();
       } else {
-        expect(section.tier === "read" ? section.hits.length >= 2 : true).toBe(true);
+        // P10-06 (re-aimed, §1c): `read` needed two terms; `strong` is a grade among the sections (at most three).
+        expect(section.tier === "strong" ? section.hits.length >= 1 : true).toBe(true);
         expect(section.tier).not.toBe("none");
       }
       if (section.evidence !== undefined) {
@@ -544,6 +551,8 @@ describe("routeByQuestions — the committed fixtures", () => {
     });
     // The question finds something in its own paper.
     expect(Object.values(entry.sections).some((s) => s.tier !== "none")).toBe(true);
+    // P10-06: and lights a few sections, not all of them.
+    expect(Object.values(entry.sections).filter((s) => s.tier === "strong").length).toBeLessThanOrEqual(3);
   });
 });
 
@@ -711,13 +720,13 @@ describe("gistRoute (P1-03)", () => {
     expect(result.byQuestion[0].vague).toBe(false);
     const tiers = Object.fromEntries(Object.entries(result.byQuestion[0].sections).map(([id, s]) => [id, s.tier]));
     expect(tiers).toEqual({
-      s1: "skim",
-      s2: "skim",
-      s3: "skim",
-      s4: "read",
-      s5: "read",
-      s6: "read",
-      s7: "read",
+      s1: "faint",
+      s2: "faint",
+      s3: "faint",
+      s4: "strong",
+      s5: "strong",
+      s6: "strong",
+      s7: "strong",
       s8: "none",
       s9: "none",
     });

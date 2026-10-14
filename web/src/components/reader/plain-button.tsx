@@ -58,8 +58,8 @@ export interface PlainView {
 
 /**
  * Whether the control is offered under paragraph `index` of a section: the paragraph's own tier
- * in the route's mark is `read`, or — a Tier 2 answer marks a section, not its paragraphs — the
- * section's tier is `read` and the section has no paragraph marks at all. Never under a paragraph
+ * in the route's mark is `strong`, or — a Tier 2 answer marks a section, not its paragraphs — the
+ * section's tier is `strong` and the section has no paragraph marks at all. Never under a paragraph
  * longer than `PLAIN_CAPS.paragraphChars` (BACKLOG-20, P4-03): the route rewrites only that many
  * characters of it, so the numbers after the cut are outside the guard's set; the control is then
  * absent, as without a model, and the paragraph is left as the paper has it. `paragraph` is the
@@ -68,8 +68,8 @@ export interface PlainView {
 export function plainOffered(mark: SectionMark | null, index: number, paragraph = ""): boolean {
   if (!mark) return false;
   if (paragraph.length > PLAIN_CAPS.paragraphChars) return false;
-  if (mark.paragraphs.get(index) === "read") return true;
-  return mark.tier === "read" && mark.paragraphs.size === 0;
+  if (mark.paragraphs.get(index) === "strong") return true;
+  return mark.tier === "strong" && mark.paragraphs.size === 0;
 }
 
 // ── The markup ─────────────────────────────────────────────────────────

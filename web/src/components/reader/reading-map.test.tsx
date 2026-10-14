@@ -163,7 +163,7 @@ const route: RouteResult = {
       vague: false,
       sections: {
         s1: {
-          tier: "read",
+          tier: "strong",
           hits: [{ term: "lco", count: 3 }, { term: "h1-3", count: 3 }, { term: "creep", count: 2 }, { term: "grain", count: 1 }],
           evidence: "Grain boundaries are where most of the creep strain is thought to happen.",
           paragraphs: [0, 2],
@@ -177,8 +177,8 @@ const route: RouteResult = {
       question: "Which samples were cut?",
       vague: false,
       sections: {
-        s1: { tier: "skim", hits: [{ term: "cut", count: 1 }], paragraphs: [1] },
-        s2: { tier: "skim", hits: [{ term: "samples", count: 1 }], evidence: "Twelve samples with different grain sizes were cut from one cast ingot.", paragraphs: [0] },
+        s1: { tier: "faint", hits: [{ term: "cut", count: 1 }], paragraphs: [1] },
+        s2: { tier: "faint", hits: [{ term: "samples", count: 1 }], evidence: "Twelve samples with different grain sizes were cut from one cast ingot.", paragraphs: [0] },
         s3: { tier: "none", hits: [], paragraphs: [] },
       },
     },
@@ -198,8 +198,8 @@ describe("ReadingMapView — the route (P1-05)", () => {
   it("tints a row by its highest tier across the questions and titles it with their numbers", () => {
     const html = render({ route });
 
-    expect(rowOf(html, "1 Introduction")).toMatch(/<div data-route="read" title="Q1, Q3" class="[^"]*bg-\[color:var\(--color-route-read\)\]/);
-    expect(rowOf(html, "2.1 Samples")).toMatch(/<div data-route="skim" title="Q3" class="[^"]*bg-\[color:var\(--color-route-skim\)\]/);
+    expect(rowOf(html, "1 Introduction")).toMatch(/<div data-route="strong" title="Q1, Q3" class="[^"]*bg-\[color:var\(--color-route-strong\)\]/);
+    expect(rowOf(html, "2.1 Samples")).toMatch(/<div data-route="faint" title="Q3" class="[^"]*bg-\[color:var\(--color-route-faint\)\]/);
     expect(rowOf(html, "Problem Statement")).not.toContain("data-route");
     expect(rowOf(html, "Problem Statement")).not.toContain("--color-route-");
   });
@@ -207,8 +207,8 @@ describe("ReadingMapView — the route (P1-05)", () => {
   it("states the facts beside a tinted row — tier and counts, as the reader typed the terms — and 'not mentioned' for the rest", () => {
     const html = render({ route });
 
-    expect(rowOf(html, "1 Introduction")).toContain(`${ROUTE.tiers.read} · mentions LCO ×3, H1-3 ×3, creep ×2`);
-    expect(rowOf(html, "2.1 Samples")).toContain(`${ROUTE.tiers.skim} · mentions samples ×1`);
+    expect(rowOf(html, "1 Introduction")).toContain(`${ROUTE.tiers.strong} · mentions LCO ×3, H1-3 ×3, creep ×2`);
+    expect(rowOf(html, "2.1 Samples")).toContain(`${ROUTE.tiers.faint} · mentions samples ×1`);
     expect(rowOf(html, "Problem Statement")).toContain(`>${ROUTE.tiers.none}<`);
   });
 
@@ -223,9 +223,9 @@ describe("ReadingMapView — the route (P1-05)", () => {
   it("tints a paragraph line whose index a question at read or skim mentions", () => {
     const opened = render({ route, openRows: [0, 1] });
 
-    expect(opened).toMatch(/<a href="#paper-section-0-p0" data-route="read" class="[^"]*bg-\[color:var\(--color-route-read\)\]/);
-    expect(opened).toMatch(/<a href="#paper-section-0-p2" data-route="read"/);
-    expect(opened).toMatch(/<a href="#paper-section-1-p0" data-route="skim"/);
+    expect(opened).toMatch(/<a href="#paper-section-0-p0" data-route="strong" class="[^"]*bg-\[color:var\(--color-route-strong\)\]/);
+    expect(opened).toMatch(/<a href="#paper-section-0-p2" data-route="strong"/);
+    expect(opened).toMatch(/<a href="#paper-section-1-p0" data-route="faint"/);
     // Without a route the lines are as they were.
     expect(render({ openRows: [0, 1] })).not.toContain("data-route");
   });
@@ -259,8 +259,8 @@ describe("ReadingMapView — the route (P1-05)", () => {
   it("for the gist: the role order, with no counts and no 'not mentioned'", () => {
     const html = render({ route: gistRoute(map) });
 
-    expect(rowOf(html, "1 Introduction")).toMatch(new RegExp(`<div data-route="skim" title="${ASK.chips.gist}"`));
-    expect(rowOf(html, "1 Introduction")).toContain(`>${ROUTE.tiers.skim}<`);
+    expect(rowOf(html, "1 Introduction")).toMatch(new RegExp(`<div data-route="faint" title="${ASK.chips.gist}"`));
+    expect(rowOf(html, "1 Introduction")).toContain(`>${ROUTE.tiers.faint}<`);
     expect(html).not.toContain("mentions");
     expect(html).not.toContain(ROUTE.tiers.none);
   });
@@ -309,10 +309,10 @@ describe("ReadingMapView — the background mark's fact line (P2-04b)", () => {
     expect(rowOf(html, "Problem Statement")).toContain(`>${ROUTE.tiers.none}<`);
     expect(rowOf(html, "Problem Statement")).not.toContain(ROUTE.backgroundWhy);
     const skim: DisplayRoute = {
-      byQuestion: [{ question: "Which samples were cut?", vague: false, sections: { s1: { tier: "skim", hits: [], paragraphs: [] } } }],
+      byQuestion: [{ question: "Which samples were cut?", vague: false, sections: { s1: { tier: "faint", hits: [], paragraphs: [] } } }],
       vague: false,
     };
-    expect(rowOf(render({ route: skim }), "1 Introduction")).toContain(`>${ROUTE.tiers.skim}<`);
+    expect(rowOf(render({ route: skim }), "1 Introduction")).toContain(`>${ROUTE.tiers.faint}<`);
     expect(render({ route: skim })).not.toContain(ROUTE.backgroundWhy);
   });
 });

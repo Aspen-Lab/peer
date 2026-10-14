@@ -238,7 +238,7 @@ describe("useModelReport with effects running — one report request across two 
     const after = await withRoute();
 
     expect(after.route?.vague).toBe(false);
-    expect(after.route?.byQuestion[0].sections.s1.tier).toBe("read");
+    expect(after.route?.byQuestion[0].sections.s1.tier).toBe("strong");
     expect(net.streamCalls).toHaveLength(2);
     expect(JSON.stringify(net.streamCalls[1])).toBe(JSON.stringify(net.streamCalls[0]));
     expect(JSON.stringify(net.streamCalls)).not.toContain("Quillwortane");

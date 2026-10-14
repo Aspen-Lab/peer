@@ -206,9 +206,10 @@ export const MAP = {
  */
 export const ROUTE = {
   tiers: {
-    read: "read",
+    strong: "strongest",
+    medium: "relevant",
     background: "background",
-    skim: "skim",
+    faint: "less relevant",
     none: "not mentioned",
   },
   vague: "Ask something more specific and Peer can point you to the right sections.",

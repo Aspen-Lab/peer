@@ -60,9 +60,10 @@ export type TintTier = RouteTier | "background";
 /** Tier → tint: a background from the route's own tokens (`globals.css`),
  *  never a text colour; `none` draws nothing. */
 export const ROUTE_TINT: Readonly<Record<TintTier, string | null>> = {
-  read: "bg-[color:var(--color-route-read)]",
+  strong: "bg-[color:var(--color-route-strong)]",
+  medium: "bg-[color:var(--color-route-medium)]",
   background: "bg-[color:var(--color-route-background)]",
-  skim: "bg-[color:var(--color-route-skim)]",
+  faint: "bg-[color:var(--color-route-faint)]",
   none: null,
 };
 
@@ -70,7 +71,7 @@ export const ROUTE_TINT: Readonly<Record<TintTier, string | null>> = {
  *  and they stay where they were. */
 export const HEADING_MARK = "w-fit -mx-1 px-1";
 
-const TIER_RANK: Readonly<Record<TintTier, number>> = { none: 0, skim: 1, background: 2, read: 3 };
+const TIER_RANK: Readonly<Record<TintTier, number>> = { none: 0, faint: 1, background: 2, medium: 3, strong: 4 };
 
 export interface SectionMark {
   /** The highest tier any question gives the section. */
@@ -118,8 +119,8 @@ export function questionRouteOverlay(questions: readonly QuestionAnswers[] | und
         if (!id || TIER_RANK[tier] <= TIER_RANK[sections[id]?.tier ?? "none"]) return;
         sections[id] = displaySection(tier, evidence);
       };
-      for (const answer of entry.answers) place(answer.sectionId, "read", answer.evidence);
-      for (const next of entry.readNext) place(next.sectionId, next.kind === "background" ? "background" : "read");
+      for (const answer of entry.answers) place(answer.sectionId, "strong", answer.evidence);
+      for (const next of entry.readNext) place(next.sectionId, next.kind === "background" ? "background" : "strong");
       return { question: entry.question, vague: false, sections };
     }),
     vague: false,

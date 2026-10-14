@@ -1,17 +1,11 @@
 import { describe, expect, it } from "vitest";
-import * as readingMap from "./reading-map";
-import { gistRoute, routeByQuestions, type ReadingMap, type ReadingRole } from "./reading-map";
+import { gistRoute, gradeScores, relevanceScores, routeByQuestions, type ReadingMap, type ReadingRole } from "./reading-map";
 
 // P10-06 (ruling §1h.78; the owner's review 3.2 and 3.4): the route grades relevance. A question
 // no longer marks every section that mentions it the same green: each section gets a score from the
 // question's terms (a term in few sections counts for much, one in all of them for little; a long
 // section does not win by length alone), the tint is one of three tiers ordered by that score, and
 // the strongest tier is worn by at most three rows. Pure, on invented sections with known counts.
-
-type Scores = (sections: Array<{ counts: readonly number[]; words: number }>) => number[];
-type Grade = (scores: readonly number[]) => string[];
-const relevanceScores = (readingMap as unknown as { relevanceScores: Scores }).relevanceScores;
-const gradeScores = (readingMap as unknown as { gradeScores: Grade }).gradeScores;
 
 describe("relevanceScores — Σ idf(term) × ln(1 + count) ÷ ln(2 + words / 200)", () => {
   it("scores a term by its rarity: idf = ln((N + 1) / (df + 1)) + 0.1", () => {
@@ -255,7 +249,7 @@ describe("routeByQuestions — the paragraphs of a section graded the same way (
   ];
   const { map, body } = paperOf(specs);
   const sections = routeByQuestions(map, body, ["quillwort lattice"]).byQuestion[0].sections;
-  const top = (id: string) => (sections[id] as unknown as { topParagraphs?: number[] }).topParagraphs;
+  const top = (id: string) => sections[id].topParagraphs;
 
   it("names the paragraph that says most as the section's top, the others that mention a term stay in `paragraphs`", () => {
     expect(sections.a.paragraphs).toEqual([0, 1, 2]);

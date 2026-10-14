@@ -187,7 +187,7 @@ describe("useReading with effects running — one reading request across two ope
     const after = await withRoute();
 
     expect(after.route?.vague).toBe(false);
-    expect(after.route?.byQuestion[0].sections.s1.tier).toBe("read");
+    expect(after.route?.byQuestion[0].sections.s1.tier).toBe("strong");
     expect(fetches).toHaveLength(2);
     expect(fetches[1]).toBe(fetches[0]);
     expect(fetches.join(" ")).not.toContain("Quillwortane");

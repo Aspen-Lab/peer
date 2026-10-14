@@ -39,7 +39,7 @@ const fullText: FullTextResult = {
 const reading = buildReading(paper, fullText, new Date("2026-10-05T00:00:00.000Z"));
 const ids = reading.body.map((section) => section.id);
 
-const section = (tier: "read" | "skim" | "none", paragraphs: number[] = [], extra: object = {}) => ({
+const section = (tier: "strong" | "faint" | "none", paragraphs: number[] = [], extra: object = {}) => ({
   tier, hits: [], paragraphs, ...extra,
 });
 
@@ -50,8 +50,8 @@ const ROUTE_RESULT: RouteResult = {
       question: "Does the LCO lattice crack at H1-3?",
       vague: false,
       sections: {
-        [ids[0]]: section("read", [1], { hits: [{ term: "lco", count: 3 }, { term: "h1-3", count: 3 }, { term: "lattice", count: 2 }, { term: "crack", count: 1 }], evidence: "The quillwort lattice cracks when the cells fade over many cycles." }),
-        [ids[1]]: section("skim", [0], { hits: [{ term: "lco", count: 1 }], evidence: "Twelve quillwort cells were cycled at a fixed current for a month." }),
+        [ids[0]]: section("strong", [1], { hits: [{ term: "lco", count: 3 }, { term: "h1-3", count: 3 }, { term: "lattice", count: 2 }, { term: "crack", count: 1 }], evidence: "The quillwort lattice cracks when the cells fade over many cycles." }),
+        [ids[1]]: section("faint", [0], { hits: [{ term: "lco", count: 1 }], evidence: "Twelve quillwort cells were cycled at a fixed current for a month." }),
         [ids[2]]: section("none"),
       },
     },
@@ -60,9 +60,9 @@ const ROUTE_RESULT: RouteResult = {
       question: "Where do cells fade?",
       vague: false,
       sections: {
-        [ids[0]]: section("skim", [0, 1], { hits: [{ term: "fade", count: 1 }], evidence: "The quillwort lattice cracks when the cells fade over many cycles." }),
+        [ids[0]]: section("faint", [0, 1], { hits: [{ term: "fade", count: 1 }], evidence: "The quillwort lattice cracks when the cells fade over many cycles." }),
         [ids[1]]: section("none"),
-        [ids[2]]: section("skim", [0], { hits: [{ term: "fade", count: 1 }] }),
+        [ids[2]]: section("faint", [0], { hits: [{ term: "fade", count: 1 }] }),
       },
     },
   ],
@@ -71,16 +71,16 @@ const ROUTE_RESULT: RouteResult = {
 
 describe("the tier → tint table (§1f.13)", () => {
   it("maps read, background and skim to their own token as a background, and none to no style", () => {
-    expect(ROUTE_TINT.read).toBe("bg-[color:var(--color-route-read)]");
+    expect(ROUTE_TINT.strong).toBe("bg-[color:var(--color-route-strong)]");
     expect(ROUTE_TINT.background).toBe("bg-[color:var(--color-route-background)]");
-    expect(ROUTE_TINT.skim).toBe("bg-[color:var(--color-route-skim)]");
+    expect(ROUTE_TINT.faint).toBe("bg-[color:var(--color-route-faint)]");
     expect(ROUTE_TINT.none).toBeNull();
     // Background only — never a text colour.
     for (const tint of Object.values(ROUTE_TINT)) if (tint) expect(tint).toMatch(/^bg-\[color:var\(--color-route-[a-z]+\)\]$/);
   });
 
   it("names the tiers exactly as the reader sees them", () => {
-    expect(ROUTE.tiers).toEqual({ read: "read", background: "background", skim: "skim", none: "not mentioned" });
+    expect(ROUTE.tiers).toEqual({ strong: "strongest", medium: "relevant", background: "background", faint: "less relevant", none: "not mentioned" });
     expect(ROUTE.vague).toBe("Ask something more specific and Peer can point you to the right sections.");
   });
 });
@@ -105,21 +105,21 @@ describe("the Tier 2 question-answer overlay (P2-04)", () => {
     const overlay = questionRouteOverlay(answers)!;
 
     expect(sectionMark(overlay, ids[0])).toMatchObject({
-      tier: "read",
+      tier: "strong",
       title: "Q1, Q2",
       evidence: "The quillwort lattice cracks when the cells fade over many cycles.",
     });
     expect(sectionMark(overlay, ids[1])).toMatchObject({ tier: "background", title: "Q1" });
-    expect(sectionMark(overlay, ids[2])).toMatchObject({ tier: "read", title: "Q2" });
+    expect(sectionMark(overlay, ids[2])).toMatchObject({ tier: "strong", title: "Q2" });
   });
 
   it("merges against Tier 0 by read > background > skim > none, preserves Tier 0 without model data, and retains multiple question titles", () => {
     const merged = mergeQuestionRoute(ROUTE_RESULT, questionRouteOverlay(answers));
 
-    expect(sectionMark(merged, ids[0])).toMatchObject({ tier: "read", title: "Q1, Q3" });
+    expect(sectionMark(merged, ids[0])).toMatchObject({ tier: "strong", title: "Q1, Q3" });
     expect(sectionMark(merged, ids[0])?.evidence).toBe("The quillwort lattice cracks when the cells fade over many cycles.");
     expect(sectionMark(merged, ids[1])).toMatchObject({ tier: "background", title: "Q1" });
-    expect(sectionMark(merged, ids[2])).toMatchObject({ tier: "read", title: "Q3" });
+    expect(sectionMark(merged, ids[2])).toMatchObject({ tier: "strong", title: "Q3" });
     expect(mergeQuestionRoute(ROUTE_RESULT, undefined)).toEqual(ROUTE_RESULT);
   });
 
@@ -139,7 +139,7 @@ describe("the Tier 2 question-answer overlay (P2-04)", () => {
     // The orphan's background mark on section 2 is gone: Tier 0's own skim stands.
     expect(sectionMark(merged, ids[1])).toEqual(sectionMark(ROUTE_RESULT, ids[1]));
     // The entry that still matches a live line still lends its answer.
-    expect(sectionMark(merged, ids[2])).toMatchObject({ tier: "read", title: "Q3" });
+    expect(sectionMark(merged, ids[2])).toMatchObject({ tier: "strong", title: "Q3" });
     // No section names a question number the field does not have.
     for (const id of ids) expect(sectionMark(merged, id)?.title ?? "").not.toMatch(/Q4/);
   });
@@ -168,12 +168,12 @@ describe("the Tier 2 question-answer overlay (P2-04)", () => {
 describe("a section's mark across the questions (§1f.13)", () => {
   it("takes the highest tier, and lists the questions that tinted it", () => {
     const first = sectionMark(ROUTE_RESULT, ids[0]);
-    expect(first?.tier).toBe("read");
+    expect(first?.tier).toBe("strong");
     expect(first?.title).toBe("Q1, Q3");
     expect(ROUTE.questions([1, 3])).toBe("Q1, Q3");
 
-    expect(sectionMark(ROUTE_RESULT, ids[1])).toMatchObject({ tier: "skim", title: "Q1" });
-    expect(sectionMark(ROUTE_RESULT, ids[2])).toMatchObject({ tier: "skim", title: "Q3" });
+    expect(sectionMark(ROUTE_RESULT, ids[1])).toMatchObject({ tier: "faint", title: "Q1" });
+    expect(sectionMark(ROUTE_RESULT, ids[2])).toMatchObject({ tier: "faint", title: "Q3" });
   });
 
   it("gives no mark to a section no question mentions, to an unknown section, to no route and to a vague route", () => {
@@ -193,8 +193,8 @@ describe("a section's mark across the questions (§1f.13)", () => {
     expect(first?.evidence).toBe("The quillwort lattice cracks when the cells fade over many cycles.");
     expect(first?.hits.map((hit) => hit.term)).toEqual(["LCO", "H1-3", "lattice", "crack", "fade"]);
     expect(ROUTE.mentions(first?.hits ?? [])).toBe("mentions LCO ×3, H1-3 ×3, lattice ×2");
-    expect(first?.paragraphs.get(0)).toBe("skim");
-    expect(first?.paragraphs.get(1)).toBe("read");
+    expect(first?.paragraphs.get(0)).toBe("faint");
+    expect(first?.paragraphs.get(1)).toBe("strong");
   });
 
   it("titles a gist row by the gist, not by a question number", () => {
@@ -202,7 +202,7 @@ describe("a section's mark across the questions (§1f.13)", () => {
     const results = reading.map!.sections.findIndex((row) => row.role === "evidence");
 
     expect(gist.byQuestion[0].question).toBe(GIST_QUESTION);
-    expect(sectionMark(gist, ids[results])).toMatchObject({ tier: "read", title: ASK.chips.gist, hits: [] });
+    expect(sectionMark(gist, ids[results])).toMatchObject({ tier: "strong", title: ASK.chips.gist, hits: [] });
   });
 });
 
@@ -235,11 +235,11 @@ describe("the map's rows and the body heading carry the mark", () => {
   it("tints a map row by its tier and titles it with the question numbers", () => {
     const html = renderToStaticMarkup(createElement(ReadingMapView, { map: reading.map!, route: ROUTE_RESULT }));
 
-    expect(mapRow(html, "1 Introduction")).toMatch(/data-route="read"[^>]*title="Q1, Q3"/);
-    expect(mapRow(html, "2 Methods")).toMatch(/data-route="skim"[^>]*title="Q1"/);
-    expect(mapRow(html, "3 Results")).toMatch(/data-route="skim"[^>]*title="Q3"/);
-    expect(html).toContain(ROUTE_TINT.read);
-    expect(html).toContain(ROUTE_TINT.skim);
+    expect(mapRow(html, "1 Introduction")).toMatch(/data-route="strong"[^>]*title="Q1, Q3"/);
+    expect(mapRow(html, "2 Methods")).toMatch(/data-route="faint"[^>]*title="Q1"/);
+    expect(mapRow(html, "3 Results")).toMatch(/data-route="faint"[^>]*title="Q3"/);
+    expect(html).toContain(ROUTE_TINT.strong);
+    expect(html).toContain(ROUTE_TINT.faint);
   });
 
   it("leaves the map's rows untouched without a route, and for a section no question mentions", () => {
@@ -249,20 +249,20 @@ describe("the map's rows and the body heading carry the mark", () => {
     expect(plain).not.toContain("--color-route-");
 
     const onlyFirst: RouteResult = {
-      byQuestion: [{ question: "q", vague: false, sections: { [ids[0]]: section("skim"), [ids[1]]: section("none") } }],
+      byQuestion: [{ question: "q", vague: false, sections: { [ids[0]]: section("faint"), [ids[1]]: section("none") } }],
       vague: false,
     };
     const html = renderToStaticMarkup(createElement(ReadingMapView, { map: reading.map!, route: onlyFirst }));
     expect(html.match(/data-route=/g)).toHaveLength(1);
     expect(mapRow(html, "2 Methods")).not.toContain("data-route");
-    expect(mapRow(html, "1 Introduction")).toContain('data-route="skim"');
+    expect(mapRow(html, "1 Introduction")).toContain('data-route="faint"');
   });
 
   it("marks the body's section headings and nothing else in the body", () => {
     const html = renderToStaticMarkup(createElement(PaperBody, { reading, route: ROUTE_RESULT }));
 
-    expect(html).toMatch(/<h3 [^>]*data-route="read"[^>]*>1 Introduction<\/h3>/);
-    expect(html).toMatch(/<h3 [^>]*data-route="skim"[^>]*>2 Methods<\/h3>/);
+    expect(html).toMatch(/<h3 [^>]*data-route="strong"[^>]*>1 Introduction<\/h3>/);
+    expect(html).toMatch(/<h3 [^>]*data-route="faint"[^>]*>2 Methods<\/h3>/);
     expect(html.match(/data-route=/g)).toHaveLength(3);
     // The paragraphs are never tinted: only the headings are.
     expect(html).not.toMatch(/<(?:p|div)[^>]*data-route/);

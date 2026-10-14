@@ -395,7 +395,7 @@ const PASS1Q_SYSTEM = [
 ].join(" ");
 
 /**
- * The sections the Tier 0 route marks `read` or `skim` for any question — the
+ * The sections the Tier 0 route marks (any tier but `none`) for any question — the
  * same route the page draws (`routeByQuestions` over the rendered body; the
  * map is `buildReadingMap(doc)`, made from the one split) — or, when it marks
  * none, every section.
@@ -406,7 +406,7 @@ function questionSections(doc: ExtractedDocument, questions: readonly string[]):
   const marked = new Set<string>();
   for (const entry of route.byQuestion) {
     for (const [id, section] of Object.entries(entry.sections)) {
-      if (section.tier === "read" || section.tier === "skim") marked.add(id);
+      if (section.tier !== "none") marked.add(id);
     }
   }
   const all = bodySections(doc);

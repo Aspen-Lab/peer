@@ -280,17 +280,25 @@ export function buildReadingMap(doc: ExtractedDocument): ReadingMap {
   return readingMapOf(readableSections(doc));
 }
 
-// ── The Tier 0 route (spec D9 second half; rulings §1f.6–8) ────────────
+// ── The Tier 0 route (spec D9 second half; rulings §1f.6–8, §1h.78) ────
 //
-// For each question and each section: read / skim / not mentioned, from
-// counts a reader can check — which of the question's specific terms the
-// section mentions, how often, and in how many of its sentences — with one
-// of those sentences, verbatim, as evidence. No score is reported (a score is
-// not a fact a reader can check). It runs in the browser on the reading the
+// For each question and each section: how much it says about the question,
+// from counts a reader can check — which of the question's specific terms the
+// section mentions, how often — with one of the section's sentences, verbatim,
+// as evidence. P10-06 (the owner's review 3.2, 3.4): the section's grade is
+// relative to the paper's other sections. Each section has a score (a term in
+// few sections counts for much, one in all of them for little; a long section
+// does not win by length alone), and the tier is the score's share of the
+// best one — strong, medium, faint, none — with the strongest tier worn by
+// three rows at most, so a specific question lights a few sections, not the
+// whole paper. The score itself is not reported (it is not a fact a reader can
+// check); the counts behind it are. It runs in the browser on the reading the
 // page already holds: the questions are the reader's own and never leave this
 // function.
 
-export type RouteTier = "read" | "skim" | "none";
+/** `strong`: among the three best sections and at least 0.6 of the best score. `medium`: at least 0.3 of it.
+ *  `faint`: any mention. `none`: no mention. */
+export type RouteTier = "strong" | "medium" | "faint" | "none";
 
 export interface RouteSection {
   tier: RouteTier;
@@ -302,6 +310,10 @@ export interface RouteSection {
   evidence?: string;
   /** Indices of the paragraphs that mention a term — the map's indices. */
   paragraphs: number[];
+  /** P10-06 (rule 3): the paragraphs of `paragraphs` that say most by the same score over their own
+   *  words — they carry the section's tier on the map's paragraph lines, the others a faint one.
+   *  Absent for a section with no mention (and for a mark that is not a question's). */
+  topParagraphs?: number[];
 }
 
 export interface RouteResult {
@@ -423,7 +435,79 @@ export function specificTerms(question: string): string[] {
   return terms;
 }
 
-function routeSection(paragraphs: readonly string[], terms: readonly string[]): RouteSection {
+/** The idf floor: a term in every section still counts for a little, so a section that says it more often still ranks higher. */
+const IDF_FLOOR = 0.1;
+/** A section is strong from this share of the best score, medium from the second. */
+const STRONG_SHARE = 0.6;
+const MEDIUM_SHARE = 0.3;
+/** At most this many rows carry the strongest tier. */
+const MAX_STRONG_ROWS = 3;
+
+/**
+ * P10-06 (rule 1; review 3.2, 3.4): a score for each of `sections` from the counts of the question's terms in it.
+ * `counts[i]` is how often term `i` occurs in the section (the same terms, in the same order, for every section),
+ * `words` the section's length. The weight of a term is its rarity among these sections,
+ * `idf = ln((N + 1) / (df + 1)) + 0.1` with N the number of sections and df the number that mention it — a term in
+ * two sections counts for much, one in all of them for little — and a section scores
+ * `Σ idf(term) × ln(1 + count(term)) ÷ ln(2 + words / 200)`: the log keeps a term repeated thirty times from
+ * outweighing three terms said twice each, and the divisor keeps a long section from winning by length alone.
+ * Pure; the score is a number to order by, never shown (it is not a fact a reader can check — the counts are).
+ */
+export function relevanceScores(sections: ReadonlyArray<{ counts: readonly number[]; words: number }>): number[] {
+  const n = sections.length;
+  const width = sections.reduce((most, section) => Math.max(most, section.counts.length), 0);
+  const idf: number[] = [];
+  for (let i = 0; i < width; i++) {
+    const df = sections.reduce((seen, section) => seen + ((section.counts[i] ?? 0) >= 1 ? 1 : 0), 0);
+    idf.push(Math.log((n + 1) / (df + 1)) + IDF_FLOOR);
+  }
+  return sections.map((section) => {
+    let sum = 0;
+    for (let i = 0; i < width; i++) sum += idf[i] * Math.log(1 + (section.counts[i] ?? 0));
+    return sum / Math.log(2 + Math.max(0, section.words) / 200);
+  });
+}
+
+/**
+ * P10-06 (rule 2): the tier of each score, relative to the best of them. `strong` for a score of at least 0.6 of
+ * the best and among the three highest (the earlier row first on a tie), so three rows at most; `medium` for at
+ * least 0.3 of the best; `faint` for any other mention; `none` for a score of zero. A single mentioned section is
+ * strong.
+ */
+export function gradeScores(scores: readonly number[]): RouteTier[] {
+  const best = scores.reduce((most, score) => Math.max(most, score), 0);
+  const leaders = new Set(
+    scores
+      .map((score, index) => ({ score, index }))
+      .filter((row) => row.score > 0)
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .slice(0, MAX_STRONG_ROWS)
+      .map((row) => row.index),
+  );
+  const EPSILON = 1e-9;
+  return scores.map((score, index) => {
+    if (!(score > 0)) return "none";
+    if (leaders.has(index) && score >= best * STRONG_SHARE - EPSILON) return "strong";
+    if (score >= best * MEDIUM_SHARE - EPSILON) return "medium";
+    return "faint";
+  });
+}
+
+function wordsOf(text: string): number {
+  return text.split(/\s+/).filter(Boolean).length;
+}
+
+/** What one section says about the terms, before it is graded against the paper's other sections. */
+interface RoutedSection {
+  section: RouteSection;
+  /** How often each term occurs, aligned with the question's terms. */
+  counts: number[];
+  words: number;
+  /** Whether the section has paragraphs of its own: a group row (a heading with only subsections) has none. */
+  scored: boolean;
+}
+
+function routeSection(paragraphs: readonly string[], terms: readonly string[]): RoutedSection {
   // Canonicalised once per section per call (joined with a space), and once
   // per paragraph and per sentence for the matches below.
   const sectionText = canonicalize(paragraphs.join(" "));
@@ -431,24 +515,26 @@ function routeSection(paragraphs: readonly string[], terms: readonly string[]): 
     .map((term) => ({ term, count: termOccurrences(sectionText, term) }))
     .filter((hit) => hit.count >= 1)
     .sort((a, b) => b.count - a.count || (a.term < b.term ? -1 : a.term > b.term ? 1 : 0));
+  const counts = terms.map((term) => hits.find((hit) => hit.term === term)?.count ?? 0);
 
   const mentioned: number[] = [];
   const matching: string[] = [];
+  // Per paragraph, for the top paragraphs (rule 3): the counts of the terms in the ones that mention any.
+  const inParagraph: Array<{ counts: number[]; words: number }> = [];
   paragraphs.forEach((paragraph, index) => {
     const text = canonicalize(paragraph);
-    if (terms.some((term) => termMatches(text, term))) mentioned.push(index);
+    const mentions = terms.some((term) => termMatches(text, term));
+    if (mentions) mentioned.push(index);
+    inParagraph.push({ counts: mentions ? terms.map((term) => termOccurrences(text, term)) : terms.map(() => 0), words: wordsOf(paragraph) });
     for (const sentence of splitSentences(paragraph)) {
       const canonicalSentence = canonicalize(sentence);
       if (terms.some((term) => termMatches(canonicalSentence, term))) matching.push(sentence);
     }
   });
 
-  const tier: RouteTier =
-    hits.length >= 2 && matching.length >= 2 ? "read" : hits.length >= 1 ? "skim" : "none";
-
   let evidence: string | undefined;
   let best = Number.NEGATIVE_INFINITY;
-  if (tier !== "none") {
+  if (hits.length > 0) {
     for (const sentence of matching) {
       const score = scoreSentence(sentence, 0);
       // Strictly greater: the earlier sentence wins a tie.
@@ -459,11 +545,34 @@ function routeSection(paragraphs: readonly string[], terms: readonly string[]): 
     }
   }
 
-  return { tier, hits, ...(evidence !== undefined ? { evidence } : {}), paragraphs: mentioned };
+  // The paragraphs that say most: graded by the same score over their own words, df over this section's paragraphs.
+  let topParagraphs: number[] | undefined;
+  if (mentioned.length > 0) {
+    const scores = relevanceScores(inParagraph);
+    const top = mentioned.reduce((most, index) => Math.max(most, scores[index]), 0);
+    topParagraphs = mentioned.filter((index) => scores[index] >= top - 1e-9);
+  }
+
+  return {
+    section: {
+      // Provisional: the tier is the section's grade among the paper's sections (`routeQuestion`).
+      tier: hits.length > 0 ? "faint" : "none",
+      hits,
+      ...(evidence !== undefined ? { evidence } : {}),
+      paragraphs: mentioned,
+      ...(topParagraphs ? { topParagraphs } : {}),
+    },
+    counts,
+    words: wordsOf(paragraphs.join(" ")),
+    scored: paragraphs.length > 0,
+  };
 }
 
 type QuestionRoute = RouteResult["byQuestion"][number];
 type RouteBody = ReadonlyArray<{ paragraphs: readonly string[] }>;
+
+/** A map row as the route reads it: `parentId` is the hierarchy's field (a child names its group row). */
+type RouteRow = ReadingMap["sections"][number] & { parentId?: string };
 
 /** One question through the paper: the whole body is read for it, and for it alone. */
 function routeQuestion(map: ReadingMap, sections: RouteBody, question: string): QuestionRoute {
@@ -471,11 +580,48 @@ function routeQuestion(map: ReadingMap, sections: RouteBody, question: string): 
   if (terms.length < MIN_SPECIFIC_TERMS) {
     return { question, vague: true, sections: {} as Record<string, RouteSection> };
   }
-  const routed: Record<string, RouteSection> = {};
-  map.sections.forEach((row, k) => {
-    routed[row.id] = routeSection(sections[k]?.paragraphs ?? [], terms);
+  const rows = map.sections as readonly RouteRow[];
+  const routed = rows.map((_, k) => routeSection(sections[k]?.paragraphs ?? [], terms));
+
+  // Rule 1: a score for each section with paragraphs of its own, against the paper's sections that have any.
+  const own = routed.map((entry, k) => ({ entry, k })).filter(({ entry }) => entry.scored);
+  const scores: number[] = rows.map(() => 0);
+  relevanceScores(own.map(({ entry }) => ({ counts: entry.counts, words: entry.words }))).forEach((score, i) => {
+    scores[own[i].k] = score;
   });
-  return { question, vague: false, sections: routed };
+
+  // A group row (no paragraphs, with subsections under it) takes its strongest child's score, the union of the
+  // children's mentions and that child's evidence. A child comes after its group, so the last row is settled first.
+  const childrenOf = new Map<string, number[]>();
+  rows.forEach((row, k) => {
+    if (row.parentId) childrenOf.set(row.parentId, [...(childrenOf.get(row.parentId) ?? []), k]);
+  });
+  for (let k = rows.length - 1; k >= 0; k--) {
+    const children = childrenOf.get(rows[k].id);
+    if (routed[k].scored || !children || children.length === 0) continue;
+    const union = new Map<string, number>();
+    let strongest = children[0];
+    for (const child of children) {
+      for (const hit of routed[child].section.hits) union.set(hit.term, (union.get(hit.term) ?? 0) + hit.count);
+      if (scores[child] > scores[strongest]) strongest = child;
+    }
+    scores[k] = scores[strongest];
+    const hits = [...union].map(([term, count]) => ({ term, count }));
+    hits.sort((a, b) => b.count - a.count || (a.term < b.term ? -1 : a.term > b.term ? 1 : 0));
+    const evidence = routed[strongest].section.evidence;
+    routed[k] = {
+      ...routed[k],
+      section: { tier: hits.length > 0 ? "faint" : "none", hits, ...(evidence !== undefined ? { evidence } : {}), paragraphs: [] },
+    };
+  }
+
+  // Rule 2: the tier is the row's grade among all the rows.
+  const tiers = gradeScores(scores);
+  const result: Record<string, RouteSection> = {};
+  rows.forEach((row, k) => {
+    result[row.id] = { ...routed[k].section, tier: tiers[k] };
+  });
+  return { question, vague: false, sections: result };
 }
 
 function routeResult(byQuestion: QuestionRoute[]): RouteResult {
@@ -546,10 +692,10 @@ export function routeByQuestionsCached(map: ReadingMap, sections: RouteBody, que
 export const GIST_QUESTION = "Just get the gist";
 
 const GIST_TIER: Readonly<Record<ReadingRole, RouteTier>> = {
-  interpretation: "read",
-  evidence: "read",
-  method: "skim",
-  setup: "skim",
+  interpretation: "strong",
+  evidence: "strong",
+  method: "faint",
+  setup: "faint",
   apparatus: "none",
   body: "none",
 };
