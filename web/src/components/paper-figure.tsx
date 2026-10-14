@@ -280,22 +280,32 @@ export function useResolvedFigure({
   useEffect(() => {
     if (settled.has(requestKey)) return;
     let cancelled = false;
-    const entry = acquire(requestKey, { itemId, url, doi, query, paperTitle, figureIndex, revision });
-    entry.promise.then(
-      (state) => {
-        if (!cancelled) setFigure(state);
-      },
-      (err: unknown) => {
-        if (!cancelled) setFigure(failureState(requestKey, err));
-      },
-    );
+    let joined = false;
+    // P10-45 (BACKLOG-92): the request is asked for after one microtask, and only if this effect is
+    // still wanted. A double effect (React StrictMode, in dev) or a key that changes in the same
+    // commit cleans this run up before then, and the figure used to be asked for, then aborted, then
+    // asked for again (`ERR_ABORTED` on `/api/figure` at every page open). Plates asking for the
+    // same figure still share one request: each joins in its own microtask, all before it answers.
+    void Promise.resolve().then(() => {
+      if (cancelled) return;
+      joined = true;
+      const entry = acquire(requestKey, { itemId, url, doi, query, paperTitle, figureIndex, revision });
+      entry.promise.then(
+        (state) => {
+          if (!cancelled) setFigure(state);
+        },
+        (err: unknown) => {
+          if (!cancelled) setFigure(failureState(requestKey, err));
+        },
+      );
+    });
 
     return () => {
       cancelled = true;
       // Leave the request when the figure is superseded/unmounted; the last
       // asker out cancels it, so an abandoned tab/scroll doesn't keep a
       // figure request running.
-      release(requestKey);
+      if (joined) release(requestKey);
     };
   }, [itemId, url, doi, query, paperTitle, figureIndex, revision, requestKey]);
 

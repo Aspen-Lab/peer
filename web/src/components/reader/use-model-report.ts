@@ -549,8 +549,11 @@ export function useModelReport({
       }
     };
 
+    // The page has what it asked for (the report, or Tier 0's "no model"): whatever the stream still
+    // sends is read and dropped. P10-45 (BACKLOG-92): returning at the report cancelled a body the
+    // server was still closing, which the browser logs as `ERR_ABORTED` on every report.
+    let settled = false;
     const load = async () => {
-      let settled = false;
       let modeSeen = false;
       let asked = false;
       await Promise.resolve();
@@ -563,6 +566,7 @@ export function useModelReport({
       try {
         for await (const event of streamPaperReport(requestBody, controller.signal)) {
           if (!active()) return;
+          if (settled) continue;
 
           if (event.type === "mode") {
             if (modeSeen) throw new Error("Report stream sent more than one mode event.");
@@ -570,7 +574,7 @@ export function useModelReport({
             if (event.aiMode === "tier0") {
               settled = true;
               settle(null, false);
-              return;
+              continue;
             }
             asked = true;
             // A model is asked: the page waits on it from here, stage event or not. (At Tier 0 no
@@ -595,7 +599,7 @@ export function useModelReport({
           if (event.type === "report") {
             settled = true;
             settle(event.report, asked);
-            return;
+            continue;
           }
           throw new Error(event.message);
         }
@@ -609,7 +613,8 @@ export function useModelReport({
     // line stands, and (`finishedKey`, below) the same key is not asked again for it.
     const deadline = setTimeout(() => {
       if (!active()) return;
-      fail();
+      // A stream that has delivered its report and does not close is let go, not reported as a failure.
+      if (!settled) fail();
       controller.abort();
     }, REPORT_DEADLINE_MS);
 
