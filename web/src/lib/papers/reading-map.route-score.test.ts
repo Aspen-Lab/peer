@@ -809,9 +809,14 @@ describe("routeByQuestions — the favoured role wins only under its intent (P10
     );
   });
 
-  it("a tied question (a mechanism word and a parameter word) is none: no role is weighed", () => {
-    expect(tiersOf(equalPaper(["setup", "evidence", "interpretation", "method"]), "quillwort lattice mechanism temperature")).toEqual(
-      tiersOf(equalPaper(["body", "body", "body", "body"]), "quillwort lattice mechanism temperature"),
+  // P10-32 re-aim (rule 1, §1c) of "a tied question (a mechanism word and a parameter word) is none: no role is weighed": the
+  // intent of a tie is still `none` (no one intent wins), but the route no longer weighs no role — it weighs both by half, so
+  // the same paper tiers differently from the all-body paper's (the cases are under "a tie between two intents weighs both by half").
+  it("a tied question (a mechanism word and a parameter word) names no one intent, but its roles are weighed by half", () => {
+    const tie = "quillwort lattice mechanism temperature";
+    expect(questionIntent(tie)).toBe("none");
+    expect(tiersOf(equalPaper(["setup", "evidence", "interpretation", "method"]), tie)).not.toEqual(
+      tiersOf(equalPaper(["body", "body", "body", "body"]), tie),
     );
   });
 

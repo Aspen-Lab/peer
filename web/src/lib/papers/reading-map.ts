@@ -808,7 +808,7 @@ function routeSection(paragraphs: readonly string[], terms: readonly string[]): 
 // rule, not the case ("举一反三，要利用文章的结构 … 问机理，优先在 discussion 里面找，其次是 result"): the question's intent says
 // which roles of the paper hold its answer, and the route weighs those roles up. One table, `ROLE_WEIGHTS`, intent × role.
 
-/** What the question asks for. `none`: no cue, or two intents with as many cue words. */
+/** What the question asks for. `none`: no cue, or two intents with as many cue words (the route weighs a tie by half, `intentWeights`). */
 export type QuestionIntent = "parameter" | "mechanism" | "result" | "background" | "none";
 
 const ALL_ONE: Readonly<Record<ReadingRole, number>> = { setup: 1, method: 1, evidence: 1, interpretation: 1, apparatus: 1, body: 1 };
@@ -857,15 +857,13 @@ const INTENT_PHRASES: ReadonlyArray<{ intent: Exclude<QuestionIntent, "none">; p
 ];
 
 /**
- * P10-15 (rule 1): the intent of a question, read from its own words — not from `specificTerms`, which drops "why", "result",
- * "show", "how" (a route never matches the paper on them, but they say what the reader wants). Each of the question's distinct
- * words counts once for the intent whose list holds it (or a form of it), the phrases above count their weight; the intent
- * with more counts wins, a tie is `none`, and no cue at all is `none`.
+ * The cue counts of a question, by intent: each distinct word of the question counts once for the intent whose list holds it
+ * (or a form of it), a phrase counts its weight (`INTENT_PHRASES`).
  */
-export function questionIntent(question: string): QuestionIntent {
-  const words = [...new Set(question.toLowerCase().match(/\p{L}+/gu) ?? [])];
-  if (words.length === 0) return "none";
-  const padded = ` ${(question.toLowerCase().match(/\p{L}+/gu) ?? []).join(" ")} `;
+function intentCounts(question: string): Record<Exclude<QuestionIntent, "none">, number> {
+  const tokens = question.toLowerCase().match(/\p{L}+/gu) ?? [];
+  const words = [...new Set(tokens)];
+  const padded = ` ${tokens.join(" ")} `;
   const counts: Record<Exclude<QuestionIntent, "none">, number> = { parameter: 0, mechanism: 0, result: 0, background: 0 };
   for (const intent of Object.keys(INTENT_WORDS) as Array<keyof typeof INTENT_WORDS>) {
     for (const word of words) {
@@ -875,9 +873,49 @@ export function questionIntent(question: string): QuestionIntent {
   for (const { intent, phrase, weight } of INTENT_PHRASES) {
     if (padded.includes(` ${phrase} `)) counts[intent] += weight;
   }
+  return counts;
+}
+
+/**
+ * P10-15 (rule 1): the intent of a question, read from its own words — not from `specificTerms`, which drops "why", "result",
+ * "show", "how" (a route never matches the paper on them, but they say what the reader wants). The intent with more counts
+ * (`intentCounts`) wins; no cue at all is `none`, and so is a tie — which the route does not read as no intent: see `tiedIntents`.
+ */
+export function questionIntent(question: string): QuestionIntent {
+  const counts = intentCounts(question);
   const ranked = (Object.entries(counts) as Array<[Exclude<QuestionIntent, "none">, number]>).sort((a, b) => b[1] - a[1]);
   if (ranked[0][1] <= 0 || ranked[0][1] === ranked[1][1]) return "none";
   return ranked[0][0];
+}
+
+/**
+ * P10-32 (rule 1, BACKLOG-83): the intents a question ties between — those with as many counts as the most, when that is at
+ * least one and two or more intents have it; else none. "Why does the temperature …" has one mechanism word and one parameter
+ * word: the reader asked for both, and the route weighs both by half (`intentWeights`) where it used to weigh neither.
+ */
+export function tiedIntents(question: string): Array<Exclude<QuestionIntent, "none">> {
+  const counts = intentCounts(question);
+  const most = Math.max(...Object.values(counts));
+  if (!(most > 0)) return [];
+  const tied = (Object.keys(counts) as Array<Exclude<QuestionIntent, "none">>).filter((intent) => counts[intent] === most);
+  return tied.length > 1 ? tied : [];
+}
+
+/**
+ * P10-32 (rule 1): what a leaf row's score is multiplied by, by role, for a question. One clear intent: its `ROLE_WEIGHTS`
+ * row, whole. A tie between intents: the product of each tied intent's row at the square root of its weight — a half boost
+ * (in the log of the score) for each favoured role, never none. No cue: every weight 1.
+ */
+export function intentWeights(question: string): Readonly<Record<ReadingRole, number>> {
+  const intent = questionIntent(question);
+  if (intent !== "none") return ROLE_WEIGHTS[intent];
+  const tied = tiedIntents(question);
+  if (tied.length === 0) return ROLE_WEIGHTS.none;
+  const weights: Record<ReadingRole, number> = { ...ALL_ONE };
+  for (const each of tied) {
+    for (const role of Object.keys(weights) as ReadingRole[]) weights[role] *= Math.sqrt(ROLE_WEIGHTS[each][role]);
+  }
+  return weights;
 }
 
 /** The roles an intent favours: the roles with its table row's largest weight, when that is more than 1 (none for `none`). */
@@ -945,12 +983,12 @@ function routeQuestion(map: ReadingMap, sections: RouteBody, question: string): 
   });
 
   // P10-15 (rule 1; was P10-06c's parameter case): the question's intent weighs the map's roles.
+  // P10-32 (rule 1): a tie between two intents weighs both by half; one clear intent as before.
   const intent = questionIntent(question);
-  if (intent !== "none") {
-    rows.forEach((row, k) => {
-      if (routed[k].scored) scores[k] *= ROLE_WEIGHTS[intent][row.role];
-    });
-  }
+  const weights = intentWeights(question);
+  rows.forEach((row, k) => {
+    if (routed[k].scored) scores[k] *= weights[row.role];
+  });
 
   // A group row (no paragraphs, with subsections under it) takes its strongest child's score, the union of the
   // children's mentions and that child's evidence. A child comes after its group, so the last row is settled first.
