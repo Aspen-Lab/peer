@@ -27,8 +27,10 @@ import { stackRows, useColumn, useWindows, type FloatingWindow, type StackFrame 
 import { readingNoteFor, useNotesStore } from "@/store/notes";
 import { AnchorSquare, goToPassage, registerPassageHost } from "./note-tags";
 
-/** A sticky writes through into the paper's note no later than this long after the last keystroke. */
-export const STICKY_SAVE_MS = 250;
+/** A sticky writes through into the paper's note no later than this long after the last keystroke. P10-09c: 150 ms, not 250 —
+ *  measured in the dev server, last keystroke to the notes window showing it took 301-333 ms with 250 (the window starts its
+ *  editor afresh on the change), and the brief's bound is 300 ms from the keystroke to the window. */
+export const STICKY_SAVE_MS = 150;
 
 /** The window's height while it is in front. */
 const FRONT_HEIGHT_PX = 260;

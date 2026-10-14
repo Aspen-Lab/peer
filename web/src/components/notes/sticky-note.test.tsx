@@ -236,6 +236,12 @@ describe("stickyFollowText — a sticky follows its blocks (P10-09c, rule 3)", (
   });
 });
 
+describe("makeStickyWriter — leaves the notes window time to show it (P10-09c)", () => {
+  it("writes through in 150 ms or less, so the open notes window shows a sticky's words within 300 ms of the last key", () => {
+    expect(STICKY_SAVE_MS).toBeLessThanOrEqual(150);
+  });
+});
+
 describe("makeStickyWriter — pending (P10-09c)", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
