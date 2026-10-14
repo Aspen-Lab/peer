@@ -1,12 +1,13 @@
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { FullTextResult } from "@/lib/papers/full-text";
 import type { ExtractedDocument } from "@/lib/papers/html-text";
 import { buildReading } from "@/lib/papers/reading";
 import { inlineMath } from "@/lib/text/math";
 import type { Paper } from "@/types";
+import { goToPassage } from "@/components/notes/note-tags";
 import { PaperBody, coveringSegments, paragraphAnchor, readSelection, type CoveringSegment, type SelectionLike } from "./paper-body";
 
 // P10-09f (review 7.1c; walk X-B3, B11; rules 2 and 4): the highlighter. The words a sticky note was taken on stay
@@ -313,5 +314,104 @@ describe("an overlapping note's mark covers all its words (P10-43)", () => {
     const marked = paragraphHtml(render({ [paragraphAnchor(0, 1)]: [spot("a", 1, P1, 0, 16), spot("b", 2, P1, 6, 22)] }), 1);
     expect(marked.replace(/<sup[^>]*>.*?<\/sup>/g, "").replace(/<[^>]+>/g, "")).toBe(bare);
     expect(marked.match(/Open note \d/g)).toEqual(["Open note 1", "Open note 2"]);
+  });
+});
+
+// ── P10-51 (round 6's reader 2): a later note that starts inside an earlier note's mark and crosses its tag ──────────
+// Round 6's real drag stored note 1 at 100–154 and note 2 at 133–175 in one paragraph. The page drew note 2 over its
+// words after note 1's tag only, and the dump (which listed `mark[data-note]` alone) showed no part of note 2 over the 21
+// shared characters. The paragraph here is invented, with a quote that matches the text at those offsets.
+describe("a later note that starts inside an earlier mark and crosses its tag has its shared words as its own (P10-51)", () => {
+  const LEAD = "Layered oxides are an old subject; this first sentence only carries the offsets, so read on now: an ";
+  const PAR = `${LEAD}important class of high-capacity intercalation cathode materials for Li-ion cells follows.`;
+  const textOf = (segments: CoveringSegment[]): string =>
+    segments.map((one) => (one.kind === "text" ? PAR.slice(one.from, one.to) : one.kind === "mark" ? textOf(one.inner) : "")).join("");
+  const parts = (segments: CoveringSegment[], n: number): string[] =>
+    segments.flatMap((one) =>
+      one.kind === "mark" ? [...(one.spot.n === n && one.part ? [textOf(one.inner)] : []), ...parts(one.inner, n)] : [],
+    );
+  const marksOf = (segments: CoveringSegment[], n: number): string[] =>
+    segments.flatMap((one) =>
+      one.kind === "mark" ? [...(one.spot.n === n && !one.part ? [textOf(one.inner)] : []), ...marksOf(one.inner, n)] : [],
+    );
+  const html = (start1: number, start2: number) => {
+    const doc2: ExtractedDocument = { ...doc, sections: [{ ...doc.sections[0], text: PAR }] };
+    const reading2 = buildReading(paper, { ...fullText, doc: doc2 }, new Date("2026-10-05T00:00:00.000Z"));
+    const notes = { [paragraphAnchor(0, 0)]: [spot("a", 1, PAR, start1, 154), spot("b", 2, PAR, start2, 175)] };
+    const out = renderToStaticMarkup(createElement(PaperBody, { reading: reading2, noteAnchors: notes }));
+    return out.slice(out.indexOf("<p>"), out.indexOf("</p>") + 4);
+  };
+
+  it("has the invented paragraph's offsets right (note 1 at 100–154, note 2 at 133–175)", () => {
+    expect(PAR.slice(100, 154)).toBe("important class of high-capacity intercalation cathode");
+    expect(PAR.slice(133, 175)).toBe("intercalation cathode materials for Li-ion");
+    expect(PAR.slice(133, 154)).toBe("intercalation cathode");
+  });
+
+  it("segments: note 2's 21 shared words are a nested part inside note 1's mark, its rest is its own mark after note 1's tag", () => {
+    const segments = coveringSegments(PAR, [spot("a", 1, PAR, 100, 154), spot("b", 2, PAR, 133, 175)]);
+    expect(parts(segments, 2)).toEqual(["intercalation cathode"]);
+    expect(marksOf(segments, 1)).toEqual(["important class of high-capacity intercalation cathode"]);
+    expect(marksOf(segments, 2)).toEqual([" materials for Li-ion"]);
+    expect(textOf(segments)).toBe(PAR);
+    // Reading order: text, note 1's mark (holding note 2's part; its tag follows it), note 2's mark (its tag follows it), text.
+    expect(segments.map((one) => (one.kind === "tag" ? `T${one.spot.n}` : one.kind === "mark" ? `M${one.spot.n}` : "x"))).toEqual(["x", "M1", "M2", "x"]);
+  });
+
+  it("DOM: the part sits inside mark 1 in the nested shade, tag 1 follows mark 1, mark 2 and its tag follow after it", () => {
+    const out = html(100, 133);
+    expect(out).toMatch(
+      new RegExp(
+        `<mark data-note="1"[^>]*>important class of high-capacity <mark data-note-part="2"[^>]*>intercalation cathode</mark></mark>${TAG(1)}<mark data-note="2"[^>]*> materials for Li-ion</mark>${TAG(2)} cells follows\\.</p>`,
+      ),
+    );
+    expect(/<mark data-note-part="2"[^>]*>/.exec(out)![0]).toContain("bg-[color:var(--color-note-nested)]");
+    expect(out.match(/<mark\b/g)).toHaveLength(3);
+  });
+
+  // The later note starts exactly where the earlier mark starts (and runs past its tag): the longer range is the outer mark
+  // (`passageSegments`, P10-20), so the later note's words are all its own outer mark and the earlier note's words stand
+  // nested inside it — every word of both notes is drawn, no part is needed, and each tag follows its own note's last word.
+  it("starting exactly at the earlier mark's start: both notes' words are all drawn, the longer outside, each tag after its own last word", () => {
+    const segments = coveringSegments(PAR, [spot("a", 1, PAR, 100, 154), spot("b", 2, PAR, 100, 175)]);
+    expect(marksOf(segments, 2)).toEqual(["important class of high-capacity intercalation cathode materials for Li-ion"]);
+    expect(marksOf(segments, 1)).toEqual(["important class of high-capacity intercalation cathode"]);
+    expect(textOf(segments)).toBe(PAR);
+    const out = html(100, 100);
+    expect(out).toMatch(
+      new RegExp(
+        `<mark data-note="2"[^>]*><mark data-note="1"[^>]*>important class of high-capacity intercalation cathode</mark>${TAG(1)} materials for Li-ion</mark>${TAG(2)} cells follows\\.</p>`,
+      ),
+    );
+    expect(/<mark data-note="2"[^>]*>/.exec(out)![0]).toContain("bg-[color:var(--color-note-mark)]");
+    expect(/<mark data-note="1"[^>]*>/.exec(out)![0]).toContain("bg-[color:var(--color-note-nested)]");
+    expect(out.match(/<mark\b/g)).toHaveLength(2);
+  });
+
+  // Rule 2: the flash lands on the shared words too. The paragraph's real markup (what `PaperBody` draws) is read into a
+  // small stand-in whose `querySelectorAll` answers the attribute selectors `goToPassage` asks, in reading order.
+  it("flash: opening note 2 outlines its part (the shared words) and its own mark, and not note 1's", () => {
+    vi.useFakeTimers();
+    try {
+      const out = html(100, 133);
+      const marks = [...out.matchAll(/<mark (data-note(?:-part)?)="(\d+)"/g)].map((m) => ({ attr: m[1], n: m[2], classes: new Set<string>() }));
+      expect(marks.map((m) => `${m.attr}=${m.n}`)).toEqual(["data-note=1", "data-note-part=2", "data-note=2"]);
+      const marked = marks.map((m) => ({ ...m, classList: { add: (...c: string[]) => c.forEach((x) => m.classes.add(x)), remove: (...c: string[]) => c.forEach((x) => m.classes.delete(x)) } }));
+      const paragraph = {
+        scrollIntoView: () => undefined,
+        classList: { add: () => undefined, remove: () => undefined },
+        querySelectorAll: (selector: string) => {
+          const wanted = [...selector.matchAll(/mark\[(data-note(?:-part)?)="(\d+)"\]/g)].map((m) => ({ attr: m[1], n: m[2] }));
+          return marked.filter((m) => wanted.some((w) => w.attr === m.attr && w.n === m.n));
+        },
+      };
+      goToPassage({ paperId: "p1", paragraphId: "paper-section-0-p0", quote: PAR.slice(133, 175), n: 2, start: 133, end: 175 }, {
+        doc: { getElementById: () => paragraph } as unknown as Document,
+        navigate: () => undefined,
+      });
+      expect(marked.map((m) => `${m.attr}=${m.n}:${m.classes.has("outline")}`)).toEqual(["data-note=1:false", "data-note-part=2:true", "data-note=2:true"]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
