@@ -176,7 +176,7 @@ describe("readingToMarkdown with the reader's questions (P2-05)", () => {
 
     const md = readingToMarkdown(normalPaper, reading, report, sentences, QUESTIONS);
 
-    expect(page).toContain(FOR_YOUR_QUESTIONS.heading);
+    expect(page).toContain(FOR_YOUR_QUESTIONS.control); // P10-03: the page shows the collapsed control; the export keeps the heading
     expect(md).toContain(`## ${FOR_YOUR_QUESTIONS.heading}`);
     for (const entry of ANSWERS) {
       expect(page).toContain(entry.question);
