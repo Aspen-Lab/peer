@@ -1129,3 +1129,62 @@ describe("buildReading — the reading map and section ids (P1-04)", () => {
   });
 });
 
+
+// P10-40 (BACKLOG-38): an abstract sentence is one line. `splitSentences` breaks only at `. ! ?` and keeps what lies
+// between, so a source's soft line break inside a sentence reached `reading.abstract.sentences` as a newline.
+// A soft break is a space; a paragraph break in the abstract is still a boundary.
+describe("buildReading — an abstract sentence is one line (P10-40, BACKLOG-38)", () => {
+  const withAbstract = (summaryIntro: string, summaryResultDiscussion = ""): Paper => ({
+    ...normalPaper,
+    summaryIntro,
+    summaryResultDiscussion,
+  });
+
+  it("a soft line break inside a sentence becomes a space", () => {
+    const reading = buildReading(
+      withAbstract("We measured soil water\nunder seaweed mulch across\n12 plots. Moisture rose by 14%."),
+      null,
+      NOW,
+    );
+    expect(reading.abstract.sentences).toEqual([
+      "We measured soil water under seaweed mulch across 12 plots.",
+      "Moisture rose by 14%.",
+    ]);
+    expect(reading.abstract.sentences.some((sentence) => /[\r\n]/.test(sentence))).toBe(false);
+  });
+
+  it("carriage returns, tabs and runs of spaces collapse too, in the intro and in the discussion", () => {
+    const reading = buildReading(
+      withAbstract("Plots were\r\nwatered   weekly. The control\twas bare.", "Yield\ndid not\n change. Soil stayed moist."),
+      null,
+      NOW,
+    );
+    expect(reading.abstract.sentences).toEqual([
+      "Plots were watered weekly.",
+      "The control was bare.",
+      "Yield did not change.",
+      "Soil stayed moist.",
+    ]);
+    expect(reading.abstract.introCount).toBe(2);
+  });
+
+  it("a real paragraph break stays a sentence boundary, even where the first paragraph has no full stop", () => {
+    const reading = buildReading(
+      withAbstract("Background on mulch and moisture\n\nWe tested seaweed mulch\nin twelve plots. It held water."),
+      null,
+      NOW,
+    );
+    expect(reading.abstract.sentences).toEqual([
+      "Background on mulch and moisture",
+      "We tested seaweed mulch in twelve plots.",
+      "It held water.",
+    ]);
+    expect(reading.abstract.introCount).toBe(3);
+  });
+
+  it("the sentence count in provenance is the count shown", () => {
+    const reading = buildReading(withAbstract("One sentence\nsplit over lines. A second one."), null, NOW);
+    expect(reading.provenance.abstractSentences).toBe(reading.abstract.sentences.length);
+    expect(reading.abstract.sentences).toEqual(["One sentence split over lines.", "A second one."]);
+  });
+});

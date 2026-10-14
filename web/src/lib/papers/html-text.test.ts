@@ -581,3 +581,48 @@ describe("liftLatexmlMath", () => {
     expect(out.equations).toBeUndefined();
   });
 });
+
+// P10-40 (BACKLOG-35): `extractPmc` matched `<section …>…</section>` non-greedily, so the first inner closing tag
+// ended the outer match: a section's first nested subsection was folded into its parent's text and never had a
+// section of its own. The walk is by depth now. Two levels of nesting, written the way PMC writes them.
+describe("extractPmc — a nested section is its own (P10-40, BACKLOG-35)", () => {
+  const PMC_URL = "https://pmc.ncbi.nlm.nih.gov/articles/PMC1/";
+  const html = `
+    <section id="sec1"><h2>Introduction</h2><p>Intro opening words.</p>
+      <section id="sec1.1"><h3>Background</h3><p>Background words.</p>
+        <section id="sec1.1.1"><h4>Prior work</h4><p>Prior work words.</p></section>
+        <p>Background closing words.</p>
+      </section>
+      <section id="sec1.2"><h3>Aim</h3><p>Aim words.</p></section>
+      <p>Intro closing words.</p>
+    </section>
+    <section id="sec2"><h2>Results</h2><p>Findings words.</p></section>`;
+
+  it("the first nested subsection is a section of its own, at both depths", () => {
+    const out = chooseHtmlExtractor(PMC_URL)(html);
+    expect(out.sections.map((s) => s.heading)).toEqual(["Introduction", "Background", "Prior work", "Aim", "Results"]);
+    expect(out.sections.map((s) => s.id)).toEqual(["s0", "s1", "s2", "s3", "s4"]);
+  });
+
+  it("a parent keeps its own words, not its subsections' — before and after them", () => {
+    const text = (heading: string) => chooseHtmlExtractor(PMC_URL)(html).sections.find((s) => s.heading === heading)?.text ?? "";
+    expect(text("Introduction")).toContain("Intro opening words.");
+    expect(text("Introduction")).toContain("Intro closing words.");
+    expect(text("Introduction")).not.toMatch(/Background|Prior work|Aim words/);
+    expect(text("Background")).toContain("Background words.");
+    expect(text("Background")).toContain("Background closing words.");
+    expect(text("Background")).not.toMatch(/Prior work/);
+    expect(text("Prior work")).toBe("Prior work words.");
+    expect(text("Aim")).toBe("Aim words.");
+  });
+
+  it("a section that is not a body section (a box) stays in its parent's text", () => {
+    const boxed = `<section id="sec1"><h2>Methods</h2><p>Plots were watered.</p>
+      <section class="boxed-text"><p>Box: the watering schedule.</p></section>
+      <section id="sec1.1"><h3>Sampling</h3><p>Probes sat in each plot.</p></section></section>`;
+    const out = chooseHtmlExtractor(PMC_URL)(boxed);
+    expect(out.sections.map((s) => s.heading)).toEqual(["Methods", "Sampling"]);
+    expect(out.sections[0].text).toContain("Box: the watering schedule.");
+    expect(out.sections[1].text).toBe("Probes sat in each plot.");
+  });
+});
