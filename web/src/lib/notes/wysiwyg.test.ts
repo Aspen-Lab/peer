@@ -238,15 +238,18 @@ describe("rule 2: the DOM serialises back to the source, losslessly", () => {
     expect(down(before)).toBe("a __xalpha__ b");
   });
 
-  it("a mark the dialect cannot read back is left unwritten, never shown (underline beside a word in another mark; a star inside bold)", () => {
+  // P10-28 (re-aimed, §1c): this test pinned that a mark whose own delimiter sat in its words (a star in bold, `__` in
+  // underline, `=` in highlight) was left unwritten. The dialect now has an escape, so the mark is kept and the character
+  // is written `\*` `\_` `\=` and shown as itself; only the mark that the dialect still cannot read back is left off.
+  it("a mark the dialect cannot read back is left unwritten, never shown (underline beside a word in another mark); one that holds its own character keeps it, escaped", () => {
     const hidden = h("div", {}, "x ", h("u", {}, "a__b"), " y");
     const src = down(hidden);
     expect(plainInline(src)).toBe("x a__b y");
-    expect(src).toBe("x a__b y");
+    expect(src).toBe("x __a\\_\\_b__ y");
     expect(plainInline(down(h("div", {}, h("strong", {}, "b"), h("u", {}, "u"), h("strong", {}, "c"))))).toBe("buc");
-    expect(down(h("div", {}, h("strong", {}, "a*b")))).not.toContain("**a*b**");
+    expect(down(h("div", {}, h("strong", {}, "a*b")))).toBe("**a\\*b**");
     expect(plainInline(down(h("div", {}, h("strong", {}, "a*b"))))).toBe("a*b");
-    expect(down(h("div", {}, h("mark", {}, "x = 1")))).not.toContain("==x = 1==");
+    expect(down(h("div", {}, h("mark", {}, "x = 1")))).toBe("==x \\= 1==");
   });
 
   it("code is one literal run; a backtick or newline in it takes the code mark off", () => {
@@ -805,18 +808,21 @@ describe("P10-28 rule 4: a literal mark character inside its own mark is written
     expect(strayCount("==a\\=\\=b==")).toBe(0);
     // sourceOfPlain / plainOfSourceOffset treat the escape as one character of two source characters
     const tree = treeOf("**a\\*b**");
-    expect(sourceOfPlain(tree, 2, "end")).toBe(6);
+    expect(sourceOfPlain(tree, 2, "end")).toBe(5);
     expect(sourceOfPlain(tree, 1, "end")).toBe(3);
   });
 
   it("the serializer round-trips every escaped source, and splitting and joining keep the escape", () => {
-    for (const src of ["**a\\*b**", "__a\\_b__ c", "==x\\=y== z", "a \\*not italic\\* b", "**\\*** x", "_a\\*b_ and *c\\*d*"]) {
+    const sources = ["**a\\*b**", "__a\\_b__ c", "==x\\=y== z", "a \\*not italic\\* b", "**\\*** x", "_a\\*b_ and *c\\*d*"];
+    for (const src of sources) {
       expect(canonical(src), src).toBe(src);
-      expect(down(draw(src)), src).toBe(src);
       expect(plainOfSource(src), src).toBe(draw(src).textContent);
     }
-    const j = joinSources("**a\\*", "b**");
-    expect(plainOfSource(j.text)).toBe("a*b");
+    // through the DOM too, where the character sits inside its own mark (outside one, the surface cannot tell a typed
+    // star from an escaped one: it is read as typed, as the dialect always read it)
+    for (const src of ["**a\\*b**", "__a\\_b__ c", "==x\\=y== z", "**\\*** x"]) expect(down(draw(src)), src).toBe(src);
+    const j = joinSources("**a\\***", "**b**");
+    expect(j.text).toBe("**a\\*b**");
     expect(splitSource("**a\\*b**", 2)).toEqual({ head: "**a\\***", tail: "**b**" });
   });
 

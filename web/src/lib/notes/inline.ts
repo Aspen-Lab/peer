@@ -14,24 +14,44 @@
 //                       they nest — `**__both__**` — and every export reads them)
 //   [@key] / [@a; @b]   a citation (Pandoc)
 //   [[Title]]           a link to another note (Obsidian)
+//   \* \_ \=            a literal star, underscore or equals sign (P10-28): the one way to write a mark's own
+//                       character inside that mark (`**a\*b**` is bold "a*b"); Markdown reads it the same way
 
 export type Inline =
-  | { kind: "text" | "strong" | "em" | "underline" | "mark" | "code"; text: string; from: number; inner: number; to: number }
+  | {
+      kind: "text" | "strong" | "em" | "underline" | "mark" | "code";
+      text: string;
+      from: number;
+      inner: number;
+      to: number;
+      /** P10-28: a text token that is an escape (`\*`): `text` is the one character, `[from, to)` the two it is written with. */
+      esc?: true;
+    }
   | { kind: "link"; text: string; href: string; from: number; inner: number; to: number }
   | { kind: "url"; text: string; href: string; from: number; inner: number; to: number }
   | { kind: "cite"; keys: string[]; from: number; to: number }
   | { kind: "wiki"; target: string; from: number; to: number };
 
 const CODE = /`([^`\n]+)`/y;
-const STRONG = /\*\*(?=\S)([^*\n]*?\S)\*\*/y;
+// P10-28: a backslash before `*`, `_` or `=` writes that character as itself (the dialect's only escape). Inside a mark's
+// content an escape counts as the one character it stands for, so a mark can hold its own delimiter (`**a\*b**`); a
+// backslash that is not the start of one is an ordinary character, as it always was.
+const ESC = String.raw`\\[*_=]`;
+const NOT_ESC = String.raw`(?!\\[*_=])`;
+/** One unit of a mark's content: an escape, or a character of class `cls` that does not begin one. */
+const unit = (cls: string) => `(?:${ESC}|${NOT_ESC}${cls})`;
+const STRONG = new RegExp(String.raw`\*\*(?=\S)(${unit(String.raw`[^*\n]`)}*?${unit(String.raw`\S`)})\*\*`, "y");
 // P10-16: `***x***` is bold with italic inside it (bold and italic stacked on one word), not a star, bold, a star.
-const STRONG_EM = /\*\*\*(?=[^\s*])([^*\n]*?[^\s*])\*\*\*/y;
-const EM_STAR = /\*(?=[^\s*])([^*\n]*?[^\s*])\*/y;
-const EM_UNDER = /(?<![\p{L}\p{N}_])_(?=\S)([^_\n]*?\S)_(?![\p{L}\p{N}_])/uy;
+const STRONG_EM = new RegExp(String.raw`\*\*\*(?=[^\s*])(${unit(String.raw`[^*\n]`)}*?${unit(String.raw`[^\s*]`)})\*\*\*`, "y");
+const EM_STAR = new RegExp(String.raw`\*(?=[^\s*])(${unit(String.raw`[^*\n]`)}*?${unit(String.raw`[^\s*]`)})\*`, "y");
+const EM_UNDER = new RegExp(String.raw`(?<![\p{L}\p{N}_])_(?=\S)(${unit(String.raw`[^_\n]`)}*?${unit(String.raw`\S`)})_(?![\p{L}\p{N}_])`, "uy");
 // P10-16: a single `_` may sit inside the content (underline over italic written `_x_` inside bold: `__**_x_**__`),
 // never two together and never at its edges.
-const UNDERLINE = /(?<![\p{L}\p{N}_])__(?=[^\s_])((?:[^_\n]|_(?!_))*?[^\s_])__(?![\p{L}\p{N}_])/uy;
-const MARK = /==(?=[^\s=])([^=\n]*?[^\s=])==/y;
+const UNDERLINE = new RegExp(
+  String.raw`(?<![\p{L}\p{N}_])__(?=[^\s_])(${unit(String.raw`(?:[^_\n]|_(?!_))`)}*?${unit(String.raw`[^\s_]`)})__(?![\p{L}\p{N}_])`,
+  "uy",
+);
+const MARK = new RegExp(String.raw`==(?=[^\s=])(${unit(String.raw`[^=\n]`)}*?${unit(String.raw`[^\s=]`)})==`, "y");
 const CITE = /\[@([^\]\n]+)\]/y;
 const WIKI = /\[\[([^\]\n]+)\]\]/y;
 const LINK = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/y;
@@ -52,6 +72,9 @@ function at(re: RegExp, src: string, i: number): RegExpExecArray | null {
 function tokenAt(src: string, i: number): Inline | null {
   const c = src[i];
   let m: RegExpExecArray | null;
+  if (c === "\\" && (src[i + 1] === "*" || src[i + 1] === "_" || src[i + 1] === "=")) {
+    return { kind: "text", text: src[i + 1], from: i, inner: i, to: i + 2, esc: true };
+  }
   if (c === "`" && (m = at(CODE, src, i))) {
     return { kind: "code", text: m[1], from: i, inner: i + 1, to: i + m[0].length };
   }

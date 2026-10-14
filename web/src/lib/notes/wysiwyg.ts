@@ -15,9 +15,11 @@
 // against a small stand-in (`test-support/fake-dom.ts`); the browser's `Selection` is touched only in the two
 // functions at the end.
 //
-// The dialect (inline.ts) has no escape: a delimiter typed or pasted as characters is read as a mark on the next
-// render, as stored text is. And a mark is only written where the dialect can read it back — `serializeTree` checks
-// that every mark it writes survives a parse, and drops (never shows) the ones that would not.
+// A delimiter typed or pasted as characters is read as a mark on the next render, as stored text is — except inside a
+// mark of its own kind (P10-28): a `*` inside bold, an `_` inside underline or italic, an `=` inside highlight is the
+// character, written `\*` `\_` `\=` (the dialect's one escape, inline.ts) and drawn as the character. And a mark is
+// only written where the dialect can read it back — `serializeTree` checks that every mark it writes survives a parse,
+// and drops (never shows) the ones that would not.
 
 import { MARKERS, isWrapping, markEdit, parseInline, type MarkName } from "./inline";
 
@@ -32,6 +34,9 @@ export interface WText {
   /** Where this text sits in the block's source: `[from, to)`. */
   from: number;
   to: number;
+  /** P10-28: the character is written escaped (`\*`): one visible character, two in the source, and it stays escaped
+   *  wherever the tree is written again. */
+  esc?: true;
 }
 export interface WMark {
   kind: "mark";
@@ -63,7 +68,7 @@ export function treeOf(src: string, label: Label = identity, base = 0): WNode[] 
   for (const t of parseInline(src)) {
     const from = base + t.from;
     const to = base + t.to;
-    if (t.kind === "text") out.push({ kind: "text", text: t.text, from, to });
+    if (t.kind === "text") out.push({ kind: "text", text: t.text, from, to, ...(t.esc ? { esc: true as const } : {}) });
     else if (isWrapping(t)) {
       const inner = base + t.inner;
       out.push({
@@ -147,6 +152,8 @@ export function sourceOfPlain(tree: readonly WNode[], p: number, side: "start" |
   if (!hit) return 0;
   const off = Math.max(0, Math.min(p - hit.p, hit.q - hit.p));
   if (hit.node.kind === "chip") return off * 2 < hit.q - hit.p ? hit.node.from : hit.node.to;
+  // an escaped character is one visible character and two written: its edges, never between the two
+  if (hit.node.esc) return off === 0 ? hit.node.from : hit.node.to;
   return hit.node.from + off;
 }
 
@@ -161,6 +168,7 @@ export function plainOfSourceOffset(tree: readonly WNode[], s: number): number {
     }
     if (s <= l.node.to) {
       if (l.node.kind === "chip") return (s - l.node.from) * 2 < l.node.to - l.node.from ? l.p : l.q;
+      if (l.node.esc) return s <= l.node.from ? l.p : l.q;
       return l.p + (s - l.node.from);
     }
     prev = l;
@@ -215,7 +223,7 @@ function normalize(nodes: readonly WNode[]): WNode[] {
     const last = joined[joined.length - 1];
     if (n.kind === "text") {
       if (n.text === "") continue;
-      if (last?.kind === "text") joined[joined.length - 1] = text(last.text + n.text);
+      if (last?.kind === "text" && !last.esc && !n.esc) joined[joined.length - 1] = text(last.text + n.text);
       else joined.push(n);
     } else if (n.kind === "mark" && last?.kind === "mark" && last.mark === n.mark && n.mark !== "code") {
       const both: WMark = { ...last, kids: [...last.kids, ...n.kids] };
@@ -261,12 +269,12 @@ function wrapLine(m: WMark, line: WNode[]): WNode[] {
   const body = line.slice();
   let lead = "";
   let trail = "";
-  if (body[0]?.kind === "text") {
+  if (body[0]?.kind === "text" && !body[0].esc) {
     lead = body[0].text.match(/^\s*/)?.[0] ?? "";
     body[0] = text(body[0].text.slice(lead.length));
   }
   const last = body[body.length - 1];
-  if (last?.kind === "text") {
+  if (last?.kind === "text" && !last.esc) {
     trail = last.text.match(/\s*$/)?.[0] ?? "";
     body[body.length - 1] = text(last.text.slice(0, last.text.length - trail.length));
   }
@@ -324,9 +332,53 @@ function containsMark(nodes: readonly WNode[], mark: MarkName): boolean {
   return nodes.some((n) => n.kind === "mark" && (n.mark === mark || containsMark(n.kids, mark)));
 }
 
+/** Which of a mark's own characters a text must write escaped here: `*` inside bold or star italic, `_` inside underline
+ *  or underscore italic, `=` inside highlight (P10-28). */
+interface Esc {
+  star: boolean;
+  under: boolean;
+  eq: boolean;
+}
+const NO_ESC: Esc = { star: false, under: false, eq: false };
+
+/** `s` as the dialect reads it with the escapes taken out: what is left of a delimiter that matches nothing. */
+const unescaped = (s: string): string => s.replace(/\\[*_=]/g, "");
+const hasBare = (s: string, delim: string): boolean => unescaped(s).includes(delim);
+
+/** A text written: each `*`, `_` or `=` that the surrounding marks cannot hold, that was escaped when it was read, or that
+ *  follows a backslash (`\*` typed as two characters must not read as an escape) is written with a backslash. `before` is
+ *  what is already written in this run, for that last case. */
+function writeText(n: WText, before: string, esc: Esc): Written {
+  let s = "";
+  const nodes: WNode[] = [];
+  let run = "";
+  let runAt = 0;
+  const flush = () => {
+    if (run !== "") nodes.push({ kind: "text", text: run, from: runAt, to: runAt + run.length });
+    run = "";
+  };
+  for (const c of n.text) {
+    const delim = c === "*" || c === "_" || c === "=";
+    const prev = s ? s[s.length - 1] : before[before.length - 1];
+    if (delim && (n.esc || prev === "\\" || (c === "*" && esc.star) || (c === "_" && esc.under) || (c === "=" && esc.eq))) {
+      flush();
+      nodes.push({ kind: "text", text: c, from: s.length, to: s.length + 2, esc: true });
+      s += "\\" + c;
+      runAt = s.length;
+    } else {
+      if (run === "") runAt = s.length;
+      run += c;
+      s += c;
+    }
+  }
+  flush();
+  return { s, nodes };
+}
+
 /** The source of a normalised list, with each node's place in it. `inStrong`: italic inside bold is written `_x_`
- *  (bold's content cannot hold a star). `dropped`: marks left unwritten (the repair, below). */
-function write(nodes: readonly WNode[], inStrong: boolean, dropped: ReadonlySet<WMark>): Written {
+ *  (bold's content cannot hold a star). `dropped`: marks left unwritten (the repair, below). `esc`: the characters a
+ *  text must write escaped here. */
+function write(nodes: readonly WNode[], inStrong: boolean, dropped: ReadonlySet<WMark>, esc: Esc = NO_ESC): Written {
   let s = "";
   const out: WNode[] = [];
   const push = (w: Written) => {
@@ -334,15 +386,15 @@ function write(nodes: readonly WNode[], inStrong: boolean, dropped: ReadonlySet<
     s += w.s;
   };
   for (const n of nodes) {
-    if (n.kind === "text") push({ s: n.text, nodes: [{ ...n, from: 0, to: n.text.length }] });
+    if (n.kind === "text") push(writeText(n, s, esc));
     else if (n.kind === "chip") push({ s: n.src, nodes: [{ ...n, from: 0, to: n.src.length }] });
-    else push(writeMark(n, inStrong, dropped));
+    else push(writeMark(n, inStrong, dropped, esc));
   }
   return { s, nodes: out };
 }
 
-function writeMark(m: WMark, inStrong: boolean, dropped: ReadonlySet<WMark>): Written {
-  const bare = (): Written => write(m.kids, inStrong, dropped);
+function writeMark(m: WMark, inStrong: boolean, dropped: ReadonlySet<WMark>, esc: Esc): Written {
+  const bare = (): Written => write(m.kids, inStrong, dropped, esc);
   if (dropped.has(m)) return bare();
   if (m.mark === "code") {
     const literal = m.kids[0]?.kind === "text" ? m.kids[0].text : "";
@@ -356,36 +408,44 @@ function writeMark(m: WMark, inStrong: boolean, dropped: ReadonlySet<WMark>): Wr
       nodes: [{ ...m, delim, kids: shifted(inner.nodes, marker.length), from: 0, inner: marker.length, close: marker.length + inner.s.length, to: s.length }],
     };
   };
-  // Each mark's content cannot hold its own delimiter character (`[^*\n]`, `[^_\n]`, `[^=\n]`): where it does, the
-  // mark is not written.
+  // Each mark's content cannot hold its own delimiter character (`[^*\n]`, `[^_\n]`, `[^=\n]`): a literal one in its
+  // words is written escaped (`\*`), and where something else of the mark's (a link's address) holds it, the mark is
+  // not written.
   if (m.mark === "strong") {
+    const inside: Esc = { ...esc, star: true };
     // bold whose only content is italic written with stars is `***x***` (the dialect reads it as bold with italic in it)
     const only = m.kids.length === 1 ? m.kids[0] : null;
     if (only?.kind === "mark" && only.mark === "em" && only.delim !== "_" && !dropped.has(only)) {
-      const words = write(only.kids, true, dropped);
-      if (!words.s.includes("*")) {
+      const words = write(only.kids, true, dropped, inside);
+      if (!hasBare(words.s, "*")) {
         const s = `***${words.s}***`;
         const em: WMark = { ...only, delim: "*", kids: shifted(words.nodes, 3), from: 2, inner: 3, close: 3 + words.s.length, to: 4 + words.s.length };
         return { s, nodes: [{ ...m, kids: [em], from: 0, inner: 2, close: 4 + words.s.length, to: s.length }] };
       }
     }
-    const inner = write(m.kids, true, dropped);
-    return inner.s.includes("*") ? bare() : wrap("**", inner);
+    const inner = write(m.kids, true, dropped, inside);
+    return hasBare(inner.s, "*") ? bare() : wrap("**", inner);
   }
   if (m.mark === "underline") {
-    // a single `_` may sit inside underline (italic written `_x_` inside bold), never two together or at its edges
-    const inner = write(m.kids, inStrong, dropped);
-    return inner.s.includes("__") || /^_|_$/.test(inner.s) ? bare() : wrap("__", inner);
+    // a single `_` may sit inside underline (italic written `_x_` inside bold), never two together or at its edges; a
+    // literal one in its words is escaped
+    const inner = write(m.kids, inStrong, dropped, { ...esc, under: true });
+    return hasBare(inner.s, "__") || /^_|(?<!\\)_$/.test(inner.s) ? bare() : wrap("__", inner);
   }
   if (m.mark === "mark") {
-    const inner = write(m.kids, inStrong, dropped);
-    return inner.s.includes("=") ? bare() : wrap("==", inner);
+    const inner = write(m.kids, inStrong, dropped, { ...esc, eq: true });
+    return hasBare(inner.s, "=") ? bare() : wrap("==", inner);
   }
   // italic: a star where the dialect can read it, else an underscore (inside bold, or around it)
   const starOk = !inStrong && !containsMark(m.kids, "strong");
   const choices: ("*" | "_")[] = starOk ? (m.delim === "_" ? ["_", "*"] : ["*", "_"]) : ["_"];
-  const inner = write(m.kids, inStrong, dropped);
-  for (const d of choices) if (!inner.s.includes(d)) return wrap(d, inner, d);
+  const plain = write(m.kids, inStrong, dropped, esc);
+  for (const d of choices) if (!hasBare(plain.s, d)) return wrap(d, plain, d);
+  // every spelling meets its own character in the words: the first is written with that character escaped
+  for (const d of choices) {
+    const inner = write(m.kids, inStrong, dropped, d === "*" ? { ...esc, star: true } : { ...esc, under: true });
+    if (!hasBare(inner.s, d)) return wrap(d, inner, d);
+  }
   return bare();
 }
 
