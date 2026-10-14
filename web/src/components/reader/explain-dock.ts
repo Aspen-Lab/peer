@@ -78,6 +78,12 @@ export const DOCK_BOTTOM_PX = 28;
  *  explain box is mounted outside it, in the window's own pixels, and reads the number to size the legend's strip. */
 export const PAGE_ZOOM_VAR = "--page-zoom";
 
+/**
+ * P10-31 (BACKLOG-86): a modal dialog over the page — the figure lightbox and the Keyboard-shortcuts sheet are the two — takes Escape before
+ * the explain window does. Both mark themselves with this (their own markup, not the window's: the window is a region, never modal).
+ */
+export const MODAL_OVER_PAGE = '[aria-modal="true"]';
+
 /** The page container the zoom is set on (`page.tsx`, `data-zoom-root`; `withZoomTransition` finds it the same way). */
 export const PAGE_ZOOM_ROOT = "[data-zoom-root]";
 

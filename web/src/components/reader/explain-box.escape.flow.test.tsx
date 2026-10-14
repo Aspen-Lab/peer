@@ -640,6 +640,16 @@ describe("Escape's order when something else is open (P10-31, BACKLOG-86)", () =
     release();
   });
 
+  it("the two modal dialogs over the page carry the mark the box looks for (read from their sources)", () => {
+    const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8").replace(/\s+/g, " ");
+
+    expect(read("src/components/reader/explain-dock.ts")).toContain(`export const MODAL_OVER_PAGE = '[aria-modal="true"]';`);
+    expect(read("src/components/reader/figure-lightbox.tsx")).toContain('aria-modal="true"');
+    expect(read("src/components/keyboard.tsx")).toMatch(/role="dialog" aria-modal="true" aria-label="Keyboard shortcuts"/);
+    // …and the explain window itself is never one (P9-20, BACKLOG-44), or it would shut its own Escape out.
+    expect(read("src/components/reader/explain-box.tsx")).not.toMatch(/aria-modal\s*=/);
+  });
+
   it("the box's Escape stands on the document in the bubble phase (read from the source): after every capture listener and every React handler", () => {
     const source = readFileSync(resolve(process.cwd(), "src/components/reader/explain-box.tsx"), "utf8").replace(/\s+/g, " ");
 

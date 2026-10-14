@@ -91,6 +91,7 @@ import {
   DOCK_TOP_PX,
   DOCK_WIDTH_PX,
   MASTHEAD_MIN_VIEWPORT_PX,
+  MODAL_OVER_PAGE,
   PAGE_ZOOM_ROOT,
   PAGE_ZOOM_VAR,
   dockInStack,
@@ -880,11 +881,17 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   // to, so Escape and Close do the same thing — the thread dropped, the answer kept for the passage staying kept, the width given
   // back; with no window open there is NO listener here at all — Escape is the page's and its other handlers' (the figure lightbox,
   // a term highlight, the help sheet, a field being edited, "back").
+  // P10-31 (BACKLOG-86): the window's Escape is the LAST of the page's, not the first. What is open takes it: a modal dialog over the page
+  // (the figure lightbox, the Keyboard-shortcuts sheet — `MODAL_OVER_PAGE`), then a control that is open (the question bar's suggestions, a
+  // note editor's menu, a sticky or the notes window with the focus in it — each a React handler that stops the key). So the listener
+  // stands on the document in the BUBBLE phase — after every capture listener and every React handler — and leaves a key that was
+  // handled (`defaultPrevented`) or a modal dialog that is open. With none of them open, Escape closes the window as P10-08 says.
   const isOpen = open !== null;
   useEffect(() => {
     if (!isOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (typeof document.querySelector === "function" && document.querySelector(MODAL_OVER_PAGE)) return;
       event.preventDefault();
       event.stopPropagation();
       setSession(null);
@@ -896,10 +903,10 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
       }
       if (!docked) setSession(null);
     };
-    document.addEventListener("keydown", onKeyDown, true);
+    document.addEventListener("keydown", onKeyDown);
     document.addEventListener("pointerdown", onPointerDown, true);
     return () => {
-      document.removeEventListener("keydown", onKeyDown, true);
+      document.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("pointerdown", onPointerDown, true);
     };
   }, [isOpen, docked]);
