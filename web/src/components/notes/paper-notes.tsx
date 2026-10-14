@@ -18,11 +18,11 @@ import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import type { Paper } from "@/types";
 import type { QuestionAnswers } from "@/lib/papers/report";
-import type { Note } from "@/lib/notes/types";
+import type { Citable, Note } from "@/lib/notes/types";
+import type { ReadingNoteExtras } from "@/lib/notes/templates";
 import { Band } from "@/components/ui/band";
 import { COMMAND } from "@/components/ui/command";
 import { citableFromPaper } from "@/lib/notes/cite";
-import { readingNote } from "@/lib/notes/templates";
 import { notesCiting, readingNoteFor, useNotesHydrated, useNotesStore } from "@/store/notes";
 
 /** P2-05: `questions` (the reader's settled ones, never the gist) and the
@@ -35,33 +35,13 @@ interface NotesInputs {
 }
 
 /**
- * P10-09b (B12/B14): the paper's one reading note — the store's own when it has one, else made now from the
- * paper's card, the opening of its abstract and (P2-05) the settled questions and the report's answers, and
- * added. Nothing navigates: the window opens it where the reader stands. (`ensureReadingNote` in the store, where
- * P10-09a puts it, is this with the store handed in; this local one is the same signature for the window until the
- * two are reconciled.)
- */
-export function ensureReadingNoteLocal({
-  own,
-  paper,
-  questions,
-  forYourQuestions,
-  add,
-}: NotesInputs & {
-  own: Note | undefined;
-  add: (note: Note) => void;
-}): Note {
-  if (own) return own;
-  const note = readingNote(citableFromPaper(paper), { questions, forYourQuestions });
-  add(note);
-  return note;
-}
-
-/**
  * Open the paper's own notes — made the first time, from its card, the
  * opening of its abstract and (P2-05) the settled questions and the report's
- * answers. The router and the store are handed in, so this is the whole of
+ * answers. The router and the store's `ensureReadingNote` are handed in, so this is the whole of
  * what pressing the button does and nothing in it needs a page to run.
+ *
+ * P10-09c: there is one `ensureReadingNote`, the store's (the template, made once, no navigation); the sticky notes' "Take notes"
+ * and this press both call it, so the window and the Saved page's own note are the same note.
  *
  * P10-09b (review 7.2): given `openWindow` (the reading page's edge tab), the note opens as the floating window
  * and nothing navigates; without it (a phone's row, the upload page's band) it goes to `/notes/<id>` as before.
@@ -71,22 +51,23 @@ export function openPaperNotes({
   paper,
   questions,
   forYourQuestions,
-  add,
+  ensure,
   push,
   openWindow,
 }: NotesInputs & {
   own: Pick<Note, "id"> | undefined;
-  add: (note: Note) => void;
+  ensure: (paper: Citable, extras?: ReadingNoteExtras) => string;
   push: (href: string) => void;
   openWindow?: () => void;
 }): void {
-  if (own && !openWindow) {
-    push(`/notes/${own.id}`);
+  if (own) {
+    if (openWindow) openWindow();
+    else push(`/notes/${own.id}`);
     return;
   }
-  const note = ensureReadingNoteLocal({ own: own as Note | undefined, paper, questions, forYourQuestions, add });
+  const id = ensure(citableFromPaper(paper), { questions, forYourQuestions });
   if (openWindow) openWindow();
-  else push(`/notes/${note.id}`);
+  else push(`/notes/${id}`);
 }
 
 /**
@@ -97,12 +78,12 @@ export function usePaperNotes({ paper, questions, forYourQuestions, openWindow }
   const router = useRouter();
   const ready = useNotesHydrated();
   const notes = useNotesStore((s) => s.notes);
-  const add = useNotesStore((s) => s.add);
+  const ensure = useNotesStore((s) => s.ensureReadingNote);
 
   const own = readingNoteFor(notes, paper.id);
   const citing = notesCiting(notes, paper.id).filter((n) => n.id !== own?.id);
   const open = () =>
-    openPaperNotes({ own, paper, questions, forYourQuestions, add, push: (href) => router.push(href as Route), openWindow });
+    openPaperNotes({ own, paper, questions, forYourQuestions, ensure, push: (href) => router.push(href as Route), openWindow });
   return { ready, own, citing, open };
 }
 
