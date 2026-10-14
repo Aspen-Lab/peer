@@ -9,15 +9,16 @@
 // (R11a): the bar is a textarea that grows with its text and takes 500 characters
 // (`MAX_QUESTION_CHARS`), so a long question is read whole; a pasted line break is folded to a space.
 //
-// The suggestions are a dropdown, open under the bar only while the field has focus and the
+// The suggestions are a dropdown, open under the bar only while the field has focus, there is a typed
+// character in it (P10-21, X-A6: the list "appears when typing"; an empty focused bar lists nothing) and the
 // question is not settled — the text differs from the last submitted question, or nothing was
 // submitted — and closed after Submit, on blur and on Escape. They are the reader's own
 // (P1-09, §1a.7, §1f.20): questions from earlier papers, the profile asked as questions
 // (`lib/reader/question-examples.ts`), the standing questions (P5-01), and, last and set apart,
 // "Just get the gist", a reading mode of its own. Picking one fills the bar and never submits.
 // P10-11 (BACKLOG-72): with text in the bar the list follows it — only the suggestions that contain a typed word
-// (two letters or more, case-folded), the gist always last, alone when nothing matches; an empty focused bar still
-// lists the examples.
+// (two letters or more, case-folded), the gist always last, alone when nothing matches; one letter is no word yet,
+// so the first character lists every suggestion.
 //
 // The question is kept in this browser (`store/reading-questions.ts`); the route that reads it
 // (`lib/papers/reading-map.ts`) runs on this page, and the settled one travels with the one
@@ -150,8 +151,8 @@ export function typedWords(text: string): string[] {
 /**
  * P10-11 (X-A5, BACKLOG-72): the dropdown follows the typed text. With a typed word in the bar, a suggestion stays
  * only if it contains one of them (case-folded, any of the words); a group left with nothing goes. With an empty
- * bar — or text with no word of two letters yet — nothing is filtered: a focused empty bar still offers the examples
- * (the owner's "输入问题的时候自动弹出"). "Just get the gist" is not a group; it is added after, always last.
+ * bar — or text with no word of two letters yet — nothing is filtered (P10-21: the dropdown itself opens only once a
+ * character is typed — the owner's "输入问题的时候自动弹出", `dropdownOpen`). "Just get the gist" is not a group; it is added after, always last.
  */
 export function filterGroups(groups: readonly ChipGroup[], text: string): ChipGroup[] {
   const words = typedWords(text);
@@ -225,9 +226,9 @@ export function leftTheBox(box: Node, next: EventTarget | null): boolean {
 
 /**
  * P10 (review 2.7): whether the dropdown is open. It opens under the bar while the field has
- * focus and the question is not settled — the text differs from the last submitted question, or
- * nothing was submitted — and is closed otherwise: after Submit, on blur, after Escape, and with
- * nothing to show.
+ * focus, a character has been typed (P10-21, X-A6: an empty or white-space bar lists nothing) and the
+ * question is not settled — the text differs from the last submitted question — and is closed
+ * otherwise: after Submit, on blur, after Escape, and with nothing to show.
  */
 export function dropdownOpen({
   focused,
@@ -243,7 +244,8 @@ export function dropdownOpen({
   closed?: boolean;
 }): boolean {
   if (!focused || closed || count <= 0) return false;
-  return !(text.trim() !== "" && !hasNewQuestions(text, settled));
+  if (text.trim() === "") return false;
+  return hasNewQuestions(text, settled);
 }
 
 /** Down and Up move the highlight through the `count` items and the bar itself (−1), and wrap. */
