@@ -23,6 +23,8 @@ const net = vi.hoisted(() => ({
   /** How long the JSON fallback is held, and what it answers. */
   jsonDelayMs: 0,
   script: null as unknown,
+  /** Requests the stub has begun and not ended. */
+  open: 0,
 }));
 
 vi.mock("@/lib/papers/report-stream", () => ({
@@ -45,7 +47,7 @@ vi.mock("@/components/profile-sync", () => ({
 import { useEffect, useState } from "react";
 import { hookRuntime } from "@/test-support/hook-runtime";
 import { defaultProfile, type Paper, type UserProfile } from "@/types";
-import { useModelReport, type ModelReportState } from "./use-model-report";
+import { buildReportKey, rememberReport, useModelReport, type ModelReportState } from "./use-model-report";
 
 function memoryStorage(): Storage {
   const items = new Map<string, string>();
@@ -102,15 +104,20 @@ function reportEvent(body: Record<string, unknown>) {
 /** A request that says its stages, is held `holdMs` in the last one, then reports. */
 function staged(holdMs: number, stages: Array<[string, string, number]>): Script {
   return async function* (body) {
-    yield { type: "mode", aiMode: "tier2" };
-    for (const [stage, label, pct] of stages) yield { type: "stage", stage, label, pct };
-    await sleep(holdMs);
+    net.open += 1;
+    try {
+      yield { type: "mode", aiMode: "tier2" };
+      for (const [stage, label, pct] of stages) yield { type: "stage", stage, label, pct };
+      await sleep(holdMs);
+    } finally {
+      net.open -= 1;
+    }
     yield reportEvent(body);
     yield { type: "stage", stage: "done", label: "Report ready", pct: 100 };
   };
 }
 
-type Seen = Pick<ModelReportState, "stage" | "report" | "failed">;
+type Seen = Pick<ModelReportState, "stage" | "report" | "failed"> & { open: number };
 
 /**
  * One page open, every render recorded. `acts` run one per round (a number is a wait, kept alive
@@ -127,7 +134,7 @@ async function drive(
   const opened = await hookRuntime.mount(
     () => {
       const state = useModelReport({ paper, profile: reader, questions: asked() });
-      history.push({ stage: state.stage, report: state.report, failed: state.failed });
+      history.push({ stage: state.stage, report: state.report, failed: state.failed, open: net.open });
       const [tick, setTick] = useState(0);
       useEffect(() => {
         if (Date.now() < clock.until) {
@@ -159,6 +166,7 @@ describe("useModelReport — the status line says what the page waits on, and cl
     net.streamCalls.length = 0;
     net.jsonCalls = 0;
     net.jsonDelayMs = 0;
+    net.open = 0;
   });
   afterEach(() => {
     vi.restoreAllMocks();
@@ -264,6 +272,30 @@ describe("useModelReport — the status line says what the page waits on, and cl
     expect(seen[0]?.label).toBe("Writing the report");
   });
 
+  it("answers shown while a request is still in flight: the question's answers are on the page and no stage is drawn", async () => {
+    // The answers for the reader's question are already kept (an earlier visit): they show at once,
+    // while the request that was in flight when the question settled is still running.
+    const key = buildReportKey(paper, "deep", "", profile.feedAiProvider, [QUESTION]);
+    rememberReport(key, {
+      noLlm: false,
+      depth: "deep",
+      skim: [],
+      whatItProposes: { summary: "Kept answers.", methods: [] },
+      resultsAndSignificance: { summary: "", keyResults: [] },
+      provenance: { basis: "model-full-text", droppedClaims: 0 },
+    } as never);
+    net.script = staged(250, [["writing", "Writing the report", 75]]);
+    let questions: readonly string[] = [];
+    const { opened, history } = await drive([30, () => (questions = [QUESTION]), 80], () => questions);
+    opened.unmount();
+
+    const answered = history.filter((seen) => seen.report !== null);
+    expect(answered.length).toBeGreaterThan(0);
+    // The earlier request was still running at some render that already showed the answers.
+    expect(answered.some((seen) => seen.open > 0)).toBe(true);
+    expect(answered.every((seen) => seen.stage === null)).toBe(true);
+  });
+
   it("a request that never answers times out: the stage clears and the model-could-not-finish line stands", async () => {
     net.script = async function* (_body: Record<string, unknown>, signal?: AbortSignal) {
       yield { type: "mode", aiMode: "tier2" };
@@ -290,6 +322,8 @@ describe("useModelReport — the status line says what the page waits on, and cl
 
   it("Tier 0: with no key no model is asked and no stage shows, at any render", async () => {
     net.script = async function* () {
+      // The server's word takes a while: the page has nothing to show for it meanwhile.
+      await sleep(40);
       yield { type: "mode", aiMode: "tier0" };
     };
     const { opened, history } = await drive([30], () => [], [], { ...defaultProfile });
