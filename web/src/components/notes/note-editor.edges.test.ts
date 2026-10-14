@@ -196,6 +196,6 @@ describe("rule 3 — undo covers a block split and a join (BACKLOG-85)", () => {
     expect(caseBody("Enter")).toMatch(/recordStructure\(/);
     expect(caseBody("Backspace")).toMatch(/recordStructure\(/);
     expect(caseBody("Delete")).toMatch(/recordStructure\(/);
-    expect(editor).toMatch(/stepHistory\(id, letter === "y" \|\| e\.shiftKey\)\s*\|\|\s*stepBlocks\(id, letter === "y" \|\| e\.shiftKey\)/);
+    expect(editor).toMatch(/if \(!stepHistory\(id, letter === "y" \|\| e\.shiftKey\)\) stepBlocks\(id, letter === "y" \|\| e\.shiftKey\);/);
   });
 });

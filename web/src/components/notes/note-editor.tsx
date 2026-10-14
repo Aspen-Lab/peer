@@ -529,6 +529,74 @@ export function recordShape(
   return { states, at: states.length - 1, kind: "shape", time: 0 };
 }
 
+// ── Undo across blocks (P10-28, BACKLOG-85) ───────────────────────────────
+
+/** A block split (Enter) or join (Backspace, Delete) changes two blocks at once, so no block's own steps hold it. It is
+ *  one step of its own: the run of blocks it replaced (`before`) and the run it left (`after`), whole — text, type,
+ *  anchor, checked, indent — and where the caret goes when it is undone and when it is done again. */
+export interface StructureStep {
+  before: Block[];
+  after: Block[];
+  caretBack: { id: string; plain: number };
+  caretForward: { id: string; plain: number };
+}
+export interface StructureLog {
+  past: StructureStep[];
+  future: StructureStep[];
+}
+export const newStructureLog = (): StructureLog => ({ past: [], future: [] });
+
+const STRUCTURE_LIMIT = 100;
+
+/** The log with one more step; what was ahead of it (undone steps) is dropped. */
+export function recordStructure(log: StructureLog, step: StructureStep): StructureLog {
+  const past = [...log.past, step];
+  return { past: past.length > STRUCTURE_LIMIT ? past.slice(past.length - STRUCTURE_LIMIT) : past, future: [] };
+}
+
+const sameBlock = (a: Block, b: Block): boolean =>
+  a.id === b.id &&
+  a.type === b.type &&
+  a.text === b.text &&
+  a.checked === b.checked &&
+  a.indent === b.indent &&
+  a.cite === b.cite &&
+  (a.anchor === b.anchor || JSON.stringify(a.anchor) === JSON.stringify(b.anchor));
+
+/** Where `run` stands in `blocks` as it was left (the same blocks, in order, next to each other); -1 when it does not. */
+function runAt(blocks: readonly Block[], run: readonly Block[]): number {
+  if (run.length === 0) return -1;
+  const at = blocks.findIndex((b) => b.id === run[0].id);
+  if (at === -1 || at + run.length > blocks.length) return -1;
+  return run.every((r, k) => sameBlock(blocks[at + k], r)) ? at : -1;
+}
+
+/** One step back (or forward) across blocks: the blocks as they were before the last split or join (as they were after,
+ *  going forward), the log moved on, and where the caret goes. Null when there is no step, when the blocks are no longer
+ *  as the step left them (they were typed in since — that typing is the block's own steps, to be undone first), or when
+ *  the caret is in none of them. */
+export function stepStructure(
+  log: StructureLog,
+  blocks: readonly Block[],
+  focusId: string,
+  forward: boolean,
+): { log: StructureLog; blocks: Block[]; caret: { id: string; plain: number } } | null {
+  const step = forward ? log.future[log.future.length - 1] : log.past[log.past.length - 1];
+  if (!step) return null;
+  const from = forward ? step.before : step.after;
+  const to = forward ? step.after : step.before;
+  if (!from.some((b) => b.id === focusId)) return null;
+  const at = runAt(blocks, from);
+  if (at === -1) return null;
+  return {
+    log: forward
+      ? { past: [...log.past, step], future: log.future.slice(0, -1) }
+      : { past: log.past.slice(0, -1), future: [...log.future, step] },
+    blocks: [...blocks.slice(0, at), ...to, ...blocks.slice(at + from.length)],
+    caret: forward ? step.caretForward : step.caretBack,
+  };
+}
+
 /** P10-23: the neighbouring textual block in `step`'s direction from index `from`, skipping the hidden block (the notes
  *  page hides a reading note's title block, P10-21): the caret is never sent into a block the reader cannot see. -1 when
  *  there is none (the editor then goes to the title field, or stays). */
@@ -612,6 +680,8 @@ export function NoteEditor({
   const lastCaret = useRef<{ id: string; plain: number } | null>(null);
   /** Each block's steps to undo: the source and the selection at each (the browser's undo cannot follow a surface that is drawn again). */
   const histories = useRef(new Map<string, History>());
+  /** The editor's splits and joins of blocks, to undo and redo (P10-28): a step no block's own history can hold. */
+  const structure = useRef(newStructureLog());
   /** A mark toggled with nothing selected: the marks the next typed text wears, at the plain offset it was asked at. */
   const pendingMarks = useRef<{ id: string; plain: number; marks: MarkName[] } | null>(null);
   const [menu, setMenuState] = useState<Menu | null>(null);
@@ -861,16 +931,28 @@ export function NoteEditor({
   };
 
   /** One step back (or forward) in a block's history: its source comes back and the words that were selected are selected. */
-  const stepHistory = (id: string, forward: boolean) => {
+  const stepHistory = (id: string, forward: boolean): boolean => {
     const b = docRef.current.blocks.find((x) => x.id === id);
     const h = histories.current.get(id);
-    if (!b || !h || h.states[h.at].text !== b.text) return;
+    if (!b || !h || h.states[h.at].text !== b.text) return false;
     const step = forward ? stepForward(h) : stepBack(h);
-    if (!step) return;
+    if (!step) return false;
     histories.current.set(id, step.history);
     pendingMarks.current = null;
     patch(id, { text: step.state.text, ...shapePatch((step.state as ShapedState).shape) });
     focusBlock(id, { plain: step.state.from, to: step.state.to });
+    return true;
+  };
+
+  /** P10-28: one step back (or forward) across blocks — the last split or join, when the block's own steps are spent. */
+  const stepBlocks = (id: string, forward: boolean): boolean => {
+    const out = stepStructure(structure.current, docRef.current.blocks, id, forward);
+    if (!out) return false;
+    structure.current = out.log;
+    pendingMarks.current = null;
+    setBlocks(out.blocks);
+    focusBlock(out.caret.id, { plain: out.caret.plain });
+    return true;
   };
 
   const replaceRange = (id: string, from: number, to: number, text: string, caretAfter?: number) => {
@@ -1296,7 +1378,8 @@ export function NoteEditor({
       const letter = e.key.toLowerCase();
       if (!area && mod && !e.altKey && (letter === "z" || letter === "y")) {
         e.preventDefault();
-        stepHistory(id, letter === "y" || e.shiftKey);
+        // the block's own steps first; when they are spent, the last split or join of blocks (P10-28)
+        if (!stepHistory(id, letter === "y" || e.shiftKey)) stepBlocks(id, letter === "y" || e.shiftKey);
         return;
       }
       // ⌘/Ctrl+B I E U and ⌘/Ctrl+Shift+H: the toolbar's marks (P10-09b); a code block takes none.
@@ -1349,8 +1432,16 @@ export function NoteEditor({
           // the words either side of the selection, each with the marks that were around the cut closed on its own side
           const cut = area ? { head: b.text.slice(0, pos), tail: b.text.slice(end) } : splitSource(b.text, sel.from, sel.to, label);
           const added = block(type, cut.tail, { indent: indentKept });
+          const head = { ...b, text: cut.head };
           const next = blocks.slice();
-          next.splice(i, 1, { ...b, text: cut.head }, added);
+          next.splice(i, 1, head, added);
+          // one step to undo: the block as it was (P10-28)
+          structure.current = recordStructure(structure.current, {
+            before: [b],
+            after: [head, added],
+            caretBack: { id: b.id, plain: sel.from },
+            caretForward: { id: added.id, plain: 0 },
+          });
           setBlocks(next);
           focusBlock(added.id, "start");
           return;
@@ -1386,8 +1477,16 @@ export function NoteEditor({
           e.preventDefault();
           if (isTextual(prev.type)) {
             const both = joined(prev, b);
+            const merged = { ...prev, text: both.text };
             const next = blocks.slice();
-            next.splice(i - 1, 2, { ...prev, text: both.text });
+            next.splice(i - 1, 2, merged);
+            // one step to undo: both blocks as they were (P10-28)
+            structure.current = recordStructure(structure.current, {
+              before: [prev, b],
+              after: [merged],
+              caretBack: { id: b.id, plain: 0 },
+              caretForward: { id: prev.id, plain: both.plain },
+            });
             setBlocks(next);
             focusBlock(prev.id, { plain: both.plain });
           } else if (!b.text) {
@@ -1414,7 +1513,15 @@ export function NoteEditor({
           }
           e.preventDefault();
           const both = joined(b, next);
-          setBlocks(blocks.filter((x) => x.id !== next.id).map((x) => (x.id === id ? { ...x, text: both.text } : x)));
+          const merged = { ...b, text: both.text };
+          // one step to undo: both blocks as they were (P10-28)
+          structure.current = recordStructure(structure.current, {
+            before: [b, next],
+            after: [merged],
+            caretBack: { id: b.id, plain: sel.from },
+            caretForward: { id: b.id, plain: both.plain },
+          });
+          setBlocks(blocks.filter((x) => x.id !== next.id).map((x) => (x.id === id ? merged : x)));
           focusBlock(id, { plain: both.plain });
           return;
         }
