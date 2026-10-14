@@ -1604,6 +1604,9 @@ const SENTENCE_END = /[.!?:;]["')\]”’]*$/;
 /** A sentence that a page break may not cut (P10-33): a full stop, a question or an exclamation, with a closing
  *  quote or bracket after it. A colon or a semicolon at a page's foot leads on to the next page's line. */
 const PAGE_END = /[.!?]["')\]”’]*$/;
+/** ...but not when the full stop closes an abbreviation (P10-37): "et al.", "e.g.", "i.e.", "Fig.", "Eq.", "Ref.", or a
+ *  single capital initial ("J."). What follows is the rest of the same sentence, so the block on the next page goes on. */
+const ABBREVIATION_END = /(?:^|[\s(\[])(?:[Ee]t\s+al|e\.g|i\.e|[Ff]ig|[Ee]q|[Rr]ef|\p{Lu})\.["')\]”’]*$/u;
 /** What a block carried over a page break may open with and still be the same paragraph: lower case, a digit, an
  *  opening or closing bracket, a comma or a semicolon... */
 const CONTINUING_OPENER = /^[\p{Ll}\p{N}()[\],;:]/u;
@@ -1618,7 +1621,7 @@ const CONTINUING_WORD = /^(?:and|or|but|nor|of|to|in|on|for|with|that|which|wher
 function continuesAcrossPage(current: string, next: string): boolean {
   const before = current.trim();
   const after = next.trim();
-  return !PAGE_END.test(before) && (CONTINUING_OPENER.test(after) || CONTINUING_WORD.test(after));
+  return (!PAGE_END.test(before) || ABBREVIATION_END.test(before)) && (CONTINUING_OPENER.test(after) || CONTINUING_WORD.test(after));
 }
 /** A gap this many line pitches high is a float's, not a paragraph's (a real paragraph gap is 1.5-2). */
 const FLOAT_GAP_PITCHES = 3;
