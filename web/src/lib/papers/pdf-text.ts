@@ -23,7 +23,7 @@
 import { readFile } from "node:fs/promises";
 import { cleanPaperText } from "@/lib/text/clean";
 import { buildOutline, gutterPrior, linesOfPageWith, type PdfOutline, type PdfPageText } from "./pdf-outline";
-import { withInheritedBuckets, withSectionIds } from "./html-text";
+import { dropStrayHeadings, withInheritedBuckets, withSectionIds } from "./html-text";
 import type { ExtractedDocument, ExtractedSection, ExtractedFigureCaption } from "./html-text";
 
 const FETCH_TIMEOUT_MS = 12_000;
@@ -159,16 +159,18 @@ function normalize(extractor: PdfOutline): ExtractedDocument {
   // one-heading-at-a-time bucketing the HTML extractor uses. P0-01: each section keeps
   // the page its heading sits on (the outline always knew it; this used to
   // drop it), and the ids are numbered last, so they follow the final order.
+  // P10-04 (review 3.3): a section with no text stays when it numbers the one after it (the paper's own
+  // group heading, "2. RESULTS AND DISCUSSION"); the other empty ones go, as they always did.
   const sections: ExtractedSection[] = withSectionIds(
     withInheritedBuckets(
-      (extractor.sections ?? [])
-        .map((section) => ({
+      dropStrayHeadings(
+        (extractor.sections ?? []).map((section) => ({
           heading: cleanPaperText(section.heading) || "Body",
           canonical: section.canonical || "body",
           text: cleanPaperText(section.text),
           ...(typeof section.page === "number" ? { page: section.page } : {}),
-        }))
-        .filter((section) => section.text.length > 0),
+        })),
+      ),
     ),
   );
 

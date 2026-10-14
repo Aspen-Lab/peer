@@ -27,7 +27,7 @@
 // nothing, and says so, rather than inventing sections.
 import { blockMarker } from "@/lib/text/math";
 
-import { bucketInheritor, canonicalizeHeading } from "./html-text";
+import { bucketInheritor, canonicalizeHeading, dropStrayHeadings, headingNumber } from "./html-text";
 
 /** One run of text from the PDF's text layer. */
 export interface PdfTextItem {
@@ -1704,6 +1704,12 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
     const text = joinProse(lifted, { vocab });
     if (text.trim().length > 0) {
       sections.push({ heading: heading ?? undefined, canonical, page, text });
+    } else if (heading !== null && !done && headingNumber(heading) !== null) {
+      // P10-04 (review 3.3): a numbered heading with nothing under it may be the paper's own group
+      // heading ("2. RESULTS AND DISCUSSION", then "2.1 …"). Kept here with empty text; `dropStrayHeadings`
+      // below keeps it if the next section's number is its child, and drops it (a stray) if not. Never one
+      // that sits in the end matter.
+      sections.push({ heading, canonical, page, text: "" });
     }
     held = [];
   };
@@ -1790,12 +1796,13 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
   }
   flush();
 
+  const kept = dropStrayHeadings(sections);
   return {
     title,
-    sections,
+    sections: kept,
     figureCaptions,
     ...(equations.length > 0 ? { equations } : {}),
     pageCount: pages.length,
-    reason: sections.length === 0 ? "no-sections" : null,
+    reason: kept.length === 0 ? "no-sections" : null,
   };
 }

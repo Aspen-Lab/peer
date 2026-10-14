@@ -211,9 +211,36 @@ export function canonicalizeHeading(heading: string): string {
  * "Appendix C.1". Null for a heading that does not — "Impact Statement",
  * and most of PMC and bioRxiv.
  */
-function headingNumber(heading: string): string | null {
+export function headingNumber(heading: string): string | null {
   const match = heading.match(/^(?:Appendix\s+)?((?:\d+|[A-Z]|[IVX]+)(?:\.\d+)*)\.?\s+\S/);
   return match ? match[1] : null;
+}
+
+/**
+ * P10-04 (review 3.3): whether `child` is a heading `parent` numbers — "2." and "2.1", "2.1" and "2.1.1",
+ * but not "2." and "3.1", and not "2." and "20.1" (the dot is part of the prefix). Both must number
+ * themselves; an unnumbered heading is nobody's parent and nobody's child.
+ */
+export function numbersHeading(parent: string, child: string): boolean {
+  const mine = headingNumber(parent);
+  const theirs = headingNumber(child);
+  return mine !== null && theirs !== null && theirs.startsWith(`${mine}.`);
+}
+
+/**
+ * P10-04 (review 3.3): the sections of one document, with the empty ones that stand for nothing taken out.
+ * A heading with no text of its own that numbers the heading after it ("2. RESULTS AND DISCUSSION", then
+ * "2.1 …") is the paper's own group heading and stays, with empty text; the map shows it as a row and the
+ * body as a heading alone. An empty heading that numbers nothing is a stray (a running head, a cut-off
+ * heading) and goes, as every empty heading used to. The next section is judged as it stands in `sections`,
+ * before this drops anything, so "2." survives a chain of empty levels ("2.", "2.1", "2.1.1 …").
+ */
+export function dropStrayHeadings<T extends { heading?: string; text?: string }>(sections: readonly T[]): T[] {
+  return sections.filter((section, index) => {
+    if ((section.text ?? "").trim().length > 0) return true;
+    const next = sections[index + 1];
+    return Boolean(section.heading && next?.heading && numbersHeading(section.heading, next.heading));
+  });
 }
 
 /**
@@ -305,6 +332,10 @@ function shouldKeepSection(canonical: string): boolean {
  * first, text or not, and the empty ones are dropped after that. The returned
  * function is made once per document — the numbering is that document's.
  *
+ * P10-04 (review 3.3): an empty heading that numbers the heading after it is
+ * the paper's own group heading and is kept, with empty text (`dropStrayHeadings`,
+ * run over what the build collected); one that numbers nothing is dropped as before.
+ *
  * End matter is judged as it always was, on the heading's own bucket, and it
  * stays out of the numbering: it is no part of the argument, so a numbered
  * subsection under it takes nothing from it and reads as it did before.
@@ -316,7 +347,8 @@ function sectionDrafter(): (heading: string, text: string) => DraftSection | nul
     const own = canonicalizeHeading(heading);
     if (!shouldKeepSection(own)) return null;
     const canonical = inherit(heading, own);
-    if (!text) return null;
+    // P10-04: an empty section is returned too — `dropStrayHeadings` keeps the ones that number the
+    // heading after them, once the next heading is known, and drops the rest.
     return { heading, canonical, text: capSection(text) };
   };
 }
@@ -578,7 +610,7 @@ function extractLatexml(page: string, pageUrl?: string): ExtractedDocument {
 
   return {
     title: extractTitleFromHtml(html),
-    sections: withSectionIds(trimToBudget(sections)),
+    sections: withSectionIds(trimToBudget(dropStrayHeadings(sections))),
     figureCaptions: collectCaptions(
       html,
       /<figcaption\b[^>]*class=["'][^"']*ltx_caption[^"']*["'][^>]*>([\s\S]*?)<\/figcaption>/gi,
@@ -620,7 +652,7 @@ function extractPmc(html: string, pageUrl?: string): ExtractedDocument {
 
   return {
     title: extractTitleFromHtml(html),
-    sections: withSectionIds(trimToBudget(sections)),
+    sections: withSectionIds(trimToBudget(dropStrayHeadings(sections))),
     // <figcaption> or <div class="caption"> containing <p>Fig N. text</p>
     figureCaptions: collectCaptions(html, /<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/gi, baseUrl),
     source: "pmc",
@@ -662,7 +694,7 @@ function extractBiorxiv(html: string, pageUrl?: string): ExtractedDocument {
 
   return {
     title: extractTitleFromHtml(html),
-    sections: withSectionIds(trimToBudget(sections)),
+    sections: withSectionIds(trimToBudget(dropStrayHeadings(sections))),
     figureCaptions: collectCaptions(
       html,
       /<div\b[^>]*class=["'][^"']*\bfig-caption\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi,
@@ -725,7 +757,7 @@ function extractGeneric(html: string, pageUrl?: string): ExtractedDocument {
   const sections = walkHeadings(body);
   return {
     title: extractTitleFromHtml(html),
-    sections: withSectionIds(trimToBudget(sections)),
+    sections: withSectionIds(trimToBudget(dropStrayHeadings(sections))),
     figureCaptions: collectCaptions(html, /<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/gi, baseUrl),
     source: "generic-html",
   };

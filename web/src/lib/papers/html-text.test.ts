@@ -360,7 +360,9 @@ describe("an empty numbered parent — every HTML extractor", () => {
         { heading: "2.1 Growth", text: "Colonies doubled each day." },
         { heading: "2.2 Limitations", text: "Only one strain was grown." },
       ]);
+      // P10-04, RE-AIMED (missed in the red commit): "2 Results" is a section now, in its bucket.
       expect(shape(doc)).toEqual([
+        ["2 Results", "results"],
         ["2.1 Growth", "results"],
         ["2.2 Limitations", "limitations"],
       ]);
