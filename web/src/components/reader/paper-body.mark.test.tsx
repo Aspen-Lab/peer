@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -37,7 +38,7 @@ const paragraphHtml = (html: string, i: number) => {
   const from = html.indexOf(`<div id="${paragraphAnchor(0, i)}"`);
   return html.slice(from, html.indexOf("</p>", from) + 4);
 };
-const TAG = (n: number) => `<sup[^>]*><button[^>]*aria-label="Open note ${n}"[^>]*>\\[${n}\\]</button></sup>`;
+const TAG = (n: number) => `<sup[^>]*>\u2060<button[^>]*aria-label="Open note ${n}"[^>]*>\\[${n}\\]</button></sup>`;
 
 describe("PaperBody — the words a sticky was taken on are marked", () => {
   it("wraps the anchored words in <mark data-note> and puts the tag right after them", () => {
@@ -57,6 +58,47 @@ describe("PaperBody — the words a sticky was taken on are marked", () => {
     expect(html).toMatch(new RegExp(`<mark data-note="1"[^>]*>Grain boundaries</mark>${TAG(1)}<mark data-note="2"[^>]*> carry</mark>${TAG(2)} the strain\\.</p>`));
     expect(html.match(/<mark\b/g)).toHaveLength(2);
     expect(html).not.toMatch(/<mark[^>]*>[^<]*<mark/);
+  });
+
+  it("draws a note taken inside another's words as its own mark inside the outer one, its tag right after its own words (P10-20)", () => {
+    const html = paragraphHtml(render({ [paragraphAnchor(0, 1)]: [spot("a", 1, P1, 0, 16), spot("b", 2, P1, 6, 16)] }), 1);
+    expect(html).toMatch(
+      new RegExp(`<p><mark data-note="1"[^>]*>Grain <mark data-note="2"[^>]*>boundaries</mark>${TAG(2)}</mark>${TAG(1)} carry the strain\\.</p>`),
+    );
+    expect(html.match(/<mark\b/g)).toHaveLength(2);
+  });
+
+  it("draws equal ranges as two marks, the earlier note outside; and three in one paragraph (P10-20)", () => {
+    const equal = paragraphHtml(render({ [paragraphAnchor(0, 1)]: [spot("a", 2, P1, 6, 16), spot("b", 4, P1, 6, 16)] }), 1);
+    expect(equal).toMatch(new RegExp(`Grain <mark data-note="2"[^>]*><mark data-note="4"[^>]*>boundaries</mark>${TAG(4)}</mark>${TAG(2)} carry`));
+    const three = paragraphHtml(
+      render({ [paragraphAnchor(0, 1)]: [spot("a", 1, P1, 0, 22), spot("b", 2, P1, 6, 22), spot("c", 3, P1, 6, 16)] }),
+      1,
+    );
+    expect(three.match(/<mark\b/g)).toHaveLength(3);
+    expect(three).toMatch(
+      new RegExp(
+        `<mark data-note="1"[^>]*>Grain <mark data-note="2"[^>]*><mark data-note="3"[^>]*>boundaries</mark>${TAG(3)} carry</mark>${TAG(2)}</mark>${TAG(1)} the strain`,
+      ),
+    );
+  });
+
+  it("gives an inner mark a second shade, and the third shares it; the outer keeps the highlighter token (P10-20)", () => {
+    const html = paragraphHtml(
+      render({ [paragraphAnchor(0, 1)]: [spot("a", 1, P1, 0, 22), spot("b", 2, P1, 6, 22), spot("c", 3, P1, 6, 16)] }),
+      1,
+    );
+    const open = (n: number) => new RegExp(`<mark data-note="${n}"[^>]*>`).exec(html)![0];
+    expect(open(1)).toContain("bg-[color:var(--color-note-mark)]");
+    for (const n of [2, 3]) {
+      expect(open(n)).toContain("bg-[color:var(--color-note-nested)]");
+      expect(open(n)).not.toContain("--color-note-mark)");
+    }
+  });
+
+  it("draws overlapping, not nested, ranges as two level marks, as before (P10-20)", () => {
+    const html = paragraphHtml(render({ [paragraphAnchor(0, 1)]: [spot("a", 1, P1, 0, 16), spot("b", 2, P1, 6, 22)] }), 1);
+    expect(html).not.toContain("--color-note-nested");
   });
 
   it("draws the tag at the paragraph's end, and no mark, for a note with no range or a range the text no longer holds", () => {
@@ -150,5 +192,38 @@ describe("a selection inside a mark", () => {
     const html = paragraphHtml(render({ [paragraphAnchor(0, 1)]: [spot("a", 1, P1, 0, 16)] }), 1);
     expect(html.indexOf("<p>")).toBeLessThan(html.indexOf("<mark"));
     expect(html.indexOf("</mark>")).toBeLessThan(html.indexOf("</p>"));
+  });
+});
+
+// ── The second shade of a nested mark (P10-20) ──────────────────────────────
+
+describe("the nested mark's token", () => {
+  const css = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
+  const TOKEN = "--color-note-nested";
+  const lightBlock = css.slice(css.indexOf(":root {"), css.indexOf("/* Dark palette"));
+  const darkBlock = css.slice(css.indexOf('html[data-mode="dark"] {'), css.indexOf('/* Dark palette — "system"'));
+  const systemStart = css.indexOf('html[data-mode="system"] {');
+  const systemBlock = css.slice(systemStart, css.indexOf("/* ── Material", systemStart));
+  const value = (block: string, token: string) => new RegExp(`${token}:\\s*(#[0-9a-f]{6});`).exec(block)?.[1] ?? "";
+  const lum = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((at) => {
+      const s = parseInt(hex.slice(at, at + 2), 16) / 255;
+      return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (a: string, b: string) => {
+    const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
+  it("is declared in every palette block, differs from the highlighter, and keeps the muted ink at 4.5:1", () => {
+    for (const block of [lightBlock, darkBlock, systemBlock]) {
+      expect(value(block, TOKEN)).toMatch(/^#[0-9a-f]{6}$/);
+      expect(value(block, TOKEN)).not.toBe(value(block, "--color-note-mark"));
+      expect(contrast(value(block, "--color-text-muted"), value(block, TOKEN))).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(value(block, "--color-heading"), value(block, TOKEN))).toBeGreaterThanOrEqual(7);
+    }
+    expect(value(systemBlock, TOKEN)).toBe(value(darkBlock, TOKEN));
   });
 });

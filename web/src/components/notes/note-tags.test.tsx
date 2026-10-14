@@ -29,8 +29,8 @@ describe("NoteTag", () => {
   });
 
   it("opens its sticky in the stack when pressed", () => {
-    const tree = NoteTag({ n: 2, id: "h2" }) as unknown as { props: { children: { props: { onClick: () => void } } } };
-    tree.props.children.props.onClick();
+    const tree = NoteTag({ n: 2, id: "h2" }) as unknown as { props: { children: [string, { props: { onClick: () => void } }] } };
+    tree.props.children[1].props.onClick();
     expect(useWindows.getState().windows).toMatchObject([{ id: "h2", kind: "sticky", title: "Note 2" }]);
   });
 });
@@ -44,6 +44,64 @@ describe("AnchorSquare — the blue square", () => {
     expect(html).toContain(`width:${SQUARE_PX}px`);
     expect(html).toContain(`height:${SQUARE_PX}px`);
     expect(html).toMatch(/background(-color)?:#?[0-9a-z(),. %-]*(3b82f6|2563eb|blue)/i);
+  });
+});
+
+// P10-20 (walk X-B2): a note taken on words inside another note's range is drawn as its own mark inside the outer one
+// (two shades; a third inside them shares the second), and a tag stands joined to its words by a word joiner.
+describe("passageSegments — a note inside another note's words (P10-20)", () => {
+  const TEXT = "Grain boundaries carry the strain."; // 34 characters
+  const spot = (n: number, start: number, end: number) => ({ id: `h${n}`, n, start, end, quote: TEXT.slice(start, end) });
+  const tree = (segments: ReturnType<typeof passageSegments>): string =>
+    segments
+      .map((one) => {
+        if (one.kind === "text") return TEXT.slice(one.from, one.to);
+        if (one.kind === "tag") return `<tag${one.spot.n}>`;
+        return `[${one.spot.n}@${one.depth} ${tree(one.inner)}]${one.spot.n}`;
+      })
+      .join("");
+
+  it("nests a range inside another: the inner mark in the outer one, each with its own words", () => {
+    expect(tree(passageSegments(TEXT, [spot(1, 0, 16), spot(2, 6, 16)]))).toBe(`[1@0 Grain [2@1 boundaries]2]1 carry the strain.`);
+    expect(tree(passageSegments(TEXT, [spot(2, 6, 16), spot(1, 0, 22)]))).toBe(`[1@0 Grain [2@1 boundaries]2 carry]1 the strain.`);
+  });
+
+  it("nests a range equal to another: the earlier note is the outer one", () => {
+    expect(tree(passageSegments(TEXT, [spot(4, 6, 16), spot(2, 6, 16)]))).toBe(`Grain [2@0 [4@1 boundaries]4]2 carry the strain.`);
+  });
+
+  it("leaves overlapping, not nested, ranges as before: the later mark starts where the earlier ends", () => {
+    expect(tree(passageSegments(TEXT, [spot(1, 0, 16), spot(2, 6, 22)]))).toBe(`[1@0 Grain boundaries]1[2@0  carry]2 the strain.`);
+  });
+
+  it("puts a range inside the later part of an overlapping pair into that later mark", () => {
+    expect(tree(passageSegments(TEXT, [spot(1, 0, 16), spot(2, 6, 22), spot(3, 17, 22)]))).toBe(
+      `[1@0 Grain boundaries]1[2@0  [3@1 carry]3]2 the strain.`,
+    );
+  });
+
+  it("draws three in one paragraph: a third inside the second is a mark in the second, and shares its level", () => {
+    const segments = passageSegments(TEXT, [spot(1, 0, 22), spot(2, 6, 22), spot(3, 6, 16)]);
+    expect(tree(segments)).toBe(`[1@0 Grain [2@1 [3@2 boundaries]3 carry]2]1 the strain.`);
+    expect(segments.filter((one) => one.kind === "mark")).toHaveLength(1);
+  });
+
+  it("draws a sibling inner mark after an inner mark, and keeps a tail mark after the outer", () => {
+    expect(tree(passageSegments(TEXT, [spot(1, 0, 22), spot(2, 0, 5), spot(3, 17, 22), spot(4, 27, 33)]))).toBe(
+      `[1@0 [2@1 Grain]2 boundaries [3@1 carry]3]1 the [4@0 strain]4.`,
+    );
+  });
+
+  it("still joins back to the paragraph: the outer runs and marks, in order, are exactly its text", () => {
+    const segments = passageSegments(TEXT, [spot(1, 0, 22), spot(2, 6, 16), spot(3, 6, 16), spot(4, 27, 33)]);
+    expect(segments.flatMap((one) => (one.kind === "tag" ? [] : [TEXT.slice(one.from, one.to)])).join("")).toBe(TEXT);
+  });
+});
+
+describe("NoteTag — a tag never wraps away from its words (P10-20)", () => {
+  it("opens with a word joiner and does not wrap itself, so no line begins with the tag", () => {
+    const html = renderToStaticMarkup(createElement(NoteTag, { n: 2, id: "h2" }));
+    expect(html).toMatch(/^<sup[^>]*whitespace-nowrap[^>]*>\u2060<button/);
   });
 });
 
@@ -136,6 +194,16 @@ describe("passageSegments", () => {
   const shape = (segments: ReturnType<typeof passageSegments>) =>
     segments.map((one) => (one.kind === "tag" ? `tag${one.spot.n}` : `${one.kind}:${TEXT.slice(one.from, one.to)}`));
 
+  // P10-20: a mark's content as a string, nested marks in brackets: `[N …]N`, text between.
+  const tree = (segments: ReturnType<typeof passageSegments>): string =>
+    segments
+      .map((one) => {
+        if (one.kind === "text") return TEXT.slice(one.from, one.to);
+        if (one.kind === "tag") return `<tag${one.spot.n}>`;
+        return `[${one.spot.n} ${tree(one.inner)}]${one.spot.n}`;
+      })
+      .join("");
+
   it("is the whole text as one run with no note, and with notes that carry no range the tags follow it", () => {
     expect(shape(passageSegments(TEXT, []))).toEqual([`text:${TEXT}`]);
     expect(shape(passageSegments(TEXT, [spot(1, undefined, undefined), spot(2, undefined, undefined)]))).toEqual([`text:${TEXT}`, "tag1", "tag2"]);
@@ -156,8 +224,10 @@ describe("passageSegments", () => {
     expect(segments.filter((one) => one.kind === "mark").map((one) => (one.kind === "mark" ? one.spot.n : 0))).toEqual([1, 2]);
   });
 
-  it("leaves a note whose words lie wholly inside an earlier mark with its tag only, right after that mark", () => {
-    expect(shape(passageSegments(TEXT, [spot(1, 0, 16), spot(2, 6, 16)]))).toEqual(["mark:Grain boundaries", "tag2", `text:${TEXT.slice(16)}`]);
+  it("draws a note whose words lie wholly inside an earlier mark as its own mark inside that one (P10-20; was: its tag only)", () => {
+    const segments = passageSegments(TEXT, [spot(1, 0, 16), spot(2, 6, 16)]);
+    expect(shape(segments)).toEqual(["mark:Grain boundaries", `text:${TEXT.slice(16)}`]);
+    expect(tree(segments)).toBe(`[1 Grain |[2 boundaries]2]1 ${TEXT.slice(16)}`);
   });
 
   it("draws no mark where the range no longer holds the words (the text changed), or is out of the text", () => {
