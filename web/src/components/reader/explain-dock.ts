@@ -1,12 +1,13 @@
-// The "Explain this?" conversation as a dock (P7-15; the owner's R7, ruling Q4) that stays open and
+// The "Explain this" conversation as a dock (P7-15; the owner's R7, ruling Q4) that stays open and
 // stands level with the paragraph it explains (P8-02; BACKLOG-31, the owner's words, ruling §1h.41 (b)) — P9-03b
-// (ruling §1h.49): level with the SELECTED paragraph, and carrying the "Explain this?" control itself.
+// (ruling §1h.49): level with the SELECTED paragraph.
 //
 // From a window of 1024 px the box is not a card at the selection but a window
 // fixed at the right edge of the screen: flush with the edge, 360 px wide, in the
-// margin the page keeps clear (below), scrolling inside. Once it is open it STAYS open across
-// selections (`explain-box.tsx`) until Close (Escape clears its passage, P8-06, and with no empty state to go back to
-// closes it), and its top is level with the first line of
+// margin the page keeps clear (below), scrolling inside. P10-08 (review 8.5; the owner: no window on entering a paper): it exists only
+// while a passage is open — the selection buttons and `e` open it, Close and Escape close it — and the page's width is kept clear only
+// then (`reserveDock` when it opens, given back when it closes). Once it is open it STAYS open across
+// selections (`explain-box.tsx`), and its top is level with the first line of
 // the PARAGRAPH it stands at (below: the selected one), measured again as the page scrolls and the window
 // resizes:
 //
@@ -19,30 +20,20 @@
 // above it) and never so low that the whole window it needs does not fit above the foot legend. P9-17 (rulings §1h.56 and
 // §1h.57; A P9-R2 F1; the owner: "if the selected paragraph is at the bottom of the screen, the window's bottom edge
 // sits directly on the bottom of the screen; in short, the window is always inside the screen"): what the window needs is
-// its own height, measured after each commit (`explain-box.tsx`) — at least `DOCK_THREAD_FLOOR_PX` once it holds a passage
-// (its sticky header, its sticky controls row and two lines of the answer between them), and for the empty window just its
-// own (about 125 px; `DOCK_MIN_VISIBLE_PX` until it is measured). So the window is level with the paragraph's first
-// line whenever all of it fits below that line, else it is lifted until its bottom edge stands on the legend's reserve
+// its own height, measured after each commit (`explain-box.tsx`; P10-08: `settleHeight` below keeps that read from running away) — at
+// least `DOCK_THREAD_FLOOR_PX` once it holds a passage
+// (its sticky header, its sticky controls row and two lines of the answer between them). So the window is level with the paragraph's
+// first line whenever all of it fits below that line, else it is lifted until its bottom edge stands on the legend's reserve
 // (the legend's height, `legendHeightPx`: the legend is the page's own last line), never lower.
 // Its height is its content, at most what is left between its top and the legend; it scrolls inside.
 // P9-03b (ruling §1h.49; the owner: "level with the first line of the SELECTED paragraph"): `paragraphTop` is that of
-// the paragraph the reader last selected — the explained one until another is selected. When a selection is offered
+// the paragraph the reader last selected — the explained one until another is selected. When a selection is settled
 // (P9-18: when the primary pointer is up — a drag that pauses with the button held offers nothing; a keyboard
 // selection keeps the page's 150 ms debounce) in another paragraph the window moves there at once, with no close and no reflow
-// (the properties below are never taken off) and its content unchanged; the "Explain this?" control is in its header
-// while the selection is not the passage it explains. The floating button stands only where no window does.
+// (the properties below are never taken off) and its content unchanged. P10-08: a selection in the Summary or an answer has no
+// paragraph of the paper, so the window stands at `DOCK_TOP_PX`.
 //
-// P8-06 (the owner's "yes" of 16:4xZ 2026-10-11 to "is the window already there, as an empty panel, before any
-// text is selected?"; ruling §1h.45): for a reader with a key, on a paper with a readable body, from the same
-// 1024 px, the window is there from the body's first paint — before anything is selected, let alone explained.
-// It is the same dock: the right edge, 360 wide, its top at `DOCK_TOP_PX` until a passage is selected (then the
-// rule above — level with the paragraph), the page keeping `DOCK_RESERVE_PX` clear from the mount, not from the
-// first open. It holds the card's header and one line of copy (`EXPLAIN.empty`); the first Explain fills it in
-// place, nothing closes or reopens. Close hides it for the rest of the page visit (the box's state, not stored; a
-// reload shows it again) and the next "Explain this?" brings it back; Escape never hides it — it clears the passage
-// back to the empty state and, with the empty state showing, is the page's. Without a key nothing stands — a
-// permanent panel for a reader with none would be a locked block (§1b) — and below 1024 px nothing does: the card
-// and the sheet open on the reader's press only. `emptyDockStands` is that rule.
+// Below 1024 px — the card and the sheet — nothing is persistent: they open on the reader's press only, as the dock does.
 //
 // Plain module, no directive: the placement (`explain-box.tsx`) and the pins on
 // the shell's own heights read the numbers from one place.
@@ -103,8 +94,8 @@ export function legendHeightPx(zoom: number): number {
 
 /** P8-02: the dock's top stands no lower than this much of it still shows above the foot legend (its lowest
  *  top is the window's height less `DOCK_BOTTOM_PX` less this), so a paragraph far down the screen never
- *  leaves a window too short to read. P9-17 (ruling §1h.57): what the empty window is given to stand on until its own height
- *  is measured (it is about 125 px tall); a window that holds a passage needs `DOCK_THREAD_FLOOR_PX` at least. */
+ *  leaves a window too short to read. P9-17 (ruling §1h.57): what a window is given to stand on until its own height
+ *  is measured; a window that holds a passage needs `DOCK_THREAD_FLOOR_PX` at least. */
 export const DOCK_MIN_VISIBLE_PX = 160;
 
 /**
@@ -180,17 +171,6 @@ export function settleHeight(guard: HeightGuard, held: number | null, reading: n
   guard.writes += 1;
   guard.trail.push(reading);
   return reading;
-}
-
-/**
- * P8-06 (ruling §1h.45): whether the window stands EMPTY, before any passage is explained — a reader with a key
- * (`canAsk`), a paper with a readable body (`hasBody`: its Paper digestion tab exists, so there is text to select),
- * the dock's width (`width` ≥ `DOCK_MIN_VIEWPORT_PX`), and not yet hidden (`hidden`: Close, for the rest of
- * the page visit). The box adds "and no passage is open" — an open window is its own. Without a key it is false:
- * the Tier 0 definition opens on a defined-term selection as it always did, and stays open once it has (P8-02).
- */
-export function emptyDockStands(state: { canAsk: boolean; hasBody: boolean; hidden: boolean; width: number }): boolean {
-  return state.canAsk && state.hasBody && !state.hidden && state.width >= DOCK_MIN_VIEWPORT_PX;
 }
 
 // ── Making room ───────────────────────────────────────────────────────────

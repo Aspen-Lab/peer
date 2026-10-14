@@ -182,15 +182,15 @@ describe("ExplainCard — the input (P3-02b)", () => {
     expect(html).toMatch(/data-explain-card=""[^>]*class="[^"]*\boverflow-y-auto\b/);
   });
 
-  it("keeps the passage and Close pinned at the top: a sticky header before everything that scrolls with the thread", () => {
+  it("keeps the passage and Close pinned at the top: a sticky header before everything that scrolls with the thread (re-aimed, P10-08: Close is the large X at its top-left)", () => {
     const html = card({ thread: view({ turns }) });
-    const header = /<div class="([^"]*)"><div class="min-w-0 flex-1">/.exec(html)?.[1] ?? "";
+    const header = /<div class="([^"]*)"><div class="flex items-center gap-3">/.exec(html)?.[1] ?? "";
 
     expect(header).toMatch(/\bsticky\b/);
     expect(header).toMatch(/-top-4/);
     expect(html.indexOf(PASSAGE)).toBeGreaterThan(-1);
     expect(html.indexOf(PASSAGE)).toBeLessThan(html.indexOf(EXPLAIN.meaning));
-    expect(html.indexOf(">Close<")).toBeLessThan(html.indexOf(EXPLAIN.meaning));
+    expect(html.indexOf('aria-label="Close"')).toBeLessThan(html.indexOf(EXPLAIN.meaning));
   });
 
   it("is disabled while a reply is pending, with Peer's thinking line under the thread", () => {

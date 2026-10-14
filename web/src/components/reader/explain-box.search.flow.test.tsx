@@ -87,6 +87,7 @@ function recorder() {
 }
 let storage: { getItem: ReturnType<typeof vi.fn>; setItem: ReturnType<typeof vi.fn>; removeItem: ReturnType<typeof vi.fn> };
 beforeEach(() => {
+  openRef = { current: null };
   listeners = new Map();
   storage = { getItem: vi.fn(() => null), setItem: vi.fn(), removeItem: vi.fn() };
   vi.stubGlobal("document", recorder());
@@ -122,10 +123,13 @@ const wait = () => new Promise((resolve) => setTimeout(resolve, 5));
 // P9-03b (re-aimed helper): press "Explain this?" wherever it stands — the floating button where no window stands, the
 // window's header control (`onExplain`) where one does (a reader with a key has the empty window from 1024 px). It was
 // the floating button alone; every assertion of the tests that use it is as it was.
-const click = (tree: ReactNode) => {
-  const press = (look(tree).button?.props.onClick as (() => void) | undefined) ?? (elements(tree).find((el) => el.type === ExplainCard)?.props.onExplain as (() => void) | undefined);
-  if (!press) throw new Error("no Explain this? control is standing");
-  press();
+/** P10-08 (review 8.4, 8.5; re-aimed): the window is opened only by the page's `explain` action — the selection buttons and the `e` key —
+ *  which is the box's `openRef`. It was the floating "Explain this?" button, or the control in the always-present window's header. */
+let openRef: { current: (() => void) | null } = { current: null };
+const click = (tree?: ReactNode) => {
+  void tree;
+  if (!openRef.current) throw new Error("the box has not published its open action");
+  openRef.current();
 };
 const draft = (tree: ReactNode, text: string) => look(tree).thread?.onDraft(text);
 const send = (tree: ReactNode) => look(tree).thread?.onSend();
@@ -146,6 +150,7 @@ const base = (over: Partial<Props> = {}): Props => ({
   onReply: vi.fn(async (): Promise<ReplyResult> => PLAIN),
   onResetThread: vi.fn(),
   reading,
+  openRef,
   ...over,
 });
 

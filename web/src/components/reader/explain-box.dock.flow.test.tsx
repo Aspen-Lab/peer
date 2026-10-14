@@ -138,6 +138,7 @@ function stubRoot() {
 }
 
 beforeEach(() => {
+  openRef = { current: null };
   listeners = new Map();
   stubRoot();
   stubWindow();
@@ -169,11 +170,13 @@ async function scenario(initial: Props, steps: Step[]) {
 const wait = () => new Promise((resolve) => setTimeout(resolve, 5));
 // P9-03b (re-aimed helper): press "Explain this?" wherever it stands — the floating button where no window stands, the
 // window's header control where one does (a reader with a key has the empty window from 1024 px). It was the button alone.
-const click = (tree: ReactNode) => {
-  const at = look(tree);
-  const press = (at.button?.props.onClick as (() => void) | undefined) ?? at.explain;
-  if (!press) throw new Error("no Explain this? control is standing");
-  press();
+/** P10-08 (review 8.4, 8.5; re-aimed): the window is opened only by the page's `explain` action — the selection buttons and the `e` key —
+ *  which is the box's `openRef`. It was the floating "Explain this?" button, or the control in the always-present window's header. */
+let openRef: { current: (() => void) | null } = { current: null };
+const click = (tree?: ReactNode) => {
+  void tree;
+  if (!openRef.current) throw new Error("the box has not published its open action");
+  openRef.current();
 };
 const draft = (tree: ReactNode, text: string) => look(tree).thread?.onDraft(text);
 const send = (tree: ReactNode) => look(tree).thread?.onSend();
@@ -201,11 +204,12 @@ const base = (over: Partial<Props> = {}): Props => ({
   onReply: vi.fn(async (): Promise<ReplyResult> => REPLY),
   onResetThread: vi.fn(),
   reading,
+  openRef,
   ...over,
 });
 
 describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-31)", () => {
-  it("a new selection does not close it: the window stays on its passage, and the new selection gets its control (re-aimed, P9-03b: in the window's header, not a floating button)", async () => {
+  it("a new selection does not close it: the window stays on its passage, and no control of its own stands for the new selection (re-aimed, P10-08: the selection buttons are the page's; was P9-03b's control in the window's header)", async () => {
     const run = await scenario(base(), [(tree) => click(tree), selectNext(second, { cached: undefined }), () => pressOutside()]);
     await wait();
 
@@ -214,11 +218,11 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     expect(run.last().passage).toBe(first.passage);
     expect(run.last().status).toBe("answer");
     expect(run.last().dock).toBe(true);
-    // P9-03b (re-aimed): the control is the new selection's, in the window's header; there is no floating button to
-    // stand below the selection's end (it was {left: 400, top: 626} here), and the window is level with the new selection.
-    expect(run.last().explain).toBeTypeOf("function");
+    // P10-08 (re-aimed): the window carries no control for the new selection (it was P9-03b's, in its header) and there is no floating
+    // button either; the page's `explain` action takes the new selection in.
+    expect(run.last().explain).toBeUndefined();
     expect(run.last().button).toBeUndefined();
-    // The page's width stays clear, and a press on that control (inside the dock) closes nothing.
+    // The page's width stays clear, and a press outside the dock closes nothing.
     expect(Object.fromEntries(root)).toEqual(RESERVED);
     run.mounted.unmount();
   });
@@ -392,26 +396,25 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     run.mounted.unmount();
   });
 
-  it("Escape after two passages clears the window back to the empty state: the width stays reserved, nothing is taken off (P8-06)", async () => {
+  it("Escape after two passages closes the window and gives the width back (re-aimed, P10-08: was \"clears the window back to the empty state: the width stays reserved\" — there is no empty state)", async () => {
     const kinds: string[] = [];
     const run = await scenario(base(), [
       (tree) => click(tree),
       selectNext(second, { cached: SECOND_ANSWER }),
       (tree) => click(tree),
       () => escape(),
-      (tree) => kinds.push(look(tree).card ? "passage" : "empty-or-none"),
+      (tree) => kinds.push(look(tree).card ? "window" : "none"),
     ]);
     await wait();
 
-    // `look().card` is the window with a passage: after Escape there is none, but the window is still there — empty.
-    expect(kinds).toEqual(["empty-or-none"]);
+    expect(kinds).toEqual(["none"]);
     expect(run.last().card).toBeUndefined();
-    // The selection that stands is offered again — P9-03b (re-aimed): by the empty window that stays, in its header, not by
-    // a floating button; the properties were never touched.
-    expect(run.last().explain).toBeTypeOf("function");
+    // No control stands for the selection that is still there: the selection buttons (the page's) and `e` open it again.
+    expect(run.last().explain).toBeUndefined();
     expect(run.last().button).toBeUndefined();
-    expect(removeProperty).not.toHaveBeenCalled();
-    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    expect(removeProperty).toHaveBeenCalledWith("--explain-dock");
+    expect(removeProperty).toHaveBeenCalledWith("--explain-dock-width");
+    expect(Object.fromEntries(root)).toEqual({});
     run.mounted.unmount();
   });
 
@@ -424,8 +427,8 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     await wait();
 
     expect(run.last().card).toBeUndefined();
-    // The selection that stood is offered again, now that nothing is open.
-    expect(run.last().button).toBeDefined();
+    // Nothing is drawn for the selection that stood, now that nothing is open (re-aimed, P10-08: was the floating button).
+    expect(run.last().button).toBeUndefined();
     expect(Object.fromEntries(root)).toEqual({});
     run.mounted.unmount();
   });
@@ -440,21 +443,17 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     run.mounted.unmount();
   });
 
-  // Re-aimed, P9-41 (§1h.66): under 768 px (640 and 390 here) the control a closed card or sheet leaves is the thumb bar's cell, not a
-  // floating button — the box draws no button and offers the new selection to the bar (`explainOffered`); the press there is the page's
-  // `explain` action, the box's `openRef`. From 768 px (800) and 1023 it is still the floating button; at 1024 the window's own control.
-  it("from 1024 px only: a new selection still closes the card (640 to 1023) and the phone's sheet, and leaves its own control (re-aimed, P9-03b: at 1024 the control is the window's, below it the floating button; P9-41: under 768 px the thumb bar's cell)", async () => {
+  // Re-aimed, P10-08: no control stands anywhere but the page's selection buttons. Under 768 px (640 and 390 here) the thumb bar's cell is
+  // offered the new selection a closed card or sheet leaves (`explainOffered`); the press there is the page's `explain` action, the box's `openRef`.
+  it("from 1024 px only: a new selection still closes the card (640 to 1023) and the phone's sheet (re-aimed, P10-08: they leave no pill; under 768 px the thumb bar's cell is offered the selection)", async () => {
     for (const [width, height, stays] of [[1024, 800, true], [1023, 800, false], [800, 900, false], [640, 900, false], [390, 844, false]] as const) {
       stubWindow(width, height);
-      const openRef = { current: null as (() => void) | null };
-      const run = await scenario(base({ openRef }), [(tree) => (width < 768 ? openRef.current?.() : click(tree)), selectNext(second, { cached: undefined })]);
+      const run = await scenario(base(), [(tree) => click(tree), selectNext(second, { cached: undefined })]);
       await wait();
 
       expect(run.last().card !== undefined, `${width} px`).toBe(stays);
-      // The control stands in one place only: the window's header where the window stays, the floating button where it closed — and
-      // under 768 px the bar's cell, which is the flag the box has published.
-      expect(run.last().explain !== undefined, `${width} px`).toBe(stays);
-      expect(run.last().button !== undefined, `${width} px`).toBe(!stays && width >= 768);
+      expect(run.last().explain, `${width} px`).toBeUndefined();
+      expect(run.last().button, `${width} px`).toBeUndefined();
       expect(explainOffered(), `${width} px`).toBe(!stays && width < 768);
       run.mounted.unmount();
     }
@@ -522,152 +521,12 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     run.mounted.unmount();
   });
 
-  it("keeps the new selection's control clear of the window: no floating button stands under the 376 px the page leaves free (re-aimed, P9-03b: the window carries it; P9-20: before any window the button is on the page's furniture)", async () => {
-    stubWindow(1280, 800);
-    const late: ExplainSelection = { ...second, rect: { left: 700, top: 600, right: 1000, bottom: 620 }, bounds: { left: 700, top: 580, right: 1000, bottom: 620 } };
-    // P8-06 (re-aimed): "no window yet" is now the reader with no key, whose Tier 0 definition opens on the press
-    // (a reader with a key has the empty window from the start, and its button clears the dock the same way:
-    // `explain-box.empty.flow.test.tsx`).
-    const lateDefined: ExplainSelection = { ...late, passage: "The rafting ratio is the same in all bars." };
-    const before = await scenario(base({ target: lateDefined, canAsk: false, terms: [term], cached: undefined }), []);
-    // No window yet, and the body reported no paragraph (no gutter is known): re-aimed, P9-20 — the button is not centred under the
-    // end of the selection (it covered the next line) but stands on the foot legend's strip, 28 + 8 px up, a margin from the window's edge.
-    expect(before.last().button?.props.style).toEqual({ right: "calc(100% - 1272px)", bottom: "36px" });
-    before.mounted.unmount();
-
-    const opened = await scenario(base({ target: first }), [(tree) => click(tree), selectNext(late, { cached: undefined })]);
-    await wait();
-    // The window open: P9-03b (re-aimed) — there is no floating button to keep out of it (it stood at 1280 − 376 − 120 − 8
-    // at the furthest right); the control is the window's.
-    expect(opened.last().button).toBeUndefined();
-    expect(opened.last().explain).toBeTypeOf("function");
-    opened.mounted.unmount();
-  });
-
-  it("measures the new selection again as the page scrolls, for its button (re-aimed, P9-03b: in the card range, where a floating button still stands; P9-20: in the gutter, where it follows the words — on the furniture it stands still, next test)", async () => {
-    stubWindow(800, 900);
-    let rect = { left: 200, top: 600, right: 460, bottom: 620 };
-    const paragraphAt = () => ({ left: 120, top: rect.top - 20, right: 600, bottom: rect.top + 240 });
-    const moving: ExplainSelection = { ...second, paragraph: paragraphAt(), measure: () => ({ rect, bounds: rect, paragraph: paragraphAt() }) };
-    const run = await scenario(base({ target: moving, cached: undefined }), [
-      () => {
-        rect = { left: 200, top: 300, right: 460, bottom: 320 };
-        fire("scroll", {});
-      },
-      () => {},
-    ]);
-    await wait();
-
-    // In the gutter (200 px right of the paragraph): beside the selection's first line, wherever the page has scrolled it to.
-    expect(run.last().button?.props.style).toEqual({ left: 600 + 6, top: 300 });
-    run.mounted.unmount();
-  });
-
   // Re-aimed, P9-41 (§1h.66): at 390 px, where this test stood the pill above the thumb bar, there is no pill now (the bar holds the
   // control: `explain-box.bar.flow.test.tsx`). The claim it pins — a pill on the page's furniture does not move with the scroll — is
   // the legend's, from 768 px, where a column with no gutter (the paragraph's right edge at 700, 100 px of room under the 136 a
   // pill needs) leaves it nowhere else.
-  it("P9-20: on the furniture the button does not move as the page scrolls: it stands put while the selection stands, and goes with it (re-aimed, P9-41: the legend's pill at 800 px)", async () => {
-    stubWindow(800, 844);
-    let rect = { left: 40, top: 600, right: 300, bottom: 620 };
-    // The column's right edge is the pill's; the body reports it again with each measure, and it does not move with the scroll.
-    const paragraphAt = () => ({ left: 16, top: rect.top - 20, right: 700, bottom: rect.top + 240 });
-    const moving: ExplainSelection = { ...second, paragraph: paragraphAt(), measure: () => ({ rect, bounds: rect, paragraph: paragraphAt() }) };
-    const styles: unknown[] = [];
-    const run = await scenario(base({ target: moving, cached: undefined }), [
-      (tree) => styles.push(look(tree).button?.props.style),
-      () => {
-        rect = { left: 40, top: 120, right: 300, bottom: 140 };
-        fire("scroll", {});
-      },
-      (tree) => styles.push(look(tree).button?.props.style),
-      () => {
-        rect = { left: 40, top: -300, right: 300, bottom: -280 };
-        fire("scroll", {});
-      },
-      (tree) => styles.push(look(tree).button?.props.style),
-    ]);
-    await wait();
-    styles.push(run.last().button?.props.style);
-
-    const pill = { right: "calc(100% - 700px)", bottom: "36px" };
-    expect(styles.length).toBeGreaterThanOrEqual(3);
-    expect(styles.every((style) => JSON.stringify(style) === JSON.stringify(pill))).toBe(true);
-    run.mounted.unmount();
-
-    // Gone with the selection: no selection, no pill.
-    const away = await scenario(base({ target: null, cached: undefined }), []);
-    expect(away.last().button).toBeUndefined();
-    away.mounted.unmount();
-  });
-
   // P9-03 (the feature walk's X13): the button stands beside the words, never on them. The body reports the
   // selection's paragraph (P8-02), and with room to its right the button is in the gutter, level with the selection.
-  it("P9-03: with the paragraph reported, the new selection's button stands in the gutter beside it, level with the selection (re-aimed, P9-03b: in the card range, where a floating button still stands; with a window open it is the window's control)", async () => {
-    stubWindow(800, 900);
-    const paragraph = { left: 120, top: 560, right: 600, bottom: 860 };
-    const late: ExplainSelection = { ...second, paragraph };
-    const run = await scenario(base({ target: late, cached: undefined }), []);
-
-    // 800 px, no window: 200 px right of the paragraph. The button's left is the paragraph's edge and the 6 px gap; its
-    // top is the selection's FIRST line (580, `bounds.top`; P9-03b, re-aimed — it was 600, the line the selection ends
-    // on), not the 626 under the selection's end.
-    expect(run.last().button?.props.style).toEqual({ left: 600 + 6, top: 580 });
-    expect((run.last().button?.props.style as { left: number }).left).toBeGreaterThanOrEqual(paragraph.right);
-    run.mounted.unmount();
-  });
-
-  it("P9-03: with no key (no window open), the button stands in the gutter of the whole window", async () => {
-    const lateDefined: ExplainSelection = { ...second, passage: "The rafting ratio is the same in all bars.", paragraph: { left: 120, top: 560, right: 760, bottom: 860 } };
-    const run = await scenario(base({ target: lateDefined, canAsk: false, terms: [term], cached: undefined }), []);
-
-    expect(run.last().card).toBeUndefined();
-    // P9-03b (re-aimed): level with the selection's first line (580), not the line it ends on (600).
-    expect(run.last().button?.props.style).toEqual({ left: 760 + 6, top: 580 });
-    run.mounted.unmount();
-  });
-
-  it("P9-03: a paragraph that leaves the window less than 136 px gets the page's furniture, not a place under the selection's end (re-aimed, P9-03b: the card range, no dock to narrow the window; P9-20: was today's place under the selection's end)", async () => {
-    stubWindow(800, 900);
-    // The paragraph ends at 700: 100 px to its right.
-    const tight: ExplainSelection = { ...second, rect: { left: 500, top: 600, right: 640, bottom: 620 }, paragraph: { left: 120, top: 560, right: 700, bottom: 860 } };
-    const run = await scenario(base({ target: tight, cached: undefined }), []);
-    // 800 px: the foot legend's strip, a margin above it; the pill's right edge is the column's (700).
-    expect(run.last().button?.props.style).toEqual({ right: "calc(100% - 700px)", bottom: "36px" });
-    run.mounted.unmount();
-
-    // One pixel on the threshold's other side (800 − 136 = 664): the gutter.
-    const roomy: ExplainSelection = { ...tight, paragraph: { left: 120, top: 560, right: 664, bottom: 860 } };
-    const again = await scenario(base({ target: roomy, cached: undefined }), []);
-    // P9-03b (re-aimed): the first line's top (580), not the end line's (600).
-    expect(again.last().button?.props.style).toEqual({ left: 664 + 6, top: 580 });
-    again.mounted.unmount();
-  });
-
-  it("P9-03: the button follows its paragraph and selection as the page scrolls (re-aimed, P9-03b: the card range)", async () => {
-    stubWindow(800, 900);
-    let shift = 0;
-    const moving: ExplainSelection = {
-      ...second,
-      paragraph: { left: 120, top: 560, right: 600, bottom: 860 },
-      measure: () => ({
-        rect: { left: 200, top: 600 - shift, right: 460, bottom: 620 - shift },
-        bounds: { left: 100, top: 580 - shift, right: 460, bottom: 620 - shift },
-        paragraph: { left: 120, top: 560 - shift, right: 600, bottom: 860 - shift },
-      }),
-    };
-    const run = await scenario(base({ target: moving, cached: undefined }), [
-      () => {
-        shift = 250;
-        fire("scroll", {});
-      },
-      () => {},
-    ]);
-    await wait();
-    // P9-03b (re-aimed): the first line's top moves with the page (580 − 250), not the end line's (600 − 250 = 350).
-    expect(run.last().button?.props.style).toEqual({ left: 600 + 6, top: 330 });
-    run.mounted.unmount();
-  });
 });
 
 // ── Level with the explained paragraph's first line (P8-02) ─────────────────────────────────────────
@@ -1000,38 +859,15 @@ describe("ExplainBox — the window follows the selected paragraph's first line 
   });
 });
 
-describe("ExplainBox — the window carries the Explain this? control (P9-03b, ruling §1h.49)", () => {
-  it("shows it while a selection is offered that is not the passage the window explains; the floating button is not rendered", async () => {
-    const run = await scenario(base({ target: paraA() }), [
-      (tree) => {
-        // Before anything is explained the empty window stands: the control is its, and the floating button is not.
-        expect(look(tree).explain).toBeDefined();
-        expect(look(tree).button).toBeUndefined();
-        click(tree);
-      },
-      (tree) => {
-        // A is the window's: nothing on offer.
-        expect(look(tree).explain).toBeUndefined();
-        expect(look(tree).button).toBeUndefined();
-      },
-      selectNext(paraB(), { cached: SECOND_ANSWER }),
-    ]);
-    await wait();
-
-    expect(run.last().passage).toBe(first.passage);
-    expect(run.last().explain).toBeTypeOf("function");
-    expect(run.last().button).toBeUndefined();
-    run.mounted.unmount();
-  });
-
-  it("pressing it explains the offered passage in the same window: no close, no intermediate null, the width never given back", async () => {
+describe("ExplainBox — the offered selection is taken into the open window by the page's explain action (P9-03b, ruling §1h.49; re-aimed, P10-08: was the window's own control)", () => {
+  it("the action explains the offered passage in the same window: no close, no intermediate null, the width never given back", async () => {
     let resolve!: (value: AskResult) => void;
     const onAsk = vi.fn(() => new Promise<AskResult>((r) => (resolve = r)));
     const loading: Array<{ passage: string | null; status: string | null; top: number | undefined }> = [];
     const run = await scenario(base({ target: paraA() }), [
       (tree) => click(tree),
       selectNext(paraB(), { cached: undefined, onAsk }),
-      (tree) => look(tree).explain?.(),
+      (tree) => click(tree),
       (tree) => {
         loading.push({ passage: look(tree).passage, status: look(tree).status, top: look(tree).style?.top });
         resolve(SECOND_ANSWER);
@@ -1077,104 +913,7 @@ describe("ExplainBox — the window carries the Explain this? control (P9-03b, r
     run.mounted.unmount();
   });
 
-  it("is the window's whatever its width from 1024 px: no floating Explain button at 1024, 1280, 1440 or 1920, with a passage open or the window empty", async () => {
-    for (const [width, height] of [[1024, 768], [1280, 800], [1440, 900], [1920, 1080]] as const) {
-      stubWindow(width, height);
-      // The empty window, a selection on offer.
-      const empty = await scenario(base({ target: paraB() }), []);
-      expect(empty.last().button, `${width} px, empty`).toBeUndefined();
-      expect(empty.last().explain, `${width} px, empty`).toBeTypeOf("function");
-      empty.mounted.unmount();
-
-      // A passage open, another on offer.
-      const open = await scenario(base({ target: paraA() }), [(tree) => click(tree), selectNext(paraB(), { cached: SECOND_ANSWER })]);
-      await wait();
-      expect(open.last().button, `${width} px, open`).toBeUndefined();
-      expect(open.last().explain, `${width} px, open`).toBeTypeOf("function");
-      open.mounted.unmount();
-
-      // Tier 0: a window open on a definition, another defined passage on offer.
-      const tier0 = await scenario(base({ canAsk: false, terms: [term], target: inParagraph({ ...first, passage: "The rafting ratio rose." }, 330), cached: undefined }), [
-        (tree) => click(tree),
-        selectNext(inParagraph({ ...second, passage: "The rafting ratio is the same in all bars." }, 560)),
-      ]);
-      await wait();
-      expect(tier0.last().button, `${width} px, Tier 0`).toBeUndefined();
-      expect(tier0.last().explain, `${width} px, Tier 0`).toBeTypeOf("function");
-      tier0.mounted.unmount();
-    }
-  });
-
-  it("Escape clears the passage and the empty window that stays carries the control for the selection still standing; Close then gives the floating button back", async () => {
-    const run = await scenario(base({ target: paraA() }), [
-      (tree) => click(tree),
-      selectNext(paraB(), { cached: SECOND_ANSWER }),
-      () => escape(),
-      (tree) => {
-        // P8-06: the window goes back to the empty state, the width still reserved; the selection is still on offer — as the window's control.
-        expect(look(tree).card).toBeUndefined();
-        expect(look(tree).explain).toBeTypeOf("function");
-        expect(look(tree).button).toBeUndefined();
-        expect(removeProperty).not.toHaveBeenCalled();
-        expect(Object.fromEntries(root)).toEqual(RESERVED);
-        // The empty window has followed the selection too.
-        expect((elements(tree).find((el) => el.type === ExplainCard)?.props.style as { top: number }).top).toBe(B_TOP);
-      },
-    ]);
-    await wait();
-    run.mounted.unmount();
-
-    // Hidden with Close: no window stands, so the floating button does.
-    const closed = await scenario(base({ target: paraA() }), [(tree) => click(tree), (tree) => (look(tree).card?.props.onClose as () => void)()]);
-    await wait();
-    expect(closed.last().card).toBeUndefined();
-    expect(closed.last().explain).toBeUndefined();
-    expect(closed.last().button).toBeDefined();
-    closed.mounted.unmount();
-  });
 });
-
-describe("ExplainBox — the floating button stands only where no window does (P9-03b, ruling §1h.49)", () => {
-  // Re-aimed, P9-41 (§1h.66): the floating button stands in the card range (768 to 1023 px) only; on the phone (640 and 390 here, under
-  // 768 px) the control is the thumb bar's cell — no button, no window control, and the offer published for the bar.
-  it("is there in the card range, and not the window's control; on the phone it is the thumb bar's cell, not a button (re-aimed, P9-41)", async () => {
-    for (const [width, height] of [[1023, 800], [900, 900], [800, 900], [640, 900], [390, 844]] as const) {
-      stubWindow(width, height);
-      const run = await scenario(base({ target: paraA() }), []);
-
-      expect(run.last().button !== undefined, `${width} px`).toBe(width >= 768);
-      expect(explainOffered(), `${width} px`).toBe(width < 768);
-      expect(run.last().card, `${width} px`).toBeUndefined();
-      expect(run.last().explain, `${width} px`).toBeUndefined();
-      run.mounted.unmount();
-    }
-  });
-
-  it("stays the card's and the sheet's control after they open: a new selection closes them and leaves it (re-aimed, P9-41: the button in the card range, the thumb bar's cell on the phone)", async () => {
-    for (const [width, height] of [[900, 900], [390, 844]] as const) {
-      stubWindow(width, height);
-      const openRef = { current: null as (() => void) | null };
-      const run = await scenario(base({ target: paraA(), openRef }), [(tree) => (width < 768 ? openRef.current?.() : click(tree)), selectNext(paraB(), { cached: undefined })]);
-      await wait();
-
-      expect(run.last().card, `${width} px`).toBeUndefined();
-      expect(run.last().button !== undefined, `${width} px`).toBe(width >= 768);
-      expect(explainOffered(), `${width} px`).toBe(width < 768);
-      expect(run.last().explain, `${width} px`).toBeUndefined();
-      run.mounted.unmount();
-    }
-  });
-
-  it("is there with no key and no window, for a passage the paper defines, from 1024 px as well", async () => {
-    const run = await scenario(base({ canAsk: false, terms: [term], target: inParagraph({ ...first, passage: "The rafting ratio rose." }, 330), cached: undefined }), []);
-
-    expect(run.last().card).toBeUndefined();
-    expect(run.last().button).toBeDefined();
-    expect(run.last().explain).toBeUndefined();
-    run.mounted.unmount();
-  });
-});
-
 // ── The header control hands the focus to the window (P9-17, ruling §1h.56; A P9-R2 F5) ───────────────────────────
 //
 // Pressing the control makes the offered selection the window's passage, so `next` becomes null and the control unmounts
@@ -1182,167 +921,6 @@ describe("ExplainBox — the floating button stands only where no window does (P
 // did the same, but it was transient; the window is not. There is no DOM here: the box finds the card, its input and the
 // document's `activeElement` through refs and the document, so the test stands in for the three and says what the browser
 // would have done (`focus()` moves `activeElement`).
-
-describe("ExplainBox — the header control hands the focus to the window (P9-17)", () => {
-  /** The card, the control inside it, the follow-up input once a thread has one, and the page — as far as the box looks. */
-  function fakeDom() {
-    const page = { name: "body" };
-    const outside = { name: "a link elsewhere on the page" };
-    const focus: { current: unknown } = { current: page };
-    const control = { name: "control" };
-    const input = { name: "input", focus: vi.fn(() => void (focus.current = input)) };
-    const card = {
-      name: "card",
-      focus: vi.fn(() => void (focus.current = card)),
-      contains: (node: unknown) => node === card || node === control || node === input,
-      getBoundingClientRect: () => ({ height: 360 }),
-      scrollTop: 0,
-      scrollHeight: 360,
-    };
-    vi.stubGlobal("document", {
-      ...recorder(),
-      documentElement: { style: { setProperty, removeProperty } },
-      get activeElement() {
-        return focus.current;
-      },
-    });
-    /** The refs the box hands the card, pointed at the stand-ins (a browser attaches them at commit). */
-    const attach = (tree: ReactNode, withInput: boolean) => {
-      const element = elements(tree).find((el) => el.type === ExplainCard);
-      (element?.props.cardRef as { current: unknown }).current = card;
-      (element?.props.inputRef as { current: unknown }).current = withInput ? input : null;
-    };
-    return { page, outside, focus, control, input, card, attach };
-  }
-  const pending = () => vi.fn(() => new Promise<AskResult>(() => {}));
-
-  it("moves into the follow-up input when the window holds a thread with one: the keyboard's press leaves the focus in the window, not on <body>", async () => {
-    const dom = fakeDom();
-    const run = await scenario(base({ target: paraA() }), [
-      (tree) => click(tree),
-      selectNext(paraB(), { cached: SECOND_ANSWER, cachedTurns: [] }),
-      (tree) => {
-        dom.attach(tree, true);
-        dom.focus.current = dom.control; // Tab to the control
-        look(tree).explain?.(); // Enter
-      },
-    ]);
-    await wait();
-
-    expect(run.last().passage).toBe(second.passage);
-    expect(run.last().explain).toBeUndefined();
-    expect(dom.focus.current).toBe(dom.input);
-    expect(dom.focus.current).not.toBe(dom.page);
-    expect(dom.input.focus).toHaveBeenCalledTimes(1);
-    expect(dom.card.focus).not.toHaveBeenCalled();
-    run.mounted.unmount();
-  });
-
-  it("moves to the card itself when the window has no input yet (the answer is on its way): inside the window, not on <body>", async () => {
-    const dom = fakeDom();
-    const onAsk = pending();
-    const run = await scenario(base({ target: paraA(), cached: undefined, onAsk }), [
-      (tree) => {
-        // The empty window carries the control; the first Explain fills it in place.
-        dom.attach(tree, false);
-        dom.focus.current = dom.control;
-        look(tree).explain?.();
-      },
-    ]);
-    await wait();
-
-    expect(run.last().status).toBe("loading");
-    expect(dom.focus.current).toBe(dom.card);
-    expect(dom.card.focus).toHaveBeenCalledTimes(1);
-    expect(dom.input.focus).not.toHaveBeenCalled();
-    expect(dom.card.contains(dom.focus.current)).toBe(true);
-    run.mounted.unmount();
-  });
-
-  it("does the same for a window that holds the paper's own definition and no input at all (no key)", async () => {
-    const dom = fakeDom();
-    const definedA = inParagraph({ ...first, passage: "The rafting ratio rose." }, 330);
-    const definedB = inParagraph({ ...second, passage: "The rafting ratio is the same in all bars." }, 440);
-    const run = await scenario(base({ canAsk: false, terms: [term], target: definedA, cached: undefined }), [
-      (tree) => click(tree),
-      selectNext(definedB),
-      (tree) => {
-        dom.attach(tree, false);
-        dom.focus.current = dom.control;
-        look(tree).explain?.();
-      },
-    ]);
-    await wait();
-
-    expect(run.last().passage).toBe(definedB.passage);
-    expect(dom.focus.current).toBe(dom.card);
-    run.mounted.unmount();
-  });
-
-  it("keeps a reader who was typing in the window's input inside it when the press replaces the thread", async () => {
-    const dom = fakeDom();
-    const run = await scenario(base({ target: paraA() }), [
-      (tree) => click(tree),
-      selectNext(paraB(), { cached: undefined, onAsk: pending() }),
-      (tree) => {
-        dom.attach(tree, false); // the answer is on its way: the new passage's window has no input yet
-        dom.focus.current = dom.input; // the reader's focus was in the input of the thread that is being replaced
-        look(tree).explain?.();
-      },
-    ]);
-    await wait();
-
-    expect(dom.focus.current).toBe(dom.card);
-    expect(dom.card.focus).toHaveBeenCalledTimes(1);
-    run.mounted.unmount();
-  });
-
-  it("takes nothing from a reader whose focus is not in the window: a mouse press (the control cancels the mouse-down) or a press while the focus is elsewhere on the page", async () => {
-    for (const where of ["page", "outside"] as const) {
-      const dom = fakeDom();
-      const run = await scenario(base({ target: paraA() }), [
-        (tree) => click(tree),
-        selectNext(paraB(), { cached: SECOND_ANSWER, cachedTurns: [] }),
-        (tree) => {
-          dom.attach(tree, true);
-          dom.focus.current = dom[where];
-          look(tree).explain?.();
-        },
-      ]);
-      await wait();
-
-      expect(run.last().passage, where).toBe(second.passage);
-      expect(dom.focus.current, where).toBe(dom[where]);
-      expect(dom.input.focus, where).not.toHaveBeenCalled();
-      expect(dom.card.focus, where).not.toHaveBeenCalled();
-      run.mounted.unmount();
-    }
-  });
-
-  it("is asked once per press: a later answer, a reply or a new selection does not pull the focus back into the window", async () => {
-    const dom = fakeDom();
-    const run = await scenario(base({ target: paraA() }), [
-      (tree) => click(tree),
-      selectNext(paraB(), { cached: SECOND_ANSWER, cachedTurns: [] }),
-      (tree) => {
-        dom.attach(tree, true);
-        dom.focus.current = dom.control;
-        look(tree).explain?.();
-      },
-      () => {
-        dom.focus.current = dom.outside; // the reader goes back to the page…
-      },
-      selectNext(paraA(), { cached: FIRST_ANSWER }), // …and selects the first passage again
-    ]);
-    await wait();
-
-    expect(dom.input.focus).toHaveBeenCalledTimes(1);
-    expect(dom.focus.current).toBe(dom.outside);
-    run.mounted.unmount();
-  });
-});
-
-
 // ── The window's bottom stands on the screen's bottom when its paragraph is too low (P9-17, ruling §1h.57) ───────────────
 //
 // The owner: "如果选中段落在屏幕最下方，那么窗口的最底部就直接贴着整个屏幕的最底部。总之，始终让窗口存在于屏幕里." The box measures the

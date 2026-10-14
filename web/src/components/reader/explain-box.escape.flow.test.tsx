@@ -2,13 +2,11 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
-// P8-06, the manager's ruling on Escape (after the first build): the window the owner wants is ALWAYS there, so Escape
-// must not fight the page. With the empty state showing, Escape does nothing to the window and the box listens for no
-// key at all — the page's other Escape handlers (the figure lightbox, "back", and a React handler such
-// as the notes editor's) act as before. With a thread showing, Escape returns the window to the empty state: the thread is
-// dropped as a Close used to drop it, the kept answer for the passage stays kept, the window stays and the width stays
-// reserved. Close (the button) is the only thing that hides the window for the visit. Without an empty state to go back to
-// (no key, no body, below 1024 px) Escape closes the window as it always did.
+// P10-08 (review 8.5; supersedes P8-06's ruling on Escape): there is no always-present window, so there is no empty state for Escape to
+// go back to. With nothing open the box listens for no key at all — Escape is the page's, and its other handlers (the figure lightbox,
+// "back", and a React handler such as the notes editor's) act as they always did. With a passage in the window, Escape clears it AND
+// closes the window: the thread is dropped as a Close drops it, the kept answer for the passage stays kept, and the width goes back.
+// Close (the button) does the same. The Tier 0 definition, the card and the sheet close on Escape as they always did.
 //
 // The seams are tried on a miniature of the browser's order for a key press: window capture, document capture, the
 // React root's bubble (where `onKeyDown` handlers run), document bubble, window bubble; `stopPropagation` keeps the event
@@ -69,24 +67,21 @@ function elements(node: ReactNode): ReactElement<Props2>[] {
 interface Look {
   button: ReactElement<Props2> | undefined;
   card: ReactElement<Props2> | undefined;
-  empty: boolean;
   passage: string | null;
   thread: ThreadView | undefined;
 }
 const look = (tree: ReactNode): Look => {
   const all = elements(tree);
   const card = all.find((el) => el.type === ExplainCard);
-  const empty = card?.props.empty === true;
   return {
     button: all.find((el) => el.type === "button" && el.props.children === EXPLAIN.ask),
     card,
-    empty,
-    passage: empty ? null : ((card?.props.passage as string | undefined) ?? null),
+    passage: (card?.props.passage as string | undefined) ?? null,
     thread: card?.props.thread as ThreadView | undefined,
   };
 };
-/** One word per render: the empty state, a window with a passage, or no window. */
-const kind = (l: Look) => (l.empty ? "empty" : l.card ? "window" : "none");
+/** One word per render: a window with a passage, or no window. */
+const kind = (l: Look) => (l.card ? "window" : "none");
 
 // ── The browser's order for a key press, in miniature ──────────────────────────────────────────────
 
@@ -159,6 +154,7 @@ let removeProperty: ReturnType<typeof vi.fn>;
 const RESERVED = { "--explain-dock": "376px", "--explain-dock-width": "360px" };
 
 beforeEach(() => {
+  openRef = { current: null };
   registrations = [];
   rootHandlers = [];
   root = new Map();
@@ -197,10 +193,13 @@ const wait = () => new Promise((resolve) => setTimeout(resolve, 5));
 // P9-03b (re-aimed helper): press "Explain this?" wherever it stands — the floating button where no window stands, the
 // window's header control (`onExplain`) where one does (a reader with a key has the empty window from 1024 px). It was
 // the floating button alone; every assertion of the tests that use it is as it was.
-const click = (tree: ReactNode) => {
-  const pressIt = (look(tree).button?.props.onClick as (() => void) | undefined) ?? (elements(tree).find((el) => el.type === ExplainCard)?.props.onExplain as (() => void) | undefined);
-  if (!pressIt) throw new Error("no Explain this? control is standing");
-  pressIt();
+/** P10-08 (review 8.4, 8.5; re-aimed): the window is opened only by the page's `explain` action — the selection buttons and the `e` key —
+ *  which is the box's `openRef`. It was the floating "Explain this?" button, or the control in the always-present window's header. */
+let openRef: { current: (() => void) | null } = { current: null };
+const click = (tree?: ReactNode) => {
+  void tree;
+  if (!openRef.current) throw new Error("the box has not published its open action");
+  openRef.current();
 };
 const close = (tree: ReactNode) => (look(tree).card?.props.onClose as () => void)();
 const draft = (tree: ReactNode, text: string) => look(tree).thread?.onDraft(text);
@@ -216,49 +215,46 @@ const base = (over: Partial<Props> = {}): Props => ({
   onReply: vi.fn(async (): Promise<ReplyResult> => REPLY),
   onResetThread: vi.fn(),
   reading,
+  openRef,
   ...over,
 });
 
-// ── The empty state leaves Escape alone ────────────────────────────────────────────────────────────
+// ── With nothing open Escape is the page's ──────────────────────────────────────────────────────────
 
-describe("Escape with the empty state showing (P8-06, the manager's ruling)", () => {
-  it("registers no key and no press listener — only the window's width is watched", async () => {
+describe("Escape with no window open (P10-08; was P8-06's \"with the empty state showing\")", () => {
+  it("registers no key and no press listener, and watches nothing: there is no window and no selection", async () => {
     const run = await scenario(base(), []);
 
-    expect(run.last().empty).toBe(true);
+    expect(run.last().card).toBeUndefined();
     expect(listening("keydown")).toBe(0);
     expect(listening("pointerdown")).toBe(0);
-    expect(listening("resize")).toBe(1);
+    expect(listening("resize")).toBe(0);
     run.mounted.unmount();
   });
 
-  it("does nothing to the window: it stays, empty, with the width still reserved, and the event is left untouched", async () => {
+  it("does nothing: no window, nothing reserved, and the event is left untouched", async () => {
     let event!: KeyEvent;
     const run = await scenario(base(), [() => void (event = press("Escape"))]);
     await wait();
 
-    expect(run.looks.every((l) => l.empty)).toBe(true);
-    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    expect(run.looks.every((l) => l.card === undefined)).toBe(true);
+    expect(Object.fromEntries(root)).toEqual({});
+    expect(setProperty).not.toHaveBeenCalled();
     expect(removeProperty).not.toHaveBeenCalled();
     expect(event.preventDefault).not.toHaveBeenCalled();
     expect(event.stopPropagation).not.toHaveBeenCalled();
     run.mounted.unmount();
   });
 
-  // Ruling §1h.51 (a), from A P8-05's finding F1: while the empty window stands (no thread open) the box does not consume
-  // Escape, so the page's own handlers — the Keyboard-shortcuts dialog's close — see that same
-  // key and the dialog never needs a second press. The head already passed it through (the box registers its Escape only
-  // while a passage is in the window: the two tests above and "registers its own Escape only while…" below); this pins
-  // it for the empty window that carries the P9-03b control, which is what a selection on offer makes of it.
-  it("P9-03b: the empty window that carries the control still leaves Escape to the page: no listener of the box's, the event untouched, the page's handlers each see it", async () => {
+  // Ruling §1h.51 (a), from A P8-05's finding F1: while no thread is open the box does not consume Escape, so the page's own handlers — the
+  // Keyboard-shortcuts dialog's close — see that same key and the dialog never needs a second press. With a selection on offer (re-aimed,
+  // P10-08: the selection buttons are the page's, the box draws nothing) it is the same.
+  it("with a selection made but no window open, Escape is still the page's: no listener of the box's, the event untouched, the page's handlers each see it", async () => {
     const pageSaw = { documentCapture: vi.fn(), windowBubble: vi.fn() };
     let event!: KeyEvent;
     const run = await scenario(base({ target: first }), [
       (tree) => {
-        // A selection is on offer, so the window shows the control…
-        expect(look(tree).empty).toBe(true);
-        expect(look(tree).card?.props.onExplain).toBeTypeOf("function");
-        // …and the box has no key listener at all; two stand-ins for the page's: a dialog's (document, capture) and the keyboard layer's (window, bubble).
+        expect(look(tree).card).toBeUndefined();
         expect(listening("keydown")).toBe(0);
         document.addEventListener("keydown", pageSaw.documentCapture as never, true);
         window.addEventListener("keydown", pageSaw.windowBubble as never);
@@ -271,15 +267,12 @@ describe("Escape with the empty state showing (P8-06, the manager's ruling)", ()
     expect(event.stopPropagation).not.toHaveBeenCalled();
     expect(pageSaw.documentCapture).toHaveBeenCalledTimes(1);
     expect(pageSaw.windowBubble).toHaveBeenCalledTimes(1);
-    // The window stays, empty, with the control and the width.
-    expect(run.looks.every((l) => l.empty)).toBe(true);
-    expect(run.last().card?.props.onExplain).toBeTypeOf("function");
-    expect(Object.fromEntries(root)).toEqual(RESERVED);
-    expect(removeProperty).not.toHaveBeenCalled();
+    expect(run.looks.every((l) => l.card === undefined)).toBe(true);
+    expect(Object.fromEntries(root)).toEqual({});
     run.mounted.unmount();
   });
 
-  it("the figure lightbox: its own Escape closes it, and the window stays", async () => {
+  it("the figure lightbox: its own Escape closes it, and nothing of the box's is in the way", async () => {
     // Stand-in with the shape of `figure-lightbox.tsx`: a capture listener on the document, registered when the lightbox
     // opens (after the box), that stops the key and closes. It ran alongside a hiding box before; now the box is not there.
     const closeLightbox = vi.fn();
@@ -302,13 +295,13 @@ describe("Escape with the empty state showing (P8-06, the manager's ruling)", ()
     await wait();
 
     expect(closeLightbox).toHaveBeenCalledTimes(1);
-    expect(run.looks.every((l) => l.empty)).toBe(true);
-    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    expect(run.looks.every((l) => l.card === undefined)).toBe(true);
+    expect(Object.fromEntries(root)).toEqual({});
     expect(removeProperty).not.toHaveBeenCalled();
     run.mounted.unmount();
   });
 
-  it("\"back\": the keyboard layer resolves Escape to the page's `back`, and the window stays", async () => {
+  it("\"back\": the keyboard layer resolves Escape to the page's `back`", async () => {
     // Stand-in with the shape of `components/keyboard.tsx`: a bubble listener on the window that runs the reading page's
     // handler for the key (`resolvePaperKey`, `readerActions`: the real ones) and prevents the event.
     const back = vi.fn();
@@ -324,13 +317,13 @@ describe("Escape with the empty state showing (P8-06, the manager's ruling)", ()
     await wait();
 
     expect(back).toHaveBeenCalledTimes(1);
-    expect(run.looks.every((l) => l.empty)).toBe(true);
-    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    expect(run.looks.every((l) => l.card === undefined)).toBe(true);
+    expect(Object.fromEntries(root)).toEqual({});
     run.mounted.unmount();
     release();
   });
 
-  it("a React `onKeyDown` handler such as the notes editor's: it runs, stops the key, and the window stays", async () => {
+  it("a React `onKeyDown` handler such as the notes editor's: it runs and stops the key", async () => {
     // Stand-in with the shape of `note-editor.tsx` (Escape: preventDefault, stopPropagation, then its own work): React
     // runs it at the root's bubble. A hiding capture listener on the document would have taken the key before it.
     const closeMenu = vi.fn();
@@ -350,17 +343,17 @@ describe("Escape with the empty state showing (P8-06, the manager's ruling)", ()
     expect(closeMenu).toHaveBeenCalledTimes(1);
     // Its own stop held "back" off, as in the browser: one Escape, one thing.
     expect(back).not.toHaveBeenCalled();
-    expect(run.looks.every((l) => l.empty)).toBe(true);
-    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    expect(run.looks.every((l) => l.card === undefined)).toBe(true);
+    expect(Object.fromEntries(root)).toEqual({});
     run.mounted.unmount();
     release();
   });
 });
 
-// ── With a thread showing, Escape returns the window to the empty state ────────────────────────────
+// ── With a passage in the window, Escape closes it ──────────────────────────────────────────────────
 
-describe("Escape with a passage in the window (P8-06, the manager's ruling)", () => {
-  it("returns the window to the empty state, in place: the width stays reserved, nothing is taken off, the key goes no further", async () => {
+describe("Escape with a passage in the window (P10-08; was P8-06's \"returns the window to the empty state\")", () => {
+  it("closes the window: the width goes back, nothing is scrolled, and the key goes no further", async () => {
     const back = vi.fn();
     const release = registerReaderActions({ back });
     window.addEventListener("keydown", (() => readerActions()?.back?.()) as never);
@@ -374,23 +367,21 @@ describe("Escape with a passage in the window (P8-06, the manager's ruling)", ()
     ]);
     await wait();
 
-    // Empty, then the passage, then empty again — never without a window.
+    // Nothing, then the passage, then nothing again.
     const kinds = run.looks.map(kind);
-    expect(kinds[0]).toBe("empty");
+    expect(kinds[0]).toBe("none");
     expect(kinds).toContain("window");
-    expect(kinds[kinds.length - 1]).toBe("empty");
-    expect(kinds).not.toContain("none");
+    expect(kinds[kinds.length - 1]).toBe("none");
     // The window's Escape goes no further, as it always did while it held a passage: "back" is not run.
     expect(event.preventDefault).toHaveBeenCalledTimes(1);
     expect(event.stopPropagation).toHaveBeenCalledTimes(1);
     expect(back).not.toHaveBeenCalled();
-    expect(removeProperty).not.toHaveBeenCalled();
     expect(setProperty).toHaveBeenCalledTimes(2);
-    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    expect(removeProperty).toHaveBeenCalledWith("--explain-dock");
+    expect(removeProperty).toHaveBeenCalledWith("--explain-dock-width");
+    expect(Object.fromEntries(root)).toEqual({});
     expect(scrollBy).not.toHaveBeenCalled();
-    // …and the selection that stands is offered again — P9-03b (re-aimed): by the empty window's header control, not a
-    // floating button.
-    expect(run.last().card?.props.onExplain).toBeTypeOf("function");
+    // No control stands for the selection that is still there: the selection buttons (the page's) and `e` open it again.
     expect(run.last().button).toBeUndefined();
     run.mounted.unmount();
     release();
@@ -404,7 +395,7 @@ describe("Escape with a passage in the window (P8-06, the manager's ruling)", ()
     const run = await scenario(base({ target: first }), [(tree) => click(tree), () => events.push(press("Escape")), () => events.push(press("Escape"))]);
     await wait();
 
-    expect(run.last().empty).toBe(true);
+    expect(run.last().card).toBeUndefined();
     expect(events[0].stopPropagation).toHaveBeenCalledTimes(1);
     expect(events[1].stopPropagation).not.toHaveBeenCalled();
     expect(back).toHaveBeenCalledTimes(1);
@@ -413,7 +404,7 @@ describe("Escape with a passage in the window (P8-06, the manager's ruling)", ()
     release();
   });
 
-  it("drops the thread as a Close used to — what was typed and the session's turns go — and the kept answer stays kept", async () => {
+  it("drops the thread as a Close does — what was typed and the session's turns go — and the kept answer stays kept: opened again, it shows with no request", async () => {
     const kept = pair(1);
     const onAsk = vi.fn(async (): Promise<AskResult> => FIRST_ANSWER);
     const seen: Array<{ draft: string | undefined; turns: ExplainTurn[] | undefined }> = [];
@@ -425,8 +416,8 @@ describe("Escape with a passage in the window (P8-06, the manager's ruling)", ()
         press("Escape");
       },
       (tree) => {
-        // The empty state: no thread, no input.
-        expect(look(tree).empty).toBe(true);
+        // No window: no thread, no input.
+        expect(look(tree).card).toBeUndefined();
         expect(look(tree).thread).toBeUndefined();
         click(tree);
       },
@@ -441,12 +432,12 @@ describe("Escape with a passage in the window (P8-06, the manager's ruling)", ()
     run.mounted.unmount();
   });
 
-  it("Close, not Escape, is what hides the window — with a passage in it too — for the rest of the visit", async () => {
+  it("Close does the same as Escape — with a passage in the window — and leaves no listener", async () => {
     const run = await scenario(base({ target: first }), [(tree) => click(tree), (tree) => close(tree)]);
     await wait();
 
     expect(run.last().card).toBeUndefined();
-    expect(run.last().button).toBeDefined();
+    expect(run.last().button).toBeUndefined();
     expect(Object.fromEntries(root)).toEqual({});
     expect(removeProperty).toHaveBeenCalledWith("--explain-dock");
     expect(removeProperty).toHaveBeenCalledWith("--explain-dock-width");
@@ -455,9 +446,9 @@ describe("Escape with a passage in the window (P8-06, the manager's ruling)", ()
   });
 });
 
-// ── Where no empty state stands behind the window, Escape closes it as it always did ───────────────
+// ── The Tier 0 definition, the card and the sheet close on Escape as they always did ───────────────
 
-describe("Escape where no empty state stands (unchanged)", () => {
+describe("Escape on the Tier 0 definition, the card and the sheet (unchanged)", () => {
   it("no key: the Tier 0 definition's window closes, and the width goes back", async () => {
     const defined = { ...first, passage: "The rafting ratio rose." };
     const run = await scenario(base({ canAsk: false, terms: [term], target: defined, cached: undefined }), [
@@ -476,7 +467,7 @@ describe("Escape where no empty state stands (unchanged)", () => {
     run.mounted.unmount();
   });
 
-  it("the card (640 to 1023 px): closes, with no window behind it", async () => {
+  it("the card (640 to 1023 px): closes", async () => {
     stubWindow(900, 800);
     const run = await scenario(base({ target: first }), [(tree) => click(tree), () => press("Escape")]);
     await wait();
@@ -487,7 +478,7 @@ describe("Escape where no empty state stands (unchanged)", () => {
     run.mounted.unmount();
   });
 
-  it("the sheet (under 640 px): closes, with no window behind it (re-aimed, P9-41: opened by the thumb bar's cell — the page's `explain` action, the box's `openRef` — not a floating pill)", async () => {
+  it("the sheet (under 640 px): closes (opened by the page's `explain` action, the box's `openRef` — the thumb bar's cell, P9-41)", async () => {
     stubWindow(390, 844);
     const openRef = { current: null as (() => void) | null };
     const run = await scenario(base({ target: first, openRef }), [() => openRef.current?.(), () => press("Escape")]);
@@ -528,6 +519,6 @@ describe("the seams are as the stand-ins model them (read from the source)", () 
     const source = read("src/components/reader/explain-box.tsx");
 
     expect(source).toContain("const isOpen = open !== null; useEffect(() => { if (!isOpen) return; const onKeyDown");
-    expect(source).not.toContain("setHidden(true); }; const onPointerDown");
+    expect(source).not.toContain("setHidden");
   });
 });

@@ -100,6 +100,7 @@ function stubWindow(width = 1280, height = 800) {
   vi.stubGlobal("window", { ...recorder(), innerWidth: width, innerHeight: height, scrollBy, requestAnimationFrame: (fn: () => void) => setTimeout(fn, 0), cancelAnimationFrame: (id: number) => clearTimeout(id) });
 }
 beforeEach(() => {
+  openRef = { current: null };
   listeners = new Map();
   vi.stubGlobal("document", recorder());
   stubWindow();
@@ -132,10 +133,13 @@ const wait = () => new Promise((resolve) => setTimeout(resolve, 5));
 // P9-03b (re-aimed helper): press "Explain this?" wherever it stands — the floating button where no window stands, the
 // window's header control (`onExplain`) where one does (a reader with a key has the empty window from 1024 px). It was
 // the floating button alone; every assertion of the tests that use it is as it was.
-const click = (tree: ReactNode) => {
-  const press = (look(tree).button?.props.onClick as (() => void) | undefined) ?? (elements(tree).find((el) => el.type === ExplainCard)?.props.onExplain as (() => void) | undefined);
-  if (!press) throw new Error("no Explain this? control is standing");
-  press();
+/** P10-08 (review 8.4, 8.5; re-aimed): the window is opened only by the page's `explain` action — the selection buttons and the `e` key —
+ *  which is the box's `openRef`. It was the floating "Explain this?" button, or the control in the always-present window's header. */
+let openRef: { current: (() => void) | null } = { current: null };
+const click = (tree?: ReactNode) => {
+  void tree;
+  if (!openRef.current) throw new Error("the box has not published its open action");
+  openRef.current();
 };
 /** The window's Close button (P8-06: the one thing that hides it; Escape clears its passage). */
 const closeOf = (tree: ReactNode) => look(tree).card?.props.onClose as () => void;
@@ -151,6 +155,7 @@ const base = (over: Partial<Props> = {}): Props => ({
   onReply: vi.fn(async (): Promise<ReplyResult> => REPLY),
   onResetThread: vi.fn(),
   reading,
+  openRef,
   ...over,
 });
 
@@ -482,7 +487,6 @@ describe("ExplainBox — openRef: e opens the box as the button does (P3-02b)", 
   });
 
   it("with the box already open, e goes to the input: it focuses it and opens nothing twice", async () => {
-    const openRef: NonNullable<Props["openRef"]> = { current: null };
     const onAsk = vi.fn(async (): Promise<AskResult> => answer);
     const focus = vi.fn();
     const run = await scenario(base({ openRef, onAsk }), [
@@ -637,14 +641,13 @@ describe("ExplainBox — the page keeps the dock's width clear while it is open 
   });
 
   it("reserves nothing while only the button stands, and 376 px once the box is open as a dock (no key: the Tier 0 definition)", async () => {
-    // P8-06 (re-aimed): with a key and a body the page keeps the 376 px clear from the mount, before any button
-    // (`explain-box.empty.flow.test.tsx`). Without a key nothing stands before the press, as this pinned.
+    // P10-08 (re-aimed): nothing stands before the page's `explain` action, with a key or without (`explain-box.entry.flow.test.tsx`).
     let before: Record<string, string> = { unset: "yes" };
     const defined = { ...first, passage: "The rafting ratio rose." };
     const run = await scenario(base({ canAsk: false, terms: [term], target: defined, cached: undefined }), [
       (tree) => {
         before = Object.fromEntries(root);
-        expect(look(tree).button).toBeDefined();
+        expect(look(tree).card).toBeUndefined();
         click(tree);
       },
     ]);
@@ -697,7 +700,7 @@ describe("ExplainBox — the page keeps the dock's width clear while it is open 
       stubWindow(width, height);
       // Re-aimed, P9-41: at 390 px the sheet is opened by the thumb bar's cell — the page's `explain` action, the box's `openRef`.
       const openRef = { current: null as (() => void) | null };
-      const run = await scenario(base({ openRef }), [(tree) => (width < 768 ? openRef.current?.() : click(tree))]);
+      const run = await scenario(base({ openRef }), [() => openRef.current?.()]);
       await wait();
 
       expect(run.last().card).toBeDefined();
@@ -735,34 +738,6 @@ describe("ExplainBox — the page keeps the dock's width clear while it is open 
       { dock: false, root: {} },
       { dock: true, root: RESERVED },
     ]);
-    run.mounted.unmount();
-  });
-
-  it("reads where the selection is after the page has reflowed, so the button stands by the words again once the dock closes (re-aimed, P9-03b: a reader with no key — the Tier 0 definition window is the dock that comes and goes; a key reader's window stands from the mount, with no floating button beside it; P9-20: in the gutter, where the button stands beside the words — on the furniture it reads nothing of them)", async () => {
-    // What the page captured when the selection was made (`first.rect`: right 420, bottom 420; the column to 700) is not
-    // where the words stand once the dock has come and gone: after the reflow they are at right 700, bottom 500 in the wide page,
-    // the column to 760. The button must follow the measure, not the first capture.
-    const wide = { rect: { left: 560, top: 480, right: 700, bottom: 500 }, bounds: { left: 560, top: 480, right: 700, bottom: 500 }, paragraph: { left: 100, top: 460, right: 760, bottom: 700 } };
-    const narrow = { rect: { left: 300, top: 900, right: 380, bottom: 920 }, bounds: { left: 300, top: 900, right: 380, bottom: 920 }, paragraph: { left: 100, top: 880, right: 500, bottom: 1100 } };
-    const target: ExplainSelection = { ...first, passage: "The rafting ratio rose.", paragraph: { left: 100, top: 360, right: 700, bottom: 600 }, measure: () => (root.has("--explain-dock") ? narrow : wide) };
-    const buttonAt: Array<{ left?: number; top?: number }> = [];
-    // P8-06 (re-aimed): the dock closes with the Close button — Escape now clears the passage back to the empty
-    // state, which keeps the width reserved and so moves nothing.
-    const run = await scenario(base({ target, canAsk: false, terms: [term], cached: undefined }), [
-      (tree) => buttonAt.push(look(tree).button?.props.style as { left?: number; top?: number }),
-      (tree) => click(tree),
-      () => {},
-      (tree) => closeOf(tree)(),
-    ]);
-    await wait();
-    const style = run.last().button?.props.style as { left: number; top: number } | undefined;
-
-    // Before the dock the button is where the first capture put it: in the gutter of the column the page captured (to 700),
-    // level with the selection's first line (`first.bounds.top`, 380).
-    expect(buttonAt[0]).toEqual({ left: 700 + 6, top: 380 });
-    // After the dock closed it is beside the words where the measure says they are: the wide page's column (to 760), first line 480.
-    expect(run.last().card).toBeUndefined();
-    expect(style).toEqual({ left: 760 + 6, top: 480 });
     run.mounted.unmount();
   });
 });
@@ -803,13 +778,12 @@ describe("ExplainBox — the selection stays where it was on the screen across t
     run.mounted.unmount();
   });
 
-  it("Escape clears the passage and moves nothing: the width stays reserved, so there is no reflow to hold (P8-06)", async () => {
+  it("Escape closes the window as Close does (re-aimed, P10-08: was \"clears the passage and moves nothing: the width stays reserved\" — there is no empty state to go back to): the width goes back and the page scrolls back by as far", async () => {
     const run = await scenario(base({ target: reflowing() }), [(tree) => click(tree), () => {}, () => escape()]);
     await wait();
 
-    // Only the first reflow (800, held at the mount, where the window first stood); none on Escape.
-    expect(scrollBy.mock.calls).toEqual([[{ top: 800, behavior: "instant" }]]);
-    expect(root.size).toBe(2);
+    expect(scrollBy.mock.calls).toEqual([[{ top: 800, behavior: "instant" }], [{ top: -800, behavior: "instant" }]]);
+    expect(root.size).toBe(0);
     run.mounted.unmount();
   });
 

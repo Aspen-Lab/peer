@@ -254,11 +254,8 @@ export const EXPLAIN = {
   ask: "Explain this?",
   /** The card's accessible name. */
   card: "Explanation of the selected passage",
-  /** P8-06 (ruling §1h.45; the owner's "yes"): the one line of the window's empty state, which a reader with a key
-   *  has from the body's first paint, from 1024 px, before anything is explained. The label face, under the card's
-   *  header; no input, no quote. It names what to do and nothing about a key, a plan or a price (§1b: the window is
-   *  shown to a reader who has one; a locked block is never shown to one who has not). */
-  empty: "Select a passage in the paper, then press Explain this? or e.",
+  /** P10-08 (review 8.4): the window's title, beside its large Close X. The control that opens it is the selection buttons' (`selection-toolbar.tsx`). */
+  title: "Explain this",
   /** Above the paper's own definition of a term in the passage (Tier 0). */
   defines: (term: string) => `How the paper defines ${term}`,
   meaning: "What it means",

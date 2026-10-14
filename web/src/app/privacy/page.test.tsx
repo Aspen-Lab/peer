@@ -61,7 +61,7 @@ describe("/privacy — Your questions (P2-03)", () => {
 // double quotes in the text are the typographic ones, which are not escaped.
 
 const EXPLAIN_PARAGRAPHS = [
-  "Selecting a passage sends nothing, and neither does typing in the box. Peer sends a request only when you click “Explain this?” (or press E on a selection) and, for a follow-up, when you press Enter or Send, or Say more under a reply. A reply is short unless you ask for more, in your own words or with Say more. The request carries the passage you selected, the paragraph it sits in and the one on either side of it, the paper's title and abstract, one line for each section of the paper's map and, for a follow-up, the messages of that thread. The request also carries the paper's record as this page holds it — its title, authors, venue, where it came from and your save and feedback marks on it — so Peer's server can find the paper; of that record the model sees only the title and the abstract. The answer is written with your own model key, which goes with the request.",
+  "Selecting a passage sends nothing, and neither does typing in the box. Peer sends a request only when you press “Explain this” above a selection (or press E on one) and, for a follow-up, when you press Enter or Send, or Say more under a reply. A reply is short unless you ask for more, in your own words or with Say more. The request carries the passage you selected, the paragraph it sits in and the one on either side of it, the paper's title and abstract, one line for each section of the paper's map and, for a follow-up, the messages of that thread. The request also carries the paper's record as this page holds it — its title, authors, venue, where it came from and your save and feedback marks on it — so Peer's server can find the paper; of that record the model sees only the title and the abstract. The answer is written with your own model key, which goes with the request.",
   "The request goes to Peer's server and on to the model provider whose key you added. The answer runs on your own key, and it is short unless you ask for more.",
   "On a follow-up you can turn on “Search the web” for that one message. It is off every time the box opens and never turns on by itself. With it on, the provider may run a web search to write that reply: Gemini does this with Google Search, and with any other provider the reply is written without a search and the box says so. A message answered with a search carries the mark “searched the web”, and Peer shows no link to anything the search found.",
   "Peer's server keeps three things. First, each answer it gives, in memory, for up to an hour, so the same passage asked about again is answered without another model call; it is filed under hashes of the document, the passage and the thread, never under who asked.",
@@ -100,7 +100,8 @@ describe("/privacy — Explain this (P3-02d)", () => {
 
   it("says what is sent, and that nothing is sent while the reader selects or types", () => {
     expect(entry).toContain("Selecting a passage sends nothing, and neither does typing in the box");
-    expect(entry).toContain("only when you click");
+    // Re-aimed (P10-08): the request is made by pressing the selection buttons' “Explain this” (was: clicking the pill “Explain this?”).
+    expect(entry).toContain("only when you press");
     expect(entry).toContain("press Enter or Send");
     for (const sent of ["the passage you selected", "the paragraph it sits in and the one on either side of it", "the paper's title and abstract".replace(/'/g, "&#x27;"), "one line for each section of the paper", "the messages of that thread", "your own model key"]) {
       expect(entry).toContain(sent);
@@ -187,7 +188,7 @@ describe("/privacy — Explain this (P3-02d)", () => {
   });
 
   it("quotes the box's own labels, so a label that changes in the box shows up here", () => {
-    expect(entry).toContain(`“${EXPLAIN.ask}”`);
+    expect(entry).toContain(`“${EXPLAIN.title}”`);
     expect(entry).toContain(`“${EXPLAIN.searchToggle}”`);
     expect(entry).toContain(`“${EXPLAIN.searchedMark}”`);
   });

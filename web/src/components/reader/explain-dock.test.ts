@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { placeCard } from "./explain-box";
 import * as dock from "./explain-dock";
-import { DOCK_BOTTOM_PX, DOCK_GAP_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_RESERVE_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_VAR, DOCK_WIDTH_PX, DOCK_WIDTH_VAR, MASTHEAD_MIN_VIEWPORT_PX, PAGE_ZOOM_ROOT, PAGE_ZOOM_VAR, emptyDockStands, legendHeightPx, reserveDock } from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_GAP_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_RESERVE_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_VAR, DOCK_WIDTH_PX, DOCK_WIDTH_VAR, MASTHEAD_MIN_VIEWPORT_PX, PAGE_ZOOM_ROOT, PAGE_ZOOM_VAR, legendHeightPx, reserveDock } from "./explain-dock";
 
 // P7-15 (the owner's R7): the dock's rectangle is built from three numbers that the shell owns —
 // the masthead's height above it, the foot legend's below it, and the width of the card it
@@ -166,31 +166,19 @@ describe("the page's width is kept at <main>, in CSS", () => {
   });
 });
 
-// ── The window before the first Explain (P8-06, ruling §1h.45) ─────────────────────────────
+// ── No window before the reader asks (P10-08, review 8.5) ───────────────────────────────────────────
 
-describe("when the window stands empty, before any passage is explained (P8-06)", () => {
-  const stands = { canAsk: true, hasBody: true, hidden: false, width: 1280 };
-
-  it("stands for a reader with a key, on a paper with a readable body, from the dock's width, until it is hidden", () => {
-    expect(emptyDockStands(stands)).toBe(true);
-    expect(emptyDockStands({ ...stands, width: DOCK_MIN_VIEWPORT_PX })).toBe(true);
-    expect(emptyDockStands({ ...stands, width: 1920 })).toBe(true);
+describe("no empty window stands (P10-08; replaces P8-06's `emptyDockStands` pins, deleted with the feature)", () => {
+  it("the rule that let an empty window stand from the mount is gone from the dock's module", () => {
+    expect((dock as Record<string, unknown>).emptyDockStands).toBeUndefined();
+    expect(read("src/components/reader/explain-dock.ts")).not.toContain("emptyDockStands");
   });
 
-  it("does not stand without a key: a permanent panel would be a locked block (§1b)", () => {
-    expect(emptyDockStands({ ...stands, canAsk: false })).toBe(false);
-  });
+  it("the page's width is kept clear only by `reserveDock`, which the box calls when a passage opens the dock", () => {
+    const box = read("src/components/reader/explain-box.tsx");
 
-  it("does not stand on a paper with no readable body (no Paper digestion tab to select in)", () => {
-    expect(emptyDockStands({ ...stands, hasBody: false })).toBe(false);
-  });
-
-  it("does not stand once the reader has hidden it (Escape or Close) — for the rest of the visit", () => {
-    expect(emptyDockStands({ ...stands, hidden: true })).toBe(false);
-  });
-
-  it("does not stand below 1024 px: the card (640 to 1023) and the sheet open on the reader's press only", () => {
-    for (const width of [DOCK_MIN_VIEWPORT_PX - 1, 800, 640, 390]) expect(emptyDockStands({ ...stands, width }), `${width} px`).toBe(false);
+    expect(box).toContain("const docked = open !== null && viewport.width >= DOCK_MIN_VIEWPORT_PX;");
+    expect(box.match(/reserveDock\(/g)).toHaveLength(1);
   });
 });
 

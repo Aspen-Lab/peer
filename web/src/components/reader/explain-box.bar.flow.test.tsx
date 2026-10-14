@@ -247,21 +247,20 @@ describe("ExplainBox — under 768 px the control is the thumb bar's cell, not a
   });
 });
 
-describe("ExplainBox — from 768 px the pill is the control again, and the bar is not asked (P9-41, §1h.66)", () => {
-  it("at 768 and 800 px with no gutter: the pill on the legend, nothing offered to the bar (the bar is hidden there)", async () => {
+describe("ExplainBox — from 768 px nothing is drawn and the bar is not asked (re-aimed, P10-08: the pill that was the control here is gone — the selection buttons are, `selection-toolbar.tsx`)", () => {
+  it("at 768 and 800 px with no gutter: no pill on the legend, nothing offered to the bar (the bar is hidden there)", async () => {
     for (const width of [768, 800]) {
       stubWindow(width);
       const run = await scenario(base({ target: { ...first, paragraph: { left: 16, top: 360, right: width - 100, bottom: 600 } } }));
       await wait();
 
-      expect(run.last().pill, `${width} px`).toBeDefined();
-      expect((run.last().pill?.props.style as { bottom?: string }).bottom, `${width} px`).toBe("36px");
+      expect(run.looks.every((l) => l.pill === undefined), `${width} px`).toBe(true);
       expect(explainOffered(), `${width} px`).toBe(false);
       run.mounted.unmount();
     }
   });
 
-  it("at 1024 px and up the window carries the control and the bar is not asked either", async () => {
+  it("at 1024 px and up there is no window until it is asked for, and the bar is not asked either", async () => {
     stubWindow(1440, 900);
     const run = await scenario(base());
     await wait();
@@ -271,7 +270,7 @@ describe("ExplainBox — from 768 px the pill is the control again, and the bar 
     run.mounted.unmount();
   });
 
-  it("a window resized from a phone's width to a tablet's hands the control from the bar back to the pill, and the other way", async () => {
+  it("a window resized from a phone's width to a tablet's takes the offer from the bar, and gives it back; no pill either way", async () => {
     const seen: Array<{ offered: boolean; pill: boolean }> = [];
     const mark: Step = (tree) => seen.push({ offered: explainOffered(), pill: look(tree).pill !== undefined });
     const resizeTo = (width: number): Step => () => {
@@ -283,7 +282,7 @@ describe("ExplainBox — from 768 px the pill is the control again, and the bar 
 
     expect(seen).toEqual([
       { offered: true, pill: false },
-      { offered: false, pill: true },
+      { offered: false, pill: false },
       { offered: true, pill: false },
     ]);
     run.mounted.unmount();

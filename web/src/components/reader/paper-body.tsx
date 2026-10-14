@@ -282,12 +282,19 @@ const PARAGRAPH_ANCHOR = /^paper-section-(\d+)-p(\d+)$/;
 /** What a drawn formula leaves in the DOM: KaTeX's markup, or the TeX in `<code>`. */
 const FORMULA_SELECTOR = ".katex, .katex-display, code";
 
+/** P10-08 (review 8.4): where a selection is from — the paper's body (as before), a block of the Summary, or an answer under the question. */
+export type ExplainSource = "paper" | "summary" | "answer";
+
 /** Where the selection sits in the body, and its words. */
 export interface SelectionTarget {
-  /** `reading.body[sectionIndex]` and its `paragraphs[paragraphIndex]`. */
+  /** `reading.body[sectionIndex]` and its `paragraphs[paragraphIndex]`; −1 for a selection that is not the paper's (below). */
   sectionIndex: number;
   paragraphIndex: number;
   passage: string;
+  /** P10-08: where it is from; absent is the paper's body, which is all there was. */
+  source?: ExplainSource;
+  /** P10-08: the container's own stable id — the paragraph's anchor for the paper, the block's key or the answer's index otherwise. */
+  paragraphId?: string;
 }
 
 /** A rectangle in the viewport's coordinates. */

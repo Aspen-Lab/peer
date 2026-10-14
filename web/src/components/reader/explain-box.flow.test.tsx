@@ -90,6 +90,7 @@ function recorder() {
 }
 
 beforeEach(() => {
+  openRef = { current: null };
   listeners = new Map();
   vi.stubGlobal("document", recorder());
   vi.stubGlobal("window", { ...recorder(), innerWidth: 1280, innerHeight: 800, requestAnimationFrame: (fn: () => void) => setTimeout(fn, 0), cancelAnimationFrame: (id: number) => clearTimeout(id) });
@@ -126,12 +127,15 @@ async function scenario(initial: Props, steps: Array<(tree: ReactNode, ctx: { pr
 // P9-03b (re-aimed helper): press "Explain this?" wherever it stands — the floating button where no window stands, the
 // window's header control (`onExplain`) where one does (a reader with a key has the empty window from 1024 px). It was
 // the floating button alone; every assertion of the tests that use it is as it was.
-const click = (tree: ReactNode) => {
-  const press = (look(tree).button?.props.onClick as (() => void) | undefined) ?? (elements(tree).find((el) => el.type === ExplainCard)?.props.onExplain as (() => void) | undefined);
-  if (!press) throw new Error("no Explain this? control is standing");
-  press();
+/** P10-08 (review 8.4, 8.5; re-aimed): the window is opened only by the page's `explain` action — the selection buttons and the `e` key —
+ *  which is the box's `openRef`. It was the floating "Explain this?" button, or the control in the always-present window's header. */
+let openRef: { current: (() => void) | null } = { current: null };
+const click = (tree?: ReactNode) => {
+  void tree;
+  if (!openRef.current) throw new Error("the box has not published its open action");
+  openRef.current();
 };
-const base = (over: Partial<Props> = {}): Props => ({ target: first, terms: [], canAsk: true, onAsk: vi.fn(async (): Promise<AskResult> => answer), reading, ...over });
+const base = (over: Partial<Props> = {}): Props => ({ target: first, terms: [], canAsk: true, onAsk: vi.fn(async (): Promise<AskResult> => answer), reading, openRef, ...over });
 const wait = () => new Promise((resolve) => setTimeout(resolve, 5));
 
 describe("ExplainBox — the click is the send (§1h.2)", () => {
@@ -142,9 +146,11 @@ describe("ExplainBox — the click is the send (§1h.2)", () => {
     const run = await scenario(base({ onAsk }), [
       (tree) => {
         expect(onAsk).not.toHaveBeenCalled();
-        // P9-03b (re-aimed): at 1280 a reader with a key has the empty window from the mount, which carries the control;
-        // the floating button stands only where no window does (the card range, tested in `explain-box.dock.flow`).
-        expect(look(tree).button ?? elements(tree).find((el) => el.type === ExplainCard)?.props.onExplain).toBeDefined();
+        // P10-08 (re-aimed): nothing is drawn before the reader asks — no window, no pill; the page's `explain` action (`openRef`) is
+        // the box's open, and it is published.
+        expect(look(tree).card).toBeUndefined();
+        expect(look(tree).button).toBeUndefined();
+        expect(openRef.current).toBeTypeOf("function");
         seen.push(look(tree).status);
       },
       (tree) => click(tree),
@@ -158,7 +164,7 @@ describe("ExplainBox — the click is the send (§1h.2)", () => {
     expect(onAsk).toHaveBeenCalledTimes(1);
     expect(onAsk).toHaveBeenCalledWith(expect.objectContaining({ sectionIndex: 1, paragraphIndex: 1, passage: first.passage }));
     expect(seen).toEqual([null, "loading", "answer"]);
-    // Once the card is open the button is gone.
+    // Once the card is open there is still no pill (P10-08: there never is one).
     expect(run.last().button).toBeUndefined();
     run.mounted.unmount();
   });
@@ -297,8 +303,10 @@ describe("ExplainBox — what closes it", () => {
 
     expect(run.looks.some((l) => l.card)).toBe(true);
     expect(run.last().card).toBeUndefined();
-    // The new selection has its own button.
-    expect(run.last().button).toBeDefined();
+    // The new selection has no pill of its own (re-aimed, P10-08): the selection buttons and `e` open it, and the thumb bar's offer is
+    // `explain-box.bar.flow.test.tsx`'s.
+    expect(run.last().button).toBeUndefined();
+    expect(openRef.current).toBeTypeOf("function");
     run.mounted.unmount();
   });
 
