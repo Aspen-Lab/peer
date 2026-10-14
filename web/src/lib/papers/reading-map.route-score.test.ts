@@ -909,3 +909,123 @@ describe("routeByQuestions — the best row of the favoured role keeps a strong 
     expect(tiersOf(absent, QUESTION_OF.mechanism).b).toBe("medium");
   });
 });
+
+// ── P10-32 (BACKLOG-83): a tie between two intents, and the cue words that misfire ──────────────────────────────────
+// A question that carries as many cue words of two intents as of any other is not "no intent": both intents' favoured roles
+// weigh half as much (the square root of the table's weight). A cue word that is also an everyday word (`current`, `time`,
+// `rate`, `model`, `role`) counts only in the phrases that mean the intent. Invented papers, the quillwort and the lattice.
+
+describe("routeByQuestions — a tie between two intents weighs both by half (P10-32, rule 1)", () => {
+  // Four rows of the same words and counts, one per role. Under no intent the earlier rows are the strong ones and the last is
+  // medium. Under a tie of mechanism and parameter every score is multiplied by the square roots of the two table rows:
+  // setup 0.95, evidence 1.07, interpretation 1.14, method 1.14 — so the setup row, the lowest, is the one left out.
+  const equal = (order: ReadingRole[]): Spec[] => [...order.map((role, i) => leaf(`r${i}`, { role })), NONE];
+  const TIE = "quillwort lattice mechanism temperature";
+
+  it("a mechanism word and a parameter word: the favoured roles of both stand in the three, the setup row (0.9) is left out", () => {
+    const specs = equal(["setup", "evidence", "interpretation", "method"]);
+    expect(questionIntent(TIE)).toBe("none");
+    expect(tiersOf(specs, QUESTION_OF.none)).toMatchObject({ r0: "strong", r1: "strong", r2: "strong", r3: "medium" });
+    expect(tiersOf(specs, TIE)).toMatchObject({ r0: "medium", r1: "strong", r2: "strong", r3: "strong" });
+  });
+
+  it("is half, not whole: a method row at 0.73 of the best does not reach the three under the tie (the whole weight 1.3 would lift it over two body rows)", () => {
+    const specs: Spec[] = [sec("b1", 7, 4), sec("b2", 6, 3), sec("b3", 5, 3), sec("m", 4, 2, { role: "method" }), NONE];
+    const raw = (id: string) => weightedShare(specs, id, "none");
+    // The premise: half the weight leaves the method row under the third body row, the whole weight puts it over the second.
+    expect(raw("m") * Math.sqrt(1.3)).toBeLessThan(raw("b3"));
+    expect(raw("m") * 1.3).toBeGreaterThan(raw("b2"));
+    expect(tiersOf(specs, TIE)).toMatchObject({ b1: "strong", b2: "strong", b3: "strong", m: "medium" });
+    expect(tiersOf(specs, QUESTION_OF.parameter)).toMatchObject({ m: "strong" });
+  });
+
+  it("three intents with one cue word each weigh all three by half", () => {
+    const specs = equal(["setup", "method", "interpretation", "evidence"]);
+    expect(tiersOf(specs, QUESTION_OF.none)).toMatchObject({ r0: "strong", r1: "strong", r2: "strong", r3: "medium" });
+    expect(tiersOf(specs, "quillwort lattice mechanism temperature performance")).toMatchObject({ r0: "medium", r1: "strong", r2: "strong", r3: "strong" });
+  });
+
+  it("gives a tie no strong slot of its own: a favoured row below the grade stays where the grade puts it", () => {
+    // The slot rule is for one clear intent (its weight is whole); a half boost only moves scores.
+    const specs: Spec[] = [sec("intro", 5, 3, { role: "setup" }), sec("r1", 7, 4, { role: "evidence" }), sec("r2", 6, 3, { role: "evidence" }), sec("d", 3, 1, { role: "interpretation" }), NONE];
+    expect(tiersOf(specs, TIE).d).toBe("medium");
+    expect(tiersOf(specs, QUESTION_OF.mechanism).d).toBe("strong");
+  });
+
+  it("leaves a question with one clear intent as it was, and a question with no cue", () => {
+    const specs = equal(["setup", "method", "evidence", "interpretation"]);
+    expect(tiersOf(specs, "quillwort lattice mechanism cause temperature")).toEqual(tiersOf(specs, QUESTION_OF.mechanism));
+    expect(tiersOf(specs, "quillwort lattice sorption")).toEqual(tiersOf(specs, QUESTION_OF.none));
+  });
+});
+
+describe("questionIntent — the cue words that are everyday words count only in their phrases (P10-32, rule 2)", () => {
+  const read = (rest: string) => questionIntent(`quillwort lattice ${rest}`);
+
+  it("current: a parameter cue as the applied or plating current, or beside another variable; never in 'current density', 'the current state', 'currently'", () => {
+    expect(read("current density")).toBe("none");
+    expect(read("the current literature")).toBe("none");
+    expect(read("current state")).toBe("none");
+    expect(read("applied current")).toBe("parameter");
+    expect(read("plating current")).toBe("parameter");
+    expect(read("what current")).toBe("parameter");
+    // Beside another variable in a list: "temperature, current" the owner's way, and the reverse.
+    expect(read("mechanism, current and voltage")).toBe("parameter");
+    expect(read("mechanism, voltage and current")).toBe("parameter");
+    expect(read("mechanism current")).toBe("mechanism");
+  });
+
+  it("time: a parameter cue as 'how long', 'time constant', a named time, or beside another variable; never as 'time-resolved', 'at the same time', 'over time'", () => {
+    expect(read("at the same time")).toBe("none");
+    expect(read("time-resolved")).toBe("none");
+    expect(read("over time")).toBe("none");
+    expect(read("how long did it take")).toBe("parameter");
+    expect(read("time constant")).toBe("parameter");
+    expect(read("annealing time")).toBe("parameter");
+    expect(read("mechanism, time and temperature")).toBe("parameter");
+    expect(read("mechanism time")).toBe("mechanism");
+  });
+
+  it("rate: a parameter cue as 'what rate', a named rate (growth, scan, heating), also plural; never as 'rate capability', 'at a high rate'", () => {
+    expect(read("rate capability")).toBe("none");
+    expect(read("a high rate")).toBe("none");
+    expect(read("what rate did it grow at")).toBe("parameter");
+    expect(read("growth rate")).toBe("parameter");
+    expect(read("scan rates")).toBe("parameter");
+    expect(read("heating rate")).toBe("parameter");
+    expect(read("mechanism, rate and temperature")).toBe("parameter");
+  });
+
+  it("model: a mechanism cue as a theoretical, physical or mechanistic model, or 'model of the …'; never as 'machine learning model', 'model system', 'model compound'", () => {
+    expect(read("machine learning model")).toBe("none");
+    expect(read("model system")).toBe("none");
+    expect(read("model compound")).toBe("none");
+    expect(read("theoretical model")).toBe("mechanism");
+    expect(read("physical model")).toBe("mechanism");
+    expect(read("a model of the growth")).toBe("mechanism");
+    expect(read("model for the growth")).toBe("mechanism");
+  });
+
+  it("role: a mechanism cue as 'the role of', 'role in', 'plays a role'; never as 'role model', 'role-based', 'a role'", () => {
+    expect(read("role model")).toBe("none");
+    expect(read("role-based")).toBe("none");
+    expect(read("the role of texture")).toBe("mechanism");
+    expect(read("role in cracking")).toBe("mechanism");
+    expect(read("texture plays a role")).toBe("mechanism");
+    expect(read("what is the role of texture")).toBe("mechanism");
+  });
+
+  it("keeps the owner's two questions as they were: the parameter one, and the long one with 'temperature, current'", () => {
+    expect(questionIntent("I want to learn the parameter for growing 110 LCO")).toBe("parameter");
+    expect(
+      questionIntent(
+        "I want to learn the relationship between LCO properties such as crystallography, grain structure, morphology, with various plating variable like temperature, current, etc.",
+      ),
+    ).toBe("parameter");
+  });
+
+  it("does not let a misfiring word break a clear intent: 'why does the current state of the model matter' has one mechanism cue", () => {
+    expect(questionIntent("Why does the current state of the quillwort lattice matter?")).toBe("mechanism");
+    expect(questionIntent("What capacity retention did the model films achieve?")).toBe("result");
+  });
+});

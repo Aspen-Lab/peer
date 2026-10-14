@@ -13,6 +13,7 @@ import { readableSections, readingMapOf, routeByQuestions, type ReadingMap } fro
 import { partitionedMap, withPartitionMarks, type GuidePartition } from "@/lib/papers/reading-partition";
 import type { Paper } from "@/types";
 import { MAP, PEERS_READING, ROUTE } from "./copy";
+import { sectionMark } from "./paper-body";
 import { ReadingMapView, carryOpenRows } from "./reading-map";
 
 // P10-07b (B P10-05 §3.1-3.3; review 3.3, second half; rubric A15): the map of a paper with no
@@ -306,5 +307,68 @@ describe("ReadingMapView — a group row is marked from its paragraphs (B §4)",
     const unfolded = render({ map: over, route, ...opened() });
 
     expect(unfolded).not.toContain("data-route=");
+  });
+});
+
+// ── P10-32 (BACKLOG-73): where the strong-group cap bites, the map's line is the body's ──────────────────────────────
+// One identical paragraph in each of the four parts: all four hold a top paragraph, the trunk is strong, and the cap
+// (floor(4 / 2) = 2) lowers the last two GROUPS to medium. The body draws every one of those four paragraphs at the trunk's
+// tier (strong, `sectionMark(route, "s0")`); the map's group row says medium for the row, and its top paragraph's line must
+// still say strong — it is the same paragraph, and the reader should not see two tints for it.
+describe("ReadingMapView — a group the cap lowered draws its top paragraph as the body does (P10-32, BACKLOG-73)", () => {
+  const SAME = "The quillwort lattice shows cracks. The quillwort lattice was measured on the sand ripples.";
+  const QUESTION = "How does the quillwort lattice crack?";
+  const tied = unheadedReading({ 2: SAME, 10: SAME, 22: SAME, 28: SAME, 12: "Invented paragraph 12 about the lattice. It is named once and left." });
+  const tiedOver = partitionedMap(tied.map!, tied.body, FOUR);
+  const base = routeByQuestions(tied.map!, tied.body, [QUESTION]);
+  const folded = withPartitionMarks(base, tied.map!, tied.body, FOUR)!;
+  const draw = (route = folded) => renderToStaticMarkup(createElement(ReadingMapView, { map: tiedOver, route, openRows: [0, 1, 2, 3] }));
+  /** The tint the map draws on the line that links to paragraph `n` of the trunk. */
+  const lineTier = (html: string, n: number): string | undefined => new RegExp(`href="#paper-section-0-p${n}"[^>]*?data-route="([a-z]+)"`).exec(html)?.[1];
+  /** The tint on a group row's own head (the first `data-route` in the row). */
+  const rowTier = (html: string, heading: string): string | undefined => /data-route="([a-z]+)"/.exec(rowOf(html, heading))?.[1];
+
+  it("has a map where the cap bites: four groups with a top paragraph each, the last two rows medium", () => {
+    expect(base.byQuestion[0].sections.s0.topParagraphs).toEqual([2, 10, 22, 28]);
+    const html = draw();
+
+    expect(["Introduction", "Results", "Discussion", "Conclusion"].map((heading) => rowTier(html, heading))).toEqual(["strong", "strong", "medium", "medium"]);
+  });
+
+  it("draws the top paragraph of a lowered group strong, as the body draws it, though its row says medium", () => {
+    const html = draw();
+
+    expect(lineTier(html, 22)).toBe("strong");
+    expect(lineTier(html, 28)).toBe("strong");
+    // And the groups the cap left alone, as before.
+    expect(lineTier(html, 2)).toBe("strong");
+    expect(lineTier(html, 10)).toBe("strong");
+  });
+
+  it("agrees with the body on every paragraph, lowered group or not: the line's tier is the trunk's mark under the trunk's id", () => {
+    const html = draw();
+    const body = sectionMark(folded, "s0")!;
+
+    for (const [index, tier] of body.paragraphs) expect(lineTier(html, index), `paragraph ${index}`).toBe(tier);
+    // A paragraph that only mentions stays faint in a group whose row the cap did not touch.
+    expect(lineTier(html, 12)).toBe("faint");
+  });
+
+  it("leaves the row's own tier at the cap's: the group is medium, its line strong", () => {
+    const html = draw();
+
+    expect(rowTier(html, "Discussion")).toBe("medium");
+    expect(lineTier(html, 22)).toBe("strong");
+  });
+
+  it("changes nothing when no group is lowered: a question that lives in one part", () => {
+    const one = unheadedReading({ 12: SAME });
+    const overOne = partitionedMap(one.map!, one.body, FOUR);
+    const route = withPartitionMarks(routeByQuestions(one.map!, one.body, [QUESTION]), one.map!, one.body, FOUR)!;
+    const html = renderToStaticMarkup(createElement(ReadingMapView, { map: overOne, route, openRows: [0, 1, 2, 3] }));
+
+    expect(lineTier(html, 12)).toBe("strong");
+    expect(rowTier(html, "Results")).toBe("strong");
+    expect(rowTier(html, "Introduction")).toBeUndefined();
   });
 });
