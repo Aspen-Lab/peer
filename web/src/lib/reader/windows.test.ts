@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DOCK_BOTTOM_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_VAR, DOCK_WIDTH_VAR, columnBottomPx, dockInStack, reserveDock } from "@/components/reader/explain-dock";
 import { block } from "@/lib/notes/blocks";
-import { MIN_FRONT_PX, NOTES_MIN_FRONT_PX, NOTES_WINDOW_ID, WINDOW_HEADER_PX, bindWindowsReserve, columnTop, holdInPlace, stackLayout, stackRoom, stackRows, useWindows } from "./windows";
+import { MIN_FRONT_PX, NOTES_MIN_FRONT_PX, NOTES_WINDOW_ID, WINDOW_HEADER_PX, bindWindowsReserve, columnTop, holdInPlace, stackLayout, stackRoom, stackRows, useWindows, type FloatingWindow } from "./windows";
 
 // P10-09a (review 7.1a; ruling §1h.78): the windows at the right stand like cascaded cards — only the headers of
 // the ones behind show (each later window offset by a header's height), the raised one in front and full; a header
@@ -373,7 +373,7 @@ describe("every window's header is reachable under the explain window (P10-18, X
 
   // The six orders of opening the dump measured (A P10-14, `stack-orders`): the explain window is always in front of the stack
   // (z 70), so what an order changes is which window of the column is the front — a sticky or the notes window — and how many.
-  const orders: Array<[string, ReturnType<typeof sticky>[]]> = [
+  const orders: Array<[string, FloatingWindow[]]> = [
     ["explain, then 3 stickies", [sticky(1, 1), sticky(2, 2), sticky(3, 3)]],
     ["3 stickies, then explain", [sticky(1, 1), sticky(2, 2), sticky(3, 3)]],
     ["explain, then 3 stickies, then the notes window", [sticky(1, 1), sticky(2, 2), sticky(3, 3), notes(4)]],
@@ -437,7 +437,7 @@ describe("every window's header is reachable under the explain window (P10-18, X
   });
 
   it("with the explain window standing and the column unable to rise above it, the column never lifts under it: the front gives way, not the headers", () => {
-    const rows = stackLayout([sticky(1, 1), sticky(2, 2), sticky(3, 3)], { top: 640, bottom: 680, frontHeight: 260, minTop: DOCK_TOP_PX, ceiling: 300 });
+    const rows = stackLayout([sticky(1, 1), sticky(2, 2), sticky(3, 3)], { top: 640, bottom: 680, frontHeight: 260, minTop: DOCK_TOP_PX, ceiling: 200 });
     expect(rows[0].top).toBe(640);
     expect(rows.every((r) => r.top >= 640)).toBe(true);
     expect(rows[2].height).toBeGreaterThanOrEqual(WINDOW_HEADER_PX);

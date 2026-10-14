@@ -173,6 +173,73 @@ export function settleHeight(guard: HeightGuard, held: number | null, reading: n
   return reading;
 }
 
+// ── Room for the stack ────────────────────────────────────────────────────
+//
+// P10-18 (A P10-14 §4 X-B1, B9; ruling §1h.93 (a)): the explain window stands at z 70, over the stickies' column (z 60+). The column
+// rises above it or stands under it, but with the explain window, three stickies and the notes window the screen is not high
+// enough for both, and the headers, the X and the notes window's Export stood under the explain window. The explain window now
+// gives way: its body scrolls inside a height that leaves the column its room (`room`, from `stackRoom` in `lib/reader/windows.ts`:
+// a gap, a header for every window behind, and the front's least height). It never goes below `DOCK_STACK_FLOOR_PX`, which keeps its
+// sticky header (with its X) and its sticky controls row (the follow-up field and Send). The decision reads the paragraph's place
+// and the screen only, never the window's own measured height, so a window that has been shrunk cannot read its smaller height
+// and un-shrink itself.
+
+/** The column's foot: the screen's bottom less the foot legend and a margin, but at least this much (`useColumn`, `windows.ts`). */
+export const COLUMN_FOOT_PX = 40;
+export const COLUMN_LEGEND_MARGIN_PX = 8;
+
+/** Where the column of floating windows ends: the screen's height less the legend (at the page's zoom) and its margin. */
+export function columnBottomPx(viewportHeight: number, legend: number): number {
+  return viewportHeight - Math.max(COLUMN_FOOT_PX, Math.ceil(legend) + COLUMN_LEGEND_MARGIN_PX);
+}
+
+/**
+ * The least the explain window is given while other windows stand: its sticky header with the quote and its X (140 px), its sticky
+ * controls row with the follow-up field and Send (101 px), and a few lines of the answer between them. Above the card's own
+ * `CARD_MIN_HEIGHT` on purpose: at 120 px the two bars would overlap and cover each other's controls.
+ */
+export const DOCK_STACK_FLOOR_PX = 250;
+
+/** Sub-pixel slack: the column's top is the explain window's bottom rounded up, and a fractional paragraph top must not tip it over. */
+const STACK_SLACK_PX = 2;
+
+const clampTo = (value: number, low: number, high: number) => Math.min(Math.max(value, low), Math.max(low, high));
+
+/**
+ * The dock's top and its `maxHeight` once the stack's `room` is counted. `top` is `placePanel`'s own (level with the paragraph,
+ * lifted for the window's height), `paragraphTop` the paragraph's, `height` the screen's, `legend` the foot legend's height.
+ *
+ *   - `room` 0 (no other window stands): `top`, and down to the legend — as it always was.
+ *   - the column can stand ABOVE the window (`DOCK_TOP_PX + room` fits over the paragraph, read at the thread floor so the answer
+ *     does not matter): the window keeps its place, no higher than the column needs;
+ *   - otherwise the window shrinks: level with the paragraph, but ending `room` above the column's foot, down to
+ *     `DOCK_STACK_FLOOR_PX` (from the masthead's foot at the highest). It scrolls inside.
+ */
+export function dockInStack({
+  top,
+  paragraphTop,
+  height,
+  legend,
+  room,
+}: {
+  top: number;
+  paragraphTop: number;
+  height: number;
+  legend: number;
+  room: number;
+}): { top: number; maxHeight: number } {
+  if (!(room > 0)) return { top, maxHeight: Math.max(0, height - top - legend) };
+  const above = DOCK_TOP_PX + room;
+  const steady = clampTo(paragraphTop, DOCK_TOP_PX, height - legend - DOCK_THREAD_FLOOR_PX);
+  if (steady >= above) {
+    const standing = Math.max(top, above);
+    return { top: standing, maxHeight: Math.max(0, height - standing - legend) };
+  }
+  const limit = Math.floor(columnBottomPx(height, legend)) - room - STACK_SLACK_PX;
+  const standing = clampTo(paragraphTop, DOCK_TOP_PX, limit - DOCK_STACK_FLOOR_PX);
+  return { top: standing, maxHeight: Math.max(limit - standing, DOCK_STACK_FLOOR_PX) };
+}
+
 // ── Making room ───────────────────────────────────────────────────────────
 //
 // The dock covers nothing (Q4): while it is open the page keeps its width clear. P10-09d (X-B1): so does every other floating

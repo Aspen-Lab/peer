@@ -338,3 +338,12 @@ describe("dockInStack — the explain window leaves the stack its room (P10-18)"
     expect(a).toEqual(b);
   });
 });
+
+describe("the box asks the stack for its room (P10-18)", () => {
+  it("explain-box.tsx places the dock through dockInStack with the stack's room, once", () => {
+    const box = read("src/components/reader/explain-box.tsx");
+    expect(box.match(/dockInStack\(/g)).toHaveLength(1);
+    expect(box).toMatch(/dockInStack\(\{[^}]*room: stackRoomPx/);
+    expect(box).toMatch(/stackRoom\(useWindows\.getState\(\)\.windows\)/);
+  });
+});

@@ -11,7 +11,7 @@
 
 import { useEffect, useState } from "react";
 import { create } from "zustand";
-import { DOCK_MIN_VIEWPORT_PX, DOCK_TOP_PX, PAGE_ZOOM_ROOT, PAGE_ZOOM_VAR, legendHeightPx, reserveDock } from "@/components/reader/explain-dock";
+import { DOCK_MIN_VIEWPORT_PX, DOCK_TOP_PX, PAGE_ZOOM_ROOT, PAGE_ZOOM_VAR, columnBottomPx, legendHeightPx, reserveDock } from "@/components/reader/explain-dock";
 import type { Block } from "@/lib/notes/types";
 
 export type WindowKind = "sticky" | "notes" | "explain";
@@ -129,9 +129,12 @@ export function stackLayout(windows: readonly FloatingWindow[], frame: StackFram
     if (frame.ceiling !== undefined && frame.minTop + behind + want <= frame.ceiling - COLUMN_GAP_PX) {
       top0 = frame.minTop;
       bottom = frame.ceiling - COLUMN_GAP_PX;
-    } else {
+    } else if (frame.ceiling === undefined) {
       top0 = Math.max(frame.minTop, bottom - behind - want);
     }
+    // P10-18: with the explain window standing (a `ceiling`) the column is never lifted under it — it stands over the stack, so a lifted
+    // column hid its own headers. The explain window gives the room instead (`stackRoom`, `dockInStack`); where even that is not
+    // enough the front gives way (down to its header), the headers below the explain window stay.
   }
   return ordered.map((w, i) => {
     const top = top0 + i * WINDOW_HEADER_PX;
@@ -139,6 +142,19 @@ export function stackLayout(windows: readonly FloatingWindow[], frame: StackFram
     const height = front ? Math.max(WINDOW_HEADER_PX, Math.min(frontHeight, bottom - top)) : WINDOW_HEADER_PX;
     return { id: w.id, top, height, front, z: STACK_Z_BASE + i };
   });
+}
+
+/**
+ * P10-18 (A P10-14 §4 X-B1, B9): what the explain window must leave the stack below it, in pixels: the gap, a header for every window
+ * behind the front, and the front's least height (`NOTES_MIN_FRONT_PX` for the notes window, `MIN_FRONT_PX` for a sticky) — exactly what
+ * `stackLayout` asks of the screen before it lifts or moves the column. 0 while no sticky or notes window stands. A sticky whose heading
+ * has left the note is counted though it is not drawn: the explain window leaves a header too much, never one too little.
+ */
+export function stackRoom(windows: readonly FloatingWindow[]): number {
+  const column = windows.filter((w) => w.kind === "sticky" || w.kind === "notes");
+  if (column.length === 0) return 0;
+  const front = column.reduce((a, b) => (b.order > a.order ? b : a));
+  return COLUMN_GAP_PX + (column.length - 1) * WINDOW_HEADER_PX + (front.kind === "notes" ? NOTES_MIN_FRONT_PX : MIN_FRONT_PX);
 }
 
 /**
@@ -152,10 +168,6 @@ export function stackRows(windows: readonly FloatingWindow[], blocks: readonly B
   );
   return stackLayout(stacked, frame);
 }
-
-/** What the column keeps clear at the screen's foot: the foot legend (at the page's zoom) and a margin; at least this. */
-const FOOT_PX = 40;
-const LEGEND_MARGIN_PX = 8;
 
 /**
  * The column's frame, read from the page: where it starts (under the explain window when one stands, else the dock's
@@ -174,7 +186,7 @@ export function useColumn(active: boolean): { top: number; bottom: number; ceili
       const zoom = root ? Number.parseFloat(getComputedStyle(root).getPropertyValue(PAGE_ZOOM_VAR)) : Number.NaN;
       const next = {
         top: columnTop(box ? { bottom: box.bottom } : null),
-        bottom: window.innerHeight - Math.max(FOOT_PX, Math.ceil(legendHeightPx(zoom)) + LEGEND_MARGIN_PX),
+        bottom: columnBottomPx(window.innerHeight, legendHeightPx(zoom)),
         ...(box && box.bottom > 0 ? { ceiling: Math.floor(box.top) } : {}),
       };
       setFrame((current) => (current.top === next.top && current.bottom === next.bottom && current.ceiling === next.ceiling ? current : next));

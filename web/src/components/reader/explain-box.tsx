@@ -74,6 +74,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type Ref } from "react";
 import { hasUserLlmOverride } from "@/lib/feed/ai-tier";
 import { setExplainOffer } from "@/lib/reader/explain-offer";
+import { stackRoom, useWindows } from "@/lib/reader/windows";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import type { ExplainAnswer, ExplainItem } from "@/lib/papers/explain";
 import type { PaperReading } from "@/lib/papers/reading";
@@ -92,6 +93,7 @@ import {
   MASTHEAD_MIN_VIEWPORT_PX,
   PAGE_ZOOM_ROOT,
   PAGE_ZOOM_VAR,
+  dockInStack,
   legendHeightPx,
   newHeightGuard,
   reserveDock,
@@ -713,6 +715,13 @@ export interface ExplainBoxProps {
 export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cachedTurns, onReply, onSayMore, onResetThread, openRef }: ExplainBoxProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [viewport, setViewport] = useState<Viewport>(currentViewport);
+  // P10-18: what the other floating windows need below the dock (0 while none stands); a number, so the box re-renders only when the stack's need changes.
+  const [stackRoomPx, setStackRoomPx] = useState(() => stackRoom(useWindows.getState().windows));
+  useEffect(() => {
+    const read = () => setStackRoomPx(stackRoom(useWindows.getState().windows));
+    read();
+    return useWindows.subscribe(read);
+  }, []);
   // P9-03b: the last settled selection the reader made — what the window stands level with once the selection itself
   // has gone away (a click in the window collapses it; the window must not jump back from under the pointer).
   const [followed, setFollowed] = useState<ExplainSelection | null>(null);
@@ -1086,7 +1095,12 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   const levelSelection = docked && stand ? stand : open.selection;
   // P9-17: the whole window stays in view (ruling §1h.57) — its measured height, and at least what a window that holds a passage
   // needs to show its header, its controls and two lines of the answer (ruling §1h.56).
-  const place = placePanel(levelWith.bounds, viewport, levelTopOf(levelSelection, levelWith), Math.max(cardHeight ?? 0, DOCK_THREAD_FLOOR_PX));
+  const paragraphTop = levelTopOf(levelSelection, levelWith);
+  const basePlace = placePanel(levelWith.bounds, viewport, paragraphTop, Math.max(cardHeight ?? 0, DOCK_THREAD_FLOOR_PX));
+  // P10-18 (X-B1, B9): the dock gives the stickies and the notes window their room — it shrinks (its body scrolls inside), so every other window's header stays reachable.
+  const place: Place = basePlace.kind === "dock" && basePlace.top !== undefined
+    ? { ...basePlace, ...dockInStack({ top: basePlace.top, paragraphTop: paragraphTop ?? levelWith.bounds.top, height: viewport.height, legend: legendOf(viewport), room: stackRoomPx }) }
+    : basePlace;
   const heading = reading.body[open.selection.sectionIndex]?.heading ?? "";
   const threadView: ThreadView | undefined =
     canAsk && onReply && open.status.kind === "answer"
