@@ -309,8 +309,10 @@ function levelOf(heading: string): 1 | 2 | 3 {
 /**
  * P10-04 (review 3.3): what a group row stands for — the words and the minutes of every row under it, by
  * `parentId` (a child's own, so a nested group adds its children, and no row is counted twice). Keyed by
- * the group row's id; a row with paragraphs of its own, or none under it, is not in the map. The minutes are
- * the children's, summed (each one rounded up as the row states it), not re-rounded from the sum.
+ * the group row's id; a row with paragraphs of its own, or none under it, is not in the map. The minutes come
+ * from the summed words, as a row's do and as the map's total does (`totalMinutes`: "from the total word
+ * count, not the sum of the rounded section minutes") — 1,562 words are 9 minutes, not the 11 that five
+ * rows each rounded up would add to.
  */
 export function groupTotals(map: ReadingMap): Map<string, { words: number; minutes: number }> {
   const byId = new Map(map.sections.map((row) => [row.id, row]));
@@ -322,7 +324,8 @@ export function groupTotals(map: ReadingMap): Map<string, { words: number; minut
       return false;
     });
     if (below.length === 0) continue;
-    totals.set(row.id, { words: below.reduce((sum, r) => sum + r.words, 0), minutes: below.reduce((sum, r) => sum + r.minutes, 0) });
+    const words = below.reduce((sum, r) => sum + r.words, 0);
+    totals.set(row.id, { words, minutes: words > 0 ? Math.max(1, Math.ceil(words / WORDS_PER_MINUTE)) : 0 });
   }
   return totals;
 }

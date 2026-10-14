@@ -839,8 +839,9 @@ describe("buildReadingMap — the paper's hierarchy (P10-04, A10)", () => {
     const map = buildReadingMap(owner());
     const totals = groupTotals(map);
     expect([...totals.keys()]).toEqual(["s1", "s5"]);
-    expect(totals.get("s1")).toEqual({ words: 290, minutes: 2 + 1 });
-    expect(totals.get("s5")).toEqual({ words: 211, minutes: 2 + 1 });
+    // The minutes are the summed words' (ceil at 180 a minute), as a row's and the map's total are: 290 -> 2, 211 -> 2.
+    expect(totals.get("s1")).toEqual({ words: 290, minutes: 2 });
+    expect(totals.get("s5")).toEqual({ words: 211, minutes: 2 });
     expect(map.sections[5].page).toBe(15);
 
     const nested = buildReadingMap(doc([
@@ -849,7 +850,7 @@ describe("buildReadingMap — the paper's hierarchy (P10-04, A10)", () => {
       { heading: "2.1.1. Dynamics", text: filler(10) },
       { heading: "2.2. Form", text: filler(20) },
     ]));
-    expect(groupTotals(nested).get("s0")).toEqual({ words: 30, minutes: 2 });
+    expect(groupTotals(nested).get("s0")).toEqual({ words: 30, minutes: 1 });
     expect(groupTotals(nested).get("s1")).toEqual({ words: 10, minutes: 1 });
   });
 

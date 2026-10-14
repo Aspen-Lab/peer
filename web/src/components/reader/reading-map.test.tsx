@@ -579,9 +579,9 @@ describe("ReadingMapView — the paper's hierarchy (P10-04, A10)", () => {
   it("says a group row's heading, role, page and the sum of its children's words and minutes", () => {
     const html = renderTree();
 
-    // 500 + 290 + 100 words; 3 + 2 + 1 minutes.
-    expect(metaText(html, "2. RESULTS AND DISCUSSION")).toBe("evidence · p.3 · 890 words · 6 min");
-    // 900 + 662 = 1,562 words; 5 + 4 minutes.
+    // 500 + 290 + 100 = 890 words; the minutes are the summed words' (890 / 180, rounded up), as the map's total is.
+    expect(metaText(html, "2. RESULTS AND DISCUSSION")).toBe("evidence · p.3 · 890 words · 5 min");
+    // 900 + 662 = 1,562 words, 9 minutes (the children's own 5 + 4 agree here; the group above is where the two differ).
     expect(metaText(html, "4. EXPERIMENTAL SECTION")).toBe("method · p.15 · 1,562 words · 9 min");
     // A row with paragraphs of its own says its own.
     expect(metaText(html, "2.2. Form")).toBe("evidence · p.5 · 290 words · 2 min");
