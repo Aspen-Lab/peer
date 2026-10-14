@@ -16,20 +16,22 @@ import type { Route } from "next";
 import type { Paper } from "@/types";
 import type { QuestionAnswers } from "@/lib/papers/report";
 import { quoteHead, stickyText, stickyTitle } from "@/lib/notes/blocks";
+import type { Block } from "@/lib/notes/types";
 import { citableFromPaper } from "@/lib/notes/cite";
 import type { ReadingNoteExtras } from "@/lib/notes/templates";
 import type { Citable, NoteAnchor } from "@/lib/notes/types";
-import { DOCK_TOP_PX } from "@/components/reader/explain-dock";
 import { paragraphAnchor, type ExplainSelection } from "@/components/reader/paper-body";
-import { useWindows, type FloatingWindow } from "@/lib/reader/windows";
+import { columnTop, stackLayout, useWindows, type FloatingWindow } from "@/lib/reader/windows";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
 import { AnchorSquare, goToPassage, registerPassageHost } from "./note-tags";
 
 /** A sticky writes through into the paper's note no later than this long after the last keystroke. */
 export const STICKY_SAVE_MS = 250;
 
-/** The window's height while it is in front, and the header's. */
+/** The window's height while it is in front. */
 const FRONT_HEIGHT_PX = 260;
+/** What the column keeps clear at the window's foot: the foot legend and a margin. */
+const FOOT_PX = 40;
 
 export function StickyWindowView({
   n,
@@ -187,6 +189,24 @@ interface Row {
   z: number;
 }
 
+/** The open stickies as rows of the stack: each with its number and quote from its "Note N" heading in the paper's
+ *  note (a window whose heading is gone is dropped), placed as cascaded cards. */
+export function stickyRows(
+  windows: readonly FloatingWindow[],
+  blocks: readonly Block[],
+  frame: { top: number; bottom: number; frontHeight: number },
+): Row[] {
+  const known = windows.filter((w) => w.kind === "sticky" && blocks.some((b) => b.id === w.id && b.type === "h3" && b.anchor));
+  const place = new Map(stackLayout(known, frame).map((row) => [row.id, row]));
+  const rows: Row[] = [];
+  for (const w of known) {
+    const anchor = blocks.find((b) => b.id === w.id)?.anchor;
+    const at = place.get(w.id);
+    if (anchor && at) rows.push({ id: w.id, n: anchor.n, quote: anchor.quote, anchor, front: at.front, top: at.top, height: at.height, z: at.z });
+  }
+  return rows.sort((a, b) => a.z - b.z);
+}
+
 function StickyWindow({ row, noteId, paperId }: { row: Row; noteId: string; paperId: string }) {
   const router = useRouter();
   const [text, setText] = useState(() => stickyText(readingNoteFor(useNotesStore.getState().notes, paperId)?.blocks ?? [], row.id));
@@ -223,16 +243,15 @@ function StickyWindow({ row, noteId, paperId }: { row: Row; noteId: string; pape
   );
 }
 
-/** Where the column starts: the dock's top, or just under the explain window when one stands. */
-function useColumnTop(active: boolean): number {
-  const [top, setTop] = useState(DOCK_TOP_PX);
+/** The column's frame: where it starts (under the explain window, when one stands) and where the screen ends. */
+function useColumn(active: boolean): { top: number; bottom: number } {
+  const [frame, setFrame] = useState({ top: columnTop(null), bottom: 1000 });
   useEffect(() => {
     if (!active) return;
     const read = () => {
       const dock = document.querySelector("[data-explain-dock]");
-      const bottom = dock ? dock.getBoundingClientRect().bottom : null;
-      const next = bottom === null ? DOCK_TOP_PX : bottom > 0 && Number.isFinite(bottom) ? Math.ceil(bottom) + 8 : DOCK_TOP_PX + 400;
-      setTop((current) => (current === next ? current : next));
+      const next = { top: columnTop(dock ? { bottom: dock.getBoundingClientRect().bottom } : null), bottom: window.innerHeight - FOOT_PX };
+      setFrame((current) => (current.top === next.top && current.bottom === next.bottom ? current : next));
     };
     read();
     const timer = setInterval(read, 250);
@@ -242,7 +261,7 @@ function useColumnTop(active: boolean): number {
       window.removeEventListener("resize", read);
     };
   }, [active]);
-  return top;
+  return frame;
 }
 
 export function StickyNotes({ paper, reveal }: { paper: Paper; reveal: (run: () => void) => void }) {
@@ -261,15 +280,9 @@ export function StickyNotes({ paper, reveal }: { paper: Paper; reveal: (run: () 
   );
 
   const stickies = windows.filter((w: FloatingWindow) => w.kind === "sticky");
-  const base = useColumnTop(stickies.length > 0);
+  const column = useColumn(stickies.length > 0);
   if (!note) return null;
-  const rows: Row[] = [];
-  const ordered = [...stickies].sort((a, b) => a.order - b.order);
-  ordered.forEach((w, i) => {
-    const head = note.blocks.find((b) => b.id === w.id);
-    if (!head?.anchor) return;
-    rows.push({ id: w.id, n: head.anchor.n, quote: head.anchor.quote, anchor: head.anchor, front: i === ordered.length - 1, top: base, height: FRONT_HEIGHT_PX, z: 60 + i });
-  });
+  const rows = stickyRows(stickies, note.blocks, { ...column, frontHeight: FRONT_HEIGHT_PX });
   return (
     <>
       {rows.map((row) => (

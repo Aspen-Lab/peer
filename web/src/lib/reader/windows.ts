@@ -6,6 +6,7 @@
 // `order` is the stacking: the window raised last has the highest, and stands in front.
 
 import { create } from "zustand";
+import { DOCK_TOP_PX } from "@/components/reader/explain-dock";
 
 export type WindowKind = "sticky" | "notes" | "explain";
 
@@ -47,3 +48,56 @@ export const useWindows = create<WindowsState>()((set) => ({
       return { windows: s.windows.map((w) => (w.id === id ? { ...w, order } : w)), clock: order };
     }),
 }));
+
+// ── The stack ─────────────────────────────────────────────────────────────
+//
+// Cascaded cards: from the top of the column down, each later window is offset by a header's height, so the
+// windows behind show only their headers and the one raised last — the front — stands at the bottom of the
+// cascade, whole. A press on a header raises that window: it takes the front's place and the others close up.
+
+/** A window's header: all that shows of one that is behind another. */
+export const WINDOW_HEADER_PX = 40;
+
+/** The gap between the explain window's bottom and the first card. */
+const COLUMN_GAP_PX = 8;
+
+/**
+ * Where the column of windows starts: the dock's top when no explain window stands, just under its bottom when
+ * one does, and — if one stands but its box cannot be read — the dock's top plus 400 px, past where it can reach.
+ * `dock` is the explain window's box, or null.
+ */
+export function columnTop(dock: { bottom: number } | null): number {
+  if (!dock) return DOCK_TOP_PX;
+  return Number.isFinite(dock.bottom) && dock.bottom > 0 ? Math.ceil(dock.bottom) + COLUMN_GAP_PX : DOCK_TOP_PX + 400;
+}
+
+export interface StackRow {
+  id: string;
+  top: number;
+  height: number;
+  /** In front, and whole. */
+  front: boolean;
+  /** Stacking, from `STACK_Z_BASE`: behind to front. */
+  z: number;
+}
+
+/** Under the explain window (`z-[70]`) and over the masthead (`z-50`). */
+export const STACK_Z_BASE = 60;
+
+/**
+ * Lay the windows out as cascaded cards between `top` and `bottom` (viewport pixels): by `order`, oldest at
+ * the top, each later one a header lower; the last is the front, `frontHeight` tall (less where the screen is
+ * short, never under a header). Pure.
+ */
+export function stackLayout(
+  windows: readonly FloatingWindow[],
+  frame: { top: number; bottom: number; frontHeight: number },
+): StackRow[] {
+  const ordered = [...windows].sort((a, b) => a.order - b.order);
+  return ordered.map((w, i) => {
+    const top = frame.top + i * WINDOW_HEADER_PX;
+    const front = i === ordered.length - 1;
+    const height = front ? Math.max(WINDOW_HEADER_PX, Math.min(frame.frontHeight, frame.bottom - top)) : WINDOW_HEADER_PX;
+    return { id: w.id, top, height, front, z: STACK_Z_BASE + i };
+  });
+}
