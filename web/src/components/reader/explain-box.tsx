@@ -111,7 +111,7 @@ import {
   toggleStep,
   type ReplyResult,
 } from "./explain-thread";
-import type { ExplainSelection, SelectionTarget, ViewRect, ViewRects } from "./paper-body";
+import type { ExplainSelection, ExplainSource, SelectionTarget, ViewRect, ViewRects } from "./paper-body";
 
 // ── What the card shows ────────────────────────────────────────────────
 
@@ -419,6 +419,7 @@ export async function requestExplanation(args: {
       sectionId,
       paragraphIndex: selection.paragraphIndex,
       thread: [],
+      ...(selection.source !== undefined && selection.source !== "paper" ? { source: selection.source } : {}),
       ...(llmOverride ? { llmOverride } : {}),
     });
     if (response.status === 422) return "not_in_paper";
@@ -526,6 +527,7 @@ export function ExplainCard({
   thread,
   sheet,
   dock,
+  source,
   cardRef,
   inputRef,
 }: {
@@ -547,6 +549,9 @@ export function ExplainCard({
    *  on the right; P8-02: as tall as its content, level with its paragraph, so it stands free of the masthead
    *  and the legend (it was a window-high column with a line on its left only), the controls pinned at its foot. */
   dock?: boolean;
+  /** P10-08 (review 8.4): where the passage is from. A selection in the Summary or an answer is Peer's reading, not the paper's words, so its
+   *  first words are shown as Peer's own under a label naming where they are from, not as a quote with a section (§1f.17). The paper's body when absent. */
+  source?: ExplainSource;
   /** The card itself — the one thing that scrolls, and what the sheet's height is read from. */
   cardRef?: Ref<HTMLDivElement>;
   inputRef?: Ref<HTMLTextAreaElement>;
@@ -597,7 +602,14 @@ export function ExplainCard({
           <p className="min-w-0 flex-1 font-mono text-caption text-heading">{EXPLAIN.title}</p>
         </div>
         <div className="mt-3 min-w-0">
-          <EvidenceQuote text={previewOf(passage)} where={heading} />
+          {source === undefined || source === "paper" ? (
+            <EvidenceQuote text={previewOf(passage)} where={heading} />
+          ) : (
+            <>
+              <p className="annotation text-text-faint">{source === "summary" ? EXPLAIN.fromSummary : EXPLAIN.fromAnswer}</p>
+              <p className="font-reading italic text-body leading-[1.55] text-text-muted pl-5 mt-2">{previewOf(passage)}</p>
+            </>
+          )}
         </div>
       </div>
 
@@ -969,7 +981,13 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   const term = placed ? definingTerm(terms, placed.passage) : null;
   const offeredTerm = offered ? definingTerm(terms, offered.passage) : null;
   const next = offered !== null && (offeredTerm !== null || canAsk) ? offered : null;
-  const asked = (selection: ExplainSelection): SelectionTarget => ({ sectionIndex: selection.sectionIndex, paragraphIndex: selection.paragraphIndex, passage: selection.passage });
+  const asked = (selection: ExplainSelection): SelectionTarget => ({
+    sectionIndex: selection.sectionIndex,
+    paragraphIndex: selection.paragraphIndex,
+    passage: selection.passage,
+    ...(selection.source !== undefined ? { source: selection.source } : {}),
+    ...(selection.paragraphId !== undefined ? { paragraphId: selection.paragraphId } : {}),
+  });
 
   // What the button's click does — and what `e` does through `openRef`: explain `selection` (the
   // current one). With a window already open the session is replaced in place — never null on the way.
@@ -1208,6 +1226,7 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
       thread={threadView}
       sheet={place.kind === "sheet"}
       dock={place.kind === "dock"}
+      source={open.selection.source}
       cardRef={cardRef}
       inputRef={inputRef}
       style={styleOf(place)}

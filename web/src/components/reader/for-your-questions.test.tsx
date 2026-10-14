@@ -299,7 +299,8 @@ describe("ForYourQuestions (P2-04)", () => {
     expect(shown).toBeGreaterThan(additions);
     // First in the summary's blocks: nothing but a comment between the branch and the answers (P7-14, R9: the
     // notes band that used to follow them is a button at the right edge now, not a block here).
-    expect(source.slice(source.indexOf(") : (", additions), shown).replace(/\s+/g, " ").trim()).toBe(") : ( <>");
+    // Re-aimed (P10-08, review 8.4): the Summary's blocks stand in one explain container, which opens the branch (was a fragment).
+    expect(source.slice(source.indexOf(") : (", additions), shown).replace(/\s+/g, " ").trim()).toBe(') : ( <div data-explain-source="summary" className="contents">');
     expect(shown).toBeLessThan(proposal);
     // Not under Paper digestion: the first branch of the additions never names it.
     const digestion = source.slice(additions, source.indexOf(") : (", additions));

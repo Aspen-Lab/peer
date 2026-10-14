@@ -260,13 +260,14 @@ export function markedClass(base: string, mark: SectionMark | null, extra?: stri
 
 // ── The selection (P3-02; ruling §1h.2, user decision §1a.10) ─────────────
 //
-// A reader selects words of the body and "Explain this?" appears beside
-// them. What counts is exactly one paragraph's worth of the paper's own text:
-// a selection whose two ends sit in the same paragraph, non-empty, at most
-// 1,200 characters, with no drawn formula in it (the text of a formula is not
-// the paper's text). Anything else is no target. The body's markup is
-// untouched: this reads the DOM's selection and the ids the paragraphs
-// already carry (`paragraphAnchor`); nothing is added to what renders.
+// A reader selects words and the selection buttons offer "Explain this". What counts is one container's worth of text: a selection whose
+// two ends sit in the same paragraph of the paper's body, or (P10-08, review 8.4: "不仅仅是正文，甚至可以是summary或者for your question里的
+// answer，但是不包括最左边的各种功能button") in one element the page marks `data-explain-source` — the Summary's blocks (`"summary"`) and the answers
+// under the question (`"answer"`) — non-empty, at most 1,200 characters, with no drawn formula in it (the text of a formula is not the paper's
+// text), and never with an end inside a control (a button, a link, a field). The commands at the left, the map, the question bar and the
+// notes are in no marked container, so they are no target. Anything else is no target. The body's markup is untouched: this reads the DOM's
+// selection and the ids the paragraphs already carry (`paragraphAnchor`) and the attribute the page puts on a container; nothing is added
+// to what renders here.
 
 /** The longest passage a selection may be (characters, whitespace collapsed). */
 export const MAX_SELECTION_CHARS = 1200;
@@ -330,14 +331,19 @@ export function selectionTarget(input: {
   anchorParagraphId: string | null;
   focusParagraphId: string | null;
   text: string;
+  /** P10-08: where the selection is from; the paper's body when absent. For the Summary or an answer the ids are the container's own. */
+  source?: ExplainSource;
 }): SelectionTarget | null {
   const { anchorParagraphId, focusParagraphId } = input;
   if (!anchorParagraphId || anchorParagraphId !== focusParagraphId) return null;
-  const match = PARAGRAPH_ANCHOR.exec(anchorParagraphId);
-  if (!match) return null;
   const passage = input.text.replace(/\s+/g, " ").trim();
   if (!passage || passage.length > MAX_SELECTION_CHARS) return null;
-  return { sectionIndex: Number(match[1]), paragraphIndex: Number(match[2]), passage };
+  const source = input.source ?? "paper";
+  // Not the paper's: there is no section and no paragraph of the body to name; the container's own id keys it.
+  if (source !== "paper") return { sectionIndex: -1, paragraphIndex: -1, passage, source, paragraphId: anchorParagraphId };
+  const match = PARAGRAPH_ANCHOR.exec(anchorParagraphId);
+  if (!match) return null;
+  return { sectionIndex: Number(match[1]), paragraphIndex: Number(match[2]), passage, source: "paper", paragraphId: anchorParagraphId };
 }
 
 const sameRect = (a: ViewRect, b: ViewRect) => a.left === b.left && a.top === b.top && a.right === b.right && a.bottom === b.bottom;
@@ -351,6 +357,8 @@ export function sameSelection(a: ExplainSelection | null, b: ExplainSelection | 
     a.sectionIndex === b.sectionIndex &&
     a.paragraphIndex === b.paragraphIndex &&
     a.passage === b.passage &&
+    (a.source ?? "paper") === (b.source ?? "paper") &&
+    a.paragraphId === b.paragraphId &&
     sameRect(a.rect, b.rect) &&
     sameRect(a.bounds, b.bounds) &&
     sameOptionalRect(a.paragraph, b.paragraph)
@@ -363,6 +371,7 @@ interface ElementLike {
   parentElement: ElementLike | null;
   closest(selector: string): ElementLike | null;
   getBoundingClientRect?(): ViewRect;
+  getAttribute?(name: string): string | null;
 }
 interface NodeLike {
   nodeType: number;
@@ -396,6 +405,45 @@ function paragraphOf(node: NodeLike | null): { id: string; text: ElementLike } |
   return PARAGRAPH_ANCHOR.test(host.id) ? { id: host.id, text } : null;
 }
 
+/** The attribute the page puts on a container whose text may be explained, and the values it takes besides the body's own paragraphs. */
+export const EXPLAIN_SOURCE_ATTRIBUTE = "data-explain-source";
+const EXPLAIN_SOURCE_SELECTOR = `[${EXPLAIN_SOURCE_ATTRIBUTE}]`;
+/** What is a control, wherever it sits: a selection with an end inside one is no target. */
+const CONTROL_SELECTOR = "button, a, input, textarea, select, summary, label, [role='button'], [role='tab'], [role='link'], [contenteditable='true'], [data-explain-skip]";
+
+/** Where one end of a selection is, for the rule that both ends share a place. */
+interface Place {
+  source: ExplainSource;
+  /** The element the two ends must share: the paragraph's anchor in the body, else the marked container. */
+  container: unknown;
+  /** The target's own stable id: the paragraph's anchor; else the block's `data-explain-id` or `id`, else the container's, else its kind. */
+  id: string;
+  /** The paper's `<p>`, whose box is the paragraph's (P8-02); none for the Summary and the answers. */
+  text?: ElementLike;
+}
+
+/**
+ * P10-08 (review 8.4): where `node` sits — a paragraph of the paper's body (as before), or a block inside an element marked
+ * `data-explain-source="summary"` or `"answer"` (the page marks them). Null for everything else, and for a node inside a control.
+ */
+function placeOf(node: NodeLike | null): Place | null {
+  if (!node) return null;
+  const paper = paragraphOf(node);
+  if (paper) return { source: "paper", container: paper.id, id: paper.id, text: paper.text };
+  const element = node.nodeType === 1 ? (node as unknown as ElementLike) : node.parentElement;
+  const container = element?.closest(EXPLAIN_SOURCE_SELECTOR) ?? null;
+  const kind = container?.getAttribute?.(EXPLAIN_SOURCE_ATTRIBUTE);
+  if (!element || !container || (kind !== "summary" && kind !== "answer")) return null;
+  if (element.closest(CONTROL_SELECTOR) !== null) return null;
+  let block: ElementLike = element;
+  while (block.parentElement && block.parentElement !== container) block = block.parentElement;
+  const id = block.getAttribute?.("data-explain-id") || block.id || container.getAttribute?.("data-explain-id") || container.id || kind;
+  return { source: kind, container, id };
+}
+
+/** Whether two ends share a place: the same paragraph of the body (by its id), else the same marked container. */
+const samePlace = (a: Place | null, b: Place | null): a is Place => a !== null && b !== null && a.source === b.source && a.container === b.container;
+
 const hasSize = (rect: ViewRect) => rect.right - rect.left > 0 || rect.bottom - rect.top > 0;
 const plain = (rect: ViewRect): ViewRect => ({ left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom });
 
@@ -427,14 +475,15 @@ export function readSelection(selection: SelectionLike | null): ExplainSelection
   // The selection's own range changes as the selection does; this one is ours.
   const range = selection.getRangeAt(0).cloneRange();
   const text = selection.toString();
-  const start = paragraphOf(range.startContainer);
-  const startId = start?.id ?? null;
-  let endId = paragraphOf(range.endContainer)?.id ?? null;
+  const start = placeOf(range.startContainer);
+  let end = placeOf(range.endContainer);
   // A triple click selects a paragraph, and the browser ends it at offset 0 of
   // the NEXT one: the words are all the first paragraph's. A drag that really
   // runs on into another paragraph carries a break inside its words.
-  if (endId !== startId && range.endOffset === 0 && !/\n/.test(text.trim())) endId = startId;
-  const target = selectionTarget({ anchorParagraphId: startId, focusParagraphId: endId, text });
+  if (!samePlace(start, end) && range.endOffset === 0 && !/\n/.test(text.trim())) end = start;
+  if (!samePlace(start, end)) return null;
+  // The two ends share a place (a paragraph, or one marked container whose blocks may differ): the start's id names the target.
+  const target = selectionTarget({ anchorParagraphId: start.id, focusParagraphId: start.id, text, source: start.source });
   if (!target) return null;
   if (range.cloneContents().querySelector(FORMULA_SELECTOR)) return null;
   const where = measureRange(range, start?.text);
@@ -459,7 +508,7 @@ export function readSelection(selection: SelectionLike | null): ExplainSelection
  * Listens only while there is somewhere to report to, and removes every
  * listener it added. Adds nothing to the page's markup.
  */
-function useSelectionListener(onSelect: ((selection: ExplainSelection | null) => void) | undefined): void {
+export function useSelectionListener(onSelect: ((selection: ExplainSelection | null) => void) | undefined): void {
   const latest = useRef(onSelect);
   useEffect(() => {
     latest.current = onSelect;

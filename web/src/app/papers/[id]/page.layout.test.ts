@@ -115,7 +115,8 @@ function tabProblems(source: string): string[] {
 
   // The tab's own blocks: the abstract under Summary only; the map and the body under Digestion only.
   const words = between(code, " words={", " additions={");
-  if (!/^ words=\{digestion \? null : \( <PaperWords/.test(words)) problems.push("the abstract is shown on Paper digestion, or the words slot moved");
+  // Re-aimed (P10-08): the abstract's words stand in the Summary's explain container (`data-explain-source="summary"`).
+  if (!/^ words=\{digestion \? null : \( <div data-explain-source="summary" className="contents"> <PaperWords/.test(words)) problems.push("the abstract is shown on Paper digestion, or the words slot moved");
   const additions = between(code, " additions={", " next={");
   const split = additions.indexOf(") : (");
   const onDigestion = split < 0 ? "" : additions.slice(0, split);

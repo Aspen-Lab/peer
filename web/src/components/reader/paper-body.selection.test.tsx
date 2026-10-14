@@ -33,10 +33,13 @@ describe("selectionTarget — the pure rule", () => {
   const id = paragraphAnchor(2, 3);
 
   it("is the paragraph and the words when both ends sit in one paragraph", () => {
+    // Re-aimed (P10-08): the target also says where it is from (the paper) and carries the paragraph's own id.
     expect(selectionTarget({ anchorParagraphId: id, focusParagraphId: id, text: "the rafting ratio" })).toEqual({
       sectionIndex: 2,
       paragraphIndex: 3,
       passage: "the rafting ratio",
+      source: "paper",
+      paragraphId: id,
     });
   });
 

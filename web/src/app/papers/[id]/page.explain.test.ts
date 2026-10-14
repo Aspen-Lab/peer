@@ -62,6 +62,13 @@ function explainProblems(source: string): string[] {
     if (/useExplainThreadsStore\.getState\(\)/.test(ask)) problems.push("the request reaches into the store instead of the page's own selector");
   }
 
+  // P10-08 (review 8.4): the Summary's blocks and the answers are explain targets too. The page marks their containers, listens for the
+  // selection itself while the Summary is showing (Paper digestion's body has its own `onSelect`), and sends no section of the body for them.
+  if (text.split('<div data-explain-source="summary" className="contents">').length - 1 !== 2) problems.push("the Summary's words and blocks are not each in a container marked `data-explain-source=\"summary\"`");
+  if (text.split('<div data-explain-source="answer" className="contents">{answers}</div>').length - 1 !== 1) problems.push("the answers are not in a container marked `data-explain-source=\"answer\"`");
+  has('useSelectionListener(hasBody && tab !== "digestion" ? selectExplain : undefined);', "the page no longer listens for a selection in the Summary or an answer while the Summary is showing");
+  has("?? (fromPaperBody(selection) ? undefined : \"\")", "a selection of the Summary or an answer is no longer sent without a section of the body");
+
   // What is already kept comes from the store, for this paper and passage.
   has("explanationFor(", "the kept answer is no longer found with `explanationFor`");
   has("useExplainThreadsStore((s) => s.byPaper[paper.id])", "the kept answers are no longer this paper's");
@@ -192,6 +199,21 @@ describe("the page's Explain this? wiring (P3-02)", () => {
     ]);
     expect(explainProblems(source.replace(" openRef={explainOpen}", ""))).toEqual([
       "the box is no longer handed the ref `e` opens it through",
+    ]);
+  });
+
+  it("would notice the Summary or an answer no longer being an explain target (P10-08)", () => {
+    expect(explainProblems(source.replace('<div data-explain-source="answer" className="contents">{answers}</div>', "{answers}"))).toEqual([
+      "the answers are not in a container marked `data-explain-source=\"answer\"`",
+    ]);
+    expect(explainProblems(source.replace('<div data-explain-source="summary" className="contents">', '<div className="contents">'))).toEqual([
+      "the Summary's words and blocks are not each in a container marked `data-explain-source=\"summary\"`",
+    ]);
+    expect(explainProblems(source.replace('useSelectionListener(hasBody && tab !== "digestion" ? selectExplain : undefined);', ""))).toEqual([
+      "the page no longer listens for a selection in the Summary or an answer while the Summary is showing",
+    ]);
+    expect(explainProblems(source.split(' ?? (fromPaperBody(selection) ? undefined : "")').join(""))).toEqual([
+      "a selection of the Summary or an answer is no longer sent without a section of the body",
     ]);
   });
 

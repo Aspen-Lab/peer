@@ -464,3 +464,72 @@ describe("ExplainBox — while it is open (P8-02, P9-03b kept)", () => {
     run.mounted.unmount();
   });
 });
+
+// ── A selection of the Summary or an answer (P10-08, review 8.4) ──────────────────────────────────────
+
+describe("ExplainBox — a selection of the Summary or an answer is explained like the paper's (P10-08, review 8.4)", () => {
+  const summary: ExplainSelection = {
+    sectionIndex: -1,
+    paragraphIndex: -1,
+    passage: "Peer's reading of the alloy's rafting.",
+    source: "summary",
+    paragraphId: "summary",
+    rect: { left: 300, top: 640, right: 420, bottom: 660 },
+    bounds: { left: 100, top: 620, right: 420, bottom: 660 },
+  };
+  const answer: ExplainSelection = { ...summary, passage: "The ratio is the share of plates.", source: "answer", paragraphId: "answers" };
+
+  it("opens it in the dock, at the masthead's foot — there is no paragraph of the paper to be level with — and asks with where it is from", async () => {
+    for (const target of [summary, answer]) {
+      stubRoot();
+      const onAsk = vi.fn(async (): Promise<AskResult> => FIRST_ANSWER);
+      const run = await scenario(base({ target, cached: undefined, onAsk }), [() => open()]);
+      await wait();
+
+      expect(run.last().dock, target.source).toBe(true);
+      expect(run.last().passage, target.source).toBe(target.passage);
+      expect(run.last().style, target.source).toEqual({ right: 0, width: 360, top: 48, maxHeight: 800 - 48 - 28 });
+      expect(run.last().card?.props.source, target.source).toBe(target.source);
+      expect(onAsk, target.source).toHaveBeenCalledWith(expect.objectContaining({ passage: target.passage, source: target.source, paragraphId: target.paragraphId, sectionIndex: -1 }));
+      expect(Object.fromEntries(root), target.source).toEqual(RESERVED);
+      run.mounted.unmount();
+    }
+  });
+
+  it("while a window is open, a selection in the Summary moves it to the masthead's foot, and one in the body moves it to the paragraph again", async () => {
+    const tops: Array<number | undefined> = [];
+    const run = await scenario(base({ target: inParagraph(first, 400) }), [
+      () => open(),
+      (tree) => tops.push(look(tree).style?.top),
+      selectNext(summary),
+      (tree) => tops.push(look(tree).style?.top),
+      selectNext(inParagraph(second, 300)),
+    ]);
+    await wait();
+    tops.push(run.last().style?.top);
+
+    expect(tops).toEqual([400, 48, 300]);
+    expect(run.last().passage).toBe(first.passage);
+    run.mounted.unmount();
+  });
+
+  it("the page's explain action takes the Summary selection into the open window in place, and the thread is kept for those words", async () => {
+    const onAsk = vi.fn(async (): Promise<AskResult> => FIRST_ANSWER);
+    const run = await scenario(base({ target: inParagraph(first, 400), onAsk }), [() => open(), selectNext(summary, { cached: undefined, onAsk }), () => open()]);
+    await wait();
+
+    expect(run.looks.filter((l) => l.card).every((l) => l.passage !== null)).toBe(true);
+    expect(run.last().passage).toBe(summary.passage);
+    expect(removeProperty).not.toHaveBeenCalled();
+    expect(onAsk).toHaveBeenCalledTimes(1);
+    run.mounted.unmount();
+  });
+
+  it("the thumb bar is offered the selection under 768 px as for the paper's own", async () => {
+    stubWindow(390, 844);
+    const run = await scenario(base({ target: summary }), []);
+    await wait();
+    expect((await import("@/lib/reader/explain-offer")).explainOffered()).toBe(true);
+    run.mounted.unmount();
+  });
+});

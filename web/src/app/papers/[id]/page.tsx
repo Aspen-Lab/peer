@@ -61,6 +61,7 @@ import {
   mergeQuestionRoute,
   questionRouteOverlay,
   sameSelection,
+  useSelectionListener,
   type ExplainSelection,
   type SelectionTarget,
 } from "@/components/reader/paper-body";
@@ -157,6 +158,10 @@ const DECIDED_MS = 1000;
  * non-upload paper's fetch (`isExternalId`) is unchanged, as before.
  */
 const UPLOAD_FETCH_TIMEOUT_MS = 15000;
+
+/** P10-08: a selection of the paper's own body (as before), not of the Summary or an answer — those name no section of the body, so their
+ *  request carries an empty section id and the paper's context goes as it always did. */
+const fromPaperBody = (selection: SelectionTarget) => selection.source === undefined || selection.source === "paper";
 
 function paperHref(id: string): string {
   return `/papers/${id}`;
@@ -808,8 +813,8 @@ function Reader({
   const explainCached = explainKeptThread?.answer;
   const askExplain = useCallback(
     async (selection: SelectionTarget): Promise<AskResult> => {
-      const sectionId = reading?.body?.[selection.sectionIndex]?.id;
-      if (!sectionId) return "unavailable";
+      const sectionId = reading?.body?.[selection.sectionIndex]?.id ?? (fromPaperBody(selection) ? undefined : "");
+      if (sectionId === undefined) return "unavailable";
       const result = await requestExplanation({ paper, selection, sectionId, llmOverride: explainLlmOverride(profile) });
       if (typeof result !== "string") {
         try {
@@ -833,8 +838,8 @@ function Reader({
   // the box shows, the message marked only when the server says the reply searched.
   const replyExplain = useCallback(
     async (selection: SelectionTarget, thread: readonly ExplainTurn[], message: string, search?: boolean): Promise<ReplyResult> => {
-      const sectionId = reading?.body?.[selection.sectionIndex]?.id;
-      if (!sectionId) return "unavailable";
+      const sectionId = reading?.body?.[selection.sectionIndex]?.id ?? (fromPaperBody(selection) ? undefined : "");
+      if (sectionId === undefined) return "unavailable";
       const result = await requestReply({ paper, selection, sectionId, search, thread, message, llmOverride: explainLlmOverride(profile) });
       if (typeof result !== "string") {
         try {
@@ -853,8 +858,8 @@ function Reader({
   // no second copy of the reader's message — once it has arrived.
   const moreExplain = useCallback(
     async (selection: SelectionTarget, thread: readonly ExplainTurn[], message: string): Promise<ReplyResult> => {
-      const sectionId = reading?.body?.[selection.sectionIndex]?.id;
-      if (!sectionId) return "unavailable";
+      const sectionId = reading?.body?.[selection.sectionIndex]?.id ?? (fromPaperBody(selection) ? undefined : "");
+      if (sectionId === undefined) return "unavailable";
       const result = await requestReply({ paper, selection, sectionId, thread, message, detail: true, llmOverride: explainLlmOverride(profile) });
       if (typeof result !== "string") {
         try {
@@ -897,6 +902,9 @@ function Reader({
   const clearExplain = useCallback(() => selectExplain(null), [selectExplain]);
   const startOfTab = useCallback(() => scrollToTabStart(spread, document), [spread]);
   const { tab, select: selectTab, reveal } = useReaderTab({ hasBody, onChange: clearExplain, atStart: startOfTab });
+  // P10-08 (review 8.4): a selection in the Summary or an answer is an explain target too. The body listens for the whole document while
+  // Paper digestion is open (its own `onSelect`, below); the Summary tab has no body to listen, so the page does.
+  useSelectionListener(hasBody && tab !== "digestion" ? selectExplain : undefined);
   const scrollToBody = useCallback(() => {
     const block = document.getElementById(PAPER_BODY_ID);
     if (!block) return;
@@ -1447,20 +1455,26 @@ function Reader({
             {questionsHydrated && (
               <QuestionField key={paper.id} paperId={paper.id} examples={examples} standing={profile.standingQuestions} vague={route?.vague ?? false} />
             )}
-            {answers}
+            {/* P10-08 (review 8.4): the answers are an explain container (`data-explain-source`): a selection inside one is a target; the
+                question field above them is not. The wrapper is here, not in `for-your-questions.tsx`, where the answers are laid out. */}
+            <div data-explain-source="answer" className="contents">{answers}</div>
             <div ref={commonEndRef} aria-hidden className="h-px" />
           </>
         ) : undefined}
+        // P10-08 (review 8.4): the Summary's words and blocks (here and in `additions` below) are each an explain container,
+        // `data-explain-source="summary"`; `contents` keeps the wrapper out of the layout, so nothing moves.
         words={digestion ? null : (
-          <PaperWords
-            endRef={wordsEndRef}
-            reading={reading}
-            marks={marks}
-            skim={report?.skim ?? []}
-            basis={report?.provenance.basis ?? null}
-            quotedSkim={quotedSkim}
-            scramble={shouldScrambleReport}
-          />
+          <div data-explain-source="summary" className="contents">
+            <PaperWords
+              endRef={wordsEndRef}
+              reading={reading}
+              marks={marks}
+              skim={report?.skim ?? []}
+              basis={report?.provenance.basis ?? null}
+              quotedSkim={quotedSkim}
+              scramble={shouldScrambleReport}
+            />
+          </div>
         )}
         additions={digestion ? (
           <>
@@ -1470,7 +1484,7 @@ function Reader({
             <PaperBody reading={reading} route={route} plain={plainForBody} onSelect={selectExplain} noteAnchors={noteAnchors} />
           </>
         ) : (
-          <>
+          <div data-explain-source="summary" className="contents">
             {!hasBody && answers}
 
             {/* P9-27 (the owner, §1a.18 (b)): "What is new here" — the proposal's
@@ -1600,7 +1614,7 @@ function Reader({
                 with no full text this stands where the column used to end
                 in air. */}
             <InYourLibrary paper={paper} />
-          </>
+          </div>
         )}
         next={<NextRow nav={nav} next={nextPaper} />}
       />

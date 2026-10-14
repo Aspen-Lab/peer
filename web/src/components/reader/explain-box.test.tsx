@@ -367,6 +367,18 @@ describe("requestExplanation — what is sent, and what comes back", () => {
     expect(JSON.parse(String(init.body))).toEqual({ paper, passage: selection.passage, sectionId: "s2", paragraphIndex: 1, thread: [] });
   });
 
+  it("says where a selection of the Summary or an answer is from, and not for the paper's own body (P10-08, review 8.4)", async () => {
+    const fetchMock = stubFetch(200, { answer, cached: false });
+    await requestExplanation({ ...args, selection: { ...args.selection, source: "paper" }, sectionId: "s2" });
+    await requestExplanation({ ...args, selection: { sectionIndex: -1, paragraphIndex: -1, passage: "Peer's own words.", source: "summary", paragraphId: "block-a" }, sectionId: "" });
+    await requestExplanation({ ...args, selection: { sectionIndex: -1, paragraphIndex: -1, passage: "An answer.", source: "answer", paragraphId: "answers" }, sectionId: "" });
+    const bodies = (fetchMock.mock.calls as unknown as Array<[string, RequestInit]>).map(([, init]) => JSON.parse(String(init.body)) as Record<string, unknown>);
+
+    expect(bodies[0]).not.toHaveProperty("source");
+    expect(bodies[1]).toMatchObject({ source: "summary", sectionId: "", passage: "Peer's own words.", thread: [] });
+    expect(bodies[2]).toMatchObject({ source: "answer", sectionId: "" });
+  });
+
   it("carries the reader's own key only when there is one", async () => {
     const fetchMock = stubFetch(200, { answer, cached: false });
     await requestExplanation({ ...args, llmOverride: { provider: "gemini", apiKey: "USER-NOT-A-KEY" } });

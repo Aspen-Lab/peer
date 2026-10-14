@@ -462,6 +462,16 @@ describe("requestReply with the long form (P3-07)", () => {
     expect(body.thread).toEqual([{ role: "peer", text: first.text }, { role: "reader", text: READER_ONE }]);
   });
 
+  it("says where a follow-up on a Summary or answer passage is from (P10-08), and nothing of it for the paper's own body", async () => {
+    const fetchMock = stubFetch(replied);
+    await requestReply({ ...args, selection: { sectionIndex: -1, paragraphIndex: -1, passage: PASSAGE, source: "answer", paragraphId: "answers" }, sectionId: "" });
+    expect(posted(fetchMock)).toMatchObject({ source: "answer", sectionId: "" });
+
+    const own = stubFetch(replied);
+    await requestReply({ ...args, selection: { ...args.selection, source: "paper" } });
+    expect(posted(own)).not.toHaveProperty("source");
+  });
+
   it("posts no `detail` key at all otherwise: the request is what it was", async () => {
     for (const detail of [undefined, false]) {
       const fetchMock = stubFetch(replied);

@@ -35,7 +35,9 @@ function newHereProblems(code: string): string[] {
 
   // Directly after the words that open the Summary (they are the `words` slot, above the additions): the
   // first block of the Summary's own, bar the answers of a paper with no body, which stay first (P7-14, Q6).
-  const before = here < 0 ? "" : bare(onSummary.slice(onSummary.indexOf("<>") + 2, here));
+  // Re-aimed (P10-08): the Summary's blocks stand in one explain container, `<div data-explain-source="summary" className="contents">` (was a fragment).
+  const OPEN = 'data-explain-source="summary" className="contents">';
+  const before = here < 0 ? "" : bare(onSummary.slice(onSummary.indexOf(OPEN) + OPEN.length, here));
   if (before !== "{!hasBody && answers} {report && (") {
     problems.push("something stands between the words that open the Summary and the block, or it is drawn with no report to read it from");
   }

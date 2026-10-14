@@ -256,6 +256,9 @@ export const EXPLAIN = {
   card: "Explanation of the selected passage",
   /** P10-08 (review 8.4): the window's title, beside its large Close X. The control that opens it is the selection buttons' (`selection-toolbar.tsx`). */
   title: "Explain this",
+  /** P10-08: above a passage selected in the Summary or in an answer — Peer's words, not the paper's. */
+  fromSummary: "From the Summary",
+  fromAnswer: "From an answer",
   /** Above the paper's own definition of a term in the passage (Tier 0). */
   defines: (term: string) => `How the paper defines ${term}`,
   meaning: "What it means",

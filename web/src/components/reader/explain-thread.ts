@@ -236,6 +236,7 @@ export async function requestReply(args: {
       sectionId,
       paragraphIndex: selection.paragraphIndex,
       thread: [...threadAsSent(thread), { role: "reader", text: message }],
+      ...(selection.source !== undefined && selection.source !== "paper" ? { source: selection.source } : {}),
       ...(search === true ? { search: true } : {}),
       ...(detail === true ? { detail: true } : {}),
       ...(llmOverride ? { llmOverride } : {}),

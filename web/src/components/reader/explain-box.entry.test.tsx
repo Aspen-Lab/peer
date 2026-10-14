@@ -110,6 +110,32 @@ describe("ExplainCard — Close is a large highlighted X at the window's top-lef
   });
 });
 
+describe("ExplainCard — a passage selected in the Summary or an answer (P10-08, review 8.4)", () => {
+  it("is shown as Peer's own words under a label naming where it is from — not as the paper's quote with a section", () => {
+    for (const [source, label] of [["summary", EXPLAIN.fromSummary], ["answer", EXPLAIN.fromAnswer]] as const) {
+      const html = markup({ source, passage: "Peer's own claim about the alloy.", heading: "" });
+
+      expect(html, source).toContain(label);
+      expect(html, source).toContain("Peer&#x27;s own claim about the alloy.");
+      // No section link and no quote styling: the paper did not say it.
+      expect(html, source).not.toContain("<a ");
+      expect(html, source).not.toContain("§");
+      expect(html.indexOf(label), source).toBeLessThan(html.indexOf("Peer&#x27;s own claim"));
+      // The title and the X are as for the paper's passage.
+      expect(html, source).toContain("data-explain-close");
+      expect(html, source).toContain(EXPLAIN.title);
+    }
+  });
+
+  it("is the paper's quote with its section when the passage is the paper's, or says nothing of where it is from", () => {
+    for (const html of [markup({ source: "paper" }), markup()]) {
+      expect(html).toContain("§2 Methods");
+      expect(html).not.toContain(EXPLAIN.fromSummary);
+      expect(html).not.toContain(EXPLAIN.fromAnswer);
+    }
+  });
+});
+
 // ── The first paint: what the box renders before anything has run ───────────────────────────────────
 
 const SENTENCE = "We define the rafting ratio as the fraction of the gauge length covered by plates.";
