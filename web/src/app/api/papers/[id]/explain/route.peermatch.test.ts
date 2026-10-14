@@ -29,7 +29,7 @@ import { POST } from "./route";
 
 const DEF = "We define the rafting ratio as the fraction of the gauge length covered by plates.";
 const TUNGSTEN = "Tungsten additions delayed plate formation, and the rafting ratio stayed below 0.3 for 200 hours.";
-const KEEPS = "The alloy keeps its shape for a week at 1100 C.";
+const KEEPS = "The alloy keeps its shape for a week at the test temperature.";
 
 const doc: ExtractedDocument = {
   source: "pdf",
