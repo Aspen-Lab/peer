@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import * as mapModule from "./reading-map";
 import { gistRoute, gradeScores, METHOD_BOOST, relevanceScores, routeByQuestions, type ReadingMap, type ReadingRole } from "./reading-map";
 
 // P10-06 (ruling §1h.78; the owner's review 3.2 and 3.4): the route grades relevance. A question
@@ -668,5 +669,240 @@ describe("routeByQuestions — a group row is marked as one, for the body's cap 
   it("marks a section with no paragraphs of its own and subsections under it, and no other", () => {
     expect(groupOf("res")).toBe(true);
     for (const id of ["intro", "r1", "empty", "z1"]) expect(groupOf(id), id).toBeUndefined();
+  });
+});
+
+// ── P10-15 (A11 generalised; the owner's ruling §1h.89): one intent table over the map's roles ──────────────────
+// The owner: "要举一反三，要利用文章的结构 … 比如问题如果问的是机理，那么就要优先在 discussion 里面找，其次是 result". The question's
+// intent (parameter, mechanism, result, background) weights the map's roles (`ROLE_WEIGHTS`); the best leaf row of the
+// favoured role keeps a strong slot (P10-06d's rule, read from the table). Invented papers, the quillwort and the lattice.
+//
+// `questionIntent` and `ROLE_WEIGHTS` are read through the module's namespace so that this file type-checks on a head that
+// does not export them yet (the red commit); the next commit imports them by name.
+
+type Intent = "parameter" | "mechanism" | "result" | "background" | "none";
+const intentApi = () => {
+  const api = mapModule as unknown as {
+    questionIntent: (question: string) => Intent;
+    ROLE_WEIGHTS: Record<Intent, Record<ReadingRole, number>>;
+  };
+  return api;
+};
+
+/** One question per intent, each with two invented terms and exactly one cue word. */
+const QUESTION_OF: Record<Intent, string> = {
+  parameter: "quillwort lattice parameters",
+  mechanism: "quillwort lattice mechanism",
+  result: "quillwort lattice performance",
+  background: "quillwort lattice overview",
+  none: "quillwort lattice sorption",
+};
+
+describe("questionIntent — the question's words choose one intent (P10-15, rule 1)", () => {
+  it.each([
+    ["parameter", ["parameter", "parameters", "condition", "temperature", "current", "voltage", "potential", "concentration", "rate", "time", "thickness", "electrolyte", "pH"]],
+    ["mechanism", ["mechanism", "why", "cause", "origin", "explain", "because", "arise", "govern", "drive", "lead", "responsible", "role", "effect", "influence", "dependence", "relationship", "correlate", "model", "theory", "kinetic", "thermodynamic"]],
+    ["result", ["result", "performance", "capacity", "efficiency", "retention", "achieve", "obtain", "measure", "show", "value", "improve", "compare"]],
+    ["background", ["define", "definition", "overview", "introduction", "prior"]],
+  ] as const)("reads %s from its words", (intent, words) => {
+    for (const word of words) expect(intentApi().questionIntent(`quillwort lattice ${word}`), word).toBe(intent);
+  });
+
+  it("reads the phrases: how much, how many, what is, state of the art", () => {
+    expect(intentApi().questionIntent("How much quillwort lattice?")).toBe("result");
+    expect(intentApi().questionIntent("How many quillwort lattice?")).toBe("result");
+    expect(intentApi().questionIntent("What is a quillwort lattice?")).toBe("background");
+    expect(intentApi().questionIntent("The state of the art of quillwort lattice")).toBe("background");
+  });
+
+  it("reads the words the route drops as terms (why, result, show): they are the question's intent all the same", () => {
+    expect(intentApi().questionIntent("Why does the quillwort lattice crack?")).toBe("mechanism");
+    expect(intentApi().questionIntent("Do the results show a quillwort lattice?")).toBe("result");
+  });
+
+  it("reads a form of a word as the word: explains, governed, temperatures, achieved", () => {
+    expect(intentApi().questionIntent("quillwort lattice explains")).toBe("mechanism");
+    expect(intentApi().questionIntent("quillwort lattice governed")).toBe("mechanism");
+    expect(intentApi().questionIntent("quillwort lattice temperatures")).toBe("parameter");
+    expect(intentApi().questionIntent("quillwort lattice achieved")).toBe("result");
+  });
+
+  it("takes the intent with more words; a tie is none", () => {
+    expect(intentApi().questionIntent("quillwort lattice temperature current relationship")).toBe("parameter");
+    expect(intentApi().questionIntent("quillwort lattice mechanism cause temperature")).toBe("mechanism");
+    expect(intentApi().questionIntent("quillwort lattice mechanism temperature")).toBe("none");
+    expect(intentApi().questionIntent("quillwort lattice capacity relationship")).toBe("none");
+  });
+
+  it("is none for a question with no cue word, and for no question", () => {
+    expect(intentApi().questionIntent("quillwort lattice sorption")).toBe("none");
+    expect(intentApi().questionIntent("")).toBe("none");
+  });
+
+  it("lets a content word outweigh the frame 'what is': 'What is the mechanism behind …' is a mechanism question", () => {
+    expect(intentApi().questionIntent("What is the mechanism behind the crack resistance of the textured films?")).toBe("mechanism");
+    expect(intentApi().questionIntent("What capacity retention did the films achieve?")).toBe("result");
+    expect(intentApi().questionIntent("What is LCO?")).toBe("background");
+  });
+
+  it("reads the owner's two questions: the parameter one, and the long one with its temperature and current", () => {
+    expect(intentApi().questionIntent("I want to learn the parameter for growing 110 LCO")).toBe("parameter");
+    expect(
+      intentApi().questionIntent(
+        "I want to learn the relationship between LCO properties such as crystallography, grain structure, morphology, with various plating variable like temperature, current, etc.",
+      ),
+    ).toBe("parameter");
+  });
+});
+
+describe("ROLE_WEIGHTS — one named table, intent × role (P10-15, rule 1)", () => {
+  it("is the owner's table: the numbers per intent and role", () => {
+    const w = intentApi().ROLE_WEIGHTS;
+    expect(w.parameter).toMatchObject({ method: 1.3, apparatus: 1.3, setup: 1, evidence: 1, interpretation: 1, body: 1 });
+    expect(w.mechanism).toMatchObject({ interpretation: 1.3, evidence: 1.15, setup: 0.9, method: 1, apparatus: 1, body: 1 });
+    expect(w.result).toMatchObject({ evidence: 1.3, interpretation: 1.1, setup: 0.9, method: 1, apparatus: 1, body: 1 });
+    expect(w.background).toMatchObject({ setup: 1.3, method: 1, evidence: 1, interpretation: 1, apparatus: 1, body: 1 });
+    expect(Object.values(w.none)).toEqual([1, 1, 1, 1, 1, 1]);
+  });
+
+  it("keeps METHOD_BOOST as an alias of the table's parameter × method entry", () => {
+    expect(METHOD_BOOST).toBe(intentApi().ROLE_WEIGHTS.parameter.method);
+  });
+});
+
+describe("routeByQuestions — the favoured role wins only under its intent (P10-15, rule 1)", () => {
+  // Four rows of the same words and counts, one per role; the favoured role stands last. The cap holds three strong
+  // rows and the earlier row first on a tie, so the last row is medium — unless the question's intent favours its role.
+  const equalPaper = (order: ReadingRole[]): Spec[] => [...order.map((role, i) => leaf(`r${i}`, { role })), NONE];
+  const cases: Array<[Intent, ReadingRole, ReadingRole[]]> = [
+    ["parameter", "method", ["setup", "evidence", "interpretation", "method"]],
+    ["mechanism", "interpretation", ["setup", "method", "evidence", "interpretation"]],
+    ["result", "evidence", ["setup", "method", "interpretation", "evidence"]],
+    ["background", "setup", ["method", "evidence", "interpretation", "setup"]],
+  ];
+
+  it.each(cases)("%s: the %s row is strong under its intent and medium under none", (intent, role, order) => {
+    const specs = equalPaper(order);
+    const last = `r${order.length - 1}`;
+    expect(tiersOf(specs, QUESTION_OF.none)[last]).toBe("medium");
+    expect(tiersOf(specs, QUESTION_OF[intent])[last]).toBe("strong");
+    expect(role).toBe(order[order.length - 1]);
+  });
+
+  it("mechanism: the interpretation row first, the results next, the setup row last (1.3, 1.15, 0.9)", () => {
+    const specs = equalPaper(["setup", "method", "evidence", "interpretation"]);
+    const tiers = tiersOf(specs, QUESTION_OF.mechanism);
+    expect(tiers).toMatchObject({ r3: "strong", r2: "strong", r1: "strong", r0: "medium" });
+  });
+
+  it("result: the results row first, the interpretation next, the setup row last (1.3, 1.1, 0.9)", () => {
+    const specs = equalPaper(["setup", "method", "interpretation", "evidence"]);
+    expect(tiersOf(specs, QUESTION_OF.result)).toMatchObject({ r3: "strong", r2: "strong", r1: "strong", r0: "medium" });
+  });
+
+  it("changes nothing under none: the tiers equal those of a paper whose roles are all body", () => {
+    expect(tiersOf(equalPaper(["setup", "method", "evidence", "interpretation"]), QUESTION_OF.none)).toEqual(
+      tiersOf(equalPaper(["body", "body", "body", "body"]), QUESTION_OF.none),
+    );
+  });
+
+  it("a tied question (a mechanism word and a parameter word) is none: no role is weighed", () => {
+    expect(tiersOf(equalPaper(["setup", "evidence", "interpretation", "method"]), "quillwort lattice mechanism temperature")).toEqual(
+      tiersOf(equalPaper(["body", "body", "body", "body"]), "quillwort lattice mechanism temperature"),
+    );
+  });
+
+  it("weighs a group row's children, so the group follows: a discussion group is strong with its strong child", () => {
+    const specs: Spec[] = [
+      leaf("a", { role: "setup" }),
+      leaf("b", { role: "method" }),
+      leaf("c", { role: "evidence" }),
+      { id: "g", paragraphs: [], role: "interpretation", level: 1 },
+      leaf("g1", { role: "interpretation", level: 2, parentId: "g" }),
+      NONE,
+    ];
+    const tiers = tiersOf(specs, QUESTION_OF.mechanism);
+    expect(tiers).toMatchObject({ g1: "strong", g: "strong" });
+  });
+});
+
+// The invented paper for the slot rule: the favoured row stands fourth by score; the table's weight alone does not lift it
+// into the three, the slot rule does. Shares are checked from the same scores the route uses.
+function weightedShare(specs: Spec[], id: string, intent: Intent): number {
+  const leaves = specs.filter((spec) => spec.paragraphs.length > 0);
+  const countsOf = (text: string) => [/quillwort/g, /lattice/g].map((re) => (text.match(re) ?? []).length);
+  const scores = relevanceScores(
+    leaves.map((spec) => ({
+      counts: countsOf(spec.paragraphs.join(" ")),
+      words: spec.paragraphs.join(" ").split(/\s+/).length,
+      paragraphs: spec.paragraphs.map((p) => ({ counts: countsOf(p), words: p.split(/\s+/).length })),
+    })),
+  ).map((score, i) => score * intentApi().ROLE_WEIGHTS[intent][leaves[i].role ?? "body"]);
+  return scores[leaves.findIndex((spec) => spec.id === id)] / Math.max(...scores);
+}
+
+describe("routeByQuestions — the best row of the favoured role keeps a strong slot, for every intent (P10-15, rule 2)", () => {
+  const SLOT: Record<"mechanism" | "result" | "background", { specs: Spec[]; favoured: string; gives: string; stays: string[] }> = {
+    // A discussion at about 0.7 of the best, fourth: the setup row gives way.
+    mechanism: {
+      specs: [sec("intro", 5, 3, { role: "setup" }), sec("r1", 7, 4, { role: "evidence" }), sec("r2", 6, 3, { role: "evidence" }), sec("d", 3, 1, { role: "interpretation" }), NONE],
+      favoured: "d",
+      gives: "intro",
+      stays: ["r1", "r2"],
+    },
+    // A results row at about 0.7 of the best, fourth: the setup row gives way.
+    result: {
+      specs: [sec("intro", 5, 3, { role: "setup" }), sec("m1", 7, 4, { role: "method" }), sec("m2", 6, 3, { role: "method" }), sec("r", 3, 1, { role: "evidence" }), NONE],
+      favoured: "r",
+      gives: "intro",
+      stays: ["m1", "m2"],
+    },
+    // An introduction at about 0.7 of the best, fourth; no strong setup row, so the lowest strong row gives way.
+    background: {
+      specs: [sec("m1", 7, 4, { role: "method" }), sec("r1", 6, 3, { role: "evidence" }), sec("c", 5, 3, { role: "interpretation" }), sec("intro", 3, 1, { role: "setup" }), NONE],
+      favoured: "intro",
+      gives: "c",
+      stays: ["m1", "r1"],
+    },
+  };
+
+  it.each(["mechanism", "result", "background"] as const)("%s: the favoured row is strong and the row that gives way is medium", (intent) => {
+    const { specs, favoured, gives, stays } = SLOT[intent];
+    const share = weightedShare(specs, favoured, intent);
+    expect(share).toBeGreaterThanOrEqual(0.6);
+    expect(share).toBeLessThan(0.8);
+    const tiers = tiersOf(specs, QUESTION_OF[intent]);
+    expect(tiers[favoured]).toBe("strong");
+    expect(tiers[gives]).toBe("medium");
+    for (const id of stays) expect(tiers[id], id).toBe("strong");
+    expect(count(tiers, "strong")).toBe(3);
+  });
+
+  it.each(["mechanism", "result", "background"] as const)("%s: the same paper under no intent keeps the favoured row medium and the row that gives way strong", (intent) => {
+    const { specs, favoured, gives } = SLOT[intent];
+    const tiers = tiersOf(specs, QUESTION_OF.none);
+    expect(tiers[favoured]).toBe("medium");
+    expect(tiers[gives]).toBe("strong");
+  });
+
+  it("parameter: the slot rule reads its roles from the table (method and apparatus), as P10-06d did", () => {
+    const specs: Spec[] = [sec("intro", 5, 3, { role: "setup" }), sec("r1", 7, 4, { role: "evidence" }), sec("r2", 6, 3, { role: "evidence" }), sec("a", 3, 1, { role: "apparatus" }), NONE];
+    expect(tiersOf(specs, QUESTION_OF.parameter)).toMatchObject({ intro: "medium", a: "strong" });
+  });
+
+  it("mechanism favours the interpretation role alone: a method row at 0.7 of the best gets no slot", () => {
+    const specs: Spec[] = [sec("intro", 5, 3, { role: "setup" }), sec("r1", 7, 4, { role: "evidence" }), sec("r2", 6, 3, { role: "evidence" }), sec("m", 3, 1, { role: "method" }), NONE];
+    expect(weightedShare(specs, "m", "mechanism")).toBeGreaterThanOrEqual(0.6);
+    expect(tiersOf(specs, QUESTION_OF.mechanism)).toMatchObject({ m: "medium", r1: "strong", r2: "strong" });
+  });
+
+  it("changes nothing when the favoured row is already strong, under 0.6 of the best, or absent", () => {
+    const already: Spec[] = [sec("intro", 5, 3, { role: "setup" }), sec("r1", 7, 4, { role: "evidence" }), sec("r2", 4, 2, { role: "evidence" }), sec("d", 8, 4, { role: "interpretation" }), NONE];
+    expect(tiersOf(already, QUESTION_OF.mechanism)).toMatchObject({ d: "strong", r1: "strong", r2: "medium" });
+    const low: Spec[] = [sec("intro", 5, 3, { role: "setup" }), sec("r1", 7, 4, { role: "evidence" }), sec("r2", 6, 3, { role: "evidence" }), sec("d", 1, 1, { role: "interpretation" }), NONE];
+    expect(weightedShare(low, "d", "mechanism")).toBeLessThan(0.6);
+    expect(tiersOf(low, QUESTION_OF.mechanism).d).toBe("medium");
+    const absent: Spec[] = [sec("intro", 5, 3, { role: "setup" }), sec("r1", 7, 4, { role: "evidence" }), sec("r2", 6, 3, { role: "evidence" }), sec("b", 3, 1, { role: "body" }), NONE];
+    expect(tiersOf(absent, QUESTION_OF.mechanism).b).toBe("medium");
   });
 });
