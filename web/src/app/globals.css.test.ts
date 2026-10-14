@@ -346,3 +346,71 @@ describe("globals.css — the reader panel pins by its top (P7-14, R2)", () => {
     expect(css).toMatch(/--legend-h:\s*1\.75rem;/);
   });
 });
+
+// P10-46 (P10-43's unsettled 3; BACKLOG-70): the nested shade is a clearer step from the highlighter, and the anchor
+// square's blue is a token (`--color-anchor`), read where the literal `#3b82f6` was.
+describe("globals.css — the nested shade and the anchor blue (P10-46)", () => {
+  const lightBlock = css.slice(css.indexOf(":root {"), css.indexOf("/* Dark palette"));
+  const darkBlock = css.slice(css.indexOf('html[data-mode="dark"] {'), css.indexOf('/* Dark palette — "system"'));
+  const systemStart = css.indexOf('html[data-mode="system"] {');
+  const systemBlock = css.slice(systemStart, css.indexOf("/* ── Material", systemStart));
+
+  const value = (block: string, token: string): string => {
+    const match = new RegExp(`${token}:\\s*(#[0-9a-f]{6});`).exec(block);
+    if (!match) throw new Error(`${token} is not declared as a #rrggbb colour in this block`);
+    return match[1];
+  };
+  const luminance = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((at) => {
+      const s = parseInt(hex.slice(at, at + 2), 16) / 255;
+      return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (a: string, b: string) => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
+  it("sets the nested mark visibly apart from the highlighter: at least 1.08:1 between them, light and dark", () => {
+    for (const block of [lightBlock, darkBlock, systemBlock]) {
+      expect(contrast(value(block, "--color-note-mark"), value(block, "--color-note-nested"))).toBeGreaterThanOrEqual(1.08);
+    }
+  });
+
+  it("keeps the ink on both marks at 4.5:1 (muted) and 7:1 (heading), light and dark; the highlighter stays off the page by 1.1:1 / 1.4:1", () => {
+    for (const block of [lightBlock, darkBlock, systemBlock]) {
+      for (const token of ["--color-note-mark", "--color-note-nested"]) {
+        expect(contrast(value(block, "--color-text-muted"), value(block, token))).toBeGreaterThanOrEqual(4.5);
+        expect(contrast(value(block, "--color-heading"), value(block, token))).toBeGreaterThanOrEqual(7);
+      }
+    }
+    expect(contrast(value(lightBlock, "--color-note-mark"), value(lightBlock, "--color-bg"))).toBeGreaterThanOrEqual(1.1);
+    expect(contrast(value(darkBlock, "--color-note-mark"), value(darkBlock, "--color-bg"))).toBeGreaterThanOrEqual(1.4);
+  });
+
+  it("declares --color-anchor in the light palette and both dark ones (the two dark in sync), a blue that reads on its page (3:1)", () => {
+    for (const block of [lightBlock, darkBlock, systemBlock]) {
+      const [r, g, b] = [1, 3, 5].map((at) => parseInt(value(block, "--color-anchor").slice(at, at + 2), 16));
+      expect(b).toBeGreaterThan(r);
+      expect(b).toBeGreaterThan(g);
+      expect(contrast(value(block, "--color-anchor"), value(block, "--color-bg"))).toBeGreaterThanOrEqual(3);
+    }
+    expect(value(systemBlock, "--color-anchor")).toBe(value(darkBlock, "--color-anchor"));
+  });
+
+  it("leaves no literal #3b82f6 in the reader's components, and the anchor square reads the token", () => {
+    const root = new URL("../components", import.meta.url).pathname.replace(/\/$/, "");
+    const literals: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const file = `${dir}/${name}`;
+        if (statSync(file).isDirectory()) walk(file);
+        else if (/\.(tsx?|css)$/.test(name) && !/\.test\.tsx?$/.test(name) && /#3b82f6/i.test(readFileSync(file, "utf8"))) literals.push(file.slice(root.length));
+      }
+    };
+    walk(root);
+    expect(literals).toEqual([]);
+    expect(readFileSync(`${root}/notes/note-tags.tsx`, "utf8")).toContain("var(--color-anchor)");
+  });
+});
