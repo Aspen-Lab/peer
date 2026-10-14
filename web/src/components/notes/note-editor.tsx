@@ -20,7 +20,8 @@
 //   ↑ ↓ ← →         cross into the next block from its first or last line
 //   Tab             indents (a list nests); Shift-Tab outdents
 //   ⌘⇧↑ ⌘⇧↓         moves the block
-//   ⌘B ⌘I ⌘E        bold, italic, code around the selection
+//   ⌘B ⌘I ⌘E ⌘U     bold, italic, code, underline around the selection (⌘⇧H highlights); the toolbar
+//                   above the blocks does the same by button, and turns a block into bullets or numbers
 //   ⌘Enter          ticks a to-do; elsewhere, a new block below
 //   the handle      drag to move; click for turn-into, duplicate, delete
 //
@@ -60,7 +61,7 @@ import {
 } from "@/lib/notes/blocks";
 import { authorYear, citableFromPaper, keyFor, sourceOf } from "@/lib/notes/cite";
 import { carriesPaper, gapAt, readPaperDrag } from "@/lib/notes/drag";
-import { plainInline } from "@/lib/notes/inline";
+import { markEdit, plainInline, type MarkName } from "@/lib/notes/inline";
 import { fileName, reference, toBibtex, toMarkdown } from "@/lib/notes/export";
 import { blankNote } from "@/lib/notes/templates";
 import { newestFirst, useNotesStore } from "@/store/notes";
@@ -69,6 +70,7 @@ import { COMMAND } from "@/components/ui/command";
 import { cn } from "@/lib/cn";
 import { caretCoords, caretLine, offsetFromPoint } from "./caret";
 import { InlineText } from "./inline-text";
+import { NoteToolbar, markForKey, typeAfterToggle } from "./note-toolbar";
 import { EditorRail, type RailTab } from "./notes-rail";
 
 type Doc = { title: string; blocks: Block[]; sources: Record<string, Source> };
@@ -637,6 +639,24 @@ export function NoteEditor({ note }: { note: Note }) {
     focusBlock(id, caretAfter ?? from + text.length);
   };
 
+  /** The toolbar's marks and the keys': wrap or unwrap the block's selection (`markEdit`), the caret after. */
+  const applyMark = (id: string, mark: MarkName) => {
+    const b = docRef.current.blocks.find((x) => x.id === id);
+    const el = areas.current.get(id);
+    if (!b || !el || b.type === "code") return;
+    const edit = markEdit(b.text, el.selectionStart, el.selectionEnd, mark);
+    replaceRange(id, edit.from, edit.to, edit.text, edit.caret);
+  };
+
+  /** Bullets, numbering and the heading turn the block that holds the caret; pressing the same one again turns it back. */
+  const applyType = (id: string, type: BlockType) => {
+    const b = docRef.current.blocks.find((x) => x.id === id);
+    if (!b || !isTextual(b.type)) return;
+    const next = typeAfterToggle(b.type, type);
+    patch(id, { type: next, checked: undefined, indent: canIndent(next) ? b.indent : undefined });
+    focusBlock(id, areas.current.get(id)?.selectionStart ?? "end");
+  };
+
   const pick = (choice: number) => {
     const m = menuRef.current;
     if (!m) return;
@@ -926,11 +946,11 @@ export function NoteEditor({ note }: { note: Note }) {
       }
       if (e.nativeEvent.isComposing) return;
 
-      if (mod && !e.shiftKey && !e.altKey && ["b", "i", "e"].includes(e.key.toLowerCase()) && b.type !== "code") {
+      // ⌘/Ctrl+B I E U and ⌘/Ctrl+Shift+H: the toolbar's marks (P10-09b); a code block takes none.
+      const mark = markForKey(e);
+      if (mark && b.type !== "code") {
         e.preventDefault();
-        const mark = { b: "**", i: "*", e: "`" }[e.key.toLowerCase() as "b" | "i" | "e"];
-        const inner = b.text.slice(pos, end);
-        replaceRange(id, pos, end, `${mark}${inner}${mark}`, inner ? pos + inner.length + mark.length * 2 : pos + mark.length);
+        applyMark(id, mark);
         return;
       }
       if (mod && e.key === "Enter") {
@@ -1192,6 +1212,7 @@ export function NoteEditor({ note }: { note: Note }) {
   // ── Derived ──
   const refs = useMemo(() => citedKeys(doc).map((k) => doc.sources[k]).filter((s): s is Source => Boolean(s)), [doc]);
   const words = useMemo(() => wordCount(doc), [doc]);
+  const editingBlock = editing ? doc.blocks.find((b) => b.id === editing) : undefined;
   return (
     // Three columns where the window allows: the notes rail, the note, the
     // shelf to cite from. Below that the rail is a panel the bar opens, and
@@ -1314,6 +1335,15 @@ export function NoteEditor({ note }: { note: Note }) {
             </p>
           )}
 
+          {/* P10-09b: the formatting toolbar, above the blocks and in view while the note scrolls under it. */}
+          <NoteToolbar
+            active={editingBlock?.type ?? null}
+            enabled={Boolean(editingBlock && isTextual(editingBlock.type))}
+            onMark={(m) => editing && applyMark(editing, m)}
+            onType={(t) => editing && applyType(editing, t)}
+            className="sticky top-0 z-10 -ml-1 mt-4 bg-bg py-1 md:top-12"
+          />
+
           <div
             ref={bodyRef}
             // The whole column takes a paper, including the empty band under
@@ -1335,7 +1365,7 @@ export function NoteEditor({ note }: { note: Note }) {
               e.preventDefault();
               dropPaper(paper, gapAt(rowsNow(), e.clientY));
             }}
-            className="relative mt-6"
+            className="relative mt-2"
           >
             {doc.blocks.map((b, i) => (
               <Row
@@ -1460,7 +1490,7 @@ export function NoteEditor({ note }: { note: Note }) {
 
           <p className="annotation mt-12 pl-10 leading-[1.7] text-text-faint">
             / blocks · @ cite a paper, or drag one in from the rail · [[ link a note · # - 1. [] &gt; ``` --- as you type · Tab nests · ⌘⇧↑↓ moves ·
-            ⌘B ⌘I ⌘E
+            ⌘B ⌘I ⌘U ⌘⇧H ⌘E
           </p>
         </div>
       </div>

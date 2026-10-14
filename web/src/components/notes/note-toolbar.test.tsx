@@ -58,9 +58,9 @@ describe("the buttons", () => {
     const html = view();
     expect(html.match(/<button\b/g)).toHaveLength(TOOLBAR_ITEMS.length);
     expect(html.match(/type="button"/g)).toHaveLength(TOOLBAR_ITEMS.length);
-    expect(html).toMatch(/title="Bold [^"]*B"/);
-    expect(html).toMatch(/title="Underline [^"]*U"/);
-    expect(html).toMatch(/title="Highlight [^"]*H"/);
+    expect(html).toMatch(/title="Bold \([^"]*B\)"/);
+    expect(html).toMatch(/title="Underline \([^"]*U\)"/);
+    expect(html).toMatch(/title="Highlight \([^"]*H\)"/);
     expect(read("src/components/notes/note-toolbar.tsx")).toContain("onMouseDown");
     expect(read("src/components/notes/note-toolbar.tsx")).toContain("preventDefault");
   });
