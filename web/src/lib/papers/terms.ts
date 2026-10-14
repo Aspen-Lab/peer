@@ -1,10 +1,11 @@
-// Terms to know — Tier 0 (P3-01; ruling §1h.1; blueprint §3.5 ⑤ 词).
+// Paper terms — Tier 0 (P3-01; ruling §1h.1; blueprint §3.5 ⑤ 词). (The strip that once listed them is deleted,
+// P10-02; the terms feed the Tier 0 definition in "Explain this".)
 //
 // A paper that defines a word says so in a handful of set shapes: it spells a
 // name out and abbreviates it in brackets ("Quantum Processing Units (QPU)"),
 // the other way round, or it writes "X, defined as …", "X refers to …", "we
 // define X as …". The sentence that does it is the paper's own definition, so
-// the strip shows that sentence — verbatim, with its section and page — and
+// the Tier 0 definition shows that sentence — verbatim, with its section and page — and
 // nothing Peer wrote. No model, no key, no fetch: a pure function of the
 // body the page already holds, so it runs in the browser (`paperDefinedTermsInReading`)
 // and on a document (`paperDefinedTerms`, the one the tests and any server

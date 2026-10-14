@@ -10,8 +10,8 @@
 //
 // Two jobs beyond holding the choice, both of which the page could not do with a plain `useState`:
 //
-//   `reveal(run)` — a jump INTO the paper's own text ("Read it here", a "§Heading" link, a term
-//   the reader clicks in "Terms to know") needs the body on the page. On Paper digestion it is, and
+//   `reveal(run)` — a jump INTO the paper's own text ("Read it here", a "§Heading" link, a sticky
+//   note's blue square) needs the body on the page. On Paper digestion it is, and
 //   `run` happens at once. From Summary it is not mounted: the tab is switched first, and `run`
 //   happens once, in the effect after the render that put the body on the page.
 //

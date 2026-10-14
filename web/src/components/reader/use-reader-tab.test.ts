@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 // P7-14 (R10, the owner's review; Q5): a paper Peer has read in full has two tabs, "Summary" and
 // "Paper digestion", and it opens on the second. `useReaderTab` is the page's one place for which
 // is showing. Beyond choosing, it does the two jobs the page cannot do with a plain state:
-//   - `reveal(run)`: a jump into the paper's own text — "Read it here", a "§Heading" link, a term
-//     the reader clicks in "Terms to know" — has to find the body on the page. From Summary the
+//   - `reveal(run)`: a jump into the paper's own text — "Read it here", a "§Heading" link, a sticky
+//     note's blue square — has to find the body on the page. From Summary the
 //     body is not mounted, so the tab is switched first and `run` happens once the blocks are in;
 //   - `atStart`: a tab the reader picks starts at its start, not wherever the other tab was
 //     scrolled to (told after the new blocks are on the page, once per pick).

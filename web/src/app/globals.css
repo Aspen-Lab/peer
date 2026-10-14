@@ -311,11 +311,6 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; }
      yellow, none of the route's greens, a background only; the paragraph's own ink stays on it (muted #666 4.88:1,
      heading #1d1d1d 14.3:1). */
   --color-note-mark: #fcee9e;
-  /* P3-01 (§1h.1): the Terms to know highlight — where the paper first uses a
-     term the reader clicked. A neutral grey, deliberately none of the three
-     route greens, a background only; the marked words take the heading ink
-     (≥ 12:1 on this tint), so the highlight reads as emphasis, not as a tier. */
-  --color-term-mark: #e4e4e4;
   --color-border: color-mix(in srgb, var(--color-heading) 6%, transparent);
   --color-border-strong: color-mix(in srgb, var(--color-heading) 12%, transparent);
   --color-skeleton-base: color-mix(in srgb, var(--color-heading) 5%, transparent);
@@ -370,8 +365,6 @@ html[data-mode="dark"] {
   --color-route-background: #173a36;
   /* P10-09f: the highlighter on the dark ground (muted #a9a9a9 4.87:1, heading #f3f3f3 10.3:1). */
   --color-note-mark: #403a14;
-  /* P3-01: the term highlight on the dark ground (the heading ink on it ≥ 9:1). */
-  --color-term-mark: #3d3d3d;
   --color-border: rgba(255, 255, 255, 0.09);
   --color-border-strong: rgba(255, 255, 255, 0.17);
   --color-skeleton-base: rgba(255, 255, 255, 0.05);
@@ -422,7 +415,6 @@ html[data-mode="dark"] {
   --color-route-background: #173a36;
   /* P10-09f: the highlighter on the dark ground (muted #a9a9a9 4.87:1, heading #f3f3f3 10.3:1). */
   --color-note-mark: #403a14;
-  --color-term-mark: #3d3d3d;
   --color-border: rgba(255, 255, 255, 0.09);
   --color-border-strong: rgba(255, 255, 255, 0.17);
   --color-skeleton-base: rgba(255, 255, 255, 0.05);

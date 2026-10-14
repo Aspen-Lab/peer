@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 // P3-03 (ruling §1h.6): the page's wiring of Peer's paragraph gists. `Reader`
-// cannot be mounted in this Node-only suite, so — as the explain, Terms to know
+// cannot be mounted in this Node-only suite, so — as the explain
 // and upload-skip wiring tests do — this reads the page's source and holds each
 // join to its shape: the hook asks for the paper the page has finished resolving
 // (`ready`), only where there is a body and the reader has switched the paper's
