@@ -52,13 +52,25 @@ function elements(node: ReactNode): ReactElement<Props2>[] {
 const cardOf = (tree: ReactNode) => elements(tree).find((el) => el.type === ExplainCard && el.props.empty !== true);
 
 let listeners: Map<string, Set<(event: unknown) => void>>;
+let frames: Array<() => void>;
+const frame = () => frames.splice(0).forEach((fn) => fn());
 const recorder = () => ({
   addEventListener: (type: string, listener: (event: unknown) => void) => void listeners.set(type, (listeners.get(type) ?? new Set()).add(listener)),
   removeEventListener: (type: string, listener: (event: unknown) => void) => void listeners.get(type)?.delete(listener),
 });
 beforeEach(() => {
   listeners = new Map();
-  vi.stubGlobal("window", { ...recorder(), innerWidth: 1440, innerHeight: 900, scrollBy: vi.fn(), requestAnimationFrame: (fn: () => void) => setTimeout(fn, 0), cancelAnimationFrame: (id: number) => clearTimeout(id) });
+  // A frame does not pass between nested commits: the callbacks wait here until the test says the burst is over (`frame()`), as a
+  // browser's do. (A timer that fired between the runtime's rounds would hand the guard a fresh budget the real loop never gets.)
+  frames = [];
+  vi.stubGlobal("window", {
+    ...recorder(),
+    innerWidth: 1440,
+    innerHeight: 900,
+    scrollBy: vi.fn(),
+    requestAnimationFrame: (fn: () => void) => frames.push(fn),
+    cancelAnimationFrame: () => {},
+  });
   vi.stubGlobal("document", { ...recorder(), documentElement: { style: { setProperty: vi.fn(), removeProperty: vi.fn() } } });
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -71,7 +83,7 @@ const ROUNDS = 150;
  * then touch nothing: the reader changes nothing from here on. Returns every render's window top, and how many times the card
  * was read (once for each commit of the box that measures it).
  */
-async function run(read: () => number) {
+async function run(read: () => number, later?: () => void, idle = 0) {
   const openRef = { current: null as (() => void) | null };
   const props: Props = {
     target: low,
@@ -105,8 +117,10 @@ async function run(read: () => number) {
       useEffect(() => {
         if (at === 0) openRef.current?.();
         else if (at === 1) (cardOf(tree)?.props.cardRef as { current: unknown }).current = card;
-        else return;
+        else if (at === 2 && later) later();
+        else if (!(at >= 2 && at < 3 + idle)) return;
         setAt(at + 1);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
       }, [at]);
       return tree;
     },
@@ -143,5 +157,41 @@ describe("ExplainBox — the after-every-commit layout effect cannot run away (P
 
     expect(out.tops.filter((top, i, all) => top !== all[i - 1])).toEqual([512, 900 - 28 - 520]);
     expect(out.reads).toBeLessThanOrEqual(4);
+  });
+
+  it("a frame later the budget is fresh: a taller card the browser really made is followed, and the window rises with it", async () => {
+    let height = 520;
+    const out = await run(
+      () => height,
+      () => {
+        frame();
+        height = 700;
+      },
+    );
+
+    expect(out.tops.filter((top, i, all) => top !== all[i - 1])).toEqual([512, 352, 172]);
+  });
+
+  it("the viewport is read when the reader or the window changes it, not after every commit: twenty idle commits ask the page's zoom no more than none", async () => {
+    let zoomReads = 0;
+    const stubZoom = () => {
+      zoomReads = 0;
+      (document as unknown as Record<string, unknown>).querySelector = (selector: string) => (selector === "[data-zoom-root]" ? {} : null);
+      (window as unknown as Record<string, unknown>).getComputedStyle = () => ({
+        getPropertyValue: () => {
+          zoomReads += 1;
+          return "1";
+        },
+      });
+    };
+    stubZoom();
+    await run(() => 520);
+    const quiet = zoomReads;
+    stubZoom();
+    const out = await run(() => 520, undefined, 20);
+
+    expect(out.renders).toBeGreaterThanOrEqual(24);
+    expect(quiet).toBeGreaterThan(0);
+    expect(zoomReads).toBe(quiet);
   });
 });

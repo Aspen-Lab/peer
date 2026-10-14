@@ -119,6 +119,69 @@ export const DOCK_MIN_VISIBLE_PX = 160;
  */
 export const DOCK_THREAD_FLOOR_PX = 360;
 
+/** P10-08 (review 1.1; B P10-01; ruling §1h.80 (a)): a reading of the card's height within this many pixels of the one the box already
+ *  holds is the same height. It was 1: a sub-pixel overshoot of a bottom-clamped card flipped it across the boundary. */
+export const HEIGHT_TOLERANCE_PX = 2;
+
+/** The most writes the height effect makes for one change the reader made (a burst of commits with nothing changed by the reader). */
+export const HEIGHT_BURST_MAX = 8;
+
+/** What the height effect remembers between commits: the reader-facing inputs it last wrote for, the heights it wrote in this burst,
+ *  and whether it has settled. */
+export interface HeightGuard {
+  key: string;
+  writes: number;
+  trail: number[];
+  locked: boolean;
+}
+
+export const newHeightGuard = (): HeightGuard => ({ key: "", writes: 0, trail: [], locked: false });
+
+/** The burst is over (a frame has passed, or the reader changed something): a fresh budget. */
+export function resetHeightGuard(guard: HeightGuard): void {
+  guard.writes = 0;
+  guard.trail = [];
+  guard.locked = false;
+}
+
+/**
+ * P10-08 (review 1.1; B P10-01's fix guide step 1 and 3; ruling §1h.80 (a)): the height the box's after-every-commit layout effect may
+ * write, or null for none. The effect reads the card's height on every commit and the card's place depends on it, so a layout that
+ * answers the card's own size with another size (a scrollbar that comes and goes, a sub-pixel overshoot) makes the effect write on
+ * every commit, and React throws "Maximum update depth exceeded" at the 51st. The cause was never found in a browser, so this
+ * ends a loop of that shape whatever its cause:
+ *
+ *   - a reading within `HEIGHT_TOLERANCE_PX` of the height held is the same height, and ends the burst;
+ *   - an A, B, A pattern (the reading is the height written two writes ago) or more than `HEIGHT_BURST_MAX` writes with nothing
+ *     changed by the reader (`key`, the reader-facing inputs: the passage, the thread, the draft, the window) settles on the LARGEST
+ *     height seen — a taller window never hides content, the card scrolls inside and `placePanel` keeps it on the screen — and
+ *     writes no more until the reader changes something (a new `key`) or the box resets the guard on the next frame.
+ *
+ * Mutates `guard`; the caller writes the returned height.
+ */
+export function settleHeight(guard: HeightGuard, held: number | null, reading: number, key: string): number | null {
+  if (guard.key !== key) {
+    resetHeightGuard(guard);
+    guard.key = key;
+  }
+  if (guard.locked) return null;
+  const same = (a: number, b: number) => Math.abs(a - b) < HEIGHT_TOLERANCE_PX;
+  if (held !== null && same(held, reading)) {
+    guard.writes = 0;
+    guard.trail = [];
+    return null;
+  }
+  const echoed = guard.trail.length >= 2 && same(guard.trail[guard.trail.length - 2], reading);
+  if (echoed || guard.writes >= HEIGHT_BURST_MAX) {
+    guard.locked = true;
+    const largest = Math.max(reading, held ?? reading, ...guard.trail);
+    return held !== null && same(held, largest) ? null : largest;
+  }
+  guard.writes += 1;
+  guard.trail.push(reading);
+  return reading;
+}
+
 /**
  * P8-06 (ruling §1h.45): whether the window stands EMPTY, before any passage is explained — a reader with a key
  * (`canAsk`), a paper with a readable body (`hasBody`: its Paper digestion tab exists, so there is text to select),

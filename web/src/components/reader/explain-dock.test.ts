@@ -193,3 +193,65 @@ describe("when the window stands empty, before any passage is explained (P8-06)"
     for (const width of [DOCK_MIN_VIEWPORT_PX - 1, 800, 640, 390]) expect(emptyDockStands({ ...stands, width }), `${width} px`).toBe(false);
   });
 });
+
+// ── The height effect's guard (P10-08, review 1.1; B P10-01; ruling §1h.80 (a)) ─────────────────────────────────────
+
+describe("settleHeight — the after-every-commit height write cannot run away", () => {
+  const fresh = () => dock.newHeightGuard();
+
+  it("writes the first reading, and a reading within 2 px of the held height is the same height (it was 1)", () => {
+    expect(dock.settleHeight(fresh(), null, 480, "k")).toBe(480);
+    expect(dock.settleHeight(fresh(), 480, 481.9, "k")).toBeNull();
+    expect(dock.settleHeight(fresh(), 480, 482, "k")).toBe(482);
+    expect(dock.HEIGHT_TOLERANCE_PX).toBe(2);
+  });
+
+  it("an A, B, A pattern settles on the larger height and writes no more", () => {
+    const guard = fresh();
+    let held: number | null = null;
+    const writes: number[] = [];
+    for (const reading of [480, 500, 480, 500, 480, 500]) {
+      const write = dock.settleHeight(guard, held, reading, "k");
+      if (write !== null) {
+        writes.push(write);
+        held = write;
+      }
+    }
+    expect(writes).toEqual([480, 500]);
+    expect(held).toBe(500);
+  });
+
+  it("an A, B, A pattern settles on the larger of the two when the smaller is held last", () => {
+    const guard = fresh();
+    expect(dock.settleHeight(guard, null, 500, "k")).toBe(500);
+    expect(dock.settleHeight(guard, 500, 480, "k")).toBe(480);
+    // 500 again: the held 480 is the smaller, so the box settles on 500.
+    expect(dock.settleHeight(guard, 480, 500, "k")).toBe(500);
+    expect(dock.settleHeight(guard, 500, 480, "k")).toBeNull();
+  });
+
+  it("more than eight writes with nothing changed by the reader settle on the largest height seen; the ninth reading writes it, the rest nothing", () => {
+    const guard = fresh();
+    let held: number | null = null;
+    let writes = 0;
+    for (let reading = 400; reading < 400 + 10 * 30; reading += 10) {
+      const write = dock.settleHeight(guard, held, reading, "k");
+      if (write !== null) {
+        writes += 1;
+        held = write;
+      }
+    }
+    expect(writes).toBe(dock.HEIGHT_BURST_MAX + 1);
+    expect(held).toBe(400 + 10 * dock.HEIGHT_BURST_MAX);
+  });
+
+  it("a change by the reader (a new key) or a reset (the next frame) is a fresh budget", () => {
+    const guard = fresh();
+    for (const reading of [480, 500, 480]) dock.settleHeight(guard, null, reading, "k");
+    expect(guard.locked).toBe(true);
+    expect(dock.settleHeight(guard, 500, 700, "k")).toBeNull();
+    expect(dock.settleHeight(guard, 500, 700, "after a reply")).toBe(700);
+    dock.resetHeightGuard(guard);
+    expect(guard).toMatchObject({ writes: 0, trail: [], locked: false });
+  });
+});

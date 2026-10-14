@@ -148,7 +148,24 @@ import type { PaperTerm } from "@/lib/papers/report";
 import { MAX_EXPLAIN_MESSAGE_CHARS, threadFull, type ExplainTurn } from "@/store/explain-threads";
 import type { Paper, UserProfile } from "@/types";
 import { EXPLAIN, PEERS_READING } from "./copy";
-import { DOCK_BOTTOM_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_WIDTH_PX, MASTHEAD_MIN_VIEWPORT_PX, PAGE_ZOOM_ROOT, PAGE_ZOOM_VAR, emptyDockStands, legendHeightPx, reserveDock } from "./explain-dock";
+import { useReadingPrefsStore } from "@/store/reading-prefs";
+import {
+  DOCK_BOTTOM_PX,
+  DOCK_MIN_VIEWPORT_PX,
+  DOCK_MIN_VISIBLE_PX,
+  DOCK_THREAD_FLOOR_PX,
+  DOCK_TOP_PX,
+  DOCK_WIDTH_PX,
+  MASTHEAD_MIN_VIEWPORT_PX,
+  PAGE_ZOOM_ROOT,
+  PAGE_ZOOM_VAR,
+  emptyDockStands,
+  legendHeightPx,
+  newHeightGuard,
+  reserveDock,
+  resetHeightGuard,
+  settleHeight,
+} from "./explain-dock";
 import { EvidenceQuote } from "./evidence-quote";
 import {
   asItems,
@@ -457,8 +474,10 @@ function currentViewport(): Viewport {
     : { width: window.innerWidth, height: window.innerHeight, legend: legendHeightPx(pageZoom()) };
 }
 
-/** The same window as far as placing goes: a scroll frame that moved nothing renders nothing. */
-const sameViewport = (a: Viewport, b: Viewport) => a.width === b.width && a.height === b.height && a.legend === b.legend;
+/** The same window as far as placing goes: a scroll frame that moved nothing renders nothing. P10-08 (B P10-01's step 2): a legend
+ *  within 0.01 px is the same legend, so a differing last bit of the page's zoom cannot count as a change. */
+const sameViewport = (a: Viewport, b: Viewport) =>
+  a.width === b.width && a.height === b.height && (a.legend === b.legend || (a.legend !== undefined && b.legend !== undefined && Math.abs(a.legend - b.legend) < 0.01));
 
 // ── Asking ─────────────────────────────────────────────────────────────
 
@@ -979,10 +998,19 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
       if (frame === undefined) frame = window.requestAnimationFrame(update);
     };
     remeasure.current = onMove;
+    // P10-08 (B P10-01's step 2): the viewport is read here and nowhere else — when something is selected or open, on a resize, and
+    // when the reader's Fit or reading size changes (the legend's height follows the page's zoom, which changes with no scroll and
+    // no resize of this window; the page has re-rendered by the next frame). It used to be read again after every commit.
+    const size = currentViewport();
+    setViewport((previous) => (sameViewport(previous, size) ? previous : size));
+    const unsubscribe = useReadingPrefsStore.subscribe((state, before) => {
+      if (state.fit !== before.fit || state.scaleIndex !== before.scaleIndex) onMove();
+    });
     window.addEventListener("scroll", onMove, true);
     window.addEventListener("resize", onMove);
     return () => {
       if (remeasure.current === onMove) remeasure.current = null;
+      unsubscribe();
       window.removeEventListener("scroll", onMove, true);
       window.removeEventListener("resize", onMove);
       if (frame !== undefined) window.cancelAnimationFrame(frame);
@@ -998,8 +1026,24 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
       const size = currentViewport();
       setViewport((previous) => (sameViewport(previous, size) ? previous : size));
     };
+    const size = currentViewport();
+    setViewport((previous) => (sameViewport(previous, size) ? previous : size));
+    // P10-08: Fit changes the legend's height with no resize; the page has re-rendered by the next frame.
+    let frame: number | undefined;
+    const unsubscribe = useReadingPrefsStore.subscribe((state, before) => {
+      if (frame === undefined && (state.fit !== before.fit || state.scaleIndex !== before.scaleIndex)) {
+        frame = window.requestAnimationFrame(() => {
+          frame = undefined;
+          onResize();
+        });
+      }
+    });
     window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    return () => {
+      unsubscribe();
+      window.removeEventListener("resize", onResize);
+      if (frame !== undefined) window.cancelAnimationFrame(frame);
+    };
   }, [waiting]);
 
   // P7-15 (R7, Q4): while the box stands as the dock the page keeps its width clear (`reserveDock`),
@@ -1031,24 +1075,38 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   }, [docked]);
   // P9-17 (ruling §1h.57): the window's whole height must be in view, so its height is read after each commit while the dock
   // stands: `scrollHeight` (the content, whatever `max-height` clips) and the border. It does not depend on where the window is,
-  // so the move it causes settles at once; a same-height reading sets nothing (the state bails out, the chain ends). After every
-  // commit on purpose: whatever changes what the card holds — a reply, a draft, the control, a late font — is read, with no list
-  // of the causes to keep up. Before the paint, so no frame shows the old place.
+  // so the move it causes settles at once. After every commit on purpose: whatever changes what the card holds — a reply, a draft,
+  // the control, a late font — is read, with no list of the causes to keep up. Before the paint, so no frame shows the old place.
+  // P10-08 (review 1.1; B P10-01; ruling §1h.80): this is the effect React's "Maximum update depth exceeded" named, and the
+  // number that moved was never found, so it is built so that no feedback can run away: a reading within 2 px of the held height is
+  // the same height, and a burst of more than 8 writes with nothing changed by the reader, or an A, B, A pattern, settles on the
+  // larger height and writes no more (`settleHeight`) until the reader changes something or the next frame (the guard resets).
+  // The viewport is not read here any more (above: the selection watcher reads it, on a resize and on Fit's change).
+  const heightGuard = useRef(newHeightGuard());
+  const guardFrame = useRef<number | undefined>(undefined);
+  const readerKey = [open?.selection.passage, open?.status.kind, open?.turns.length, open?.reply, open?.draft, docked, viewport.width, viewport.height, viewport.legend].join("\u0001");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
-    // P9-20 (BACKLOG-42): the legend's height follows the page's Fit zoom, which the page changes with no scroll and no resize of this
-    // window (the Fit toggle); while something stands that the legend's strip places — the dock, a floating control — it is read
-    // again after each commit (the page re-renders its children with the zoom), and an unchanged one sets nothing.
-    if (docked || target !== null) {
-      const size = currentViewport();
-      setViewport((previous) => (sameViewport(previous, size) ? previous : size));
-    }
     const card = cardRef.current;
     if (!docked || !card) return;
     const height = card.scrollHeight + (card.offsetHeight - card.clientHeight);
     if (!Number.isFinite(height)) return;
-    setCardHeight((previous) => (previous !== null && Math.abs(previous - height) < 1 ? previous : height));
+    const write = settleHeight(heightGuard.current, cardHeight, height, readerKey);
+    if (write === null) return;
+    setCardHeight(write);
+    if (guardFrame.current === undefined && typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+      guardFrame.current = window.requestAnimationFrame(() => {
+        guardFrame.current = undefined;
+        resetHeightGuard(heightGuard.current);
+      });
+    }
   });
+  useLayoutEffect(
+    () => () => {
+      if (guardFrame.current !== undefined && typeof window !== "undefined") window.cancelAnimationFrame(guardFrame.current);
+    },
+    [],
+  );
   // Leaving the paper with the dock open gives the width back — and scrolls nothing: the next page is not this one's.
   useLayoutEffect(
     () => () => {

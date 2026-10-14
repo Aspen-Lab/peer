@@ -18,6 +18,7 @@ vi.mock("react", async (importOriginal) => {
 import { useEffect, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 import { hookRuntime } from "@/test-support/hook-runtime";
+import { useReadingPrefsStore } from "@/store/reading-prefs";
 import type { ExplainAnswer } from "@/lib/papers/explain";
 import type { PaperReading } from "@/lib/papers/reading";
 import type { PaperTerm } from "@/lib/papers/report";
@@ -1487,17 +1488,19 @@ describe("ExplainBox — the window's bottom stands on the legend's top as Fit s
     run.mounted.unmount();
   });
 
-  it("follows a change of zoom with no scroll and no resize: the Fit toggle re-renders the box, and the window's bottom moves to the new legend", async () => {
+  it("follows a change of zoom with no scroll and no resize: the Fit toggle (the reading-prefs store's `fit`) is subscribed, and the window's bottom moves to the new legend (re-aimed, P10-08: the box no longer re-reads the viewport after every commit — a re-render alone no longer does it)", async () => {
     stubWindow(2560, 1440);
     stubZoom();
+    useReadingPrefsStore.setState({ fit: false });
     const run = await scenario(base({ target: inParagraph(first, 4000) }), [
       (tree) => click(tree),
-      (_tree, ctx) => {
+      () => {
         zoom = "1.838";
-        ctx.rerender();
+        useReadingPrefsStore.setState({ fit: true });
       },
     ]);
     await wait();
+    useReadingPrefsStore.setState({ fit: false });
     const at = fromOpen(run.looks);
 
     // Fit off: the flat 28. Fit on: the legend's 51.5 — the same window, moved by the difference.
