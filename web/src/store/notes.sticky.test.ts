@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { useNotesStore, readingNoteFor } from "./notes";
+import { inlineMath } from "@/lib/text/math";
+import { useNotesStore, readingNoteFor, locatePassage } from "./notes";
 
 // P10-09a (review 7.1; ruling §1h.78 (f)): the paper's one note holds every sticky. `ensureReadingNote` makes the
 // note without navigating and returns its id; `addSticky` appends "Note N" (an `h3` carrying `anchor`) and one empty
@@ -97,5 +98,63 @@ describe("setStickyText", () => {
     setStickyText("missing", one!.id, "x");
     setStickyText(id, "missing", "x");
     expect(useNotesStore.getState().notes[id].blocks).toEqual(before);
+  });
+});
+
+// P10-09f (review 7.1c; walk X-B3, B11; rule 1): the anchor knows where the words are. `start` / `end` are the
+// character offsets of the selection in the paragraph's text (the string the body renders), found by locating the
+// passage in the paragraph at creation — the first occurrence; not found whole, they are absent.
+describe("locatePassage", () => {
+  it("finds the passage's first occurrence in the paragraph", () => {
+    const paragraph = "Creep limits the life. Grain boundaries carry the strain. Grain boundaries slide.";
+    expect(locatePassage(paragraph, "Grain boundaries")).toEqual({ start: 23, end: 39 });
+    expect(paragraph.slice(23, 39)).toBe("Grain boundaries");
+  });
+
+  it("matches across the paragraph's own white space (the passage arrives collapsed)", () => {
+    const paragraph = "The finest  grains\ncrept fastest.";
+    const hit = locatePassage(paragraph, "finest grains crept");
+    expect(hit && paragraph.slice(hit.start, hit.end)).toBe("finest  grains\ncrept");
+  });
+
+  it("is null when the passage is not found whole, or is empty", () => {
+    expect(locatePassage("Creep limits the life.", "Creep limits the wear")).toBeNull();
+    expect(locatePassage("Creep limits the life.", "   ")).toBeNull();
+  });
+
+  it("never lands inside a formula: a formula's TeX is not the paragraph's prose", () => {
+    const paragraph = `The load ${inlineMath("grain size")} meets the grain size twice.`;
+    const hit = locatePassage(paragraph, "grain size");
+    expect(hit).not.toBeNull();
+    expect(hit!.start).toBe(paragraph.lastIndexOf("grain size"));
+    expect(locatePassage(`A ${inlineMath("x y")} B`, "x y")).toBeNull();
+  });
+});
+
+describe("addSticky — the selection's place", () => {
+  beforeEach(() => useNotesStore.setState({ notes: {} }));
+  const PARAGRAPH = "Creep limits the life of hot parts. The finest grains crept fastest when annealed.";
+
+  it("stores start and end beside the quote when it is handed the paragraph's text", () => {
+    const { ensureReadingNote, addSticky } = useNotesStore.getState();
+    const id = ensureReadingNote(PAPER);
+    const sticky = addSticky(id, { ...AT, passage: "finest grains crept", paragraphText: PARAGRAPH });
+    const anchor = useNotesStore.getState().notes[id].blocks.find((b) => b.id === sticky?.id)?.anchor;
+    expect(anchor).toEqual({ paperId: "p1", paragraphId: AT.paragraphId, quote: "finest grains crept", n: 1, start: 40, end: 59 });
+    expect(PARAGRAPH.slice(anchor!.start, anchor!.end)).toBe("finest grains crept");
+  });
+
+  it("leaves start and end out when the passage is not found whole, or no paragraph text came", () => {
+    const { ensureReadingNote, addSticky } = useNotesStore.getState();
+    const id = ensureReadingNote(PAPER);
+    const lost = addSticky(id, { ...AT, passage: "grains crept slowest", paragraphText: PARAGRAPH });
+    const none = addSticky(id, { ...AT, passage: "finest grains" });
+    const blocks = useNotesStore.getState().notes[id].blocks;
+    for (const made of [lost, none]) {
+      const anchor = blocks.find((b) => b.id === made?.id)?.anchor;
+      expect(anchor).toBeDefined();
+      expect("start" in anchor!).toBe(false);
+      expect("end" in anchor!).toBe(false);
+    }
   });
 });

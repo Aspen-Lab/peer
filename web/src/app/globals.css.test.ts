@@ -209,12 +209,12 @@ describe("globals.css — the route tint tokens (P1-05, P10-06)", () => {
   });
 });
 
-// P3-01 (§1h.1): the highlight a clicked term leaves in the body. A neutral
-// grey in every palette block — none of the route's greens, so a marked word
-// is never mistaken for a tier — used as a background only, by the body's one
-// `<mark>`; the palette's muted and heading ink stay readable on it.
-describe("globals.css — the term highlight token (P3-01)", () => {
-  const TOKEN = "--color-term-mark";
+// P10-09f (review 7.1c; walk X-B3): the highlighter. The words a sticky note was taken on stay marked in the paper,
+// in a pale yellow in every palette block (it replaces P3-01's grey term highlight, which went with the Terms strip):
+// none of the route's greens, so a marked passage is never mistaken for a tier; used as a background only, by the
+// body's note `<mark>`; the palette's muted ink (the paragraph's own) stays ≥ 4.5:1 on it, the heading ink ≥ 7:1.
+describe("globals.css — the highlighter token (P10-09f)", () => {
+  const TOKEN = "--color-note-mark";
   const lightBlock = css.slice(css.indexOf(":root {"), css.indexOf("/* Dark palette"));
   const darkBlock = css.slice(css.indexOf('html[data-mode="dark"] {'), css.indexOf('/* Dark palette — "system"'));
   const systemStart = css.indexOf('html[data-mode="system"] {');
@@ -243,10 +243,12 @@ describe("globals.css — the term highlight token (P3-01)", () => {
     expect(value(systemBlock, TOKEN)).toBe(value(darkBlock, TOKEN));
   });
 
-  it("is a neutral grey, never one of the route's greens", () => {
+  it("is a pale yellow (red and green high, blue lowest), never one of the route's greens", () => {
     for (const block of [lightBlock, darkBlock]) {
       const [r, g, b] = channels(value(block, TOKEN));
-      expect(r === g && g === b).toBe(true);
+      expect(r).toBeGreaterThanOrEqual(g);
+      expect(g).toBeGreaterThan(b);
+      expect(r - b).toBeGreaterThanOrEqual(24);
       for (const green of ["--color-route-strong", "--color-route-medium", "--color-route-faint", "--color-route-background"]) {
         expect(value(block, TOKEN)).not.toBe(value(block, green));
       }
@@ -256,7 +258,7 @@ describe("globals.css — the term highlight token (P3-01)", () => {
   it("is a tint on its ground: darker than the light ground, lighter than the dark one, and visibly off both", () => {
     expect(luminance(value(lightBlock, TOKEN))).toBeLessThan(luminance(value(lightBlock, "--color-bg")));
     expect(luminance(value(darkBlock, TOKEN))).toBeGreaterThan(luminance(value(darkBlock, "--color-bg")));
-    expect(contrast(value(lightBlock, TOKEN), value(lightBlock, "--color-bg"))).toBeGreaterThanOrEqual(1.15);
+    expect(contrast(value(lightBlock, TOKEN), value(lightBlock, "--color-bg"))).toBeGreaterThanOrEqual(1.1);
     expect(contrast(value(darkBlock, TOKEN), value(darkBlock, "--color-bg"))).toBeGreaterThanOrEqual(1.4);
   });
 
@@ -267,8 +269,8 @@ describe("globals.css — the term highlight token (P3-01)", () => {
     }
   });
 
-  it("is read only as a background — by the body's `<mark>` — and nowhere else", () => {
-    expect(css).not.toMatch(/var\(--color-term-mark/);
+  it("is read only as a background — by the body's note `<mark>` — and nowhere else", () => {
+    expect(css).not.toMatch(/var\(--color-note-mark/);
     const root = new URL("..", import.meta.url).pathname;
     const reads: string[] = [];
     const walk = (dir: string) => {
@@ -277,13 +279,13 @@ describe("globals.css — the term highlight token (P3-01)", () => {
         if (statSync(file).isDirectory()) walk(file);
         else if (/\.(tsx?|css)$/.test(name) && !/\.test\.tsx?$/.test(name) && !file.endsWith("app/globals.css")) {
           const source = readFileSync(file, "utf8");
-          for (const match of source.matchAll(/[^\s"'`]*--color-term-mark[^\s"'`]*/g)) reads.push(`${file.slice(root.length)}: ${match[0]}`);
+          for (const match of source.matchAll(/[^\s"'`]*--color-note-mark[^\s"'`]*/g)) reads.push(`${file.slice(root.length)}: ${match[0]}`);
         }
       }
     };
     walk(root.replace(/\/$/, ""));
     expect(reads).toEqual([
-      "components/reader/paper-body.tsx: bg-[color:var(--color-term-mark)]",
+      "components/reader/paper-body.tsx: bg-[color:var(--color-note-mark)]",
     ]);
   });
 });

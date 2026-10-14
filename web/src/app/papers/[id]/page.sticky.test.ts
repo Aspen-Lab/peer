@@ -16,6 +16,8 @@ function wiringProblems(page: string, body: string, editor: string): string[] {
   has(p, "<StickyNotes key={paper.id} paper={paper} reveal={reveal} />", "the sticky notes are not mounted for the paper with the tab reveal");
   has(p, "noteAnchors={noteAnchors}", "the body is not handed the paper's note anchors");
   has(p, "useTakeNote(", "the page has no take-note action");
+  // P10-09f: the take-note action is handed the body, so the anchor records where in the paragraph the words stand.
+  has(p, "body: reading?.body", "the take-note action is not handed the body (the anchor would record no range)");
   if (p.split("<SelectionToolbar").length - 1 !== 1) problems.push("the selection buttons are not mounted exactly once");
   const b = body.replace(/\s+/g, " ");
   has(b, "noteAnchors", "the paper body does not take noteAnchors");
@@ -42,6 +44,7 @@ describe("the page's wiring of the selection buttons and the sticky notes", () =
       ["stickies", () => wiringProblems(page.replace("<StickyNotes", "<Nothing"), body, editor)],
       ["anchors", () => wiringProblems(page.replace("noteAnchors={noteAnchors}", ""), body, editor)],
       ["tag", () => wiringProblems(page, body.replaceAll("<NoteTag", "<Nothing"), editor)],
+      ["place", () => wiringProblems(page.replace("body: reading?.body", "body: undefined"), body, editor)],
       ["square", () => wiringProblems(page, body, editor.replaceAll("AnchorLink", "Nothing"))],
     ];
     for (const [name, run] of cases) expect(run().length, name).toBeGreaterThan(0);
