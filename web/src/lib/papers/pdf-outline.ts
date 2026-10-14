@@ -944,17 +944,45 @@ export function bodyStyle(lines: PdfLine[]): { size: number; font: string } {
   return { size: top(bySize, 10), font: top(byFont, "") };
 }
 
-/** Lines that repeat across pages at the same height: running heads, folios,
- *  preprint stamps. They are the page's furniture, not the paper's words. */
+/** A running head is on at least this many pages (P10-33, BACKLOG-84): two pages that open with the same
+ *  wording are a templated paragraph, or a repeated one, not a head. */
+const FURNITURE_MIN_PAGES = 3;
+/** The page's top or bottom band: this many of its rows from either edge. A head and a rule, a folio and a
+ *  journal line, an author line above them: three. Wording mid-page, or the fifth row down, is the body's. */
+const FURNITURE_BAND_ROWS = 3;
+
+/** Whether a line stands in the top or bottom band of its page (`FURNITURE_BAND_ROWS` rows from an edge, rows
+ *  being the page's distinct baselines to the nearest 3 points, so two columns' lines share one). */
+function bandOf(lines: PdfLine[]): (line: PdfLine) => boolean {
+  const rows = new Map<number, number[]>();
+  for (const { page, y } of lines) {
+    const row = Math.round(y / 3);
+    const known = rows.get(page);
+    if (!known) rows.set(page, [row]);
+    else if (!known.includes(row)) known.push(row);
+  }
+  for (const known of rows.values()) known.sort((a, b) => b - a);
+  return (line) => {
+    const known = rows.get(line.page);
+    if (!known) return false;
+    const at = known.indexOf(Math.round(line.y / 3));
+    return at < FURNITURE_BAND_ROWS || at >= known.length - FURNITURE_BAND_ROWS;
+  };
+}
+
+/** Lines that repeat across pages at the same height, in the page's top or bottom band, on at least three
+ *  pages (and 40% of them): running heads, folios, preprint stamps. They are the page's furniture, not the
+ *  paper's words. */
 export function furnitureOf(lines: PdfLine[], pageCount: number): Set<string> {
   const seen = new Map<string, Set<number>>();
+  const inBand = bandOf(lines);
   for (const line of lines) {
-    if (line.text.length > 120) continue;
+    if (line.text.length > 120 || !inBand(line)) continue;
     const key = `${Math.round(line.y / 6)}:${line.text.replace(/\d+/g, "#").toLowerCase()}`;
     seen.set(key, (seen.get(key) ?? new Set()).add(line.page));
   }
   const repeated = new Set<string>();
-  const threshold = Math.max(2, Math.ceil(pageCount * 0.4));
+  const threshold = Math.max(FURNITURE_MIN_PAGES, Math.ceil(pageCount * 0.4));
   for (const [key, pages] of seen) if (pages.size >= threshold) repeated.add(key);
   return repeated;
 }
