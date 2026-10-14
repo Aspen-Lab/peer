@@ -27,6 +27,13 @@
 // The gist is Peer's, never the paper's: the page labels it (`PEERS_READING`)
 // and never lets it replace, shorten or restyle the opening.
 //
+// P10-07a (B P10-05; review 3.3, second half): a paper with no headings of its own (the rule
+// is `unheadedTrunk`, `guideTrunk` here) is also asked to divide its one big section into
+// introduction / results / discussion / conclusion / experimental — a `partition`, where each
+// part STARTS, made whole by `sanitizePartition`. It is asked for only then: a paper with
+// headings gets today's prompt and token allowance, byte for byte. The partition rides in the
+// same call, the same cache entry (key: the document's hash) and the same gate as the gists.
+//
 // Pure — no I/O, no `node:` import, no logging — so the browser may import it;
 // today it imports types only. The hash is the route's (`explainDocHash`).
 
@@ -34,6 +41,7 @@ import { cleanDisplayText } from "@/lib/text/clean";
 import { normalizeForMatch } from "./evidence";
 import type { ExtractedDocument } from "./html-text";
 import { openingOf, readableSections } from "./reading-map";
+import { PARTITION_ROLES, unheadedTrunk, type GuidePartition, type Trunk } from "./reading-partition";
 
 export const GUIDE_CAPS = {
   /** A paragraph is sent clipped to this many characters, at a word. */
@@ -61,6 +69,9 @@ export type GistRecord = Record<string, Record<number, string>>;
 export interface ParagraphGuide {
   docHash: string;
   gists: GistRecord;
+  /** Peer's division of an unheaded paper's one big section into parts (P10-07a); absent for a
+   *  paper with headings, and when the model's answer made no whole partition. */
+  partition?: GuidePartition;
 }
 
 /** What the route says (the status says the rest). `skipped`: the document has
@@ -115,6 +126,16 @@ export function tooManyParagraphs(doc: ExtractedDocument): boolean {
   return gistCandidates(doc).length > GUIDE_CAPS.maxParagraphs;
 }
 
+/**
+ * The section the model is also asked to divide into parts, or null — a paper with headings of its
+ * own (P10-07a; `unheadedTrunk`, B P10-05 §1.3). Computed on the sections the body renders, so the
+ * paragraph indices of a part are the body's, the map's and a gist's. A paragraph with no opening is
+ * not a candidate but is in the trunk's size: a part's range is by paragraph index.
+ */
+export function guideTrunk(doc: ExtractedDocument): Trunk | null {
+  return unheadedTrunk(readableSections(doc).map(({ id, section, paragraphs }) => ({ id, canonical: section.canonical, paragraphs })));
+}
+
 // ── The prompt ─────────────────────────────────────────────────────────
 
 const GUIDE_SYSTEM = [
@@ -125,19 +146,45 @@ const GUIDE_SYSTEM = [
   "Return only valid JSON.",
 ].join(" ");
 
+/** The three lines that ask for the partition (B P10-05 §2.3): where each part starts, what the
+ *  five roles are, and the limits. Added to the rules only when there is a trunk. */
+function partitionRules(sectionId: string): string[] {
+  return [
+    `\`partition\` divides the paragraphs of section \`${sectionId}\` only, in reading order, into consecutive parts; list where each part starts; the first part starts at the section's first paragraph; a part runs until the next one starts. \`paragraphIndex\` values may skip: a part's range is by index.`,
+    "Roles: `introduction` is the background, motivation and the question asked; `results` is what was observed or measured; `discussion` is interpretation, comparison with other work and limits; `conclusion` is the closing summary and outlook; `experimental` is materials, samples, instruments, procedures, data processing and statistics, wherever in the section they stand.",
+    "Use a role at most twice. Use only the roles the paragraphs show; leave a role out rather than invent a part. Two to five parts is usual. This is your reading of the structure: copy no sentence of the paper into it.",
+  ];
+}
+
 /**
  * The system and user prompts for the one pass: the paper's title, the
  * candidates in document order — each with its topic sentence (the opening) and
  * its text, at most 1,200 characters, at most 120 of them — then the schema and
- * the rules, which are never what gets cut. The only inputs are the title and
- * the candidates, so nothing about the reader can be in it.
+ * the rules, which are never what gets cut. The only inputs are the title, the
+ * candidates and the trunk (the document's own), so nothing about the reader can
+ * be in it.
+ *
+ * With a `trunk` (P10-07a: the paper has no headings of its own) the prompt also asks for a
+ * `partition` of that section — the schema line before `gists`, three more rules. Without one the
+ * prompt is what it has always been, byte for byte.
  */
 export function buildParagraphGuidePrompt(args: {
   paper: { title: string };
   candidates: readonly GistCandidate[];
+  trunk?: Trunk | null;
 }): { systemPrompt: string; userPrompt: string } {
+  const trunk = args.trunk ?? null;
+  const gistSchema = [
+    {
+      sectionId: "copied from the paragraph",
+      paragraphIndex: "copied from the paragraph, a number",
+      gist: "at most 12 words, in plain words, saying what the paragraph is about",
+    },
+  ];
   const userPrompt = JSON.stringify({
-    task: "Write one gist for every paragraph in `paragraphs`.",
+    task: trunk
+      ? `Write one gist for every paragraph in \`paragraphs\`. Also divide the paragraphs of section \`${trunk.sectionId}\` into parts.`
+      : "Write one gist for every paragraph in `paragraphs`.",
     paper: { title: cutAtWord(cleanDisplayText(args.paper.title), GUIDE_CAPS.titleChars) },
     paragraphs: args.candidates.slice(0, GUIDE_CAPS.maxParagraphs).map((candidate) => ({
       sectionId: candidate.sectionId,
@@ -145,21 +192,24 @@ export function buildParagraphGuidePrompt(args: {
       topicSentence: candidate.opening,
       text: cutAtWord(candidate.paragraph, GUIDE_CAPS.paragraphChars),
     })),
-    outputSchema: {
-      gists: [
-        {
-          sectionId: "copied from the paragraph",
-          paragraphIndex: "copied from the paragraph, a number",
-          gist: "at most 12 words, in plain words, saying what the paragraph is about",
-        },
-      ],
-    },
+    outputSchema: trunk
+      ? {
+          partition: [
+            {
+              role: `one of: ${PARTITION_ROLES.join(", ")}`,
+              fromParagraph: "the paragraphIndex of the part's first paragraph, a number",
+            },
+          ],
+          gists: gistSchema,
+        }
+      : { gists: gistSchema },
     rules: [
       "Return ONLY valid JSON of the shape in `outputSchema`: one entry per paragraph, in order, `sectionId` and `paragraphIndex` copied exactly from the paragraph.",
       `Each \`gist\` is at most ${GUIDE_CAPS.gistWords} words of plain English, condensed from that paragraph's \`topicSentence\` (its topic sentence) and checked against its \`text\`.`,
       "Add no new facts, and no number, name or claim the paragraph does not state. Reuse the paragraph's own key words.",
       "Do not copy the topic sentence; say it shorter. No LaTeX, no links, no advice, no verdict on whether the reader should read the paragraph.",
       "Leave a paragraph out rather than guess.",
+      ...(trunk ? partitionRules(trunk.sectionId) : []),
     ],
   });
   return { systemPrompt: GUIDE_SYSTEM, userPrompt };
@@ -169,10 +219,14 @@ export function buildParagraphGuidePrompt(args: {
  * How many tokens the answer may take: a gist entry is about forty tokens with
  * its keys, so the allowance grows with the paragraphs asked about — a fixed
  * small one would cut the JSON off mid-list on a real paper and lose every gist.
+ * Asked for a partition too (P10-07a), the answer needs room for about five parts at eighteen
+ * tokens each, and some over: 300 more. Without it the allowance is what it has always been.
  */
-export function gistMaxTokens(paragraphs: number): number {
-  return Math.min(8000, Math.max(600, 200 + 45 * Math.max(0, Math.floor(paragraphs))));
+export function gistMaxTokens(paragraphs: number, withPartition = false): number {
+  return Math.min(8000, Math.max(600, 200 + 45 * Math.max(0, Math.floor(paragraphs)))) + (withPartition ? PARTITION_TOKENS : 0);
 }
+
+const PARTITION_TOKENS = 300;
 
 // ── The answer ─────────────────────────────────────────────────────────
 
@@ -300,8 +354,9 @@ export interface ParagraphGuideCache {
 /**
  * In this process only: at most `max` finished guides for at most `ttlMs`, the
  * oldest forgotten first, keyed by the document's hash and nothing else. A
- * guide is a gist for each of some paragraphs of the document — there is no
- * reader, question or passage in it, so one reader's guide can only ever be
+ * guide is a gist for each of some paragraphs of the document, and, for a paper
+ * with no headings, Peer's division of its one big section (P10-07a) — there is
+ * no reader, question or passage in it, so one reader's guide can only ever be
  * another's hit for the same document.
  */
 export function createParagraphGuideCache(

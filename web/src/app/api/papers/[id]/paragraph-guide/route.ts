@@ -11,6 +11,13 @@
 // dropped, never mended. A document with more than 120 such paragraphs is not
 // asked about at all (`200 { skipped }`).
 //
+// P10-07a (review 3.3, second half; B P10-05): a paper with no headings of its own
+// (`guideTrunk`: one big section nothing recognised) is asked, in the same call, to divide
+// that section into introduction / results / discussion / conclusion / experimental parts.
+// The answer's `partition` is made whole by `sanitizePartition` (it quotes nothing, so there
+// is nothing to ground), and a guide with a partition and no gist is still a guide. A paper
+// with headings is asked what it always was; the memory is still the document's hash alone.
+//
 // Nothing about the reader reaches the model: the prompt is the paper's title and
 // its paragraphs. The answer is remembered by the document's hash alone, in this
 // process for an hour — one reader's guide is another's hit for the same text, and
@@ -38,12 +45,14 @@ import {
   gistCandidates,
   gistMaxTokens,
   GUIDE_CAPS,
+  guideTrunk,
   paragraphGuideCache,
   sanitizeParagraphGuide,
   verifyParagraphGuide,
   type ParagraphGuide,
   type ParagraphGuideResult,
 } from "@/lib/papers/paragraph-guide";
+import { sanitizePartition } from "@/lib/papers/reading-partition";
 import type { PaperReportRequest } from "@/lib/papers/report";
 import { bareUploadId, claimsUploadId } from "@/lib/papers/upload-store";
 import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
@@ -186,10 +195,18 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   const hit = paragraphGuideCache.get(docHash);
   if (hit) return reply({ guide: hit, cached: true } satisfies ParagraphGuideResult);
 
-  const { systemPrompt, userPrompt } = buildParagraphGuidePrompt({ paper: { title: body.paper.title }, candidates });
+  // A paper with no headings of its own also gets its one big section divided into parts; a
+  // function of the document, so the same for every reader.
+  const trunk = guideTrunk(doc);
+  const { systemPrompt, userPrompt } = buildParagraphGuidePrompt({ paper: { title: body.paper.title }, candidates, trunk });
   let raw: string;
   try {
-    raw = await provider.generateJsonText({ systemPrompt, userPrompt, maxTokens: gistMaxTokens(candidates.length), tier: "small" });
+    raw = await provider.generateJsonText({
+      systemPrompt,
+      userPrompt,
+      maxTokens: gistMaxTokens(candidates.length, trunk !== null),
+      tier: "small",
+    });
   } catch (err) {
     // Only the kind of error is logged: a provider's message may echo the prompt.
     console.error("[papers/paragraph-guide] model call failed:", err instanceof Error ? err.name : typeof err);
@@ -197,8 +214,11 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   }
 
   // Sanitised, then held to the paragraphs: a gist the paragraph does not support is
-  // dropped. Nothing left is no guide — nothing is kept, and the client is told so.
-  const gists = verifyParagraphGuide(sanitizeParagraphGuide(parseModelJson(raw), candidates), candidates);
+  // dropped. The partition is made whole by its sanitizer (no text to hold it to: it quotes
+  // none). Nothing left of either is no guide — nothing is kept, and the client is told so.
+  const answer = parseModelJson(raw);
+  const gists = verifyParagraphGuide(sanitizeParagraphGuide(answer, candidates), candidates);
+  const partition = trunk ? sanitizePartition(answer, trunk) : null;
   const kept = Object.values(gists).reduce((sum, section) => sum + Object.keys(section).length, 0);
   // Sizes only: no paper word, no gist, no title.
   console.debug("[papers/paragraph-guide] pass", {
@@ -207,8 +227,10 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
     answerChars: raw.length,
     paragraphs: candidates.length,
     kept,
+    // A count, only when a partition was asked for: a headed paper's line is what it was.
+    ...(trunk ? { parts: partition?.parts.length ?? 0 } : {}),
   });
-  if (kept === 0) return reply({ unavailable: true } satisfies ParagraphGuideResult);
+  if (kept === 0 && !partition) return reply({ unavailable: true } satisfies ParagraphGuideResult);
 
   // The model's work can run long: an upload changed meanwhile is not answered
   // from, and nothing built from it is remembered.
@@ -216,7 +238,7 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
     return reply({ error: "Upload no longer available" }, 410);
   }
 
-  const guide: ParagraphGuide = { docHash, gists };
+  const guide: ParagraphGuide = { docHash, gists, ...(partition ? { partition } : {}) };
   paragraphGuideCache.set(docHash, guide);
   return reply({ guide, cached: false } satisfies ParagraphGuideResult);
 }
