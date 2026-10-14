@@ -87,7 +87,11 @@ describe.each([
   it("reads the right column's lines as the column's own, not as indents: one paragraph, as printed", async () => {
     const result = await extractPdfTextFromBytes(bytes);
     const body = result.doc?.sections[0].text ?? "";
-    expect(body.split("\n\n")).toHaveLength(1);
+    // P10-33 (re-aimed): one paragraph per page, not one in all — the right column of page 1 ends mid-sentence
+    // and page 2's left column opens with a capital ("P2L01"), which is no continuing word, so the page break
+    // is a paragraph break. What the test is for stands: no column line is read as an indent, so each page's
+    // two columns are one paragraph and nothing splits inside them.
+    expect(body.split("\n\n")).toHaveLength(2);
   });
 
   it("hands the upload route page 1's text in the same order", async () => {

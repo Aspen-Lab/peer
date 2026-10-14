@@ -259,9 +259,11 @@ describe("extractPdfTextFromPath's page-number furniture removal — 4-05, read 
     const introduction = result.doc?.sections.find((section) => section.canonical === "introduction");
     // Exact join: "1"/"2"/"3"/"4" are gone from every seam they could have
     // spliced into. P0-03: so is the lone "2024" (pdf.js's `FOLIO`).
+    // P10-33 (re-aimed): a page break that follows a finished sentence is a paragraph break, not a join —
+    // the seams here are the ones the folios sat in, and the paragraphs on either side of them stay two.
     expect(introduction?.text).toBe(
-      "Body text discusses electrodes of identical thickness but different pore size were fabricated. " +
-        "Further discussion continues on this page. The study concludes with final remarks here. " +
+      "Body text discusses electrodes of identical thickness but different pore size were fabricated.\n\n" +
+        "Further discussion continues on this page.\n\nThe study concludes with final remarks here. " +
         "Nothing else follows in this short fixture.",
     );
   });
@@ -291,8 +293,10 @@ describe("extractPdfTextFromPath's page-number furniture removal — 4-05, read 
     // P0-03: the old helper kept "2024" three times here, because its value
     // never tracked the page number. pdf.js sees one line at one height on
     // every page — a running footer — and leaves it out of the prose.
+    // P10-33 (re-aimed): "…under load." ends a sentence and "A separate note" opens one, so the page break
+    // between them is a paragraph break; the first seam (an unfinished sentence, then lower case) still joins.
     expect(introduction?.text).toBe(
-      "Experimental values were measured across three trials to assess performance under load. " +
+      "Experimental values were measured across three trials to assess performance under load.\n\n" +
         "A separate note follows here for completeness. " +
         "Each trial ran for the same number of cycles at room temperature.",
     );

@@ -1596,6 +1596,25 @@ export function writeIsland(rows: readonly PdfLine[], leading: number): string |
 
 /** A sentence ends at one of these, and a closing quote or bracket after it still ends it. */
 const SENTENCE_END = /[.!?:;]["')\]”’]*$/;
+/** A sentence that a page break may not cut (P10-33): a full stop, a question or an exclamation, with a closing
+ *  quote or bracket after it. A colon or a semicolon at a page's foot leads on to the next page's line. */
+const PAGE_END = /[.!?]["')\]”’]*$/;
+/** What a block carried over a page break may open with and still be the same paragraph: lower case, a digit, an
+ *  opening or closing bracket, a comma or a semicolon... */
+const CONTINUING_OPENER = /^[\p{Ll}\p{N}()[\],;:]/u;
+/** ...or a word that only continues a sentence, set capital by nothing but a new line ("And the gull colonies once."). */
+const CONTINUING_WORD = /^(?:and|or|but|nor|of|to|in|on|for|with|that|which|whereas|where|while|as|by|at|from|than)\b/i;
+
+/**
+ * P10-33 (BACKLOG-84): whether the block on the next page carries the paragraph `current` began on. It does when
+ * `current` stops short of a sentence's end and the line opens in lower case, or with a continuing word. Two
+ * paragraphs that happen to meet at a page break (the foot of one, the head of the next) stay two.
+ */
+function continuesAcrossPage(current: string, next: string): boolean {
+  const before = current.trim();
+  const after = next.trim();
+  return !PAGE_END.test(before) && (CONTINUING_OPENER.test(after) || CONTINUING_WORD.test(after));
+}
 /** A gap this many line pitches high is a float's, not a paragraph's (a real paragraph gap is 1.5-2). */
 const FLOAT_GAP_PITCHES = 3;
 
@@ -1645,7 +1664,10 @@ export function joinProse(lines: readonly FlowLine[], options: JoinOptions = {})
     const breaks =
       previous !== null &&
       !line.continues &&
-      ((bigGap && !floatGap) || (samePage && line.x > left + 6) || previous?.block === true);
+      ((bigGap && !floatGap) ||
+        (samePage && line.x > left + 6) ||
+        previous?.block === true ||
+        (previous.page !== line.page && current.trim() !== "" && !continuesAcrossPage(current, line.text)));
     if (breaks && current.trim()) {
       paragraphs.push(current.trim());
       current = "";
