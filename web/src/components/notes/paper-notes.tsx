@@ -106,7 +106,7 @@ export function PaperNotes({
           {own ? "Open your notes →" : "Take notes"}
         </button>
         {!own && citing.length === 0 && (
-          <span className="annotation text-text-faint">Its card, the opening of its abstract, four questions to answer.</span>
+          <span className="annotation text-text-faint">The note holds the paper&apos;s title and your sticky notes.</span>
         )}
       </div>
       {citing.length > 0 && (

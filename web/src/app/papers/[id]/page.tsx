@@ -704,7 +704,7 @@ function Reader({
 
   // P3-01 (§1h.1; §3d 13): the paper's own defined terms — the sentences the paper defines
   // its own words in, read from the sections the route marks read or background
-  // (the methods and results when there is no such route), then the model's,
+  // (the whole body when there is no such route), then the model's,
   // ≤8 in all. From the reading this page holds, in the browser: no key, no
   // request. They feed the Tier 0 definition in "Explain this". P10-02 (ruling §1h.78): the
   // strip that listed them on the page is deleted.
