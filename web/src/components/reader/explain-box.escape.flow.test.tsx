@@ -489,6 +489,166 @@ describe("Escape on the Tier 0 definition, the card and the sheet (unchanged)", 
   });
 });
 
+// ── What is open takes Escape first (P10-31, BACKLOG-86) ────────────────────────────────────────────
+
+// P10-18's check found Escape closing the explain window with the focus in the page, and nothing said who else Escape belongs to there.
+// The order, written down (P10-31 rule 1): (1) a modal dialog over the page — the figure lightbox, the Keyboard-shortcuts sheet — takes
+// it and the window stays; (2) a control that is open — the question bar's suggestions, a note editor's menu, an export menu, a sticky or
+// the notes window with the focus in it — takes it (its React handler stops it before the document's bubble) and the window stays;
+// (3) with none of those open the window closes, as P10-08 says (Escape clears the passage and closes it, and goes no further, so the
+// page's own "back" is not run by the same press). The box listens on the document in the BUBBLE phase for this: at the capture
+// phase it ran before every one of them (and beside the lightbox's own capture listener, which it did not stop), so one press closed the
+// lightbox and the window together, and never reached the suggestions' handler.
+describe("Escape's order when something else is open (P10-31, BACKLOG-86)", () => {
+  /** A stand-in with the shape of the lightbox (`figure-lightbox.tsx`): a capture listener on the document that stops every key, closes on Escape. */
+  function openLightbox(onClose: () => void) {
+    const onKeyDown = (event: KeyEvent) => {
+      event.stopPropagation();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        document.removeEventListener("keydown", onKeyDown as never, true);
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown as never, true);
+  }
+  const standsOpen = (run: { last: () => Look }) => run.last().card !== undefined;
+
+  it("an open figure lightbox takes Escape first: it closes, the window stays; the next Escape closes the window", async () => {
+    const closeLightbox = vi.fn();
+    const run = await scenario(base({ target: first }), [
+      (tree) => click(tree),
+      () => openLightbox(closeLightbox),
+      () => void press("Escape"),
+      (tree) => {
+        expect(closeLightbox).toHaveBeenCalledTimes(1);
+        expect(look(tree).card, "the window stays while the lightbox closes").toBeDefined();
+        expect(Object.fromEntries(root)).toEqual(RESERVED);
+      },
+      () => void press("Escape"),
+    ]);
+    await wait();
+
+    expect(closeLightbox).toHaveBeenCalledTimes(1);
+    expect(run.last().card).toBeUndefined();
+    expect(Object.fromEntries(root)).toEqual({});
+    run.mounted.unmount();
+  });
+
+  it("the question bar's open suggestions take Escape first (its React handler stops it): they close, the window stays; the next one closes the window", async () => {
+    // Stand-in with the shape of `question-field.tsx`: with the list open Escape is the list's (preventDefault, stopPropagation, close).
+    let listboxOpen = true;
+    rootHandlers.push((event) => {
+      if (event.key !== "Escape" || !listboxOpen) return;
+      event.preventDefault();
+      event.stopPropagation();
+      listboxOpen = false;
+    });
+    const run = await scenario(base({ target: first }), [
+      (tree) => click(tree),
+      () => void press("Escape"),
+      (tree) => {
+        expect(listboxOpen).toBe(false);
+        expect(look(tree).card, "the window stays while the list closes").toBeDefined();
+        expect(Object.fromEntries(root)).toEqual(RESERVED);
+      },
+      () => void press("Escape"),
+    ]);
+    await wait();
+
+    expect(run.last().card).toBeUndefined();
+    expect(Object.fromEntries(root)).toEqual({});
+    run.mounted.unmount();
+  });
+
+  it("a sticky note (or the notes window, or a note editor's menu) with the focus in it takes Escape as its React handler always did: the window stays", async () => {
+    const closeSticky = vi.fn();
+    rootHandlers.push((event) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      event.preventDefault();
+      closeSticky();
+    });
+    const run = await scenario(base({ target: first }), [(tree) => click(tree), () => void press("Escape")]);
+    await wait();
+
+    expect(closeSticky).toHaveBeenCalledTimes(1);
+    expect(standsOpen(run)).toBe(true);
+    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    run.mounted.unmount();
+  });
+
+  it("the Keyboard-shortcuts sheet, a modal dialog standing over the page, takes Escape first: the keyboard layer closes it, the window stays", async () => {
+    // The keyboard layer handles Escape on the window in bubble (`components/keyboard.tsx`) after the document's: the sheet's own markup
+    // (`role="dialog" aria-modal="true"`) is how the box knows to leave the key to it.
+    let helpOpen = true;
+    vi.stubGlobal("document", {
+      ...node("document"),
+      documentElement: { style: { setProperty, removeProperty } },
+      querySelector: (selector: string) => (helpOpen && selector.includes('aria-modal="true"') ? {} : null),
+    });
+    window.addEventListener("keydown", ((event: KeyEvent) => {
+      if (event.key === "Escape" && helpOpen) {
+        helpOpen = false;
+        event.preventDefault();
+      }
+    }) as never);
+    const run = await scenario(base({ target: first }), [
+      (tree) => click(tree),
+      () => void press("Escape"),
+      (tree) => {
+        expect(helpOpen).toBe(false);
+        expect(look(tree).card, "the window stays while the sheet closes").toBeDefined();
+      },
+      () => void press("Escape"),
+    ]);
+    await wait();
+
+    expect(run.last().card).toBeUndefined();
+    run.mounted.unmount();
+  });
+
+  it("a key someone has already handled (default prevented) is left alone: the window stays", async () => {
+    const run = await scenario(base({ target: first }), [
+      (tree) => click(tree),
+      () => {
+        const event = keyEvent("Escape");
+        event.defaultPrevented = true;
+        for (const r of registrations.filter((entry) => entry.type === "keydown")) r.fn(event);
+        expect(event.stopPropagation).not.toHaveBeenCalled();
+      },
+    ]);
+    await wait();
+
+    expect(standsOpen(run)).toBe(true);
+    run.mounted.unmount();
+  });
+
+  it("with nothing else open (the focus anywhere in the page) one Escape closes the window and goes no further; the next is the page's (P10-08, unchanged)", async () => {
+    const back = vi.fn();
+    const release = registerReaderActions({ back });
+    window.addEventListener("keydown", (() => readerActions()?.back?.()) as never);
+    const events: KeyEvent[] = [];
+    const run = await scenario(base({ target: first }), [(tree) => click(tree), () => events.push(press("Escape")), () => events.push(press("Escape"))]);
+    await wait();
+
+    expect(events[0].stopPropagation).toHaveBeenCalledTimes(1);
+    expect(events[1].stopPropagation).not.toHaveBeenCalled();
+    expect(back).toHaveBeenCalledTimes(1);
+    expect(run.last().card).toBeUndefined();
+    run.mounted.unmount();
+    release();
+  });
+
+  it("the box's Escape stands on the document in the bubble phase (read from the source): after every capture listener and every React handler", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/components/reader/explain-box.tsx"), "utf8").replace(/\s+/g, " ");
+
+    expect(source).toContain('document.addEventListener("keydown", onKeyDown);');
+    expect(source).toContain('document.removeEventListener("keydown", onKeyDown);');
+    expect(source).not.toContain('"keydown", onKeyDown, true');
+  });
+});
+
 // ── The shapes the stand-ins above are modelled on ─────────────────────────────────────────────────
 
 describe("the seams are as the stand-ins model them (read from the source)", () => {
