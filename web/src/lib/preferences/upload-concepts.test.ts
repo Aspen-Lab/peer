@@ -215,3 +215,12 @@ describe("the extraction version after the empty numbered parent is kept (P10-04
     expect(UPLOAD_CONCEPT_EXTRACTION_VERSION).toBeGreaterThanOrEqual(10);
   });
 });
+
+describe("the extraction version after the running-head and page-break rules and the figure sizes (P10-33, P10-34)", () => {
+  // Text read under 10 drops a paragraph whose words repeat a running head, joins two paragraphs across a page break
+  // where the first had ended its sentence, and carries no figure sizes; 11 retires it, and the paper is read again.
+  // A saved note keeps its passage through the new split by its quote (P10-35).
+  it("is past the reading that dropped repeating paragraphs and carried no figure sizes", () => {
+    expect(UPLOAD_CONCEPT_EXTRACTION_VERSION).toBeGreaterThanOrEqual(11);
+  });
+});
