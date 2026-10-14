@@ -21,7 +21,7 @@ import type { PaperReading } from "@/lib/papers/reading";
 import { useSpread } from "./reader-layout";
 import { ReaderCommands } from "./reader-commands";
 import { ReadingControls } from "./reading-controls";
-import { BUTTON, PROGRESS_LABEL, progressSuffix } from "./copy";
+import { BUTTON, progressSuffix } from "./copy";
 
 /**
  * Touch room for a line of text that is a control, without moving the type:
@@ -159,6 +159,9 @@ export function DecisionBlock({
         // S19: the last thing in the panel while generating — moved off
         // the sentence, widened, and labelled, so it reads as the whole
         // panel's own progress rather than a thin accent under one line.
+        // P10-41: the label says what the page is waiting on (the stage it is
+        // given), not a fixed "loading report..."; it is drawn only while a
+        // stage stands, which the hook ends with the request.
         <>
           <div
             role="progressbar"
@@ -174,7 +177,7 @@ export function DecisionBlock({
             />
           </div>
           <p aria-live="polite" className="font-mono text-meta text-text-muted mt-1.5">
-            {PROGRESS_LABEL}
+            {stage.label}…
           </p>
         </>
       )}

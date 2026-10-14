@@ -116,12 +116,17 @@ type Seen = Pick<ModelReportState, "stage" | "report" | "failed">;
  * One page open, every render recorded. `acts` run one per round (a number is a wait, kept alive
  * by a 1 ms poll), the settled questions read from `asked()` on each render as the page reads them.
  */
-async function drive(acts: Array<(() => void) | number>, asked: () => readonly string[] = () => [], history: Seen[] = []) {
+async function drive(
+  acts: Array<(() => void) | number>,
+  asked: () => readonly string[] = () => [],
+  history: Seen[] = [],
+  reader: UserProfile = { ...profile, deepReportEnabled: true },
+) {
   const queued = [...acts];
   const clock = { until: 0 };
   const opened = await hookRuntime.mount(
     () => {
-      const state = useModelReport({ paper, profile: { ...profile, deepReportEnabled: true }, questions: asked() });
+      const state = useModelReport({ paper, profile: reader, questions: asked() });
       history.push({ stage: state.stage, report: state.report, failed: state.failed });
       const [tick, setTick] = useState(0);
       useEffect(() => {
@@ -214,39 +219,39 @@ describe("useModelReport — the status line says what the page waits on, and cl
     const { opened, history } = await drive([30]);
 
     // Held: the mode event has arrived, no stage yet; the reader is waiting.
-    const held = history[history.length - 1];
-    expect(held.report).toBeNull();
-    expect(held.stage).not.toBeNull();
     opened.unmount();
+    expect(history.some((seen) => seen.report === null && seen.stage !== null)).toBe(true);
   });
 
   it("names the pass: reading with the reader's questions on it is 'Reading your questions'", async () => {
     net.script = staged(60, [["reading", "Reading it", 35]]);
     const { opened, history } = await drive([30], () => [QUESTION]);
-
-    expect(history[history.length - 1].stage?.label).toBe("Reading your questions");
     opened.unmount();
+
+    expect(history.some((seen) => seen.stage?.label === "Reading your questions")).toBe(true);
+    expect(history.some((seen) => seen.stage?.label === "Reading the paper")).toBe(false);
   });
 
   it("names the pass: writing is 'Writing the report', reading without questions is 'Reading the paper'", async () => {
     net.script = staged(60, [["writing", "Writing the report", 75]]);
     const withWriting = await drive([30], () => [QUESTION]);
-    expect(withWriting.history[withWriting.history.length - 1].stage?.label).toBe("Writing the report");
     withWriting.opened.unmount();
+    expect(withWriting.history.some((seen) => seen.stage?.label === "Writing the report")).toBe(true);
 
     net.script = staged(60, [["reading", "Reading it", 35]]);
     const plain = await drive([30]);
-    expect(plain.history[plain.history.length - 1].stage?.label).toBe("Reading the paper");
     plain.opened.unmount();
+    expect(plain.history.some((seen) => seen.stage?.label === "Reading the paper")).toBe(true);
+    expect(plain.history.some((seen) => seen.stage?.label === "Reading your questions")).toBe(false);
   });
 
   it("a question settled while an earlier request is in flight: the label names that request, not a blank wait", async () => {
-    net.script = staged(120, [["writing", "Writing the report", 75]]);
+    net.script = staged(250, [["writing", "Writing the report", 75]]);
     let questions: readonly string[] = [];
     const seen: Array<Seen["stage"]> = [];
     const history: Seen[] = [];
     const { opened } = await drive(
-      [30, () => (questions = [QUESTION]), 20, () => seen.push(history[history.length - 1].stage), 200],
+      [30, () => (questions = [QUESTION]), 20, () => seen.push(history[history.length - 1].stage), 300],
       () => questions,
       history,
     );
@@ -269,9 +274,9 @@ describe("useModelReport — the status line says what the page waits on, and cl
     const realSetTimeout = globalThis.setTimeout;
     vi.spyOn(globalThis, "setTimeout").mockImplementation(((handler: () => void, ms?: number, ...rest: unknown[]) =>
       ms !== undefined && ms >= 150_000 && ms <= 400_000
-        ? realSetTimeout(handler, 5)
+        ? realSetTimeout(handler, 60)
         : realSetTimeout(handler, ms, ...rest)) as typeof setTimeout);
-    const { opened, history } = await drive([60]);
+    const { opened, history } = await drive([160]);
     opened.unmount();
 
     expect(history.some((seen) => seen.stage !== null)).toBe(true);
@@ -283,14 +288,43 @@ describe("useModelReport — the status line says what the page waits on, and cl
     expect(net.streamCalls).toHaveLength(1);
   });
 
-  it("Tier 0: a request that is never sent to a model shows no stage, at any render", async () => {
+  it("Tier 0: with no key no model is asked and no stage shows, at any render", async () => {
+    net.script = async function* () {
+      yield { type: "mode", aiMode: "tier0" };
+    };
+    const { opened, history } = await drive([30], () => [], [], { ...defaultProfile });
+    opened.unmount();
+
+    expect(net.streamCalls).toHaveLength(1);
+    expect(history.every((seen) => seen.stage === null)).toBe(true);
+    expect(history[history.length - 1].failed).toBe(false);
+  });
+
+  it("a server that answers Tier 0 to a keyed reader ends the stage with the request (nothing lingers)", async () => {
     net.script = async function* () {
       yield { type: "mode", aiMode: "tier0" };
     };
     const { opened, history } = await drive([30]);
     opened.unmount();
 
-    expect(history.every((seen) => seen.stage === null)).toBe(true);
-    expect(history[history.length - 1].failed).toBe(false);
+    const last = history[history.length - 1];
+    expect(last.stage).toBeNull();
+    expect(last.failed).toBe(false);
+  });
+
+  it("the stream breaks and the request is asked again as JSON: the line says so, and clears with the answer", async () => {
+    net.jsonDelayMs = 60;
+    net.script = async function* () {
+      yield { type: "mode", aiMode: "tier2" };
+      yield { type: "stage", stage: "writing", label: "Writing the report", pct: 75 };
+      throw new Error("the connection was cut");
+    };
+    const { opened, history } = await drive([120]);
+    opened.unmount();
+
+    expect(net.jsonCalls).toBe(1);
+    const labels = history.map((seen) => seen.stage?.label);
+    expect(labels).toContain("Trying the report once more");
+    expect(history[history.length - 1].stage).toBeNull();
   });
 });

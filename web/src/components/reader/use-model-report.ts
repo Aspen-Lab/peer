@@ -48,6 +48,42 @@ export const REPORT_CACHE_BUDGET_CHARS = 1_500_000;
 const DEEP_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const ABSTRACT_TTL_MS = 6 * 60 * 60 * 1000;
 
+/**
+ * P10-41 (BACKLOG-39): the longest a reader waits on one report. The route's own ceiling is
+ * `maxDuration = 180` s for one attempt (the deep reports measured run 85–100 s); the stream and
+ * its JSON fallback together get a little over that, and then the request has failed — the page says
+ * so, in the line it already has for a model that could not finish — instead of a label that never
+ * clears. Nothing a request could still finish is cut: the platform ends it at 180 s.
+ */
+export const REPORT_DEADLINE_MS = 200_000;
+
+/**
+ * P10-41 (BACKLOG-39): what the status line under the progress bar says, by what the page waits
+ * on. These are the page's own words for the server's stages (the stage's `label` is the server's
+ * and says "Reading it"); a stage this table does not know keeps its server label. The words belong
+ * with the rest of the reader's copy in `copy.ts`, which is another item's file this round.
+ */
+export const REPORT_STATUS = {
+  /** A model has been asked; the server has not yet said which stage it is in. */
+  starting: "Starting the report",
+  source: "Finding the paper",
+  reading: "Reading the paper",
+  /** The reading stage while the reader's own questions ride the request. */
+  readingQuestions: "Reading your questions",
+  writing: "Writing the report",
+  figures: "Adding figures",
+  /** The stream broke and the same request is being asked once more as plain JSON. */
+  again: "Trying the report once more",
+} as const;
+
+function stageLabel(stage: string, serverLabel: string, withQuestions: boolean): string {
+  if (stage === "reading") return withQuestions ? REPORT_STATUS.readingQuestions : REPORT_STATUS.reading;
+  if (stage === "source") return REPORT_STATUS.source;
+  if (stage === "writing") return REPORT_STATUS.writing;
+  if (stage === "figures") return REPORT_STATUS.figures;
+  return serverLabel;
+}
+
 interface CachedReport {
   report: PaperReport;
   savedAt: number;
@@ -341,11 +377,16 @@ export function useModelReport({
   // revision on every request it does receive.
   const cached = useMemo(() => readCached(reportKey), [reportKey]);
   const [result, setResult] = useState<Result | null>(null);
-  const [buildup, setBuildup] = useState<{
-    key: string;
+  // P10-41: the request in flight, if a model was asked — what the status line says. `base` is the
+  // key without the questions: the request a reader's new question waits behind is the same paper,
+  // depth, project and provider, so its stage is what the page is waiting on until it ends. It is
+  // cleared at the one place a request ends (`finally` below), so it cannot outlive its request.
+  const [progress, setProgress] = useState<{
+    base: string;
     label: string;
     pct: number;
   } | null>(null);
+  const baseKey = buildReportKey(paper, depth, project, profile.feedAiProvider);
 
   // The old page's cache held fallback reports that relabelled abstract
   // sentences as findings; it is removed once so none of that is ever read
@@ -487,7 +528,7 @@ export function useModelReport({
 
     const fail = () => {
       if (!active()) return;
-      setBuildup(null);
+      setProgress(null);
       setResult({ key: reportKey, report: null, failed: true });
     };
     // `asked` is whether a model was asked at all. A `noLlm` report is never
@@ -501,11 +542,16 @@ export function useModelReport({
       }
       const shown = outcome === "shown" ? report : null;
       if (shown) writeCached(reportKey, shown);
-      setBuildup(null);
+      setProgress(null);
       setResult({ key: reportKey, report: shown, failed: false });
     };
 
     const fetchJsonFallback = async () => {
+      // The stream broke and the request is asked once more: the line says so rather than
+      // standing on the stage the broken one reached. Only where a model was to be asked.
+      if (userProviderConfigured) {
+        setProgress((current) => ({ base: baseKey, label: REPORT_STATUS.again, pct: current?.pct ?? 0 }));
+      }
       try {
         const report = await apiFetch<PaperReport>("/api/papers/report", {
           method: "POST",
@@ -526,6 +572,11 @@ export function useModelReport({
       let asked = false;
       await Promise.resolve();
       if (!active()) return;
+      // A reader's own key means a model is to be asked: the page waits on it from the request on,
+      // not from the server's first word (which, with an earlier request ending just before this
+      // one starts, would leave the line blank for a round trip). With no key, no model is asked
+      // and nothing is shown; the mode event below says so for the case this guess misses.
+      if (userProviderConfigured) setProgress({ base: baseKey, label: REPORT_STATUS.starting, pct: 0 });
       try {
         for await (const event of streamPaperReport(requestBody, controller.signal)) {
           if (!active()) return;
@@ -539,17 +590,19 @@ export function useModelReport({
               return;
             }
             asked = true;
+            // A model is asked: the page waits on it from here, stage event or not. (At Tier 0 no
+            // model is asked and nothing is shown, so this is not set before the mode says so.)
+            setProgress({ base: baseKey, label: REPORT_STATUS.starting, pct: 0 });
             continue;
           }
           if (!modeSeen) throw new Error("Report stream did not begin with a mode event.");
 
           if (event.type === "stage") {
             const pct = Number.isFinite(event.pct) ? Math.max(0, Math.min(100, event.pct)) : 0;
+            const label = stageLabel(event.stage, event.label, sentQuestions.length > 0);
             // The bar never moves backwards.
-            setBuildup((current) =>
-              current && current.key === reportKey && pct < current.pct
-                ? current
-                : { key: reportKey, label: event.label, pct },
+            setProgress((current) =>
+              current && current.base === baseKey && pct < current.pct ? current : { base: baseKey, label, pct },
             );
             continue;
           }
@@ -566,10 +619,21 @@ export function useModelReport({
       }
     };
 
+    // P10-41: out of time is a failure, said once: the stage clears, the page's "could not finish"
+    // line stands, and (`finishedKey`, below) the same key is not asked again for it.
+    const deadline = setTimeout(() => {
+      if (!active()) return;
+      fail();
+      controller.abort();
+    }, REPORT_DEADLINE_MS);
+
     void load().finally(() => {
+      clearTimeout(deadline);
       if (flight.current?.controller !== controller) return;
       flight.current = null;
       finishedKey.current = reportKey;
+      // The one place a request ends, whichever way: nothing is in flight, so no stage stands.
+      setProgress(null);
       setReleased((n) => n + 1);
     });
   }, [
@@ -583,12 +647,14 @@ export function useModelReport({
     userProviderConfigured,
     profile.feedAiProvider,
     profile.feedAiApiKey,
+    baseKey,
   ]);
 
   const settled = result?.key === reportKey ? result : null;
   const report = cached ?? settled?.report ?? null;
-  const stage =
-    !report && buildup?.key === reportKey ? { label: buildup.label, pct: buildup.pct } : null;
+  // P10-41: the page's wait, said only while it is waiting: no report yet, and a request for this
+  // paper in flight (this key's own, or the earlier one this key's request follows).
+  const stage = !report && progress?.base === baseKey ? { label: progress.label, pct: progress.pct } : null;
   return {
     report,
     stage,
