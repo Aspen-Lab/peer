@@ -645,6 +645,23 @@ describe("withPartitionMarks — a group's mark from the paragraphs inside it (B
     expect(four.s0.tier).toBe("strong");
   });
 
+  // P10-32 (BACKLOG-73): the cap lowers a group's ROW; what it holds is left whole, so the map can draw each line at the
+  // trunk's grade for it (the body's) — the lowered group's top paragraph is still listed as one.
+  it("keeps a lowered group's paragraphs and top paragraphs whole, beside the trunk's strong tier the lines are drawn at", () => {
+    const same = "The quillwort lattice shows cracks. The quillwort lattice was measured on the sand ripples.";
+    const tied = unheadedReading({ 2: same, 10: same, 22: same, 28: same });
+    const tiedRoute = routeByQuestions(tied.map!, tied.body, [QUESTION]);
+    const got = withPartitionMarks(tiedRoute, tied.map!, tied.body, FOUR)!.byQuestion[0].sections;
+
+    expect(got["s0~2"].tier).toBe("medium");
+    expect(got["s0~2"].paragraphs).toEqual([22]);
+    expect(got["s0~2"].topParagraphs).toEqual([22]);
+    expect(got["s0~3"].tier).toBe("medium");
+    expect(got["s0~3"].topParagraphs).toEqual([28]);
+    expect(tiedRoute.byQuestion[0].sections.s0.tier).toBe("strong");
+    expect(tiedRoute.byQuestion[0].sections.s0.topParagraphs).toContain(22);
+  });
+
   it("takes the gist question's tier from each group's role, with no counts", () => {
     const gist = gistRoute(map);
     const got = withPartitionMarks(gist, map, reading.body, FOUR)!.byQuestion[0];

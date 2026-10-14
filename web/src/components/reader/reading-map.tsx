@@ -296,6 +296,10 @@ export function ReadingMapView({
             const shown = group ? { ...row, ...group } : row;
             const level = levelOfRow(row);
             const mark = sectionMark(route, row.id);
+            // P10-32 (BACKLOG-73): a paragraph line of a part is drawn at the tier the body draws that paragraph — the trunk's
+            // mark under the trunk's id. The part's row wears the cap's tier (at most half the parts are strong, the rest
+            // medium), but the paragraph that says most in a lowered part is the same paragraph the body shows strong.
+            const lineTiers = (part ? sectionMark(route, part.sectionId) : null)?.paragraphs ?? mark?.paragraphs;
             // P2-04b (§1g.15): a background mark Tier 0 found nothing in has no
             // counts to state, so it says what the mark is for, not the bare tier.
             const fact = group
@@ -370,7 +374,7 @@ export function ReadingMapView({
                 {expanded && lines.length > 0 && (
                   <ol className="mt-1 mb-2 space-y-1 pl-5">
                     {lines.map((line) => {
-                      const tier = mark?.paragraphs.get(line.index);
+                      const tier = lineTiers?.get(line.index);
                       const gist = gistOf(gistKeyOf(row), line.index, line.opening ?? "");
                       return (
                         <li key={line.index}>

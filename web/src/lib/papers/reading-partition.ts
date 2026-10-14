@@ -329,9 +329,10 @@ interface MarkRoute {
  *     sentence among them, verbatim — `routeByQuestions` over the groups, so the counts are the ones a
  *     reader can check in the group;
  *   - at most `max(1, floor(N / 2))` of the N groups are `strong` (the earlier first: the paragraphs that
- *     say most in one section tie or are one), the others `medium`. A paragraph line of a group so lowered
- *     is drawn at the group's tier: the one place a line and the body differ, and only when more than
- *     half the parts each hold a paragraph that says the most.
+ *     say most in one section tie or are one), the others `medium` — the ROW's tier. A group so lowered keeps its
+ *     `paragraphs` and `topParagraphs` whole, and its lines are not drawn at its row's tier: the map reads each line's
+ *     tier from the trunk's mark (P10-32, BACKLOG-73), the one the body draws, so a paragraph that says the most
+ *     is strong in the map as in the body though the row it stands in is medium.
  *
  * "Just get the gist" names no paragraph: a group takes its tier from its role, as every row does.
  */
