@@ -14,7 +14,7 @@
 //   stack (`DecisionBlock`'s `notesAction`), set like the other commands.
 //
 // What it does is the band's old `open()` (`paper-notes.tsx`): the paper's own notes, made the
-// first time from its card, the opening of its abstract and the settled questions.
+// first time with the paper's title and your sticky notes (P10-09e: nothing else is placed in it).
 //
 // P10-09b (the owner's review 7.2): on the reading page the edge tab opens those notes as a floating window at
 // the right (`notes-window.tsx`) instead of navigating, and while the window stands the tab stands beside it
@@ -36,7 +36,7 @@ export function notesLabel(has: boolean): string {
   return has ? NOTES_LABEL.open : NOTES_LABEL.take;
 }
 
-const TAKE_TITLE = "Take notes on this paper: its card, the opening of its abstract, four questions to answer.";
+export const TAKE_TITLE = "Take notes on this paper: its title, and your sticky notes.";
 
 export function NotesButtonView({
   variant,

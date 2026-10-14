@@ -1,8 +1,8 @@
 "use client";
 
 // On a paper's page: the reader's notes on it, and the way into them.
-// "Take notes" opens the paper's own reading notes — made the first time,
-// from its record and abstract — and every other note that cites it is
+// "Take notes" opens the paper's own reading notes — made the first time, with
+// the paper's title and your sticky notes (P10-09e) — and every other note that cites it is
 // listed under, Obsidian's backlinks for a paper.
 //
 // P7-14 (R9, the owner's review): on the reading page the entry is a button —
@@ -35,9 +35,9 @@ interface NotesInputs {
 }
 
 /**
- * Open the paper's own notes — made the first time, from its card, the
- * opening of its abstract and (P2-05) the settled questions and the report's
- * answers. The router and the store's `ensureReadingNote` are handed in, so this is the whole of
+ * Open the paper's own notes — made the first time, with the paper's title
+ * and your sticky notes (P10-09e; the settled questions and the report's
+ * answers stand on the paper's page, not in the note). The router and the store's `ensureReadingNote` are handed in, so this is the whole of
  * what pressing the button does and nothing in it needs a page to run.
  *
  * P10-09c: there is one `ensureReadingNote`, the store's (the template, made once, no navigation); the sticky notes' "Take notes"
