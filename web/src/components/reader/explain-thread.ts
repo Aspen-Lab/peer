@@ -6,15 +6,10 @@
 // answer as its first `peer` message, so the server never has to remember it —
 // with the reader's new message last, roles and words only.
 //
-// P3-02c (ruling §1h.4 amendment; user decision §1a.11) adds the web-search
-// toggle's rules:
-//
-//   - `toggleStep` / `pressKind`: one press of the toggle, and the touch screen's
-//     two steps (the first tap shows the warning, the second turns search on);
-//   - `replyPair`: what joins the thread when a reply arrives — the reader's
-//     message, marked when the server says the reply searched, and Peer's reply,
-//     with the one-line note when the reader asked to search and it could not;
-//   - `postExplain`: the request, reading its own response whatever its status.
+// `replyPair`: what joins the thread when a reply arrives — the reader's message and Peer's reply;
+// `postExplain`: the request, reading its own response whatever its status.
+// (P10-08, review 8.6: the web-search toggle of P3-02c — `toggleStep`, `pressKind`, the "searched the web" mark and the note
+// on a search that could not run — is gone; a reply request never carries `search`. The server's option stays, ruling §1h.76 (e).)
 //
 // P3-07 (ruling §1h.9; user decision §1a.14) adds "Say more", the reader's way to ask
 // for a longer reply than the short one Peer gives by default:
@@ -70,53 +65,11 @@ export async function postExplain(paperId: string, payload: unknown): Promise<Ex
   return { ok: response.ok, status: response.status, body };
 }
 
-// ── The web-search toggle (§1a.11) ─────────────────────────────────────
-
-/** How the reader pressed the toggle: a finger (no hover), a mouse or pen, or the keyboard. */
-export type PressKind = "touch" | "pointer" | "keyboard";
-
-/** The toggle: whether search is on for the next message, and whether the
- *  warning is showing because a touch put it there. */
-export interface SearchToggle {
-  on: boolean;
-  tip: boolean;
-}
-
-/** `pointerType` as a browser reports it on the `pointerdown` before a click;
- *  none at all is the keyboard (Enter or Space on the focused button). */
-export function pressKind(pointerType: string | null | undefined): PressKind {
-  if (pointerType === "touch") return "touch";
-  if (pointerType === "mouse" || pointerType === "pen") return "pointer";
-  return "keyboard";
-}
-
 /**
- * One press of the toggle. When search is on, any press turns it off. When it is
- * off, a mouse, a pen or the keyboard turns it on at once — the warning already
- * showed, on hover or on focus. A finger has no hover, so on a touch screen the
- * first tap shows the warning and leaves search off, and the second turns it on
- * (and puts the warning away).
+ * The two messages that join the thread when a reply arrives: the reader's, and Peer's.
  */
-export function toggleStep(state: SearchToggle, press: PressKind): SearchToggle {
-  if (state.on) return { on: false, tip: false };
-  if (press === "touch" && !state.tip) return { on: false, tip: true };
-  return { on: true, tip: false };
-}
-
-/**
- * The two messages that join the thread when a reply arrives: the reader's, and
- * Peer's. The reader's carries the mark `searched` only when the server says the
- * reply was written with web search (so the mark is a fact, not a wish). Peer's
- * carries `searchUnavailable` when the reader asked to search and it was not
- * (the provider cannot) — the page then says so, once, under that reply. For a
- * message sent without search this is the pair it always was.
- */
-export function replyPair(message: string, asked: boolean, result: ExplainTurn): [ExplainTurn, ExplainTurn] {
-  const searched = result.searched === true;
-  return [
-    { role: "reader", text: message, ...(searched ? { searched: true as const } : {}) },
-    asked && !searched ? { ...result, searchUnavailable: true as const } : result,
-  ];
+export function replyPair(message: string, result: ExplainTurn): [ExplainTurn, ExplainTurn] {
+  return [{ role: "reader", text: message }, result];
 }
 
 /** Whether a key press in the input sends: Enter, alone, outside an IME
@@ -160,8 +113,6 @@ function asTurn(value: unknown): ExplainTurn | null {
     ...(isText(turn.sectionId) ? { sectionId: turn.sectionId } : {}),
     ...(typeof turn.page === "number" ? { page: turn.page } : {}),
     ...(turn.peer === true ? { peer: true as const } : {}),
-    // The server says whether the reply searched; only a yes is kept.
-    ...(turn.searched === true ? { searched: true as const } : {}),
     // P3-07: the table, and whether this is the long form — only a literal true.
     ...(items.length > 0 ? { items } : {}),
     ...(turn.detail === true ? { detail: true as const } : {}),
@@ -209,8 +160,7 @@ export function threadAsSent(thread: readonly ExplainTurn[]): Array<{ role: Expl
  * The one request a send makes (P3-02b), when the reader presses Enter or Send —
  * never before: the paper, the passage and where it sits, and the thread so far
  * (the first answer first) with the reader's new message last, roles and words
- * only; the reader's own key only when they have one; and — P3-02c — `search:
- * true` only when the reader turned web search on for this message; and — P3-07 —
+ * only; the reader's own key only when they have one; and — P3-07 —
  * `detail: true` only when this is "Say more" (the thread is then the one `sayMoreOf`
  * gives and the message the reader's last, once). The thread goes as the server reads it
  * (`threadAsSent`). Peer's turn, or "unavailable" for everything else — an outage,
@@ -222,13 +172,11 @@ export async function requestReply(args: {
   sectionId: string;
   thread: readonly ExplainTurn[];
   message: string;
-  /** The reader turned web search on for this message. */
-  search?: boolean;
   /** P3-07: "Say more" — the reply may run to the long cap. */
   detail?: boolean;
   llmOverride?: ProviderOverrideConfig;
 }): Promise<ReplyResult> {
-  const { paper, selection, sectionId, thread, message, search, detail, llmOverride } = args;
+  const { paper, selection, sectionId, thread, message, detail, llmOverride } = args;
   try {
     const response = await postExplain(paper.id, {
       paper,
@@ -237,7 +185,6 @@ export async function requestReply(args: {
       paragraphIndex: selection.paragraphIndex,
       thread: [...threadAsSent(thread), { role: "reader", text: message }],
       ...(selection.source !== undefined && selection.source !== "paper" ? { source: selection.source } : {}),
-      ...(search === true ? { search: true } : {}),
       ...(detail === true ? { detail: true } : {}),
       ...(llmOverride ? { llmOverride } : {}),
     });

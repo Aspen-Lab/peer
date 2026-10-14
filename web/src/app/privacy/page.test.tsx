@@ -63,7 +63,6 @@ describe("/privacy — Your questions (P2-03)", () => {
 const EXPLAIN_PARAGRAPHS = [
   "Selecting a passage sends nothing, and neither does typing in the box. Peer sends a request only when you press “Explain this” above a selection (or press E on one) and, for a follow-up, when you press Enter or Send, or Say more under a reply. A reply is short unless you ask for more, in your own words or with Say more. The request carries the passage you selected, the paragraph it sits in and the one on either side of it, the paper's title and abstract, one line for each section of the paper's map and, for a follow-up, the messages of that thread. The request also carries the paper's record as this page holds it — its title, authors, venue, where it came from and your save and feedback marks on it — so Peer's server can find the paper; of that record the model sees only the title and the abstract. The answer is written with your own model key, which goes with the request.",
   "The request goes to Peer's server and on to the model provider whose key you added. The answer runs on your own key, and it is short unless you ask for more.",
-  "On a follow-up you can turn on “Search the web” for that one message. It is off every time the box opens and never turns on by itself. With it on, the provider may run a web search to write that reply: Gemini does this with Google Search, and with any other provider the reply is written without a search and the box says so. A message answered with a search carries the mark “searched the web”, and Peer shows no link to anything the search found.",
   "Peer's server keeps three things. First, each answer it gives, in memory, for up to an hour, so the same passage asked about again is answered without another model call; it is filed under hashes of the document, the passage and the thread, never under who asked.",
   "Second, one log line for each answer it gives: how many characters went out and came back and, if you are signed in, a shortened hash of your account id — never the passage, the paper's words or anything you wrote.",
   "Third, if you are signed in, a count of this account's requests this hour, a number and nothing else, kept so the hourly limit can hold; it holds no text.",
@@ -145,20 +144,16 @@ describe("/privacy — Explain this (P3-02d)", () => {
   it("names the provider the request goes on to: the one whose key the reader added, running on their own key", () => {
     expect(entry).toContain("model provider whose key you added");
     expect(entry).toContain("The answer runs on your own key, and it is short unless you ask for more.");
-    expect(entry).toContain("Gemini");
-    expect(entry).toContain("Google");
+    // Re-aimed (P10-08, review 8.6): the entry named Gemini and Google only in the sentence about the web search, which is gone with the toggle.
     for (const gone of ["Peer&#x27;s own model", "the owner configured", "allowance", "usage row", "What is recorded about model use"]) {
       expect(entry).not.toContain(gone);
     }
   });
 
-  it("says the web search is off every time the box opens, never on by itself, and runs for one message", () => {
-    expect(entry).toContain("off every time the box opens");
-    expect(entry).toContain("never turns on by itself");
-    expect(entry).toContain("for that one message");
-    expect(entry).toContain("Google Search");
-    expect(entry).toContain("the reply is written without a search and the box says so");
-    expect(entry).toContain("shows no link to anything the search found");
+  it("says nothing of a web search any more: the toggle is gone from the box (re-aimed, P10-08, review 8.6; was: off every time the box opens, for one message)", () => {
+    for (const gone of ["off every time the box opens", "never turns on by itself", "for that one message", "Google Search", "the box says so", "shows no link to anything the search found"]) {
+      expect(entry).not.toContain(gone);
+    }
   });
 
   it("says what Peer's server keeps: an hour's memory under hashes, never by reader; one log line without the words", () => {
@@ -189,8 +184,8 @@ describe("/privacy — Explain this (P3-02d)", () => {
 
   it("quotes the box's own labels, so a label that changes in the box shows up here", () => {
     expect(entry).toContain(`“${EXPLAIN.title}”`);
-    expect(entry).toContain(`“${EXPLAIN.searchToggle}”`);
-    expect(entry).toContain(`“${EXPLAIN.searchedMark}”`);
+    // Re-aimed (P10-08, review 8.6): the web-search toggle and its mark are gone from the box, and so is the sentence about them.
+    expect(entry).not.toMatch(/search the web|searched the web|web search/i);
   });
 
   it("ties the one number the entry states to the code: the server's memory holds an answer for an hour", () => {

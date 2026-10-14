@@ -9,7 +9,7 @@
 // body, the Summary's blocks and an answer under the question are all explain targets (`paper-body.tsx` reads the selection, `source`
 // says where it is from); a small pair of buttons above the selection (`selection-toolbar.tsx`) and the `e` key call the page's
 // `explain` action, which is this box's `open` (below, `openRef`). The gutter pill, the window's empty state (P8-06), the header's
-// "Explain this?" control (P9-03b) and the web-search toggle (P3-02c) are gone (review 8.5, 8.6). Under 768 px the thumb bar's cell is
+// "Explain this?" control (P9-03b) and the web-search toggle (P3-02c; review 8.6: "目前的ai解释功能挺厉害的，够用了") are gone (review 8.5, 8.6). Under 768 px the thumb bar's cell is
 // the control and the box only says, through `explain-offer.ts`, that a target is selected (P9-41, ruling §1h.66).
 //
 // What the window shows, in order, when the reader opens it:
@@ -99,18 +99,7 @@ import {
   settleHeight,
 } from "./explain-dock";
 import { EvidenceQuote } from "./evidence-quote";
-import {
-  asItems,
-  firstAnswerMessage,
-  keyToSend,
-  postExplain,
-  pressKind,
-  moreReply,
-  replyPair,
-  sayMoreOf,
-  toggleStep,
-  type ReplyResult,
-} from "./explain-thread";
+import { asItems, firstAnswerMessage, keyToSend, postExplain, moreReply, replyPair, sayMoreOf, type ReplyResult } from "./explain-thread";
 import type { ExplainSelection, ExplainSource, SelectionTarget, ViewRect, ViewRects } from "./paper-body";
 
 // ── What the card shows ────────────────────────────────────────────────
@@ -126,18 +115,6 @@ export type ExplainStatus =
 /** What asking comes to. */
 export type AskResult = ExplainAnswer | "unavailable" | "not_in_paper";
 
-/** The web-search toggle as the card draws it (P3-02c): its state, and its three
- *  events — the pointer's kind as it goes down (a finger, a mouse, a pen; none at
- *  all is the keyboard), the press, and the button losing the focus. */
-export interface SearchView {
-  on: boolean;
-  /** The warning is showing because a touch put it there (hover and focus show it by CSS). */
-  tip: boolean;
-  onPointerDown: (pointerType: string) => void;
-  onPress: () => void;
-  onBlur: () => void;
-}
-
 /** The thread as the card draws it, and the handlers it calls. The card owns no
  *  state: the box holds the draft and the pending reply. */
 export interface ThreadView {
@@ -149,15 +126,10 @@ export interface ThreadView {
   failed: boolean;
   onDraft: (text: string) => void;
   onSend: () => void;
-  /** P3-02c: the web-search toggle. Without it the row has none. */
-  search?: SearchView;
   /** P3-07: "Say more" — re-send the reader's last message in the long form. Without it
    *  the thread has no such button. */
   onSayMore?: () => void;
 }
-
-/** The tooltip's id: there is one box on a page, so one is enough. */
-const SEARCH_TIP_ID = "explain-search-tip";
 
 const PREVIEW_CHARS = 80;
 
@@ -483,16 +455,7 @@ function TurnView({ turn }: { turn: ExplainTurn }) {
   if (turn.role === "reader") {
     return (
       <div>
-        {turn.searched === true ? (
-          // P3-02c: the one trace of a search — a label-face mark beside "You", so the
-          // cost of this message can be explained afterwards. Never a source.
-          <div className="flex flex-wrap items-baseline gap-x-3">
-            <p className="font-mono text-caption text-text-muted">{EXPLAIN.you}</p>
-            <span className="annotation text-text-faint">{EXPLAIN.searchedMark}</span>
-          </div>
-        ) : (
-          <p className="font-mono text-caption text-text-muted">{EXPLAIN.you}</p>
-        )}
+        <p className="font-mono text-caption text-text-muted">{EXPLAIN.you}</p>
         <p className="font-reading text-body leading-[1.6] text-text mt-1 whitespace-pre-wrap">{turn.text}</p>
       </div>
     );
@@ -503,7 +466,6 @@ function TurnView({ turn }: { turn: ExplainTurn }) {
       <p className="font-reading text-body leading-[1.6] text-text mt-1">{turn.text}</p>
       {turn.items && turn.items.length > 0 && <ItemsTable items={turn.items} />}
       {turn.evidence && turn.peer !== true && <EvidenceQuote text={turn.evidence} where={turn.evidenceWhere ?? "abstract"} page={turn.page} />}
-      {turn.searchUnavailable === true && <p className="annotation mt-2 text-text-faint">{EXPLAIN.searchUnavailable}</p>}
     </div>
   );
 }
@@ -662,44 +624,11 @@ export function ExplainCard({
       )}
 
       {asking && (
-        // The control row: the input, then Send — and (P3-02c) at its start the one
-        // small toggle, on a line of its own so the input keeps the card's width.
+        // The control row: the input, then Send. (P10-08, review 8.6: the web-search toggle that stood at its start is gone.)
         <div
           data-explain-controls=""
           className={`sticky -bottom-4 -mx-4 -mb-4 ${dock ? "mt-auto" : "mt-4"} flex flex-wrap items-end gap-2 border-t border-border bg-surface p-3 ${sheet ? "pb-[max(0.75rem,env(safe-area-inset-bottom))]" : ""}`}
         >
-          {asking.search && (
-            <div data-explain-search="" className="w-full">
-              {/* The tooltip is the button's next sibling: hover and keyboard focus show it by
-                  CSS (`peer-hover`, `peer-focus-visible`, which a touch screen never matches);
-                  a touch's first tap shows it by its attribute. */}
-              <span className="relative inline-flex">
-                <button
-                  type="button"
-                  data-explain-search-toggle=""
-                  aria-pressed={asking.search.on}
-                  aria-describedby={SEARCH_TIP_ID}
-                  disabled={sendBlocked}
-                  onPointerDown={(event) => asking.search?.onPointerDown(event.pointerType)}
-                  onClick={() => asking.search?.onPress()}
-                  onBlur={() => asking.search?.onBlur()}
-                  className={`peer annotation rounded-full border px-3 py-1 transition-colors disabled:opacity-50 ${
-                    asking.search.on ? "border-heading text-heading" : "border-border-strong text-text-muted hover:text-heading"
-                  }`}
-                >
-                  {EXPLAIN.searchToggle}
-                </button>
-                <span
-                  role="tooltip"
-                  id={SEARCH_TIP_ID}
-                  data-tooltip-open={asking.search.tip ? "" : undefined}
-                  className="annotation pointer-events-none invisible absolute bottom-full left-0 z-20 mb-2 w-64 rounded-md border border-border-strong bg-surface p-2 text-text-muted opacity-0 shadow-card-hover transition-opacity peer-hover:visible peer-hover:opacity-100 peer-focus-visible:visible peer-focus-visible:opacity-100 peer-disabled:hidden data-[tooltip-open]:visible data-[tooltip-open]:opacity-100"
-                >
-                  {EXPLAIN.searchWarning}
-                </span>
-              </span>
-            </div>
-          )}
           <textarea
             ref={inputRef}
             rows={1}
@@ -743,14 +672,9 @@ interface Session {
   /** What the reader has typed and not sent. */
   draft: string;
   reply: "idle" | "pending" | "failed";
-  /** P3-02c: web search is on for the next message. Session state only — off
-   *  whenever a box or a passage is opened, never remembered. */
-  search: boolean;
-  /** The warning is showing because a touch put it there. */
-  tip: boolean;
 }
 
-const noThread = { turns: [] as ExplainTurn[], draft: "", reply: "idle" as const, search: false, tip: false };
+const noThread = { turns: [] as ExplainTurn[], draft: "", reply: "idle" as const };
 /** The input grows to three lines, then scrolls. */
 const INPUT_MAX_HEIGHT = 72;
 
@@ -771,9 +695,8 @@ export interface ExplainBoxProps {
   cachedTurns?: readonly ExplainTurn[];
   /** The send — the second kind of request, made when the reader presses Enter
    *  or Send, never before: the target, the thread so far (the first answer
-   *  first) and the new message — and, only when the reader turned web search on
-   *  for it (P3-02c), `true` as a fourth argument. Without it the box has no thread. */
-  onReply?: (target: SelectionTarget, thread: readonly ExplainTurn[], message: string, search?: boolean) => Promise<ReplyResult>;
+   *  first) and the new message. Without it the box has no thread. (P10-08, review 8.6: there is no fourth argument; a reply never searches.) */
+  onReply?: (target: SelectionTarget, thread: readonly ExplainTurn[], message: string) => Promise<ReplyResult>;
   /** P3-07: "Say more" — the same kind of request as a send, made when the reader presses it,
    *  never before: the target, the thread before the reader's last message (the first answer
    *  first) and that message — which is not repeated — to be answered in the long form. Without
@@ -824,8 +747,6 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   const live = useRef<Session | null>(null);
   const refocus = useRef(false);
   const wasPending = useRef(false);
-  /** The kind of pointer that went down on the toggle, until the click that follows reads it. */
-  const pointer = useRef<string | null>(null);
   /** Reads where the selection is again, on the next frame (below); null with no selection. */
   const remeasure = useRef<(() => void) | null>(null);
 
@@ -962,8 +883,6 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
     const onPointerDown = (event: PointerEvent) => {
       const node = event.target as Element | null;
       if (node?.closest?.("[data-explain-card]")) {
-        // A press in the card, off the toggle, puts a touch's warning away.
-        if (!node.closest("[data-explain-search]")) setSession((current) => (current !== null && current.tip ? { ...current, tip: false } : current));
         return;
       }
       if (!docked) setSession(null);
@@ -1019,26 +938,23 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
 
   // The send: the one request of a follow-up. Nothing happens for an empty
   // draft, a reply already on its way or a full thread; the reply joins the thread, with the message it answers, only once it has
-  // arrived. The search toggle is for this message only (§1a.11): it goes with the
-  // request — as the fourth argument, only when on — and is off again at once,
-  // whatever comes back.
+  // arrived. A reply never searches the web (P10-08, review 8.6).
   const send = () => {
     if (!open || !onReply || open.status.kind !== "answer") return;
     if (open.reply === "pending" || threadFull(open.turns)) return;
     const message = open.draft.trim();
     if (!message) return;
     const selection = open.selection;
-    const searching = open.search;
     const thread = [firstAnswerMessage(open.status.answer), ...open.turns];
     refocus.current = inputRef.current !== null && typeof document !== "undefined" && document.activeElement === inputRef.current;
-    setSession((current) => (current ? { ...current, reply: "pending", search: false, tip: false } : current));
-    void (searching ? onReply(asked(selection), thread, message, true) : onReply(asked(selection), thread, message))
+    setSession((current) => (current ? { ...current, reply: "pending" } : current));
+    void onReply(asked(selection), thread, message)
       .catch((): ReplyResult => "unavailable")
       .then((result) =>
         setSession((current) => {
           if (current === null || current.selection.passage !== selection.passage) return current;
           if (typeof result === "string") return { ...current, reply: "failed" };
-          return { ...current, reply: "idle", draft: "", turns: [...current.turns, ...replyPair(message, searching, result)] };
+          return { ...current, reply: "idle", draft: "", turns: [...current.turns, ...replyPair(message, result)] };
         }),
       );
   };
@@ -1047,8 +963,7 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   // before it, then the message, no copy of it (`sayMoreOf`). It does nothing for a reply
   // already on its way, a full thread, or no reply to lengthen; the reply joins the
   // thread as Peer's turn alone, only once it has arrived; a failed one leaves the
-  // thread as it was; the draft the reader was typing stays; and the toggle is not
-  // touched (a long reply never searches).
+  // thread as it was; the draft the reader was typing stays.
   const sayMore = () => {
     if (!open || !onSayMore || open.status.kind !== "answer") return;
     if (open.reply === "pending" || threadFull(open.turns)) return;
@@ -1066,26 +981,6 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
           return { ...current, reply: "idle", turns: [...current.turns, ...moreReply(result)] };
         }),
       );
-  };
-
-  // The toggle's events (§1a.11). The pointer that went down is read once by the
-  // click that follows it: a finger needs two taps (the first shows the warning), a
-  // mouse, a pen or the keyboard one. A press does nothing while a reply is on its
-  // way or the thread is full.
-  const pressSearch = () => {
-    const kind = pressKind(pointer.current);
-    pointer.current = null;
-    setSession((current) => {
-      if (current === null || current.reply === "pending" || threadFull(current.turns)) return current;
-      const next = toggleStep({ on: current.search, tip: current.tip }, kind);
-      return { ...current, search: next.on, tip: next.tip };
-    });
-  };
-  // A button that loses the focus has been left: a touch's warning goes, and a
-  // pointer that never clicked is forgotten.
-  const blurSearch = () => {
-    pointer.current = null;
-    setSession((current) => (current !== null && current.tip ? { ...current, tip: false } : current));
   };
 
   const openBox = () => {
@@ -1203,15 +1098,6 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
           onDraft: (text) => setSession((current) => (current ? { ...current, draft: text.slice(0, MAX_EXPLAIN_MESSAGE_CHARS) } : current)),
           onSend: send,
           ...(onSayMore ? { onSayMore: sayMore } : {}),
-          search: {
-            on: open.search,
-            tip: open.tip,
-            onPointerDown: (pointerType) => {
-              pointer.current = pointerType;
-            },
-            onPress: pressSearch,
-            onBlur: blurSearch,
-          },
         }
       : undefined;
   return (

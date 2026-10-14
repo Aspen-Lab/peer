@@ -275,16 +275,6 @@ export const EXPLAIN = {
   send: "Send",
   thinking: "Peer is thinking…",
   threadFull: "This thread is full. Select the passage again to start a new one.",
-  /** P3-02c (§1a.11): the small toggle in the box's control row. Off whenever the
-   *  box opens; its warning shows on hover, on keyboard focus and — on a touch
-   *  screen, with no hover — on the first tap. Peer's words, in the label face. */
-  searchToggle: "Search the web",
-  searchWarning: "Web search costs many times more than a normal reply. On for this message only.",
-  /** Beside "You" on a message that was answered with web search: the one trace of
-   *  it, so the cost can be explained afterwards. Never a source, never an address. */
-  searchedMark: "searched the web",
-  /** Under a reply to a message that asked to search when the provider cannot. */
-  searchUnavailable: "Web search is not available with this provider.",
   /** P3-07 (§1h.9 (3); user decision §1a.14): the headers of the term table a reply
    *  may carry — the term, what it means in this paper, how to read it. Peer's
    *  words, in the label face; the cells under them are in the reading face. */

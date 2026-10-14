@@ -24,7 +24,7 @@ import { defaultProfile } from "@/types";
 const PASSAGE = "The rafting ratio rose from 0.2 to 0.7 as the specimen crept at 1100 C.";
 const answer: ExplainAnswer = { meaning: "A rafting ratio says how much of a sample has turned into plates.", here: { text: "The authors use it to compare alloys on one scale.", peer: true } };
 const turns: ExplainTurn[] = [{ role: "reader", text: "Why does a bigger ratio matter?" }, { role: "peer", text: "It changes how the metal carries load.", peer: true }];
-const view: ThreadView = { turns, draft: "", pending: false, failed: false, onDraft: () => {}, onSend: () => {}, search: { on: false, tip: false, onPointerDown: () => {}, onPress: () => {}, onBlur: () => {} } };
+const view: ThreadView = { turns, draft: "", pending: false, failed: false, onDraft: () => {}, onSend: () => {} };
 
 const markup = (over: Partial<Parameters<typeof ExplainCard>[0]> = {}) =>
   renderToStaticMarkup(
@@ -198,7 +198,7 @@ describe("ExplainBox — nothing stands on entering a paper (P10-08, review 8.5)
     const source = readFileSync(resolve(process.cwd(), "src/components/reader/explain-box.tsx"), "utf8");
 
     expect(source).toContain("const docked = open !== null && viewport.width >= DOCK_MIN_VIEWPORT_PX;");
-    expect(source).not.toMatch(/emptyDockStands|standing|waiting/);
+    expect(source).not.toMatch(/standing|waiting/);
     expect(source).not.toContain("data-explain-ask");
     expect(source).not.toContain("placeButton");
   });

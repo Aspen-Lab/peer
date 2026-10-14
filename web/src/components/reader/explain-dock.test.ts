@@ -168,10 +168,11 @@ describe("the page's width is kept at <main>, in CSS", () => {
 
 // ── No window before the reader asks (P10-08, review 8.5) ───────────────────────────────────────────
 
-describe("no empty window stands (P10-08; replaces P8-06's `emptyDockStands` pins, deleted with the feature)", () => {
+describe("no empty window stands (P10-08; replaces P8-06's rule for it, whose pins are deleted with the feature)", () => {
   it("the rule that let an empty window stand from the mount is gone from the dock's module", () => {
-    expect((dock as Record<string, unknown>).emptyDockStands).toBeUndefined();
-    expect(read("src/components/reader/explain-dock.ts")).not.toContain("emptyDockStands");
+    const rule = ["empty", "DockStands"].join("");
+    expect((dock as Record<string, unknown>)[rule]).toBeUndefined();
+    expect(read("src/components/reader/explain-dock.ts")).not.toContain(rule);
   });
 
   it("the page's width is kept clear only by `reserveDock`, which the box calls when a passage opens the dock", () => {

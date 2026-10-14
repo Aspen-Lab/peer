@@ -338,14 +338,9 @@ describe("the route copy never tells the reader not to read (§1f.13, §3d 8)", 
     expect(all).toContain("What it means");
     expect(all).toContain("Why it is here");
     expect(all).toContain(EXPLAIN.defines("2 Methods"));
-    // P3-02c (§1h.4 amendment): the search toggle's label, its warning, the mark
-    // and the note are scanned too.
-    for (const line of [
-      EXPLAIN.searchToggle,
-      EXPLAIN.searchWarning,
-      EXPLAIN.searchedMark,
-      EXPLAIN.searchUnavailable,
-    ]) {
+    // Re-aimed (P10-08, review 8.6): the search toggle's label, its warning, the mark and the note (P3-02c) are gone with the toggle.
+    // The window's title and where a Summary or answer passage is from are scanned instead.
+    for (const line of [EXPLAIN.title, EXPLAIN.fromSummary, EXPLAIN.fromAnswer]) {
       expect(all).toContain(line);
     }
     for (const line of all) expect(line).not.toMatch(/skip|don['’]t read|ignore|not worth/i);

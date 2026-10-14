@@ -286,13 +286,12 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     run.mounted.unmount();
   });
 
-  it("starts the new passage with an empty draft and the web-search toggle off", async () => {
+  it("starts the new passage with an empty draft (re-aimed, P10-08: the web-search toggle it also started off is gone)", async () => {
     const run = await scenario(base(), [
       (tree) => click(tree),
       (tree) => draft(tree, "Why does it matter?"),
       (tree) => {
         expect(look(tree).thread?.draft).toBe("Why does it matter?");
-        look(tree).thread?.search?.onPress();
       },
       selectNext(second, { cached: SECOND_ANSWER }),
       (tree) => click(tree),
@@ -301,7 +300,7 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
 
     expect(run.last().passage).toBe(second.passage);
     expect(run.last().thread?.draft).toBe("");
-    expect(run.last().thread?.search?.on).toBe(false);
+    expect(run.last().thread).not.toHaveProperty("search");
     run.mounted.unmount();
   });
 
