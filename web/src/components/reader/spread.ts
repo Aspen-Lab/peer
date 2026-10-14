@@ -78,9 +78,23 @@ export const TWO_XL_COLUMN_PX = 680;
 export const SPREAD_GRID =
   "xl:grid xl:grid-cols-[minmax(0,320px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,360px)_minmax(0,1fr)] xl:gap-x-16 2xl:gap-x-24 xl:items-start";
 
-/** The left panel: pinned while the reader scrolls the column (`reader-panel`
- *  in `globals.css`). */
-export const PANEL_CLASS = "xl:min-w-0 xl:self-start xl:reader-panel";
+/** The left panel (P10-04b): no longer the sticky element itself. It stretches over the row (`self-stretch`),
+ *  so the sticky part inside it (`PANEL_STICKY_CLASS`) has the whole column's height to travel in, and stacks
+ *  its head — the plate, the title, the decision — as a flex column, as the old sticky panel did. The head is
+ *  in normal flow and scrolls away with the page.
+ *
+ *  `xl:flex-col xl:flex`, in that order, on purpose: `reader-layout.order.test.tsx` finds the reading column
+ *  by the first `xl:flex xl:flex-col` in the markup, and the panel comes first. */
+export const PANEL_CLASS = "xl:min-w-0 xl:self-stretch xl:flex-col xl:flex";
+
+/** The panel's sticky part (P10-04b, A8): pinned under the masthead while the reader scrolls the column,
+ *  window-bounded, scrolling inside only when it is taller than the room (`reader-panel` in `globals.css`).
+ *  It is the tab strip and the map; for a paper with no body, the head. */
+export const PANEL_STICKY_CLASS = "xl:reader-panel";
+
+/** The sticky part when it holds the strip and the map: the strip's own 32px top gap is the holder's
+ *  (`reader-layout.tsx`), so a stuck strip stands at the masthead's foot with no gap above it. */
+export const PANEL_TAIL_CLASS = `${PANEL_STICKY_CLASS} xl:[&>:first-child]:mt-0`;
 
 /** The reading column: a flex column so the Next row can take the free space
  *  on a page shorter than the panel.

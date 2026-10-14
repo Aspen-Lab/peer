@@ -28,7 +28,7 @@
 // remote control for the column by design (R10).
 //
 // P9-04 (X2): the panel scrolls as one. The panel, bounded by the window in `reader-panel` (globals.css),
-// is the one scroll region, and nothing inside it scrolls on its own.
+// is the one scroll region, and nothing inside it scrolls on its own. (P10-04b: now the sticky part, below.)
 //
 // P10-02 (ruling §1h.78): the "Terms to know" strip, which stood in the panel under the tab strip (after
 // the common blocks in one column), is deleted, and with it its `terms` slot. The paper's own definitions
@@ -40,6 +40,15 @@
 // stickiness there. It is a slot of its own, outside the tabpanel: under both tabs, never remounted by a
 // switch, and nothing of it is duplicated in the column.
 //
+// P10-04b (A8, X-A1; ruling §1h.87 (a)): the panel is split. At 1440 x 1000 the plate, the six-line title and the
+// decision block filled 760 of the sticky panel's 892 px, so no row of the map was in view; the owner's A8 wants
+// the map to float so that "wherever the reader is" it can be used. Now the head (plate, title, decision) is in
+// normal flow and scrolls away with the page, and the sticky part is the strip and the map (`PANEL_STICKY_CLASS`):
+// under the masthead at every scroll past the head, window-bounded, the map scrolling inside it only when it is
+// taller than the room. This supersedes P9-04's "the panel scrolls as one" for the head: the panel has no scroll
+// region of its own any more. The DOM order is unchanged; for a paper with no strip and no map the head is the
+// sticky part, as the whole panel was.
+//
 // The structure is chosen in JS rather than with `display: contents` and
 // `order`, so what a screen reader announces is what the page shows. Crossing
 // 80rem remounts the blocks (the authors toggle resets); a window resize
@@ -48,7 +57,7 @@
 import { useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { fitZoom, READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
 import { TABPANEL_ID, tabId } from "./reader-tabs";
-import { COLUMN_CLASS, PANEL_CLASS, SPREAD_GRID, SPREAD_QUERY } from "./spread";
+import { COLUMN_CLASS, PANEL_CLASS, PANEL_STICKY_CLASS, PANEL_TAIL_CLASS, SPREAD_GRID, SPREAD_QUERY } from "./spread";
 import type { ReaderTab } from "./use-reader-tab";
 
 /** The id of the wrapper that holds the blocks both tabs share. */
@@ -177,6 +186,8 @@ export function ReaderLayout(p: ReaderLayoutProps) {
   // taller than the window could pin by its bottom and keep the decision in view.
 
   const tabbed = p.tabs !== undefined && p.tabs !== null;
+  // P10-04b: the strip and the map are the spread panel's sticky part; with neither, the head is.
+  const tail = tabbed || (p.map !== undefined && p.map !== null);
   // Built from the slot alone — the tab is not read here, on purpose (see the header).
   const common = p.common ? (
     <div id={COMMON_ID} className="reading-scaled scroll-mt-20" style={readingScaleStyle}>{p.common}</div>
@@ -239,13 +250,34 @@ export function ReaderLayout(p: ReaderLayoutProps) {
           left on the element as a stable selector future code may still
           want, costs nothing to keep. */}
       <div className={PANEL_CLASS} data-reader-panel="">
-        {p.plate}
-        {p.title}
-        {p.decision}
-        {p.tabs}
-        {/* P10-04 (review 3.1): the map floats with the strip — it is in the panel, which is sticky and
-            window-high, and scrolls inside it when it is taller than the window. */}
-        {p.map}
+        {tail ? (
+          <>
+            {/* P10-04b (A8, X-A1): the head — plate, title, decision — is in normal flow and scrolls away
+                with the page. */}
+            {p.plate}
+            {p.title}
+            {p.decision}
+            {/* The holder is the sticky part's containing block: it takes the rest of the panel's height
+                (which is the column's), and carries the strip's 32px gap, so the margin is not the sticky
+                element's own. */}
+            <div className="xl:mt-8 xl:flex-1">
+              {/* The strip and the map (P10-04) stay under the masthead while the reader scrolls the column;
+                  the map scrolls inside when it is taller than the window's remaining height. */}
+              <div className={PANEL_TAIL_CLASS} data-reader-sticky="">
+                {p.tabs}
+                {p.map}
+              </div>
+            </div>
+          </>
+        ) : (
+          // No strip and no map (a paper with no body): there is nothing to float but the head, so the head is
+          // the sticky part, as the whole panel was.
+          <div className={PANEL_STICKY_CLASS} data-reader-sticky="">
+            {p.plate}
+            {p.title}
+            {p.decision}
+          </div>
+        )}
       </div>
       <div className={COLUMN_CLASS}>
         {common}

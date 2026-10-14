@@ -254,7 +254,7 @@ export function ReadingMapView({
     });
 
   return (
-    <section aria-label={MAP.heading} className="mt-6">
+    <section aria-label={MAP.heading} className="mt-6 xl:min-h-0 xl:overflow-y-auto xl:-mx-1.5 xl:px-1.5">
       <p className="eyebrow inline-flex items-center gap-2 text-text-faint">
         <span aria-hidden className="block h-[6px] w-[6px] shrink-0 bg-current" />
         {MAP.heading}

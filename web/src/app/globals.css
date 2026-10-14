@@ -516,7 +516,18 @@ html[data-mode="dark"] {
   backdrop-filter: blur(18px) saturate(1.25);
 }
 
-/* The reading spread's left panel (≥ xl), pinned by its top: the plate, the
+/* P10-04b (A8, X-A1): this utility is the panel's STICKY PART, not the whole
+   panel. The panel itself (`PANEL_CLASS`, spread.ts) stretches over the row
+   and is not sticky; its head — the plate, the title, the decision block —
+   is in normal flow and scrolls away with the page; the part below is this
+   utility: the Summary / Paper digestion strip and the reading map (or, for
+   a paper with no body, the head), pinned under the masthead, the window's
+   height at most, and the map — `overflow-y: auto` on its own section —
+   scrolling inside it when it is taller than the room. The old reading
+   (the panel pinned as one, 760 of its 892px taken by the head, no row of the
+   map in view on arrival) is below, as it was written.
+
+   The reading spread's left panel (≥ xl), pinned by its top: the plate, the
    title, the decision block (the commands, then the sentence, the reading
    controls and the DOI), the Summary / Paper digestion tabs and the Terms
    strip. P7-14 (R2): the question box and the map moved to the column, so the
