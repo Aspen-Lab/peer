@@ -19,6 +19,7 @@
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { useSyncExternalStore } from "react";
+import type { PaperReading } from "@/lib/papers/reading";
 import { stickyTitle } from "@/lib/notes/blocks";
 import type { NoteAnchor } from "@/lib/notes/types";
 import { useWindows } from "@/lib/reader/windows";
@@ -201,9 +202,16 @@ type Body = readonly { readonly paragraphs: readonly string[] }[];
 
 /** The key of the reading the reading page keeps in this browser (`use-reading.ts`); an entry's key starts with the paper's id. */
 const READING_CACHE_KEY = "peer-reading-v2";
+/**
+ * The two gates `use-reading.ts` puts on a cached reading, copied from there (its `READING_VERSION` and `TTL_MS` are not
+ * exported): an entry of another shape version, or older than a day, is not the reading the page would show, so it is
+ * "not known". Typed from the document itself, so a bump of `PaperReading["version"]` stops the build here until this follows.
+ */
+const READING_VERSION: PaperReading["version"] = 12;
+const READING_TTL_MS = 24 * 60 * 60 * 1000;
 
 let parsedFrom: string | null = null;
-let parsed: Record<string, { ts?: unknown; reading?: { body?: unknown } } | undefined> = {};
+let parsed: Record<string, { ts?: unknown; reading?: { version?: unknown; body?: unknown } } | undefined> = {};
 /** The cache is parsed once per change of its text, not once per heading per render. */
 function cachedReadings(raw: string | null) {
   if (raw !== parsedFrom) {
@@ -219,20 +227,24 @@ function cachedReadings(raw: string | null) {
 }
 
 /**
- * The body of the newest reading kept in this browser for a paper (null when there is none, it is unreadable, or its body is
- * not sections of paragraph strings). The notes page has no paper on show, so it asks what the reader last had.
+ * The body of the newest reading kept in this browser for a paper (null when there is none, it is unreadable, its body is
+ * not sections of paragraph strings, or it is not one the reading page would use: another version, or older than a day —
+ * then it is not known, and a note is never called lost by it). The notes page has no paper on show, so it asks what the
+ * reader last had.
  */
-export function storedBodyOf(paperId: string, storage?: Pick<Storage, "getItem">): Body | null {
+export function storedBodyOf(paperId: string, storage?: Pick<Storage, "getItem">, now: number = Date.now()): Body | null {
   try {
     const store = storage ?? (typeof window === "undefined" ? undefined : window.localStorage);
     if (!store) return null;
     let best: { ts: number; body: Body } | null = null;
     for (const [key, entry] of Object.entries(cachedReadings(store.getItem(READING_CACHE_KEY)))) {
       if (!key.startsWith(`${paperId}|`)) continue;
-      const body = entry?.reading?.body;
+      if (entry?.reading?.version !== READING_VERSION) continue;
+      if (typeof entry.ts !== "number" || now - entry.ts >= READING_TTL_MS) continue;
+      const body = entry.reading.body;
       const sound = Array.isArray(body) && body.every((one) => Array.isArray(one?.paragraphs) && one.paragraphs.every((p: unknown) => typeof p === "string"));
       if (!sound) continue;
-      const ts = typeof entry?.ts === "number" ? entry.ts : 0;
+      const ts = entry.ts;
       if (!best || ts > best.ts) best = { ts, body: body as Body };
     }
     return best?.body ?? null;

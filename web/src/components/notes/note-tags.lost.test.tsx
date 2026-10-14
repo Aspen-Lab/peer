@@ -46,21 +46,49 @@ describe("passageIsLost — the sticky whose passage the paper holds nowhere", (
 });
 
 describe("storedBodyOf — the body of the paper's reading kept in this browser", () => {
-  const entry = (ts: number, paragraphs: string[]) => ({ ts, reading: { body: [{ paragraphs }] } });
+  // re-aimed (§1c): an entry now carries the version and a recent time, which the gates below need (same cases as before)
+  const NOW = 1_800_000_000_000;
+  const entry = (ts: number, paragraphs: string[], version = 12) => ({ ts: NOW - 1000 * ts, reading: { version, body: [{ paragraphs }] } });
   const store = (value: unknown) => ({ getItem: () => (typeof value === "string" ? value : JSON.stringify(value)) });
 
   it("is the newest reading kept under the paper's id, and no other paper's", () => {
-    const cache = { "p1|public|": entry(10, ["old"]), "p1|up|3": entry(20, ["new"]), "p2|public|": entry(30, ["other"]) };
-    expect(storedBodyOf("p1", store(cache))).toEqual([{ paragraphs: ["new"] }]);
-    expect(storedBodyOf("p3", store(cache))).toBeNull();
+    const cache = { "p1|public|": entry(20, ["old"]), "p1|up|3": entry(10, ["new"]), "p2|public|": entry(5, ["other"]) };
+    expect(storedBodyOf("p1", store(cache), NOW)).toEqual([{ paragraphs: ["new"] }]);
+    expect(storedBodyOf("p3", store(cache), NOW)).toBeNull();
   });
 
   it("is null when the storage is empty, unreadable, or not a reading", () => {
-    expect(storedBodyOf("p1", store({}))).toBeNull();
-    expect(storedBodyOf("p1", store("{not json"))).toBeNull();
-    expect(storedBodyOf("p1", { getItem: () => { throw new Error("blocked"); } })).toBeNull();
-    expect(storedBodyOf("p1", store({ "p1|public|": { ts: 1, reading: { body: "x" } } }))).toBeNull();
-    expect(storedBodyOf("p1", store({ "p1|public|": { ts: 1, reading: { body: [{ paragraphs: [3] }] } } }))).toBeNull();
+    expect(storedBodyOf("p1", store({}), NOW)).toBeNull();
+    expect(storedBodyOf("p1", store("{not json"), NOW)).toBeNull();
+    expect(storedBodyOf("p1", { getItem: () => { throw new Error("blocked"); } }, NOW)).toBeNull();
+    expect(storedBodyOf("p1", store({ "p1|public|": { ts: NOW, reading: { version: 12, body: "x" } } }), NOW)).toBeNull();
+    expect(storedBodyOf("p1", store({ "p1|public|": { ts: NOW, reading: { version: 12, body: [{ paragraphs: [3] }] } } }), NOW)).toBeNull();
+  });
+
+  // P10-36 (the manager's fix): a cached reading is used only as `use-reading.ts` uses it — the current version, inside a day.
+  it("does not know a reading of another version: its body may be an older split, and a repaired note must not be called lost by it", () => {
+    const stale = { "p1|public|": entry(10, ["Creep limits the life of hot parts."], 11) };
+    expect(storedBodyOf("p1", store(stale), NOW)).toBeNull();
+    expect(passageIsLost(ANCHOR, "h2", {}, storedBodyOf("p1", store(stale), NOW))).toBe(false);
+    // and the newer entry wins over an older-version one, not the other way round
+    expect(storedBodyOf("p1", store({ ...stale, "p1|up|3": entry(50, ["kept"]) }), NOW)).toEqual([{ paragraphs: ["kept"] }]);
+  });
+
+  it("does not know a reading older than a day (the page would fetch it again), and uses one just inside the day", () => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const aged = (age: number) => ({ "p1|public|": { ts: NOW - age, reading: { version: 12, body: [{ paragraphs: ["x"] }] } } });
+    expect(storedBodyOf("p1", store(aged(DAY)), NOW)).toBeNull();
+    expect(passageIsLost(ANCHOR, "h2", {}, storedBodyOf("p1", store(aged(DAY + 1)), NOW))).toBe(false);
+    expect(storedBodyOf("p1", store(aged(DAY - 1)), NOW)).toEqual([{ paragraphs: ["x"] }]);
+    expect(storedBodyOf("p1", store({ "p1|public|": { reading: { version: 12, body: [{ paragraphs: ["x"] }] } } }), NOW)).toBeNull();
+  });
+
+  it("keeps its two gates the ones use-reading.ts applies", () => {
+    const reading = read("src/components/reader/use-reading.ts");
+    const tags = read("src/components/notes/note-tags.tsx");
+    expect(tags).toContain(`const READING_VERSION: PaperReading["version"] = ${/READING_VERSION: PaperReading\["version"\] = (\d+)/.exec(reading)?.[1]};`);
+    expect(reading).toContain("const TTL_MS = 24 * 60 * 60 * 1000;");
+    expect(tags).toContain("const READING_TTL_MS = 24 * 60 * 60 * 1000;");
   });
 });
 
