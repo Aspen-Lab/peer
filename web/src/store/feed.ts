@@ -28,6 +28,7 @@ import {
   markFeedPendingKey,
   clearFeedPendingKey,
   replaceFeedPendingKeys,
+  useFeedSyncStatus,
 } from "@/lib/feed/sync-status";
 import { scoredItemToPaper } from "@/lib/feed/mapper";
 import { STARTER_TOPICS_KEY, topicsOrStarter } from "@/lib/feed/starter-topics";
@@ -2085,6 +2086,7 @@ export const useFeedStore = create<FeedState>()(
       },
 
       markRead: (id, paper) => {
+        const alreadyRead = Boolean(get().readItems[id]);
         set((s) => {
           if (s.readItems[id]) return s;
           // The first read is the one the chart plots; re-opening a paper a
@@ -2102,6 +2104,13 @@ export const useFeedStore = create<FeedState>()(
               : s.library,
           };
         });
+        // P10-49 — a paper already read is not posted as read again: the reader's decisions (a
+        // key, a button, the observer re-attaching when the reading arrives) call this for the
+        // same paper more than once per load, and the first call's post is the one the account
+        // needs. The one repeat that must still go up is the retry of a read whose post failed:
+        // its `read:<id>` key is pending (and mirrored in `pendingPushByOwner`), so a repeated
+        // call posts while that key stands and stops once a post lands and clears it.
+        if (alreadyRead && !useFeedSyncStatus.getState().pendingKeys[pendingReadKey(id)]) return;
         cloudMarkRead(id);
       },
 
