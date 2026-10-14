@@ -127,9 +127,10 @@ function tabProblems(source: string): string[] {
     if (!onDigestion.includes(block)) problems.push(`${block} is not under Paper digestion`);
     if (onSummary.includes(block)) problems.push(`${block} is also under Summary`);
   }
+  // P10-07b, RE-AIMED: the map the slot draws is the partition's overlay of the reading's map (`shownMap`, defined exactly when the reading has a map).
   // (P10-02 deleted the `terms` slot that used to follow the map prop; the map line ends on its own `: undefined}`.)
   const mapSlot = between(code, " map={hasBody", " : undefined}");
-  if (!mapSlot.startsWith(" map={hasBody && reading.map ? <ReadingMapView")) problems.push("the map is not drawn in the layout's `map` slot exactly when there is a body and a map");
+  if (!mapSlot.startsWith(" map={hasBody && shownMap ? <ReadingMapView")) problems.push("the map is not drawn in the layout's `map` slot exactly when there is a body and a map");
   if (count(code, "<ReadingMapView") !== 1) problems.push("the map is not mounted exactly once");
   if (/\btab\b|digestion/.test(mapSlot)) problems.push("the map slot depends on the tab: it is shown under both");
   if (!mapSlot.includes("reveal={reveal}")) problems.push("a row of the map cannot bring the body in from Summary");

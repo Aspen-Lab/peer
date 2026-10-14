@@ -63,14 +63,17 @@ const over = partitionedMap(map, reading.body, FOUR);
 const escaped = (text: string) => text.replace(/&/g, "&amp;").replace(/'/g, "&#x27;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const render = (props: Partial<Parameters<typeof ReadingMapView>[0]> = {}) => renderToStaticMarkup(createElement(ReadingMapView, { map, ...props }));
 const hrefs = (html: string): string[] => [...html.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]);
+/** The paragraph lines' anchors in a row (or a whole map): every link to a paragraph but a group row's own, the first in its row. */
+const lineHrefs = (row: string): string[] => hrefs(row).slice(1).filter((id) => /-p\d+$/.test(id));
+const allLineHrefs = (html: string): string[] => hrefs(html).filter((id) => /^paper-section-\d+-p\d+$/.test(id));
 /** The legend line: a label-face paragraph holding `PEERS_READING` and nothing else. */
 const legends = (html: string): number => (html.match(new RegExp(`<p class="[^"]*">${escaped(PEERS_READING)}</p>`, "g")) ?? []).length;
-/** The `<li>` of the row whose heading is `heading`, from its opening tag to the row's own fact lines. */
+/** The row whose heading is `heading`: from its `<li data-level>` to the next row's (its own lines are inside). */
 function rowOf(html: string, heading: string): string {
   const at = html.indexOf(`>${escaped(heading)}</a>`);
-  const start = html.lastIndexOf("<li ", at);
-  const end = html.indexOf("</li>", html.indexOf("</div>", at));
-  return html.slice(start, end);
+  const start = html.lastIndexOf("<li data-level", at);
+  const next = html.indexOf("<li data-level", at);
+  return html.slice(start, next < 0 ? html.length : next);
 }
 const opened = (...positions: number[]) => ({ openRows: positions });
 
@@ -114,14 +117,14 @@ describe("ReadingMapView — a partition's group rows (B P10-05 §3.1)", () => {
   it("links the paragraph lines of an open group to the trunk's real paragraph anchors", () => {
     const html = render({ map: over, ...opened(1, 4) });
     const results = rowOf(html, "Results");
-    const lines = hrefs(results).filter((id) => /-p\d+$/.test(id));
+    const lines = lineHrefs(results);
 
     expect(lines[0]).toBe("paper-section-0-p6");
     expect(lines).toContain("paper-section-0-p12");
     expect(lines.at(-1)).toBe("paper-section-0-p19");
     expect(lines).toHaveLength(14);
     // Methods' own lines: its section's paragraphs, the body's section 1.
-    expect(hrefs(rowOf(html, "Methods")).filter((id) => /-p\d+$/.test(id))).toEqual(["paper-section-1-p0", "paper-section-1-p1", "paper-section-1-p2", "paper-section-1-p3"]);
+    expect(lineHrefs(rowOf(html, "Methods"))).toEqual(["paper-section-1-p0", "paper-section-1-p1", "paper-section-1-p2", "paper-section-1-p3"]);
   });
 
   it("keeps the paper's own opening on a line, word for word", () => {
@@ -134,8 +137,8 @@ describe("ReadingMapView — a partition's group rows (B P10-05 §3.1)", () => {
     const closed = render({ map: over, ...opened() });
     const open = render({ map: over, ...opened(2) });
 
-    expect(hrefs(rowOf(closed, "Discussion")).filter((id) => /-p\d+$/.test(id))).toEqual([]);
-    expect(hrefs(rowOf(open, "Discussion")).filter((id) => /-p\d+$/.test(id))).toHaveLength(7);
+    expect(lineHrefs(rowOf(closed, "Discussion"))).toEqual([]);
+    expect(lineHrefs(rowOf(open, "Discussion"))).toHaveLength(7);
     expect(rowOf(closed, "Discussion")).toContain('aria-expanded="false"');
   });
 
@@ -179,23 +182,25 @@ describe("ReadingMapView — without a partition: the paper's paragraphs under o
   const trunkOnly: ReadingMap = { sections: [map.sections[0]], totalMinutes: map.totalMinutes };
 
   it("shows the unheaded paper's one row with its lines", () => {
-    const html = render({ map });
+    const html = render({ map, openRows: [0] });
     const lines = map.sections[0].paragraphs.filter((line) => line.opening !== null);
 
     expect(rowOf(html, "A survey of shore ecology")).toBeTruthy();
-    expect(hrefs(html).filter((id) => /^paper-section-0-p\d+$/.test(id))).toHaveLength(lines.length);
+    expect(lineHrefs(rowOf(html, "A survey of shore ecology"))).toHaveLength(lines.length);
+    expect(lines.length).toBe(30);
+    expect(rowOf(html, "Methods")).toContain('href="#paper-section-1"');
     expect(html).not.toContain(escaped(MAP.parts.tag));
     expect(legends(html)).toBe(0);
   });
 
   it("opens a map of one row by default, so the lines are there; an explicit openRows is honoured", () => {
-    expect(hrefs(render({ map: trunkOnly })).filter((id) => /-p\d+$/.test(id)).length).toBeGreaterThan(20);
-    expect(hrefs(render({ map: trunkOnly, openRows: [] })).filter((id) => /-p\d+$/.test(id))).toEqual([]);
+    expect(allLineHrefs(render({ map: trunkOnly }))).toHaveLength(30);
+    expect(allLineHrefs(render({ map: trunkOnly, openRows: [] }))).toEqual([]);
   });
 
   it("does not open a map of several rows by default", () => {
     expect(map.sections).toHaveLength(2);
-    expect(hrefs(render({ map })).filter((id) => /-p\d+$/.test(id))).toEqual([]);
+    expect(allLineHrefs(render({ map }))).toEqual([]);
   });
 
   describe("a headless PDF", () => {
@@ -231,7 +236,7 @@ describe("ReadingMapView — without a partition: the paper's paragraphs under o
 
       expect(headless.sections).toHaveLength(1);
       expect(html).toContain("<ol");
-      expect(hrefs(html).filter((id) => /-p\d+$/.test(id)).length).toBeGreaterThan(10);
+      expect(allLineHrefs(html).length).toBeGreaterThan(10);
       expect(html).not.toContain(escaped(MAP.parts.tag));
       // A partition that does not fit it (the model was never asked) changes nothing.
       expect(partitionedMap(headless, result.doc ? readableSections(result.doc).map(({ id, section, paragraphs }) => ({ id, canonical: section.canonical, paragraphs })) : [], { sectionId: headless.sections[0].id, parts: FOUR.parts })).toBe(headless);
@@ -256,8 +261,8 @@ describe("the open set is kept by row id (B §3.1, trap one)", () => {
   it("reads openRows as positions of the map it is given, then keeps them as ids", () => {
     const html = render({ map: over, openRows: [4] });
 
-    expect(hrefs(rowOf(html, "Methods")).filter((id) => /-p\d+$/.test(id))).toHaveLength(4);
-    expect(hrefs(rowOf(html, "Results")).filter((id) => /-p\d+$/.test(id))).toEqual([]);
+    expect(lineHrefs(rowOf(html, "Methods"))).toHaveLength(4);
+    expect(lineHrefs(rowOf(html, "Results"))).toEqual([]);
   });
 });
 

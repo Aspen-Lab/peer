@@ -46,6 +46,19 @@
 // mention anything in). The summary line counts it as a section and adds the words over the rows that have
 // them, so the group's sum is not counted twice. With the map under the tab strip (review 3.1) its links
 // follow the page's `reveal`, so a row clicked under "Summary" brings the body in first.
+//
+// P10-07b (review 3.3, second half; A15; B P10-05 §3): a paper with no headings of its own is divided by the
+// model into parts (`partitionedMap`), and the parts are rows here, in the trunk row's place: the part's name
+// for a heading, "Peer's reading" in the meta where a headed row reads its role (the part is not a heading the
+// paper wrote), the legend line under the heading while one is on screen, the paper's own paragraph lines
+// under it. A group row's link goes to its first paragraph, and the lines' links to the trunk's real
+// paragraph anchors — the body is untouched, so its anchors are where they were (a row after the trunk is
+// the body's section `sectionIndex`, not the map's row number). Gists are looked up under the trunk's id.
+// The rows that are open are kept by id, not by position, so a partition arriving after the first paint
+// (one row becomes several and everything after it moves) keeps what was open, and gives the parts the
+// trunk's openness. The summary line counts the paper's own sections: the parts are not sections the paper has.
+// And a map of one row (no key, or the guide not yet answered) starts open, so a headless paper's map is its
+// paragraphs under their one row, not a closed line.
 
 import { Fragment, useMemo, useState } from "react";
 import type { PaperReading } from "@/lib/papers/reading";
@@ -59,6 +72,7 @@ import {
   type RouteResult,
 } from "@/lib/papers/reading-map";
 import type { ParagraphGuide } from "@/lib/papers/paragraph-guide";
+import { partOf } from "@/lib/papers/reading-partition";
 import { MAP, PEERS_READING, ROUTE } from "./copy";
 import { followSectionLink } from "./evidence-quote";
 import { MathText } from "./math";
@@ -99,6 +113,31 @@ function levelOfRow(row: ReadingMapSection): 1 | 2 | 3 {
   return row.level ?? (Math.min(depthOf(row.heading) + 1, 3) as 1 | 2 | 3);
 }
 
+/**
+ * P10-07b: the rows that are open after the map changed (a partition arrived, or went), kept by id. A row of the
+ * new map stays open when it was; a group row is open when the trunk it divides was, so the parts of an open row
+ * are open; an id the new map no longer has (the trunk's, once it is divided) is let go.
+ */
+export function carryOpenRows(open: ReadonlySet<string>, map: ReadingMap): Set<string> {
+  const next = new Set<string>();
+  for (const row of map.sections) {
+    const part = partOf(row);
+    if (open.has(row.id) || (part !== undefined && open.has(part.sectionId))) next.add(row.id);
+  }
+  return next;
+}
+
+/** P10-07b: each row's place among the body's sections — the `k` of `paper-section-k`. The map's own rows are the
+ *  body's sections in order; the parts of a divided trunk are all the trunk's. */
+function sectionIndexesOf(map: ReadingMap): number[] {
+  let at = -1;
+  return map.sections.map((row) => {
+    const part = partOf(row);
+    at = part ? part.sectionIndex : at + 1;
+    return at;
+  });
+}
+
 /** P10-04: one indent step per level under the first, in rem. */
 const INDENT_STEP_REM = 0.75;
 
@@ -129,7 +168,7 @@ function metaParts(row: ReadingMapSection, role: string | null) {
 export function ReadingMapView({
   map,
   route,
-  openRows = [],
+  openRows,
   phoneOpen = false,
   gists,
   source,
@@ -139,7 +178,8 @@ export function ReadingMapView({
   /** The reader's questions routed through the paper (`readingRoute`), with
    *  the report's Tier 2 marks merged over them once there is one. */
   route?: DrawRoute;
-  /** Rows whose paragraph lines start open (tests; the page opens none). */
+  /** Rows whose paragraph lines start open, by position (tests; the page opens none of several rows). Absent: a map
+   *  of one row starts open, a map of several closed. */
   openRows?: readonly number[];
   /** Whether the table starts shown on a phone (tests; the page: no). */
   phoneOpen?: boolean;
@@ -155,10 +195,20 @@ export function ReadingMapView({
    *  browser's own anchor, as it was. */
   reveal?: (run: () => void) => void;
 }) {
-  const [open, setOpen] = useState<ReadonlySet<number>>(() => new Set(openRows));
+  // P10-07b: the open rows are kept by id (a partition replaces one row by several and moves the rest).
+  const [open, setOpen] = useState<ReadonlySet<string>>(
+    () => new Set((openRows ?? (map.sections.length === 1 ? [0] : [])).flatMap((k) => (map.sections[k] ? [map.sections[k].id] : []))),
+  );
+  const [seenMap, setSeenMap] = useState(map);
+  if (seenMap !== map) {
+    // The map changed under the open set (the partition arrived): carry what was open over, in this render.
+    setSeenMap(map);
+    setOpen(carryOpenRows(open, map));
+  }
   const [shownOnPhone, setShownOnPhone] = useState(phoneOpen);
   // P10-04: what each group row stands for, by its id.
   const groups = useMemo(() => groupTotals(map), [map]);
+  const sectionIndexes = useMemo(() => sectionIndexesOf(map), [map]);
   if (map.sections.length === 0) return null;
   // Questions that point somewhere: an unmarked row then says so.
   const asked = routeAsksQuestions(route);
@@ -172,15 +222,21 @@ export function ReadingMapView({
     const gist = gists?.[sectionId]?.[index];
     return typeof gist === "string" && gist !== "" ? gist : undefined;
   };
+  // P10-07b: a part's gists are the trunk's (the guide knows the section, not the part).
+  const gistKeyOf = (row: ReadingMapSection): string => partOf(row)?.sectionId ?? row.id;
   const gistShown = map.sections.some(
-    (row, k) => open.has(k) && row.paragraphs.some((line) => line.opening !== null && gistOf(row.id, line.index) !== undefined),
+    (row) => open.has(row.id) && row.paragraphs.some((line) => line.opening !== null && gistOf(gistKeyOf(row), line.index) !== undefined),
   );
+  // P10-07b: the legend is also there while a part of Peer's reading is on screen.
+  const partShown = map.sections.some((row) => partOf(row) !== undefined);
+  // P10-07b: the sections the paper has — a divided trunk is one, whatever the parts it was read as.
+  const ownSections = new Set(map.sections.map(gistKeyOf)).size;
 
-  const toggle = (k: number) =>
+  const toggle = (id: string) =>
     setOpen((current) => {
       const next = new Set(current);
-      if (next.has(k)) next.delete(k);
-      else next.add(k);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
 
@@ -192,11 +248,11 @@ export function ReadingMapView({
       </p>
       {/* Peer's words, once: what the gists below are. Folds with the table on a phone,
           where the gists are folded too. */}
-      {gistShown && (
+      {(gistShown || partShown) && (
         <p className={["annotation mt-1 text-text-faint", shownOnPhone ? "" : "hidden sm:block"].join(" ").trim()}>{PEERS_READING}</p>
       )}
       <p className="annotation mt-2 flex items-baseline gap-3 text-text-faint">
-        <span>{MAP.summary(map.sections.length, map.totalMinutes, totalWords, source)}</span>
+        <span>{MAP.summary(ownSections, map.totalMinutes, totalWords, source)}</span>
         <button
           type="button"
           aria-expanded={shownOnPhone}
@@ -213,8 +269,13 @@ export function ReadingMapView({
         <ol className="mt-2 space-y-1">
           {map.sections.map((row, k) => {
             const lines = row.paragraphs.filter((line) => line.opening !== null);
-            const expanded = open.has(k);
-            const role = roleLabel(row.role);
+            const expanded = open.has(row.id);
+            // P10-07b: a part of Peer's reading says so where a headed row says its role; its link, and its
+            // lines', are the trunk's real anchors in the body.
+            const part = partOf(row);
+            const at = sectionIndexes[k];
+            const role = part ? MAP.parts.tag : roleLabel(row.role);
+            const rowAnchor = part ? paragraphAnchor(at, part.from) : sectionAnchor(at);
             // P10-04: a group row says its children's words and minutes, and has nothing of its own to fold.
             const group = groups.get(row.id);
             const shown = group ? { ...row, ...group } : row;
@@ -249,7 +310,7 @@ export function ReadingMapView({
                       type="button"
                       aria-expanded={expanded}
                       aria-label={expanded ? MAP.closeLines(row.heading) : MAP.openLines(row.heading)}
-                      onClick={() => toggle(k)}
+                      onClick={() => toggle(row.id)}
                       className={`annotation w-3 shrink-0 text-text-faint transition-colors hover:text-heading ${TOUCH_TALL}`}
                     >
                       {expanded ? "−" : "+"}
@@ -261,8 +322,8 @@ export function ReadingMapView({
                       heading when the heading would be left too little room), beside the fold toggle. */}
                   <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
                     <a
-                      href={`#${sectionAnchor(k)}`}
-                      onClick={(event) => followSectionLink(event, sectionAnchor(k), reveal)}
+                      href={`#${rowAnchor}`}
+                      onClick={(event) => followSectionLink(event, rowAnchor, reveal)}
                       className="min-w-0 flex-[1_1_14rem] font-reading text-body-sm leading-[1.45] text-text-muted transition-colors hover:text-heading"
                     >
                       <MathText text={row.heading} />
@@ -295,12 +356,12 @@ export function ReadingMapView({
                   <ol className="mt-1 mb-2 space-y-1 pl-5">
                     {lines.map((line) => {
                       const tier = mark?.paragraphs.get(line.index);
-                      const gist = gistOf(row.id, line.index);
+                      const gist = gistOf(gistKeyOf(row), line.index);
                       return (
                         <li key={line.index}>
                           <a
-                            href={`#${paragraphAnchor(k, line.index)}`}
-                            onClick={(event) => followSectionLink(event, paragraphAnchor(k, line.index), reveal)}
+                            href={`#${paragraphAnchor(at, line.index)}`}
+                            onClick={(event) => followSectionLink(event, paragraphAnchor(at, line.index), reveal)}
                             data-route={tier}
                             // P1-07 (§1f.18 b): on a tint the faint ink is
                             // 2.69:1; the muted ink is ≥ 4.5:1 on every tint.

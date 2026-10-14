@@ -108,6 +108,7 @@ import { NotesButton } from "@/components/notes/notes-button";
 import { PAPER_BODY_ID } from "@/components/reader/paper-body";
 import { QuestionField, focusFirstEmptyQuestion } from "@/components/reader/question-field";
 import { ReadingMapView, readingRoute } from "@/components/reader/reading-map";
+import { partitionedMap, withPartitionMarks } from "@/lib/papers/reading-partition";
 import { useDebouncedQuestions } from "@/components/reader/use-debounced-questions";
 import { SectionLinks } from "@/components/reader/evidence-quote";
 import { ReaderTabs } from "@/components/reader/reader-tabs";
@@ -691,7 +692,7 @@ function Reader({
   // stands unchanged if there is no verified report/question overlay. P2-04b:
   // the map and the body both take it as a `DrawRoute`
   // (the shared `RouteResult` contract is untouched), so no cast is needed.
-  const route = useMemo(
+  const mergedRoute = useMemo(
     () => mergeQuestionRoute(tier0Route, questionRouteOverlay(report?.forYourQuestions)),
     [tier0Route, report?.forYourQuestions],
   );
@@ -704,7 +705,7 @@ function Reader({
   // strip that listed them on the page is deleted.
   // P7-13 (R11b): keyed on WHICH sections are read, as a string — `routeTermScope`
   // makes a new object on every route, and the scan below re-ran on each of them.
-  const scopeKey = useMemo(() => termScopeKey(routeTermScope(route)), [route]);
+  const scopeKey = useMemo(() => termScopeKey(routeTermScope(mergedRoute)), [mergedRoute]);
   const tier0Terms = useMemo(
     () => (reading ? paperDefinedTermsInReading(reading, termScopeOfKey(scopeKey)) : []),
     [reading, scopeKey],
@@ -765,9 +766,18 @@ function Reader({
     enabled: providerConfigured && deepReportRequested(profile, ready ? paper : undefined, aiMode),
     llmOverride: explainLlmOverride(profile),
   });
-  // P10-07a: the guide also carries Peer's division of an unheaded paper into parts. Nothing on
-  // the page draws it yet (C P10-07b lays it over the map); it is read here and passed nowhere.
-  void paragraphPartition;
+  // P10-07a/b: the guide also carries Peer's division of an unheaded paper into parts. The map is
+  // laid over with it (the trunk's row becomes the parts' rows; the body is untouched, §1h.79 (c)), and
+  // the route the map AND the body read has each part's mark folded in beside the real ids', derived
+  // from the grades of the paragraphs inside it, so the two never disagree on a paragraph.
+  const shownMap = useMemo(
+    () => (reading?.map ? partitionedMap(reading.map, reading.body, paragraphPartition) : undefined),
+    [reading, paragraphPartition],
+  );
+  const route = useMemo(
+    () => withPartitionMarks(mergedRoute, reading?.map, reading?.body, paragraphPartition),
+    [mergedRoute, reading?.map, reading?.body, paragraphPartition],
+  );
   const projectText = useMemo(
     () => [profile.currentProject, profile.currentChallenges].filter(Boolean).join("\n"),
     [profile.currentProject, profile.currentChallenges],
@@ -1427,7 +1437,7 @@ function Reader({
         // P10-04 (review 3.1): the map (P1-04, §1f.12: from the reading the server built, absent without a body)
         // stands directly under the strip and floats with it, under both tabs; it is the paper's one contents
         // list (R5). A row clicked under "Summary" brings the body in first (`reveal`).
-        map={hasBody && reading.map ? <ReadingMapView key={`map:${paper.id}`} map={reading.map} route={route} gists={paragraphGists} reveal={reveal} source={reading.provenance.sourceLabel} /> : undefined}
+        map={hasBody && shownMap ? <ReadingMapView key={`map:${paper.id}`} map={shownMap} route={route} gists={paragraphGists} reveal={reveal} source={reading.provenance.sourceLabel} /> : undefined}
         // The blocks both tabs share (Q6): the question field (P1-03, §1f.10 — only where Peer has
         // the paper's text; without it there is nothing to point a question at, and the Decision
         // block already says why; one field per paper) and the answers. ONE element each, built here

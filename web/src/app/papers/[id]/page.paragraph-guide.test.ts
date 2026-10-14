@@ -54,7 +54,8 @@ function guideProblems(source: string): string[] {
   if (!map) problems.push("the map is no longer mounted");
   else {
     if (!map.includes("gists={paragraphGists}")) problems.push("the map is no longer handed Peer's gists");
-    if (!map.includes("route={route}") || !map.includes("map={reading.map}")) problems.push("the map lost its reading or its route");
+    // P10-07b: the map is the partition's overlay of the reading's map (`shownMap`), and the route is the folded one.
+    if (!map.includes("route={route}") || !map.includes("map={shownMap}")) problems.push("the map lost its reading or its route");
   }
   return problems;
 }

@@ -34,7 +34,7 @@ function questionsProblems(source: string): string[] {
   if (!text.includes("questions: settledQuestions(asked)")) problems.push("the deep report is no longer asked about the settled questions of `asked`");
 
   // The terms scan: keyed on the set of sections.
-  if (!text.includes("const scopeKey = useMemo(() => termScopeKey(routeTermScope(route)), [route]);")) {
+  if (!text.includes("const scopeKey = useMemo(() => termScopeKey(routeTermScope(mergedRoute)), [mergedRoute]);")) {
     problems.push("the term scope is no longer made from the route, as a key");
   }
   if (!/const tier0Terms = useMemo\( \(\) => \(reading \? paperDefinedTermsInReading\(reading, termScopeOfKey\(scopeKey\)\) : \[\]\), \[reading, scopeKey\], \);/.test(text)) {

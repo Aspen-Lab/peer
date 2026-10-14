@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 // P10-07b (B P10-05 §3.1, §4; ruling §1h.79 (c)): the page's wiring of the partition. `Reader`
 // cannot be mounted in this Node-only suite, so — as the paragraph-guide wiring test does — this
 // reads the page's source and holds each join to its shape: the map is handed the partition's
-// overlay (memoised on the reading's map and body and on the partition), the route the map AND the
+// overlay (memoised on the reading and the partition), the route the map AND the
 // body read has the group marks folded in (so the two never disagree on a paragraph), the fold runs
 // after the guide hook has answered (the partition is a `const` of that call), the earlier merged
 // route is what the terms scope reads, and the line P10-07a left (`void paragraphPartition;`) is gone.
@@ -24,13 +24,13 @@ function partitionProblems(raw: string): string[] {
   const shown = at("const shownMap = useMemo(");
   const route = at("const route = useMemo(");
   const merged = at("const mergedRoute = useMemo(");
-  if (shown < 0 || !/const shownMap = useMemo\(\(\) => \(?reading\?\.map \? partitionedMap\(reading\.map, reading\.body, paragraphPartition\) : undefined\)?, \[reading\?\.map, reading\?\.body, paragraphPartition\]\);/.test(text))
-    problems.push("the map's overlay is not `partitionedMap(reading.map, reading.body, paragraphPartition)`, memoised on the map, the body and the partition");
+  if (shown < 0 || !/const shownMap = useMemo\( ?\(\) => \(?reading\?\.map \? partitionedMap\(reading\.map, reading\.body, paragraphPartition\) : undefined\)?, \[reading, paragraphPartition\],? ?\);/.test(text))
+    problems.push("the map's overlay is not `partitionedMap(reading.map, reading.body, paragraphPartition)`, memoised on the reading and the partition");
   if (shown >= 0 && hook >= 0 && shown < hook) problems.push("the overlay is made before the partition is known");
 
-  if (merged < 0 || !/const mergedRoute = useMemo\(\(\) => mergeQuestionRoute\(tier0Route, questionRouteOverlay\(report\?\.forYourQuestions\)\), \[tier0Route, report\?\.forYourQuestions\]\);/.test(text))
+  if (merged < 0 || !/const mergedRoute = useMemo\( ?\(\) => mergeQuestionRoute\(tier0Route, questionRouteOverlay\(report\?\.forYourQuestions\)\), \[tier0Route, report\?\.forYourQuestions\],? ?\);/.test(text))
     problems.push("the merged route (Tier 0 and the model's overlay) is no longer its own memo");
-  if (route < 0 || !/const route = useMemo\(\(\) => withPartitionMarks\(mergedRoute, reading\?\.map, reading\?\.body, paragraphPartition\), \[mergedRoute, reading\?\.map, reading\?\.body, paragraphPartition\]\);/.test(text))
+  if (route < 0 || !/const route = useMemo\( ?\(\) => withPartitionMarks\(mergedRoute, reading\?\.map, reading\?\.body, paragraphPartition\), \[mergedRoute, reading\?\.map, reading\?\.body, paragraphPartition\],? ?\);/.test(text))
     problems.push("the route is not the merged route with the group marks folded in, memoised on the merged route, the map, the body and the partition");
   if (route >= 0 && hook >= 0 && route < hook) problems.push("the fold is made before the partition is known");
   if (!text.includes("termScopeKey(routeTermScope(mergedRoute))")) problems.push("the terms scope no longer reads the merged route");
@@ -53,12 +53,12 @@ describe("the page's partition wiring (P10-07b)", () => {
   it("would notice the overlay not made, or handed the unpartitioned map", () => {
     expect(partitionProblems(source.replace("map={shownMap}", "map={reading.map}"))).toContain("the map is not handed the overlay and the folded route");
     expect(partitionProblems(source.replace("partitionedMap(reading.map, reading.body, paragraphPartition)", "reading.map"))).toContain(
-      "the map's overlay is not `partitionedMap(reading.map, reading.body, paragraphPartition)`, memoised on the map, the body and the partition",
+      "the map's overlay is not `partitionedMap(reading.map, reading.body, paragraphPartition)`, memoised on the reading and the partition",
     );
   });
 
   it("would notice the overlay's memo left without the partition among its keys", () => {
-    expect(partitionProblems(source.replace("[reading?.map, reading?.body, paragraphPartition]);\n  const mergedRoute", "[reading?.map, reading?.body]);\n  const mergedRoute"))).not.toEqual([]);
+    expect(partitionProblems(source.replace("[reading, paragraphPartition],\n  );\n  const route", "[reading],\n  );\n  const route"))).not.toEqual([]);
   });
 
   it("would notice the group marks not folded into the route", () => {
