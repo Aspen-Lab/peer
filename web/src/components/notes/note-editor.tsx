@@ -469,6 +469,30 @@ export function holdsItsType(b: Pick<Block, "type" | "anchor">): boolean {
   return b.type === "h3" && Boolean(b.anchor);
 }
 
+/** P10-28 (BACKLOG-90): the block menu's Duplicate copies a block's words, type, indent and state under a new id — but not
+ *  a sticky heading's anchor: the paper reads one tag and one mark from each anchored heading, so a copy that carried it
+ *  would be a second note on the same passage. The copy is an ordinary heading. */
+export function duplicateBlock(b: Block, id: string): Block {
+  const copy: Block = { ...b, id };
+  delete copy.anchor;
+  return copy;
+}
+
+/** P10-28 (BACKLOG-90): a block that carries an anchor is a sticky note's heading, whatever type it was left as. The old
+ *  Backspace (before P10-25) turned such a heading into text and the paper's tag and mark vanished; on load it is an
+ *  `h3` again, its anchor kept, and its words, its id and its place the same. The same array when there is nothing to
+ *  repair. */
+export function repairAnchored(blocks: Block[]): Block[] {
+  if (!blocks.some((b) => b.anchor && b.type !== "h3" && isTextual(b.type) && b.type !== "code")) return blocks;
+  return blocks.map((b) => {
+    if (!b.anchor || b.type === "h3" || !isTextual(b.type) || b.type === "code") return b;
+    const healed: Block = { ...b, type: "h3" };
+    delete healed.checked;
+    delete healed.indent;
+    return healed;
+  });
+}
+
 /** P10-25: what a block is besides its words — kept with each step of its undo, so ⌘/Ctrl Z gives back its type and its
  *  anchor, not only its source. */
 export interface Shape {
@@ -557,7 +581,12 @@ export function NoteEditor({
     blocks: note.blocks.length > 0 ? note.blocks : [block("text")],
     sources: note.sources,
   });
-  const [doc, setDoc] = useState<Doc>(initial.current);
+  // P10-28: an anchored block an old Backspace left as text is a sticky's heading again. The doc starts as the repaired
+  // copy, so the editor's own save (it saves a doc that is not `initial`) writes the repair back.
+  const [doc, setDoc] = useState<Doc>(() => {
+    const blocks = repairAnchored(initial.current.blocks);
+    return blocks === initial.current.blocks ? initial.current : { ...initial.current, blocks };
+  });
   const docRef = useRef(doc);
   /** Every change goes through here, so a handler that reads the doc right
    *  after writing it (a citation's source, then the text that cites it)
@@ -1378,6 +1407,11 @@ export function NoteEditor({
             e.preventDefault();
             return;
           }
+          // nor does a sticky's heading take the next block's words in (its words are its name; the body is the block under it)
+          if (holdsItsType(b)) {
+            e.preventDefault();
+            return;
+          }
           e.preventDefault();
           const both = joined(b, next);
           setBlocks(blocks.filter((x) => x.id !== next.id).map((x) => (x.id === id ? { ...x, text: both.text } : x)));
@@ -1486,7 +1520,7 @@ export function NoteEditor({
       const gap = action === "up" ? i - 1 : i + 2;
       if (gap >= 0 && gap <= blocks.length) setBlocks(moveBlock(blocks, i, gap));
     } else if (action === "duplicate") {
-      insertAt(i + 1, { ...b, id: block().id });
+      insertAt(i + 1, duplicateBlock(b, block().id));
     } else if (action === "delete") {
       const rest = blocks.filter((x) => x.id !== id);
       setBlocks(rest.length > 0 ? rest : [block("text")]);
@@ -1562,6 +1596,17 @@ export function NoteEditor({
   const refs = useMemo(() => citedKeys(doc).map((k) => doc.sources[k]).filter((s): s is Source => Boolean(s)), [doc]);
   const words = useMemo(() => visibleWordCount(doc, hiddenBlockId), [doc, hiddenBlockId]);
   const editingBlock = editing ? doc.blocks.find((b) => b.id === editing) : undefined;
+  // P10-28 (BACKLOG-90): the toolbar's heading and list buttons turn nothing in a sticky's heading (`applyType` refuses);
+  // they say so — aria-disabled and greyed — while the caret is in one. Set on the buttons themselves, after each draw,
+  // so the toolbar component (which knows only the block's type) stays as it is.
+  const typesHeld = Boolean(editingBlock && holdsItsType(editingBlock));
+  const columnRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    columnRef.current?.querySelectorAll('[role="toolbar"] button[aria-pressed]').forEach((btn) => {
+      if (typesHeld) btn.setAttribute("aria-disabled", "true");
+      else btn.removeAttribute("aria-disabled");
+    });
+  });
   return (
     // Three columns where the window allows: the notes rail, the note, the
     // shelf to cite from. Below that the rail is a panel the bar opens, and
@@ -1663,7 +1708,13 @@ export function NoteEditor({
           </div>
         </div>}
 
-        <div className={compact ? "max-w-[44rem]" : "mt-8 max-w-[44rem]"}>
+        <div
+          ref={columnRef}
+          className={cn(
+            compact ? "max-w-[44rem]" : "mt-8 max-w-[44rem]",
+            "[&_[aria-disabled=true]]:cursor-default [&_[aria-disabled=true]]:opacity-40 [&_[aria-disabled=true]]:hover:bg-transparent",
+          )}
+        >
           {!compact && <textarea
             ref={titleRef}
             value={doc.title}

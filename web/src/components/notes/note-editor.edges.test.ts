@@ -76,7 +76,7 @@ describe("rule 1 — a sticky's heading is whole (BACKLOG-90)", () => {
     const same = [plain, ok];
     expect(repairAnchored(same)).toBe(same);
     // the editor reads its blocks through it
-    expect(editor).toMatch(/repairAnchored\(note\.blocks\)/);
+    expect(editor).toMatch(/repairAnchored\(initial\.current\.blocks\)/);
   });
 
   it("the toolbar's heading and list buttons are aria-disabled while the caret is in an anchored heading", () => {
