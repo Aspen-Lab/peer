@@ -406,6 +406,11 @@ export async function requestExplanation(args: {
 
 // ── The card ───────────────────────────────────────────────────────────
 
+/** P10-38 (BACKLOG-75, ruling §1h.102): the second part's title when the selection is Peer's own words (the Summary, an answer): the
+ *  paper's sentence under it, when there is one, is the body paragraph the words were matched to, with its section. A selection in the
+ *  paper keeps `EXPLAIN.here`. */
+const WHY_PEER_SAYS_IT = "Why Peer says it";
+
 /** A part's label, in the label face — with Peer's own label beside it when the
  *  words under it are Peer's. */
 function PartHeading({ children, peers }: { children: string; peers: boolean }) {
@@ -597,7 +602,7 @@ export function ExplainCard({
                 <p className="font-reading text-body leading-[1.6] text-text mt-2">{status.answer.meaning}</p>
               </section>
               <section>
-                <PartHeading peers={status.answer.here.peer === true}>{EXPLAIN.here}</PartHeading>
+                <PartHeading peers={status.answer.here.peer === true}>{source === undefined || source === "paper" ? EXPLAIN.here : WHY_PEER_SAYS_IT}</PartHeading>
                 <p className="font-reading text-body leading-[1.6] text-text mt-2">{status.answer.here.text}</p>
                 {status.answer.here.evidence && status.answer.here.peer !== true && (
                   <EvidenceQuote text={status.answer.here.evidence} where={status.answer.here.evidenceWhere ?? "abstract"} page={status.answer.here.page} />

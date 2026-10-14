@@ -20,6 +20,11 @@
 // its quote is held to the paper as ever (one that does not verify leaves the prose Peer's reading), and the memory's key
 // carries the source. A passage with no such mark must still be the paper's text, or it is refused.
 //
+// P10-38 (BACKLOG-75, ruling §1h.102): those words carry their source paragraph. The route asks `matchPeerWords` for the body
+// paragraph that best matches the selection (the Tier 0 route's own scoring and a floor; no model call, nothing about the reader)
+// and the prompt holds it in `context`, so a quote from it verifies as a selection in the body's does; below the floor there is
+// none and the prompt is P10-08b's, the answer Peer's reading as before.
+//
 // Gated like the report route, in the same order: the owner checks on an
 // upload (the claim, the attachment, the revision), the shared sign-in and
 // hourly-limit check, then the provider — only a provider that can write answers.
@@ -62,6 +67,7 @@ import {
   explainDocHash,
   explainMapLines,
   locatePassage,
+  matchPeerWords,
   parseModelJson,
   peerWordsSource,
   readThread,
@@ -264,8 +270,11 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
         sectionId: typeof body.sectionId === "string" ? body.sectionId : undefined,
         paragraphIndex: typeof body.paragraphIndex === "number" ? body.paragraphIndex : undefined,
       });
+  // P10-38 (BACKLOG-75): Peer's words carry the body paragraph that best matches them (the Tier 0 route's scoring, a floor; no model
+  // call), so a quote from the paper can be verified against it as for a selection in the body; none below the floor.
+  const matched = peerWords && passage !== "" ? matchPeerWords(doc, passage) : null;
   // How the prompt knows where the passage is from: Peer's words (with something in them), or the paragraph found.
-  const frame = peerWords ? (passage === "" ? null : { peerWords }) : located ? { located } : null;
+  const frame = peerWords ? (passage === "" ? null : { peerWords, matched }) : located ? { located } : null;
   if (!frame) return reply({ error: "not_in_paper" } satisfies ExplainResult, 422);
 
   // Whether this turn searches the web: the reader asked (a literal `true`), it is
@@ -325,7 +334,7 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   // A table's rows — a reply's (P3-07) or, since P4-00c (§1h.11 (a)), the first answer's — are
   // held to the paper in the scope the passage was found in.
   // A quote is held to the whole paper either way; the section the passage sits in only orders the search, and Peer's words sit in none.
-  const preferSectionId = located?.sectionId;
+  const preferSectionId = located?.sectionId ?? matched?.sectionId;
   const scope = located ? { passage, located } : undefined;
   if (sanitizedReply) result = { ...verifyExplainReply(sanitizedReply, doc, preferSectionId, scope), searched, ...(detail ? { detail: true as const } : {}) };
   else if (sanitizedAnswer) result = verifyExplainAnswer(sanitizedAnswer, doc, preferSectionId, scope);

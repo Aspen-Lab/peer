@@ -92,14 +92,22 @@
 // be held to. The memory's key carries the source, so a paper passage and the same words in the Summary are two
 // entries. A paper passage is built exactly as before.
 //
+// P10-38 (BACKLOG-75; ruling §1h.102): Peer's own words carry their source paragraph. `matchPeerWords` finds the body
+// paragraph that best matches the selection — the Tier 0 route's own scoring (`routeByQuestions`: idf over the paper's sections,
+// the terms meeting in one paragraph), the selection standing as the question — and both Peer-words prompts then hold it in
+// `context` (its section's heading and the paragraph), so a quote from it verifies as a selection in the body's does. Below the
+// floor (a strong section whose top paragraph holds at least `PEER_MATCH_MIN_TERMS` of the selection's terms) there is no
+// paragraph and the prompts are exactly what P10-08b built. No model call, nothing per-reader.
+//
 // Pure apart from the hash and the clock the cache reads: no I/O, no logging.
 // Server-side — the browser imports this module for its types only.
 
 import { createHash } from "node:crypto";
+import { canonicalize, termOccurrences } from "@/lib/scoring/term-expand";
 import { cleanDisplayText } from "@/lib/text/clean";
 import { CJK_SENTENCE_BREAK, locateSection, normalizeForMatch, sectionCorpus, shapeEvidenceQuote } from "./evidence";
 import type { ExtractedDocument } from "./html-text";
-import { openingOf, readableSections } from "./reading-map";
+import { openingOf, readableSections, readingMapOf, routeByQuestions, specificTerms, termFormsMatch } from "./reading-map";
 import { splitSentences } from "./skim";
 
 /** Each of the two parts of a first answer: at most this many characters. */
@@ -373,6 +381,68 @@ export function locatePassage(
   return null;
 }
 
+/** P10-38: the body paragraph that best matches a selection of Peer's own words, as the prompts carry it. */
+export interface PeerWordsMatch {
+  sectionId: string;
+  /** The section's heading, as the body renders it. */
+  heading: string;
+  /** The paragraph's place in the section (`readableSections(doc)[k].paragraphs[paragraphIndex]`). */
+  paragraphIndex: number;
+  paragraph: string;
+}
+
+/** P10-38: the floor — a paragraph is a match only when at least this many distinct terms of the selection meet in it (the route's
+ *  own minimum for a question to be routed at all, and where its meeting bonus begins). */
+export const PEER_MATCH_MIN_TERMS = 2;
+
+/** How many distinct terms of the selection a paragraph says, and how often in all — forms counted as the route counts them. */
+function termOverlap(terms: readonly string[], paragraph: string): { distinct: number; total: number } {
+  const text = canonicalize(paragraph);
+  const words = text.split(" ");
+  let distinct = 0;
+  let total = 0;
+  for (const term of terms) {
+    const count = termOccurrences(text, term) + words.filter((word) => termFormsMatch(term, word) && termOccurrences(word, term) === 0).length;
+    if (count > 0) distinct++;
+    total += count;
+  }
+  return { distinct, total };
+}
+
+/**
+ * P10-38 (BACKLOG-75): the paragraph of the body that best matches `passage`, a selection of Peer's own words (the Summary, an
+ * answer) — what the explanation's quote from the paper can be verified against. The selection stands as the question of the Tier 0
+ * route (`routeByQuestions`: the terms it is made of, their idf over the paper's sections, a paragraph that holds several of them
+ * together scoring over one that holds one); the candidates are the top paragraphs of the sections it grades strong. Of those the
+ * paragraph holding the most distinct terms wins, then the most mentions in all, then the earlier one; below the floor
+ * (`PEER_MATCH_MIN_TERMS`), or when the selection is too vague to route (fewer than two specific terms), there is none. The
+ * abstract is not part of the body, so it is never the match. Pure and deterministic; no model, nothing about the reader.
+ */
+export function matchPeerWords(doc: ExtractedDocument, passage: string): PeerWordsMatch | null {
+  const terms = specificTerms(passage);
+  if (terms.length < PEER_MATCH_MIN_TERMS) return null;
+  const rendered = readableSections(doc);
+  const route = routeByQuestions(readingMapOf(rendered), rendered, [passage]).byQuestion[0];
+  if (!route || route.vague) return null;
+
+  let best: { match: PeerWordsMatch; distinct: number; total: number } | null = null;
+  for (const { id, section, paragraphs } of rendered) {
+    const graded = route.sections[id];
+    if (!graded || graded.group || graded.tier !== "strong") continue;
+    for (const index of graded.topParagraphs ?? []) {
+      const paragraph = paragraphs[index];
+      if (paragraph === undefined) continue;
+      const { distinct, total } = termOverlap(terms, paragraph);
+      if (distinct < PEER_MATCH_MIN_TERMS) continue;
+      // Strictly better: on a tie the earlier paragraph stays.
+      if (!best || distinct > best.distinct || (distinct === best.distinct && total > best.total)) {
+        best = { match: { sectionId: id, heading: section.heading, paragraphIndex: index, paragraph }, distinct, total };
+      }
+    }
+  }
+  return best?.match ?? null;
+}
+
 // ── The prompt ─────────────────────────────────────────────────────────
 
 export interface ExplainMapLine {
@@ -480,25 +550,33 @@ function buildPeerWordsPrompt(args: {
   map: readonly ExplainMapLine[];
   passage: string;
   peerWords: PeerWordsSource;
+  matched?: PeerWordsMatch | null;
 }): { systemPrompt: string; userPrompt: string } {
+  const matched = args.matched ?? null;
+  // P10-38: with a matched paragraph the quote may come from it as well as from an opening; without, exactly as P10-08b built it.
+  const from = matched ? "`context.paragraph` or from an `opening` in `sections`" : "an `opening` in `sections`";
   const userPrompt = JSON.stringify({
     task: "Explain the reader's selected passage, which is Peer's own wording, in two parts: what it means in general, and why Peer's words say it about this paper.",
     ...promptOrientation(args),
     passageFrom: PEER_WORDS_FROM[args.peerWords],
+    ...(matched ? { context: matchedContext(matched) } : {}),
     passage: clipPassage(args.passage),
     outputSchema: {
       meaning: "at most two sentences, in plain words, saying what the selected term or passage means in general, as a good textbook would, not specific to this paper",
       here: {
         text: "at most two sentences, in plain words, saying why Peer's words say it about this paper, in terms of what the paper studies and finds",
-        evidence: "one sentence copied character-for-character from an `opening` in `sections`, only when that sentence shows the paper saying what Peer's words say; otherwise leave this key out",
+        evidence: `one sentence copied character-for-character from ${from}, only when that sentence shows the paper saying what Peer's words say; otherwise leave this key out`,
       },
     },
     rules: [
       "Return ONLY valid JSON.",
       "Use plain words a thoughtful non-specialist understands; define nothing with another unexplained term.",
       "`passage` is Peer's wording, not the author's: never present it as the paper's own words, and never quote it.",
-      "`here.evidence` is one sentence copied character-for-character from an `opening` in `sections`. Do not paraphrase it, shorten it, or merge sentences.",
-      "Omit `evidence` when no opening shows the paper saying it. Never quote the abstract, a heading or `passage`; they are there for orientation only.",
+      ...(matched ? [MATCHED_PARAGRAPH_RULE] : []),
+      `\`here.evidence\` is one sentence copied character-for-character from ${from}. Do not paraphrase it, shorten it, or merge sentences.`,
+      matched
+        ? "Omit `evidence` when no such sentence shows the paper saying it. Never quote the abstract, a heading or `passage`; they are there for orientation only."
+        : "Omit `evidence` when no opening shows the paper saying it. Never quote the abstract, a heading or `passage`; they are there for orientation only.",
       "No LaTeX, no links, no advice, no verdict on whether the reader should read on.",
     ],
   });
@@ -539,6 +617,15 @@ function promptOrientation(args: { paper: { title: string; abstract: string }; m
   };
 }
 
+/** P10-38: the matched paragraph as a prompt holds it — its section's heading and the paragraph, bounded as a paper passage's paragraph is. */
+function matchedContext(matched: PeerWordsMatch) {
+  return { section: cutAtWord(matched.heading, EXPLAIN_CAPS.headingChars), paragraph: cutAtWord(matched.paragraph, EXPLAIN_CAPS.paragraphChars) };
+}
+
+/** P10-38: said once when a matched paragraph is in the prompt — it is the best match by the words' terms, not a claim that the paper says them. */
+const MATCHED_PARAGRAPH_RULE =
+  "`context.paragraph` is the paragraph of the paper that best matches Peer's wording by its terms; it may say something else, so rest on it only for what it says.";
+
 /** What the selection is, for the prompt of Peer's own words (P10-08b): never the paper's. */
 const PEER_WORDS_FROM: Record<PeerWordsSource, string> = {
   summary: "Peer's own words about this paper: a line of the summary Peer wrote of it. They are not the author's words.",
@@ -546,10 +633,11 @@ const PEER_WORDS_FROM: Record<PeerWordsSource, string> = {
 };
 
 /** How a prompt knows where the passage is from: the paper's body, found at `located`; or Peer's own words (P10-08b), which sit
- *  in no paragraph of the paper, so the context is the abstract and the map alone. */
+ *  in no paragraph of the paper, so the context is the abstract and the map — and, P10-38, the body paragraph that best matches
+ *  them (`matched`, from `matchPeerWords`) when there is one. */
 export type PassageFrame =
-  | { located: Pick<LocatedPassage, "paragraph" | "before" | "after">; peerWords?: undefined }
-  | { peerWords: PeerWordsSource; located?: undefined };
+  | { located: Pick<LocatedPassage, "paragraph" | "before" | "after">; peerWords?: undefined; matched?: undefined }
+  | { peerWords: PeerWordsSource; located?: undefined; matched?: PeerWordsMatch | null };
 
 const EXPLAIN_REPLY_SYSTEM = [
   "You are Peer, a calm research assistant who sits beside a reader.",
@@ -652,15 +740,19 @@ function buildPeerWordsReplyPrompt(args: {
   map: readonly ExplainMapLine[];
   passage: string;
   peerWords: PeerWordsSource;
+  matched?: PeerWordsMatch | null;
   thread: readonly ExplainMessage[];
   last: ExplainMessage | undefined;
   search?: boolean;
   detail?: boolean;
 }): { systemPrompt: string; userPrompt: string } {
+  const matched = args.matched ?? null;
+  const from = matched ? "`context.paragraph` or from an `opening` in `sections`" : "an `opening` in `sections`";
   const userPrompt = JSON.stringify({
     task: "Answer the reader's last message in `thread` about the selected passage, which is Peer's own wording.",
     ...promptOrientation(args),
     passageFrom: PEER_WORDS_FROM[args.peerWords],
+    ...(matched ? { context: matchedContext(matched) } : {}),
     passage: clipPassage(args.passage),
     thread: args.thread,
     lastReaderMessage: args.last?.text ?? "",
@@ -668,7 +760,7 @@ function buildPeerWordsReplyPrompt(args: {
       reply: args.detail
         ? "at most eight sentences and 1,400 characters, in plain words, answering the reader's last message about this passage; the reader asked for more, so give the detail they asked for"
         : "at most three sentences and 560 characters, in plain words, answering the reader's last message about this passage",
-      evidence: "one sentence copied character-for-character from an `opening` in `sections`, only when the reply rests on something the paper says; otherwise leave this key out",
+      evidence: `one sentence copied character-for-character from ${from}, only when the reply rests on something the paper says; otherwise leave this key out`,
     },
     rules: [
       "Return ONLY valid JSON.",
@@ -676,10 +768,13 @@ function buildPeerWordsReplyPrompt(args: {
         ? "Answer `lastReaderMessage`, the reader's last message in `thread`, about the selected passage, in plain words a thoughtful non-specialist understands. The reader asked for more, so `reply` may run to at most eight sentences and 1,400 characters; still no preamble and one idea per sentence. The earlier messages are there for what has been said so far."
         : "Answer `lastReaderMessage`, the reader's last message in `thread`, about the selected passage, in at most three sentences (560 characters) of plain words a thoughtful non-specialist understands; the reader has not asked for more. The earlier messages are there for what has been said so far.",
       "`passage` is Peer's wording, not the author's: never present it as the paper's own words, and never quote it.",
-      "`evidence` is one sentence copied character-for-character from an `opening` in `sections`, and only when the reply rests on something the paper says. Do not paraphrase it, shorten it, or merge sentences.",
+      ...(matched ? [MATCHED_PARAGRAPH_RULE] : []),
+      `\`evidence\` is one sentence copied character-for-character from ${from}, and only when the reply rests on something the paper says. Do not paraphrase it, shorten it, or merge sentences.`,
       "Omit `evidence` when the reply does not rest on a sentence of the paper. Never quote the abstract, a heading, `passage` or the thread.",
       args.search
-        ? "You may use web search for general background. The paper's own words still come only from `sections`; `evidence` is still one sentence copied from it. Name no URL and no source by name. No advice, no verdict on whether the reader should read on."
+        ? matched
+          ? "You may use web search for general background. The paper's own words still come only from `context` and `sections`; `evidence` is still one sentence copied from one of them. Name no URL and no source by name. No advice, no verdict on whether the reader should read on."
+          : "You may use web search for general background. The paper's own words still come only from `sections`; `evidence` is still one sentence copied from it. Name no URL and no source by name. No advice, no verdict on whether the reader should read on."
         : "Do not search the web or rely on anything outside the text supplied. No advice, no verdict on whether the reader should read on.",
       "No LaTeX, no links.",
     ],

@@ -47,7 +47,7 @@ describe("matchPeerWords — the body paragraph that best matches Peer's words (
 
   it("has a floor: a paragraph that shares only one term with the words is no match", () => {
     expect(PEER_MATCH_MIN_TERMS).toBe(2);
-    expect(matchPeerWords(doc, "Tungsten powder arrived late, so nothing else mattered in the budget")?.paragraph).not.toBe(ONE_WORD);
+    expect(matchPeerWords(doc, "Tungsten arrived late, so nothing else mattered in the budget")).toBeNull();
     expect(matchPeerWords(doc, "Tungsten budget schedule invoices")).toBeNull();
   });
 
@@ -60,7 +60,7 @@ describe("matchPeerWords — the body paragraph that best matches Peer's words (
   });
 
   it("looks in the body only: the abstract is not a paragraph a quote could be verified against", () => {
-    expect(matchPeerWords({ ...doc, sections: [doc.sections[0], doc.sections[4]] }, "Tungsten additions delayed plate formation under creep")).toBeNull();
+    expect(matchPeerWords({ ...doc, sections: [doc.sections[0], doc.sections[1]] }, "Tungsten additions delayed plate formation under creep")).toBeNull();
   });
 
   it("is the same answer twice and changes nothing it is given", () => {
