@@ -713,9 +713,14 @@ describe("the cost of a keystroke", () => {
     const words = Array.from({ length: 2500 }, (_, i) => (i % 25 === 0 ? `**w${i}**` : i % 31 === 0 ? `__u${i}__` : `word${i}`)).join(" ");
     const root = draw(words);
     expect(root.textContent.length).toBeGreaterThan(15000);
-    const t0 = performance.now();
-    for (let i = 0; i < 20; i++) serializeInline(root as unknown as Node);
-    const per = (performance.now() - t0) / 20;
-    expect(per).toBeLessThan(16);
+    // The best of twenty runs: the algorithm's cost, not the machine's load (the manager's re-aim after the
+    // mean flaked at 18–27 ms per call beside four other builds; the browser measurement is the checkpoint's).
+    let best = Infinity;
+    for (let i = 0; i < 20; i++) {
+      const t0 = performance.now();
+      serializeInline(root as unknown as Node);
+      best = Math.min(best, performance.now() - t0);
+    }
+    expect(best).toBeLessThan(16);
   });
 });
