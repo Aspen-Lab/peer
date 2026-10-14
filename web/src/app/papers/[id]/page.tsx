@@ -147,6 +147,47 @@ const DECIDED_VISIBLE = 0.6;
 const DECIDED_MS = 1000;
 
 /**
+ * The decided-read observer (P10-49): watches `el` and calls `decide` once it has been 60% on
+ * screen for a second; returns the cleanup. It is not armed at all for a paper that is already
+ * decided (`alreadyDecided()` true when it is attached) — the page re-attaches it whenever the
+ * reading arrives or the layout or tab switches, and a paper read on an earlier visit, or decided
+ * by a key a moment ago, has nothing left for it to say. A paper the reader un-reads is not
+ * decided: the next attach watches it again, as it did before.
+ */
+export function watchForDecision(
+  el: Element,
+  decide: () => void,
+  alreadyDecided: () => boolean,
+): () => void {
+  if (alreadyDecided()) return () => {};
+  let timer: number | undefined;
+  const observer = new IntersectionObserver(
+    ([entry]) => {
+      if (entry.intersectionRatio >= DECIDED_VISIBLE) {
+        if (timer === undefined) timer = window.setTimeout(decide, DECIDED_MS);
+      } else if (timer !== undefined) {
+        window.clearTimeout(timer);
+        timer = undefined;
+      }
+    },
+    {
+      threshold: [DECIDED_VISIBLE],
+      // The phone's thumb bar is fixed over the viewport's last 56px, and
+      // the observer's root is the viewport: without this the block
+      // counted as 60% seen while its lower part was under the glass.
+      rootMargin: window.matchMedia(THUMB_BAR_QUERY).matches
+        ? `0px 0px -${THUMB_BAR_PX}px 0px`
+        : "0px",
+    },
+  );
+  observer.observe(el);
+  return () => {
+    observer.disconnect();
+    if (timer !== undefined) window.clearTimeout(timer);
+  };
+}
+
+/**
  * UPLOAD-FETCH-TIMEOUT: how long the fetch effect below waits on an uploaded
  * paper's own record before giving up and treating a hung server the same
  * as any other transient failure (§1bi.8b) — never the permanent 404
@@ -1085,36 +1126,13 @@ function Reader({
   useEffect(() => {
     const el = (hasBody && tab === "digestion" ? commonEndRef.current : wordsEndRef.current) ?? decisionRef.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
-    let timer: number | undefined;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.intersectionRatio >= DECIDED_VISIBLE) {
-          if (timer === undefined) timer = window.setTimeout(decide, DECIDED_MS);
-        } else if (timer !== undefined) {
-          window.clearTimeout(timer);
-          timer = undefined;
-        }
-      },
-      {
-        threshold: [DECIDED_VISIBLE],
-        // The phone's thumb bar is fixed over the viewport's last 56px, and
-        // the observer's root is the viewport: without this the block
-        // counted as 60% seen while its lower part was under the glass.
-        rootMargin: window.matchMedia(THUMB_BAR_QUERY).matches
-          ? `0px 0px -${THUMB_BAR_PX}px 0px`
-          : "0px",
-      },
-    );
-    observer.observe(el);
-    return () => {
-      observer.disconnect();
-      if (timer !== undefined) window.clearTimeout(timer);
-    };
+    return watchForDecision(el, decide, () => Boolean(useFeedStore.getState().readItems[paper.id]));
     // `spread` re-runs the effect when the layout switches, so the observer
     // attaches to the remounted block; `reading` re-attaches when the words
     // (and their footer) arrive or change; `tab` and `hasBody` choose which
-    // footer there is to watch.
-  }, [decide, spread, reading, tab, hasBody]);
+    // footer there is to watch. A paper already decided is not watched again
+    // (`watchForDecision`).
+  }, [decide, paper.id, spread, reading, tab, hasBody]);
 
   // The approach. One observer for every `[data-reveal]` in the scope below.
   // The deps are the two things that arrive after first paint — the server
