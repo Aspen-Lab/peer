@@ -724,3 +724,119 @@ describe("the cost of a keystroke", () => {
     expect(best).toBeLessThan(16);
   });
 });
+
+// P10-28 (BACKLOG-85): a literal mark character inside its own mark. A `*` typed inside bold (an `_` inside underline,
+// an `=` inside highlight) is written escaped (`\*`) and drawn as the character in place; the dialect reads `\*`,
+// `\_` and `\=` as the character, anywhere, and the serializer round-trips it. Before, the mark that could not hold
+// its own character was dropped (the words lost their bold) or the character was left to read as a delimiter.
+describe("P10-28 rule 4: a literal mark character inside its own mark is written escaped and shown in place", () => {
+  it("a * typed inside a bold word stays inside it, written \\*, shown as a star", () => {
+    const root = draw("alpha **beta** gamma");
+    type(root, 8, "*");
+    expect(down(root)).toBe("alpha **be\\*ta** gamma");
+    expect(readsDifferently(down(root), "alpha be*ta gamma")).toBe(false);
+    const again = draw(down(root));
+    expect(show(again)).toBe("alpha <strong>be*ta</strong> gamma");
+    expect(again.textContent).toBe("alpha be*ta gamma");
+    expect(down(again)).toBe("alpha **be\\*ta** gamma");
+  });
+
+  it("a star at either edge of a bold run, and several, are kept", () => {
+    for (const [typed, p, want] of [
+      ["*", 10, "alpha **beta\\***"],
+      ["**", 8, "alpha **be\\*\\*ta**"],
+    ] as const) {
+      const root = draw("alpha **beta** gamma");
+      type(root, p, typed);
+      expect(down(root)).toContain(want);
+      expect(strayCount(down(root))).toBe(0);
+      expect(plainOfSource(down(root))).toBe(root.textContent);
+    }
+  });
+
+  it("an _ typed inside an underlined word stays inside it, written \\_", () => {
+    const root = draw("alpha __beta__ gamma");
+    type(root, 8, "_");
+    expect(down(root)).toBe("alpha __be\\_ta__ gamma");
+    const again = draw(down(root));
+    expect(show(again)).toBe("alpha <u>be_ta</u> gamma");
+    expect(down(again)).toBe("alpha __be\\_ta__ gamma");
+  });
+
+  it("an = typed inside a highlight stays inside it, written \\=", () => {
+    const root = draw("alpha ==beta== gamma");
+    type(root, 8, "=");
+    expect(down(root)).toBe("alpha ==be\\=ta== gamma");
+    const again = draw(down(root));
+    expect(show(again)).toBe("alpha <mark>be=ta</mark> gamma");
+    expect(down(again)).toBe("alpha ==be\\=ta== gamma");
+  });
+
+  it("a star inside italic is shown too (the italic is spelled where the dialect can read it)", () => {
+    const root = draw("alpha *beta* gamma");
+    type(root, 8, "*");
+    const src = down(root);
+    expect(plainOfSource(src)).toBe("alpha be*ta gamma");
+    expect(show(draw(src))).toBe("alpha <em>be*ta</em> gamma");
+  });
+
+  it("a character outside its mark is as it was: no escape where none is needed", () => {
+    const root = draw("alpha **beta** gamma");
+    type(root, 14, "_"); // inside "gamma"
+    expect(down(root)).toBe("alpha **beta** gam_ma");
+    expect(down(draw("snake_case and a=b"))).toBe("snake_case and a=b");
+  });
+
+  it("a backslash typed before a mark character is kept as a backslash (the character after it is escaped)", () => {
+    const root = draw("a b");
+    type(root, 1, "\\*");
+    const src = down(root);
+    expect(plainOfSource(src)).toBe("a\\* b");
+    expect(down(draw(src))).toBe(src);
+    expect(draw(src).textContent).toBe("a\\* b");
+  });
+
+  it("the source side reads the escape as the character: the dialect, the plain words, the tree's places", () => {
+    expect(plainOfSource("a \\* b")).toBe("a * b");
+    expect(plainOfSource("**a\\*b**")).toBe("a*b");
+    expect(plainOfSource("__a\\_b__")).toBe("a_b");
+    expect(plainOfSource("==a\\=b==")).toBe("a=b");
+    expect(plainInline("**a\\*b** \\_c\\_")).toBe("a*b _c_");
+    expect(strayCount("==a\\=\\=b==")).toBe(0);
+    // sourceOfPlain / plainOfSourceOffset treat the escape as one character of two source characters
+    const tree = treeOf("**a\\*b**");
+    expect(sourceOfPlain(tree, 2, "end")).toBe(6);
+    expect(sourceOfPlain(tree, 1, "end")).toBe(3);
+  });
+
+  it("the serializer round-trips every escaped source, and splitting and joining keep the escape", () => {
+    for (const src of ["**a\\*b**", "__a\\_b__ c", "==x\\=y== z", "a \\*not italic\\* b", "**\\*** x", "_a\\*b_ and *c\\*d*"]) {
+      expect(canonical(src), src).toBe(src);
+      expect(down(draw(src)), src).toBe(src);
+      expect(plainOfSource(src), src).toBe(draw(src).textContent);
+    }
+    const j = joinSources("**a\\*", "b**");
+    expect(plainOfSource(j.text)).toBe("a*b");
+    expect(splitSource("**a\\*b**", 2)).toEqual({ head: "**a\\***", tail: "**b**" });
+  });
+
+  it("a mark laid over words that hold a literal mark character keeps them", () => {
+    const out = pressMark("a\\*b", { from: 0, to: 3 }, "strong", null);
+    expect(out.kind).toBe("edit");
+    if (out.kind === "edit") expect(plainOfSource(out.text)).toBe("a*b");
+    const hi = pressMark("x\\=y", { from: 0, to: 3 }, "mark", null);
+    expect(hi.kind).toBe("edit");
+    if (hi.kind === "edit") expect(plainOfSource(hi.text)).toBe("x=y");
+  });
+
+  it("the exports show the character: .txt, .md keeps the escape (Markdown reads it as the character)", () => {
+    const note = { id: "n", title: "T", blocks: [block("text", "**a\\*b** and __c\\_d__")], sources: {}, createdAt: "", updatedAt: "" } as unknown as Note;
+    expect(toPlainText(note)).toContain("a*b and c_d");
+  });
+
+  it("underline over whole words and a backslash that escapes nothing are not changed", () => {
+    expect(plainOfSource("a\\b \\n c\\")).toBe("a\\b \\n c\\");
+    expect(canonical("a\\b \\n c\\")).toBe("a\\b \\n c\\");
+    expect(down(draw("al__ph__a"))).toBe("al__ph__a");
+  });
+});
