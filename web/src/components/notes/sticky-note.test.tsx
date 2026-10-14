@@ -1,12 +1,15 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { createElement } from "react";
 import type { ReactElement, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { block, stickyTitle } from "@/lib/notes/blocks";
+import { block, stickySpan, stickyText, stickyTitle } from "@/lib/notes/blocks";
 import type { Block } from "@/lib/notes/types";
-import { useWindows } from "@/lib/reader/windows";
-import { useNotesStore } from "@/store/notes";
-import { STICKY_SAVE_MS, StickyWindowView, makeStickyWriter, passageFromHash, stickyRows, takeStickyNote } from "./sticky-note";
+import { NOTES_WINDOW_ID, useWindows } from "@/lib/reader/windows";
+import { readingNoteFor, useNotesStore } from "@/store/notes";
+import { reconcileWindow } from "./notes-window";
+import { STICKY_SAVE_MS, StickyWindowView, closeSticky, makeStickyWriter, passageFromHash, stickyFollowText, stickyRows, takeStickyNote, withoutSticky } from "./sticky-note";
 
 // P10-09a (review 7.1; rubric B7–B10; ruling §1h.78): "Take notes" opens a numbered sticky at the right, its
 // header "Note N" with the passage's first words quoted and a Close (×), a text area focused at once; typing writes
@@ -182,5 +185,192 @@ describe("passageFromHash — the notes page's square arrives with the paragraph
     expect(passageFromHash("#elsewhere")).toBeNull();
     expect(passageFromHash("")).toBeNull();
     expect(passageFromHash("#%E0%A4%A")).toBeNull();
+  });
+});
+
+// ── P10-09c ───────────────────────────────────────────────────────────────
+
+describe("stickyRows — with the notes window in the stack (P10-09c, B9)", () => {
+  const frame = { top: 100, bottom: 900, frontHeight: 260 };
+  const heads: Block[] = [1, 2, 3].map((n) => block("h3", stickyTitle(n), { anchor: { paperId: "p1", paragraphId: `paper-section-0-p${n}`, quote: `quote ${n}`, n } }));
+  const win = (i: number, order: number) => ({ id: heads[i].id, kind: "sticky" as const, title: heads[i].text, order });
+  const notes = (order: number) => ({ id: NOTES_WINDOW_ID, kind: "notes" as const, title: "Your notes", order });
+
+  it("leaves a slot for the notes window: three stickies and the notes window are four cards, 40 px apart", () => {
+    const rows = stickyRows([win(0, 1), win(1, 2), win(2, 3), notes(4)], heads, frame);
+    expect(rows.map((r) => [r.n, r.top, r.front])).toEqual([[1, 100, false], [2, 140, false], [3, 180, false]]);
+    // The notes window opened between the stickies: the later stickies sit under its header.
+    const between = stickyRows([win(0, 1), notes(2), win(1, 3), win(2, 4)], heads, frame);
+    expect(between.map((r) => [r.n, r.top, r.front])).toEqual([[1, 100, false], [2, 180, false], [3, 220, true]]);
+  });
+
+  it("brings a raised sticky in front of the notes window, and none of them is in front when the notes window is", () => {
+    const rows = stickyRows([win(0, 5), win(1, 2), notes(3), win(2, 4)], heads, frame);
+    expect(rows.map((r) => [r.n, r.front])).toEqual([[2, false], [3, false], [1, true]]);
+    expect(stickyRows([win(0, 1), win(1, 2), notes(9)], heads, frame).some((r) => r.front)).toBe(false);
+  });
+});
+
+describe("the source (P10-09c, rule 2) — one column, one layout", () => {
+  it("StickyNotes lays out over the stack's windows and takes the column from lib/reader/windows", () => {
+    const src = readFileSync(resolve(process.cwd(), "src/components/notes/sticky-note.tsx"), "utf8");
+    expect(src).toContain("stackRows(");
+    expect(src).toContain("useColumn(");
+    expect(src).not.toContain("function useColumn");
+  });
+});
+
+describe("stickyFollowText — a sticky follows its blocks (P10-09c, rule 3)", () => {
+  it("takes the stored text when its blocks changed outside and it holds no unsaved keystroke", () => {
+    expect(stickyFollowText({ local: "my words", stored: "my words, and the window's", pending: false })).toBe("my words, and the window's");
+    expect(stickyFollowText({ local: "", stored: "typed in the window", pending: false })).toBe("typed in the window");
+  });
+
+  it("keeps its own text while a keystroke of its own is not yet written", () => {
+    expect(stickyFollowText({ local: "my words, one more", stored: "my words", pending: true })).toBeNull();
+  });
+
+  it("does not take back what it wrote itself: the store keeps paragraphs, not the blank lines or trailing spaces typed", () => {
+    expect(stickyFollowText({ local: "first\n\nsecond  \n", stored: "first\nsecond", pending: false })).toBeNull();
+    expect(stickyFollowText({ local: "same", stored: "same", pending: false })).toBeNull();
+  });
+});
+
+describe("makeStickyWriter — pending (P10-09c)", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("says whether a keystroke is waiting to be written", () => {
+    const writer = makeStickyWriter(vi.fn());
+    expect(writer.pending()).toBe(false);
+    writer.push("a");
+    expect(writer.pending()).toBe(true);
+    vi.advanceTimersByTime(STICKY_SAVE_MS);
+    expect(writer.pending()).toBe(false);
+    writer.push("b");
+    writer.flush();
+    expect(writer.pending()).toBe(false);
+  });
+});
+
+describe("an empty sticky leaves nothing behind (P10-09c, rule 4)", () => {
+  beforeEach(() => {
+    useNotesStore.setState({ notes: {} });
+    useWindows.setState({ windows: [], clock: 0 });
+  });
+  const target = { sectionIndex: 0, paragraphIndex: 1, passage: QUOTE };
+  const noteOf = () => readingNoteFor(useNotesStore.getState().notes, "p1")!;
+
+  it("withoutSticky removes the heading and its empty text blocks, and only those", () => {
+    const a = block("h3", "Note 1", { anchor: { paperId: "p1", paragraphId: "paper-section-0-p0", quote: "q", n: 1 } });
+    const b = block("h3", "Note 2", { anchor: { paperId: "p1", paragraphId: "paper-section-0-p1", quote: "q", n: 2 } });
+    const blocks = [block("h2", "Questions"), a, block("text", "kept words"), b, block("text", ""), block("text", "  ")];
+    const out = withoutSticky(blocks, b.id);
+    expect(out.map((x) => x.id)).toEqual([blocks[0].id, a.id, blocks[2].id]);
+    // A sticky with words in it is not touched.
+    expect(withoutSticky(blocks, a.id)).toBe(blocks);
+    expect(withoutSticky(blocks, "missing")).toBe(blocks);
+  });
+
+  it("closing an empty sticky removes its heading and text from the note and closes the window", () => {
+    takeStickyNote(target, PAPER);
+    const before = noteOf().blocks.length;
+    const second = takeStickyNote(target, PAPER)!;
+    expect(noteOf().blocks.length).toBe(before + 2);
+    closeSticky(noteOf().id, second.id);
+    expect(noteOf().blocks.length).toBe(before);
+    expect(noteOf().blocks.some((b) => b.id === second.id)).toBe(false);
+    expect(useWindows.getState().windows.map((w) => w.title)).toEqual(["Note 1"]);
+  });
+
+  it("frees nothing else: the number is not reused, the other stickies and their words stay", () => {
+    const first = takeStickyNote(target, PAPER)!;
+    const second = takeStickyNote(target, PAPER)!;
+    useNotesStore.getState().setStickyText(noteOf().id, first.id, "words of the first");
+    closeSticky(noteOf().id, second.id);
+    expect(noteOf().stickyCount).toBe(2);
+    expect(stickyText(noteOf().blocks, first.id)).toBe("words of the first");
+    const third = takeStickyNote(target, PAPER)!;
+    expect(third.n).toBe(3);
+  });
+
+  it("closing a sticky with words in it keeps its heading and its words", () => {
+    const made = takeStickyNote(target, PAPER)!;
+    useNotesStore.getState().setStickyText(noteOf().id, made.id, "worth keeping");
+    closeSticky(noteOf().id, made.id);
+    expect(stickySpan(noteOf().blocks, made.id)).not.toBeNull();
+    expect(stickyText(noteOf().blocks, made.id)).toBe("worth keeping");
+    expect(useWindows.getState().windows).toEqual([]);
+  });
+});
+
+// A sticky and the notes window open on the one note. The sticky's side is its writer and `stickyFollowText`, the window's
+// side is `reconcileWindow` (what it does when the stored blocks change under its editor); the note is the real store's.
+describe("a sticky and the notes window on one note (P10-09c, rule 3)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    useNotesStore.setState({ notes: {} });
+    useWindows.setState({ windows: [], clock: 0 });
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const setup = () => {
+    const made = takeStickyNote({ sectionIndex: 0, paragraphIndex: 0, passage: QUOTE }, PAPER)!;
+    const noteId = readingNoteFor(useNotesStore.getState().notes, "p1")!.id;
+    const blocks = () => useNotesStore.getState().notes[noteId].blocks;
+    const writer = makeStickyWriter((text) => useNotesStore.getState().setStickyText(noteId, made.id, text));
+    return { made, noteId, blocks, writer };
+  };
+
+  it("typing in the sticky shows in the window within 300 ms, and the window's editor starts afresh with it", () => {
+    const { made, blocks, writer } = setup();
+    const windowCopy = blocks(); // the editor's copy, nothing unsaved
+    writer.push("typed in the sticky");
+    vi.advanceTimersByTime(300);
+    expect(stickyText(blocks(), made.id)).toBe("typed in the sticky");
+    const verdict = reconcileWindow(windowCopy, windowCopy, blocks());
+    expect(verdict.kind).toBe("restart");
+    expect(verdict.kind === "restart" && stickyText(verdict.blocks, made.id)).toBe("typed in the sticky");
+  });
+
+  it("typing in the window shows in the sticky, and the sticky's text area takes it", () => {
+    const { made, noteId, blocks, writer } = setup();
+    writer.push("first");
+    vi.advanceTimersByTime(300);
+    // The window's editor changes the sticky's own text block and its save lands.
+    const edited = blocks().map((b) => (b.text === "first" ? { ...b, text: "first, and more from the window" } : b));
+    useNotesStore.getState().save(noteId, { blocks: edited });
+    expect(stickyFollowText({ local: "first", stored: stickyText(blocks(), made.id), pending: writer.pending() })).toBe("first, and more from the window");
+  });
+
+  it("no overwrite from the sticky: a keystroke waiting to be written is kept, and lands over the stored text after", () => {
+    const { made, noteId, blocks, writer } = setup();
+    writer.push("sticky words");
+    vi.advanceTimersByTime(300);
+    const edited = blocks().map((b) => (b.text === "sticky words" ? { ...b, text: "window version" } : b));
+    useNotesStore.getState().save(noteId, { blocks: edited });
+    writer.push("sticky words, more");
+    expect(stickyFollowText({ local: "sticky words, more", stored: stickyText(blocks(), made.id), pending: writer.pending() })).toBeNull();
+    vi.advanceTimersByTime(300);
+    expect(stickyText(blocks(), made.id)).toBe("sticky words, more");
+  });
+
+  it("no overwrite from the window: its unsaved typing and the sticky's new words are merged, not one over the other", () => {
+    const { made, noteId, blocks, writer } = setup();
+    const base = blocks();
+    // The window's editor holds an unsaved block of its own (typed in the last half second)...
+    const mine = [...base, block("text", "typed in the window")];
+    // ...when the sticky's words arrive in the store.
+    writer.push("typed in the sticky");
+    vi.advanceTimersByTime(300);
+    const verdict = reconcileWindow(base, mine, blocks());
+    expect(verdict.kind).toBe("merge");
+    if (verdict.kind !== "merge") return;
+    expect(stickyText(verdict.blocks, made.id)).toBe("typed in the sticky");
+    expect(verdict.blocks.some((b) => b.text === "typed in the window")).toBe(true);
+    // The window saves the merge over the editor's own flush: the store holds both.
+    useNotesStore.getState().save(noteId, { blocks: verdict.blocks });
+    expect(stickyText(blocks(), made.id)).toBe("typed in the sticky");
+    expect(blocks().some((b) => b.text === "typed in the window")).toBe(true);
   });
 });

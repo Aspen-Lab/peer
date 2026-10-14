@@ -36,10 +36,13 @@ describe("page.tsx source — the copy action passes the settled questions (P2-0
 });
 
 describe("PaperNotes — the questions go into the first note (P2-05)", () => {
-  it("takes the two optional props and hands them to readingNote", () => {
+  // P10-09c (rule 1, re-aimed, §1c): the same two props reach the template through the store's `ensureReadingNote`
+  // (it calls `readingNote`) instead of this file's own `readingNote(...)` call.
+  it("takes the two optional props and hands them to the store's ensureReadingNote", () => {
     expect(paperNotes).toContain("questions?: readonly string[]");
     expect(paperNotes).toContain("forYourQuestions?: readonly QuestionAnswers[]");
-    expect(paperNotes).toContain("readingNote(citableFromPaper(paper), { questions, forYourQuestions })");
+    expect(paperNotes).toContain("ensure(citableFromPaper(paper), { questions, forYourQuestions })");
+    expect(paperNotes).not.toMatch(/\breadingNote\(/);
   });
 
   // P7-14 (R9, the owner's review): the notes entry is no longer a Band at the top of the column but a

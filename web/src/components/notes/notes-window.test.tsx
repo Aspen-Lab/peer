@@ -3,18 +3,14 @@ import { resolve } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it } from "vitest";
+import type { ReactElement, ReactNode } from "react";
 import { DOCK_TOP_PX, DOCK_WIDTH_PX } from "@/components/reader/explain-dock";
 import { block } from "@/lib/notes/blocks";
+import { citableFromPaper } from "@/lib/notes/cite";
+import { NOTES_MIN_FRONT_PX, stackLayout } from "@/lib/reader/windows";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
 import type { Paper } from "@/types";
-import { ensureReadingNoteLocal } from "./paper-notes";
-import {
-  EXPORT_ITEMS,
-  NOTES_WINDOW_GAP_PX,
-  NOTES_WINDOW_MIN_HEIGHT_PX,
-  NotesWindowView,
-  notesWindowBox,
-} from "./notes-window";
+import { EXPORT_ITEMS, NotesWindowView, mergeBlocks, reconcileWindow } from "./notes-window";
 
 // P10-09b (review 7.2, 7.3, 7.5; B12, B13, B15): "Open your notes" opens the paper's whole note as a floating
 // window in the dock's column. The window cannot mount in this runtime (no DOM), so its geometry is a pure
@@ -28,28 +24,33 @@ const paper: Paper = {
   summaryExperimentKeywords: [], summaryResultDiscussion: "", isSaved: false,
 };
 
-describe("where the window stands", () => {
+// P10-09c (rule 2): the window's own box (`notesWindowBox`, P10-09b) is gone — it stands in the stack's column
+// (`lib/reader/windows.ts`), where these four cases are answered by `stackLayout` (re-aimed, §1c; also in windows.test.ts).
+describe("where the window stands — in the stack's column", () => {
+  const notes = { id: "notes-window", kind: "notes" as const, title: "Your notes", order: 1 };
+  const alone = (top: number, bottom: number) => stackLayout([notes], { top, bottom, frontHeight: 260, minTop: DOCK_TOP_PX })[0];
+
   it("is the dock's column: 360 wide, at the right edge, its top the dock's top while no explain window stands", () => {
-    const box = notesWindowBox({ viewportHeight: 1000, explainBottom: null, legend: 32 });
+    const row = alone(DOCK_TOP_PX, 1000 - 32 - 8);
     expect(DOCK_WIDTH_PX).toBe(360);
-    expect(box.top).toBe(DOCK_TOP_PX);
-    expect(box.maxHeight).toBe(1000 - DOCK_TOP_PX - 32 - NOTES_WINDOW_GAP_PX);
+    expect(row.top).toBe(DOCK_TOP_PX);
+    expect(row.height).toBe(1000 - DOCK_TOP_PX - 32 - 8);
   });
 
   it("stands under the explain window when one stands, with a gap, and takes what is left above the legend", () => {
-    const box = notesWindowBox({ viewportHeight: 1000, explainBottom: 500, legend: 32 });
-    expect(box.top).toBe(500 + NOTES_WINDOW_GAP_PX);
-    expect(box.maxHeight).toBe(1000 - box.top - 32 - NOTES_WINDOW_GAP_PX);
+    const row = alone(500 + 8, 960);
+    expect(row.top).toBe(500 + 8);
+    expect(row.height).toBe(960 - row.top);
   });
 
   it("is lifted, never shrunk below a height you can write in, when the explain window is low", () => {
-    const box = notesWindowBox({ viewportHeight: 1000, explainBottom: 960, legend: 32 });
-    expect(box.maxHeight).toBe(NOTES_WINDOW_MIN_HEIGHT_PX);
-    expect(box.top).toBe(1000 - 32 - NOTES_WINDOW_GAP_PX - NOTES_WINDOW_MIN_HEIGHT_PX);
+    const row = alone(960 + 8, 960);
+    expect(row.height).toBe(NOTES_MIN_FRONT_PX);
+    expect(row.top).toBe(960 - NOTES_MIN_FRONT_PX);
   });
 
   it("never stands above the masthead", () => {
-    expect(notesWindowBox({ viewportHeight: 300, explainBottom: null, legend: 32 }).top).toBeGreaterThanOrEqual(DOCK_TOP_PX);
+    expect(alone(DOCK_TOP_PX, 300 - 40).top).toBeGreaterThanOrEqual(DOCK_TOP_PX);
   });
 });
 
@@ -95,6 +96,124 @@ describe("NotesWindowView", () => {
   });
 });
 
+// P10-09c (rule 2): in the stack the window is a card — whole when in front, its header alone when behind another.
+type ViewProps = Parameters<typeof NotesWindowView>[0];
+type El = ReactElement<Record<string, unknown> & { children?: ReactNode }>;
+function walk(node: ReactNode): El[] {
+  if (Array.isArray(node)) return node.flatMap(walk);
+  if (!node || typeof node !== "object" || !("props" in node)) return [];
+  const el = node as El;
+  return [el, ...walk(el.props.children)];
+}
+const base: ViewProps = { top: 220, maxHeight: 700, menuOpen: false, notice: null, onClose: () => {}, onMenu: () => {}, onExport: () => {}, onRaise: () => {} };
+
+describe("NotesWindowView — a card in the stack (P10-09c)", () => {
+  const html = (props: Partial<ViewProps>) => renderToStaticMarkup(createElement(NotesWindowView, { ...base, ...props }, createElement("p", null, "THE NOTE")));
+
+  it("stands at its place in the stack, under the explain window (z below 70) and over the masthead", () => {
+    const out = html({ z: 63 });
+    expect(out).toContain("top:220px");
+    expect(out).toContain("z-index:63");
+    expect(out).not.toContain("z-[70]");
+  });
+
+  it("in front it is whole; behind another it shows its header alone, a header tall, the note kept (hidden), no Export", () => {
+    const front = html({ front: true });
+    expect(front).toContain("max-height:700px");
+    expect(front).toContain(">Export");
+    expect(front).not.toContain(' hidden=""');
+    const behind = html({ front: false, height: 40 });
+    expect(behind).toContain("height:40px");
+    expect(behind).toContain(">Your notes<");
+    expect(behind).toContain('aria-label="Close your notes"');
+    expect(behind).toContain("THE NOTE");
+    expect(behind).toContain(' hidden=""');
+    expect(behind).not.toContain(">Export");
+  });
+
+  it("a press on the header raises the window", () => {
+    let raised = 0;
+    const tree = NotesWindowView({ ...base, onRaise: () => { raised += 1; }, children: null });
+    const header = walk(tree).find((el) => el.props["data-window-header"] !== undefined)!;
+    (header.props.onClick as () => void)();
+    expect(raised).toBe(1);
+  });
+
+  it("Escape closes the window, or only the open export menu first", () => {
+    let closed = 0;
+    let menu = 0;
+    const key = { key: "Escape", stopPropagation: () => {}, preventDefault: () => {} };
+    const closing = NotesWindowView({ ...base, onClose: () => { closed += 1; }, onMenu: () => { menu += 1; }, children: null }) as El;
+    (closing.props.onKeyDown as (e: unknown) => void)(key);
+    expect([closed, menu]).toEqual([1, 0]);
+    (closing.props.onKeyDown as (e: unknown) => void)({ ...key, key: "a" });
+    expect(closed).toBe(1);
+    const withMenu = NotesWindowView({ ...base, menuOpen: true, onClose: () => { closed += 1; }, onMenu: () => { menu += 1; }, children: null }) as El;
+    (withMenu.props.onKeyDown as (e: unknown) => void)(key);
+    expect([closed, menu]).toEqual([1, 1]);
+  });
+});
+
+describe("the window is in the stack of floating windows (P10-09c, rule 2)", () => {
+  const win = read("src/components/notes/notes-window.tsx");
+
+  it("registers as kind notes when it stands and leaves when it closes; places itself from the stack, not by its own box", () => {
+    expect(win).toContain("NOTES_WINDOW_ID");
+    expect(win).toMatch(/kind:\s*"notes"/);
+    expect(win).toContain("useWindows");
+    expect(win).toContain("stackRows(");
+    expect(win).toContain("useColumn(");
+    expect(win).not.toContain("notesWindowBox");
+    expect(win).not.toContain("legendHeightPx");
+  });
+});
+
+describe("mergeBlocks — the window's unsaved blocks and an outside change, together (P10-09c)", () => {
+  const a = block("text", "alpha");
+  const b = block("text", "beta");
+  const c = block("text", "gamma");
+
+  it("keeps what the window changed and what was changed outside, each in its own block", () => {
+    const mine = [a, { ...b, text: "beta, edited in the window" }, c];
+    const theirs = [{ ...a, text: "alpha, from the sticky" }, b, c];
+    expect(mergeBlocks([a, b, c], mine, theirs).map((x) => x.text)).toEqual(["alpha, from the sticky", "beta, edited in the window", "gamma"]);
+  });
+
+  it("keeps a block added in the window after its neighbour, a block added outside, and drops what the window deleted", () => {
+    const mine = [a, block("text", "window's new"), c];
+    const out = block("text", "outside's new");
+    const merged = mergeBlocks([a, b, c], mine, [a, b, c, out]);
+    expect(merged.map((x) => x.text)).toEqual(["alpha", "window's new", "gamma", "outside's new"]);
+  });
+
+  it("where both changed the same block, the outside one stands (it was written last)", () => {
+    const merged = mergeBlocks([a], [{ ...a, text: "mine" }], [{ ...a, text: "theirs" }]);
+    expect(merged.map((x) => x.text)).toEqual(["theirs"]);
+  });
+});
+
+describe("reconcileWindow — what the window does when the stored blocks change under its editor (P10-09c)", () => {
+  const a = block("text", "alpha");
+  const b = block("text", "beta");
+
+  it("does nothing when its own save landed, or when the store did not really change", () => {
+    expect(reconcileWindow([a], [a, b], [a, b]).kind).toBe("same");
+    expect(reconcileWindow([a], [a, b], [a]).kind).toBe("keep");
+  });
+
+  it("starts the editor afresh on an outside change when it holds nothing unsaved", () => {
+    const v = reconcileWindow([a], [a], [a, b]);
+    expect(v).toEqual({ kind: "restart", blocks: [a, b] });
+  });
+
+  it("merges when it holds unsaved typing and the store changed too", () => {
+    const mine = [{ ...a, text: "alpha!" }];
+    const v = reconcileWindow([a], mine, [a, b]);
+    expect(v.kind).toBe("merge");
+    expect(v.kind === "merge" && v.blocks.map((x) => x.text)).toEqual(["alpha!", "beta"]);
+  });
+});
+
 describe("no limit, stays put (B15)", () => {
   const win = read("src/components/notes/notes-window.tsx");
   const editor = read("src/components/notes/note-editor.tsx");
@@ -108,7 +227,8 @@ describe("no limit, stays put (B15)", () => {
 
   it("holds 200 blocks of 100 characters in the store, whole", () => {
     useNotesStore.setState({ notes: {} });
-    const note = ensureReadingNoteLocal({ own: undefined, paper, add: useNotesStore.getState().add });
+    const id = useNotesStore.getState().ensureReadingNote(citableFromPaper(paper));
+    const note = useNotesStore.getState().notes[id];
     const blocks = Array.from({ length: 200 }, (_, i) => block("text", `${String(i).padStart(3, "0")} ${"y".repeat(96)}`));
     useNotesStore.getState().save(note.id, { blocks });
     const kept = useNotesStore.getState().notes[note.id];
@@ -127,11 +247,12 @@ describe("one note, in the window and on the page (B14)", () => {
   beforeEach(() => useNotesStore.setState({ notes: {} }));
 
   it("the window opens the note readingNoteFor finds, which is the one the Saved page opens", () => {
-    const made = ensureReadingNoteLocal({ own: undefined, paper, add: useNotesStore.getState().add });
-    expect(readingNoteFor(useNotesStore.getState().notes, paper.id)?.id).toBe(made.id);
-    const again = ensureReadingNoteLocal({ own: readingNoteFor(useNotesStore.getState().notes, paper.id), paper, add: useNotesStore.getState().add });
-    expect(again.id).toBe(made.id);
-    expect(Object.keys(useNotesStore.getState().notes)).toEqual([made.id]);
+    // P10-09c (rule 1, re-aimed from `ensureReadingNoteLocal`, §1c): the store's one `ensureReadingNote`.
+    const { ensureReadingNote } = useNotesStore.getState();
+    const made = ensureReadingNote(citableFromPaper(paper));
+    expect(readingNoteFor(useNotesStore.getState().notes, paper.id)?.id).toBe(made);
+    expect(ensureReadingNote(citableFromPaper(paper))).toBe(made);
+    expect(Object.keys(useNotesStore.getState().notes)).toEqual([made]);
   });
 
   it("the window reads it with readingNoteFor and edits it with the block editor", () => {

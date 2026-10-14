@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { DOCK_TOP_PX } from "@/components/reader/explain-dock";
-import { WINDOW_HEADER_PX, columnTop, stackLayout, useWindows } from "./windows";
+import { block } from "@/lib/notes/blocks";
+import { NOTES_MIN_FRONT_PX, NOTES_WINDOW_ID, WINDOW_HEADER_PX, columnTop, stackLayout, stackRows, useWindows } from "./windows";
 
 // P10-09a (review 7.1a; ruling §1h.78): the windows at the right stand like cascaded cards — only the headers of
 // the ones behind show (each later window offset by a header's height), the raised one in front and full; a header
@@ -112,5 +113,89 @@ describe("columnTop — under the explain window", () => {
   it("is the dock's top plus 400 when the window stands but cannot be measured", () => {
     expect(columnTop({ bottom: 0 })).toBe(DOCK_TOP_PX + 400);
     expect(columnTop({ bottom: Number.NaN })).toBe(DOCK_TOP_PX + 400);
+  });
+});
+
+// P10-09c (review 7.1a, rubric B9): the notes window stands in the same stack as the sticky notes. The layout takes every
+// kind in one cascade: 40 px apart, the last raised in front and whole, the others only their headers; the notes window
+// takes what the screen leaves when it is in front (it scrolls inside itself) and is lifted, not squeezed, below 240 px.
+describe("stackLayout — the notes window and the stickies in one cascade (P10-09c)", () => {
+  const sticky = (id: string, order: number) => ({ id, kind: "sticky" as const, title: id, order });
+  const notes = (order: number) => ({ id: NOTES_WINDOW_ID, kind: "notes" as const, title: "Your notes", order });
+  const frame = { top: 100, bottom: 900, frontHeight: 260 };
+
+  it("opening the notes window while three stickies stand makes four cards, 40 px apart, the notes window in front", () => {
+    const rows = stackLayout([sticky("a", 1), sticky("b", 2), sticky("c", 3), notes(4)], frame);
+    expect(rows.map((r) => [r.id, r.top])).toEqual([["a", 100], ["b", 140], ["c", 180], [NOTES_WINDOW_ID, 220]]);
+    expect(rows.map((r) => r.front)).toEqual([false, false, false, true]);
+    expect(rows.map((r) => r.height).slice(0, 3)).toEqual([40, 40, 40]);
+    // In front the notes window takes what the screen leaves, not a sticky's 260.
+    expect(rows[3].height).toBe(900 - 220);
+    expect(new Set(rows.map((r) => r.z)).size).toBe(4);
+  });
+
+  it("raising a sticky brings it in front of the notes window, and raising the notes window brings it back", () => {
+    useWindows.setState({ windows: [], clock: 0 });
+    const { open, raise } = useWindows.getState();
+    open({ id: "a", kind: "sticky", title: "Note 1" });
+    open({ id: "b", kind: "sticky", title: "Note 2" });
+    open({ id: NOTES_WINDOW_ID, kind: "notes", title: "Your notes" });
+    expect(stackLayout(useWindows.getState().windows, frame).map((r) => r.id)).toEqual(["a", "b", NOTES_WINDOW_ID]);
+    raise("a");
+    const rows = stackLayout(useWindows.getState().windows, frame);
+    expect(rows.map((r) => r.id)).toEqual(["b", NOTES_WINDOW_ID, "a"]);
+    expect(rows[2]).toMatchObject({ id: "a", front: true, top: 180, height: 260 });
+    expect(rows[1]).toMatchObject({ id: NOTES_WINDOW_ID, front: false, height: 40 });
+    raise(NOTES_WINDOW_ID);
+    expect(stackLayout(useWindows.getState().windows, frame).map((r) => r.id)).toEqual(["b", "a", NOTES_WINDOW_ID]);
+  });
+
+  // The four cases the notes window's own box (`notesWindowBox`, P10-09b) used to answer, re-aimed to the stack (§1c).
+  it("the notes window alone stands at the dock's top and takes the height down to the legend", () => {
+    const rows = stackLayout([notes(1)], { top: columnTop(null), bottom: 1000 - 32 - 8, frontHeight: 260, minTop: DOCK_TOP_PX });
+    expect(rows[0].top).toBe(DOCK_TOP_PX);
+    expect(rows[0].height).toBe(1000 - DOCK_TOP_PX - 32 - 8);
+  });
+
+  it("the notes window stands under the explain window with a gap, and takes what is left above the legend", () => {
+    const rows = stackLayout([notes(1)], { top: columnTop({ bottom: 500 }), bottom: 960, frontHeight: 260, minTop: DOCK_TOP_PX });
+    expect(rows[0].top).toBe(500 + 8);
+    expect(rows[0].height).toBe(960 - 508);
+  });
+
+  it("the notes window is lifted, never shrunk below a height you can write in, when the explain window is low", () => {
+    expect(NOTES_MIN_FRONT_PX).toBe(240);
+    const rows = stackLayout([notes(1)], { top: columnTop({ bottom: 960 }), bottom: 960, frontHeight: 260, minTop: DOCK_TOP_PX });
+    expect(rows[0].height).toBe(NOTES_MIN_FRONT_PX);
+    expect(rows[0].top).toBe(960 - NOTES_MIN_FRONT_PX);
+  });
+
+  it("the notes window never stands above the masthead", () => {
+    const rows = stackLayout([notes(1)], { top: DOCK_TOP_PX, bottom: 300 - 40, frontHeight: 260, minTop: DOCK_TOP_PX });
+    expect(rows[0].top).toBeGreaterThanOrEqual(DOCK_TOP_PX);
+  });
+});
+
+describe("stackRows — which windows stand in the column (P10-09c)", () => {
+  const frame = { top: 100, bottom: 900, frontHeight: 260 };
+  const heads = [1, 2].map((n) => block("h3", `Note ${n}`, { anchor: { paperId: "p", paragraphId: `paper-section-0-p${n}`, quote: "q", n } }));
+  const sticky = (id: string, order: number) => ({ id, kind: "sticky" as const, title: id, order });
+
+  it("holds the notes window and every sticky whose heading is in the note, and nothing else", () => {
+    const windows = [
+      sticky(heads[0].id, 1),
+      sticky("gone", 2),
+      { id: NOTES_WINDOW_ID, kind: "notes" as const, title: "Your notes", order: 3 },
+      { id: "e", kind: "explain" as const, title: "Explain", order: 4 },
+      sticky(heads[1].id, 5),
+    ];
+    const rows = stackRows(windows, heads, frame);
+    expect(rows.map((r) => r.id)).toEqual([heads[0].id, NOTES_WINDOW_ID, heads[1].id]);
+    expect(rows.map((r) => r.top)).toEqual([100, 140, 180]);
+  });
+
+  it("is the same cascade whoever asks: the stickies' view and the notes window's view agree", () => {
+    const windows = [sticky(heads[0].id, 1), { id: NOTES_WINDOW_ID, kind: "notes" as const, title: "Your notes", order: 2 }];
+    expect(stackRows(windows, heads, frame)).toEqual(stackRows([...windows].reverse(), heads, frame));
   });
 });

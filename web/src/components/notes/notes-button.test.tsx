@@ -2,12 +2,13 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readingNote } from "@/lib/notes/templates";
 import type { Note } from "@/lib/notes/types";
 import type { Paper } from "@/types";
 import { NOTES_LABEL, NotesButtonView, notesLabel } from "./notes-button";
-import { ensureReadingNoteLocal, openPaperNotes } from "./paper-notes";
+import { useNotesStore } from "@/store/notes";
+import { openPaperNotes } from "./paper-notes";
 
 // P7-14 (R9, the owner's review): "Your notes" at the far right of the screen, as a button, not a band
 // at the top of the column. A small tab fixed at the viewport's right edge (from `md`; on a phone a
@@ -106,52 +107,61 @@ describe("NotesButtonView — the row in the command stack, for a phone", () => 
   });
 });
 
+// P10-09c (rule 1, re-aimed, §1c): `openPaperNotes` takes the store's `ensureReadingNote` (`ensure`) in place of `add`
+// and makes nothing itself; the stubs read the real store, so the assertions on "what was made" read the store's notes.
 describe("openPaperNotes — the same open() as the band had (P2-05)", () => {
+  beforeEach(() => useNotesStore.setState({ notes: {} }));
   const stubs = (own?: Pick<Note, "id">) => {
-    const added: Note[] = [];
     const pushed: string[] = [];
-    return { added, pushed, args: { own, add: (note: Note) => added.push(note), push: (href: string) => pushed.push(href) } };
+    const ensure = vi.fn(useNotesStore.getState().ensureReadingNote);
+    return { ensure, pushed, made: () => Object.values(useNotesStore.getState().notes), args: { own, ensure, push: (href: string) => pushed.push(href) } };
   };
 
   it("with a note already made, goes to it and makes nothing", () => {
-    const { added, pushed, args } = stubs({ id: "n-1" });
+    const { ensure, made, pushed, args } = stubs({ id: "n-1" });
 
     openPaperNotes({ ...args, paper, questions: ["Does it hold?"] });
 
-    expect(added).toEqual([]);
+    expect(ensure).not.toHaveBeenCalled();
+    expect(made()).toEqual([]);
     expect(pushed).toEqual(["/notes/n-1"]);
   });
 
   it("without one, makes the paper's note from its card, abstract and settled questions, then goes to it", () => {
-    const { added, pushed, args } = stubs();
+    const { made, pushed, args } = stubs();
 
     openPaperNotes({ ...args, paper, questions: ["Does a deeper layer keep more water?"], forYourQuestions: [] });
 
-    expect(added).toHaveLength(1);
-    expect(added[0].paperId).toBe(paper.id);
-    expect(added[0].title).toBe(paper.title);
-    expect(JSON.stringify(added[0].blocks)).toContain("Does a deeper layer keep more water?");
-    expect(pushed).toEqual([`/notes/${added[0].id}`]);
+    const notes = made();
+    expect(notes).toHaveLength(1);
+    expect(notes[0].paperId).toBe(paper.id);
+    expect(notes[0].title).toBe(paper.title);
+    expect(JSON.stringify(notes[0].blocks)).toContain("Does a deeper layer keep more water?");
+    expect(pushed).toEqual([`/notes/${notes[0].id}`]);
   });
 
   it("with no questions the note is the one the card alone makes", () => {
-    const { added, args } = stubs();
+    const { made, args } = stubs();
 
     openPaperNotes({ ...args, paper });
 
     const plain = readingNote({ id: paper.id, title: paper.title, authors: paper.authors, abstract: paper.summaryIntro } as never);
-    expect(added[0].blocks.map((b) => b.type)).toEqual(plain.blocks.map((b) => b.type));
+    expect(made()[0].blocks.map((b) => b.type)).toEqual(plain.blocks.map((b) => b.type));
   });
 });
 
 describe("the source (P7-14, R9)", () => {
   const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 
-  it("the band's open() is extracted, not rewritten: one readingNote call, in paper-notes.tsx", () => {
+  it("the band's open() is extracted, not rewritten: it asks the store's ensureReadingNote, in paper-notes.tsx", () => {
     const notes = read("src/components/notes/paper-notes.tsx");
     const button = read("src/components/notes/notes-button.tsx");
 
-    expect(notes.split("readingNote(").length - 1).toBe(1);
+    // P10-09c (rule 1, re-aimed from "one readingNote call, in paper-notes.tsx", §1c): the template is made in the store,
+    // by the one `ensureReadingNote`; neither file makes a note itself.
+    expect(notes).not.toMatch(/\breadingNote\(/);
+    expect(notes).not.toContain("ensureReadingNoteLocal");
+    expect(notes).toContain("s.ensureReadingNote");
     expect(button).not.toContain("readingNote(");
     expect(button).toContain("usePaperNotes");
   });
@@ -160,38 +170,45 @@ describe("the source (P7-14, R9)", () => {
 // P10-09b (review 7.2, 7.5; B12): the edge tab opens the paper's whole note as a floating window instead of
 // navigating; the phone's row still navigates (the phone is deferred).
 describe("P10-09b — the edge tab opens the window, the row still navigates", () => {
+  beforeEach(() => useNotesStore.setState({ notes: {} }));
   const stubs = (own?: Pick<Note, "id">) => {
-    const added: Note[] = [];
     const pushed: string[] = [];
     let opened = 0;
-    return { added, pushed, opened: () => opened, args: { own, add: (note: Note) => added.push(note), push: (href: string) => pushed.push(href), openWindow: () => { opened += 1; } } };
+    return {
+      pushed,
+      opened: () => opened,
+      made: () => Object.values(useNotesStore.getState().notes),
+      args: { own, ensure: useNotesStore.getState().ensureReadingNote, push: (href: string) => pushed.push(href), openWindow: () => { opened += 1; } },
+    };
   };
 
   it("with an openWindow, a note already made is opened in the window: nothing made, nothing navigated", () => {
-    const { added, pushed, opened, args } = stubs({ id: "n-1" });
+    const { made, pushed, opened, args } = stubs({ id: "n-1" });
     openPaperNotes({ ...args, paper });
-    expect(added).toEqual([]);
+    expect(made()).toEqual([]);
     expect(pushed).toEqual([]);
     expect(opened()).toBe(1);
   });
 
   it("with an openWindow and no note, makes the paper's note first and still does not navigate", () => {
-    const { added, pushed, opened, args } = stubs();
+    const { made, pushed, opened, args } = stubs();
     openPaperNotes({ ...args, paper, questions: ["Does a deeper layer keep more water?"] });
-    expect(added).toHaveLength(1);
-    expect(added[0].paperId).toBe(paper.id);
+    expect(made()).toHaveLength(1);
+    expect(made()[0].paperId).toBe(paper.id);
     expect(pushed).toEqual([]);
     expect(opened()).toBe(1);
   });
 
-  it("ensureReadingNoteLocal returns the note it was given, or makes one from the same template", () => {
-    const made: Note[] = [];
-    const own = { id: "n-1" } as Note;
-    expect(ensureReadingNoteLocal({ own, paper, add: (n) => made.push(n) })).toBe(own);
-    expect(made).toEqual([]);
-    const fresh = ensureReadingNoteLocal({ own: undefined, paper, add: (n) => made.push(n) });
-    expect(made).toEqual([fresh]);
-    expect(fresh.paperId).toBe(paper.id);
+  // Re-aimed (§1c) from "ensureReadingNoteLocal returns the note it was given, or makes one from the same template":
+  // the local copy is deleted; the store's `ensureReadingNote` answers, and pressing twice makes one note.
+  it("pressing twice makes one note: the second finds the paper's note the first made", () => {
+    const { made, args } = stubs();
+    openPaperNotes({ ...args, paper });
+    const [first] = made();
+    openPaperNotes({ ...args, own: { id: first.id }, paper });
+    expect(made()).toEqual([first]);
+    const direct = useNotesStore.getState().ensureReadingNote({ id: paper.id, title: paper.title, authors: paper.authors, abstract: paper.summaryIntro } as never);
+    expect(direct).toBe(first.id);
   });
 
   it("the tab's source mounts the window and the edge press toggles it; only the row navigates", () => {
