@@ -1,0 +1,95 @@
+{
+ "kind": "sticky",
+ "steps": [
+  {
+   "name": "typed three words",
+   "text": "alpha beta gamma",
+   "noMarkup": true,
+   "stored": "alpha beta gamma",
+   "selection": ""
+  },
+  {
+   "name": "middle word selected",
+   "text": "alpha beta gamma",
+   "noMarkup": true,
+   "stored": "alpha beta gamma",
+   "selection": "beta"
+  },
+  {
+   "name": "Ctrl+B",
+   "text": "alpha beta gamma",
+   "noMarkup": true,
+   "stored": "alpha **beta** gamma",
+   "selection": "beta"
+  },
+  {
+   "name": "Ctrl+U",
+   "text": "alpha beta gamma",
+   "noMarkup": true,
+   "stored": "alpha __**beta**__ gamma",
+   "selection": "beta"
+  },
+  {
+   "name": "Ctrl+Shift+H",
+   "text": "alpha beta gamma",
+   "noMarkup": true,
+   "stored": "alpha ==__**beta**__== gamma",
+   "selection": "beta"
+  },
+  {
+   "name": "Ctrl+I",
+   "text": "alpha beta gamma",
+   "noMarkup": true,
+   "stored": "alpha ==__***beta***__== gamma",
+   "selection": "beta"
+  },
+  {
+   "name": "Ctrl+B off",
+   "text": "alpha beta gamma",
+   "noMarkup": true,
+   "stored": "alpha ==__*beta*__== gamma",
+   "selection": "beta"
+  },
+  {
+   "name": "Ctrl+Shift+H off",
+   "text": "alpha beta gamma",
+   "noMarkup": true,
+   "stored": "alpha __*beta*__ gamma",
+   "selection": "beta"
+  },
+  {
+   "name": "Ctrl+U off",
+   "text": "alpha beta gamma",
+   "noMarkup": true,
+   "stored": "alpha *beta* gamma",
+   "selection": "beta"
+  },
+  {
+   "name": "Ctrl+I off",
+   "text": "alpha beta gamma",
+   "noMarkup": true,
+   "stored": "alpha beta gamma",
+   "selection": "beta"
+  },
+  {
+   "name": "typed inside the bold word",
+   "text": "alpha beXta gamma",
+   "noMarkup": true,
+   "stored": "alpha **beXta** gamma",
+   "selection": "",
+   "html": "alpha <strong>beXta</strong> gamma"
+  },
+  {
+   "name": "pasted 'a **b** c'",
+   "text": "alpha beXta gamma a b c",
+   "noMarkup": true,
+   "stored": "alpha **beXta** gamma a **b** c",
+   "selection": "",
+   "html": "alpha <strong>beXta</strong> gamma a <strong>b</strong> c"
+  }
+ ],
+ "reload": {
+  "text": "alpha beXta gamma a b c",
+  "html": "<span>alpha </span><strong>beXta</strong><span> gamma a </span><strong>b</strong><span> c</span>"
+ }
+}
