@@ -1765,15 +1765,20 @@ const OWNER_PAPER: PageRow[] = [
   ["H", "ACKNOWLEDGMENTS"], marker("The authors thank the funders"),
   ["H", "REFERENCES"], marker("Smith, J. A paper. 2015"),
 ];
+// P10-04 (review 3.3), RE-AIMED: "2. RESULTS AND DISCUSSION" and "4. EXPERIMENTAL SECTION" hold only their
+// subsections; they were no sections here, and the map lacked the paper's own group headings. A numbered
+// heading that numbers the next one is kept (with empty text) now, so the owner's 19 headings read 15 in the body.
 const BODY_HEADINGS = [
   "ABSTRACT",
   "1. INTRODUCTION",
+  "2. RESULTS AND DISCUSSION",
   "2.1. Electrochemically Tuned Growth and Form of LiCoO2 Crystals",
   "2.2. Electrochemically Governed Crystal Morphogenesis during Growth",
   "2.3. Electrochemical Growth of Twinned, Coincident Site Lattice Interfaces",
   "2.4. Effect of Crystal Tectonics on Electrochemical Performance",
   "2.5. Crystal Tectonics Guided Electrochemomechanics",
   "3. CONCLUSION",
+  "4. EXPERIMENTAL SECTION",
   "4.1. Material Growth of Electrodeposited LiCoO2",
   "4.2. Electrochemical Data Acquisition and Analysis",
   "4.3. EBSD Sample Preparation, Data Acquisition and Analysis",
@@ -1964,10 +1969,11 @@ describe("a numbered subsection takes its parent's bucket, even when the parent 
     const counts: Record<string, number> = {};
     for (const s of sections) counts[s.canonical ?? "body"] = (counts[s.canonical ?? "body"] ?? 0) + 1;
 
-    expect(counts).toEqual({ abstract: 1, introduction: 1, results: 5, conclusion: 1, methods: 5 });
+    // P10-04, RE-AIMED: the two group headings are sections too, each in its bucket (results 5 -> 6, methods 5 -> 6).
+    expect(counts).toEqual({ abstract: 1, introduction: 1, results: 6, conclusion: 1, methods: 6 });
     for (const s of sections) {
-      if (/^2\.\d/.test(s.heading ?? "")) expect(s.canonical).toBe("results");
-      if (/^4\.\d/.test(s.heading ?? "")) expect(s.canonical).toBe("methods");
+      if (/^2\.\d?/.test(s.heading ?? "")) expect(s.canonical).toBe("results");
+      if (/^4\.\d?/.test(s.heading ?? "")) expect(s.canonical).toBe("methods");
     }
   });
 
@@ -1977,9 +1983,12 @@ describe("a numbered subsection takes its parent's bucket, even when the parent 
       ["N", "5. EXPERIMENTS"], ["N", "5.1 Setup of the cells"], ["N", "5.1.1 Hardware used in the tests"], P,
       ["N", "5.2 Cycling protocol"], P,
     ];
+    // P10-04, RE-AIMED: the two empty levels above 5.1.1 are kept as sections (empty text), in their bucket.
     expect(bucketsOf(rows)).toEqual([
       ["ABSTRACT", "abstract"],
       ["1. INTRODUCTION", "introduction"],
+      ["5. EXPERIMENTS", "results"],
+      ["5.1 Setup of the cells", "results"],
       ["5.1.1 Hardware used in the tests", "results"],
       ["5.2 Cycling protocol", "results"],
     ]);
@@ -1990,7 +1999,9 @@ describe("a numbered subsection takes its parent's bucket, even when the parent 
       ["H", "ABSTRACT"], P, ["N", "1. INTRODUCTION"], P,
       ["N", "4. EXPERIMENTAL SECTION"], ["N", "4.1 Material growth"], P, ["N", "4.2 Limitations of the setup"], P,
     ];
+    // P10-04, RE-AIMED: the empty parent "4. EXPERIMENTAL SECTION" is the first of the three.
     expect(bucketsOf(rows).slice(2)).toEqual([
+      ["4. EXPERIMENTAL SECTION", "methods"],
       ["4.1 Material growth", "methods"],
       ["4.2 Limitations of the setup", "limitations"],
     ]);
@@ -2008,6 +2019,59 @@ describe("a numbered subsection takes its parent's bucket, even when the parent 
       ["2.1 Something stands alone", "body"],
       ["Methods", "methods"],
     ]);
+  });
+});
+
+// ── P10-04 (review 3.3; A10): the paper's own group headings stay ────────────────────────────────────
+//
+// The owner: "the big title 4 experimental section is gone, and the results title too". A heading that has
+// no text of its own but numbers the heading after it ("2." then "2.1") is a section with empty text; one
+// that numbers nothing is a stray and is dropped, as every empty heading was.
+describe("an empty numbered parent is kept as a section with empty text (P10-04, review 3.3)", () => {
+  const sectionsOf = (rows: PageRow[]) => buildOutline(rowsPage(rows)).sections ?? [];
+
+  it("keeps '2. RESULTS AND DISCUSSION' and '4. EXPERIMENTAL SECTION' of the owner's paper, in order, with no text and their page", () => {
+    const sections = sectionsOf(OWNER_PAPER);
+    const groups = sections.filter((s) => (s.text ?? "").length === 0);
+
+    expect(groups.map((s) => s.heading)).toEqual(["2. RESULTS AND DISCUSSION", "4. EXPERIMENTAL SECTION"]);
+    expect(groups.map((s) => s.canonical)).toEqual(["results", "methods"]);
+    expect(groups.every((s) => s.page === 1)).toBe(true);
+    // In the document's order: each stands directly before its first child.
+    const headings = sections.map((s) => s.heading);
+    expect(headings.indexOf("2. RESULTS AND DISCUSSION") + 1).toBe(headings.indexOf("2.1. Electrochemically Tuned Growth and Form of LiCoO2 Crystals"));
+    expect(headings.indexOf("4. EXPERIMENTAL SECTION") + 1).toBe(headings.indexOf("4.1. Material Growth of Electrodeposited LiCoO2"));
+    // Every other section still has its text.
+    expect(sections.filter((s) => (s.text ?? "").length > 0)).toHaveLength(sections.length - 2);
+  });
+
+  it("drops an empty numbered heading that numbers nothing, and one at the end of the paper", () => {
+    const rows: PageRow[] = [
+      ["H", "ABSTRACT"], P, ["N", "1. INTRODUCTION"], P,
+      ["N", "2. LAYOUT OF THE CELLS"],
+      ["N", "3. CONCLUSION"], P,
+      ["N", "4. OUTLOOK"],
+    ];
+    expect(sectionsOf(rows).map((s) => s.heading)).toEqual(["ABSTRACT", "1. INTRODUCTION", "3. CONCLUSION"]);
+  });
+
+  it("keeps a parent only for a child its number opens: '2.' then '2.1', not '2.' then '3.1' or '20.1'", () => {
+    const rows: PageRow[] = [
+      ["H", "ABSTRACT"], P, ["N", "1. INTRODUCTION"], P,
+      ["N", "2. RESULTS"], ["N", "3.1 Elsewhere in the paper"], P,
+      ["N", "20. EXTRAS"], ["N", "20.1 Something under twenty"], P,
+    ];
+    expect(sectionsOf(rows).map((s) => s.heading)).toEqual([
+      "ABSTRACT", "1. INTRODUCTION", "3.1 Elsewhere in the paper", "20. EXTRAS", "20.1 Something under twenty",
+    ]);
+  });
+
+  it("does not keep an empty numbered heading that is end matter", () => {
+    const rows: PageRow[] = [
+      ["H", "ABSTRACT"], P, ["N", "1. INTRODUCTION"], P, ["N", "2. CONCLUSION"], P,
+      ["N", "3. ACKNOWLEDGMENTS"], ["N", "3.1 Thanks"], marker("We thank the funders"),
+    ];
+    expect(sectionsOf(rows).map((s) => s.heading)).toEqual(["ABSTRACT", "1. INTRODUCTION", "2. CONCLUSION"]);
   });
 });
 

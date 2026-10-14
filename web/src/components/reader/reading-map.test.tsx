@@ -544,3 +544,123 @@ describe("ReadingMapView — the map's toggles are touch targets (P9-51, N5)", (
     expect(html.match(/aria-expanded="(?:true|false)"/g)).toHaveLength(3);
   });
 });
+
+// P10-04 (review 3.3; A10): the map shows the paper's own hierarchy. "2. RESULTS AND DISCUSSION" and
+// "4. EXPERIMENTAL SECTION" are rows (group rows: no paragraphs of their own), their subsections indented
+// one step per level under them, in one list; a group row says the sum of its children's words and minutes
+// and has no fold of its own.
+const treeMap: ReadingMap = {
+  sections: [
+    { id: "g0", heading: "1. INTRODUCTION", canonical: "introduction", role: "setup", page: 1, level: 1, words: 400, minutes: 3, paragraphs: [{ index: 0, opening: "Cathodes fade with use in ways nobody has traced." }] },
+    { id: "g1", heading: "2. RESULTS AND DISCUSSION", canonical: "results", role: "evidence", page: 3, level: 1, words: 0, minutes: 0, paragraphs: [] },
+    { id: "g2", heading: "2.1. Growth", canonical: "results", role: "evidence", page: 3, level: 2, parentId: "g1", words: 500, minutes: 3, paragraphs: [{ index: 0, opening: "Crystals grew as faceted plates from the molten bath." }] },
+    { id: "g3", heading: "2.2. Form", canonical: "results", role: "evidence", page: 5, level: 2, parentId: "g1", words: 290, minutes: 2, paragraphs: [{ index: 0, opening: "Plates meet at twin boundaries that carry strain." }] },
+    { id: "g4", heading: "2.2.1. Twins", canonical: "results", role: "evidence", page: 6, level: 3, parentId: "g3", words: 100, minutes: 1, paragraphs: [{ index: 0, opening: "Twin planes repeat every few nanometres along the plate." }] },
+    { id: "g5", heading: "3. CONCLUSION", canonical: "conclusion", role: "interpretation", page: 9, level: 1, words: 60, minutes: 1, paragraphs: [{ index: 0, opening: "Shape sets the life of the cathode." }] },
+    { id: "g6", heading: "4. EXPERIMENTAL SECTION", canonical: "methods", role: "method", page: 15, level: 1, words: 0, minutes: 0, paragraphs: [] },
+    { id: "g7", heading: "4.1. Material Growth", canonical: "methods", role: "method", page: 15, level: 2, parentId: "g6", words: 900, minutes: 5, paragraphs: [{ index: 0, opening: "Films were grown on gold from a molten hydroxide bath." }] },
+    { id: "g8", heading: "4.2. Raman Spectroscopy", canonical: "methods", role: "method", page: 17, level: 2, parentId: "g6", words: 662, minutes: 4, paragraphs: [{ index: 0, opening: "Spectra were collected across the film with a laser." }] },
+  ],
+  totalMinutes: 17,
+};
+const renderTree = (props: Partial<Parameters<typeof ReadingMapView>[0]> = {}) =>
+  renderToStaticMarkup(createElement(ReadingMapView, { map: treeMap, ...props }));
+
+describe("ReadingMapView — the paper's hierarchy (P10-04, A10)", () => {
+  it("lists the group rows in the paper's order, each directly before its first child", () => {
+    const html = renderTree();
+    const at = (heading: string) => html.indexOf(`>${heading}</a>`);
+
+    expect(treeMap.sections.map((r) => at(r.heading)).every((n, i, all) => n > 0 && (i === 0 || n > all[i - 1]))).toBe(true);
+    expect(html).toContain('href="#paper-section-1"');
+    expect(html).toContain('href="#paper-section-6"');
+  });
+
+  it("says a group row's heading, role, page and the sum of its children's words and minutes", () => {
+    const html = renderTree();
+
+    // 500 + 290 + 100 words; 3 + 2 + 1 minutes.
+    expect(metaText(html, "2. RESULTS AND DISCUSSION")).toBe("evidence · p.3 · 890 words · 6 min");
+    // 900 + 662 = 1,562 words; 5 + 4 minutes.
+    expect(metaText(html, "4. EXPERIMENTAL SECTION")).toBe("method · p.15 · 1,562 words · 9 min");
+    // A row with paragraphs of its own says its own.
+    expect(metaText(html, "2.2. Form")).toBe("evidence · p.5 · 290 words · 2 min");
+  });
+
+  it("gives a group row no fold of its own, and its children theirs", () => {
+    const html = renderTree();
+
+    expect(html).not.toContain(MAP.openLines("2. RESULTS AND DISCUSSION"));
+    expect(html).not.toContain(MAP.openLines("4. EXPERIMENTAL SECTION"));
+    expect(html).toContain(MAP.openLines("2.1. Growth"));
+    expect(html).toContain(MAP.openLines("4.2. Raman Spectroscopy"));
+  });
+
+  it("indents a row one step per level, in one list — not a nested table", () => {
+    const html = renderTree();
+    const pad = (heading: string) => /padding-left:([\d.]+)rem/.exec(rowOf(html, heading))?.[1];
+
+    expect([pad("1. INTRODUCTION"), pad("2. RESULTS AND DISCUSSION")]).toEqual(["0", "0"]);
+    expect([pad("2.1. Growth"), pad("2.2. Form"), pad("4.1. Material Growth")]).toEqual(["0.75", "0.75", "0.75"]);
+    expect(pad("2.2.1. Twins")).toBe("1.5");
+    expect(rowOf(html, "2.2.1. Twins")).toContain('data-level="3"');
+    expect(rowOf(html, "2.1. Growth")).toContain('data-level="2"');
+    // One <ol> for the rows; no row is a list inside another while the paragraph lines are folded.
+    expect(html.match(/<ol\b/g)).toHaveLength(1);
+    expect(html.match(/<li\b/g)).toHaveLength(treeMap.sections.length);
+  });
+
+  it("indents by the stored level, not the heading's number", () => {
+    const html = renderToStaticMarkup(createElement(ReadingMapView, {
+      map: { sections: [{ ...treeMap.sections[0], heading: "Overview", level: 1 }, { ...treeMap.sections[2], heading: "Detail without a number", level: 2 }], totalMinutes: 6 },
+    }));
+
+    expect(/padding-left:([\d.]+)rem/.exec(rowOf(html, "Detail without a number"))?.[1]).toBe("0.75");
+  });
+
+  it("counts the group rows as sections and adds the words over the leaves only", () => {
+    const html = renderTree({ source: "PDF" });
+    const leaves = 400 + 500 + 290 + 100 + 60 + 900 + 662;
+
+    expect(html).toContain(MAP.summary(9, 17, leaves, "PDF"));
+    // The group rows' summed words are not in the line: 890 + 1,562 more would double count.
+    expect(MAP.summary(9, 17, leaves, "PDF")).toContain("2,912 words");
+  });
+
+  it("opens a child's paragraph lines and links them to the body section of the same index", () => {
+    const html = renderTree({ openRows: [7] });
+
+    expect(html).toContain('href="#paper-section-7-p0"');
+    expect(html).toContain("Films were grown on gold");
+  });
+
+  it("states no 'not mentioned' on a group row when questions are asked, only on rows that have text", () => {
+    const asked: RouteResult = {
+      byQuestion: [{
+        question: "Which films were grown?",
+        vague: false,
+        sections: {
+          g2: { tier: "read", hits: [{ term: "films", count: 4 }], paragraphs: [0] },
+          g1: { tier: "none", hits: [], paragraphs: [] },
+          g6: { tier: "none", hits: [], paragraphs: [] },
+        },
+      }],
+      vague: false,
+    };
+    const html = renderTree({ route: asked });
+
+    expect(rowOf(html, "2. RESULTS AND DISCUSSION")).not.toContain(ROUTE.tiers.none);
+    expect(rowOf(html, "4. EXPERIMENTAL SECTION")).not.toContain(ROUTE.tiers.none);
+    expect(rowOf(html, "3. CONCLUSION")).toContain(ROUTE.tiers.none);
+  });
+
+  it("follows a row's link through the page's reveal when the body is on the other tab", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const view = readFileSync(resolve(process.cwd(), "src/components/reader/reading-map.tsx"), "utf8");
+    const page = readFileSync(resolve(process.cwd(), "src/app/papers/[id]/page.tsx"), "utf8").replace(/\s+/g, " ");
+
+    expect(view).toMatch(/onClick=\{\(event\) => followSectionLink\(event, /);
+    expect(/<ReadingMapView [^>]*\/>/.exec(page)?.[0] ?? "").toContain("reveal={reveal}");
+  });
+});

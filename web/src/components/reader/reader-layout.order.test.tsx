@@ -188,6 +188,71 @@ describe("ReaderLayout, the spread, a paper with a body (R10)", () => {
   });
 });
 
+// P10-04 (review 3.1; A8): the map stands directly under the Summary / Paper digestion strip and floats
+// with it. On the spread it is in the panel (the sticky, window-bounded scroll region), straight after the
+// strip, so a reader anywhere in the paper can jump by it and a map taller than the panel scrolls inside it;
+// in one column it stands between the strip and the tabpanel. It is a slot of its own, outside the tabpanel,
+// so it shows under both tabs and a tab switch does not remount it.
+describe("ReaderLayout, the map under the strip (P10-04, A8)", () => {
+  const withMap = (spread: boolean, over: Record<string, unknown> = {}) => tabbed(spread, { map: mark("MAP"), ...over });
+
+  it("on the spread: in the panel, directly after the tab strip and before the terms", () => {
+    const html = withMap(true);
+    const panelAt = html.indexOf("data-reader-panel");
+    const columnAt = html.indexOf("xl:flex xl:flex-col");
+
+    expect(ascending(order(html, ["PLATE", "TITLE", "DECISION", "TABS", "MAP", "TERMS"]))).toBe(true);
+    expect(html).toContain('<i data-mark="TABS">TABS</i><i data-mark="MAP">MAP</i>');
+    expect(at(html, "MAP")).toBeGreaterThan(panelAt);
+    expect(at(html, "MAP")).toBeLessThan(columnAt);
+    // Nothing of it in the column, and the column is as it was.
+    expect(html.slice(columnAt)).not.toContain('data-mark="MAP"');
+    expect(html.split('data-mark="MAP"').length - 1).toBe(1);
+  });
+
+  it("in one column: directly under the strip and above the tabpanel, outside it", () => {
+    const html = withMap(false);
+
+    expect(ascending(order(html, ["PLATE", "TITLE", "DECISION", "COMMON", "TERMS", "TABS", "MAP", "WORDS", "ADDITIONS", "NEXT"]))).toBe(true);
+    expect(html).toContain('<i data-mark="TABS">TABS</i><i data-mark="MAP">MAP</i><div role="tabpanel"');
+    expect(html.split('data-mark="MAP"').length - 1).toBe(1);
+  });
+
+  it("shows under both tabs, in the same place with the same markup", () => {
+    for (const spread of [true, false]) {
+      const summary = withMap(spread, { tab: "summary", words: mark("WORDS"), additions: mark("SUMMARY-BLOCKS") });
+      const digestion = withMap(spread, { tab: "digestion", words: null, additions: mark("BODY") });
+
+      expect(summary).toContain('<i data-mark="MAP">MAP</i>');
+      expect(digestion).toContain('<i data-mark="MAP">MAP</i>');
+      expect(summary.slice(0, summary.indexOf('data-mark="MAP"'))).toBe(digestion.slice(0, digestion.indexOf('data-mark="MAP"')));
+    }
+  });
+
+  it("is not part of the tabpanel and takes no scale wrapper of its own", () => {
+    const html = withMap(false);
+    const panel = html.slice(html.indexOf('role="tabpanel"'));
+
+    expect(panel).not.toContain('data-mark="MAP"');
+    expect(html).not.toMatch(/reading-scaled[^>]*><i data-mark="MAP"/);
+  });
+
+  it("without a map the page is exactly what it was: the strip is the tabpanel's previous sibling", () => {
+    expect(tabbed(false)).toContain('<i data-mark="TABS">TABS</i><div role="tabpanel"');
+    absent(tabbed(true), "MAP");
+  });
+
+  it("the page hands the map to the layout in its own slot, not among the additions", () => {
+    const page = readFileSync(resolve(process.cwd(), "src/app/papers/[id]/page.tsx"), "utf8");
+    const mount = page.indexOf("<ReadingMapView");
+
+    expect(page.match(/<ReadingMapView/g)).toHaveLength(1);
+    expect(mount).toBeGreaterThan(page.indexOf("tabs={hasBody"));
+    expect(mount).toBeLessThan(page.indexOf("additions={digestion"));
+    expect(page.slice(page.lastIndexOf("\n", mount), mount)).toMatch(/\bmap=\{/);
+  });
+});
+
 describe("reader-layout.tsx source (P7-14)", () => {
   const source = readFileSync(resolve(process.cwd(), "src/components/reader/reader-layout.tsx"), "utf8");
   const body = source.slice(source.indexOf("export function ReaderLayout"));

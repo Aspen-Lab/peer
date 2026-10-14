@@ -7,7 +7,7 @@ import { withSectionIds, type DraftSection, type ExtractedDocument } from "./htm
 import type { FullTextResult } from "./full-text";
 import { buildReading } from "./reading";
 import { ROUTE } from "@/components/reader/copy";
-import { buildReadingMap, FUNCTION_WORDS, gistRoute, openingOf, routeByQuestions, specificTerms, type ReadingMap } from "./reading-map";
+import { buildReadingMap, FUNCTION_WORDS, gistRoute, groupTotals, openingOf, readableSections, routeByQuestions, specificTerms, type ReadingMap } from "./reading-map";
 import { isBoilerplate, splitSentences } from "./skim";
 import arxivHtmlDocJson from "./__fixtures__/arxiv-2609.02697.doc.json";
 import arxivPdfDocJson from "./__fixtures__/arxiv-2609.02113.doc.json";
@@ -739,5 +739,121 @@ describe("gistRoute (P1-03)", () => {
 
   it("is empty for a map with no sections", () => {
     expect(gistRoute({ sections: [], totalMinutes: 0 }).byQuestion[0].sections).toEqual({});
+  });
+});
+
+// P10-04 (review 3.3; A10): the paper's own hierarchy. A numbered heading with no text of its own that
+// numbers the heading after it is a group row of the map; every row says its level and its parent.
+describe("buildReadingMap — the paper's hierarchy (P10-04, A10)", () => {
+  const owner = () =>
+    doc([
+      { heading: "1. INTRODUCTION", canonical: "introduction", text: filler(120) },
+      { heading: "2. RESULTS AND DISCUSSION", canonical: "results", text: "" },
+      { heading: "2.1. Growth", canonical: "results", text: filler(200) },
+      { heading: "2.2. Form", canonical: "results", text: filler(90) },
+      { heading: "3. CONCLUSION", canonical: "conclusion", text: filler(60) },
+      { heading: "4. EXPERIMENTAL SECTION", canonical: "methods", text: "", page: 15 },
+      { heading: "4.1. Material Growth", canonical: "methods", text: filler(181) },
+      { heading: "4.2. Raman Spectroscopy", canonical: "methods", text: filler(30) },
+    ]);
+
+  it("keeps a section with no paragraphs when it numbers the section after it, and in the body too", () => {
+    const rendered = readableSections(owner());
+    expect(rendered.map((r) => r.section.heading)).toEqual([
+      "1. INTRODUCTION", "2. RESULTS AND DISCUSSION", "2.1. Growth", "2.2. Form", "3. CONCLUSION",
+      "4. EXPERIMENTAL SECTION", "4.1. Material Growth", "4.2. Raman Spectroscopy",
+    ]);
+    expect(rendered[1].paragraphs).toEqual([]);
+    expect(rendered.map((r) => r.id)).toEqual(["s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7"]);
+    const body = buildReading(paper, okFullText(owner())).body;
+    expect(body.map((s) => s.heading)).toEqual(rendered.map((r) => r.section.heading));
+    expect(body[1].paragraphs).toEqual([]);
+  });
+
+  it("still drops an empty section that numbers nothing", () => {
+    const map = buildReadingMap(doc([
+      { heading: "1. A", text: "Something to read." },
+      { heading: "2. B", text: "" },
+      { heading: "3. C", text: "Something else to read." },
+      { heading: "3.1 D", text: "   " },
+    ]));
+    expect(map.sections.map((r) => r.heading)).toEqual(["1. A", "3. C"]);
+  });
+
+  it("gives every row its level — 1 for 'N.', 2 for 'N.M', 3 for 'N.M.K' — and the nearest shallower row before it as its parent", () => {
+    const map = buildReadingMap(doc([
+      { heading: "1. INTRODUCTION", text: filler(10) },
+      { heading: "2. RESULTS", text: "" },
+      { heading: "2.1. Growth", text: "" },
+      { heading: "2.1.1. Dynamics", text: filler(10) },
+      { heading: "2.1.2. Rates", text: filler(10) },
+      { heading: "2.2. Form", text: filler(10) },
+      { heading: "3. CONCLUSION", text: filler(10) },
+    ]));
+    expect(map.sections.map((r) => [r.heading, r.level, r.parentId])).toEqual([
+      ["1. INTRODUCTION", 1, undefined],
+      ["2. RESULTS", 1, undefined],
+      ["2.1. Growth", 2, "s1"],
+      ["2.1.1. Dynamics", 3, "s2"],
+      ["2.1.2. Rates", 3, "s2"],
+      ["2.2. Form", 2, "s1"],
+      ["3. CONCLUSION", 1, undefined],
+    ]);
+  });
+
+  it("caps the level at 3 and gives a numbered subsection with no parent row no parent", () => {
+    const map = buildReadingMap(doc([
+      { heading: "5.1.2.3 Deep", text: filler(10) },
+      { heading: "6.1 Orphan", text: filler(10) },
+    ]));
+    expect(map.sections.map((r) => [r.level, r.parentId])).toEqual([[3, undefined], [2, undefined]]);
+  });
+
+  it("takes an unnumbered heading as level 1 — even after a numbered level-1 parent — and gives it no parent", () => {
+    const map = buildReadingMap(doc([
+      { heading: "Introduction", text: filler(10) },
+      { heading: "2. RESULTS", text: "" },
+      { heading: "2.1. Growth", text: filler(10) },
+      { heading: "Summary of findings", text: filler(10) },
+      { heading: "3. CONCLUSION", text: filler(10) },
+      { heading: "Outlook", text: filler(10) },
+    ]));
+    expect(map.sections.map((r) => [r.heading, r.level, r.parentId])).toEqual([
+      ["Introduction", 1, undefined],
+      ["2. RESULTS", 1, undefined],
+      ["2.1. Growth", 2, "s1"],
+      ["Summary of findings", 1, undefined],
+      ["3. CONCLUSION", 1, undefined],
+      ["Outlook", 1, undefined],
+    ]);
+  });
+
+  it("puts nothing of a group row into the words: it has none of its own and the total is over the leaves", () => {
+    const map = buildReadingMap(owner());
+    const group = map.sections[1];
+    expect([group.words, group.minutes, group.paragraphs]).toEqual([0, 0, []]);
+    expect(map.totalMinutes).toBe(Math.ceil((120 + 200 + 90 + 60 + 181 + 30) / 180));
+  });
+
+  it("sums a group row's leaves — words and minutes — with groupTotals, nested groups included", () => {
+    const map = buildReadingMap(owner());
+    const totals = groupTotals(map);
+    expect([...totals.keys()]).toEqual(["s1", "s5"]);
+    expect(totals.get("s1")).toEqual({ words: 290, minutes: 2 + 1 });
+    expect(totals.get("s5")).toEqual({ words: 211, minutes: 2 + 1 });
+    expect(map.sections[5].page).toBe(15);
+
+    const nested = buildReadingMap(doc([
+      { heading: "2. RESULTS", text: "" },
+      { heading: "2.1. Growth", text: "" },
+      { heading: "2.1.1. Dynamics", text: filler(10) },
+      { heading: "2.2. Form", text: filler(20) },
+    ]));
+    expect(groupTotals(nested).get("s0")).toEqual({ words: 30, minutes: 2 });
+    expect(groupTotals(nested).get("s1")).toEqual({ words: 10, minutes: 1 });
+  });
+
+  it("has no group row in a map whose sections all have paragraphs: groupTotals is empty", () => {
+    expect(groupTotals(buildReadingMap(doc([{ heading: "1. A", text: filler(10) }, { heading: "1.1 B", text: filler(10) }]))).size).toBe(0);
   });
 });

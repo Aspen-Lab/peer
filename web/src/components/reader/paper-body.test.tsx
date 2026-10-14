@@ -176,3 +176,50 @@ describe("the contents rail is gone (P7-14, R5)", () => {
     expect(layout).not.toContain("p.contents");
   });
 });
+
+// P10-04 (review 3.3; A10): "2 Results" holds only its subsections. It is a section of the body with no
+// paragraphs: its heading stands alone (the anchor the map's group row jumps to), nothing under it before
+// its first child, and the paragraphs everywhere else keep their anchors' indices.
+describe("PaperBody — a group heading stands alone (P10-04, A10)", () => {
+  const grouped: ExtractedDocument = {
+    ...doc,
+    equations: [],
+    figureCaptions: [],
+    sections: [
+      { id: "s0", heading: "Abstract", canonical: "abstract", text: "Not in the body." },
+      { id: "s1", heading: "1 Introduction", canonical: "introduction", text: "Creep limits the life of hot parts.", page: 1 },
+      { id: "s2", heading: "2 Results", canonical: "results", text: "", page: 2 },
+      { id: "s3", heading: "2.1 Growth", canonical: "results", text: "The finest grains crept fastest.", page: 2 },
+    ],
+  };
+  const groupedReading = buildReading(paper, { ...fullText, doc: grouped }, new Date("2026-10-05T00:00:00.000Z"));
+  const html = renderToStaticMarkup(createElement(PaperBody, { reading: groupedReading }));
+
+  it("renders the group heading as a heading alone, with its anchor, between its neighbours", () => {
+    expect(groupedReading.body.map((s) => s.heading)).toEqual(["1 Introduction", "2 Results", "2.1 Growth"]);
+    expect(groupedReading.body[1].paragraphs).toEqual([]);
+    const section = /<section id="paper-section-1"[^>]*>(.*?)<\/section>/.exec(html)?.[1] ?? "";
+
+    expect(section).toMatch(/^<h3\b[^>]*>2 Results<\/h3>$/);
+    expect(section).not.toContain("measure-paper");
+    expect(html.indexOf('id="paper-section-1"')).toBeLessThan(html.indexOf('id="paper-section-2"'));
+  });
+
+  it("leaves the paragraphs where they were: the child's anchors carry the body index, and no anchor is made for the heading", () => {
+    expect(html).toContain('id="paper-section-2-p0"');
+    expect(html).toContain('id="paper-section-0-p0"');
+    expect(html).not.toContain('id="paper-section-1-p0"');
+    expect(html.match(/id="paper-section-\d+-p\d+"/g)).toHaveLength(2);
+  });
+
+  it("tints the group heading by the same class path as any heading", () => {
+    const route = {
+      byQuestion: [{ question: "q", vague: false, sections: { s2: { tier: "read" as const, hits: [], paragraphs: [] } } }],
+      vague: false,
+    };
+    const tinted = renderToStaticMarkup(createElement(PaperBody, { reading: groupedReading, route }));
+    const heading = /<section id="paper-section-1"[^>]*>(<h3\b[^>]*>)/.exec(tinted)?.[1] ?? "";
+
+    expect(heading).toContain('data-route="read"');
+  });
+});

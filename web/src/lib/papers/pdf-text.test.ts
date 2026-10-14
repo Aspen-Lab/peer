@@ -441,14 +441,23 @@ describe("extractPdfTextFromPath's buckets — subsections of a numbered heading
     const result = await extractPdfTextFromPath(await onDisk("empty-parents.pdf", emptyParents));
 
     expect(result.ok).toBe(true);
+    // P10-04 (review 3.3), RE-AIMED: the two empty parents are sections now (empty text, their bucket,
+    // numbered in order); this test listed the seven with text only.
     expect(result.doc?.sections.map((s) => [s.heading, s.canonical])).toEqual([
       ["Abstract", "abstract"],
       ["1 Introduction", "introduction"],
+      ["2 Results and Discussion", "results"],
       ["2.1 Growth of the crystals", "results"],
       ["2.2 Twinned interfaces", "results"],
       ["3 Conclusion", "conclusion"],
+      ["4 Experimental Section", "methods"],
       ["4.1 Material growth", "methods"],
       ["4.2 Raman spectroscopy", "methods"],
+    ]);
+    expect(result.doc?.sections.map((s) => s.id)).toEqual(["s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8"]);
+    expect(result.doc?.sections.filter((s) => s.text === "").map((s) => s.heading)).toEqual([
+      "2 Results and Discussion",
+      "4 Experimental Section",
     ]);
   });
 

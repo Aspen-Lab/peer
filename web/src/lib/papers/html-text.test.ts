@@ -339,13 +339,17 @@ describe("an empty numbered parent — every HTML extractor", () => {
         { heading: "4.1 Samples", text: "Samples were taken at dawn." },
       ]);
       expect(doc.source).toBe(path.source);
-      // The empty parents are no sections; their children carry what they stood for.
+      // P10-04 (review 3.3), RE-AIMED: this test pinned "the empty parents are no sections". An empty parent
+      // that numbers the next heading is a section now (empty text, its bucket), so the map can show the
+      // paper's own group headings; its children still carry the bucket they inherit.
       expect(shape(doc)).toEqual([
+        ["2 Results", "results"],
         ["2.1 Growth", "results"],
+        ["4 Methods", "methods"],
         ["4.1 Samples", "methods"],
       ]);
-      expect(doc.sections.map((s) => s.text)).toEqual(["Colonies doubled each day.", "Samples were taken at dawn."]);
-      expect(doc.sections.map((s) => s.id)).toEqual(["s0", "s1"]);
+      expect(doc.sections.map((s) => s.text)).toEqual(["", "Colonies doubled each day.", "", "Samples were taken at dawn."]);
+      expect(doc.sections.map((s) => s.id)).toEqual(["s0", "s1", "s2", "s3"]);
       // A second pass over what was kept finds nothing left to inherit, so the build needs no second pass.
       expect(withInheritedBuckets(doc.sections).map((s) => s.canonical)).toEqual(doc.sections.map((s) => s.canonical));
     });
@@ -368,7 +372,49 @@ describe("an empty numbered parent — every HTML extractor", () => {
         { heading: "2.1 Growth" },
         { heading: "2.1.1 Dynamics", text: "The curve is steepest at noon." },
       ]);
-      expect(shape(doc)).toEqual([["2.1.1 Dynamics", "results"]]);
+      // P10-04, RE-AIMED: the two empty parents are kept, each numbering the heading after it.
+      expect(shape(doc)).toEqual([
+        ["2 Results", "results"],
+        ["2.1 Growth", "results"],
+        ["2.1.1 Dynamics", "results"],
+      ]);
+      expect(doc.sections.map((s) => s.text)).toEqual(["", "", "The curve is steepest at noon."]);
+    });
+
+    // P10-04 (review 3.3; A10): the paper's group headings are rows of the map, so the extractor keeps them.
+    it("keeps an empty numbered parent as a section with empty text and numbers it in order (P10-04)", () => {
+      const doc = read(path, [
+        { heading: "1 Introduction", text: "Cathodes fade." },
+        { heading: "2 Results" },
+        { heading: "2.1 Growth", text: "Colonies doubled each day." },
+        { heading: "2.2 Form", text: "Crystals were faceted." },
+        { heading: "3 Conclusion", text: "It works." },
+      ]);
+      expect(doc.sections.map((s) => s.heading)).toEqual(["1 Introduction", "2 Results", "2.1 Growth", "2.2 Form", "3 Conclusion"]);
+      expect(doc.sections.map((s) => s.id)).toEqual(["s0", "s1", "s2", "s3", "s4"]);
+      expect(doc.sections[1].text).toBe("");
+      expect(doc.sections[1].canonical).toBe("results");
+    });
+
+    it("drops an empty heading that numbers nothing — a stray — as before (P10-04)", () => {
+      const doc = read(path, [
+        { heading: "1 Introduction", text: "Cathodes fade." },
+        { heading: "2 Layout notes" },
+        { heading: "3 Results", text: "Three findings follow." },
+        { heading: "4 Outlook" },
+      ]);
+      expect(doc.sections.map((s) => s.heading)).toEqual(["1 Introduction", "3 Results"]);
+    });
+
+    it("does not take a sibling or an unrelated number for a child: 2 then 3.1 keeps nothing of 2 (P10-04)", () => {
+      const doc = read(path, [
+        { heading: "1 Introduction", text: "Cathodes fade." },
+        { heading: "2 Results" },
+        { heading: "3.1 Elsewhere", text: "Not a child of two." },
+        { heading: "20 Further observations" },
+        { heading: "20.1 Detail", text: "Child of twenty, not of two." },
+      ]);
+      expect(doc.sections.map((s) => s.heading)).toEqual(["1 Introduction", "3.1 Elsewhere", "20 Further observations", "20.1 Detail"]);
     });
 
     it("leaves an unnumbered document alone", () => {
