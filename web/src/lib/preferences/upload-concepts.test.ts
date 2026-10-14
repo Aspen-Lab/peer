@@ -224,3 +224,11 @@ describe("the extraction version after the running-head and page-break rules and
     expect(UPLOAD_CONCEPT_EXTRACTION_VERSION).toBeGreaterThanOrEqual(11);
   });
 });
+
+describe("the extraction version after a PMC section's nested subsections are kept (P10-40)", () => {
+  // Text read under 11 folds a PMC section's first nested subsection into its parent; 12 retires it, and the paper is
+  // read again. A saved note keeps its passage through the new split by its quote (P10-35).
+  it("is past the reading that folded a nested PMC subsection into its parent", () => {
+    expect(UPLOAD_CONCEPT_EXTRACTION_VERSION).toBeGreaterThanOrEqual(12);
+  });
+});

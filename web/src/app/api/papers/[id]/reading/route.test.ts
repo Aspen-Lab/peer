@@ -92,7 +92,7 @@ describe("GET /api/papers/[id]/reading", () => {
     // (section ids and the reading map). P8-04: 6 -> 7 (the extractors'
     // sections and buckets changed; see reading.test.ts's note).
     // P9: 7 -> 8 (the PDF text and the cleaner changed: P9-08 / P9-09 / P9-10).
-    expect(body.version).toBe(12);
+    expect(body.version).toBe(13);
     expect(body.paperId).toBe("openalex:W7208807247");
     expect(body.provenance.fullText).toBe("pdf");
     expect(body.provenance.pageCount).toBe(5);
@@ -372,7 +372,7 @@ describe("GET /api/papers/[id]/reading — 9-14 (A9-13): the ?upload= supplement
     });
     mocks.getFullText.mockResolvedValue(zenodoFullText);
 
-    const res = await call("openalex:W7208807247", "?v=12&upload=upload:0000000000000007");
+    const res = await call("openalex:W7208807247", "?v=13&upload=upload:0000000000000007");
 
     expect(res.status).toBe(200);
     expect(mocks.getFullText).toHaveBeenCalledWith({ paperId: "upload:0000000000000007" });
