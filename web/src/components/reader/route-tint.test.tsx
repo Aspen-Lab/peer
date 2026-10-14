@@ -6,7 +6,7 @@ import type { ExtractedDocument } from "@/lib/papers/html-text";
 import type { FullTextResult } from "@/lib/papers/full-text";
 import { GIST_QUESTION, gistRoute, routeByQuestions, type RouteResult } from "@/lib/papers/reading-map";
 import type { Paper } from "@/types";
-import { ASK, EXPLAIN, FOR_YOUR_QUESTIONS, MAP, ROUTE, TERMS } from "./copy";
+import { ASK, EXPLAIN, FOR_YOUR_QUESTIONS, MAP, ROUTE } from "./copy";
 import { HEADING_MARK, PaperBody, ROUTE_TINT, mergeQuestionRoute, questionRouteOverlay, sectionMark } from "./paper-body";
 import { ReadingMapView, readingRoute } from "./reading-map";
 
@@ -320,10 +320,9 @@ describe("the route copy never tells the reader not to read (§1f.13, §3d 8)", 
 
   it("has no 'skip', 'don't read', 'ignore' or 'not worth' in the ask, map, route or answers copy or the tier labels", () => {
     // P2-04b (§1g.15 finding 4): the answers block's copy is scanned too.
-    // P3-01 (§1h.1): the Terms to know strip's copy is scanned too.
     // P3-02 (§1h.2): so is "Explain this?" — the button, the card's two labels
     // and its three states.
-    const all = [...strings(ASK), ...strings(MAP), ...strings(ROUTE), ...strings(FOR_YOUR_QUESTIONS), ...strings(TERMS), ...strings(EXPLAIN)];
+    const all = [...strings(ASK), ...strings(MAP), ...strings(ROUTE), ...strings(FOR_YOUR_QUESTIONS), ...strings(EXPLAIN)];
 
     expect(all.length).toBeGreaterThan(30);
     expect(all).toContain("not mentioned");
@@ -332,8 +331,6 @@ describe("the route copy never tells the reader not to read (§1f.13, §3d 8)", 
     // P2-08b (§1g.21 (2)): the unverified verdict line is scanned too.
     expect(all).toContain(FOR_YOUR_QUESTIONS.unverified);
     expect(all).toContain(ROUTE.backgroundWhy);
-    expect(all).toContain("Terms to know");
-    expect(all).toContain(TERMS.find("2 Methods"));
     expect(all).toContain("Explain this?");
     // P3-03 (§1h.6): the accessible name of Peer's paragraph gist is scanned too.
     expect(all).toContain(MAP.gist);

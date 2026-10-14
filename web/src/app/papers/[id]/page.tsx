@@ -12,9 +12,8 @@
 // today's related papers (components/reader/report-sections.tsx) — and under
 // that the blocks the rewrite added: where it is thin, the next step, the
 // record, the reader's library. "Before you read" and the answers to the reader's
-// questions stand above both tabs, one state, never remounted by a switch;
-// "Terms to know" stands in the panel under the tab strip. A paper with no
-// body has no tabs and is the page it was. Later-arriving content (the server
+// questions stand above both tabs, one state, never remounted by a switch.
+// A paper with no body has no tabs and is the page it was. Later-arriving content (the server
 // reading, a model report) changes nothing above it.
 //
 // The page holds the wiring — which paper, the store, the keys, the swipe,
@@ -38,7 +37,7 @@ import { paperNav } from "@/lib/reader/paper-nav";
 import { paperKeysFor, registerReaderActions, type ReaderActions } from "@/lib/reader/reader-keys";
 import { recommendationLine } from "@/lib/reader/recommendation";
 import { allocatePlateTerms } from "@/lib/papers/plate-terms";
-import { firstOccurrence, mergeTerms, paperDefinedTermsInReading, routeTermScope, termScopeKey, termScopeOfKey } from "@/lib/papers/terms";
+import { mergeTerms, paperDefinedTermsInReading, routeTermScope, termScopeKey, termScopeOfKey } from "@/lib/papers/terms";
 import { placeEvidence } from "@/lib/papers/evidence";
 import {
   PDF_NO_TEXT_MESSAGE,
@@ -110,7 +109,6 @@ import { PAPER_BODY_ID } from "@/components/reader/paper-body";
 import { QuestionField, focusFirstEmptyQuestion } from "@/components/reader/question-field";
 import { ReadingMapView, readingRoute } from "@/components/reader/reading-map";
 import { useDebouncedQuestions } from "@/components/reader/use-debounced-questions";
-import { TermsStrip } from "@/components/reader/terms-strip";
 import { SectionLinks } from "@/components/reader/evidence-quote";
 import { ReaderTabs } from "@/components/reader/reader-tabs";
 import { useReaderTab } from "@/components/reader/use-reader-tab";
@@ -694,13 +692,12 @@ function Reader({
     [tier0Route, report?.forYourQuestions],
   );
 
-  // P3-01 (§1h.1; §3d 13): the terms to know — the sentences the paper defines
+  // P3-01 (§1h.1; §3d 13): the paper's own defined terms — the sentences the paper defines
   // its own words in, read from the sections the route marks read or background
   // (the methods and results when there is no such route), then the model's,
   // ≤8 in all. From the reading this page holds, in the browser: no key, no
-  // request. The term the reader clicked is kept with its paper, so it never
-  // follows them to another, and its first use in the body is what the body
-  // marks.
+  // request. They feed the Tier 0 definition in "Explain this". P10-02 (ruling §1h.78): the
+  // strip that listed them on the page is deleted.
   // P7-13 (R11b): keyed on WHICH sections are read, as a string — `routeTermScope`
   // makes a new object on every route, and the scan below re-ran on each of them.
   const scopeKey = useMemo(() => termScopeKey(routeTermScope(route)), [route]);
@@ -709,16 +706,6 @@ function Reader({
     [reading, scopeKey],
   );
   const terms = useMemo(() => mergeTerms(tier0Terms, report?.terms), [tier0Terms, report?.terms]);
-  const [clickedTerm, setClickedTerm] = useState<{ paperId: string; term: string } | null>(null);
-  const markedTerm = clickedTerm?.paperId === paper.id ? clickedTerm.term : null;
-  const markTerm = useCallback(
-    (term: string | null) => setClickedTerm(term === null ? null : { paperId: paper.id, term }),
-    [paper.id],
-  );
-  const termMark = useMemo(
-    () => (markedTerm && reading ? firstOccurrence(reading.body ?? [], markedTerm) : null),
-    [markedTerm, reading],
-  );
 
   // S5: the "matrix" scramble reveal, restored. `revealingReportKey` is the
   // key of a report that just arrived fresh in this visit; while it matches
@@ -1424,13 +1411,6 @@ function Reader({
         // P7-14 (R10): the strip under the decision block, only on a paper Peer has read in full.
         tabs={hasBody ? <ReaderTabs tab={tab} onSelect={selectTab} /> : undefined}
         tab={hasBody ? tab : undefined}
-        // "Terms to know" stands in the panel under the strip, under both tabs; a click on a term
-        // brings the body in first when it is on the other tab (`reveal`).
-        terms={
-          hasBody ? (
-            <TermsStrip key={`terms:${paper.id}`} terms={terms} reading={reading} marked={markedTerm} onMark={markTerm} reveal={reveal} />
-          ) : undefined
-        }
         // The blocks both tabs share (Q6): the question field (P1-03, §1f.10 — only where Peer has
         // the paper's text; without it there is nothing to point a question at, and the Decision
         // block already says why; one field per paper) and the answers. ONE element each, built here
@@ -1463,7 +1443,7 @@ function Reader({
             {reading.map && <ReadingMapView key={`map:${paper.id}`} map={reading.map} route={route} gists={paragraphGists} source={reading.provenance.sourceLabel} />}
 
             {/* The paper, when Peer reached it. */}
-            <PaperBody reading={reading} route={route} termMark={termMark} plain={plainForBody} onSelect={selectExplain} />
+            <PaperBody reading={reading} route={route} plain={plainForBody} onSelect={selectExplain} />
           </>
         ) : (
           <>

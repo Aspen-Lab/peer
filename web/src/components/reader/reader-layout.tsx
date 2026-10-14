@@ -16,23 +16,23 @@
 //
 // P7-14 (R10): a paper Peer has read in full has two tabs, "Summary" and
 // "Paper digestion". The page hands this file the strip (`tabs`), the blocks
-// both tabs share (`common`: "Before you read" and the answers) and the
-// terms; the active tab's blocks are `words` and `additions` as before, in
-// one tabpanel. `common` is built here from its slot alone and drawn BEFORE
+// both tabs share (`common`: "Before you read" and the answers); the
+// active tab's blocks are `words` and `additions` as before, in one tabpanel. `common` is built here from its slot alone and drawn BEFORE
 // the panel, outside it, in both layouts — it never reads the tab, so a
 // switch cannot remount the question field or lose what the reader typed.
 //
 // P9-04 (X3): in one column the tab strip stands directly above its tabpanel. The order is plate,
-// title, decision, the common blocks, the terms, the strip, the panel, Next: on a phone the strip used
-// to stand under the decision, with the question box and the terms (about 2,000 px) between it and the
+// title, decision, the common blocks, the strip, the panel, Next: on a phone the strip used
+// to stand under the decision, with the question box and more (about 2,000 px) between it and the
 // panel it switches. The spread is unchanged: there the strip is in the panel beside the column, a
 // remote control for the column by design (R10).
 //
-// P9-04 (X2): the panel scrolls as one. "Terms to know" used to be the one block of the panel that
-// gave when the window was short — a flex item that shrank to a 7rem floor and scrolled inside itself,
-// so a reader on a 1440 x 1000 window saw one of eight terms in a 112-px window nested in the panel's
-// own scroll region. It is an ordinary block now: the panel, bounded by the window in `reader-panel`
-// (globals.css), is the one scroll region, and nothing inside it scrolls on its own.
+// P9-04 (X2): the panel scrolls as one. The panel, bounded by the window in `reader-panel` (globals.css),
+// is the one scroll region, and nothing inside it scrolls on its own.
+//
+// P10-02 (ruling §1h.78): the "Terms to know" strip, which stood in the panel under the tab strip (after
+// the common blocks in one column), is deleted, and with it its `terms` slot. The paper's own definitions
+// still feed "Explain this" and the plate; they are not a block of this layout.
 //
 // The structure is chosen in JS rather than with `display: contents` and
 // `order`, so what a screen reader announces is what the page shows. Crossing
@@ -76,9 +76,6 @@ interface ReaderLayoutProps {
   tabs?: ReactNode;
   /** The tab on show, for the tabpanel's label. */
   tab?: ReaderTab;
-  /** "Terms to know": in the panel under the strip on the spread, after the
-   *  common blocks and before the strip in one column. Shown under both tabs. */
-  terms?: ReactNode;
   /** The blocks both tabs share ("Before you read" and the answers), above the
    *  active tab's blocks in the column. Q6: one state, never remounted by a tab. */
   common?: ReactNode;
@@ -197,9 +194,8 @@ export function ReaderLayout(p: ReaderLayoutProps) {
         {p.title}
         {p.decision}
         {common}
-        {p.terms}
         {/* P9-04 (X3): the strip stands directly above the panel it switches (`aria-controls`),
-            after the blocks both tabs share and the terms — not four screens above it. */}
+            after the blocks both tabs share — not four screens above it. */}
         {p.tabs}
         {panel}
         {p.next}
@@ -234,9 +230,6 @@ export function ReaderLayout(p: ReaderLayoutProps) {
         {p.title}
         {p.decision}
         {p.tabs}
-        {/* P9-04 (X2): the terms are an ordinary block. The panel scrolls as one
-            (`reader-panel`, globals.css); nothing inside it scrolls on its own. */}
-        {p.terms}
       </div>
       <div className={COLUMN_CLASS}>
         {common}

@@ -22,7 +22,7 @@ function plainProblems(source: string): string[] {
   };
 
   // The body is handed the view — and only a reader with a model gets one.
-  has("<PaperBody reading={reading} route={route} termMark={termMark} plain={plainForBody} onSelect={selectExplain} />", "the body is no longer handed the plain view");
+  has("<PaperBody reading={reading} route={route} plain={plainForBody} onSelect={selectExplain} />", "the body is no longer handed the plain view");
   const forBody = /const plainForBody = ([^;]*);/.exec(text)?.[1] ?? "";
   if (forBody !== "providerConfigured ? plainView : undefined") problems.push("the plain view is not absent for a reader with no model (the locked-block rule)");
   if (/deepReport/i.test(forBody)) problems.push("Say it plainly is gated on deep reports being on");

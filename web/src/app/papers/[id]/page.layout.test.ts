@@ -110,14 +110,8 @@ function tabProblems(source: string): string[] {
   has("const answers = report?.forYourQuestions ? <ForYourQuestions report={report} map={reading.map} /> : null;", "the answers block is not built from the report's forYourQuestions");
   if (!code.includes("{!hasBody && answers}")) problems.push("a paper with no body no longer shows its answers first in the additions, as before");
 
-  // The strip of terms is under both tabs: its own slot.
-  const terms = between(code, "terms={ hasBody ?", " common={");
-  if (!terms) problems.push("the `terms` slot moved");
-  else {
-    if (count(terms, "<TermsStrip") !== 1) problems.push("\"Terms to know\" is not in the terms slot exactly once");
-    if (!terms.includes("reveal={reveal}")) problems.push("a click on a term cannot bring the body in from Summary");
-    if (/\btab\b|digestion/.test(terms)) problems.push("the terms slot depends on the tab: it is shown under both");
-  }
+  // P10-02 (ruling §1h.78): "Terms to know" is deleted; the layout has no `terms` slot and the page hands it none.
+  if (/terms=\{ hasBody/.test(code) || code.includes("<TermsStrip")) problems.push("a `terms` slot or the Terms to know strip is back on the page");
 
   // The tab's own blocks: the abstract under Summary only; the map and the body under Digestion only.
   const words = between(code, " words={", " additions={");
@@ -210,9 +204,8 @@ describe("the page's two tabs (P7-14, R10)", () => {
     expect(tabProblems(wrong)).toEqual(["\"Read it here\" / t no longer brings the body in from Summary first"]);
   });
 
-  it("would notice the § links or the terms unable to switch tab", () => {
+  it("would notice the § links unable to switch tab", () => {
     expect(tabProblems(source.replace("<SectionLinks headings={bodyHeadings} reveal={reveal}>", "<SectionLinks headings={bodyHeadings}>"))).toEqual(["the § links cannot bring the body in from Summary"]);
-    expect(tabProblems(source.replace(" reveal={reveal} />", " />"))).toEqual(["a click on a term cannot bring the body in from Summary"]);
   });
 
   it("would notice a tab change no longer clearing the explain card", () => {

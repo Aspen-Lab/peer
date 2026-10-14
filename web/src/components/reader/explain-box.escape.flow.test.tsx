@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vite
 
 // P8-06, the manager's ruling on Escape (after the first build): the window the owner wants is ALWAYS there, so Escape
 // must not fight the page. With the empty state showing, Escape does nothing to the window and the box listens for no
-// key at all — the page's other Escape handlers (the figure lightbox, a term highlight, "back", and a React handler such
+// key at all — the page's other Escape handlers (the figure lightbox, "back", and a React handler such
 // as the notes editor's) act as before. With a thread showing, Escape returns the window to the empty state: the thread is
 // dropped as a Close used to drop it, the kept answer for the passage stays kept, the window stays and the width stays
 // reserved. Close (the button) is the only thing that hides the window for the visit. Without an empty state to go back to
@@ -12,9 +12,9 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vite
 //
 // The seams are tried on a miniature of the browser's order for a key press: window capture, document capture, the
 // React root's bubble (where `onKeyDown` handlers run), document bubble, window bubble; `stopPropagation` keeps the event
-// from reaching the NEXT node but not from the other listeners of the node it is on. The term highlight's own hook
-// (`useEscapeToClear`) is the real one; the lightbox, the keyboard layer's "back" and the editor's handler are stand-ins
-// of the shape their source has, and a last block pins that shape against the source. The box runs on the minimal hook
+// from reaching the NEXT node but not from the other listeners of the node it is on. The lightbox, the keyboard layer's "back" and the editor's handler are
+// stand-ins of the shape their source has, and a last block pins that shape against the source. (P10-02: the term
+// highlight's hook went with the "Terms to know" strip, and with it its scenario here.) The box runs on the minimal hook
 // runtime (no DOM). Every text is invented.
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
@@ -34,7 +34,6 @@ import { EXPLAIN } from "./copy";
 import { ExplainBox, ExplainCard, type AskResult, type ThreadView } from "./explain-box";
 import type { ReplyResult } from "./explain-thread";
 import type { ExplainSelection } from "./paper-body";
-import { useEscapeToClear } from "./terms-strip";
 
 const SENTENCE = "We define the rafting ratio as the fraction of the gauge length covered by plates.";
 const term: PaperTerm = { term: "rafting ratio", definition: SENTENCE, evidence: SENTENCE, evidenceWhere: "2 Methods", sectionId: "s2", page: 2 };
@@ -247,7 +246,7 @@ describe("Escape with the empty state showing (P8-06, the manager's ruling)", ()
   });
 
   // Ruling §1h.51 (a), from A P8-05's finding F1: while the empty window stands (no thread open) the box does not consume
-  // Escape, so the page's own handlers — the Keyboard-shortcuts dialog's close, a term highlight's clear — see that same
+  // Escape, so the page's own handlers — the Keyboard-shortcuts dialog's close — see that same
   // key and the dialog never needs a second press. The head already passed it through (the box registers its Escape only
   // while a passage is in the window: the two tests above and "registers its own Escape only while…" below); this pins
   // it for the empty window that carries the P9-03b control, which is what a selection on offer makes of it.
@@ -303,22 +302,6 @@ describe("Escape with the empty state showing (P8-06, the manager's ruling)", ()
     await wait();
 
     expect(closeLightbox).toHaveBeenCalledTimes(1);
-    expect(run.looks.every((l) => l.empty)).toBe(true);
-    expect(Object.fromEntries(root)).toEqual(RESERVED);
-    expect(removeProperty).not.toHaveBeenCalled();
-    run.mounted.unmount();
-  });
-
-  it("a term highlight: the real `useEscapeToClear` clears it, and the window stays", async () => {
-    const clear = vi.fn();
-    let event!: KeyEvent;
-    const run = await scenario(base(), [() => void (event = press("Escape"))], () => useEscapeToClear(true, clear));
-    await wait();
-
-    expect(clear).toHaveBeenCalledTimes(1);
-    // The highlight's own handler took the key (it prevents and stops it); the box added nothing to that.
-    expect(event.preventDefault).toHaveBeenCalledTimes(1);
-    expect(event.stopPropagation).toHaveBeenCalledTimes(1);
     expect(run.looks.every((l) => l.empty)).toBe(true);
     expect(Object.fromEntries(root)).toEqual(RESERVED);
     expect(removeProperty).not.toHaveBeenCalled();
@@ -533,10 +516,6 @@ describe("the seams are as the stand-ins model them (read from the source)", () 
     expect(source).toContain('window.addEventListener("keydown", handler)');
     expect(source).toContain("if (onPaperPage() && runReaderKey(e.key, e)) return;");
     expect(source).toMatch(/Esc is "back to the briefing"/);
-  });
-
-  it("the term highlight's hook is the one this file mounts: a capture listener on the document", () => {
-    expect(read("src/components/reader/terms-strip.tsx")).toContain('document.addEventListener("keydown", onKeyDown, true)');
   });
 
   it("the notes editor's Escape is a React handler that stops the key itself", () => {

@@ -247,7 +247,7 @@ describe("globals.css — the term highlight token (P3-01)", () => {
     }
   });
 
-  it("is read only as a background — by the body's `<mark>` and by the pressed term that points at it — and nowhere else", () => {
+  it("is read only as a background — by the body's `<mark>` — and nowhere else", () => {
     expect(css).not.toMatch(/var\(--color-term-mark/);
     const root = new URL("..", import.meta.url).pathname;
     const reads: string[] = [];
@@ -264,7 +264,6 @@ describe("globals.css — the term highlight token (P3-01)", () => {
     walk(root.replace(/\/$/, ""));
     expect(reads).toEqual([
       "components/reader/paper-body.tsx: bg-[color:var(--color-term-mark)]",
-      "components/reader/terms-strip.tsx: aria-pressed:bg-[color:var(--color-term-mark)]",
     ]);
   });
 });

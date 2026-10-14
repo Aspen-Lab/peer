@@ -226,21 +226,6 @@ export const ROUTE = {
 } as const;
 
 /**
- * P3-01 (§1h.1; blueprint §3.5 ⑤ 词): the strip under the map. A term is a
- * button that points at its first use in the paper; its name says so for the
- * reader who cannot see the highlight. The definitions are the paper's own
- * sentences (quoted, attributed) or Peer's, labelled `PEERS_READING`.
- */
-export const TERMS = {
-  heading: "Terms to know",
-  find: (term: string) => `Find ${term} in the paper`,
-  /** P9-04 (X3): below `sm` the strip shows its first two terms; the toggle that opens the rest (only when
-   *  there are more than two), in the map's style — `MAP.show` / `MAP.hide`. */
-  showAll: (count: number) => `show all ${count} terms`,
-  fewer: "fewer terms",
-} as const;
-
-/**
  * P3-02 (§1h.2; user decision §1a.10; blueprint §3.5 ⑤): "Explain this?" — the
  * button beside a selected passage and the card it opens. Peer's words, in the
  * label face; the card's two prose parts are in the reading face and carry

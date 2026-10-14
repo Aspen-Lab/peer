@@ -14,8 +14,7 @@ import { TABPANEL_ID, tabId } from "./reader-tabs";
 // made a screen reader announce it before the abstract, so the DOM order was chosen on purpose).
 //
 // R10: on a paper Peer has read in full the page has two tabs. The strip stands under the decision
-// block; "Terms to know" stands in the panel on the spread (after the common blocks in one column);
-// the blocks BOTH tabs share — "Before you read" and the answers — are the column's first thing,
+// block; the blocks BOTH tabs share — "Before you read" and the answers — are the column's first thing,
 // above the active tab's blocks, in a slot of their own that does not depend on the tab, so that a
 // switch cannot remount the field or lose what the reader has typed (Q6). The rail is gone.
 //
@@ -38,9 +37,9 @@ function render(spread: boolean, over: Record<string, unknown> = {}): string {
     }),
   );
 }
-/** The page with a body: the tab strip, the terms and the common blocks all there. */
+/** The page with a body: the tab strip and the common blocks all there. */
 const tabbed = (spread: boolean, over: Record<string, unknown> = {}) =>
-  render(spread, { tabs: mark("TABS"), tab: "digestion", terms: mark("TERMS"), common: mark("COMMON"), ...over });
+  render(spread, { tabs: mark("TABS"), tab: "digestion", common: mark("COMMON"), ...over });
 
 const at = (html: string, name: string) => html.indexOf(`data-mark="${name}"`);
 const order = (html: string, names: readonly string[]) => names.map((name) => at(html, name));
@@ -55,7 +54,7 @@ describe("ReaderLayout, one column, a paper with no body (R2 + Q1)", () => {
   });
 
   it("has no tab strip, no tab panel and no common slot: the page it was", () => {
-    absent(html, "TABS", "TERMS", "COMMON");
+    absent(html, "TABS", "COMMON");
     expect(html).not.toContain("role=\"tabpanel\"");
     expect(html).not.toContain(TABPANEL_ID);
   });
@@ -66,15 +65,14 @@ describe("ReaderLayout, one column, a paper with a body (R10)", () => {
 
   // P9-04 (X3), RE-AIMED: this test pinned plate, title, decision, TABS, common, terms, panel — the strip
   // four screens above the panel it switches (on a phone the Map started at y 3,449). The strip now stands
-  // directly above its panel, after the blocks both tabs share and the terms.
-  it("plate, title, decision, the common blocks, the terms, the tab strip, then the active tab's blocks, Next (P9-04, X3)", () => {
-    expect(ascending(order(html, ["PLATE", "TITLE", "DECISION", "COMMON", "TERMS", "TABS", "WORDS", "ADDITIONS", "NEXT"]))).toBe(true);
+  // directly above its panel, after the blocks both tabs share. P10-02: the terms strip is gone from the order.
+  it("plate, title, decision, the common blocks, the tab strip, then the active tab's blocks, Next (P9-04, X3)", () => {
+    expect(ascending(order(html, ["PLATE", "TITLE", "DECISION", "COMMON", "TABS", "WORDS", "ADDITIONS", "NEXT"]))).toBe(true);
   });
 
-  it("the tab strip is the tabpanel's immediate previous sibling, with the terms before it (P9-04, X3)", () => {
+  it("the tab strip is the tabpanel's immediate previous sibling, with the common blocks before it (P9-04, X3)", () => {
     expect(html).toContain('<i data-mark="TABS">TABS</i><div role="tabpanel"');
-    expect(at(html, "TERMS")).toBeLessThan(at(html, "TABS"));
-    expect(at(html, "COMMON")).toBeLessThan(at(html, "TERMS"));
+    expect(at(html, "COMMON")).toBeLessThan(at(html, "TABS"));
     // The spread keeps the strip in the panel beside the column, a remote control by design (P7-14, R10).
     expect(tabbed(true)).not.toContain('<i data-mark="TABS">TABS</i><div role="tabpanel"');
   });
@@ -104,7 +102,6 @@ describe("ReaderLayout, one column, a paper with a body (R10)", () => {
       expect(panel).toContain('data-mark="WORDS"');
       expect(panel).toContain('data-mark="ADDITIONS"');
       expect(panel).not.toContain('data-mark="COMMON"');
-      expect(panel).not.toContain('data-mark="TERMS"');
       expect(panel).not.toContain('data-mark="TABS"');
     }
   });
@@ -136,9 +133,9 @@ describe("ReaderLayout, the spread, a paper with a body (R10)", () => {
   const panelAt = html.indexOf("data-reader-panel");
   const columnAt = html.indexOf("xl:flex xl:flex-col");
 
-  it("the panel: plate, title, decision, the tab strip, the terms — and none of the column's blocks", () => {
-    expect(ascending(order(html, ["PLATE", "TITLE", "DECISION", "TABS", "TERMS"]))).toBe(true);
-    for (const name of ["PLATE", "TITLE", "DECISION", "TABS", "TERMS"]) {
+  it("the panel: plate, title, decision, the tab strip — and none of the column's blocks (P10-02: no terms after it)", () => {
+    expect(ascending(order(html, ["PLATE", "TITLE", "DECISION", "TABS"]))).toBe(true);
+    for (const name of ["PLATE", "TITLE", "DECISION", "TABS"]) {
       expect(at(html, name)).toBeGreaterThan(panelAt);
       expect(at(html, name)).toBeLessThan(columnAt);
     }
@@ -171,19 +168,16 @@ describe("ReaderLayout, the spread, a paper with a body (R10)", () => {
     expect(summary.chunk).toContain('data-mark="COMMON"');
   });
 
-  // P9-04 (X2): this test pinned the opposite — "the one block of the panel that gives", a flex item
-  // that shrank to a 7rem floor and scrolled inside itself, a 112-px window on one of eight terms inside
-  // the panel's own scroll region. The panel scrolls as one now; nothing the layout puts inside it does.
-  it("the terms stand in the panel as an ordinary block: nothing the layout adds inside the panel scrolls, shrinks or has a floor (P9-04, X2)", () => {
+  // P9-04 (X2): the panel scrolls as one; nothing the layout puts inside it scrolls, shrinks or has a floor.
+  // P10-02: it held the terms as its example; the terms are gone, the panel's own contents are the same.
+  it("nothing the layout adds inside the panel scrolls, shrinks or has a floor (P9-04, X2)", () => {
     const panel = html.slice(html.indexOf("data-reader-panel"), columnAt);
     const inside = panel.slice(panel.indexOf(">") + 1);
 
-    expect(inside).toContain('data-mark="TERMS"');
+    expect(inside).toContain('data-mark="TABS"');
     // The panel's own tag carries `reader-panel` (sticky, window-high, overflow-y: auto); no other tag in it
     // has a class that scrolls (`overflow-*`), gives (`shrink`) or keeps a floor (`min-h-*`, `max-h-*`).
     expect(inside).not.toMatch(/class="[^"]*(?:overflow|shrink|min-h-|max-h-)[^"]*"/);
-    // One column has no panel to give in either: the terms are drawn as they are.
-    expect(tabbed(false)).not.toMatch(/class="[^"]*(?:overflow|shrink|min-h-)[^"]*"><i data-mark="TERMS">/);
   });
 
   it("an empty words slot (Paper digestion) leaves the additions where they were in the tabpanel", () => {
@@ -202,24 +196,23 @@ describe("reader-layout.tsx source (P7-14)", () => {
 
   it("one column: {p.decision} right after {p.title}, before the tabs, the common blocks and the abstract", () => {
     expect(stacked.slice(stacked.indexOf("{p.title}") + "{p.title}".length, stacked.indexOf("{p.decision}")).trim()).toBe("");
-    for (const later of ["{p.tabs}", "{common}", "{p.terms}", "{panel}"]) {
+    for (const later of ["{p.tabs}", "{common}", "{panel}"]) {
       expect(stacked.indexOf(later)).toBeGreaterThan(stacked.indexOf("{p.decision}"));
     }
   });
 
   // P9-04 (X3): the one-column return ends with the strip and the panel it labels, side by side.
-  it("one column: {p.tabs} stands directly before {panel}, after {common} and {p.terms}", () => {
+  it("one column: {p.tabs} stands directly before {panel}, after {common}", () => {
     expect(stacked.slice(stacked.indexOf("{p.tabs}") + "{p.tabs}".length, stacked.indexOf("{panel}")).trim()).toBe("");
-    expect(stacked.indexOf("{p.tabs}")).toBeGreaterThan(stacked.indexOf("{p.terms}"));
-    expect(stacked.indexOf("{p.terms}")).toBeGreaterThan(stacked.indexOf("{common}"));
+    expect(stacked.indexOf("{p.tabs}")).toBeGreaterThan(stacked.indexOf("{common}"));
   });
 
-  it("the spread's panel: {p.decision} right after {p.title}, then {p.tabs}, then {p.terms}", () => {
+  it("the spread's panel: {p.decision} right after {p.title}, then {p.tabs}, and nothing after it", () => {
     const panel = spread.slice(spread.indexOf("data-reader-panel"), spread.indexOf("COLUMN_CLASS"));
 
     expect(panel.slice(panel.indexOf("{p.title}") + "{p.title}".length, panel.indexOf("{p.decision}")).trim()).toBe("");
     expect(panel.indexOf("{p.tabs}")).toBeGreaterThan(panel.indexOf("{p.decision}"));
-    expect(panel.indexOf("{p.terms}")).toBeGreaterThan(panel.indexOf("{p.tabs}"));
+    expect(panel.slice(panel.indexOf("{p.tabs}") + "{p.tabs}".length).replace(/<\/div>[\s\S]*$/, "").trim()).toBe("");
     expect(panel).not.toContain("{p.common}");
     expect(panel).not.toContain("{common}");
   });
@@ -236,12 +229,10 @@ describe("reader-layout.tsx source (P7-14)", () => {
     expect(commonLine).not.toContain("tabbed");
   });
 
-  // P9-04 (X2): "Terms to know" lost its window of its own; the panel (`reader-panel`, globals.css) is the one
-  // scroll region, so the file names no class that would make a block inside it scroll, shrink or keep a floor.
-  it("gives the terms no window of their own: no wrapper class that scrolls, shrinks or keeps a floor (P9-04)", () => {
-    expect(source).not.toContain("TERMS_PANEL_CLASS");
+  // P9-04 (X2): the panel (`reader-panel`, globals.css) is the one scroll region, so the file names no class that
+  // would make a block inside it scroll, shrink or keep a floor. (P10-02: the terms it was pinned on are gone.)
+  it("gives no block of the panel a window of its own: no wrapper class that scrolls, shrinks or keeps a floor (P9-04)", () => {
     expect(source).not.toMatch(/xl:(?:shrink|overflow-)|min-h-\[|max-h-\[/);
-    expect(spread.slice(spread.indexOf("{p.terms}") - 40, spread.indexOf("{p.terms}"))).not.toContain("<div");
   });
 
   it("has no rail slot, no ask slot, no panel-height variable and no ResizeObserver", () => {
