@@ -215,8 +215,9 @@ describe("routeByQuestions — the tier is the section's grade among the paper's
 describe("routeByQuestions — a group row takes the best of its children (P10-06, ruling §1h.78 (d))", () => {
   const specs: Spec[] = [
     { id: "g2", paragraphs: [], level: 1 },
-    { id: "g2a", paragraphs: [para(6, 3, 120)], level: 2, parentId: "g2" },
+    // The weaker child stands first: the group takes the strongest, not the first.
     { id: "g2b", paragraphs: [para(1, 0, 120)], level: 2, parentId: "g2" },
+    { id: "g2a", paragraphs: [para(6, 3, 120)], level: 2, parentId: "g2" },
     { id: "other", paragraphs: [para(1, 0, 120)], level: 1 },
     { id: "far", paragraphs: [para(0, 0, 120)], level: 1 },
   ];
