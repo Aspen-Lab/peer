@@ -453,8 +453,10 @@ function ItemsTable({ items }: { items: readonly ExplainItem[] }) {
 /** One message of the thread: the reader's under "You"; Peer's under "Peer", the
  *  paper's own sentence through `EvidenceQuote` when it was verified, else Peer's
  *  reading label beside the prose and no quote (§1f.17). A reply's term table (P3-07)
- *  sits under its prose and above its quote. */
-function TurnView({ turn }: { turn: ExplainTurn }) {
+ *  sits under its prose and above its quote. P10-39: on a selection in Peer's own words (the
+ *  Summary, an answer) Peer's replies carry the label of the first answer's second part,
+ *  "Why Peer says it", not "Peer"; on a selection in the paper they keep "Peer". */
+function TurnView({ turn, source }: { turn: ExplainTurn; source?: ExplainSource }) {
   if (turn.role === "reader") {
     return (
       <div>
@@ -465,7 +467,7 @@ function TurnView({ turn }: { turn: ExplainTurn }) {
   }
   return (
     <div>
-      <PartHeading peers={turn.peer === true}>{EXPLAIN.peer}</PartHeading>
+      <PartHeading peers={turn.peer === true}>{source === undefined || source === "paper" ? EXPLAIN.peer : WHY_PEER_SAYS_IT}</PartHeading>
       <p className="font-reading text-body leading-[1.6] text-text mt-1">{turn.text}</p>
       {turn.items && turn.items.length > 0 && <ItemsTable items={turn.items} />}
       {turn.evidence && turn.peer !== true && <EvidenceQuote text={turn.evidence} where={turn.evidenceWhere ?? "abstract"} page={turn.page} />}
@@ -604,7 +606,7 @@ export function ExplainCard({
                 )}
               </section>
               {status.answer.items && status.answer.items.length > 0 && <ItemsTable items={status.answer.items} />}
-              {asking?.turns.map((turn, index) => <TurnView key={index} turn={turn} />)}
+              {asking?.turns.map((turn, index) => <TurnView key={index} turn={turn} source={source} />)}
               {asking?.onSayMore && sayMoreOf(asking.turns) !== null && (
                 // P3-07: one button, under Peer's latest reply only — and never under the first
                 // answer (no turn yet), nor under a reply that is already the long form.
