@@ -1232,7 +1232,12 @@ export function NoteEditor({
       const next = insertMarked(b.text, sel.from, data, want.marks, label);
       remember(id, b.text, next.text, next.plain, next.plain, "type");
       patch(id, { text: next.text });
-      focusBlock(id, { plain: next.plain });
+      // typed text that closes a mark (a delimiter) is read as one: the caret goes where the mark ends, and the text after it is outside
+      const words = plainOfSource(b.text, label);
+      const closed = plainOfSource(next.text, label) !== words.slice(0, sel.from) + data + words.slice(sel.from);
+      const at = closed ? plainOfSourceOffset(treeOf(next.text, label), next.caret) : next.plain;
+      focusBlock(id, { plain: at });
+      if (closed) pendingMarks.current = { id, plain: at, marks: marksOpenAt(next.text, at, label) };
       return true;
     },
 
@@ -1287,7 +1292,8 @@ export function NoteEditor({
       const blocks = docRef.current.blocks;
       const b = blocks[i];
       // The selection: source offsets (pos, end), and the visible characters (sel.from, sel.to of sel.len).
-      const sel = selection(id) ?? { start: 0, end: 0, from: 0, to: 0, len: 0 };
+      const sel = selection(id);
+      if (!sel) return;
       const pos = sel.start;
       const end = sel.end;
       const collapsed = sel.from === sel.to;

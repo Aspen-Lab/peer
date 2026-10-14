@@ -403,8 +403,11 @@ const withChipsAsOne = (nodes: readonly WNode[]): string =>
 function survives(src: string, tree: readonly WNode[]): boolean {
   const parsed = treeOf(src);
   if (withChipsAsOne(parsed) !== withChipsAsOne(tree)) return true;
-  const want = runs(tree);
-  const got = runs(parsed);
+  return covers(runs(tree), runs(parsed));
+}
+
+/** Does every character carry, in `got`, at least the marks it carries in `want`? (Both over the same characters.) */
+function covers(want: { n: number; k: string }[], got: { n: number; k: string }[]): boolean {
   let i = 0;
   let j = 0;
   let a = want[0]?.n ?? 0;
@@ -791,6 +794,8 @@ export function marksAt(src: string, p: number, label: Label = identity): MarkNa
  *  there, after the reader has just closed a mark by typing its delimiter, wears these and not the one just closed. */
 export function marksOpenAt(src: string, p: number, label: Label = identity): MarkName[] {
   const leaves = leavesOf(treeOf(src, label));
+  const within = leaves.find((l) => p > l.p && p < l.q);
+  if (within) return within.marks;
   const before = leaves.find((l) => l.q === p);
   const after = leaves.find((l) => l.p === p);
   if (!before || !after) return [];
@@ -801,13 +806,13 @@ export function marksOpenAt(src: string, p: number, label: Label = identity): Ma
 
 /** `typed` put in at plain offset `p` wearing the marks `want`: the cut at `p` closes the marks around it and the
  *  text is wrapped in `want` (outermost first). The new source, and the plain offset after the text. */
-export function insertMarked(src: string, p: number, typed: string, want: readonly MarkName[], label: Label = identity): { text: string; plain: number } {
+export function insertMarked(src: string, p: number, typed: string, want: readonly MarkName[], label: Label = identity): { text: string; plain: number; caret: number } {
   const tree = treeOf(src, label);
   const total = plainOfTree(tree).length;
   let piece: WNode[] = [text(typed)];
   for (const mark of [...want].reverse()) piece = [{ kind: "mark", mark, kids: piece, ...blank }];
   const next = serializeTree([...sliceTree(tree, 0, p), ...piece, ...sliceTree(tree, p, total)]);
-  return { text: next.src, plain: p + typed.length };
+  return { text: next.src, plain: p + typed.length, caret: sourceOfPlain(next.tree, p + typed.length, "end") };
 }
 
 /**
@@ -817,6 +822,11 @@ export function insertMarked(src: string, p: number, typed: string, want: readon
  */
 export function markSource(src: string, from: number, to: number, mark: MarkName, label: Label = identity): { text: string } | null {
   const words = plainOfSource(src, label);
+  // What was marked before stays marked (apart from `mark` itself): italic over bold-and-underline has no spelling in
+  // the dialect (a star cannot sit in bold, an underscore cannot sit in underline), and it is refused, not written
+  // with a mark lost.
+  const before = runs(treeOf(src, label)).map((r) => ({ n: r.n, k: r.k.split("+").filter((k) => k !== mark).join("+") }));
+  const ok = (next: string): boolean => plainOfSource(next, label) === words && covers(before, runs(treeOf(next, label)));
   const run = (s: string, em: "*" | "_"): string | null => {
     const tree = treeOf(s, label);
     const a = sourceOfPlain(tree, from, "start");
@@ -832,9 +842,9 @@ export function markSource(src: string, from: number, to: number, mark: MarkName
     }
     if (edit.from === edit.to && edit.text === "" && edit.caret !== edit.from) return null;
     const next = s.slice(0, edit.from) + edit.text + s.slice(edit.to);
-    if (plainOfSource(next, label) === words) return next;
+    if (ok(next)) return next;
     const fixed = next.replace(/\*\*\*([^*\n]+)\*\*\*/, "**_$1_**");
-    return plainOfSource(fixed, label) === words ? fixed : null;
+    return ok(fixed) ? fixed : null;
   };
   const attempt = (s: string): string | null => run(s, "*") ?? (mark === "em" ? run(s, "_") : null);
   const done = attempt(src);
@@ -844,7 +854,7 @@ export function markSource(src: string, from: number, to: number, mark: MarkName
   if (retry !== null) return { text: retry };
   // Last: the mark around the words themselves, innermost (italic inside bold-and-underline has no spelling around them)
   const around = serializeTree(wrapRange(treeOf(src, label), from, to, mark)).src;
-  return around !== src && plainOfSource(around, label) === words && survivesMark(around, mark) ? { text: around } : null;
+  return around !== src && ok(around) && survivesMark(around, mark) ? { text: around } : null;
 }
 
 /** The tree with `mark` laid directly round the plain range `[from, to)`, as deep as the range allows. */

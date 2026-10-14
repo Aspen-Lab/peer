@@ -7,6 +7,7 @@ import {
   insertMarked,
   joinSources,
   marksAt,
+  marksOpenAt,
   markSource,
   mountInline,
   newHistory,
@@ -408,12 +409,23 @@ describe("rule 3: the selection is the words, mapped between the DOM and the sou
     expect(press("alpha **beta** gamma", 6, 10, "strong")).toBe("alpha beta gamma");
   });
 
-  it("every key over the same selection leaves the visible words and the selection's plain range alone", () => {
+  it("every key over the same selection leaves the visible words alone, and no other mark is lost", () => {
     let src = "alpha beta gamma";
-    for (const m of ["strong", "underline", "mark", "em", "underline", "strong", "mark", "em"] as MarkName[]) {
+    const steps: [MarkName, string | null][] = [
+      ["strong", "alpha **beta** gamma"],
+      ["underline", "alpha __**beta**__ gamma"],
+      ["mark", "alpha ==__**beta**__== gamma"],
+      // bold, underline and italic together have no spelling in the dialect (no star in bold, no underscore in underline): refused
+      ["em", null],
+      ["underline", "alpha ==**beta**== gamma"],
+      ["em", "alpha _==**beta**==_ gamma"],
+      ["strong", "alpha _==beta==_ gamma"],
+      ["mark", "alpha _beta_ gamma"],
+    ];
+    for (const [m, want] of steps) {
       const next = markSource(src, 6, 10, m);
-      expect(next).not.toBeNull();
-      src = next!.text;
+      expect(next?.text ?? null).toBe(want);
+      if (next) src = next.text;
       expect(plainOfSource(src)).toBe("alpha beta gamma");
       expect(strayCount(src)).toBe(0);
       expect(draw(src).textContent).toBe("alpha beta gamma");
@@ -459,6 +471,45 @@ describe("rule 3: the selection is the words, mapped between the DOM and the sou
     expect(c.text).toBe("alpha **__beXta__** gamma"); // underline is read across the whole word
     expect(strayCount(c.text)).toBe(0);
     expect(plainInline(c.text)).toBe("alpha beXta gamma");
+  });
+});
+
+describe("a mark the reader closes by typing its delimiter ends there", () => {
+  it("the marks still open where a mark just closed: the text typed next is outside it, inside the ones around it", () => {
+    expect(marksOpenAt("hello *italic*", 12)).toEqual([]);
+    expect(marksOpenAt("**one _two_ three**", 7)).toEqual(["strong"]);
+    expect(marksOpenAt("**one** two", 3)).toEqual([]);
+    expect(marksOpenAt("**one two**", 3)).toEqual(["strong"]);
+  });
+
+  it("typed text with no marks wanted lands after the mark: `hello *italic*` + ` and` is `hello *italic* and`", () => {
+    const next = insertMarked("hello *italic*", 12, " ", []);
+    expect(next.text).toBe("hello *italic* ");
+    expect(next.caret).toBe(15);
+    expect(next.plain).toBe(13);
+  });
+
+  it("a delimiter typed through the editor's own insertion is read as a mark, and the visible words tell it", () => {
+    const next = insertMarked("third **bold word*", 17, "*", []);
+    expect(next.text).toBe("third **bold word**");
+    expect(readsDifferently(next.text, "third **bold word**")).toBe(true);
+    expect(plainOfSource(next.text)).toBe("third bold word");
+  });
+});
+
+describe("undo gives back the selection a step had when it was left", () => {
+  const S = (text: string, from: number, to = from) => ({ text, from, to });
+  it("an edit records the selection just before it on the state it leaves", () => {
+    let h = newHistory(S("alpha beta", 10));
+    h = recordState(h, S("alpha **beta**", 6, 10), "edit", 1, { from: 6, to: 10 });
+    h = recordState(h, S("alpha **beta** x", 16), "type", 5000, { from: 10, to: 10 });
+    expect(h.states.map((st) => [st.text, st.from, st.to])).toEqual([
+      ["alpha beta", 6, 10],
+      ["alpha **beta**", 10, 10],
+      ["alpha **beta** x", 16, 16],
+    ]);
+    // undoing the typing puts the caret where it was when the typing began
+    expect(stepBack(h)!.state).toEqual(S("alpha **beta**", 10, 10));
   });
 });
 
