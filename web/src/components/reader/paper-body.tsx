@@ -380,12 +380,19 @@ interface NodeLike {
   nodeType: number;
   parentElement: ElementLike | null;
 }
+/** A node of the range's cloned contents, as far as the words of a paragraph are read from it (P10-24). */
+interface ChildLike {
+  nodeType: number;
+  nodeName: string;
+  data?: string;
+  childNodes?: ArrayLike<ChildLike>;
+}
 interface RangeLike {
   startContainer: NodeLike;
   endContainer: NodeLike;
   endOffset: number;
   cloneRange(): RangeLike;
-  cloneContents(): { querySelector(selector: string): unknown };
+  cloneContents(): { querySelector(selector: string): unknown; childNodes?: ArrayLike<ChildLike> };
   getClientRects(): ArrayLike<ViewRect>;
   getBoundingClientRect(): ViewRect;
 }
@@ -470,6 +477,30 @@ function measureRange(range: RangeLike, paragraph?: ElementLike): ViewRects | nu
   return { rect: plain(last), bounds, ...(box && hasSize(box) ? { paragraph: plain(box) } : {}) };
 }
 
+/**
+ * P10-24 (X-B2′, BACKLOG-87): the words a range holds when it holds a note's tag. The tag (`NoteTag`) is a `<sup>` — a word
+ * joiner and the button "[n]" — inside the paragraph's `<p>`, and a browser's `selection.toString()` reads it as text in the
+ * middle of the words it runs across. The paragraph's own words are the range's text nodes outside every `<sup>` (the
+ * paper's text has none of its own: a formula is a drawn `.katex`, which the reading refuses). Null when the range holds
+ * no tag, or its contents cannot be walked: `toString()` is then the words, as it always was.
+ */
+function wordsWithoutTags(contents: { childNodes?: ArrayLike<ChildLike> }): string | null {
+  if (!contents.childNodes) return null;
+  let skipped = false;
+  const read = (nodes: ArrayLike<ChildLike>): string => {
+    let words = "";
+    for (let i = 0; i < nodes.length; i += 1) {
+      const node = nodes[i];
+      if (node.nodeType === 3) words += node.data ?? "";
+      else if (node.nodeName === "SUP") skipped = true;
+      else if (node.childNodes) words += read(node.childNodes);
+    }
+    return words;
+  };
+  const words = read(contents.childNodes);
+  return skipped ? words : null;
+}
+
 /** What the page's selection is, as an `ExplainSelection`, or null: nothing
  *  selected, a selection across paragraphs or outside the body, one with a
  *  formula in it, over-long, or not on screen. */
@@ -477,18 +508,21 @@ export function readSelection(selection: SelectionLike | null): ExplainSelection
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
   // The selection's own range changes as the selection does; this one is ours.
   const range = selection.getRangeAt(0).cloneRange();
-  const text = selection.toString();
+  const spoken = selection.toString();
   const start = placeOf(range.startContainer);
   let end = placeOf(range.endContainer);
   // A triple click selects a paragraph, and the browser ends it at offset 0 of
   // the NEXT one: the words are all the first paragraph's. A drag that really
   // runs on into another paragraph carries a break inside its words.
-  if (!samePlace(start, end) && range.endOffset === 0 && !/\n/.test(text.trim())) end = start;
+  if (!samePlace(start, end) && range.endOffset === 0 && !/\n/.test(spoken.trim())) end = start;
   if (!samePlace(start, end)) return null;
+  const contents = range.cloneContents();
+  // P10-24: the passage is the paragraph's words, never a note tag's text (a break the selection carries was read from `spoken`).
+  const text = wordsWithoutTags(contents) ?? spoken;
   // The two ends share a place (a paragraph, or one marked container whose blocks may differ): the start's id names the target.
   const target = selectionTarget({ anchorParagraphId: start.id, focusParagraphId: start.id, text, source: start.source });
   if (!target) return null;
-  if (range.cloneContents().querySelector(FORMULA_SELECTOR)) return null;
+  if (contents.querySelector(FORMULA_SELECTOR)) return null;
   const where = measureRange(range, start?.text);
   if (!where) return null;
   return { ...target, ...where, measure: () => measureRange(range, start?.text) };

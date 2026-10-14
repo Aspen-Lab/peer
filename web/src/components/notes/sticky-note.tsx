@@ -24,7 +24,7 @@ import type { Citable, NoteAnchor } from "@/lib/notes/types";
 import { paragraphAnchor, type ExplainSelection } from "@/components/reader/paper-body";
 import { DOCK_TOP_PX } from "@/components/reader/explain-dock";
 import { holdInPlace, readingAnchorTop, stackRows, useColumn, useWindows, type FloatingWindow, type StackFrame } from "@/lib/reader/windows";
-import { readingNoteFor, useNotesStore } from "@/store/notes";
+import { readingNoteFor, stripTagText, useNotesStore } from "@/store/notes";
 import { AnchorSquare, goToPassage, registerPassageHost } from "./note-tags";
 import { WysiwygField } from "./wysiwyg-field";
 
@@ -84,7 +84,7 @@ export function StickyWindowView({
           className="flex min-w-0 flex-1 items-center gap-2 px-3 text-left transition-colors hover:bg-surface-hover"
         >
           <span className="eyebrow shrink-0 text-heading">{stickyTitle(n)}</span>
-          <span className="min-w-0 truncate font-reading text-body-sm italic text-text-muted">{`“${quoteHead(quote)}”`}</span>
+          <span className="min-w-0 truncate font-reading text-body-sm italic text-text-muted">{`“${quoteHead(stripTagText(quote))}”`}</span>
         </button>
         <button
           type="button"
@@ -193,7 +193,8 @@ export function takeStickyNote(
   const made = addSticky(noteId, {
     paperId: paper.id,
     paragraphId: paragraphAnchor(target.sectionIndex, target.paragraphIndex),
-    passage: target.passage,
+    // P10-24: the words, never a note tag's text.
+    passage: stripTagText(target.passage),
     paragraphText: target.paragraphText,
   });
   if (!made) return null;

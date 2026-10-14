@@ -17,13 +17,27 @@ import { citedKeys, stickyBlocks, stickyQuote, withStickyText } from "@/lib/note
 import { readingNote, type ReadingNoteExtras } from "@/lib/notes/templates";
 import { MATH_CLOSE, MATH_OPEN } from "@/lib/text/math";
 
+/** U+2060: the word joiner a note's tag opens with (`NoteTag`), which allows no line break before the tag. */
+const TAG_JOINER = "\u2060";
+
+/**
+ * P10-24 (X-B2′, BACKLOG-87): a passage without a note tag's text. A browser's selection reads the tag's `<sup>` as text —
+ * the word joiner and "[n]" — in the middle of the words it runs across; the passage is the paragraph's words, so a tag
+ * (the joiner and its "[n]") and any stray joiner are removed. A "[12]" with no joiner before it is the paper's own
+ * words (a citation) and stays.
+ */
+export function stripTagText(passage: string): string {
+  return passage.replace(new RegExp(`${TAG_JOINER}\\[\\d+\\]`, "g"), "").replace(new RegExp(TAG_JOINER, "g"), "");
+}
+
 /**
  * P10-09f (review 7.1c; rule 1): where a selection's words stand in the paragraph's text — the first occurrence of the
  * passage (white space in the passage matches any white space in the paragraph; the selection arrives collapsed).
  * A formula's TeX is not prose: no match starts or ends inside one. Null when the passage is not found whole.
  */
 export function locatePassage(paragraph: string, passage: string): { start: number; end: number } | null {
-  const words = passage.split(/\s+/).filter(Boolean);
+  // P10-24: a passage that still arrives with a tag's text (an older caller) is searched by its words.
+  const words = stripTagText(passage).split(/\s+/).filter(Boolean);
   if (words.length === 0) return null;
   const masked = paragraph.replace(new RegExp(`${MATH_OPEN}[^${MATH_CLOSE}]*${MATH_CLOSE}`, "g"), (math) => "\u0000".repeat(math.length));
   const found = new RegExp(words.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s+")).exec(masked);
@@ -85,8 +99,10 @@ export const useNotesStore = create<NotesState>()(
         if (!note) return null;
         const used = note.blocks.reduce((most, b) => Math.max(most, b.anchor?.n ?? 0), 0);
         const n = Math.max(note.stickyCount ?? 0, used) + 1;
-        const place = at.paragraphText === undefined ? null : locatePassage(at.paragraphText, at.passage);
-        const { header, blocks } = stickyBlocks({ paperId: at.paperId, paragraphId: at.paragraphId, quote: stickyQuote(at.passage), n, ...(place ?? {}) });
+        // P10-24: the passage is the paragraph's words — never a tag's text — for the quote and for the range alike.
+        const passage = stripTagText(at.passage);
+        const place = at.paragraphText === undefined ? null : locatePassage(at.paragraphText, passage);
+        const { header, blocks } = stickyBlocks({ paperId: at.paperId, paragraphId: at.paragraphId, quote: stickyQuote(passage), n, ...(place ?? {}) });
         set((s) => {
           const current = s.notes[noteId];
           if (!current) return s;

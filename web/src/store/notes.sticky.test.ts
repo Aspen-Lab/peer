@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { inlineMath } from "@/lib/text/math";
-import { useNotesStore, readingNoteFor, locatePassage } from "./notes";
+import { useNotesStore, readingNoteFor, locatePassage, stripTagText } from "./notes";
 
 // P10-09a (review 7.1; ruling §1h.78 (f)): the paper's one note holds every sticky. `ensureReadingNote` makes the
 // note without navigating and returns its id; `addSticky` appends "Note N" (an `h3` carrying `anchor`) and one empty
@@ -164,6 +164,14 @@ describe("addSticky — the selection's place", () => {
 describe("a passage carrying a note tag's text (P10-24, rule 1)", () => {
   beforeEach(() => useNotesStore.setState({ notes: {} }));
   const PARAGRAPH = "Creep limits the life of hot parts. The finest grains crept fastest when annealed.";
+
+  it("stripTagText removes a tag (the joiner and [n]) and a stray joiner, and nothing else", () => {
+    expect(stripTagText("finest grains\u2060[1] crept")).toBe("finest grains crept");
+    expect(stripTagText("a\u2060[12]\u2060[3] b")).toBe("a b");
+    expect(stripTagText("a\u2060 b")).toBe("a b");
+    // a citation in the paper's own words has no joiner before it: it stays
+    expect(stripTagText("as shown in [12] before")).toBe("as shown in [12] before");
+  });
 
   it("locatePassage finds the words across the tag's text, at the paragraph's offsets", () => {
     const hit = locatePassage(PARAGRAPH, "The finest grains\u2060[1] crept fastest");
