@@ -586,16 +586,20 @@ function Section({
   );
   /** Whether the paper set an equation or a figure right after paragraph `i`. */
   const hasFollowing = (i: number) => equations.some((e) => e.after === i) || figures.some((f) => f.after === i);
+  // P10-04 (review 3.3): a group heading ("2 Results" holding only "2.1 …") has no paragraphs, no equation
+  // and no figure: it is its heading alone, with its anchor, and nothing under it before its first child.
+  const alone = section.paragraphs.length === 0 && equations.length === 0 && figures.length === 0;
   return (
     <section id={sectionAnchor(index)} className="mt-8 scroll-mt-20 first:mt-6">
       {/* P1-05: the route marks the heading — an attribute and a tint,
           nothing else — and never the paragraphs under it. */}
       <h3
         data-route={mark?.tier}
-        className={markedClass("font-reading font-medium text-heading text-title leading-[1.3] mb-2", mark, HEADING_MARK)}
+        className={markedClass(`font-reading font-medium text-heading text-title leading-[1.3]${alone ? "" : " mb-2"}`, mark, HEADING_MARK)}
       >
         <MathText text={section.heading} />
       </h3>
+      {!alone && (
       <div className="font-reading text-title leading-[1.65] text-text-muted measure-paper space-y-4 reading-justify">
         {following(-1)}
         {section.paragraphs.map((paragraph, i) => {
@@ -635,6 +639,7 @@ function Section({
           );
         })}
       </div>
+      )}
     </section>
   );
 }

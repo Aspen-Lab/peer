@@ -18,7 +18,7 @@
 import { tokenize } from "@/lib/scoring/tokenize";
 import { canonicalize, isGenericTerm, termMatches, termOccurrences } from "@/lib/scoring/term-expand";
 import { parseBlockMarker } from "@/lib/text/math";
-import type { ExtractedDocument, ExtractedEquation, ExtractedSection } from "./html-text";
+import { headingNumber, numbersHeading, type ExtractedDocument, type ExtractedEquation, type ExtractedSection } from "./html-text";
 // Type only: erased at runtime, so `reading.ts` can import this module
 // without the two importing each other.
 import type { ReadingEquation } from "./reading";
@@ -74,7 +74,10 @@ export function sectionParagraphs(
  * The abstract is dropped: the page sets it from the record, sentence by
  * sentence, with the ink on it, and the extractor's copy is the same text
  * without the marks. A section with nothing under its heading is dropped too
- * — an extractor artefact, not a part of the paper.
+ * — an extractor artefact, not a part of the paper — unless it numbers the
+ * section after it (P10-04, review 3.3): "2. RESULTS AND DISCUSSION" holding
+ * only "2.1 …" is the paper's own group heading, a row of the map and a
+ * heading of the body with no paragraphs under it.
  *
  * P1-01 (§1f.1): exported so the reading map and the body are one list —
  * map row k ↔ body section k.
@@ -95,7 +98,10 @@ export function readableSections(doc: ExtractedDocument): ReadableSection[] {
   doc.sections.forEach((section, index) => {
     if (section.canonical === "abstract") return;
     const { paragraphs, equations } = sectionParagraphs(section, lifted);
-    if (paragraphs.length === 0 && equations.length === 0) return;
+    if (paragraphs.length === 0 && equations.length === 0) {
+      const next = doc.sections[index + 1];
+      if (!next || !numbersHeading(section.heading, next.heading)) return;
+    }
     out.push({ id: section.id ?? `s${index}`, section, paragraphs, equations });
   });
   return out;
@@ -126,6 +132,14 @@ export interface ReadingMapSection {
   words: number;
   minutes: number;
   paragraphs: ReadingMapParagraph[];
+  /** P10-04 (review 3.3): how deep the paper numbers this heading — 1 for "2.", 2 for "2.1", 3 for "2.1.1"
+   *  (deeper is 3). An unnumbered heading is 1: a heading with no number says nothing about its depth, and
+   *  a guess would nest "Conclusions" under whatever numbered section stands above it. Absent in a map
+   *  built before levels existed; the view then reads the depth off the heading. */
+  level?: 1 | 2 | 3;
+  /** The id of the nearest row before this one with a smaller level, when there is one. A row with no
+   *  paragraphs and a child is a group row ("4. EXPERIMENTAL SECTION"). */
+  parentId?: string;
 }
 
 export interface ReadingMap {
@@ -259,9 +273,16 @@ export function openingOf(paragraph: string): string | null {
  *  how `buildReading` builds it, from the same split as the body. */
 export function readingMapOf(rendered: readonly ReadableSection[]): ReadingMap {
   let totalWords = 0;
+  // P10-04: the rows still open above this one — each with the level it was given — so the nearest
+  // shallower row before a row is its parent.
+  const open: Array<{ id: string; level: 1 | 2 | 3 }> = [];
   const sections = rendered.map(({ id, section, paragraphs }): ReadingMapSection => {
     const words = paragraphs.reduce((sum, paragraph) => sum + wordCount(paragraph), 0);
     totalWords += words;
+    const level = levelOf(section.heading);
+    while (open.length > 0 && open[open.length - 1].level >= level) open.pop();
+    const parentId = open[open.length - 1]?.id;
+    open.push({ id, level });
     return {
       id,
       heading: section.heading,
@@ -271,9 +292,39 @@ export function readingMapOf(rendered: readonly ReadableSection[]): ReadingMap {
       words,
       minutes: words > 0 ? Math.max(1, Math.ceil(words / WORDS_PER_MINUTE)) : 0,
       paragraphs: paragraphs.map((paragraph, index) => ({ index, opening: openingOf(paragraph) })),
+      level,
+      ...(parentId !== undefined ? { parentId } : {}),
     };
   });
   return { sections, totalMinutes: Math.ceil(totalWords / WORDS_PER_MINUTE) };
+}
+
+/** P10-04: a heading's level — the parts of its number ("2." 1, "2.1" 2, "2.1.1" 3, deeper 3); no number, 1. */
+function levelOf(heading: string): 1 | 2 | 3 {
+  const number = headingNumber(heading);
+  const depth = number ? number.split(".").length : 1;
+  return depth >= 3 ? 3 : depth === 2 ? 2 : 1;
+}
+
+/**
+ * P10-04 (review 3.3): what a group row stands for — the words and the minutes of every row under it, by
+ * `parentId` (a child's own, so a nested group adds its children, and no row is counted twice). Keyed by
+ * the group row's id; a row with paragraphs of its own, or none under it, is not in the map. The minutes are
+ * the children's, summed (each one rounded up as the row states it), not re-rounded from the sum.
+ */
+export function groupTotals(map: ReadingMap): Map<string, { words: number; minutes: number }> {
+  const byId = new Map(map.sections.map((row) => [row.id, row]));
+  const totals = new Map<string, { words: number; minutes: number }>();
+  for (const row of map.sections) {
+    if (row.paragraphs.length > 0 || row.words > 0) continue;
+    const below = map.sections.filter((other) => {
+      for (let up = other.parentId; up !== undefined; up = byId.get(up)?.parentId) if (up === row.id) return true;
+      return false;
+    });
+    if (below.length === 0) continue;
+    totals.set(row.id, { words: below.reduce((sum, r) => sum + r.words, 0), minutes: below.reduce((sum, r) => sum + r.minutes, 0) });
+  }
+  return totals;
 }
 
 export function buildReadingMap(doc: ExtractedDocument): ReadingMap {

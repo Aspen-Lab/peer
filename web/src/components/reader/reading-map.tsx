@@ -37,11 +37,21 @@
 // the separator it owns (P9-22's rule: a wrap never leaves a line ending on "·"), joined by one plain
 // space; the meta may wrap under the heading rather than squeeze it. And where there is no hover the
 // map's toggles — "show map" / "hide map" and each row's fold — are 44 px tall (the P9-23 rule).
+//
+// P10-04 (review 3.3; A10): the paper's own hierarchy. A row has its `level` (1 for "2.", 2 for "2.1", 3 for
+// "2.1.1") and is indented one step per level, in the one list (an inline padding, not a nested table, so the
+// keyboard walks the rows in order). A row with no paragraphs of its own that has rows under it is a group
+// row ("4. EXPERIMENTAL SECTION · method · p.15 · 1,562 words · 9 min"): its heading, role and page as any
+// row's, the sum of its children's words and minutes, no fold, no "not mentioned" (it has no text to
+// mention anything in). The summary line counts it as a section and adds the words over the rows that have
+// them, so the group's sum is not counted twice. With the map under the tab strip (review 3.1) its links
+// follow the page's `reveal`, so a row clicked under "Summary" brings the body in first.
 
-import { Fragment, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import type { PaperReading } from "@/lib/papers/reading";
 import {
   gistRoute,
+  groupTotals,
   routeByQuestionsCached,
   type ReadingMap,
   type ReadingMapSection,
@@ -50,6 +60,7 @@ import {
 } from "@/lib/papers/reading-map";
 import type { ParagraphGuide } from "@/lib/papers/paragraph-guide";
 import { MAP, PEERS_READING, ROUTE } from "./copy";
+import { followSectionLink } from "./evidence-quote";
 import { MathText } from "./math";
 import {
   ROUTE_TINT,
@@ -83,6 +94,14 @@ function depthOf(heading: string): number {
   return number ? number[1].split(".").length - 1 : 0;
 }
 
+/** P10-04: a row's level — the map's own (`level`), or, for a map built before levels, read off the heading. */
+function levelOfRow(row: ReadingMapSection): 1 | 2 | 3 {
+  return row.level ?? (Math.min(depthOf(row.heading) + 1, 3) as 1 | 2 | 3);
+}
+
+/** P10-04: one indent step per level under the first, in rem. */
+const INDENT_STEP_REM = 0.75;
+
 function roleLabel(role: ReadingRole): string | null {
   return role === "body" ? null : MAP.roles[role];
 }
@@ -114,6 +133,7 @@ export function ReadingMapView({
   phoneOpen = false,
   gists,
   source,
+  reveal,
 }: {
   map: ReadingMap;
   /** The reader's questions routed through the paper (`readingRoute`), with
@@ -130,9 +150,15 @@ export function ReadingMapView({
    *  the map is the paper's one contents list, so it says so once. Absent: the line has no
    *  "Read from …" part. */
   source?: string;
+  /** P10-04 (review 3.1): the page's way to bring the body in before a jump into it (`useReaderTab`'s
+   *  `reveal`). The map stands under both tabs, the body under one; without this a link is the
+   *  browser's own anchor, as it was. */
+  reveal?: (run: () => void) => void;
 }) {
   const [open, setOpen] = useState<ReadonlySet<number>>(() => new Set(openRows));
   const [shownOnPhone, setShownOnPhone] = useState(phoneOpen);
+  // P10-04: what each group row stands for, by its id.
+  const groups = useMemo(() => groupTotals(map), [map]);
   if (map.sections.length === 0) return null;
   // Questions that point somewhere: an unmarked row then says so.
   const asked = routeAsksQuestions(route);
@@ -189,10 +215,16 @@ export function ReadingMapView({
             const lines = row.paragraphs.filter((line) => line.opening !== null);
             const expanded = open.has(k);
             const role = roleLabel(row.role);
+            // P10-04: a group row says its children's words and minutes, and has nothing of its own to fold.
+            const group = groups.get(row.id);
+            const shown = group ? { ...row, ...group } : row;
+            const level = levelOfRow(row);
             const mark = sectionMark(route, row.id);
             // P2-04b (§1g.15): a background mark Tier 0 found nothing in has no
             // counts to state, so it says what the mark is for, not the bare tier.
-            const fact = mark
+            const fact = group
+              ? null
+              : mark
               ? mark.hits.length > 0
                 ? // P10-06: "strongest · mentions …", "relevant · mentions …", and for the faintest just "mentions …".
                   mark.tier === "faint"
@@ -204,9 +236,9 @@ export function ReadingMapView({
               : asked
                 ? ROUTE.tiers.none
                 : null;
-            const foldable = lines.length > 0 || Boolean(mark?.evidence);
+            const foldable = !group && (lines.length > 0 || Boolean(mark?.evidence));
             return (
-              <li key={row.id} style={{ paddingLeft: `${depthOf(row.heading) * 0.75}rem` }}>
+              <li key={row.id} data-level={level} {...(group ? { "data-group": "" } : {})} style={{ paddingLeft: `${(level - 1) * INDENT_STEP_REM}rem` }}>
                 <div
                   data-route={mark?.tier}
                   title={mark?.title}
@@ -230,6 +262,7 @@ export function ReadingMapView({
                   <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
                     <a
                       href={`#${sectionAnchor(k)}`}
+                      onClick={(event) => followSectionLink(event, sectionAnchor(k), reveal)}
                       className="min-w-0 flex-[1_1_14rem] font-reading text-body-sm leading-[1.45] text-text-muted transition-colors hover:text-heading"
                     >
                       <MathText text={row.heading} />
@@ -239,7 +272,7 @@ export function ReadingMapView({
                         the line may break, so no line ends on "·". The group drops under the heading, right
                         aligned as it was beside it, when the heading would be left too little room. */}
                     <span className="annotation ml-auto min-w-0 max-w-full text-right text-text-faint">
-                      {metaParts(row, role).map((part, index) => (
+                      {metaParts(shown, role).map((part, index) => (
                         <Fragment key={part.name}>
                           {index > 0 ? " " : null}
                           <span data-meta-part={part.name} className="whitespace-nowrap">
@@ -267,6 +300,7 @@ export function ReadingMapView({
                         <li key={line.index}>
                           <a
                             href={`#${paragraphAnchor(k, line.index)}`}
+                            onClick={(event) => followSectionLink(event, paragraphAnchor(k, line.index), reveal)}
                             data-route={tier}
                             // P1-07 (§1f.18 b): on a tint the faint ink is
                             // 2.69:1; the muted ink is ≥ 4.5:1 on every tint.
