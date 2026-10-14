@@ -553,7 +553,7 @@ html[data-mode="dark"] {
 
    A panel pinned by its top has no way to show what is below the window, so
    the panel is the window's height at most, and it scrolls as one (P9-04,
-   X2): nothing inside it scrolls on its own. "Terms to know" used to be a
+   X2): nothing inside it scrolls on its own. The terms strip used to be a
    flex item that shrank to a 112px window and scrolled inside itself (one of
    eight terms in view, a scroll region inside the panel's own); it is an
    ordinary block now, so when the blocks together are taller than the window

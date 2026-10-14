@@ -30,7 +30,7 @@
 // P9-04 (X2): the panel scrolls as one. The panel, bounded by the window in `reader-panel` (globals.css),
 // is the one scroll region, and nothing inside it scrolls on its own. (P10-04b: now the sticky part, below.)
 //
-// P10-02 (ruling §1h.78): the "Terms to know" strip, which stood in the panel under the tab strip (after
+// P10-02 (ruling §1h.78): the paper's terms strip, which stood in the panel under the tab strip (after
 // the common blocks in one column), is deleted, and with it its `terms` slot. The paper's own definitions
 // still feed "Explain this" and the plate; they are not a block of this layout.
 //
