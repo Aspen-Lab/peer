@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { anchorMap, block, stickyBlocks } from "@/lib/notes/blocks";
-import { newHistory, stepBack, stepForward, type History } from "@/lib/notes/wysiwyg";
+import { newHistory, stepBack, stepForward } from "@/lib/notes/wysiwyg";
 import type { Block, NoteAnchor } from "@/lib/notes/types";
-import * as editorModule from "./note-editor";
+import { holdsItsType, recordShape, shapeOf, shapePatch, type Shape } from "./note-editor";
 
 // P10-25 (A P10-22's X-B5; ruling §1h.97 (b)): a sticky's number is not editable text. The paper reads a note's tag and
 // mark from the `h3` blocks that carry an anchor, and the editor let Backspace at the start of "Note 2" turn that
@@ -13,20 +13,6 @@ import * as editorModule from "./note-editor";
 // editable, and every other type change is a step of the block's own undo that carries its type and anchor. No DOM in
 // this runtime: the choices are pure functions, the key handler is read from the source, and what only a browser can
 // say was measured in Chromium (the checkpoint).
-
-type Shape = { type: Block["type"]; anchor?: NoteAnchor; checked?: boolean; indent?: number };
-type Probe = {
-  holdsItsType: (b: Block) => boolean;
-  shapeOf: (b: Block) => Shape;
-  shapePatch: (s: Shape | undefined) => Partial<Block>;
-  recordShape: (
-    h: History | undefined,
-    before: { text: string; shape: Shape },
-    after: { text: string; shape: Shape },
-    sel: { from: number; to: number },
-  ) => History;
-};
-const { holdsItsType, shapeOf, shapePatch, recordShape } = editorModule as unknown as Probe;
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 const editor = read("src/components/notes/note-editor.tsx");
@@ -44,8 +30,10 @@ const sticky = (): Block => stickyBlocks(ANCHOR).header;
 describe("holdsItsType — a sticky's heading is the block that carries the anchor as an h3", () => {
   it("is true for a sticky's heading, however its words were edited", () => {
     expect(holdsItsType(sticky())).toBe(true);
-    expect(holdsItsType({ ...sticky(), text: "Soil moisture, mine" })).toBe(true);
-    expect(holdsItsType({ ...sticky(), text: "" })).toBe(true);
+    const renamed: Block = { ...sticky(), text: "Soil moisture, mine" };
+    const emptied: Block = { ...sticky(), text: "" };
+    expect(holdsItsType(renamed)).toBe(true);
+    expect(holdsItsType(emptied)).toBe(true);
   });
 
   it("is false for every ordinary block, and for a block the paper does not read as a sticky (an anchor on a non-h3)", () => {
@@ -53,7 +41,8 @@ describe("holdsItsType — a sticky's heading is the block that carries the anch
       expect(holdsItsType(block(type, "x"))).toBe(false);
     }
     // an earlier break left such a block (the paper reads only h3): it stays an ordinary block, which the type menu can turn back
-    expect(holdsItsType({ ...block("text", "Note 2"), anchor: ANCHOR })).toBe(false);
+    const damaged: Block = { ...block("text", "Note 2"), anchor: ANCHOR };
+    expect(holdsItsType(damaged)).toBe(false);
   });
 });
 
@@ -153,10 +142,10 @@ describe("rule 2 — undo restores a block's type and anchor", () => {
 
   it("the editor steps through shapes: stepHistory writes the shape back, remember stamps it, every type change is recorded", () => {
     expect(editor).toMatch(/patch\(id, \{ text: step\.state\.text, \.\.\.shapePatch\(\(step\.state as [^)]*\)\.shape\) \}\)/);
-    expect(editor).toMatch(/const stamped = [^\n]*shape: shapeOf\(/);
+    expect(editor).toMatch(/const shape = shapeOf\(docRef\.current\.blocks\.find[^\n]*\n[\s\S]*?const stamped = \{ text, from, to, shape \}/);
     expect(editor).toMatch(/const retype = [\s\S]*?recordShape\(/);
-    // the Backspace demotion, an empty list item's Enter, the block menu, the toolbar, the Markdown shortcut and the slash pick
+    // the Backspace demotion, an empty list item's Enter, the block menu, the toolbar (applyType), the Markdown shortcut and the slash pick: six
     const uses = editor.match(/\bretype\(/g) ?? [];
-    expect(uses.length).toBeGreaterThanOrEqual(7);
+    expect(uses.length).toBeGreaterThanOrEqual(6);
   });
 });

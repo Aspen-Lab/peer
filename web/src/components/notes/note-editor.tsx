@@ -23,7 +23,9 @@
 //                   block menu, `@` or `[[` the citation picker
 //   Enter           splits the block; on an empty list item, leaves the list
 //   Backspace       at a block's start: a heading or list turns back into
-//                   text, an indent comes out, then it joins the block above
+//                   text, an indent comes out, then it joins the block above;
+//                   a sticky's heading ("Note N", it carries the paper's anchor)
+//                   stays as it is — its number is not editable text (P10-25)
 //   ↑ ↓ ← →         cross into the next block from its first or last line
 //   Tab             indents (a list nests); Shift-Tab outdents
 //   ⌘⇧↑ ⌘⇧↓         moves the block
@@ -52,7 +54,7 @@ import {
   type MutableRefObject,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import type { Block, BlockType, Citable, Note, Source } from "@/lib/notes/types";
+import type { Block, BlockType, Citable, Note, NoteAnchor, Source } from "@/lib/notes/types";
 import {
   block,
   canIndent,
@@ -91,6 +93,7 @@ import {
   stepForward,
   treeOf,
   type History,
+  type HistoryState,
   type Label,
 } from "@/lib/notes/wysiwyg";
 import { fileName, reference, toBibtex, toMarkdown } from "@/lib/notes/export";
@@ -458,6 +461,50 @@ const Row = memo(function Row({ block: b, first, number, editing, sources, dragg
 
 // ── The editor ────────────────────────────────────────────────────────────
 
+/** P10-25 (X-B5): a sticky note's heading — the `h3` that carries the paper's anchor — keeps its type. The paper reads a
+ *  note's tag and mark from exactly such blocks, so a heading turned into text (Backspace at its start, the type menu,
+ *  the toolbar, a join) made the tag and the mark vanish. Its words may still be edited (the tag reads the anchor's `n`,
+ *  not the words); deleting a sticky is its × in the paper, or the block menu's Delete (which has its own undo). */
+export function holdsItsType(b: Pick<Block, "type" | "anchor">): boolean {
+  return b.type === "h3" && Boolean(b.anchor);
+}
+
+/** P10-25: what a block is besides its words — kept with each step of its undo, so ⌘/Ctrl Z gives back its type and its
+ *  anchor, not only its source. */
+export interface Shape {
+  type: BlockType;
+  anchor?: NoteAnchor;
+  checked?: boolean;
+  indent?: number;
+}
+type ShapedState = HistoryState & { shape?: Shape };
+
+export function shapeOf(b: Pick<Block, "type" | "anchor" | "checked" | "indent">): Shape {
+  return { type: b.type, anchor: b.anchor, checked: b.checked, indent: b.indent };
+}
+
+/** The block fields a step back (or forward) writes: all four, so a field the old shape lacked is cleared. */
+export function shapePatch(s: Shape | undefined): Partial<Block> {
+  return s ? { type: s.type, anchor: s.anchor, checked: s.checked, indent: s.indent } : {};
+}
+
+/** P10-25: the history after a block's type changed (its words as `before` and `after` say): a step of its own — the
+ *  history's `recordState` folds a change that leaves the words alone into the step before it, which would lose the old
+ *  type. A history that is not at `before`'s words starts again from them. `sel` is the caret (plain offsets). */
+export function recordShape(
+  h: History | undefined,
+  before: { text: string; shape: Shape },
+  after: { text: string; shape: Shape },
+  sel: { from: number; to: number },
+): History {
+  const base = h && h.states[h.at].text === before.text ? h : newHistory({ text: before.text, ...sel, shape: before.shape } as ShapedState);
+  const kept: ShapedState[] = base.states.slice(0, base.at + 1);
+  kept[kept.length - 1] = { ...kept[kept.length - 1], ...sel, shape: before.shape };
+  kept.push({ text: after.text, ...sel, shape: after.shape });
+  const states = kept.length > 200 ? kept.slice(kept.length - 200) : kept;
+  return { states, at: states.length - 1, kind: "shape", time: 0 };
+}
+
 /** P10-23: the neighbouring textual block in `step`'s direction from index `from`, skipping the hidden block (the notes
  *  page hides a reading note's title block, P10-21): the caret is never sent into a block the reader cannot see. -1 when
  *  there is none (the editor then goes to the title field, or stays). */
@@ -761,9 +808,27 @@ export function NoteEditor({
   const remember = (id: string, before: string, text: string, from: number, to: number, kind: "type" | "delete" | "edit", was?: { from: number; to: number }) => {
     const seen = lastCaret.current?.id === id ? lastCaret.current.plain : plainOfSource(before, label).length;
     const start = was ?? { from: seen, to: seen };
+    // every step keeps the block's type and anchor with its words (P10-25)
+    const shape = shapeOf(docRef.current.blocks.find((x) => x.id === id) ?? { type: "text" });
     let h = histories.current.get(id);
-    if (!h || h.states[h.at].text !== before) h = newHistory({ text: before, ...start });
-    histories.current.set(id, recordState(h, { text, from, to }, kind, Date.now(), start));
+    if (!h || h.states[h.at].text !== before) h = newHistory({ text: before, ...start, shape } as ShapedState);
+    const stamped = { text, from, to, shape } as ShapedState;
+    histories.current.set(id, recordState(h, stamped, kind, Date.now(), start));
+  };
+
+  /** P10-25: a block's type changes — one step of its undo, with the old type and anchor kept. An anchored heading
+   *  keeps its type (here, so no path can change it). `was` is the words before the change when they are not the
+   *  block's own yet (a Markdown shortcut, typed). */
+  const retype = (id: string, change: Partial<Block>, was?: string) => {
+    const b = docRef.current.blocks.find((x) => x.id === id);
+    if (!b) return;
+    if (holdsItsType(b) && change.type !== undefined && change.type !== b.type) return;
+    const after = { ...b, ...change };
+    const sel = selection(id);
+    const at = sel ? { from: sel.from, to: sel.to } : { from: 0, to: 0 };
+    const from = { text: was ?? b.text, shape: shapeOf(b) };
+    if (after.type !== b.type) histories.current.set(id, recordShape(histories.current.get(id), from, { text: after.text, shape: shapeOf(after) }, at));
+    patch(id, change);
   };
 
   /** One step back (or forward) in a block's history: its source comes back and the words that were selected are selected. */
@@ -775,7 +840,7 @@ export function NoteEditor({
     if (!step) return;
     histories.current.set(id, step.history);
     pendingMarks.current = null;
-    patch(id, { text: step.state.text });
+    patch(id, { text: step.state.text, ...shapePatch((step.state as ShapedState).shape) });
     focusBlock(id, { plain: step.state.from, to: step.state.to });
   };
 
@@ -826,10 +891,10 @@ export function NoteEditor({
   /** Bullets, numbering and the heading turn the block that holds the caret; pressing the same one again turns it back. */
   const applyType = (id: string, type: BlockType) => {
     const b = docRef.current.blocks.find((x) => x.id === id);
-    if (!b || !isTextual(b.type)) return;
+    if (!b || !isTextual(b.type) || holdsItsType(b)) return;
     const next = typeAfterToggle(b.type, type);
     const sel = selection(id);
-    patch(id, { type: next, checked: undefined, indent: canIndent(next) ? b.indent : undefined });
+    retype(id, { type: next, checked: undefined, indent: canIndent(next) ? b.indent : undefined });
     focusBlock(id, sel ? { plain: sel.from, to: sel.to } : "end");
   };
 
@@ -847,6 +912,12 @@ export function NoteEditor({
       if (!item) return setMenu(null);
       setMenu(null);
       const rest = without();
+      if (holdsItsType(b) && item.id !== "cite" && item.id !== "paper") {
+        // a sticky's heading offers no type (the menu does not open in it); a pick that arrives anyway only takes the "/" back out
+        patch(b.id, { text: rest });
+        focusBlock(b.id, m.from);
+        return;
+      }
       if (item.id === "cite" || item.id === "paper") {
         patch(b.id, { text: rest });
         focusBlock(b.id, m.from);
@@ -865,7 +936,7 @@ export function NoteEditor({
       }
       const type = item.id as BlockType;
       if (empty) {
-        patch(b.id, { type, text: rest, checked: undefined, indent: canIndent(type) ? b.indent : undefined });
+        retype(b.id, { type, text: rest, checked: undefined, indent: canIndent(type) ? b.indent : undefined });
         focusBlock(b.id, m.from);
       } else {
         const added = block(type);
@@ -989,7 +1060,7 @@ export function NoteEditor({
     if (b.type === "text" && typedOne) {
       const s = shortcut(text);
       if (s) {
-        patch(id, { type: s.type, text: s.text, checked: s.checked, indent: canIndent(s.type) ? b.indent : undefined });
+        retype(id, { type: s.type, text: s.text, checked: s.checked, indent: canIndent(s.type) ? b.indent : undefined }, text);
         setMenu(null);
         focusBlock(id, Math.max(0, caret - (text.length - s.text.length)));
         return;
@@ -998,7 +1069,7 @@ export function NoteEditor({
     patch(id, { text });
 
     const m = menuRef.current;
-    if (typedOne && text[caret - 1] === "/" && (caret === 1 || /\s/.test(text[caret - 2])) && b.type !== "code") {
+    if (typedOne && text[caret - 1] === "/" && (caret === 1 || /\s/.test(text[caret - 2])) && b.type !== "code" && !holdsItsType(b)) {
       setMenu({ kind: "slash", blockId: id, from: caret - 1, query: "", index: 0 });
     } else if (typedOne && text[caret - 1] === "@" && (caret === 1 || /[\s(]/.test(text[caret - 2])) && b.type !== "code") {
       setMenu({ kind: "cite", blockId: id, from: caret - 1, trigger: "@", mode: "inline", query: "", index: 0 });
@@ -1124,7 +1195,7 @@ export function NoteEditor({
       const { head: before, tail: after } = splitSource(b.text, sel?.from ?? 0, sel?.to ?? 0, label);
       const blocks = docRef.current.blocks.slice();
       let replaced: Block[];
-      if (!before && !after) {
+      if (!before && !after && !holdsItsType(b)) {
         replaced = [{ ...parsed[0], id: b.id }, ...parsed.slice(1)];
       } else {
         const [head, ...tail] = parsed;
@@ -1235,7 +1306,7 @@ export function NoteEditor({
           e.preventDefault();
           if (isList(b.type) && b.text === "") {
             if ((b.indent ?? 0) > 0) setBlocks(indentBlock(blocks, i, -1));
-            else patch(id, { type: "text", checked: undefined });
+            else retype(id, { type: "text", checked: undefined });
             focusBlock(id, 0);
             return;
           }
@@ -1257,9 +1328,14 @@ export function NoteEditor({
         }
         case "Backspace": {
           if (!collapsed || sel.from !== 0) return;
+          // A sticky's heading keeps its type, as the note's first block keeps its place: its number is not editable text.
+          if (holdsItsType(b)) {
+            e.preventDefault();
+            return;
+          }
           if (b.type !== "text") {
             e.preventDefault();
-            patch(id, { type: "text", checked: undefined });
+            retype(id, { type: "text", checked: undefined });
             focusBlock(id, 0);
             return;
           }
@@ -1297,6 +1373,11 @@ export function NoteEditor({
           if (!collapsed || sel.to !== sel.len) return;
           const next = blocks[i + 1];
           if (!next || !isTextual(next.type) || next.id === hiddenBlockId) return;
+          // A sticky's heading is not joined into the block before it (that would delete it).
+          if (holdsItsType(next)) {
+            e.preventDefault();
+            return;
+          }
           e.preventDefault();
           const both = joined(b, next);
           setBlocks(blocks.filter((x) => x.id !== next.id).map((x) => (x.id === id ? { ...x, text: both.text } : x)));
@@ -1411,7 +1492,7 @@ export function NoteEditor({
       setBlocks(rest.length > 0 ? rest : [block("text")]);
       setUndo({ block: b, index: i });
     } else {
-      patch(id, { type: action, checked: undefined, indent: canIndent(action) ? b.indent : undefined });
+      retype(id, { type: action, checked: undefined, indent: canIndent(action) ? b.indent : undefined });
       if (isTextual(action)) focusBlock(id, "end");
     }
   };
@@ -1837,7 +1918,7 @@ function BlockMenu({
       className="absolute left-0 z-30 w-56 bg-surface py-1 shadow-card"
       style={{ top }}
     >
-      {isTextual(b.type) && (
+      {isTextual(b.type) && !holdsItsType(b) && (
         <>
           <p className="eyebrow px-3 pb-1 pt-2 text-text-faint">Turn into</p>
           {TURN_INTO.map((t) => (
