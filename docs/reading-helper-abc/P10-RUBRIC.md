@@ -61,7 +61,7 @@ N = 16.
 4. Defects clustered by mechanism → B where the cause is unknown → C items in parallel in detached worktrees → the manager verifies (gates, the touched tests ×3, one own mutation restored byte-identical) and lands.
 5. Both scores recorded here and in the state file with the head; the owner gets the numbers, what changed, what is left, and the decisions only they can make.
 
-Stop: every theme ≥ 95 in two consecutive rounds. The loop's end is the manager's measure; the owner's own look at the surface is the acceptance above it.
+Stop: every theme ≥ **99** in two consecutive rounds (the owner, 05:0xZ 2026-10-14, ruling §1h.89 (a); the original line: ≥ 95 — both recorded under each round from round 2 on). The loop's end is the manager's measure; the owner's own look at the surface is the acceptance above it.
 
 ## Scores
 
