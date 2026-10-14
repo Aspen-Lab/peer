@@ -18,6 +18,8 @@ import type { ReactNode } from "react";
 import { DOCK_TOP_PX, PAGE_ZOOM_ROOT, PAGE_ZOOM_VAR, legendHeightPx } from "@/components/reader/explain-dock";
 import type { Paper } from "@/types";
 import type { Block, Note, Source } from "@/lib/notes/types";
+import { fileName, toMarkdown, toPlainText, toPrintHtml, toWordHtml } from "@/lib/notes/export";
+import { downloadFile, printHtml } from "@/lib/notes/print";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
 import { NoteEditor } from "./note-editor";
 
@@ -48,18 +50,35 @@ export function notesWindowBox({
   return { top, maxHeight: Math.max(NOTES_WINDOW_MIN_HEIGHT_PX, floor - top) };
 }
 
+export type ExportKind = "copy" | "txt" | "md" | "doc" | "pdf";
+
+/** The export menu, in the order it stands. None of these formats carries a sticky note's quoted passage. */
+export const EXPORT_ITEMS: readonly { id: ExportKind; label: string; detail: string }[] = [
+  { id: "copy", label: "Copy", detail: "the note as plain text" },
+  { id: "txt", label: "Text (.txt)", detail: "words only, no markup" },
+  { id: "md", label: "Markdown (.md)", detail: "Obsidian, Pandoc" },
+  { id: "doc", label: "Word (.doc)", detail: "opens in Word" },
+  { id: "pdf", label: "PDF (print)", detail: "choose Save as PDF" },
+];
+
 export function NotesWindowView({
   top,
   maxHeight,
+  menuOpen,
+  notice,
   onClose,
-  actions,
+  onMenu,
+  onExport,
   children,
 }: {
   top: number;
   maxHeight: number;
+  menuOpen: boolean;
+  /** What the last export did ("Copied"), said politely in the header. */
+  notice: string | null;
   onClose: () => void;
-  /** In the header, left of Close: the export control. */
-  actions?: ReactNode;
+  onMenu: () => void;
+  onExport: (kind: ExportKind) => void;
   children: ReactNode;
 }) {
   return (
@@ -72,7 +91,37 @@ export function NotesWindowView({
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-2">
         <h2 className="eyebrow text-heading">Your notes</h2>
         <div className="relative flex items-center gap-2">
-          {actions}
+          <span className="annotation text-text-faint" aria-live="polite">
+            {notice}
+          </span>
+          <button
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={onMenu}
+            className="eyebrow px-2 py-1 text-text-muted transition-colors hover:bg-bg-secondary hover:text-heading"
+          >
+            Export <span aria-hidden>▾</span>
+          </button>
+          {menuOpen && (
+            <>
+              <button type="button" aria-hidden tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={onMenu} />
+              <div role="menu" className="absolute right-0 top-full z-20 mt-1 w-56 border border-border-strong bg-surface py-1 shadow-card">
+                {EXPORT_ITEMS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => onExport(item.id)}
+                    className="block w-full px-3 py-2 text-left hover:bg-bg-secondary/70"
+                  >
+                    <span className="block text-body-sm text-heading">{item.label}</span>
+                    <span className="annotation block text-text-faint">{item.detail}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
           <button
             type="button"
             aria-label="Close your notes"
@@ -108,6 +157,8 @@ export function NotesWindow({ paper, onClose }: { paper: Paper; onClose: () => v
   const note = useNotesStore((s) => readingNoteFor(s.notes, paper.id));
   const [box, setBox] = useState(() => notesWindowBox({ viewportHeight: 900, explainBottom: null, legend: 28 }));
   const doc = useRef<Doc | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   // The editor keeps its own copy while it is open; a sticky note written into the same note from outside (P10-09a)
   // changes the stored blocks under it, so the editor is started afresh when they change and it holds nothing unsaved.
   const [rev, setRev] = useState(0);
@@ -135,9 +186,40 @@ export function NotesWindow({ paper, onClose }: { paper: Paper; onClose: () => v
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note?.blocks]);
 
+  const flash = (text: string) => {
+    setNotice(text);
+    window.setTimeout(() => setNotice((n) => (n === text ? null : n)), 2400);
+  };
+
+  // What leaves is the editor's copy as it is now, not the last save: a change is stored half a second after it.
+  const runExport = async (kind: ExportKind) => {
+    setMenuOpen(false);
+    if (!note) return;
+    const n: Note = { ...note, ...doc.current, updatedAt: new Date().toISOString() };
+    if (kind === "copy") {
+      try {
+        await navigator.clipboard.writeText(toPlainText(n));
+        flash("Copied");
+      } catch {
+        flash("Copy was blocked — try Text");
+      }
+    } else if (kind === "txt") downloadFile(toPlainText(n), fileName(n, "txt"), "text/plain;charset=utf-8");
+    else if (kind === "md") downloadFile(toMarkdown(n), fileName(n, "md"), "text/markdown;charset=utf-8");
+    else if (kind === "doc") downloadFile(toWordHtml(n), fileName(n, "doc"), "application/msword");
+    else printHtml(toPrintHtml(n));
+  };
+
   if (!note) return null;
   return (
-    <NotesWindowView top={box.top} maxHeight={box.maxHeight} onClose={onClose}>
+    <NotesWindowView
+      top={box.top}
+      maxHeight={box.maxHeight}
+      menuOpen={menuOpen}
+      notice={notice}
+      onClose={onClose}
+      onMenu={() => setMenuOpen((o) => !o)}
+      onExport={runExport}
+    >
       <NoteEditor
         key={`${note.id}:${rev}`}
         note={note as Note}

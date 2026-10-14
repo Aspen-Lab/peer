@@ -42,8 +42,8 @@ const SECTIONS = [
   {
     label: "Your notes",
     body: [
-      "Notes and drafts you write from the Saved page are kept only in this browser. Peer never sends them to its servers, and signing in does not copy them into your account.",
-      "Signing out leaves them in place — they were never an account's, so signing out has nothing to take back. On a shared computer, delete them before you leave. Clearing site data deletes them for good; export a note as Markdown to keep a copy.",
+      "Notes and drafts you write — in the notes window on a paper, or from the Saved page — are kept only in this browser. Peer never sends them to its servers, and signing in does not copy them into your account.",
+      "Signing out leaves them in place — they were never an account's, so signing out has nothing to take back. On a shared computer, delete them before you leave. Clearing site data deletes them for good; export a note (text, Markdown, Word or PDF) to keep a copy.",
     ],
   },
   {
