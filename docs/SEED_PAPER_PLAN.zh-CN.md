@@ -145,7 +145,9 @@ flowchart TD
 **决定一：种子存在服务器端、每人一行，永远不从 HTTP 请求体读。**
 新表 `private_seed_sets`（`owner_id` 主键，`seeds` jsonb ≤5 条，`version`，`changed_on`，`signature`）。喂给管线的方式和现有的 `positiveSeeds`、`rolloverCandidates`、`ledgerExclusions` 一样：由 `app/api/feed/route.ts` 在服务器上查出来，作为 `FeedPipelineOptions.seedPapers` 传进去，`FeedRequest` 里**没有**这个字段。这样任何人都不能通过伪造请求体给自己或别人塞种子，也不能用请求体触发重建（正是 UPSTREAM-02 当年搁置 `forceRebuild` 的原因）。
 
-为什么不放在 `profiles` 表的一列里：`profiles` 的同步机制（`profile-sync.tsx` 的差分推送、`merge.ts` 的三方合并）是为浅字段设计的，种子是服务器算出来的身份数据，不该经过浏览器再写回；单独一张表还能用一条原子 SQL 实现"一天一次"（见决定五）。
+为什么不放在 `profiles` 表的一列里：第一，`profiles` 现有的 RLS 策略是"本人可以更新自己的行"（`schema.sql` 的 `users update own profile`），放在那里的任何一列用户自己的浏览器就能直接改，"一天一次"和"服务器核实身份"都能被绕过；第二，`profiles` 的同步机制（`profile-sync.tsx` 的差分推送、`merge.ts` 的三方合并）是为浅字段设计的，种子是服务器算出来的身份数据，不该经过浏览器再写回；第三，单独一张表能用一条原子 SQL 实现"一天一次"（见决定五）。
+
+写入接口只接受最少的东西：`PUT /api/seeds` 的请求体里每颗种子只有 `{ uploadId?, openalexWorkId?, confirmed? }`。服务器自己重新查一次这篇作品（1 信用点，`sourceFetch` 带一天的 `revalidate`），在服务器端重建种子记录；标题、作者、参考文献清单这些字段**永远不信客户端传来的值**；"confirm 档"的候选只有在它确实出现在上一次解析返回的候选列表里、且 `confirmed=true` 时才接受。
 
 **决定二：种子通道在"建池时"跑，不在"读取时"跑；种子签名进缓存标签。**
 今天的正例种子走读取时，是因为当年改不了缓存标签（代码注释里写得很清楚）。读取时的候选永远见不到模型和 Jev，"权重很高"就做不到。所以种子通道和 5 个学术源**同时并行**跑在 `buildPaperPool` 里，候选和关键词结果一起去重、打分、进前 50、被 Jev 和模型看到，并且拿到 `aiOrder` 回放加分。
@@ -211,12 +213,16 @@ combined = clamp01( 上式 + 0.35 × seedAffinity )
 | **seed_foundation**（Similar Work，文献耦合） | 谁和这颗种子站在同一批基础文献上：引用了种子参考文献的新论文 | **每颗种子一次**：`filter=cites:R1\|R2\|…\|R40,from_publication_date:<窗口起点>`，R 取这颗种子参考文献里被引最多的 40 个（OR 列表上限 50 个值）；本地把响应里每篇的 `referenced_works` 和种子的参考文献求交集 = 共享篇数 | 每颗 25 | `seed-foundation` | 是 |
 | **seed_earlier**（时间窗内的 Earlier Work） | 种子引用了的、本身也还算新的论文（例如 2025 年的种子引用了 2025 年的预印本） | 一次：`filter=cited_by:W1\|…\|W5,from_publication_date:<窗口起点>`（注意 OpenAlex 的 `cited_by:` 返回的是"该作品的参考文献"，名字容易看反） | 15 | `seed-foundation` | 是 |
 | **seed_authors**（These Authors） | 种子的第一/末位作者在时间窗内的新作 | 一次：`filter=authorships.author.id:A1\|…\|A10,from_publication_date:<窗口起点>`，`sort=publication_date:desc`，`per_page=40` | 40，每位作者 ≤10 | `seed-author` | **否**（作者的无关论文对每日预报是噪音；它必须像关键词论文一样过 T1–T4 门槛） |
-| **seed_related**（Similar Work，OpenAlex 自算） | OpenAlex 认为和种子相关的作品 | 一次：`filter=related_to:W1\|…\|W5,from_publication_date:<窗口起点>`，`per_page=30`；"仅标题"种子另加每颗一次 `search.semantic` | 30 + 每颗 10 | `seed-related` | 是 |
+| **seed_related**（Similar Work，OpenAlex 自算） | OpenAlex 认为和种子相关的作品 | 一次：`filter=related_to:W1\|…\|W5,from_publication_date:<窗口起点>`，`per_page=30`；"仅标题"种子另加每颗一次 `search.semantic`（这些调用要**串行**或限速到每秒 1 次，OpenAlex 语义搜索有此限制） | 30 + 每颗 10 | `seed-related` | 是 |
+
+> `related_works` 是 OpenAlex 算好的"概念相近"的作品，不保证新。加上时间窗以后这条通道可能经常是空的——B 组真机探测时要测一下；如果一周内基本为空，就删掉这条，只留给"仅标题"种子的语义搜索。
 
 要点：
 
 - 所有调用都加 `select=…,referenced_works`，**只在种子通道**加（不在 5 个学术源的关键词查询上加，避免每次建池多拉几百篇的参考文献清单）。`referenced_works` 用完算证据后、在 `cache.set` 之前**从候选上删掉**，池子不会变大。
 - 所有种子通道的候选先过 `excludeSeeds`（种子自己不出现），再和学术源结果一起 `dedupItems`。去重的"幸存者"要把所有成员的 `seedEvidence` 合并（和今天合并 `admissionChannels` 一样，改 `dedup.ts` 一处）。
+- OR 列表（`W1|W2|…`）的上限：OpenAlex 文档两处分别写 50 和 100 个值，本计划一律按 50 取保守值。
+- 某条种子通道失败时**不会**被现有的"30 分钟一次、每天 3 次"自动重试接住——`retryFailedSources` 只重试 5 个学术源（和今天的导师通道一样）。失败的通道要等下一次建池（第二天，或当天改种子时）。要不要把重试范围扩到种子通道，是 B/E 组的一个可选项。
 - 时间窗起点用 `freshness.ts` 的同一张表，这样抓回来的东西不会被 `dropStale` 再丢一遍。
 - 现有 `fetchCitationNeighborhood` 加三个可选参数（`fromDate`、`sort`、`extraSelect`），不传时行为逐字节不变，导师通道和点赞种子通道不受影响。新增 `fetchSeedFoundations`、`fetchSeedEarlierInWindow`、`fetchSeedAuthorsRecent`、`fetchSeedRelated` 四个同形的函数放在 `lib/affiliation/openalex.ts` 旁边的新文件 `lib/seeds/graph.ts`。
 - 开了 `PEER_RANK_FUSION` 时，四条通道各算一个 RRF 频道（`cap: 30`）。RRF 没有权重参数，也不需要加——权重由下面的亲缘分承担，RRF 只保证"每条路都有名额"。
@@ -267,7 +273,7 @@ combined = clamp01( 上式 + 0.35 × seedAffinity )
   - 种子作者 → "New from <姓>, an author of your seed “…”."
   - 相关 → "Listed as related to your seed “…”." / "Similar to your seed “…”."
   
-  种子标题只出现在用户自己的响应和自己的池子行里，**不进日志**（沿用 `positive-seeds.test.ts` 的"never logs"测试）。`scoreBreakdown.seed` 字段只在有证据时出现，没有种子的用户的响应形状不变。
+  种子标题只出现在用户自己的响应和自己的池子行里，**不进日志**（沿用 `positive-seeds.test.ts` 的"never logs"测试）。`scoreBreakdown.seed` 字段只在有证据时出现，没有种子的用户的响应形状不变。注意：今天的卡片界面**不显示**分项分数（`scoreBreakdown` 没有映射到客户端的 `Paper` 类型上），所以这项分数在 v1 只在接口 JSON 里可查；面板上那句"今天 10 篇里有 N 篇来自你的种子"靠的是 `FeedMeta.seedChannels.inTopN`，不靠分项。
 
 ### 5.4 防洪：五道闸
 
@@ -289,7 +295,14 @@ combined = clamp01( 上式 + 0.35 × seedAffinity )
 | 深度报告 / 图 | 重、按篇、用户点才生成 | 报告缓存 | 不受影响 |
 | 读取时重算 | 本地、免费 | — | 每次打开页面都做，和今天一样 |
 
-OpenAlex 额度（文档镜像：免费 key 每天 10 万信用点，单篇 1 点、列表 10 点；另有 2026 年的二手报道说改成了"每天约 1 美元免费额度"，实施前核实）：一位有种子的用户一天 ≈130–260 点 → 免费额度大约撑 400–800 位有种子的用户/天。超过就要付费 key。`OPENALEX_API_KEY` 代码已支持。
+OpenAlex 额度——两种说法冲突，必须当成"有预算的"来设计，而不是"免费的"：
+
+| 说法 | 来源 | 一位有种子的用户一天 ≈13–26 次列表查询意味着 |
+|---|---|---|
+| 信用点制：免费 key 每天 10 万点，单篇 1 点、列表 10 点 | OpenAlex 文档 git 镜像（2026-05） | ≈130–260 点 → 大约撑 400–800 位有种子的用户/天 |
+| 金额制：无 key 每天约 0.1 美元，免费 key 每天约 1 美元，列表/过滤约 0.1 美元/千次、搜索约 1 美元/千次 | 项目里 2026-09 记录的 help.openalex.org 读数（`docs/jev-abc/P2-B`）和 2026-07 的二手报道 | 如果语义搜索按 1 美元/千次算，5 次 `search.semantic` 就是 0.5 美分；免费额度只够约 100–200 位用户/天 |
+
+因此：（1）生产环境必须配 `OPENALEX_API_KEY`（代码已支持）；（2）每次建池把种子通道的调用次数记进 `meta.seedChannels.fetched`；（3）加一个全局的每日种子调用上限（用现有的 `CounterStore` 计数，和 `claimSourceRetry` 同一套），超了就当天只用关键词池并在 `meta.errors` 里诚实说明；（4）B 组开工前用一次无 key、一次带 key 的真机调用核实现行计费。
 
 Semantic Scholar：不新增调用。`PEER_CHANNEL_S2_RECOMMENDATIONS` 开着时，声明的种子的 S2 号会并入正例 id 列表；但这个开关默认关，开不开要作者决定（§8）。
 
@@ -307,15 +320,18 @@ update private_seed_sets
 -- 没有行 → 第一次种下 → insert，不计数
 ```
 
-- "今天"用用户自己的时区（`lib/dashboard/timezone.ts`，和提前准备任务一致）。池子标签用的是服务器日期（Vercel 上是 UTC），两者偶尔不一致只会让某人多一次机会，成本有上限，接受。
-- 第一次从空集合种下（walkthrough）**不算改动**；面板里"暂存多次增删、一次保存"算一次。
+- "今天"是哪一天：现有的 `localCalendarDate()` 返回的是**服务器**的日期（Vercel 上就是 UTC），没有时区参数；池子标签和冻结批次都用它。v1 的一天一次也用同一个日期，三者永远一致——代价是北京的用户在早上 8 点"换日"。想按用户自己的时区算，要把 `lib/dashboard/timezone.ts` 的 `dateInTimezone` 接进来，并且池子标签和批次也一起改，不要只改一处（§8 第 7 项）。
+- **只有第一次种下**（表里还没有这一行，`version = 0`）不算改动。之后任何从非空集合出发的保存都算，包括"全部删掉"——这样"种下 → 全删 → 再种"不能一天白拿三次。面板里"暂存多次增删、一次保存"算一次。
+- 同一天内给**今天刚加的**种子纠正匹配（"匹配错了？"）不算改动——否则 walkthrough 里一篇匹配错了要等到明天才能修。实现上：`PUT` 带 `rebindOnly=true` 且只改了 `addedAt` 是今天的种子的身份字段时，不改 `changed_on`，但签名照常变（池子照常重建）。
 - 规则拒绝时的文案："今天已经换过种子了，明天再来。"
 
 **冻结批次**（`PEER_DASHBOARD_LEDGER=on` 时）：
 
 - 迁移：`dashboard_batches` 加 `superseded_at timestamptz` 和 `seed_set_id text`；把 `unique(owner_id, local_date)` 换成部分唯一索引 `(owner_id, local_date) where superseded_at is null`。
-- 新方法 `DashboardDeliveryLedger.supersedeBatch(ownerId, localDate)`；`getBatch` 只看 `superseded_at is null`；`readExclusions` 不改（它按 served/acknowledged 状态算"已推送"，被取代的批次照样算）。
-- 顺序：先写种子，再取代批次，再让客户端 `loadFeed`；`runLedgerAwareFeed` 发现没有活批次 → 读排除集合（fail-closed）→ 跑管线（新标签 → 建池）→ `prepareBatch` 铸造新批次。被取代批次的"未展示剩余"不再写入 rollover（它们会在新池子里重新竞争）。
+- 新方法 `DashboardDeliveryLedger.supersedeBatch(ownerId, localDate)`；`getBatch` 只看 `superseded_at is null`；`readExclusions` 不改（它按 served/acknowledged 状态算"已推送"，被取代的批次照样算）。被取代的行要同时标成 acknowledged（或让 `listServedUnacknowledged` 跳过它），否则"已送达未确认"的清单会越积越多。
+- **触发条件是"批次记录的 `seed_set_id` 和当前种子签名不一样"**，而不是"今天改过"。这样第一次种下（不计数）也会立刻生效；否则一个今天早上已经拿到批次的老用户第一次种种子，会被回放旧批次到明天，和"立刻生效"的承诺矛盾。
+- 顺序：先取代批次，再写种子（账本写不了就 503 `seeds_not_saved`，什么都不改），再让客户端重新加载 feed；`runLedgerAwareFeed` 发现没有活批次 → 读排除集合（fail-closed）→ 跑管线（新标签 → 建池）→ `prepareBatch` 铸造新批次，并记下 `seed_set_id`。被取代批次的"未展示剩余"不再写入 rollover（它们会在新池子里重新竞争）；rollover 行同时存一份 `seedSignature`，签名不一致时剥掉它身上的种子标签和证据，让它重新凭本事竞争。
+- 替代方案（三位评审里两位更倾向）：**原地修订**——不动 `unique(owner_id, local_date)` 约束，给批次加 `revision` 列，一个 SQL 函数先把旧批次的论文复制进 `dashboard_deliveries`（永久排除），再替换论文、`revision + 1`；客户端的确认（ack）带 `revision`。好处是不改线上表的唯一约束、送达记录更完整；代价是 ack 流程和本地持久化状态要跟着改。两条路都保住"已给过的不重推"，实施前由 F 组二选一。
 - 如果迁移暂时不能上线：v0 退路是 `PUT` 在当天已有活批次时返回 409 "明天生效"，功能照样可用，只是不"立刻"。
 - 这和 §1p.C(5) 的"当天永不轮换"有冲突，需要作者新裁定（§8 第 2 项）。理由：轮换的触发者是用户自己的明确动作，一天一次，而且已推送的论文一篇都不重推——§1g 的"永不重推"原则完整保留。
 
@@ -323,12 +339,12 @@ update private_seed_sets
 
 ### 5.7 界面
 
-**Walkthrough（`app/welcome/`）**：在 `work`（"你的工作"）之后加一页 `seeds`，标题"哪几篇论文对你最重要？"，副标题"上传最多 5 篇你最在意的论文 PDF——你自己的，或者你反复回去读的。Peer 从它们出发：它们引用了谁、谁引用了它们、它们的作者接下来发了什么。1–3 篇最好；放一篇奠基性的，再放一篇最新的。"
+**Walkthrough（`app/welcome/`）**：放在 `work`（"你的工作"，收集项目描述、挑战、学校、导师的那一页）里，作为导师字段下面的一个带边框小节，小标题"Seed papers"，提示"Optional, up to 5. Upload the PDFs of the papers that matter most to you — Peer follows who cites them, who they cite, and what their authors publish next. 1–3 is best: one foundational, one recent."（三位评审一致建议不新开一页：onboarding 要快，而且未登录的访客用不了这一步。）
 
-- 五个槽位：已填的显示"标题 · 年份 · 期刊"+ 状态条（"已在 OpenAlex 找到" / "仅标题——贴一个 DOI 可以连上" / 确认卡）+ ×；下一个空槽是虚线的"放一个 PDF，或点击选择"。复用 `UploadButton` 的机器（同意框、`attachPdf`、PDF/25 MB 检查），抽成一个 `useUploadPdf()` hook。
+- 五个槽位：已填的显示"标题 · 年份 · 期刊"+ 状态条（"已在 OpenAlex 找到" / "仅标题——贴一个 DOI 可以连上" / 确认卡）+ ×；下一个空槽是虚线的"放一个 PDF，或点击选择"。复用 `UploadButton` 的机器（同意框、`attachPdf`、PDF/25 MB 检查），抽成一个 `useUploadPdf()` hook；同意框多一句"Peer 会把这篇论文的公开编号发给 OpenAlex 以寻找相关论文"（用现有的 `upload-legal-wording.test.ts` 钉死文案）。
 - 不登录：槽位禁用，一行平静的说明"种子论文需要账号来保存。先登录，或者继续——以后可以在主页的小苗按钮里添加。"
-- 这一步**不是门槛**（`Topics is the only gate` 规则不变；作者如果想改成必填见 §8 第 1 项）。`completeness.ts`：`isStepDone('seeds') = 种子数 > 0`；`summarizeStep` 显示"3 篇种子"。
-- 放在 `work` 里面也可以（省一页），但 `work` 已经有 4 个字段，再加 5 个上传槽会很挤；walkthrough 自己的规矩是"一页一个想法"。
+- 不是门槛（`Topics is the only gate` 规则不变；作者如果想改成必填见 §8 第 1 项）。`completeness.ts` 的 `work` 步 "done" 判定加上 `种子数 > 0`；`summarizeStep('work')` 末尾加 "· 3 seeds"。
+- 备选：单独一页 `seeds`，标题"哪几篇论文对你最重要？"。更醒目，但多一页，并且对未登录访客是空页。
 
 **主页小苗按钮（`components/briefing/seed-button.tsx`）**：放在黑色上传方块的**左边**（上传和搜索框继续相邻）。尺寸和上传方块一模一样：`h-9 w-9 rounded-md`，固定黑底（`--color-fixed-black`），`hover:scale-125 active:scale-90`，15 px 手绘线条图标（本仓库不用图标库）。图标是一株小苗（茎 + 两片叶，描边 2，圆头）；新增一个固定绿色 token `--color-fixed-sprout`（约 `#4caf50`，在黑底上两种主题都看得清；现有 `--color-positive` 太深）。0 颗种子时用虚线画、白色；≥1 颗时绿色实线。不放数字角标（保持平静）。`aria-label`："Seed papers (3 of 5)"。显示条件：上传可用 **且** 已登录 **且** `GET /api/seeds` 返回 `enabled: true`。
 
@@ -350,11 +366,11 @@ update private_seed_sets
 | 第一次种下 | "Plant up to 5 papers. You can change them once a day afterwards." |
 | 服务器 429 | "Already replanted today — try again tomorrow." |
 
-**空态和错误**：无种子："No seeds yet. Add up to 5 PDFs of the papers that matter most to you — Peer will follow who cites them."；OpenAlex 不可达："Couldn't reach OpenAlex to look this paper up. Try again in a minute — nothing was saved."；第 6 篇：空位隐藏，接口返回 400 `seed_limit`；重复："That paper is already a seed."；建池时某条种子通道失败：feed 照常渲染，面板统计行写"Peer couldn't reach OpenAlex for your seeds this morning; it will retry"（沿用现有的 30 分钟/每天 3 次重试）。
+**空态和错误**：无种子："No seeds yet. Add up to 5 PDFs of the papers that matter most to you — Peer will follow who cites them."；OpenAlex 不可达："Couldn't reach OpenAlex to look this paper up. Try again in a minute — nothing was saved."；第 6 篇：空位隐藏，接口返回 400 `seed_limit`；重复："That paper is already a seed."；建池时某条种子通道失败：feed 照常渲染，面板统计行写"Peer couldn't reach OpenAlex for your seeds this morning. Tomorrow's forecast will try again."（失败的种子通道不在现有自动重试的范围里，见 §5.2 要点）。
 
 ### 5.8 没有模型 key 的用户得到什么（Tier 0 故事）
 
-全部功能。身份解析、四条通道、文献耦合、亲缘分、理由句子、小苗面板，都是免费的 OpenAlex 调用加本地算术，跑在今天 Tier 0 已经在跑的 `combine.ts` / `rerank.ts` 里。一天的样子：walkthrough 里上传 3 篇 PDF，两篇靠 DOI 连上，一篇靠标题确认；第二天 10 张卡里大约 4 张引用了种子（卡片写"Cites your seed “Solid-state electrolyte…”"）、1 张是种子末位作者的新作、5 张是关键词和主题相近度挑出来的；没有一颗种子超过 3 张。分数检查器里能看到 `seed` 这一项。有模型 key 只改变顺序和理由的文笔；有 Jev 只多一道筛。OpenAlex 挂了，种子通道报 failed，关键词源照样撑起这一天。
+全部功能。身份解析、四条通道、文献耦合、亲缘分、理由句子、小苗面板，都是不花 token 的 OpenAlex 调用加本地算术，跑在今天 Tier 0 已经在跑的 `combine.ts` / `rerank.ts` 里。一天的样子：walkthrough 里上传 3 篇 PDF，两篇靠 DOI 连上，一篇靠标题确认；第二天 10 张卡里大约 4 张引用了种子（卡片写"Cites your seed “Solid-state electrolyte…”"）、1 张是种子末位作者的新作、5 张是关键词和主题相近度挑出来的；没有一颗种子超过 3 张。接口 JSON 的 `scoreBreakdown.seed` 里能查到这一项。有模型 key 只改变顺序和理由的文笔；有 Jev 只多一道筛。OpenAlex 挂了，种子通道报 failed，关键词源照样撑起这一天。
 
 ---
 
@@ -382,7 +398,7 @@ update private_seed_sets
 
 ### 6.2 改动的已有文件（都是加法，关掉开关时逐字节不变）
 
-`lib/feed/pipeline.ts`（建池并行种子通道、标签、证据、`sourceStatus.seed_*`、RRF 频道、`MAX_PER_SEED` 和份额闸、Tier 2 提示词、rollover 证据剥离）；`lib/opportunities/pool-cache.ts`（`seedSignature`）；`lib/scoring/combine.ts`（免检名单 + 亲缘分一项）；`lib/scoring/reason.ts`（种子句）；`lib/feed/rerank.ts`（`MAX_PER_SEED`）；`lib/feed/dedup.ts`（合并 `seedEvidence`）；`lib/feed/tier2-rerank.ts`（提示词；v1.1 插入式）；`lib/affiliation/openalex.ts`（`fetchCitationNeighborhood` 三个可选参数）；`lib/utils/openalex.ts`（`OpenAlexWork` 加 `referenced_works`、`related_works`、`authorships[].author.id`）；`app/api/feed/route.ts`（`resolveSeedPapersForRequest`、取代批次路径）；`app/api/papers/upload/route.ts`（`purpose=seed`、arXiv 正则）；`lib/papers/upload-store.ts`（`UploadMeta.purpose`、`arxivId`）；`lib/dashboard/delivery-ledger.ts`（`supersedeBatch`）；`lib/dashboard/prepare-pool.ts`（读种子）；`app/welcome/completeness.ts` + `page.tsx`（`seeds` 步）；`app/page.tsx`（按钮位置）；`app/globals.css`（`--color-fixed-sprout`）；`lib/briefing/copy.ts`（文案）；`web/.env.example`；`docs/PRIVATE_PDF_UPLOADS.md`（一句交叉引用：种子身份不随 PDF 过期）。
+`lib/feed/pipeline.ts`（建池并行种子通道、标签、证据、`sourceStatus.seed_*`、RRF 频道、`MAX_PER_SEED` 和份额闸、Tier 2 提示词、rollover 证据剥离）；`lib/opportunities/pool-cache.ts`（`seedSignature`）；`lib/scoring/combine.ts`（免检名单 + 亲缘分一项）；`lib/scoring/reason.ts`（种子句）；`lib/feed/rerank.ts`（`MAX_PER_SEED`）；`lib/feed/dedup.ts`（合并 `seedEvidence`）；`lib/feed/tier2-rerank.ts`（提示词；v1.1 插入式）；`lib/affiliation/openalex.ts`（`fetchCitationNeighborhood` 三个可选参数）；`lib/utils/openalex.ts`（`OpenAlexWork` 加 `referenced_works`、`related_works`、`authorships[].author.id`）；`app/api/feed/route.ts`（`resolveSeedPapersForRequest`、取代批次路径）；`app/api/papers/upload/route.ts`（`purpose=seed`、arXiv 正则）；`lib/papers/upload-store.ts`（`UploadMeta.purpose`、`arxivId`）；`lib/dashboard/delivery-ledger.ts`（`supersedeBatch`）；`lib/dashboard/prepare-pool.ts`（读种子）；`app/welcome/completeness.ts` + `page.tsx`（`work` 步里的种子小节）；`app/page.tsx`（按钮位置）；`app/globals.css`（`--color-fixed-sprout`）；`lib/briefing/copy.ts`（文案）；`web/.env.example`；`docs/PRIVATE_PDF_UPLOADS.md`（一句交叉引用：种子身份不随 PDF 过期）。
 
 Python CLI（`python/`）不在范围内：它是独立的 Tier 0 MVP，没有上传和账号。
 
@@ -400,7 +416,7 @@ Python CLI（`python/`）不在范围内：它是独立的 Tier 0 MVP，没有�
 | **D 打分** | `seed-affinity.ts`；`combine.ts` 免检名单 + 一项；`reason.ts` 种子句；`rerank.ts` `MAX_PER_SEED`；`dedup.ts` 合并证据；`evidence.ts` 纯函数 | `lib/scoring/**`、`lib/feed/rerank.ts`、`lib/feed/dedup.ts` | A 的类型 | `npx vitest run src/lib/scoring src/lib/feed/rerank.test.ts src/lib/feed/dedup.test.ts`；**变异测试**：把 0.35 改成 0 必须有测试变红；没有证据时 `ranking.test.ts`、`required-gate.test.ts`、`admission.test.ts` 输出逐字节不变 |
 | **E 管线 + 缓存标签** | `FeedPipelineOptions.seedPapers`；`derivePoolCacheKey.seedSignature`；建池并行通道、标签、证据剥离、`sourceStatus`；份额闸；RRF 频道；Tier 2 提示词；rollover 剥离；`FeedMeta.seedChannels` | `pipeline.ts`、`pool-cache.ts`、`tier2-rerank.ts`、`route.ts`（rollover） | B、D | `npx vitest run src/lib/feed src/lib/opportunities`；新 `pipeline.seeds.test.ts`（有种子：通道并行、标签、`referencedWorks` 被剥离、状态；无种子：零额外调用、输出逐字节不变）；`pool-cache.test.ts` 旧 key 不动 + 新 key 钉死 |
 | **F 路由接线 + 冻结批次** | `resolveSeedPapersForRequest`（服务器端）；两处 `runFeedPipeline` 传入；`supersedeBatch` + 迁移；`prepare-pool.ts` 读种子 | `app/api/feed/route.ts`、`lib/dashboard/**`、迁移 | A、E | `npx vitest run src/app/api/feed src/lib/dashboard`；账本测试：取代后 `getBatch` 为空、`prepareBatch` 可再铸、`readExclusions` 仍含旧批次论文；请求体里的 `seedPapers` 被忽略 |
-| **G 界面** | `useUploadPdf()` hook；小苗按钮 + 图标 + token；面板；walkthrough `seeds` 步；`store/seeds.ts`；文案 | `components/**`、`app/page.tsx`、`app/welcome/**`、`globals.css`、`copy.ts` | C 的接口形状 | `npx vitest run src/components/briefing src/app/welcome`；本仓库没有组件渲染测试，决策逻辑（暂存、一天一次判断、重复检测、图标颜色）作为纯函数测试 |
+| **G 界面** | `useUploadPdf()` hook；小苗按钮 + 图标 + token；面板；walkthrough `work` 步里的种子小节；同意框多一句披露；`store/seeds.ts`；文案 | `components/**`、`app/page.tsx`、`app/welcome/**`、`globals.css`、`copy.ts` | C 的接口形状 | `npx vitest run src/components/briefing src/app/welcome`；本仓库没有组件渲染测试，决策逻辑（暂存、一天一次判断、重复检测、图标颜色）作为纯函数测试 |
 | **H 文档 + 开关** | `.env.example`；`docs/SEED_PAPERS.md`（存什么、发什么给谁、一天一次）；`PRIVATE_PDF_UPLOADS.md` 一句 | 文档 | — | 人读 |
 | **I（v1.1，可选）** | Tier 2 插入式重排（`prior` 锚）；关键词原始结果缓存 `peer-sources-v1-…` | `tier2-rerank.ts`、`pipeline.ts`、新 `source-candidate-cache.ts` | E | `tier2-rerank.test.ts`：无新论文则零调用；提示词含锚和新论文 |
 
@@ -415,7 +431,8 @@ Python CLI（`python/`）不在范围内：它是独立的 Tier 0 MVP，没有�
 3. **声明的种子要不要发给 Semantic Scholar？** 面板里有披露句，但 S2 许可证是非商业研究用途（§1e）。本计划 v1 **只用 OpenAlex**，`PEER_CHANNEL_S2_RECOMMENDATIONS` 保持关。
 4. **常数**：0.35 的权重、hub 衰减的 50 篇拐点、`MAX_PER_SEED = 3`、6/10 的份额，都是起点，要像当年的 REQUIRED-GATE 一样拿保存下来的池子调。
 5. **OpenAlex key 和预算**：Vercel 上配 `OPENALEX_API_KEY`；核实当前是"10 万信用点/天"还是"约 1 美元/天"；决定超额后降级还是付费。
-6. **种子摘要要不要进 TF-IDF 的 `seedTexts`？** 导师 seed 文本今天就在里面。但读代码发现：`seedTexts` 一变会让短标签的"词义上下文门"从"放行"变成"真的在判"，还会改变 T4 的相似度门槛和综述过滤。本计划 v1 **不进**，"仅标题"种子只走语义搜索；这是保守选择，可以在 v1.1 用保存的池子评估后再开。
+6. **种子摘要要不要进 TF-IDF 的 `seedTexts`？** 导师 seed 文本今天就在里面。但读代码发现：`seedTexts` 一变会让短标签的"词义上下文门"从"放行"变成"真的在判"（`keyword.ts` 里只有上下文文本为空时才放行），还会改变 T4 的相似度门槛和综述过滤。本计划 v1 **不进**，"仅标题"种子只走语义搜索；这是保守选择（三位评审里两位同意、一位主张进），可以在 v1.1 用保存的池子评估后再开。
+7. **"一天"按谁的时区算？** v1 按服务器日期（和池子标签、冻结批次一致；北京用户早上 8 点换日）。要改成用户时区，三处要一起改。
 
 ---
 
@@ -457,5 +474,6 @@ Python CLI（`python/`）不在范围内：它是独立的 Tier 0 MVP，没有�
 ### 本次调研方法（诚实记录）
 
 - 先由我亲自读完 `pipeline.ts`、`positive-seeds.ts`、`combine.ts`、`rerank.ts`、`tier2-rerank.ts`、`affiliation/openalex.ts`、`pool-cache.ts`、`channel-candidate-cache.ts`、`route.ts`、`rrf.ts` 等核心文件并写成事实清单；再派 7 个只读子代理分别梳理通道、缓存、上传、界面、打分、历史裁定、ResearchRabbit；再派 3 个设计子代理从"检索精度优先 / 成本缓存优先 / 最小改动优先"三个角度各出一版完整设计；最后 3 个评审子代理按 10 条标准打分。
-- 评审子代理第一次运行时撞上账号用量上限全部失败；用量恢复后已重跑。三版设计在骨架上高度一致（服务器端种子、建池时通道、签名进标签、可解释的加分、服务器端一天一次、取代冻结批次），本文是在三版之上做的综合；分歧处的取舍写在 §4.2 和 §8。
+- 评审子代理第一次运行时撞上账号用量上限全部失败；用量恢复后已重跑完成。三位评审（分别扮演"熟悉代码库的怀疑派工程师"、"产品负责人"、"成本与正确性审计员"）独立打分，排序一致：精度优先版最高（43/42/44 分，满分 50），成本优先版次之（42/41/42），最小改动版最低（35/38/33）。三版设计在骨架上高度一致（服务器端种子、建池时通道、签名进标签、可解释的加分、服务器端一天一次、取代冻结批次）；本文以精度优先版的检索与打分为核心，嫁接成本优先版的基础设施（原子的一天一次 SQL、服务器端重建种子记录、复用评测代码里的 DOI 解析器、Tier 2 插入式重排、按颗种子的确定性 URL），再取最小改动版的几个细节（rollover 行带签名、409 退路、开关、`dispatch-digests` 同步、小苗颜色即状态）。
+- 评审指出并已在本文修正的问题：`localCalendarDate` 是服务器日期而非用户时区（§5.6）；今天的界面没有"分数检查器"（§5.3、§5.8）；失败的种子通道不会被现有自动重试接住（§5.2、§5.7）；第一次种下也必须立刻生效，所以取代批次的条件是签名不一致而非"今天改过"（§5.6）；"种下 → 全删 → 再种"的漏洞（§5.6）；写接口不能信任客户端传来的身份字段（§4.2 决定一）；OpenAlex 两种计费说法冲突，要当成有预算的（§5.5）；`related_to` 加时间窗后可能常空（§5.2）；语义搜索要限速（§5.2）；OR 列表上限文档自相矛盾，取 50（§5.2）；种子字段放在 `work` 步里而不是新开一页（§5.7）。评审里未采纳的建议：把种子摘要并入 `seedTexts`（见 §8 第 6 项）。
 - 沙箱出口代理拒绝所有外网页面，ResearchRabbit 和 OpenAlex 的事实来自搜索引擎摘要和一份 2026-05 的 OpenAlex 文档 git 镜像，**没有做过真机 API 调用**。实施 B 组时必须先探测。
