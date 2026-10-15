@@ -15,6 +15,7 @@ import {
   hasOtherReadyDocumentCopy,
   isValidHash16,
   readUploadMeta,
+  removeUploadDoc,
   removeUploadPdf,
   writeUploadMeta,
   type UploadMeta,
@@ -64,12 +65,13 @@ export async function POST(req: Request) {
     ? !(await hasOtherReadyDocumentCopy(meta.ownerKey, meta.documentKey, hash16))
     : true;
 
-  // The PDF is the only per-hash16 derived content that ever lands on disk
-  // for an upload (confirmed 9-16: full-text/figure extraction for
-  // `upload:` ids never writes a shared or per-request cache file into
-  // upload storage — both bypass the shared cache entirely and read the PDF
-  // directly on every call). Removing it is removing every derived file.
+  // The PDF and, since P0-02, the text Peer read out of it (the
+  // `<hash16>.doc.json` sidecar, `upload-store.ts`) are the per-hash16 objects
+  // an upload leaves in its storage (confirmed 9-16: full-text/figure
+  // extraction for `upload:` ids never writes a shared or per-request cache
+  // file into upload storage). Removing both is removing every derived file.
   await removeUploadPdf(hash16);
+  await removeUploadDoc(hash16);
 
   // A minimal record, deliberately smaller than a live `UploadMeta`: kept
   // ONLY so this hash16 can never be re-claimed by a future upload of the

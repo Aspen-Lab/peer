@@ -45,9 +45,10 @@ const robotoMono = Roboto_Mono({
   display: "swap",
 });
 
-// Serif — display headlines AND long prose. Variable font with an optical
-// size axis, closest open face to Delphi's Martina Plantijn; light (300)
-// at display sizes, 400 for reading.
+// Serif — display headlines AND long prose. A variable face with the wght
+// axis only (no `axes` option is passed, so no optical-size axis is
+// requested or served), closest open face to Delphi's Martina Plantijn;
+// light (300) at display sizes, 400 for reading.
 const newsreader = Newsreader({
   subsets: ["latin"],
   variable: "--font-newsreader",

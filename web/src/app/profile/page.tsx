@@ -20,6 +20,8 @@ import {
   useReadingDays,
 } from "@/components/charts/reading-calendar";
 import { AdvisorField } from "@/components/profile/advisor-field";
+import { StandingQuestionsField } from "@/components/profile/standing-questions-field";
+import { STANDING } from "@/components/reader/copy";
 import { summarizePreferenceLedger } from "@/lib/preferences/ledger";
 import { ProfileUploads } from "@/components/profile-uploads";
 import { apiFetch } from "@/lib/api";
@@ -32,7 +34,7 @@ import { RestoreFromBackup } from "@/components/profile/restore-backup";
 import { useProfileSyncStatus, useSyncGate } from "@/components/profile-sync";
 import { useFeedSyncStatus } from "@/components/feed-sync";
 import { VersionLine } from "@/components/shell/version-line";
-import { AiKeyFields } from "@/components/profile/ai-setup";
+import { AiKeyFields, FEED_AI_PROVIDER_OPTIONS, providerShortLabel } from "@/components/profile/ai-setup";
 import { JevSetup } from "@/components/profile/jev-setup";
 import { Toggle } from "@/components/ui/toggle";
 import { FEED_EMPTY_REASON_CODES } from "@/lib/feed/types";
@@ -303,7 +305,10 @@ export default function ProfilePage() {
         />
       )}
 
-      {/* ── Reset ── */}
+      {/* ── Reset ── The three actions are text, 18 px tall to a mouse; where there is no hover each is a 44 px target
+          (P9-52, A P9-W3's N5: `[@media(hover:none)]:min-h-11`, the rule P9-23 set), 12 px apart in the column. The
+          second step of each two-step control (here "Confirm reset" and "Cancel"; "Reset all" and "Cancel" in What Peer
+          has learned) is the same 44 px target (P9-54). ── */}
       <section
         className="mt-14 pt-6 border-t border-border flex flex-col items-start gap-3"
       >
@@ -313,7 +318,7 @@ export default function ProfilePage() {
             resetOnboarding();
             router.push("/welcome");
           }}
-          className="inline-flex items-center gap-1.5 text-meta text-text-faint hover:text-accent transition-colors"
+          className="inline-flex items-center gap-1.5 text-meta text-text-faint hover:text-accent transition-colors [@media(hover:none)]:min-h-11"
         >
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M3 12a9 9 0 1 0 3-6.7" />
@@ -325,7 +330,7 @@ export default function ProfilePage() {
         {!showLogout ? (
           <button
             onClick={() => setShowLogout(true)}
-            className="inline-flex items-center gap-1.5 text-meta text-text-faint hover:text-red transition-colors"
+            className="inline-flex items-center gap-1.5 text-meta text-text-faint hover:text-red transition-colors [@media(hover:none)]:min-h-11"
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M3 6h18" />
@@ -344,13 +349,13 @@ export default function ProfilePage() {
                   setShowLogout(false);
                   setMode("view");
                 }}
-                className="text-red hover:text-red/80 font-medium transition-[color,background-color,border-color,scale] active:scale-95"
+                className="text-red hover:text-red/80 font-medium transition-[color,background-color,border-color,scale] active:scale-95 [@media(hover:none)]:min-h-11"
               >
                 Confirm reset
               </button>
               <button
                 onClick={() => setShowLogout(false)}
-                className="text-text-faint hover:text-text-muted transition-[color,background-color,border-color,scale] active:scale-95"
+                className="text-text-faint hover:text-text-muted transition-[color,background-color,border-color,scale] active:scale-95 [@media(hover:none)]:min-h-11"
               >
                 Cancel
               </button>
@@ -367,7 +372,29 @@ export default function ProfilePage() {
 
 // ── View mode: editorial dashboard ─────────────────────────────
 
-function DashboardView({
+/**
+ * P9-24 (§1h.57; the key session's K1 note, A P9-W2's P9-KEY check): the one line the view mode prints about the AI
+ * setup. The Edit form shows the provider and the key, but the view mode printed neither, so the page read the same
+ * with a key saved and without one.
+ *
+ * With a key saved (`hasUserLlmOverride`: a provider other than "default" and a key that is not blank) it names the
+ * provider and says the key is on this device. Otherwise it is the Profile's own label for the default provider, the
+ * same words the Edit form's select shows for "no key": Peer then reads without a model. **It never prints any part of
+ * the key** — not the last four characters, not its length. The key is read here only as that yes/no answer, never as
+ * a string, so nothing of it can reach the markup; a test renders the view with a 40-character key and looks for every
+ * 4-character piece of it.
+ */
+function aiSetupLine(profile: UserProfile): string {
+  if (hasUserLlmOverride(profile)) {
+    return `${providerShortLabel(profile.feedAiProvider)} · key saved on this device`;
+  }
+  return (
+    FEED_AI_PROVIDER_OPTIONS.find((option) => option.value === "default")?.label ??
+    "No AI key — Peer works without one"
+  );
+}
+
+export function DashboardView({
   profile,
   displayName,
   onEdit,
@@ -454,13 +481,28 @@ function DashboardView({
         </div>
       </div>
 
+      <div className="h-px bg-border/70 mx-7" />
+
+      {/* ── AI setup (P9-24): one plain line, no control. The page's Edit button is where the provider and the key are changed. ── */}
+      <div className="px-7 py-5">
+        <SectionHeader label="AI setup" />
+        <p className="mt-3 flex items-center gap-2 text-caption text-text-muted">
+          <span className={`inline-flex items-center justify-center w-5 h-5 rounded-md ${toneBadge("neutral")}`}>
+            <IconKey />
+          </span>
+          <span>{aiSetupLine(profile)}</span>
+        </p>
+      </div>
+
     </div>
   );
 }
 
 // ── Reading: fancy editorial dashboard ─────────────────────────
 
-function ReadingCard({
+// Exported for a static-markup test (P9-36): its counts come from the feed
+// store, so a test can seed the store and read what the reader is told.
+export function ReadingCard({
   profile,
 }: {
   profile: ReturnType<typeof useProfileStore.getState>["profile"];
@@ -645,10 +687,8 @@ function HeroStat({
 
 // `TypeTiles` stood here. It drew "EVENTS 0 / JOBS 0" under a heading that
 // said "What you save" — a claim about the reader that Peer could not support,
-// since `saveEvent` and `saveJob` are called nowhere outside the store and
-// both surfaces state in their own header comments that they are gone. The
-// `savedEvents`/`savedJobs` selectors stay in `useReadingStats`, so legacy
-// synced rows are still counted honestly in the total.
+// since nothing saved an event or a job and both surfaces are gone. The total
+// in `useReadingStats` counts saved papers and nothing else (P9-36).
 
 // ── Venue grid — blocks, warm intensity by rank ───────────────
 
@@ -876,7 +916,7 @@ function SectionHeader({
       {onAdjust && (
         <button
           onClick={onAdjust}
-          className="text-caption text-text-faint/80 hover:text-accent transition-[color,background-color,border-color,scale] active:scale-95"
+          className="text-caption text-text-faint/80 hover:text-accent transition-[color,background-color,border-color,scale] active:scale-95 [@media(hover:none)]:min-h-11"
         >
           adjust
         </button>
@@ -938,12 +978,10 @@ function SignalRow({
 
 function useReadingStats() {
   const savedPapers = useFeedStore((s) => s.savedPapers);
-  const savedEvents = useFeedStore((s) => s.savedEvents);
-  const savedJobs = useFeedStore((s) => s.savedJobs);
   const readItems = useFeedStore((s) => s.readItems);
   const lastRefresh = useFeedStore((s) => s.lastRefresh);
 
-  const saved = savedPapers.length + savedEvents.length + savedJobs.length;
+  const saved = savedPapers.length;
   const read = Object.keys(readItems).length;
 
   // Top keywords across saved papers' experiment keywords
@@ -1105,14 +1143,14 @@ export function LearnedPreferences({
                   onReset();
                   setConfirmReset(false);
                 }}
-                className="text-red hover:text-red/80 font-medium transition-[color,background-color,border-color,scale] active:scale-95"
+                className="text-red hover:text-red/80 font-medium transition-[color,background-color,border-color,scale] active:scale-95 [@media(hover:none)]:min-h-11"
               >
                 Reset all
               </button>
               <button
                 type="button"
                 onClick={() => setConfirmReset(false)}
-                className="text-text-faint hover:text-text-muted transition-[color,background-color,border-color,scale] active:scale-95"
+                className="text-text-faint hover:text-text-muted transition-[color,background-color,border-color,scale] active:scale-95 [@media(hover:none)]:min-h-11"
               >
                 Cancel
               </button>
@@ -1121,7 +1159,7 @@ export function LearnedPreferences({
             <button
               type="button"
               onClick={() => setConfirmReset(true)}
-              className="text-caption text-text-faint/80 hover:text-accent transition-colors shrink-0"
+              className="text-caption text-text-faint/80 hover:text-accent transition-colors shrink-0 [@media(hover:none)]:min-h-11"
             >
               Reset
             </button>
@@ -1937,6 +1975,10 @@ function EditView({
         </p>
       </EditRow>
 
+      <EditRow icon={<IconHash />} tone="tag" label={STANDING.label}>
+        <StandingQuestionsField />
+      </EditRow>
+
       <EditRow icon={<IconCareer />} tone="neutral" label="Career">
         <div className="space-y-3">
           <div>
@@ -2122,7 +2164,8 @@ function EditView({
               Read each paper&apos;s full text (HTML when available, PDF as
               fallback) before writing the report. Costs more tokens per paper
               and produces paper-grounded reports instead of a summary of the
-              abstract.
+              abstract. With it on, Peer also writes a one-line gist beside each
+              paragraph in the reading map.
             </p>
             <Toggle
               checked={profile.deepReportEnabled}

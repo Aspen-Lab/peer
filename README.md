@@ -54,7 +54,7 @@ Peer is a self-hosted **information agent**. The user declares who they are and 
 they care about (topics, current project, open challenges, advisor, preferred journals),
 and Peer fetches from academic sources, scores every candidate against that profile,
 removes duplicates, and surfaces a short daily briefing of the most relevant papers
-(plus events and jobs). Named after the Greek messenger god — it is the user's personal
+(papers only: jobs and events were removed). Named after the Greek messenger god — it is the user's personal
 messenger for their field.
 
 There are **two surfaces in one repo**. They are *parallel implementations of the same
@@ -323,7 +323,7 @@ expiry immediately, but the bytes themselves are only physically removed by
 401 with no/wrong secret) — every upload also sweeps expired records opportunistically, but that
 is a supplement to the scheduled job, not a substitute for one. Two ways to actually run it, and
 **neither runs automatically in this local checkout**:
-- **Vercel**: the repo-root [`vercel.json`](vercel.json) declares a daily cron
+- **Vercel**: [`web/vercel.json`](web/vercel.json) (the project's Root Directory, where Vercel reads it) declares a daily cron
   (`crons: [{ path: "/api/jobs/purge-uploads", schedule: "17 3 * * *" }]`); set `CRON_SECRET` in
   the Vercel project's environment variables and Vercel calls the route with that bearer
   automatically — nothing else to configure.
@@ -350,13 +350,24 @@ resolved for your deployment.
 ### Onboarding & persona quiz
 
 First-run wizard at [`web/src/app/welcome/page.tsx`](web/src/app/welcome/page.tsx) —
-Apple-setup style, one idea per page: **basics → topics → work → radar → ai → persona**.
+Apple-setup style, one idea per page: **basics → topics → work → radar → ai → data → persona**.
 
+- **A browser that has never been set up opens on it once, from the home page.** `FirstRunGate`
+  ([`first-run.tsx`](web/src/components/first-run.tsx)) sends a profile with nothing in it — no
+  `onboardedAt`, no topic, project, challenge or model key, and `welcomeSkipped` unset
+  ([`lib/profile/first-visit.ts`](web/src/lib/profile/first-visit.ts)) — from `/` to `/welcome`, once
+  the profile has loaded, and records that it did, so it never opens by itself a second time. Only
+  `/`: a shared paper link, a search or any other page is left where it is — a deep link is never
+  redirected. "Skip setup →" and the last step set the same flag. Anyone with something set up goes
+  straight to the briefing.
+- **The way back is on the home page.** Until a field is chosen the briefing is a sample, and the
+  sample card carries **Set up Peer** (`/welcome`) and **Add a key** (`/welcome?step=ai`) buttons;
+  after the first field a one-line "Add a key to turn on the model" row stays until a key exists
+  or it is dismissed. Profile → "Replay walkthrough" opens the wizard again.
 - **Topics is the only gate** — the feed needs at least one required topic for a real first
   briefing. Everything else is skippable.
 - It writes straight to the shared **profile store** (same store and field components as
-  `/profile`), then marks `onboardedAt` and hands off to the feed with the coachmark tour
-  (`/?tour=1`, see [`onboarding-tour.tsx`](web/src/components/onboarding-tour.tsx)).
+  `/profile`), then marks `onboardedAt` and returns to the feed (`/`).
 - The optional **persona quiz** ([`/persona`](web/src/app/persona/page.tsx),
   [`lib/persona/`](web/src/lib/persona/)) maps reading style across five axes.
 
@@ -376,7 +387,7 @@ and fire-and-forget cloud sync:
 - [`profile.ts`](web/src/store/profile.ts) — the user profile (topics, knobs, keys, ledger,
   digest prefs, theme, onboarding flag). `hydrateFromRemote` merges a server snapshot
   (undefined fields keep local values). Persisted under `peer-profile`.
-- [`feed.ts`](web/src/store/feed.ts) — papers/events/jobs, loading, read items, AI-search toggle.
+- [`feed.ts`](web/src/store/feed.ts) — papers (jobs and events were removed), loading, read items, AI-search toggle.
 - [`ui.ts`](web/src/store/ui.ts) — transient UI state.
 
 Sync components: `profile-sync.tsx`, `feed-sync.tsx`, `theme-sync.tsx`.
@@ -392,7 +403,7 @@ Supabase SQL editor). All tables are **RLS-scoped to `auth.uid()`**. Tables:
 | Table | Purpose |
 | --- | --- |
 | `profiles` | All user profile fields + feed knobs + digest prefs + `preference_ledger` + theme. Auto-created on signup; `updated_at` auto-touched. |
-| `saved_items` | Unified saved papers/events/jobs. `payload` is a full snapshot so links survive source decay. |
+| `saved_items` | Saved papers (jobs and events were removed; the `item_kind` check still allows the old kinds). `payload` is a full snapshot so links survive source decay. |
 | `read_items` | One row per (user, item) — powers the reading calendar/streak. |
 | `feedback_events` | Append-only signal stream (`liked` / `saved` / `notInterested` / `moreLikeThis`). |
 | `briefing_deliveries` | One row per scheduled digest run; drives the in-app "past briefings" inbox. Written by the cron with the service role (bypasses RLS). |
@@ -460,18 +471,6 @@ practice, so Peer's own shared client (`sources/semantic-scholar-client.ts`) pac
 one per 1.5 s (350 ms unkeyed) and retries a 429 with exponential backoff — 1 s, 2 s, 4 s — before
 giving up. Optional — without a key, search and enrichment still work, just slower and more likely
 to be throttled), `OPENALEX_EMAIL`, `UNPAYWALL_EMAIL` (polite-pool emails).
-
-**Jobs feed (code kept; no route serves it today — Remotive/Arbeitnow/Himalayas run keyless):**
-Adzuna, USAJOBS and JSearch (paid beyond a small free tier) run only on credentials the reader
-sends in the request (`apiKeys`); Peer reads none of them from the environment, and a Vercel
-build fails if `ADZUNA_APP_ID`, `ADZUNA_APP_KEY`, `USAJOBS_API_KEY` or `JSEARCH_API_KEY` is set.
-Web discovery of academic job boards (HigherEdJobs, jobs.ac.uk, Nature Careers — none expose
-usable feeds directly) runs only on a Tavily key a reader pastes in themselves; Peer holds no
-search key of its own.
-
-**Events feed:** fully keyless (ccfddl, confs.tech, researchseminars.org). A Tavily key a
-reader pastes in themselves adds profile-driven web discovery for non-CS fields; an LLM key
-upgrades its query generation from templates to profile-aware prompts.
 
 **Email digest:** `RESEND_API_KEY`, `DIGEST_FROM_EMAIL`.
 

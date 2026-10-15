@@ -45,7 +45,7 @@ behavior below, not the other way around):
 > provider's terms.
 >
 > I am authorized to upload, store and process this article in Peer, including with my AI
-> provider. Having subscription access alone may not grant these permissions.
+> provider.
 >
 > Only upload authorized copies. Peer does not bypass paywalls or share your PDF with other
 > readers.
@@ -120,7 +120,7 @@ conditions" below).
 Neither of the following runs by itself just because this repository exists — **a fresh local
 checkout purges nothing until one of these is actually configured**:
 
-- **Vercel deployment:** the repo-root `vercel.json` declares a daily cron entry
+- **Vercel deployment:** `web/vercel.json` (the project's Root Directory, where Vercel reads it) declares a daily cron entry
   (`{"crons":[{"path":"/api/jobs/purge-uploads","schedule":"17 3 * * *"}]}`). Set `CRON_SECRET`
   in the Vercel project's environment variables; Vercel calls the route with that bearer
   automatically.

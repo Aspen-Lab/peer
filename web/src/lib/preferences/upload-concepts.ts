@@ -7,7 +7,35 @@ import { ABBREVIATION_GROUPS, canonicalize, isGenericTerm } from "@/lib/scoring/
 // whenever the candidate-filtering or facet rules change meaningfully, so a
 // concept already stored in a user's ledger/meta can be told apart from one
 // a future rewrite of this module would produce.
-export const UPLOAD_CONCEPT_EXTRACTION_VERSION = 1;
+//
+// 2 (P0-03): uploads are read by pdf.js, not the Python helper, so the text
+// these concepts come from changed. The same number keys the server's cache
+// of an upload's extracted text (`full-text.ts`, P0-02), so the bump also
+// retires every document the Python helper read.
+// 3 (P7-10): two-column papers are read column by column; text cached under 2 is scrambled and is re-read.
+// 4 (P7-11): the hygiene rules after the columns (no hyphen-ended or decimal-led "headings", no notation
+// lifted out of a sentence as an equation, the paragraph indent read against the usual left edge, the
+// received/accepted date box dropped, captions to 2,000 characters, citation superscripts dropped);
+// text cached under 3 still carries them and is re-read.
+// 5 (P7-18): the end matter after the argument (associated content, author information, data availability ...)
+// is out of the sections, and a numbered subsection takes its parent's bucket even when the parent holds no
+// text of its own; text cached under 4 still carries the affiliation fragments and `body` for 2.x and 4.x.
+// 6 (P8-03): only a numbered line is a display equation in a PDF (an unnumbered symbol line stays in its
+// paragraph), and a glyph before an end-matter heading ("■ ACKNOWLEDGMENTS", "*sı Supporting Information")
+// no longer hides it; text cached under 5 still carries the fragments lifted out as "equations" and the
+// apparatus after a glyph-led heading.
+// 10 (P10-04): a numbered heading with no text of its own that numbers the heading after it ("2. RESULTS AND
+// DISCUSSION") is kept as a section with empty text, HTML and PDF alike; text cached under 9 has no such
+// section, so the map has no group row for it and the body no group heading.
+// 11 (P10-33, P10-34): a running head is a band line on three pages, so a paragraph whose words repeat is kept;
+// two blocks join across a page break only when the first has not ended its sentence; and each figure carries its
+// picture's width and height. Text cached under 10 lacks the kept paragraphs and the sizes. A saved note keeps its
+// passage through the new split by its quote (P10-35).
+// 12 (P10-40): a PMC section's nested subsections are sections of their own (`extractPmc` walks `<section>` by depth),
+// and an abstract sentence holds no line break; text cached under 11 folds the first subsection into its parent.
+// 13 (P10-42): a block with no sentence end joins the next across a page break or a floating figure whatever the
+// next word (unless it opens a heading or a list); text cached under 12 cuts such a sentence at a capital.
+export const UPLOAD_CONCEPT_EXTRACTION_VERSION = 13;
 
 // A conservative, local phrase extractor. No document text is sent to a model
 // for preference learning. References, author blocks and boilerplate are out.

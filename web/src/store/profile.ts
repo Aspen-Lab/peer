@@ -7,8 +7,6 @@ import { applyColorTheme, normalizeColorTheme } from "@/lib/theme";
 import type {
   UserProfile,
   Paper,
-  Event,
-  Job,
   CareerStage,
   IndustryAcademiaPreference,
   DigestChannel,
@@ -23,18 +21,18 @@ import type {
 } from "@/types";
 import { defaultProfile } from "@/types";
 import { normalizePersistedFeedIntent } from "@/lib/feed/intent";
-import { stripCredentialFields } from "@/lib/profile/merge";
+import { stripCredentialFields, stripLegacyOpportunityFields } from "@/lib/profile/merge";
 import { useJevScreeningStore } from "@/store/jev-screening";
+import { cleanQuestions } from "@/store/reading-questions";
 import {
-  applyOpportunityFacetPreferenceSignal,
   applyPreferenceSignal,
+  applyQuestionTermSignal,
   applyUploadPreferenceSignal,
+  holdsQuestionTerms,
   removeUploadPreferenceSignal,
-  conceptsFromEvent,
-  conceptsFromJob,
   conceptsFromPaper,
   setTermLean,
-  type OpportunityFacetGroup,
+  type QuestionTerm,
   type TermLean,
 } from "@/lib/preferences/ledger";
 
@@ -44,6 +42,10 @@ type PersistedUserProfile = Omit<Partial<UserProfile>, "colorTheme"> & {
 
 interface ProfileState {
   recordUploadPreference: (paper: Paper) => void;
+  /** P5-02: the specific terms of this paper's settled questions, as the
+   *  ledger's low-weight evidence (replacing the paper's earlier terms). A call
+   *  that changes nothing leaves the profile as it was. */
+  recordQuestionTerms: (paperId: string, terms: readonly QuestionTerm[]) => void;
   forgetUploadPreference: (documentKey: string) => void;
   profile: UserProfile;
   /**
@@ -90,10 +92,6 @@ interface ProfileState {
   updateDisplayName: (name: string) => void;
   updateTopics: (topics: string[]) => void;
   updateSoftTopics: (topics: string[]) => void;
-  updateEventTopics: (topics: string[]) => void;
-  updateEventSoftTopics: (topics: string[]) => void;
-  updateJobTopics: (topics: string[]) => void;
-  updateJobSoftTopics: (topics: string[]) => void;
   updatePreferredJournals: (journals: string[]) => void;
   updateCareerStage: (stage: CareerStage) => void;
   updateIndustryPreference: (pref: IndustryAcademiaPreference) => void;
@@ -103,29 +101,13 @@ interface ProfileState {
   updateSchool: (school: string) => void;
   updateCurrentProject: (text: string) => void;
   updateCurrentChallenges: (text: string) => void;
+  /** P5-01: the reader's standing questions, cleaned like any question (trimmed, distinct, five of 500 since P7-13). */
+  updateStandingQuestions: (questions: readonly string[]) => void;
+  /** P10-03 (review 2.3): the switch "Use my questions to tune recommendations". On removes the key (absent = on). */
+  updateQuestionsTuneRecommendations: (on: boolean) => void;
   recordPaperPreference: (
     paper: Paper,
     signal: "positive" | "negative",
-    at?: string,
-  ) => void;
-  /** Event feedback: recorded under the `event` origin namespace — flows
-   * weakly into job scoring, never back into papers. */
-  recordEventPreference: (
-    event: Event,
-    signal: "positive" | "negative",
-    at?: string,
-  ) => void;
-  /** Job feedback: recorded under the `job` origin namespace — job-only. */
-  recordJobPreference: (
-    job: Job,
-    signal: "positive" | "negative",
-    at?: string,
-  ) => void;
-  /** Facet clicks are weak, positive-only evidence under event/job origins. */
-  recordOpportunityFacetPreference: (
-    origin: "event" | "job",
-    group: OpportunityFacetGroup,
-    value: string,
     at?: string,
   ) => void;
   /** Wipe everything Peer has learned from likes/saves/dismissals. */
@@ -164,27 +146,47 @@ interface ProfileState {
   updateDigestEmail: (email: string) => void;
   updateTavilyEnabled: (value: boolean) => void;
   updateTavilyApiKey: (value: string) => void;
-  updateAdzunaKeys: (appId: string, appKey: string) => void;
-  updateUsajobsKeys: (apiKey: string, userAgent: string) => void;
   updateFeedAiProvider: (value: UserProfile["feedAiProvider"]) => void;
   updateFeedAiApiKey: (value: string) => void;
   /** The reader's own Jev key: trimmed, blank clears it. Never synced. */
   updateJevApiKey: (value: string) => void;
   updateDeepReportEnabled: (value: boolean) => void;
   updateColorTheme: (theme: ColorTheme) => void;
-  /** Mark first-run onboarding complete (defaults to now). */
+  /**
+   * Mark first-run onboarding complete (defaults to now). Skipping the wizard,
+   * finishing it and choosing a field on the home page all end here, so it also
+   * sets `welcomeSkipped`: the walkthrough does not open on its own again.
+   */
   completeOnboarding: (at?: string) => void;
-  /** Clear the onboarding flag so the welcome flow shows again (replay / dev). */
+  /**
+   * Record that the first-visit walkthrough has been dealt with — nothing else.
+   * `FirstRunGate` calls it when it sends a never-set-up profile to /welcome
+   * (and when the reader opens /welcome themselves), so the redirect fires once
+   * per browser however the reader leaves the wizard.
+   */
+  skipWelcome: () => void;
+  /**
+   * Clear the onboarding flag so the welcome flow shows again (replay / dev).
+   * `welcomeSkipped` stays: a replay is the reader's own call and must not
+   * re-arm the first-visit redirect.
+   */
   resetOnboarding: () => void;
   /** Replace local state with a server snapshot. Undefined fields keep local values. */
   hydrateFromRemote: (remote: Partial<UserProfile>) => void;
   logOut: () => void;
 }
 
-export function migrateProfileStore(
-  persisted: unknown,
-  version: number,
-): unknown {
+/**
+ * Brings a persisted `peer-profile` blob up to the current shape. The step that
+ * matters most is the v8 one (the events and jobs feeds are stopped): whatever
+ * version the blob is, the event and job topic lists, the Adzuna and USAJobs
+ * credentials and the events/jobs halves of the active snapshot are dropped —
+ * they are no longer part of the profile, and nothing may keep storing,
+ * syncing or reading them. It is idempotent, so it needs no version switch.
+ * The reader's own words (Career stage, Looking toward, locations, work
+ * authorisation) and the Tavily fields are kept.
+ */
+export function migrateProfileStore(persisted: unknown): unknown {
   if (!persisted || typeof persisted !== "object") return persisted;
 
   const state = persisted as {
@@ -193,43 +195,11 @@ export function migrateProfileStore(
   };
   if (!state.profile || typeof state.profile !== "object") return persisted;
 
-  const profile: PersistedUserProfile = { ...state.profile };
+  const profile: PersistedUserProfile = stripLegacyOpportunityFields({
+    ...state.profile,
+  });
   if (profile.colorTheme !== undefined) {
     profile.colorTheme = normalizeColorTheme(profile.colorTheme);
-  }
-
-  if (version < 3) {
-    const requiredTopics = Array.isArray(profile.researchTopics)
-      ? profile.researchTopics
-      : [];
-    const exploreTopics = Array.isArray(profile.softTopics)
-      ? profile.softTopics
-      : [];
-
-    if (
-      !Array.isArray(profile.eventRequiredTopics) ||
-      profile.eventRequiredTopics.length === 0
-    ) {
-      profile.eventRequiredTopics = [...requiredTopics];
-    }
-    if (
-      !Array.isArray(profile.eventExploreTopics) ||
-      profile.eventExploreTopics.length === 0
-    ) {
-      profile.eventExploreTopics = [...exploreTopics];
-    }
-    if (
-      !Array.isArray(profile.jobRequiredTopics) ||
-      profile.jobRequiredTopics.length === 0
-    ) {
-      profile.jobRequiredTopics = [...requiredTopics];
-    }
-    if (
-      !Array.isArray(profile.jobExploreTopics) ||
-      profile.jobExploreTopics.length === 0
-    ) {
-      profile.jobExploreTopics = [...exploreTopics];
-    }
   }
 
   const authorisedCountries = (
@@ -253,8 +223,8 @@ export function migrateProfileStore(
 }
 
 /**
- * True when the active snapshot has no usable topics on any surface but the
- * pending fields do — i.e. we have never once locked in a real search input.
+ * True when the active snapshot has no usable paper topics but the pending
+ * field does — i.e. we have never once locked in a real search input.
  *
  * This is the bootstrap case, and it has to bypass the once-a-day rule.
  * Promotion normally runs at hydration, which for a brand-new user happens
@@ -269,16 +239,8 @@ export function migrateProfileStore(
 function hasNoActiveInputsYet(profile: UserProfile): boolean {
   const active = profile.activeSearchInputs;
   if (!active) return true;
-  const activeCount =
-    active.papers.required.length +
-    active.events.required.length +
-    active.jobs.required.length;
-  if (activeCount > 0) return false;
-  const pendingCount =
-    profile.researchTopics.length +
-    profile.eventRequiredTopics.length +
-    profile.jobRequiredTopics.length;
-  return pendingCount > 0;
+  if (active.papers.required.length > 0) return false;
+  return profile.researchTopics.length > 0;
 }
 
 export function promoteSearchInputs(
@@ -299,14 +261,6 @@ export function promoteSearchInputs(
       papers: {
         required: [...profile.researchTopics],
         explore: [...(profile.softTopics ?? [])],
-      },
-      events: {
-        required: [...profile.eventRequiredTopics],
-        explore: [...profile.eventExploreTopics],
-      },
-      jobs: {
-        required: [...profile.jobRequiredTopics],
-        explore: [...profile.jobExploreTopics],
       },
       careerStage: profile.careerStage,
       locationPreferences: [...profile.locationPreferences],
@@ -380,7 +334,11 @@ export function parseExportedProfile(
   }
   // Malformed input must leave the existing profile untouched, so only known
   // keys survive and anything else in the file is ignored.
-  const known = [...Object.keys(defaultProfile), "feedIntent"] as Array<keyof UserProfile>;
+  // `standingQuestions` and `questionsTuneRecommendations` are absent from `defaultProfile` (optional fields), so
+  // they are named here.
+  const known = [...Object.keys(defaultProfile), "feedIntent", "standingQuestions", "questionsTuneRecommendations"] as Array<
+    keyof UserProfile
+  >;
   const source = profile as Record<string, unknown>;
   const result: Record<string, unknown> = {};
   for (const key of known) {
@@ -388,6 +346,17 @@ export function parseExportedProfile(
     if (key === "feedIntent") {
       const intent = normalizePersistedFeedIntent(source[key]);
       if (intent.ok) result[key] = intent.intent;
+      continue;
+    }
+    if (key === "standingQuestions") {
+      // The reader's own questions, kept as typed; anything that is not a list of text is ignored.
+      const list = source[key];
+      if (Array.isArray(list)) result[key] = cleanQuestions(list.filter((q): q is string => typeof q === "string"));
+      continue;
+    }
+    if (key === "questionsTuneRecommendations") {
+      // A switch: anything that is not a boolean is ignored.
+      if (typeof source[key] === "boolean") result[key] = source[key];
       continue;
     }
     result[key] = source[key];
@@ -415,6 +384,13 @@ export const useProfileStore = create<ProfileState>()(
         preferenceLedger: applyUploadPreferenceSignal(s.profile.preferenceLedger,
           conceptsFromPaper(paper), paper.uploadDocumentKey ?? ""),
       } })),
+      recordQuestionTerms: (paperId, terms) => set((s) => {
+        const ledger = s.profile.preferenceLedger;
+        // P5-04 (S4): the same terms at other shares is a change too.
+        if (holdsQuestionTerms(ledger, paperId, terms)) return s;
+        return { profile: { ...s.profile,
+          preferenceLedger: applyQuestionTermSignal(ledger, paperId, terms) } };
+      }),
       forgetUploadPreference: (key) => set((s) => ({ profile: { ...s.profile,
         preferenceLedger: removeUploadPreferenceSignal(s.profile.preferenceLedger, key),
       } })),
@@ -446,26 +422,6 @@ export const useProfileStore = create<ProfileState>()(
 
       updateSoftTopics: (topics) =>
         set((s) => ({ profile: { ...s.profile, softTopics: topics, feedIntent: undefined } })),
-
-      updateEventTopics: (topics) =>
-        set((s) => ({
-          profile: { ...s.profile, eventRequiredTopics: topics },
-        })),
-
-      updateEventSoftTopics: (topics) =>
-        set((s) => ({
-          profile: { ...s.profile, eventExploreTopics: topics },
-        })),
-
-      updateJobTopics: (topics) =>
-        set((s) => ({
-          profile: { ...s.profile, jobRequiredTopics: topics },
-        })),
-
-      updateJobSoftTopics: (topics) =>
-        set((s) => ({
-          profile: { ...s.profile, jobExploreTopics: topics },
-        })),
 
       updatePreferredJournals: (journals) =>
         set((s) => ({ profile: { ...s.profile, preferredJournals: journals } })),
@@ -512,6 +468,18 @@ export const useProfileStore = create<ProfileState>()(
           profile: { ...s.profile, currentChallenges: text, feedIntent: undefined },
         })),
 
+      updateStandingQuestions: (questions) =>
+        set((s) => ({
+          profile: { ...s.profile, standingQuestions: cleanQuestions(questions) },
+        })),
+
+      updateQuestionsTuneRecommendations: (on) =>
+        set((s) => {
+          const { questionsTuneRecommendations: _was, ...rest } = s.profile;
+          void _was;
+          return { profile: on ? rest : { ...rest, questionsTuneRecommendations: false } };
+        }),
+
       recordPaperPreference: (paper, signal, at) =>
         set((s) => ({
           profile: {
@@ -524,45 +492,6 @@ export const useProfileStore = create<ProfileState>()(
                 at,
                 requiredTopics: s.profile.researchTopics,
               },
-            ),
-          },
-        })),
-
-      recordEventPreference: (event, signal, at) =>
-        set((s) => ({
-          profile: {
-            ...s.profile,
-            preferenceLedger: applyPreferenceSignal(
-              s.profile.preferenceLedger,
-              conceptsFromEvent(event),
-              signal,
-              { at, origin: "event" },
-            ),
-          },
-        })),
-
-      recordJobPreference: (job, signal, at) =>
-        set((s) => ({
-          profile: {
-            ...s.profile,
-            preferenceLedger: applyPreferenceSignal(
-              s.profile.preferenceLedger,
-              conceptsFromJob(job),
-              signal,
-              { at, origin: "job" },
-            ),
-          },
-        })),
-
-      recordOpportunityFacetPreference: (origin, group, value, at) =>
-        set((s) => ({
-          profile: {
-            ...s.profile,
-            preferenceLedger: applyOpportunityFacetPreferenceSignal(
-              s.profile.preferenceLedger,
-              group,
-              value,
-              { at, origin },
             ),
           },
         })),
@@ -688,22 +617,6 @@ export const useProfileStore = create<ProfileState>()(
         set((s) => ({
           profile: { ...s.profile, tavilyApiKey: value.trim() || undefined },
         })),
-      updateAdzunaKeys: (appId, appKey) =>
-        set((s) => ({
-          profile: {
-            ...s.profile,
-            adzunaAppId: appId.trim() || undefined,
-            adzunaAppKey: appKey.trim() || undefined,
-          },
-        })),
-      updateUsajobsKeys: (apiKey, userAgent) =>
-        set((s) => ({
-          profile: {
-            ...s.profile,
-            usajobsApiKey: apiKey.trim() || undefined,
-            usajobsUserAgent: userAgent.trim() || undefined,
-          },
-        })),
       updateFeedAiProvider: (value) =>
         set((s) => ({
           profile: {
@@ -742,10 +655,16 @@ export const useProfileStore = create<ProfileState>()(
           // promoteSearchInputs only acts when the snapshot has never held real
           // inputs, so this cannot bypass the day-lock for a returning user.
           profile: promoteSearchInputs(
-            { ...s.profile, onboardedAt: at ?? new Date().toISOString() },
+            {
+              ...s.profile,
+              onboardedAt: at ?? new Date().toISOString(),
+              welcomeSkipped: true,
+            },
             new Date(),
           ),
         })),
+      skipWelcome: () =>
+        set((s) => ({ profile: { ...s.profile, welcomeSkipped: true } })),
       resetOnboarding: () =>
         set((s) => ({ profile: { ...s.profile, onboardedAt: null } })),
 
@@ -857,7 +776,8 @@ export const useProfileStore = create<ProfileState>()(
         syncedAccountId: state.syncedAccountId,
       }) as ProfileState,
       // v2: colorTheme became a "mode:accent" composite.
-      // v3: Events and Jobs gained independent Required/Explore topic fields.
+      // v3: Events and Jobs gained independent Required/Explore topic fields
+      //     (dropped again at v8).
       // v4: work-authorisation countries became a persisted profile signal.
       // v5: PROFILE-SYNC (§1bk) — lastSynced, a per-device snapshot of the
       //     single-value fields' last-confirmed values. The migration adds
@@ -885,9 +805,15 @@ export const useProfileStore = create<ProfileState>()(
       //     the old code has not "switched" accounts merely because this
       //     fix shipped, so its very next sign-in must not be treated as
       //     one.
-      version: 7,
-      migrate: (persisted, version) =>
-        migrateProfileStore(persisted, version) as ProfileState,
+      // v8: the events and jobs feeds are stopped (rulings 60). The migration
+      //     drops the event and job topic lists, the Adzuna and USAJobs
+      //     credentials and the events/jobs halves of `activeSearchInputs`
+      //     from a saved profile; nothing is seeded in their place (the old
+      //     v3 step that copied the paper topics into them is gone). It drops
+      //     whatever version the blob is at, so it replaces the version switch
+      //     the earlier steps needed.
+      version: 8,
+      migrate: (persisted) => migrateProfileStore(persisted) as ProfileState,
       // Build the promoted snapshot as part of the state installed by
       // hydration, so subscribers can never observe hydrated pending inputs
       // without the corresponding active inputs.

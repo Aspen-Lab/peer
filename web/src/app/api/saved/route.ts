@@ -1,13 +1,19 @@
-// GET    /api/saved               — list all saved items for the signed-in user
-// POST   /api/saved               — upsert { itemId, itemKind, payload }
+// GET    /api/saved               — list the signed-in user's saved papers
+// POST   /api/saved               — upsert { itemId, itemKind: "paper", payload }
 // DELETE /api/saved?itemId=...    — remove one saved item
 //
 // RLS ensures user_id ownership; user_id is derived from the session, never the body.
+//
+// Papers only. Peer is a paper briefing: jobs and events are not processed, so
+// a row of any other kind is neither written nor read here (the owner's
+// decision, §1a.18 (f)). Rows of kind 'event' / 'job' that an older build
+// wrote stay in the table untouched — nothing reads them — and the owner may
+// delete them with the SQL file offered for that.
 
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-type ItemKind = "paper" | "event" | "job";
+type ItemKind = "paper";
 
 interface SavedRow {
   user_id: string;
@@ -30,6 +36,7 @@ export async function GET() {
     .from("saved_items")
     .select("*")
     .eq("user_id", user.id)
+    .eq("item_kind", "paper")
     .order("saved_at", { ascending: false });
 
   if (error) {
@@ -58,11 +65,16 @@ export async function POST(request: NextRequest) {
 
   const body = (await request.json()) as {
     itemId?: string;
-    itemKind?: ItemKind;
+    itemKind?: string;
     payload?: unknown;
   };
   if (!body.itemId || !body.itemKind || body.payload === undefined) {
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
+  }
+  // A refusal, not a quiet 200: a client that still sends a job or an event
+  // should be told its write was not kept.
+  if (body.itemKind !== "paper") {
+    return NextResponse.json({ error: "unsupported itemKind" }, { status: 400 });
   }
 
   const { error } = await supabase.from("saved_items").upsert(

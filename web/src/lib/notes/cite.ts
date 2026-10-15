@@ -86,18 +86,37 @@ export function sourceOf(paper: Citable, key: string): Source {
   };
 }
 
-/** The citation as it reads in the text: "Rose et al., 2024". */
+/** The citation as it reads in the text: "Rose et al., 2024". A paper whose record names no author is cited by the
+ *  first four words of its title — never by a name made up from them — and a year the record lacks is left out, with
+ *  no "n.d." (P10-09e, rule 4). */
 export function authorYear(source: Pick<Source, "authors" | "year" | "title">): string {
   const names = source.authors.map(surname).filter(Boolean);
   const who =
     names.length === 0
-      ? source.title.split(/\s+/).slice(0, 3).join(" ")
+      ? source.title.split(/\s+/).filter(Boolean).slice(0, 4).join(" ")
       : names.length === 1
         ? names[0]
         : names.length === 2
           ? `${names[0]} & ${names[1]}`
           : `${names[0]} et al.`;
-  return source.year ? `${who}, ${source.year}` : `${who}, n.d.`;
+  return source.year ? `${who}, ${source.year}` : who;
+}
+
+/** A link worth writing for a paper: an `http(s)` address that is not the app's own `/api/` path (an uploaded PDF is
+ *  served from `/api/papers/upload/…/file`, which means nothing to anyone outside this browser). Nothing otherwise. */
+export function externalLink(url?: string): string | undefined {
+  if (!url) return undefined;
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return undefined;
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return undefined;
+  const here = typeof location !== "undefined" ? location.host : "";
+  const own = u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "[::1]" || (here !== "" && u.host === here);
+  if (own && u.pathname.startsWith("/api/")) return undefined;
+  return url;
 }
 
 /** A paper from the shelf or the briefing, as a note sees it. */

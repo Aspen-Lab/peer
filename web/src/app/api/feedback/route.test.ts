@@ -64,6 +64,12 @@ describe("POST /api/feedback — unchanged behavior (regression net)", () => {
     expect(mocks.insert).toHaveBeenCalledWith(expect.objectContaining({ user_id: "user-1" }));
   });
 
+  it.each(["event", "job", "note", ""])("refuses kind %j with a 400 and writes nothing (papers only)", async (itemKind) => {
+    const res = await POST(request({ itemId: "x:1", itemKind, feedback: "notInterested", payload: { title: "T" } }));
+    expect(res.status).toBe(400);
+    expect(mocks.insert).not.toHaveBeenCalled();
+  });
+
   it("retries without payload when the insert fails on a payload-column error (legacy schema)", async () => {
     mocks.insert
       .mockResolvedValueOnce({ error: { message: "column \"payload\" does not exist" } })
@@ -126,16 +132,21 @@ describe("POST /api/feedback — additive resolvedIds capture (P2-S4b, F-A-P2-04
     expect(mocks.insert).toHaveBeenCalledWith(expect.objectContaining({ payload: { title: "T" } }));
   });
 
-  it("leaves payload byte-identical for a non-paper itemKind, even with an openalex-shaped itemId", async () => {
-    await POST(
+  // P9-31 — RE-AIMED (§1c): these two tests used to pin that a job / event kind was stored with its
+  // payload untouched. Jobs and events are no longer processed (the owner's decision, §1a.18 (f)),
+  // so the same inputs now pin the refusal: a 400 and no row written, with or without a payload.
+  it("refuses a job itemKind with a 400 and writes nothing, even with an openalex-shaped itemId", async () => {
+    const res = await POST(
       request({ itemId: "openalex:W1", itemKind: "job", feedback: "saved", payload: { title: "A job" } }),
     );
-    expect(mocks.insert).toHaveBeenCalledWith(expect.objectContaining({ payload: { title: "A job" } }));
+    expect(res.status).toBe(400);
+    expect(mocks.insert).not.toHaveBeenCalled();
   });
 
-  it("stores null payload unchanged when itemKind is not paper and no payload was sent", async () => {
-    await POST(request({ itemId: "openalex:W1", itemKind: "event", feedback: "saved" }));
-    expect(mocks.insert).toHaveBeenCalledWith(expect.objectContaining({ payload: null }));
+  it("refuses an event itemKind with a 400 and writes nothing when no payload was sent", async () => {
+    const res = await POST(request({ itemId: "openalex:W1", itemKind: "event", feedback: "saved" }));
+    expect(res.status).toBe(400);
+    expect(mocks.insert).not.toHaveBeenCalled();
   });
 
   it("still derives resolvedIds when payload was omitted entirely for a paper", async () => {

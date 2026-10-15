@@ -95,7 +95,7 @@ export function RestoreFromBackup() {
         type="button"
         onClick={() => inputRef.current?.click()}
         disabled={busy}
-        className="inline-flex items-center gap-1.5 text-meta text-text-faint hover:text-accent transition-colors disabled:opacity-50"
+        className="inline-flex items-center gap-1.5 text-meta text-text-faint hover:text-accent transition-colors disabled:opacity-50 [@media(hover:none)]:min-h-11"
       >
         {busy ? "Reading…" : "Restore from a backup file"}
       </button>

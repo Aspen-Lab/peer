@@ -2,22 +2,33 @@
 
 // First-run onboarding plumbing.
 //
-// **It no longer redirects.** A first visitor used to be sent to /welcome and
-// saw a seven-step form before a single paper. The first visit is now the
-// briefing itself, with a sample feed and a setup strip above it
-// (`components/briefing/starter-strip.tsx`); /welcome is still there and is
-// still linked, for a reader who wants the long form.
+// **A profile that has never been set up opens on /welcome, once, from the
+// home page.** (P7-16, the owner's R12; P7-16c, §1h.35 (a).) The first visit
+// used to be the briefing alone, with a sample feed and a setup strip above it
+// (see `starter-strip.tsx` in components/briefing) and no way into the
+// walkthrough except a faint link in that strip. A reader who ran Peer from
+// GitHub never met the wizard and never found where to put a key. So the gate
+// sends a profile with nothing in it — no onboarding stamp, no topic, project,
+// challenge or key (see lib/profile/first-visit.ts) — from `/` to /welcome,
+// after the profile store has hydrated and the first sync has settled, and
+// records that it did (`welcomeSkipped`), so it never happens a second time.
+// Only `/`: a shared paper link, a search or any other route is a deep link,
+// and a deep link is never redirected. The wizard's "Skip setup" and its last
+// step set the same flag; the strip's "Set up Peer" and "Add a key" buttons
+// stay as the way back.
 //
-// What is left here is the backfill: a synced profile that already has topics
-// is proof of prior onboarding, so the local flag is written to match.
+// Beside that, the backfill: a synced profile that already has topics is proof
+// of prior onboarding, so the local flag is written to match.
 //
-// Onboarding state is local (see UserProfile.onboardedAt), so this works for
-// signed-out visitors too and resets cleanly when localStorage is cleared.
+// Onboarding state is local (see UserProfile.onboardedAt and welcomeSkipped),
+// so this works for signed-out visitors too and resets cleanly when
+// localStorage is cleared.
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useProfileStore } from "@/store/profile";
 import { useSyncGate } from "@/components/profile-sync";
+import { walkthroughAction } from "@/lib/profile/first-visit";
 // P4-S5b-FIX3 — the literal 4000 below is now sourced from here so it can't
 // silently drift from page.tsx's own auth-outcome fallback, which waits on
 // the same underlying ProfileSync state. The value and this hook's own
@@ -58,11 +69,14 @@ export function useProfileSettled(): boolean {
 }
 
 export function FirstRunGate() {
+  const router = useRouter();
   const pathname = usePathname();
-  const onboardedAt = useProfileStore((s) => s.profile.onboardedAt);
-  const topicsCount = useProfileStore((s) => s.profile.researchTopics.length);
+  const profile = useProfileStore((s) => s.profile);
   const completeOnboarding = useProfileStore((s) => s.completeOnboarding);
+  const skipWelcome = useProfileStore((s) => s.skipWelcome);
   const settled = useProfileSettled();
+  const onboardedAt = profile.onboardedAt;
+  const topicsCount = profile.researchTopics.length;
 
   // A profile with research topics is proof of prior onboarding, whatever the
   // local-only onboardedAt flag says — it covers the signed-in returning user
@@ -76,6 +90,23 @@ export function FirstRunGate() {
     if (pathname === "/welcome") return;
     if (!onboardedAt && topicsCount > 0) completeOnboarding();
   }, [settled, pathname, onboardedAt, topicsCount, completeOnboarding]);
+
+  // The first visit, from the home page. Only once the profile is
+  // trustworthy — after local hydration AND the initial remote pull — because
+  // on the pre-sync default profile a returning reader looks exactly like a
+  // new one, and would be bounced into the wizard on a fresh-browser load.
+  // Nothing renders differently before that: this component renders nothing
+  // at all. On any other page it does nothing (and records nothing).
+  const action = settled ? walkthroughAction(pathname, profile) : null;
+
+  useEffect(() => {
+    if (!action) return;
+    // Recorded first and in the same breath, so that however the reader leaves
+    // the wizard — Skip, Enter Peer, the masthead, the back button — the
+    // walkthrough has been offered exactly once.
+    skipWelcome();
+    if (action === "redirect") router.replace("/welcome");
+  }, [action, router, skipWelcome]);
 
   return null;
 }

@@ -217,11 +217,13 @@ describe("sanitizePaperReport", () => {
       nextStep: null,
     });
 
+    // P2-02b (§1g.12): the count is the server's own and starts at 0 — a
+    // number in the model's output is not carried (it was 2 here before).
     expect(report.provenance).toEqual({
       basis: "model-fulltext",
       sourceKind: "pdf",
       pageCount: 5,
-      droppedClaims: 2,
+      droppedClaims: 0,
     });
     expect(report.depth).toBe("deep");
     expect(report.nextStep).toBeNull();

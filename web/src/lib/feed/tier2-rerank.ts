@@ -1,4 +1,5 @@
 import { resolveProvider } from "@/lib/llm/providers/registry";
+import { errorKind } from "@/lib/llm/providers/error-kind";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import type { ScoredItem } from "@/lib/scoring/types";
 import type { SearchBrief } from "./profile-compiler";
@@ -140,7 +141,9 @@ export async function applyTier2Rerank(
       reasons,
     };
   } catch (err) {
-    console.warn("[feed/tier2] rerank failed, keeping Tier 1 order:", err);
+    // The prompt holds the reader's own search brief and a provider's error
+    // body can quote it back, so only the kind (and a status) is logged.
+    console.warn(`[feed/tier2] rerank failed, keeping Tier 1 order: ${errorKind(err)}`);
     return { items, orderedIds: [], reasons: {} };
   }
 }

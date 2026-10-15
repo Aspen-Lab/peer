@@ -40,6 +40,15 @@ export interface VisionImageInput {
 
 export interface DigestProvider {
   id: ProviderId;
+  /**
+   * P3-02c (ruling §1h.4 amendment): true when `generateJsonText` honours its
+   * `webSearch` argument. Both Gemini providers say so; every other provider
+   * leaves it out and ignores the argument, so a caller that asks for search of
+   * one that cannot gets a plain answer, and the caller says so (the explain
+   * route answers `searched: false`). The registry returns the provider object
+   * itself, wrapped in nothing, so the flag is read off it exactly as set.
+   */
+  supportsWebSearch?: true;
   generateDigest(args: {
     papers: PaperLite[];
     contextHint?: string;
@@ -55,6 +64,14 @@ export interface DigestProvider {
      * legacy call sites keep working unchanged.
      */
     tier?: ModelTier;
+    /**
+     * P3-02c (ruling §1h.4 amendment): let the model use web search for this one
+     * call (Gemini: the Google Search grounding tool). Honoured only by a
+     * provider with `supportsWebSearch`; every other provider ignores it. A
+     * grounded call is not in JSON mode — Gemini refuses the two together — so
+     * the text comes back as the model wrote it and the caller parses it.
+     */
+    webSearch?: boolean;
   }): Promise<string>;
   generateVisionJsonText?(args: {
     systemPrompt: string;
@@ -126,6 +143,16 @@ export function safeParseDigest(text: string): DigestResult | null {
     }
   }
 
-  console.warn("[digest] Could not parse JSON from model response. First 300 chars:", text.slice(0, 300));
+  // The reply's length, and whether it began like JSON, never a character of it
+  // (P5-06b, §1h.20 (b)): the prompt holds the papers' abstracts and the reader's
+  // own profile text, and a reply that fails to parse is exactly the kind that
+  // quotes them back. A server log is shared; AGENTS.md keeps per-user text out of
+  // it. The length and the yes/no still tell the owner an empty reply from prose
+  // from truncated JSON.
+  const first = text.trimStart().charAt(0);
+  const beganLikeJson = first === "{" || first === "[";
+  console.warn(
+    `[digest] Could not parse JSON from model response (reply length ${text.length}, begins like JSON: ${beganLikeJson ? "yes" : "no"})`,
+  );
   return null;
 }

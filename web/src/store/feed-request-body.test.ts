@@ -2,22 +2,18 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { defaultProfile, type UserProfile } from "@/types";
 import { useProfileStore } from "./profile";
 import { useJevScreeningStore, type JevScreeningReport } from "./jev-screening";
-import {
-  activePaperTopicsKey,
-  opportunityRequestBody,
-  paperFeedRequestBody,
-} from "./feed";
+import * as feedModule from "./feed";
+import { activePaperTopicsKey, paperFeedRequestBody } from "./feed";
 import { selectedSenseConcept } from "@/lib/feed/senses";
 import { STARTER_TOPICS, STARTER_TOPICS_KEY } from "@/lib/feed/starter-topics";
 
+// P9-31 — Peer is a paper briefing (jobs and events are not processed, the owner's decision
+// §1a.18 (f)): the active inputs the store reads are the papers' alone, so the fixture names no
+// event or job list (the cast keeps it valid whatever else the profile type still carries).
 const activeProfile: UserProfile = {
   ...defaultProfile,
   researchTopics: ["pending-paper"],
   softTopics: ["pending-paper-explore"],
-  eventRequiredTopics: ["pending-event"],
-  eventExploreTopics: ["pending-event-explore"],
-  jobRequiredTopics: ["pending-job"],
-  jobExploreTopics: ["pending-job-explore"],
   careerStage: "Postdoc",
   locationPreferences: ["Pending location"],
   authorisedCountries: ["United States"],
@@ -26,18 +22,10 @@ const activeProfile: UserProfile = {
       required: ["active-paper"],
       explore: ["active-paper-explore"],
     },
-    events: {
-      required: ["active-event"],
-      explore: ["active-event-explore"],
-    },
-    jobs: {
-      required: ["active-job"],
-      explore: ["active-job-explore"],
-    },
     careerStage: "PhD Year 4",
     locationPreferences: ["Active location"],
     promotedOn: "2026-07-29",
-  },
+  } as UserProfile["activeSearchInputs"],
 };
 
 const advisorSeeds = {
@@ -48,21 +36,25 @@ const advisorSeeds = {
 function buildSearchRequests(profile: UserProfile) {
   return {
     papers: paperFeedRequestBody(profile, advisorSeeds),
-    events: opportunityRequestBody(profile, "events", []),
-    jobs: opportunityRequestBody(profile, "jobs", []),
   };
 }
 
 describe("active feed request inputs", () => {
-  it("defaults every surface to Tier 0 with no model override", () => {
+  // P9-31 — the store builds one request, the paper briefing's. It has no builder for a jobs or an
+  // events request (they used to share `opportunityRequestBody`, which also carried the Tavily /
+  // Adzuna / USAJobs keys and a model key to routes that no longer exist).
+  it("builds no jobs or events request: the store module exports the paper builder only", () => {
+    expect(feedModule).toHaveProperty("paperFeedRequestBody");
+    expect(Object.keys(feedModule).filter((name) => /opportunity|event|job/i.test(name))).toEqual([]);
+  });
+
+  // RE-AIMED (§1c): "defaults every surface to Tier 0 with no model override" — the events and
+  // jobs surfaces are gone; the papers' half of the assertions is unchanged.
+  it("defaults the paper request to Tier 0 with no model override", () => {
     const requests = buildSearchRequests(activeProfile);
 
     expect(requests.papers.aiTier).toBe(0);
-    expect(requests.events.aiTier).toBe(0);
-    expect(requests.jobs.aiTier).toBe(0);
     expect(requests.papers.llmOverride).toBeUndefined();
-    expect(requests.events.llmOverride).toBeUndefined();
-    expect(requests.jobs.llmOverride).toBeUndefined();
   });
 
   it("uses Tier 2 only with the user's selected provider and key, for a signed-in reader", () => {
@@ -78,20 +70,9 @@ describe("active feed request inputs", () => {
       [],
       "signed-in",
     );
-    const events = opportunityRequestBody(
-      byokProfile,
-      "events",
-      [],
-      "signed-in",
-    );
 
     expect(papers.aiTier).toBe(2);
     expect(papers.llmOverride).toEqual({
-      provider: "openai",
-      apiKey: "user-owned-key",
-    });
-    expect(events.aiTier).toBe(2);
-    expect(events.llmOverride).toEqual({
       provider: "openai",
       apiKey: "user-owned-key",
     });
@@ -104,38 +85,12 @@ describe("active feed request inputs", () => {
       ...activeProfile,
       researchTopics: ["edited-pending-paper"],
       softTopics: ["edited-pending-paper-explore"],
-      eventRequiredTopics: ["edited-pending-event"],
-      eventExploreTopics: ["edited-pending-event-explore"],
-      jobRequiredTopics: ["edited-pending-job"],
-      jobExploreTopics: ["edited-pending-job-explore"],
       careerStage: "Research Scientist",
       locationPreferences: ["Edited pending location"],
     };
 
     expect(buildSearchRequests(editedPending)).toEqual(before);
     expect(activePaperTopicsKey(editedPending)).toBe(beforeAutoLoadKey);
-  });
-
-  it("routes Events and Jobs active topics only to their matching requests", () => {
-    const events = opportunityRequestBody(activeProfile, "events", []);
-    const jobs = opportunityRequestBody(activeProfile, "jobs", []);
-
-    expect(events).toMatchObject({
-      topics: ["active-event"],
-      softTopics: ["active-event-explore"],
-    });
-    expect(jobs).toMatchObject({
-      topics: ["active-job"],
-      softTopics: ["active-job-explore"],
-      authorisedCountries: ["United States"],
-    });
-    expect(events).not.toHaveProperty("authorisedCountries");
-    expect(events.topics).not.toEqual(
-      activeProfile.activeSearchInputs?.papers.required,
-    );
-    expect(jobs.topics).not.toEqual(
-      activeProfile.activeSearchInputs?.papers.required,
-    );
   });
 
   it("routes only the active Papers topics to the paper request", () => {
@@ -145,12 +100,6 @@ describe("active feed request inputs", () => {
       topics: ["active-paper"],
       softTopics: ["active-paper-explore"],
     });
-    expect(papers.topics).not.toEqual(
-      activeProfile.activeSearchInputs?.events.required,
-    );
-    expect(papers.topics).not.toEqual(
-      activeProfile.activeSearchInputs?.jobs.required,
-    );
   });
 
   it("keeps a project-only paper request usable and separately labeled", () => {
@@ -253,21 +202,18 @@ describe("active feed request inputs", () => {
  * ABC-freemium 6-03 — retired with the forced-rebuild breaker.
  *
  * This block pinned **the ask itself**: `poolRefresh` went on the wire only when
- * the reader actually asked for a "Refresh now" rebuild of the jobs and events
- * pools, and the route decided whether to grant it against an entitlement and a
- * daily breaker on Peer's own model and search spend. Peer spends nothing of
- * either kind now, so the breaker, the entitlement and the route's decision are
- * all deleted, and so is the ask: no request body carries the field at all.
+ * the reader actually asked for a "Refresh now" rebuild of the pool, and the
+ * route decided whether to grant it against an entitlement and a daily breaker
+ * on Peer's own model and search spend. Peer spends nothing of either kind now,
+ * so the breaker, the entitlement and the route's decision are all deleted, and
+ * so is the ask: no request body carries the field at all.
  */
 describe("no forced-rebuild ask (6-03, retired)", () => {
-  it("never puts a poolRefresh field on the wire, for any surface", () => {
-    for (const surface of ["events", "jobs"] as const) {
-      const body = opportunityRequestBody(
-        activeProfile,
-        surface,
-        [],
-        "signed-out",
-      );
+  // RE-AIMED (§1c): the loop over the "events" and "jobs" surfaces is gone with them; the paper
+  // request is checked the same way, for each sign-in outcome.
+  it("never puts a poolRefresh field on the wire, for the paper request", () => {
+    for (const auth of ["signed-out", "signed-in", "unknown"] as const) {
+      const body = paperFeedRequestBody(activeProfile, advisorSeeds, false, [], auth);
       expect(Object.keys(body)).not.toContain("poolRefresh");
     }
   });
@@ -276,8 +222,7 @@ describe("no forced-rebuild ask (6-03, retired)", () => {
 
 // A Jev key is a second key the reader may bring. It travels as ONE top-level
 // string, only for a reader the server can attribute it to, and only on the
-// paper request: the digest, report and figure routes never use Jev, and the
-// jobs and events requests do not carry it.
+// paper request: the digest, report and figure routes never use Jev.
 describe("a Jev key in the paper request", () => {
   // An invented string. It is not, and never was, a key.
   const JEV = "jev-test-sentinel-not-a-key-0000";
@@ -371,13 +316,6 @@ describe("a Jev key in the paper request", () => {
     expect(rest).toEqual({ ...without, jevApiKey: undefined });
   });
 
-  it("is not carried by the jobs or events requests", () => {
-    for (const surface of ["events", "jobs"] as const) {
-      const body = opportunityRequestBody(withKey, surface, [], "signed-in");
-      expect(body).not.toHaveProperty("jevApiKey");
-      expect(JSON.stringify(body)).not.toContain(JEV);
-    }
-  });
 });
 
 // N1 of the branch review. A key Jev rejected is not cached as a day's pool (the

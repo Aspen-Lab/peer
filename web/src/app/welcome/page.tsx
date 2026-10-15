@@ -3,8 +3,8 @@
 // First-run onboarding wizard. Apple-setup-style: one idea per page, every
 // page optional except Topics (which the feed needs to produce a real first
 // briefing). Writes straight to the shared profile store — same store, same
-// field components as /profile — and on finish marks onboarding complete and
-// hands off to the feed with the coachmark tour (`/?tour=1`).
+// field components as /profile — and on finish (or on "Skip setup") marks
+// onboarding complete and hands off to the feed, `/`.
 //
 // Resume-aware: per-step completeness is derived live from the profile (see
 // ./completeness), the wizard auto-opens at the first incomplete step, and
@@ -46,7 +46,6 @@ import {
 } from "@/components/profile/ai-setup";
 import { SchoolAutocomplete } from "@/components/profile/school-autocomplete";
 import { AdvisorField } from "@/components/profile/advisor-field";
-import { ConnectorPanel } from "@/components/profile/connector-panel";
 import { JevSetup } from "@/components/profile/jev-setup";
 import { useProfileSettled } from "@/components/first-run";
 import { Callout } from "@/components/ui";
@@ -57,16 +56,11 @@ import { SURFACE_TOPIC_DESCRIPTIONS } from "@/lib/profile/topic-copy";
 import {
   STEP_META,
   type StepKey,
-  connectorCount,
   firstIncompleteStep,
   isStepDone,
   readPersonaDone,
   stepIndexFromKey,
 } from "./completeness";
-import {
-  createTopicMirroringController,
-  type TopicMirroringController,
-} from "./topic-mirroring";
 
 const DEFAULT_NAME = "Peer Member";
 const TOPICS_IDX = STEP_META.findIndex((m) => m.key === "topics");
@@ -90,7 +84,6 @@ export default function WelcomePage() {
   // reader the step instead of hiding it.
   const auth = useSyncGate((s) => s.authOutcome);
   const store = useProfileStore();
-  const topicMirroringRef = useRef<TopicMirroringController | null>(null);
   const completeOnboarding = useProfileStore((s) => s.completeOnboarding);
   // Wait for local hydration AND the initial remote sync before choosing the
   // resume position — otherwise a signed-in returning user's wizard freezes
@@ -165,13 +158,14 @@ export default function WelcomePage() {
 
   const finishToTour = () => {
     completeOnboarding();
-    router.push("/?tour=1");
+    router.push("/");
   };
 
-  // Skippers get the coachmark tour too — they need it most.
+  // Skipping marks onboarding complete too, so the first-visit redirect never
+  // brings the reader back here by itself.
   const skipEverything = () => {
     completeOnboarding();
-    router.push("/?tour=1");
+    router.push("/");
   };
 
   // On step change (not on first paint), move focus to the new step's
@@ -223,13 +217,6 @@ export default function WelcomePage() {
   }, []);
 
   const name = profile.displayName === DEFAULT_NAME ? "" : profile.displayName;
-  const topicMirroring = () => {
-    topicMirroringRef.current ??= createTopicMirroringController(
-      profile,
-      store,
-    );
-    return topicMirroringRef.current;
-  };
 
   return (
     <div className="min-h-[100dvh] bg-bg flex flex-col items-center">
@@ -304,12 +291,8 @@ export default function WelcomePage() {
                       <TopicsField
                         required={profile.researchTopics}
                         soft={profile.softTopics ?? []}
-                        onChangeRequired={(topics) =>
-                          topicMirroring().updatePaperRequired(topics)
-                        }
-                        onChangeSoft={(topics) =>
-                          topicMirroring().updatePaperExplore(topics)
-                        }
+                        onChangeRequired={store.updateTopics}
+                        onChangeSoft={store.updateSoftTopics}
                       />
                     </div>
                   </Field>
@@ -455,8 +438,7 @@ export default function WelcomePage() {
                       provider={profile.feedAiProvider}
                     />
                     <p className="text-caption leading-relaxed text-text-faint">
-                      AI keys power ranking, summaries, and Deep reports. Tavily
-                      web scouting uses its own separate search key.
+                      AI keys power ranking, summaries, and Deep reports.
                     </p>
                     {/* A second, optional pass over the paper shortlist on the
                         reader's own Jev key. Part of this step, not a step of
@@ -465,39 +447,6 @@ export default function WelcomePage() {
                       <JevSetup variant="welcome" idPrefix="welcome" />
                     </div>
                   </div>
-                </StepFrame>
-              )}
-
-              {key === "connectors" && (
-                <StepFrame
-                  kicker="Optional power-up"
-                  title="Turn on Events & Jobs for your field."
-                  subtitle="Papers work out of the box. Events and jobs need a data source — the free curated feeds only cover CS/AI, so for every other field these three free keys are what make your Events and Jobs tabs fill up."
-                >
-                  <Callout variant="accent">
-                    <strong>Why this matters:</strong> a materials-science conference or a
-                    battery-lab postdoc never appears in a CS-only feed. These sources search
-                    the whole web and every major job board for <em>your</em> topics — all free,
-                    all stored only in your browser.
-                  </Callout>
-
-                  <div className="space-y-2.5">
-                    <ApiIntro
-                      name="Tavily"
-                      tag="Web discovery · optional"
-                      why="Widens the daily paper search beyond the academic APIs. Peer works without it."
-                      how="Free — 1,000 searches/month. Sign up, copy the key from your dashboard."
-                      href="https://tavily.com"
-                    />
-                  </div>
-
-                  <div data-enter-scope className="rounded-xl bg-surface shadow-well overflow-hidden">
-                    <ConnectorPanel />
-                  </div>
-                  <p className="text-caption leading-relaxed text-text-faint">
-                    Add any or none now — you can paste keys later from the “Data APIs” button in
-                    the search bar. Keys never leave your browser.
-                  </p>
                 </StepFrame>
               )}
 
@@ -764,55 +713,12 @@ function summarizeStep(
       return isStepDone("ai", profile, false, auth)
         ? `${providerShortLabel(profile.feedAiProvider)} key connected`
         : "No key — reading without a model";
-    case "connectors": {
-      const n = connectorCount(profile);
-      return n > 0 ? `${n} of 3 sources connected` : "None connected yet";
-    }
     case "persona":
       return "";
   }
 }
 
 // ── Small layout helpers ───────────────────────────────────────
-
-// Compact "what this API is and why it's worth 2 minutes" card, used in the
-// connectors onboarding step.
-function ApiIntro({
-  name,
-  tag,
-  why,
-  how,
-  href,
-}: {
-  name: string;
-  tag: string;
-  why: string;
-  how: string;
-  href: string;
-}) {
-  return (
-    <div className="rounded-xl bg-bg-secondary/40 px-4 py-3">
-      <div className="flex items-baseline justify-between gap-3 mb-1">
-        <span className="text-body-sm font-semibold text-heading">{name}</span>
-        <span className={cn("eyebrow text-accent", "text-right")}>
-          {tag}
-        </span>
-      </div>
-      <p className="text-meta leading-relaxed text-text-muted">{why}</p>
-      <p className="text-caption leading-relaxed text-text-faint mt-1.5">
-        {how}{" "}
-        <a
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-accent hover:underline"
-        >
-          Get a key ↗
-        </a>
-      </p>
-    </div>
-  );
-}
 
 function StepFrame({
   kicker,

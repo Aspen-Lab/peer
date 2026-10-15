@@ -7,7 +7,8 @@
 // so the page is complete before any request. The server reading adds the
 // full-text blocks (below the Decision block, so nothing above it moves) and
 // is one document per paper for every reader, which is why it can live in
-// localStorage for a day: it carries no profile and no key.
+// localStorage for a day: it carries no profile and no key. A private PDF's
+// reading is the owner's own and lives there under its own key (P0-02).
 
 import { useEffect, useMemo, useState } from "react";
 import type { Paper } from "@/types";
@@ -17,8 +18,17 @@ const STORAGE_KEY = "peer-reading-v2";
 const MAX_ENTRIES = 40;
 const TTL_MS = 24 * 60 * 60 * 1000;
 /** The shape both gates below accept. Typed from the document itself, so
- *  bumping `PaperReading["version"]` is the only edit a shape change needs. */
-const READING_VERSION: PaperReading["version"] = 5;
+ *  bumping `PaperReading["version"]` is the only edit a shape change needs.
+ *
+ *  It is also in the request's URL (`?v=`, below). The route answers a public
+ *  paper with `public, s-maxage=86400, stale-while-revalidate=604800`, and a
+ *  shared cache is keyed by the URL: with the same URL for every version, a
+ *  cache holding a body of the old shape went on serving it to a client that
+ *  refuses it, and the reader got the abstract alone for a day instead of the
+ *  old full reading (P8-04). The version in the URL moves the cache's key with
+ *  the bump, so an old body is never served to a newer client. The route
+ *  ignores the parameter. */
+const READING_VERSION: PaperReading["version"] = 14;
 
 type ReadingCache = Record<string, { reading: PaperReading; ts: number }>;
 
@@ -52,18 +62,24 @@ function readCache(): ReadingCache {
   }
 }
 
-function readCached(paperId: string): PaperReading | null {
-  const entry = readCache()[paperId];
+function readCached(key: string): PaperReading | null {
+  const entry = readCache()[key];
   if (!entry?.reading || entry.reading.version !== READING_VERSION) return null;
   if (Date.now() - (entry.ts ?? 0) >= TTL_MS) return null;
   return entry.reading;
 }
 
-function writeCached(paperId: string, reading: PaperReading): void {
+/** What a server reading is cached as — exported so a test can stand in for
+ *  the first visit that wrote it. */
+export function rememberReading(key: string, reading: PaperReading): void {
+  writeCached(key, reading);
+}
+
+function writeCached(key: string, reading: PaperReading): void {
   if (typeof window === "undefined") return;
   try {
     const cache = readCache();
-    cache[paperId] = { reading, ts: Date.now() };
+    cache[key] = { reading, ts: Date.now() };
     const pruned = Object.fromEntries(
       Object.entries(cache)
         .sort((a, b) => (b[1].ts ?? 0) - (a[1].ts ?? 0))
@@ -104,7 +120,11 @@ export function useReading(paper: Paper | undefined): {
   // Read once per paper. The server renders with no window and the first
   // client render has no paper yet (the store hydrates after mount), so the
   // two agree.
-  const cached = useMemo(() => (paperId && !privatePdf ? readCached(paperId) : null), [paperId, privatePdf]);
+  //
+  // P0-02 (spec D0): keyed by `readingKey`, which names the upload and its
+  // revision, so a private PDF's reading is cached too — under its own key,
+  // never the public paper's — instead of being read again on every open.
+  const cached = useMemo(() => (paperId ? readCached(readingKey) : null), [paperId, readingKey]);
 
   const [fetched, setFetched] = useState<Fetched | null>(null);
 
@@ -112,8 +132,14 @@ export function useReading(paper: Paper | undefined): {
     if (!paperId || cached) return;
     const controller = new AbortController();
     (async () => {
+      // The first tick, as `use-model-report.ts` has it (P10-40, BACKLOG-04): a double effect
+      // (StrictMode in dev, or a key that changes at once) cleans the first run up before
+      // this line, so only the run that is kept goes on to ask.
+      await Promise.resolve();
+      if (controller.signal.aborted) return;
       try {
-        const res = await fetch(`/api/papers/${encodeURIComponent(paperId)}/reading${uploadId ? `?upload=${encodeURIComponent(uploadId)}` : ""}`, {
+        // `v` first, so a private request keeps its `upload` parameter after it.
+        const res = await fetch(`/api/papers/${encodeURIComponent(paperId)}/reading?v=${READING_VERSION}${uploadId ? `&upload=${encodeURIComponent(uploadId)}` : ""}`, {
           signal: controller.signal,
         });
         if (!res.ok) throw new Error(`reading HTTP ${res.status}`);
@@ -123,9 +149,15 @@ export function useReading(paper: Paper | undefined): {
         // The route answers `no-store` when the full-text attempt timed out —
         // that reading is the abstract alone, and keeping it for a day would
         // hide the sections the next request gets. Follow the server's own
-        // verdict on what is worth keeping.
+        // verdict on what is worth keeping. A private reading is always
+        // `private, no-store` (it must never sit in a shared HTTP cache), so
+        // there the reading itself says whether the PDF was read: a
+        // `fullText` of "none" is the timed-out, abstract-only answer.
         const cacheControl = res.headers.get("cache-control") ?? "";
-        if (!privatePdf && !/\bno-store\b/i.test(cacheControl)) writeCached(paperId, reading);
+        const keep = privatePdf
+          ? reading.provenance?.fullText !== "none"
+          : !/\bno-store\b/i.test(cacheControl);
+        if (keep) writeCached(readingKey, reading);
         setFetched({ id: readingKey, reading });
       } catch {
         if (!controller.signal.aborted) setFetched({ id: readingKey, reading: null });

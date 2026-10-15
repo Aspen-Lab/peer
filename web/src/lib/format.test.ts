@@ -1,20 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
-  dateClaimEndMs,
-  daysUntil,
   formatCount,
   formatDate,
-  formatDateRange,
   formatDayAge,
-  formatDayDistance,
-  formatDaysAgo,
-  formatDaysLeft,
-  formatMatchPct,
   formatTimeAgo,
-  formatWeekdayRange,
-  isMonthGranularity,
   parseDate,
 } from "./format";
+
+// P9-35 (§1h.60): ten exports of this module were read only by the stopped
+// events and jobs feeds and went with them — formatDateRange,
+// formatWeekdayRange, daysUntil, formatDayDistance, formatDaysLeft,
+// formatDaysAgo, formatAgeInWords, formatMatchPct, dateClaimEndMs and the
+// exported isMonthGranularity (the predicate lives on, private, behind
+// `formatDate`). Their cases are deleted with them; what is left of a case that
+// also pinned `formatDate` or `parseDate` is re-aimed below, by name.
 
 describe("parseDate", () => {
   it("parses date-only strings as local dates (no UTC day-shift)", () => {
@@ -62,43 +61,6 @@ describe("formatDayAge", () => {
   });
 });
 
-describe("formatDayDistance / daysUntil", () => {
-  it("speaks both directions", () => {
-    expect(formatDayDistance(0)).toBe("today");
-    expect(formatDayDistance(1)).toBe("tomorrow");
-    expect(formatDayDistance(5)).toBe("in 5 days");
-    expect(formatDayDistance(-5)).toBe("5 days ago");
-    expect(formatDayDistance(21)).toBe("in 3 weeks");
-    expect(formatDayDistance(-400)).toBe("1 years ago");
-  });
-
-  it("daysUntil is signed", () => {
-    const now = new Date(2026, 6, 19, 12, 0, 0).getTime();
-    expect(daysUntil("2026-07-24", now)).toBe(5);
-    expect(daysUntil("2026-07-14", now)).toBe(-5);
-  });
-});
-
-describe("formatDaysLeft / formatDaysAgo", () => {
-  // B2-01 / Ruling 8. The report's own countdown vocabulary — always days,
-  // never bucketed into weeks or months, never abbreviated to "Nd". Distinct
-  // from formatDayDistance / formatDayAge above, which keep serving the feed
-  // and papers view unchanged.
-  it("counts down in the plate's words", () => {
-    expect(formatDaysLeft(47)).toBe("47 days left");
-    expect(formatDaysLeft(1)).toBe("1 day left");
-    expect(formatDaysLeft(0)).toBe("due today");
-    expect(formatDaysLeft(-3)).toBe("due today");
-  });
-
-  it("counts up in the plate's words", () => {
-    expect(formatDaysAgo(8)).toBe("8 days ago");
-    expect(formatDaysAgo(1)).toBe("1 day ago");
-    expect(formatDaysAgo(0)).toBe("today");
-    expect(formatDaysAgo(-3)).toBe("today");
-  });
-});
-
 describe("formatCount", () => {
   it("compacts", () => {
     expect(formatCount(842)).toBe("842");
@@ -109,24 +71,16 @@ describe("formatCount", () => {
   });
 });
 
-describe("formatMatchPct", () => {
-  it("clamps dirty scores", () => {
-    expect(formatMatchPct(0.87)).toBe(87);
-    expect(formatMatchPct(1.4)).toBe(100);
-    expect(formatMatchPct(-0.2)).toBe(0);
-    expect(formatMatchPct(null)).toBeNull();
-    expect(formatMatchPct(undefined)).toBeNull();
-  });
-});
-
 // A23-02 / Ruling 62b. A date evidenced only to the month.
 describe("month-granularity date claims", () => {
-  it("recognises the shape and nothing else", () => {
-    expect(isMonthGranularity("2026-08")).toBe(true);
-    expect(isMonthGranularity("2026-08-11")).toBe(false);
-    expect(isMonthGranularity("2026")).toBe(false);
-    expect(isMonthGranularity("2026-13")).toBe(false);
-    expect(isMonthGranularity(undefined)).toBe(false);
+  // RE-AIMED (P9-35), NOT DELETED: was "recognises the shape and nothing else"
+  // on the exported `isMonthGranularity`. The predicate is private now, so the
+  // same shapes are asked of `formatDate`, which is what acts on them.
+  it("recognises the shape and nothing else (asked of formatDate)", () => {
+    expect(formatDate("2026-08")).toBe("Aug 2026");
+    expect(formatDate("2026-08-11")).toBe("Aug 11, 2026");
+    expect(formatDate("2026-13")).toBeNull();
+    expect(formatDate(undefined)).toBeNull();
   });
 
   it("parses to the first of the month as a LOCAL date", () => {
@@ -135,30 +89,14 @@ describe("month-granularity date claims", () => {
     expect(d?.getMonth()).toBe(7);
     expect(d?.getDate()).toBe(1);
   });
-
-  it("ends the claim at the END of the month, never the start", () => {
-    // The whole point of the ruling: reading `2026-08` as a day-level date puts
-    // its expiry at 1 August, which would retire a live August event wrongly
-    // early.
-    expect(dateClaimEndMs("2026-08")).toBeGreaterThan(
-      new Date(2026, 7, 31, 23, 0).getTime(),
-    );
-    expect(dateClaimEndMs("2026-08")).toBeLessThan(new Date(2026, 8, 1).getTime());
-  });
-
-  it("is identical to Date.parse for every day-level value", () => {
-    expect(dateClaimEndMs("2026-08-11T12:00:00.000Z")).toBe(
-      Date.parse("2026-08-11T12:00:00.000Z"),
-    );
-  });
 });
 
 // A24-02 / Ruling 62b. THE GRANULARITY BRANCH NOW LIVES IN THE SHARED
-// FORMATTER. Before round 24 only `lib/events/card.ts` had it; five render
-// sites reached `format.ts` directly and printed a day the page never stated —
-// plate 03's DATES tile value and its weekday sub-line, plate 03's deadline
-// strip, the feed tile, the briefing quick-hit and the briefing hero. Each
-// `it` below is the uniquely-red case for one clause of the fix.
+// FORMATTER. Before round 24 only a card that has since been removed had it;
+// the render sites that reached `format.ts` directly printed a day the page
+// never stated. Each `it` below is the uniquely-red case for one clause of the
+// fix. (P9-35: the clauses that were about date ranges and weekday sub-lines
+// went with `formatDateRange` / `formatWeekdayRange`.)
 describe("A24-02: month-granularity rendering in the shared formatter", () => {
   it("renders the month for EVERY style — no style may invent a day", () => {
     // Reverted, these read "Aug 1, 2026" (default/medium, the tile and the
@@ -176,28 +114,11 @@ describe("A24-02: month-granularity rendering in the shared formatter", () => {
     // event that genuinely starts on 1 August keeps its evidenced day.
     expect(formatDate("2026-08-01", "medium")).toBe("Aug 1, 2026");
     expect(formatDate("2026-08-01", "short")).toBe("Aug 1");
-    expect(formatWeekdayRange("2026-08-01", undefined)).toBe("Sat");
-    expect(formatDateRange("2026-08-01", "2026-08-03")).toBe("Aug 1 – 3, 2026");
   });
 
   it("widens ONLY — a day-level value asked for monthYear still gets monthYear", () => {
     expect(formatDate("2026-09-15", "monthYear")).toBe("Sep 2026");
     expect(formatDate("2026-09-15", "medium")).toBe("Sep 15, 2026");
-  });
-
-  it("drops the weekday sub-line entirely, because a MONTH has no weekday", () => {
-    // Reverted, both read "Sat" — the weekday of a first-of-the-month anchor.
-    // `null` is what plate 03's `detail: … ?? undefined` consumes, so the
-    // sub-line disappears rather than showing a wrong or blank one.
-    expect(formatWeekdayRange("2026-08", undefined)).toBeNull();
-    expect(formatWeekdayRange("2026-08", "2026-09-15")).toBeNull();
-  });
-
-  it("ignores the end — a month-granularity start has no day to range FROM", () => {
-    // Reverted, the third reads "Aug 1 – Sep 15, 2026".
-    expect(formatDateRange("2026-08", undefined)).toBe("Aug 2026");
-    expect(formatDateRange("2026-08", "")).toBe("Aug 2026");
-    expect(formatDateRange("2026-08", "2026-09-15")).toBe("Aug 2026");
   });
 
   it("FILLS nothing — an unparseable value is still null, never a fallback", () => {
@@ -210,39 +131,9 @@ describe("A24-02: month-granularity rendering in the shared formatter", () => {
     // NOT null today: `formatDate("2026")` renders "Dec 31, 2025" in any
     // behind-UTC zone, because it falls past both `parseDate` branches into a
     // raw `new Date("2026")` = UTC midnight, 1 January. An invented day AND a
-    // wrong year. It is UNREACHABLE in the shipped pipeline as of this round —
-    // `readDateOnlyParenthetical` (eventweb.ts:1346) emits a month-year ONLY
-    // when it has BOTH month and year and `null` otherwise, `extractEventDate`
-    // needs a month-day, and the two other year-ish call sites
-    // (`search-result-card.tsx:207`, `formatDayAge`) already ask for
-    // "monthYear". So it is LATENT. This assertion locks today's answer so the
-    // shape cannot start moving unnoticed; it is not an endorsement of it.
+    // wrong year. It is LATENT (the extractor that could emit it was deleted
+    // with the events feed). This assertion locks today's answer so the shape
+    // cannot start moving unnoticed; it is not an endorsement of it.
     expect(formatDate("2026")).not.toBeNull();
-    expect(formatDateRange("not-a-date", "2026-09-15")).toBeNull();
-    expect(formatWeekdayRange("not-a-date", undefined)).toBeNull();
-  });
-
-  // A GUARD, NOT A PROOF — this block is green both before and after the fix by
-  // design. It is the boundary condition round 24 B named: a single day-level
-  // byte moving is a failed fix. All four are REAL live pool shapes B measured.
-  it("leaves every day-level value byte-identical", () => {
-    expect(
-      formatDateRange("2026-09-15T12:00:00.000Z", "2026-09-18T12:00:00.000Z"),
-    ).toBe("Sep 15 – 18, 2026");
-    expect(
-      formatWeekdayRange("2026-09-15T12:00:00.000Z", "2026-09-18T12:00:00.000Z"),
-    ).toBe("Tue – Fri");
-    expect(formatDateRange("2026-12-07", "2026-12-10")).toBe("Dec 7 – 10, 2026");
-    expect(formatWeekdayRange("2026-12-07", "2026-12-10")).toBe("Mon – Thu");
-    expect(
-      formatDateRange("2026-10-12T12:00:00.000Z", "2026-10-15T12:00:00.000Z"),
-    ).toBe("Oct 12 – 15, 2026");
-    expect(
-      formatWeekdayRange("2026-10-12T12:00:00.000Z", "2026-10-15T12:00:00.000Z"),
-    ).toBe("Mon – Thu");
-    expect(formatDateRange("2027-03-15T12:00:00.000Z", undefined)).toBe(
-      "Mar 15, 2027",
-    );
-    expect(formatWeekdayRange("2027-03-15T12:00:00.000Z", undefined)).toBe("Mon");
   });
 });

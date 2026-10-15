@@ -15,10 +15,17 @@ const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
   resolveProvider: vi.fn(),
   realResolveProvider: vi.fn(),
+  // The figure route's extractor is the one thing that route does after its gate,
+  // and it fetches: stubbed, so the hourly-limit cases below make no network call.
+  extractFigure: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: () => Promise.resolve(supabaseServerStub(mocks.getUser)),
+}));
+vi.mock("@/lib/figures/extract", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/figures/extract")>()),
+  extractFigure: mocks.extractFigure,
 }));
 
 // The registry's `resolveProvider` is a spy that defaults to "no model", so the
@@ -33,8 +40,9 @@ vi.mock("@/lib/llm/providers/registry", async (importOriginal) => {
 });
 
 import { POST as digestPost } from "./digest/route";
+import { GET as figureGet } from "./figure/route";
 import { POST as papersReportPost } from "./papers/report/route";
-import { resetCounterStoreForTests } from "@/lib/usage/counters";
+import { getCounterStore, rateKey, resetCounterStoreForTests } from "@/lib/usage/counters";
 
 /**
  * ABC-freemium 2-06 · R-SEC-2, R-SEC-3, R-TEST-1 · Ruling 2 point 7.
@@ -186,6 +194,140 @@ describe("the AI routes, driven through the real handlers", () => {
         for (const call of mocks.resolveProvider.mock.calls) {
           expect(call).toEqual([llmOverride]);
         }
+      });
+    });
+  }
+});
+
+/**
+ * P4-00c · B1 (A's P4-00b) · ruling §1h.10 — **the hourly limit is the one bound
+ * on a reader's loop, so the number and the scope are pinned for every route that
+ * carries one.**
+ *
+ * After P4-00 nothing else bounds a signed-in reader's requests to Peer's server
+ * (the full-text fetch, the PDF parse, the figure fetch): no allowance, no day
+ * cap. Each route's `requireAiRequest(scope, limit)` is that bound. The explain
+ * and paragraph-guide gates are held in their own gate suites; these two were
+ * held by nothing, so a limit of 200 or a scope swapped between the two left the
+ * whole suite green (A's mutations M9 and M10).
+ *
+ * Each case drives the real handler as a signed-in reader with a pinned clock
+ * (the key carries the UTC hour), and reads the counter store the way the gate
+ * writes it: `rate:<scope>:<user>:<hour>`, and no other key.
+ */
+describe("the hourly limit of the report and figure routes", () => {
+  const NOW = new Date("2026-10-07T09:20:00.000Z");
+  // The rest of the UTC hour, in seconds: what the 429's `Retry-After` carries.
+  const RETRY_AFTER = "2400";
+
+  interface LimitCase {
+    name: string;
+    scope: string;
+    limit: number;
+    call: () => Promise<Response>;
+  }
+
+  const CASES: LimitCase[] = [
+    {
+      name: "POST /api/papers/report",
+      scope: "paper-report",
+      limit: 20,
+      call: () =>
+        papersReportPost(
+          request("/api/papers/report", {
+            paper: { id: "p:1", title: "A paper", summaryExperimentKeywords: [], authors: [] },
+          }),
+        ),
+    },
+    {
+      name: "GET /api/figure",
+      scope: "figure",
+      limit: 60,
+      call: () =>
+        figureGet(new NextRequest("http://localhost/api/figure?id=paper-1&url=https%3A%2F%2Fexample.org%2Fp")),
+    },
+  ];
+
+  let increment: { mock: { calls: unknown[][] } };
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    vi.clearAllMocks();
+    deleteSpendableKeys();
+    deployedRuntimeEnv(vi.stubEnv);
+    // The store is chosen from the environment, so reset it after the stubs and
+    // spy on the instance the gate will get.
+    resetCounterStoreForTests();
+    increment = vi.spyOn(getCounterStore(), "increment");
+    mocks.getUser.mockResolvedValue(signedIn("reader-1"));
+    mocks.resolveProvider.mockReturnValue(null);
+    mocks.extractFigure.mockResolvedValue({ imageUrl: null, status: "no_figures" });
+    // No test here may reach the network.
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.useRealTimers();
+    resetCounterStoreForTests();
+    vi.restoreAllMocks();
+  });
+
+  /** The keys the gate has incremented so far, in order. */
+  function countedKeys(): unknown[] {
+    return increment.mock.calls.map((call) => call[0]);
+  }
+
+  /** What the reader has used this hour under one scope, as the store holds it. */
+  async function used(scope: string, userId: string): Promise<number> {
+    return (await getCounterStore().read(rateKey(scope, userId, NOW), NOW)).value;
+  }
+
+  for (const { name, scope, limit, call } of CASES) {
+    describe(name, () => {
+      it(`answers a signed-in reader's first ${limit} calls an hour, and the next one 429 with the rest of the hour in Retry-After`, async () => {
+        for (let i = 0; i < limit; i += 1) {
+          expect((await call()).status).toBe(200);
+        }
+        const over = await call();
+
+        expect(over.status).toBe(429);
+        expect(over.headers.get("retry-after")).toBe(RETRY_AFTER);
+        // The report route marks its own answers private; either way it is never cached.
+        expect(over.headers.get("cache-control")).toMatch(/no-store/);
+      });
+
+      it(`counts each call under the reader's own hour for "${scope}" and under no other key`, async () => {
+        await call();
+        await call();
+        await call();
+
+        const key = rateKey(scope, "reader-1", NOW);
+        expect(key).toBe(`rate:${scope}:reader-1:2026-10-07T09`);
+        expect(countedKeys()).toEqual([key, key, key]);
+        expect(await used(scope, "reader-1")).toBe(3);
+      });
+
+      it("holds each reader to their own count: one reader at the limit does not refuse the next", async () => {
+        for (let i = 0; i < limit + 1; i += 1) await call();
+        expect((await call()).status).toBe(429);
+
+        mocks.getUser.mockResolvedValue(signedIn("reader-2"));
+
+        expect((await call()).status).toBe(200);
+        expect(await used(scope, "reader-2")).toBe(1);
+        expect(await used(scope, "reader-1")).toBe(limit + 2);
+      });
+
+      it("starts a new count when the hour turns over", async () => {
+        for (let i = 0; i < limit + 1; i += 1) await call();
+        expect((await call()).status).toBe(429);
+
+        vi.setSystemTime(new Date("2026-10-07T10:00:00.000Z"));
+
+        expect((await call()).status).toBe(200);
+        expect(countedKeys().at(-1)).toBe(`rate:${scope}:reader-1:2026-10-07T10`);
       });
     });
   }

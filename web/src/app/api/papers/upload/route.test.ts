@@ -151,6 +151,23 @@ describe("POST /api/papers/upload", () => {
     expect(mocks.writeUploadMeta).toHaveBeenCalledWith(body.id.slice(7), expect.objectContaining({ ownerKey: "test-owner", rightsVersion: "2026-09-19", paperIds: ["openalex:W123"] }));
   });
 
+  // P0-08 (§1e.8): an attachment target that claims to be an upload is
+  // refused in any spelling — the check used `startsWith("upload:")`, so
+  // `UPLOAD:<hash16>` was accepted as an ordinary paper to attach to.
+  it("refuses an attachment target that claims to be an upload, in any spelling", async () => {
+    for (const id of ["upload:0123456789abcdef", "UPLOAD:0123456789abcdef", "Upload:0123456789abcdef", " upload:0123456789abcdef"]) {
+      const form = new FormData(); form.set("file", pdfFile(pdfBytes()));
+      form.set("rightsVersion", "2026-09-19");
+      form.set("targetPaper", JSON.stringify({ id, title: "Solid electrolytes for lithium metal batteries" }));
+      const res = await POST(new Request("http://localhost/api/papers/upload", { method: "POST", headers: SAME_ORIGIN_HEADERS, body: form }));
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "Invalid paper to supplement." });
+    }
+    expect(mocks.extractPdfTextFromBytes).not.toHaveBeenCalled();
+    expect(mocks.writeUploadPdfIfAbsent).not.toHaveBeenCalled();
+    expect(mocks.attachUpload).not.toHaveBeenCalled();
+  });
+
   // 9-31 (A9-09): a partial-but-real title overlap (the "confirm" band, 0.35
   // <= overlap < 0.6) neither binds silently nor refuses outright — it asks
   // the client to confirm, and only writes anything once the client
@@ -354,7 +371,7 @@ describe("POST /api/papers/upload", () => {
       doc: {
         ...emptyDoc,
         sections: [
-          { heading: "Abstract", canonical: "abstract", text: "See https://doi.org/10.1000/abcd.123, for details." },
+          { id: "s0", heading: "Abstract", canonical: "abstract", text: "See https://doi.org/10.1000/abcd.123, for details." },
         ],
       },
     } satisfies PdfTextResult);
@@ -370,8 +387,8 @@ describe("POST /api/papers/upload", () => {
     expect(body.paper.doi).toBeUndefined();
   });
 
-  it("still succeeds when the extractor fails entirely (e.g. no Python on this machine)", async () => {
-    mocks.extractPdfTextFromBytes.mockResolvedValue({ ok: false, reason: "no-python" } satisfies PdfTextResult);
+  it("still succeeds when the extractor fails entirely (e.g. a scan with no text layer)", async () => {
+    mocks.extractPdfTextFromBytes.mockResolvedValue({ ok: false, reason: "no-text-layer" } satisfies PdfTextResult);
 
     const res = await postWith(pdfFile(pdfBytes(), "scanned.pdf"));
     expect(res.status).toBe(200);
@@ -394,7 +411,7 @@ describe("POST /api/papers/upload", () => {
       ok: true,
       doc: {
         ...emptyDoc,
-        sections: [{ heading: "Abstract", canonical: "abstract", text: "This paper studies things." }],
+        sections: [{ id: "s0", heading: "Abstract", canonical: "abstract", text: "This paper studies things." }],
       },
     } satisfies PdfTextResult);
 
@@ -404,23 +421,88 @@ describe("POST /api/papers/upload", () => {
   });
 
   it("2-05: marks textStatus 'empty' when the extractor fails entirely", async () => {
-    mocks.extractPdfTextFromBytes.mockResolvedValue({ ok: false, reason: "no-python" } satisfies PdfTextResult);
+    mocks.extractPdfTextFromBytes.mockResolvedValue({ ok: false, reason: "no-text-layer" } satisfies PdfTextResult);
 
     const res = await postWith(pdfFile(pdfBytes(), "scanned.pdf"));
     const body = await res.json();
     expect(body.paper.textStatus).toBe("empty");
   });
 
-  it("carries the abstract section through as summaryIntro, capped to 400 chars", async () => {
-    const longAbstract = "x".repeat(500);
+  // P7-18 (F1, §1h.39 a): the line was the abstract's first 400 characters and ended inside a word
+  // ("…enabling study and co"). It is the abstract's whole sentences up to 1,200 characters now, so this
+  // test, which pinned the 400, is re-aimed to the new contract: an abstract that fits comes through whole.
+  it("carries the abstract section through as summaryIntro, whole when it fits the 1,200-character line", async () => {
+    const abstract = "x".repeat(500);
     mocks.extractPdfTextFromBytes.mockResolvedValue({
       ok: true,
-      doc: { ...emptyDoc, sections: [{ heading: "Abstract", canonical: "abstract", text: longAbstract }] },
+      doc: { ...emptyDoc, sections: [{ id: "s0", heading: "Abstract", canonical: "abstract", text: abstract }] },
     } satisfies PdfTextResult);
 
     const res = await postWith(pdfFile(pdfBytes()));
     const body = await res.json();
-    expect(body.paper.summaryIntro).toHaveLength(400);
+    expect(body.paper.summaryIntro).toBe(abstract);
+  });
+
+  describe("the abstract line keeps whole sentences up to 1,200 characters (P7-18, F1)", () => {
+    const intro = async (text: string): Promise<string> => {
+      mocks.extractPdfTextFromBytes.mockResolvedValue({
+        ok: true,
+        doc: { ...emptyDoc, sections: [{ id: "s0", heading: "Abstract", canonical: "abstract", text }] },
+      } satisfies PdfTextResult);
+      const res = await postWith(pdfFile(pdfBytes()));
+      return (await res.json()).paper.summaryIntro as string;
+    };
+    /** A sentence of about two hundred characters, with a decimal in it. */
+    const sentence = (k: number) =>
+      `Result ${k} shows that the electrodeposited films keep ${k}.5 percent of their capacity over a hundred cycles, which is more than the controls managed.`;
+
+    it("takes the first whole sentences of a ten-sentence abstract of 2,000 characters, and ends on a sentence end", async () => {
+      const sentences = Array.from({ length: 11 }, (_, i) => sentence(i + 1));
+      const text = sentences.join(" ");
+      expect(text.length).toBeGreaterThan(1_600);
+      // What "the first N whole sentences up to 1,200" is, counted here without the implementation.
+      let n = 0;
+      while (n < sentences.length && sentences.slice(0, n + 1).join(" ").length <= 1_200) n++;
+
+      const line = await intro(text);
+
+      expect(line).toBe(sentences.slice(0, n).join(" "));
+      expect(line.length).toBeLessThanOrEqual(1_200);
+      expect(line.length).toBeGreaterThan(1_000);
+      expect(line.endsWith(".")).toBe(true);
+      // The next sentence starts where the line stops: nothing was cut inside a word.
+      expect(text.slice(line.length, line.length + 1)).toBe(" ");
+    });
+
+    it("never cuts inside a number: a sentence end before '0.5' is the cut, not the decimal point", async () => {
+      // The first sentence is 1,197 characters; the second opens with a decimal at 1,198–1,200, so a
+      // cut at the 1,200th character would leave "…0." and the stub of a number.
+      const first = `${"Layered cathodes ".repeat(80).slice(0, 1_196).trimEnd()}.`;
+      const text = `${first} 0.5 percent of the capacity is lost per cycle, and the loss is largest in the first ten cycles.`;
+      expect(first).toHaveLength(1_197);
+      expect(text.indexOf("0.5")).toBe(1_198);
+
+      const line = await intro(text);
+
+      expect(line).toBe(first);
+    });
+
+    it("cuts a single sentence longer than 1,200 characters at a space and says so with an ellipsis", async () => {
+      const words = Array.from({ length: 400 }, (_, i) => `word${i}`);
+      const text = `${words.join(" ")}.`;
+      expect(text.length).toBeGreaterThan(1_500);
+
+      const line = await intro(text);
+
+      expect(line.endsWith("…")).toBe(true);
+      expect(line.length).toBeLessThanOrEqual(1_200);
+      expect(line.length).toBeGreaterThan(1_100);
+      const kept = line.slice(0, -1);
+      expect(text.startsWith(kept)).toBe(true);
+      // Whole words only: the text goes on with a space, and no space is left before the ellipsis.
+      expect(text.charAt(kept.length)).toBe(" ");
+      expect(kept.endsWith(" ")).toBe(false);
+    });
   });
 
   it("9-12: a brand new asset is written status 'ready' at revision 1", async () => {

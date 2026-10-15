@@ -88,8 +88,11 @@ describe("GET /api/papers/[id]/reading", () => {
     const body = await res.json();
     // 1-28/1-31: PaperReading.version bumped 3 -> 4 for the new `pdf_empty`
     // fullText state; 4 -> 5 is main's later math-rendering shape change,
-    // which this merge keeps (see reading.test.ts's own note).
-    expect(body.version).toBe(5);
+    // which this merge keeps (see reading.test.ts's own note). P1-04: 5 -> 6
+    // (section ids and the reading map). P8-04: 6 -> 7 (the extractors'
+    // sections and buckets changed; see reading.test.ts's note).
+    // P9: 7 -> 8 (the PDF text and the cleaner changed: P9-08 / P9-09 / P9-10).
+    expect(body.version).toBe(14);
     expect(body.paperId).toBe("openalex:W7208807247");
     expect(body.provenance.fullText).toBe("pdf");
     expect(body.provenance.pageCount).toBe(5);
@@ -153,6 +156,20 @@ describe("GET /api/papers/[id]/reading", () => {
     quiet.mockRestore();
   });
 
+  // P8-04: the client puts its reading version in the URL (`?v=`) so a shared cache never serves it an
+  // older shape. The route reads only `refresh` and `upload`; a `v` it does not know changes nothing.
+  it("ignores ?v= — an unknown version changes neither the answer nor its cache headers (P8-04)", async () => {
+    mocks.fetchPaperById.mockResolvedValue(zenodoItem);
+    mocks.getFullText.mockResolvedValue(zenodoFullText);
+
+    const plain = await call("openalex:W7208807247");
+    const versioned = await call("openalex:W7208807247", "?v=999");
+
+    expect(versioned.status).toBe(plain.status);
+    expect(versioned.headers.get("cache-control")).toBe(plain.headers.get("cache-control"));
+    expect({ ...(await versioned.json()), builtAt: undefined }).toEqual({ ...(await plain.json()), builtAt: undefined });
+  });
+
   it("skips the edge cache on ?refresh=1", async () => {
     mocks.fetchPaperById.mockResolvedValue(zenodoItem);
     mocks.getFullText.mockResolvedValue(zenodoFullText);
@@ -193,6 +210,32 @@ describe("GET /api/papers/[id]/reading — 2-05 (bug B): an upload: id never rea
     expect(res.status).toBe(404);
     expect(res.headers.get("cache-control")).toBe("no-store");
     expect(mocks.fetchPaperById).not.toHaveBeenCalled();
+  });
+
+  // P0-05 (§1e.1, A's F1): only the canonical `upload:<hash16>` is an
+  // upload id. A case variant is refused as not found — never looked up as
+  // an upload (even one whose owner check would pass), never handed to the
+  // public paper lookup, never read.
+  it("404s a non-canonical upload id, in the path or as ?upload=, without any lookup or read", async () => {
+    mocks.readUploadMeta.mockResolvedValue({
+      hash16: "0000000000000005", fileName: "paper.pdf", title: "A Real Uploaded Paper",
+      uploadedAt: "2026-09-15T00:00:00.000Z", textStatus: "ok", paperIds: ["openalex:W7208807247"],
+    });
+    mocks.fetchPaperById.mockResolvedValue(zenodoItem);
+    mocks.getFullText.mockResolvedValue(zenodoFullText);
+
+    for (const id of ["UPLOAD:0000000000000005", "Upload:0000000000000005", "upload:00000000000000AB"]) {
+      const res = await call(id);
+      expect(res.status).toBe(404);
+      expect(res.headers.get("cache-control")).toBe("no-store");
+    }
+    const supplement = await call("openalex:W7208807247", "?upload=UPLOAD%3A0000000000000005");
+    expect(supplement.status).toBe(404);
+
+    expect(mocks.readUploadMeta).not.toHaveBeenCalled();
+    expect(mocks.getFullText).not.toHaveBeenCalled();
+    expect(mocks.fetchPaperById).toHaveBeenCalledTimes(1);
+    expect(mocks.fetchPaperById).toHaveBeenCalledWith("openalex:W7208807247");
   });
 
   it("returns pdf_empty provenance for an upload whose PDF had no readable text", async () => {
@@ -317,5 +360,85 @@ describe("GET /api/papers/[id]/reading — 9-14 (A9-13): the ?upload= supplement
     const res = await call("openalex:W7208807247", "?upload=upload:0000000000000006");
 
     expect(res.status).toBe(200);
+  });
+
+  // P8-04: the hook's request is `?v=<version>&upload=…`; `v` first does not hide `upload`.
+  it("reads the supplement when ?v= comes before ?upload=, and keeps the private headers (P8-04)", async () => {
+    mocks.fetchPaperById.mockResolvedValue(zenodoItem);
+    mocks.readUploadMeta.mockResolvedValue({
+      hash16: "0000000000000007", fileName: "paper.pdf", title: "A Real Uploaded Paper",
+      uploadedAt: "2026-09-15T00:00:00.000Z", textStatus: "ok", status: "ready", revision: 1,
+      paperIds: ["openalex:W7208807247"],
+    });
+    mocks.getFullText.mockResolvedValue(zenodoFullText);
+
+    const res = await call("openalex:W7208807247", "?v=14&upload=upload:0000000000000007");
+
+    expect(res.status).toBe(200);
+    expect(mocks.getFullText).toHaveBeenCalledWith({ paperId: "upload:0000000000000007" });
+    expect(res.headers.get("cache-control")).toContain("no-store");
+  });
+});
+
+// P9-42 (§1h.67): a supplement reading takes its captions and their pages from the reader's own
+// attached PDF, so its figure pictures come from that PDF too — the URL names the upload, and the
+// figure-image route answers it to its owner only. The public reading keeps the public id.
+describe("GET /api/papers/[id]/reading — P9-42 (§1h.67): a supplement's figure pictures come from the owner's attached PDF", () => {
+  beforeEach(() => {
+    mocks.fetchPaperById.mockReset();
+    mocks.getFullText.mockReset();
+    mocks.readUploadMeta.mockReset();
+  });
+
+  /** The text of a PDF with a "Figure 2" caption on page 3 (the Zenodo fixture's body, one caption added). */
+  const picturedText: FullTextResult = {
+    ...zenodoFullText,
+    doc: {
+      ...zenodoDoc,
+      figureCaptions: [{ ordinal: 1, label: "Figure 2", caption: "Embedding dimension against accuracy.", page: 3, at: 0.5 }],
+    },
+  };
+  const figureUrls = (body: { body: { figures?: { imageUrl?: string }[] }[] }) =>
+    body.body.flatMap((section) => section.figures ?? []).map((figure) => figure.imageUrl);
+  const meta = (hash16: string, extra: Record<string, unknown> = {}) => ({
+    hash16, fileName: "paper.pdf", title: "A Real Uploaded Paper",
+    uploadedAt: "2026-09-15T00:00:00.000Z", textStatus: "ok", status: "ready", revision: 1, ...extra,
+  });
+
+  it("names the attached upload in every figure picture's URL on the ?upload= branch — never the public paper", async () => {
+    mocks.fetchPaperById.mockResolvedValue(zenodoItem);
+    mocks.readUploadMeta.mockResolvedValue(meta("0000000000000008", { paperIds: ["openalex:W7208807247"] }));
+    mocks.getFullText.mockResolvedValue(picturedText);
+
+    const res = await call("openalex:W7208807247", "?upload=upload:0000000000000008");
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toContain("no-store");
+    const body = await res.json();
+    expect(figureUrls(body)).toEqual(["/api/papers/upload%3A0000000000000008/figure-image?page=3&fig=2"]);
+    expect(JSON.stringify(body)).not.toContain("openalex%3AW7208807247/figure-image");
+    // Still the public paper's reading: its id, and the captions read from the attached text.
+    expect(body.paperId).toBe("openalex:W7208807247");
+    expect(mocks.getFullText).toHaveBeenCalledWith({ paperId: "upload:0000000000000008" });
+  });
+
+  it("keeps the public paper's id in the picture URLs of the plain branch", async () => {
+    mocks.fetchPaperById.mockResolvedValue(zenodoItem);
+    mocks.getFullText.mockResolvedValue(picturedText);
+
+    const res = await call("openalex:W7208807247");
+
+    expect(res.status).toBe(200);
+    expect(figureUrls(await res.json())).toEqual(["/api/papers/openalex%3AW7208807247/figure-image?page=3&fig=2"]);
+  });
+
+  it("keeps an upload's own reading naming itself", async () => {
+    mocks.readUploadMeta.mockResolvedValue(meta("0000000000000009"));
+    mocks.getFullText.mockResolvedValue(picturedText);
+
+    const res = await call("upload:0000000000000009");
+
+    expect(res.status).toBe(200);
+    expect(figureUrls(await res.json())).toEqual(["/api/papers/upload%3A0000000000000009/figure-image?page=3&fig=2"]);
   });
 });

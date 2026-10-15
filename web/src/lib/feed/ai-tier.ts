@@ -61,6 +61,25 @@ export function aiAvailability(profile: UserProfile, auth: AuthOutcome): AiMode 
 }
 
 /**
+ * P8-06 (the manager's ruling on the first paint): whether the always-on EXPLAIN WINDOW may stand, and ask.
+ *
+ * It is `aiAvailability`'s answer except for one moment: while the sign-in check has not answered yet (`"unknown"`), a
+ * reader whose key is their own local override — the profile's provider and key, read by `hasUserLlmOverride` as everywhere
+ * else — has the window already. The window is there from the body's first paint, and the 376 px the page keeps clear for it
+ * come with it; waiting for the check (a round trip, where sign-in is configured) would put both on screen late, as a
+ * reflow under the reader's eyes. A reader with no local key never has the window, whatever the check says: Peer has no key
+ * to lend. A CONFIRMED sign-out with a key is `"none"` here as there (the server refuses the call), so a window that stood
+ * for the unknown moment goes then; a signed-in reader and an unconfigured copy keep what they had, with nothing redrawn.
+ *
+ * **Only the explain window asks this.** The chip, the request builders and the report keep `aiAvailability`, where
+ * `"unknown"` stays `"none"` (see its note: a wrong "AI on" for a moment is worse there than a re-render). The window's
+ * request carries the local key as always, and a refusal shows the window's own "could not explain just now".
+ */
+export function explainWindowAvailable(profile: UserProfile, auth: AuthOutcome): boolean {
+  return aiAvailability(profile, auth) !== "none" || (auth === "unknown" && hasUserLlmOverride(profile));
+}
+
+/**
  * True when the feeds will ask for tier 2. **The chip's text and all three
  * request builders' `aiTier` are this same value** — that identity is the fix,
  * and `ai-tier.test.ts` asserts it rather than trusting it.

@@ -27,6 +27,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { activePaperTopicsKey, useFeedStore } from "@/store/feed";
+import { useFeedAutoLoad } from "@/lib/feed/auto-load";
 import { useBatchAcknowledgement } from "@/lib/dashboard/use-batch-acknowledgement";
 import { feedsUseAi } from "@/lib/feed/ai-tier";
 import { formatTimeAgo } from "@/lib/format";
@@ -35,6 +36,7 @@ import { useSyncGate } from "@/components/profile-sync";
 import { AUTH_SETTLE_TIMEOUT_MS } from "@/lib/auth-settle-timeout";
 import { FeedTile } from "@/components/cards/feed-tile";
 import { StarterStrip } from "@/components/briefing/starter-strip";
+import { KeyHint } from "@/components/briefing/key-hint";
 import { STARTER_TOPICS, STARTER_TOPICS_KEY } from "@/lib/feed/starter-topics";
 import { SearchBox } from "@/components/briefing/search-box";
 import { UploadButton } from "@/components/briefing/upload-button";
@@ -76,6 +78,9 @@ function DailyBriefingPage() {
   const loadFeed = useFeedStore((s) => s.loadFeed);
   const readItems = useFeedStore((s) => s.readItems);
   const feedTopicsKey = useFeedStore((s) => s.feedTopicsKey);
+  // P8-01 — the key a failed papers load tried (store/feed.ts); the auto-load
+  // below does not ask for it again. "Try again" is the retry.
+  const feedFailedKey = useFeedStore((s) => s.feedFailedKey);
   const feedError = useFeedStore((s) => s.feedError);
   // EMPTY-STATE-REASON (ABC-JEV-INTEGRATION.md §1bb) — the server's own
   // honest reason for the last empty paper response, threaded into
@@ -165,23 +170,23 @@ function DailyBriefingPage() {
   // repo for page.tsx itself — see this slice's checkpoint).
   const provisionalOwnerLoadRef = useRef(false);
 
-  useEffect(() => {
-    if (!authReady) return;
-    if (!feedAutoLoadKey || isLoading) return;
-    // Reload when the loaded feed's active day-locked Papers topics differ.
-    // Pending edits intentionally do not change this key until promotion on
-    // the next local day.
-    if (feedTopicsKey === feedAutoLoadKey) return;
+  // P8-01 (BACKLOG-29 = 22) — when this fires is `shouldAutoLoad`
+  // (lib/feed/auto-load.ts): a key the shown papers were not built from, that
+  // no load is running for and that no load has already tried and failed. It
+  // used to ask again the moment a failed load cleared the loading flag,
+  // without end; the store now remembers the failed key (`feedFailedKey`).
+  const autoLoad = useCallback(() => {
     if (!authOutcomeKnown) provisionalOwnerLoadRef.current = true;
     void loadFeed({ lanes: ["papers"] });
-  }, [
-    authReady,
-    authOutcomeKnown,
-    feedAutoLoadKey,
-    feedTopicsKey,
-    isLoading,
-    loadFeed,
-  ]);
+  }, [authOutcomeKnown, loadFeed]);
+  useFeedAutoLoad({
+    ready: authReady,
+    autoLoadKey: feedAutoLoadKey,
+    topicsKey: feedTopicsKey,
+    failedKey: feedFailedKey,
+    loading: isLoading,
+    load: autoLoad,
+  });
 
   // The correction itself: fires at most once, exactly when
   // `authOutcomeKnown` first flips true (it never flips back — same
@@ -336,8 +341,10 @@ function DailyBriefingPage() {
         <ReadingStrip papers={papers} readerTopics={starter ? [] : profile.researchTopics} />
       )}
 
-      {/* Setup, above the papers it is about — and only until it is done. */}
-      {starter && <StarterStrip />}
+      {/* Setup, above the papers it is about — and only until it is done. Then
+          one line is left in its place about the one thing the card also
+          carried, a key, until there is one or the reader sends it away. */}
+      {starter ? <StarterStrip /> : <KeyHint />}
 
       {/* The deck already says what is being looked for. */}
       {papersLoading && papers.length === 0 && <LoadingSkeleton label={null} />}

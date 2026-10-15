@@ -353,6 +353,31 @@ describe("getFigurePool — 1-29, an upload: id reads its stored PDF directly", 
   });
 });
 
+// P0-08 (§1e.8): the pool's owner check used `startsWith("upload:")`, so a
+// malformed claim (`UPLOAD:<hash16>`) skipped it and was built as a public
+// pool, cached under that id. It is refused like an upload the caller does
+// not own — even here, where the owner check (mocked above) accepts anyone.
+describe("getFigurePool — P0-08, a malformed upload claim is refused, not treated as public", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    mocks.extractPdfCandidatesFromPath.mockReset();
+    globalThis.fetch = vi.fn(async () => new Response("", { status: 404 })) as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("rejects UPLOAD:<hash16> and its spellings without reading a PDF or fetching anything", async () => {
+    for (const itemId of ["UPLOAD:0000000000000012", "Upload:0000000000000012", "upload:000000000000001A"]) {
+      await expect(getFigurePool({ itemId, url: "https://example.com/p0-08" })).rejects.toThrow("Private upload unavailable");
+    }
+    expect(mocks.extractPdfCandidatesFromPath).not.toHaveBeenCalled();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+});
+
 describe("extractFigure — 5-06, the query-less og:image last resort is cached on the pool", () => {
   const originalFetch = globalThis.fetch;
 

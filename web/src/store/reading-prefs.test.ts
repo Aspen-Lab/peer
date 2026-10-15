@@ -1,4 +1,7 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
+import { PLAIN_DEFAULT_LEVEL, PLAIN_LEVELS } from "@/lib/papers/plain-levels";
 import { fitZoom, READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
 
 // S15: the font-size ladder's clamp logic — the only real behaviour this
@@ -150,5 +153,54 @@ describe("fit caps match page-container's class strings", () => {
     expect(src).toContain(`calc(${XL_CAP_PX}px*var(--reading-scale,1))`);
     expect(src).toContain(`calc(${TWO_XL_PANEL_PX}px+${TWO_XL_COLUMN_PX}px*var(--reading-scale,1))`);
     expect(TWO_XL_PANEL_PX + TWO_XL_COLUMN_PX).toBe(TWO_XL_CAP_PX);
+  });
+});
+
+// P4-01 (blueprint §3.6; rulings §1h.12 (h)): the reader's level for "Say it plainly" is
+// remembered here, with the other reading preferences, and is `undergrad` until they choose.
+describe("reading prefs — the plain level (P4-01)", () => {
+  beforeEach(() => {
+    useReadingPrefsStore.setState({ plainLevel: "undergrad" });
+  });
+
+  it("starts at undergrad", () => {
+    expect(useReadingPrefsStore.getState().plainLevel).toBe("undergrad");
+    expect(PLAIN_DEFAULT_LEVEL).toBe("undergrad");
+  });
+
+  it("remembers each of the three levels the reader picks", () => {
+    for (const level of PLAIN_LEVELS) {
+      useReadingPrefsStore.getState().setPlainLevel(level);
+      expect(useReadingPrefsStore.getState().plainLevel).toBe(level);
+    }
+  });
+
+  it("takes nothing that is not one of the three: the level stays as it was", () => {
+    useReadingPrefsStore.getState().setPlainLevel("graduate");
+    for (const other of ["phd", "", "Undergrad", null, undefined, 2, {}]) {
+      useReadingPrefsStore.getState().setPlainLevel(other as never);
+      expect(useReadingPrefsStore.getState().plainLevel).toBe("graduate");
+    }
+  });
+
+  it("leaves the scale and Fit alone, and they leave it alone", () => {
+    useReadingPrefsStore.setState({ scaleIndex: 4, fit: true });
+    useReadingPrefsStore.getState().setPlainLevel("highschool");
+    useReadingPrefsStore.getState().resetScale();
+    useReadingPrefsStore.getState().setFit(false);
+
+    expect(useReadingPrefsStore.getState().plainLevel).toBe("highschool");
+    expect(useReadingPrefsStore.getState().scaleIndex).toBe(2);
+    useReadingPrefsStore.setState({ scaleIndex: 2, fit: false });
+  });
+
+  // No version bump: a blob persisted before the level existed has no `plainLevel` key, and
+  // zustand's persist merges it over the initial state, so it reads as the default — exactly as
+  // a reader with no choice yet. The store's own comment says so, and the version stays 1.
+  it("is not a new version of the persisted blob: an older one merges to the default", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/store/reading-prefs.ts"), "utf8");
+
+    expect(source).toContain('name: "peer-reading-prefs",\n      version: 1,');
+    expect(source).toMatch(/plainLevel[^\n]*\n[^]*merges it over the initial state/);
   });
 });

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { Paper } from "@/types";
 import type { ExtractedDocument } from "./html-text";
 import { buildReading, describeAvailability, omittedForReader } from "./reading";
-import { buildBibTeX, readingToMarkdown, type MarkdownReport } from "./reading-markdown";
+import type { PaperReading, ReadingQuote } from "./reading";
+import { readingToMarkdown, type MarkdownReport } from "./reading-markdown";
+import { PEERS_READING, REPORT_HEADING } from "@/components/reader/copy";
 import arxivHtmlDocJson from "./__fixtures__/arxiv-2609.02697.doc.json";
 import normalPaperJson from "./__fixtures__/abstract-normal-W7204479535.paper.json";
 import noAbstractPaperJson from "./__fixtures__/no-abstract-W7204992910.paper.json";
@@ -16,37 +18,33 @@ const arxivPaper = arxivPaperJson as unknown as Paper;
 const NOW = new Date("2026-09-06T12:00:00.000Z");
 const noModel = { report: null, providerConfigured: false, profileHasProject: false, modelFailed: false };
 
+// P7-12 (R3, the owner's order): the `c` copy carries the notes only — the title, one `DOI:` line
+// under it when the paper has one, and the page's sections. No YAML front matter, no "Not on this
+// page" list, no BibTeX block. Peer's Obsidian note template keeps its own front matter and is not
+// this export.
 describe("readingToMarkdown", () => {
-  it("no abstract: frontmatter, the record, the availability line and what is not on the page", () => {
+  it("no abstract: the title, the DOI line and the availability line, and nothing about what is not on the page", () => {
     const reading = buildReading(noAbstractPaper, null, NOW);
     const sentences = describeAvailability({ reading, ...noModel });
 
-    const md = readingToMarkdown(noAbstractPaper, reading, null, sentences, NOW);
+    const md = readingToMarkdown(noAbstractPaper, reading, null, sentences);
 
-    expect(md.startsWith("---\n")).toBe(true);
-    expect(md).toContain('title: "DiffKT: a diffusion model for fine-grained knowledge tracing"');
-    expect(md).toContain('authors: ["R.D. Liu", "Yong Niu", "Hu Li"]');
-    expect(md).toContain('doi: "10.1007/s10489-026-07459-9"');
-    expect(md).toContain('url: "https://doi.org/10.1007/s10489-026-07459-9"');
-    expect(md).toContain("basis: abstract");
-    expect(md).toContain('pages: ""');
-    expect(md).toContain('generated: "2026-09-06T12:00:00.000Z"');
-    expect(md).toMatch(/peer_version: "\d+\.\d+\.\d+"/);
-    expect(md).toContain("# DiffKT: a diffusion model for fine-grained knowledge tracing");
+    expect(
+      md.startsWith(
+        "# DiffKT: a diffusion model for fine-grained knowledge tracing\n\nDOI: 10.1007/s10489-026-07459-9\n\n",
+      ),
+    ).toBe(true);
     expect(md).toContain("No abstract is published where Peer can read it — only the record.");
-    expect(md).toContain("## Not on this page");
-    expect(md).toContain("- The skim, findings, method and caveats — no abstract is published where Peer can read it");
-    expect(md).toContain("- For your project and next step — need a key");
     expect(md).not.toContain("## What they found");
-    expect(md).toContain("```bibtex\n@inproceedings{liu2026diffkt,");
-    expect(md.trimEnd().endsWith("```")).toBe(true);
+    expect(md).not.toContain("## Not on this page");
+    expect(md).not.toContain("```");
   });
 
   it("abstract only: the ink marks are bold, the paragraph break is the intro split", () => {
     const reading = buildReading(normalPaper, null, NOW);
     const sentences = describeAvailability({ reading, ...noModel });
 
-    const md = readingToMarkdown(normalPaper, reading, null, sentences, NOW);
+    const md = readingToMarkdown(normalPaper, reading, null, sentences);
 
     const [first] = reading.abstract.marks;
     expect(md).toContain(`**${reading.abstract.sentences[first]}**`);
@@ -54,10 +52,12 @@ describe("readingToMarkdown", () => {
     expect(md).toContain(`${reading.abstract.sentences[0]}\n\n`);
     expect(md).toContain("*From the abstract · claim and numbers in ink*");
     expect(md).toContain("Abstract only. Method, caveats and what it means for your project need the full text and a key.");
-    expect(md).toContain("- Findings, method and caveats — not in the abstract");
+    // The omissions list went with the front matter (P7-12): the copy says what it has, not what it lacks.
+    expect(md).not.toContain("Not on this page");
+    expect(md).not.toContain("not in the abstract");
   });
 
-  it("sections: every quote carries its heading, and the omissions list shrinks", () => {
+  it("sections: every quote carries its heading", () => {
     const reading = buildReading(
       arxivPaper,
       {
@@ -69,15 +69,14 @@ describe("readingToMarkdown", () => {
       NOW,
     );
 
-    const md = readingToMarkdown(arxivPaper, reading, null, describeAvailability({ reading, ...noModel }), NOW);
+    const md = readingToMarkdown(arxivPaper, reading, null, describeAvailability({ reading, ...noModel }));
 
-    expect(md).toContain("basis: sections");
-    expect(md).toContain('source: "arXiv HTML"');
     expect(md).toContain("## What they found, and how big");
     expect(md).toContain("## Where it is thin");
     expect(md).toContain(`> ${reading.caveats[0].text} — §4.5 Limitations`);
     expect(md).toContain(`> ${reading.findings[0].text} — §4.4 Results`);
-    expect(md).toContain("## Not on this page\n\n- For your project and next step — need a key\n");
+    expect(md).not.toContain("## Not on this page");
+    expect(md).not.toContain("- For your project and next step");
   });
 
   it("deep report: every claim is followed by its evidence blockquote", () => {
@@ -109,9 +108,8 @@ describe("readingToMarkdown", () => {
       modelFailed: false,
     });
 
-    const md = readingToMarkdown(normalPaper, reading, report, sentences, NOW);
+    const md = readingToMarkdown(normalPaper, reading, report, sentences);
 
-    expect(md).toContain("basis: model-fulltext");
     expect(md).toContain("Five predictors were benchmarked on three HIV-1 enzymes.\n\n*Peer's skim, from the full text*");
     expect(md).toContain("**AlphaFold leads.** AlphaFold-based models score best overall.\n\n> Our results show that AlphaFold-based models achieve strong overall performance. — §4 Results");
     expect(md).toContain("**RT is hardest.** Reverse transcriptase degrades every model.\n\n> Performance degrades markedly for RT. — §4 Results");
@@ -120,15 +118,14 @@ describe("readingToMarkdown", () => {
     expect(md).toContain("## For your project\n\n*Your project: I am benchmarking structure predictors on viral proteases for a resistance atlas that spans every cl…*");
     expect(md).toContain("The protease benchmark is directly reusable.\n\n> We evaluate predictions against a curated dataset. — abstract");
     expect(md).toContain("## Next step\n\nRe-run the docking analysis with the newest AlphaFold3 weights.\n\n> Finally, a docking analysis");
-    // Every block is filled, so nothing is listed as missing.
     expect(md).not.toContain("## Not on this page");
     expect(md).toContain("Read by your model from the full text (PDF, 12 pages)");
   });
 
-  it("deep report without a next step or relation: the omissions never say 'need a key'", () => {
-    // The reader ran the model on their own key; the model produced no next
-    // step and its relation was dropped in verification. The export's "Not
-    // on this page" must say that, not that the blocks need a key.
+  // The page still keeps its omissions (the reading carries them for the availability line); the copy
+  // does not print them. This reading is the one the old "Not on this page" list said "the model gave no
+  // sentences for them that could be verified" about — it must not say "need a key" either.
+  it("deep report without a next step or relation: a reading that carries omissions still copies none of them", () => {
     const reading = buildReading(normalPaper, null, NOW);
     const availability = { basis: "model-fulltext" as const, droppedClaims: 1, sourceKind: "pdf" };
     const report: MarkdownReport = {
@@ -149,46 +146,486 @@ describe("readingToMarkdown", () => {
       profileHasProject: true,
       modelFailed: false,
     });
+    const withOmissions = { ...reading, omitted: omittedForReader(reading, availability, true) };
+    expect(withOmissions.omitted.length).toBeGreaterThan(0);
 
-    const md = readingToMarkdown(
-      normalPaper,
-      { ...reading, omitted: omittedForReader(reading, availability, true) },
-      report,
-      sentences,
-      NOW,
-    );
+    const md = readingToMarkdown(normalPaper, withOmissions, report, sentences);
 
-    expect(md).toContain("## Not on this page");
-    // The reading (abstract only here) still names its own reason for the
-    // method; the two model-only blocks get the model's.
-    expect(md).toContain("- Method — not in the abstract");
-    expect(md).toContain(
-      "- For your project and next step — the model gave no sentences for them that could be verified",
-    );
+    expect(md).not.toContain("## Not on this page");
+    expect(md).not.toContain("- Method — not in the abstract");
+    expect(md).not.toContain("the model gave no sentences");
     expect(md).not.toContain("need a key");
     expect(md).not.toContain("needs a key");
+    // What it does have is still there.
+    expect(md).toContain("## Where it is thin");
   });
 
-  it("escapes quotes in frontmatter scalars", () => {
+  // P0-03: every PDF is read with pdf.js, so "the PDF is readable only by a
+  // self-hosted Peer" is no longer true of any PDF. What `pdf_only_hosted`
+  // marks now is a PDF link with no text in it — the page already says so
+  // ("the PDF carries no text to read — it looks scanned"); the copy carried the
+  // same phrase in its omissions list, which P7-12 removed.
+  it("a PDF link with no text layer: the copy has no omissions list, and never says only a self-hosted Peer reads it", () => {
+    const reading = buildReading(
+      normalPaper,
+      {
+        status: "no_full_text",
+        reason: "No legal full-text source returned readable body text.",
+        attempts: [{ link: { url: "https://zenodo.org/records/1/files/paper.pdf", kind: "pdf", label: "zenodo", rank: 30 }, outcome: "source_unavailable: no-text-layer" }],
+      },
+      NOW,
+    );
+    const sentences = describeAvailability({ reading, ...noModel });
+
+    const md = readingToMarkdown(normalPaper, reading, null, sentences);
+
+    expect(reading.provenance.fullText).toBe("pdf_unreadable_here");
+    expect(reading.omitted.some((entry) => entry.reason === "pdf_only_hosted")).toBe(true);
+    expect(md).not.toContain("## Not on this page");
+    expect(md).not.toMatch(/^- .+ — the PDF carries no text to read$/m);
+    expect(md).not.toContain("self-hosted");
+  });
+
+  it("copies a title with quotes as it is: there is no YAML to escape it for", () => {
     const paper = { ...normalPaper, title: 'The "best" model' };
     const reading = buildReading(paper, null, NOW);
 
-    const md = readingToMarkdown(paper, reading, null, [], NOW);
+    const md = readingToMarkdown(paper, reading, null, []);
 
-    expect(md).toContain('title: "The \\"best\\" model"');
+    expect(md.startsWith('# The "best" model\n')).toBe(true);
+    expect(md).not.toContain('\\"');
   });
 });
 
-describe("buildBibTeX", () => {
-  it("keys on first author, year and first title word, and carries the arXiv link", () => {
-    expect(buildBibTeX(arxivPaper)).toBe(
-      `@inproceedings{cumbo2026logarithmicscale,
-  title={${arxivPaper.title}},
-  author={${arxivPaper.authors.join(" and ")}},
-  booktitle={arXiv},
-  year={2026},
-  url={https://arxiv.org/abs/2609.02113v1}
-}`,
+// P7-12 (R3): what the copy no longer carries, and the one line it keeps from the record.
+describe("readingToMarkdown carries the notes only (P7-12, R3)", () => {
+  const deepReport = (reading: ReturnType<typeof buildReading>): MarkdownReport => ({
+    skim: [{ text: "Five predictors were benchmarked on three HIV-1 enzymes.", evidence: reading.abstract.sentences[1], evidenceWhere: "abstract" }],
+    whatItProposes: { summary: "Peer's proposal summary." },
+    limitations: [{ text: "Only three enzymes were covered.", evidence: "We restrict the study to three enzymes.", evidenceWhere: "5 Discussion" }],
+    provenance: { basis: "model-fulltext" },
+  });
+  const cases = () => {
+    const normal = buildReading(normalPaper, null, NOW);
+    const noAbstract = buildReading(noAbstractPaper, null, NOW);
+    const sections = buildReading(
+      arxivPaper,
+      {
+        status: "ok",
+        doc: arxivHtmlDoc,
+        sourceLink: { url: "https://arxiv.org/html/2609.02697", kind: "html", label: "arxiv-html", rank: 5 },
+        attempts: [],
+      },
+      NOW,
     );
+    const sentencesOf = (reading: ReturnType<typeof buildReading>) => describeAvailability({ reading, ...noModel });
+    return [
+      { name: "abstract only", paper: normalPaper, reading: normal, report: null, sentences: sentencesOf(normal) },
+      { name: "no abstract", paper: noAbstractPaper, reading: noAbstract, report: null, sentences: sentencesOf(noAbstract) },
+      { name: "sections from arXiv HTML", paper: arxivPaper, reading: sections, report: null, sentences: sentencesOf(sections) },
+      { name: "a deep report", paper: normalPaper, reading: normal, report: deepReport(normal), sentences: sentencesOf(normal) },
+    ];
+  };
+
+  it.each(cases().map((c) => [c.name, c] as const))("%s: starts with # <title>, has no front matter, no omissions list and no BibTeX", (_name, c) => {
+    const md = readingToMarkdown(c.paper, c.reading, c.report, c.sentences);
+
+    expect(md.startsWith(`# ${c.paper.title}\n`)).toBe(true);
+    expect(md).not.toMatch(/^---$/m);
+    for (const key of ["title:", "authors:", "venue:", "date:", "url:", "source:", "basis:", "pages:", "questions:", "generated:", "peer_version:"]) {
+      expect(md, key).not.toMatch(new RegExp(`^${key}`, "m"));
+    }
+    expect(md).not.toContain("Not on this page");
+    expect(md).not.toContain("```bibtex");
+    expect(md).not.toContain("```");
+    expect(md).not.toContain("@inproceedings");
+  });
+
+  it.each(cases().map((c) => [c.name, c] as const))("%s: ends with one newline, not a fence and not a blank line", (_name, c) => {
+    const md = readingToMarkdown(c.paper, c.reading, c.report, c.sentences);
+
+    expect(md.endsWith("\n")).toBe(true);
+    expect(md.endsWith("\n\n")).toBe(false);
+  });
+
+  it("puts one DOI line right under the title when the paper has a DOI", () => {
+    const reading = buildReading(normalPaper, null, NOW);
+
+    const md = readingToMarkdown(normalPaper, reading, null, describeAvailability({ reading, ...noModel }));
+
+    const lines = md.split("\n");
+    expect(lines[0]).toBe(`# ${normalPaper.title}`);
+    expect(lines[1]).toBe("");
+    expect(lines[2]).toBe("DOI: 10.1038/s41598-026-64923-9");
+    expect(lines[3]).toBe("");
+    expect(lines.filter((line) => line.startsWith("DOI:"))).toHaveLength(1);
+    // The old front matter wrote a lowercase `doi:` key; that line is gone.
+    expect(md).not.toMatch(/^doi:/m);
+  });
+
+  it("has no DOI line for a paper with no DOI, and the sections follow the title directly", () => {
+    const reading = buildReading(arxivPaper, null, NOW);
+    expect(arxivPaper.doi).toBeFalsy();
+
+    const md = readingToMarkdown(arxivPaper, reading, null, describeAvailability({ reading, ...noModel }));
+
+    expect(md).not.toContain("DOI");
+    expect(md.startsWith(`# ${arxivPaper.title}\n\n`)).toBe(true);
+    expect(md.split("\n")[2]).not.toBe("");
+  });
+
+  it("keeps the skim, the abstract and its footer, the Decision sentences and the report's sections", () => {
+    const reading = buildReading(normalPaper, null, NOW);
+    const report: MarkdownReport = {
+      ...deepReport(reading),
+      nextStep: { text: "Re-run the docking analysis.", evidence: "Finally, a docking analysis indicates a binding pose.", evidenceWhere: "4 Results" },
+    };
+    const sentences = describeAvailability({
+      reading,
+      report: { basis: "model-fulltext", droppedClaims: 0, sourceKind: "pdf", pageCount: 12 },
+      providerConfigured: true,
+      profileHasProject: true,
+      modelFailed: false,
+    });
+
+    const md = readingToMarkdown(normalPaper, reading, report, sentences);
+
+    expect(md).toContain("*Peer's skim, from the full text*");
+    expect(md).toContain("*From the abstract · claim and numbers in ink*");
+    expect(md).toContain(sentences.join(" "));
+    for (const heading of ["## What it proposes", "## Where it is thin", "## Next step"]) expect(md).toContain(heading);
+    // Title, DOI, skim, abstract, Decision, sections — in the page's order.
+    const at = (text: string) => md.indexOf(text);
+    expect(at("DOI:")).toBeGreaterThan(at("# "));
+    expect(at("*Peer's skim")).toBeGreaterThan(at("DOI:"));
+    expect(at("*From the abstract")).toBeGreaterThan(at("*Peer's skim"));
+    expect(at(sentences.join(" "))).toBeGreaterThan(at("*From the abstract"));
+    expect(at("## What it proposes")).toBeGreaterThan(at(sentences.join(" ")));
+  });
+});
+
+// P9-06 (the feature walk's X11): the clipboard's abstract came out as three paragraphs where the page
+// shows one block. A PDF abstract keeps the line breaks of its text layer inside a sentence (the splitter
+// breaks only after `.`, `!` or `?`), a `<p>` on the page collapses them and Markdown does not, and one of
+// them fell right after an opening `**` — a bold run that opens on a line break is not bold. The copy now
+// prints every piece of the paper's text on one line. Every sentence here is invented.
+describe("readingToMarkdown prints the paper's text on one line (P9-06)", () => {
+  const inventedPaper: Paper = {
+    ...normalPaper,
+    title: "Annealing texture in an invented oxide",
+    doi: "",
+    summaryIntro: "Quillium films were annealed for two hours at 600 K. The peak grew by 40 % after annealing.",
+    summaryResultDiscussion: "",
+  };
+  const base = buildReading(inventedPaper, null, NOW);
+  const withAbstract = (
+    sentences: string[],
+    introCount: number,
+    marks: number[],
+    over: Partial<PaperReading> = {},
+  ): PaperReading => ({ ...base, abstract: { sentences, introCount, marks }, ...over });
+  /** Everything between the title and the abstract's footer line. */
+  const abstractBlock = (md: string) => md.slice(md.indexOf("\n\n") + 2, md.indexOf("\n\n*From the abstract"));
+  /** The text of every bold run in a block. */
+  const boldRuns = (block: string) => [...block.matchAll(/\*\*(.+?)\*\*/gs)].map((match) => match[1]);
+  const quote = (text: string, heading = "2 Methods"): ReadingQuote => ({
+    text,
+    from: { kind: "section", heading, canonical: "methods" },
+  });
+
+  const BROKEN = [
+    "Quillium films were annealed for two hours at 600 K.",
+    "The \u27E8003\u27E9\n\n||ND texture of each film sharpened with annealing.",
+    "\n  The \u27E8003\u27E9 peak grew by 40 % after\nannealing.\n",
+    "Lattice strain stayed below 0.1 %.",
+  ];
+
+  it("a sentence that holds line breaks prints on one line, and a marked sentence's bold run is tight", () => {
+    const reading = withAbstract(BROKEN, BROKEN.length, [2]);
+
+    const md = readingToMarkdown(inventedPaper, reading, null, []);
+
+    expect(abstractBlock(md)).toBe(
+      [
+        "Quillium films were annealed for two hours at 600 K.",
+        "The \u27E8003\u27E9 ||ND texture of each film sharpened with annealing.",
+        "**The \u27E8003\u27E9 peak grew by 40 % after annealing.**",
+        "Lattice strain stayed below 0.1 %.",
+      ].join(" "),
+    );
+    expect(abstractBlock(md)).not.toContain("\n");
+  });
+
+  it("a bold run never opens or closes on whitespace, wherever the break was", () => {
+    // The break right after the sentence's start, and one right before its end.
+    const sentences = ["\n\u27E8003\u27E9 reflections were sharp.\n\n", "A second sentence stayed plain."];
+
+    const md = readingToMarkdown(inventedPaper, withAbstract(sentences, 2, [0]), null, []);
+
+    expect(boldRuns(abstractBlock(md))).toEqual(["\u27E8003\u27E9 reflections were sharp."]);
+  });
+
+  it("the two paragraphs by introCount are kept, each on one line", () => {
+    const reading = withAbstract(BROKEN, 2, [2]);
+
+    const md = readingToMarkdown(inventedPaper, reading, null, []);
+
+    expect(md).toContain(
+      "\n\nQuillium films were annealed for two hours at 600 K. The \u27E8003\u27E9 ||ND texture of each film sharpened with annealing.\n\n" +
+        "**The \u27E8003\u27E9 peak grew by 40 % after annealing.** Lattice strain stayed below 0.1 %.\n\n*From the abstract",
+    );
+  });
+
+  it("an abstract already on one line prints exactly as it did", () => {
+    const sentences = [
+      "Quillium films were annealed for two hours at 600 K.",
+      "The \u27E8003\u27E9 peak grew by 40 % after annealing.",
+      "Lattice strain stayed below 0.1 %.",
+    ];
+
+    const md = readingToMarkdown(inventedPaper, withAbstract(sentences, 1, [1]), null, []);
+
+    expect(md).toBe(
+      [
+        "# Annealing texture in an invented oxide",
+        "",
+        sentences[0],
+        "",
+        `**${sentences[1]}** ${sentences[2]}`,
+        "",
+        "*From the abstract \u00B7 claim and numbers in ink*",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("the line breaks an upload's abstract carries from the PDF are gone from the copy, bold runs tight", () => {
+    // The route stores the abstract section's text as it is (`abstractLine` returns what fits as it
+    // is), and `splitSentences` breaks only after `.`, `!` or `?`: a break after a `\u27E9` stays inside.
+    const paper: Paper = {
+      ...inventedPaper,
+      summaryIntro:
+        "Quillium films were annealed for two hours at 600 K. We index the \u27E8003\u27E9\n\n||ND texture of each film.\n" +
+        "The \u27E8003\u27E9 peak sharpened by 40 % after\nannealing, and lattice strain stayed below 0.1 %.",
+      summaryResultDiscussion: "",
+    };
+    const reading = buildReading(paper, null, NOW);
+    expect(reading.abstract.sentences.length).toBeGreaterThan(1);
+
+    const md = readingToMarkdown(paper, reading, null, []);
+
+    const block = abstractBlock(md);
+    expect(block).not.toMatch(/\s{2}|[\t\r\n]/);
+    expect(block.replace(/\*\*/g, "")).toBe(reading.abstract.sentences.map((s) => s.replace(/\s+/g, " ").trim()).join(" "));
+    for (const run of boldRuns(block)) expect(run).toBe(run.trim());
+  });
+
+  it("a marked sentence with nothing in it prints nothing, never an empty bold run", () => {
+    const sentences = ["Quillium films were annealed for two hours at 600 K.", " \n ", "Lattice strain stayed below 0.1 %."];
+
+    const md = readingToMarkdown(inventedPaper, withAbstract(sentences, 3, [1]), null, []);
+
+    expect(abstractBlock(md)).toBe("Quillium films were annealed for two hours at 600 K. Lattice strain stayed below 0.1 %.");
+    expect(md).not.toContain("****");
+  });
+
+  it("a report's evidence quotes print on one line, with where they came from", () => {
+    const report: MarkdownReport = {
+      whatItProposes: {
+        methods: [{ text: "Films were annealed.", evidence: "We anneal\nthe films at\n\n600 K.", evidenceWhere: "2 Methods" }],
+      },
+      resultsAndSignificance: {
+        keyResults: [{ title: "Sharper peak", detail: "The peak sharpened.", evidence: "The \u27E8003\u27E9\npeak sharpened.", evidenceWhere: "4 Results" }],
+      },
+      limitations: [{ text: "One alloy only.", evidence: "Only one\nalloy was grown.", evidenceWhere: "5 Discussion" }],
+      nextStep: { text: "Grow a second alloy.", evidence: "A second alloy\nis planned.", evidenceWhere: "abstract" },
+      provenance: { basis: "model-fulltext" },
+    };
+
+    const md = readingToMarkdown(inventedPaper, base, report, []);
+
+    expect(md).toContain("\n\n> We anneal the films at 600 K. \u2014 \u00A72 Methods\n");
+    expect(md).toContain("\n\n> The \u27E8003\u27E9 peak sharpened. \u2014 \u00A74 Results\n");
+    expect(md).toContain("\n\n> Only one alloy was grown. \u2014 \u00A75 Discussion\n");
+    expect(md).toContain("\n\n> A second alloy is planned. \u2014 abstract\n");
+    // No quote left a tail on the next line.
+    for (const tail of ["600 K.", "peak sharpened.", "alloy was grown.", "is planned.", "the films at"]) {
+      expect(md.split("\n").some((line) => line.startsWith(tail)), tail).toBe(false);
+    }
+  });
+
+  // P9-19 (A P9-R2's F6 a, the survivor 06c): `evidenceText` flattens the quote with its own `oneLine` and
+  // then flattens the composed "quote — where" line again, so the first call is seen only where there is no
+  // composed line (a claim with evidence and no `evidenceWhere`) and where the quote is nothing but whitespace.
+  it("evidence with no heading to go with it prints on one line too", () => {
+    const report: MarkdownReport = {
+      limitations: [{ text: "Only nine films were measured.", evidence: "We tested\nonly nine\n\nfilms." }],
+      nextStep: { text: "Measure a tenth film.", evidence: "\n  A tenth film\r\nis planned.\n" },
+      provenance: { basis: "model-fulltext" },
+    };
+
+    const md = readingToMarkdown(inventedPaper, base, report, []);
+    const lines = md.split("\n");
+
+    expect(lines).toContain("> We tested only nine films.");
+    expect(lines).toContain("> A tenth film is planned.");
+    // No quote left a tail on the next line, and none carries a `—` it was not given.
+    for (const tail of ["only nine", "films.", "A tenth film", "is planned."]) {
+      expect(lines.some((line) => line.startsWith(tail)), tail).toBe(false);
+    }
+    expect(lines.filter((line) => line.startsWith(">")).every((line) => !line.includes("\u2014"))).toBe(true);
+  });
+
+  it("evidence that is nothing but whitespace is no quote, with or without a heading", () => {
+    const report: MarkdownReport = {
+      limitations: [
+        { text: "Only nine films were measured.", evidence: "  \n ", evidenceWhere: "abstract" },
+        { text: "The annealing time was fixed.", evidence: " \r\n\t", evidenceWhere: "2 Methods" },
+        { text: "One substrate only.", evidence: "\n\n" },
+      ],
+      provenance: { basis: "model-fulltext" },
+    };
+
+    const md = readingToMarkdown(inventedPaper, base, report, []);
+
+    // The claims are there; a quote line is not, and no lone "— abstract" is printed in place of one.
+    expect(md).toContain("Only nine films were measured.");
+    expect(md).toContain("The annealing time was fixed.");
+    expect(md).toContain("One substrate only.");
+    expect(md.split("\n").filter((line) => line.startsWith(">"))).toEqual([]);
+    expect(md).not.toContain("> \u2014");
+  });
+
+  it("the reading's own quotes, its TLDR and the title print on one line", () => {
+    const reading: PaperReading = {
+      ...base,
+      abstract: { sentences: [], introCount: 0, marks: [] },
+      provenance: { ...base.provenance, tldr: "A machine\nsummary of an invented\n\npaper." },
+      findings: [quote("The peak grew\nby 40 %.", "4 Results")],
+      method: [quote("Films were\n annealed at 600 K.")],
+      caveats: [quote("Only one\r\nalloy.", "5 Discussion")],
+    };
+    const paper: Paper = { ...inventedPaper, title: "Annealing texture\nin an invented oxide" };
+
+    const md = readingToMarkdown(paper, reading, null, []);
+
+    expect(md.startsWith("# Annealing texture in an invented oxide\n\nA machine summary of an invented paper.\n\n")).toBe(true);
+    expect(md).toContain("> The peak grew by 40 %. \u2014 \u00A74 Results\n");
+    expect(md).toContain("> Films were annealed at 600 K. \u2014 \u00A72 Methods\n");
+    expect(md).toContain("> Only one alloy. \u2014 \u00A75 Discussion\n");
+  });
+});
+
+// P9-27 (the owner, §1a.18 (b), "这个放到summary那里"; the manager's follow-up): the page shows the proposal's
+// `newHere` lines as a block of their own, "What is new here", ahead of "What it proposes". The copy follows:
+// its own "## What is new here" section right after the opening (title, DOI, skim, abstract and the Decision
+// sentences — the opening is everything before the first `##`), under the attribution the export already uses
+// for Peer's lines, written whether or not a proposal summary exists, and once: "What it proposes" carries the
+// proposal alone. Every sentence here is invented. (Before this, the lines rode inside "What it proposes",
+// only when it had a summary; no earlier test pinned that place.)
+describe("readingToMarkdown gives \"What is new here\" its own section after the opening (P9-27)", () => {
+  const PEERS = "*Peer's reading \u2014 not a quote*";
+  const NEW_A = "It swaps the imported film for a mulch cut from local seaweed.";
+  const NEW_B = "Three layer depths are compared in one orchard.";
+  const SUMMARY = "The paper lays seaweed on terrace soil and logs the soil water.";
+  const NOVELTY = "Earlier trials used only one layer depth.";
+  const reading = buildReading(normalPaper, null, NOW);
+  const sentences = describeAvailability({ reading, ...noModel });
+  const reportWith = (whatItProposes: NonNullable<MarkdownReport["whatItProposes"]>): MarkdownReport => ({
+    skim: [{ text: "Deeper seaweed layers held more soil water.", evidence: reading.abstract.sentences[1], evidenceWhere: "abstract" }],
+    whatItProposes,
+    resultsAndSignificance: {
+      summary: "Soil water stayed higher under the thick layer.",
+      keyResults: [{ title: "Water kept", detail: "The index rose with depth.", evidence: "The index rose with depth.", evidenceWhere: "4 Results", novelty: NOVELTY }],
+    },
+    provenance: { basis: "model-fulltext" },
+  });
+  const count = (md: string, text: string) => md.split(text).length - 1;
+  /** One `##` section: from its heading to the next heading (or the end). */
+  const sectionOf = (md: string, heading: string) => {
+    const from = md.indexOf(`## ${heading}\n`);
+    if (from < 0) return null;
+    const next = md.indexOf("\n## ", from + 1);
+    return md.slice(from, next < 0 ? md.length : next + 1);
+  };
+
+  it("uses the page's heading and the page's attribution words", () => {
+    expect(REPORT_HEADING.newHere).toBe("What is new here");
+    expect(PEERS).toBe(`*${PEERS_READING}*`);
+  });
+
+  it("is a section of its own, after the opening and before \"What it proposes\", under Peer's attribution", () => {
+    const md = readingToMarkdown(normalPaper, reading, reportWith({ summary: SUMMARY, newHere: [NEW_A, NEW_B] }), sentences);
+
+    expect(count(md, "## What is new here")).toBe(1);
+    expect(sectionOf(md, "What is new here")).toBe(`## What is new here\n\n${NEW_A}\n\n${NEW_B}\n\n${PEERS}\n\n`);
+    // The opening — the skim, the abstract and its footer, the Decision sentences — comes first, whole.
+    const at = (text: string) => md.indexOf(text);
+    expect(at("*Peer's skim")).toBeGreaterThan(-1);
+    expect(at("*From the abstract")).toBeGreaterThan(at("*Peer's skim"));
+    expect(at(sentences.join(" "))).toBeGreaterThan(at("*From the abstract"));
+    expect(at("## What is new here")).toBeGreaterThan(at(sentences.join(" ")));
+    expect(at("## What it proposes")).toBeGreaterThan(at("## What is new here"));
+    // Nothing of the opening is inside the new section's words, and it is the first heading of the copy.
+    expect(md.indexOf("\n## ") + 1).toBe(at("## What is new here"));
+  });
+
+  it("\"What it proposes\" carries the proposal alone, and each line is on the copy once", () => {
+    const md = readingToMarkdown(normalPaper, reading, reportWith({ summary: SUMMARY, newHere: [NEW_A, NEW_B] }), sentences);
+
+    expect(sectionOf(md, "What it proposes")).toBe(`## What it proposes\n\n${SUMMARY}\n\n`);
+    expect(count(md, NEW_A)).toBe(1);
+    expect(count(md, NEW_B)).toBe(1);
+    expect(count(md, PEERS)).toBe(1);
+  });
+
+  it("is written with no proposal summary too, and then there is no \"What it proposes\"", () => {
+    for (const whatItProposes of [{ newHere: [NEW_A] }, { summary: "   ", newHere: [NEW_A] }]) {
+      const md = readingToMarkdown(normalPaper, reading, reportWith(whatItProposes), sentences);
+
+      expect(sectionOf(md, "What is new here")).toBe(`## What is new here\n\n${NEW_A}\n\n${PEERS}\n\n`);
+      expect(md).not.toContain("## What it proposes");
+      expect(count(md, NEW_A)).toBe(1);
+    }
+  });
+
+  it("is absent, heading and attribution and all, with no line to show", () => {
+    const reports: (MarkdownReport | null)[] = [
+      null,
+      reportWith({ summary: SUMMARY }),
+      reportWith({ summary: SUMMARY, newHere: [] }),
+      reportWith({ summary: SUMMARY, newHere: ["", "   \n "] }),
+    ];
+    for (const report of reports) {
+      const md = readingToMarkdown(normalPaper, reading, report, sentences);
+
+      expect(md).not.toContain("## What is new here");
+      expect(md).not.toContain(PEERS);
+    }
+    expect(readingToMarkdown(normalPaper, reading, reportWith({ summary: SUMMARY }), sentences)).toContain(`## What it proposes\n\n${SUMMARY}\n`);
+  });
+
+  it("prints each line on one line, and drops a blank one", () => {
+    const md = readingToMarkdown(normalPaper, reading, reportWith({ summary: SUMMARY, newHere: ["  It swaps the film\nfor a seaweed\r\n mulch. ", "", NEW_B] }), sentences);
+
+    expect(sectionOf(md, "What is new here")).toBe(`## What is new here\n\nIt swaps the film for a seaweed mulch.\n\n${NEW_B}\n\n${PEERS}\n\n`);
+  });
+
+  it("stands right after the opening, ahead of the reader's questions, whose block it leaves whole", () => {
+    const md = readingToMarkdown(normalPaper, reading, reportWith({ summary: SUMMARY, newHere: [NEW_A] }), sentences, ["Does it hold at 600 K?"]);
+    const at = (text: string) => md.indexOf(text);
+
+    expect(at("## What is new here")).toBeGreaterThan(at(sentences.join(" ")));
+    expect(at("## Your questions")).toBeGreaterThan(at("## What is new here"));
+    expect(at("## What it proposes")).toBeGreaterThan(at("## Your questions"));
+    expect(sectionOf(md, "Your questions")).toBe("## Your questions\n\n- Does it hold at 600 K?\n\n");
+  });
+
+  it("leaves each result's own novelty line with its result, under the label it always had", () => {
+    const md = readingToMarkdown(normalPaper, reading, reportWith({ summary: SUMMARY, newHere: [NEW_A] }), sentences);
+
+    expect(count(md, `What is new here: ${NOVELTY}`)).toBe(1);
+    expect(sectionOf(md, "What they found, and how big")).toContain(`What is new here: ${NOVELTY}`);
+    expect(sectionOf(md, "What is new here")).not.toContain(NOVELTY);
   });
 });

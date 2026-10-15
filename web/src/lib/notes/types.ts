@@ -25,6 +25,23 @@ export type BlockType =
   | "divider"
   | "paper";
 
+/** P10-09a (ruling §1h.78 (f)): the passage a sticky note was taken on. It rides on the sticky's `h3` block
+ *  ("Note N") and is never a block's text, so no export carries it. */
+export interface NoteAnchor {
+  paperId: string;
+  /** The paper's paragraph, as `paragraphAnchor` writes it (`paper-section-1-p2`). */
+  paragraphId: string;
+  /** The passage's start, at most 300 characters: what the tag and the blue square stand for. */
+  quote: string;
+  /** The sticky's number in the paper's note; it never changes. */
+  n: number;
+  /** P10-09f (review 7.1c): where the words stand in the paragraph — character offsets, `start` inclusive and `end`
+   *  exclusive, in the paragraph's text as the body renders it. Both absent when the passage was not found whole in
+   *  the paragraph at creation: no mark is drawn then and the tag stands at the paragraph's end. */
+  start?: number;
+  end?: number;
+}
+
 export interface Block {
   id: string;
   type: BlockType;
@@ -38,6 +55,8 @@ export interface Block {
   cite?: string;
   /** A template's prompt, shown only while the block is empty. Never exported. */
   hint?: string;
+  /** A sticky note's heading ("Note N") carries the passage it was taken on. Never exported. */
+  anchor?: NoteAnchor;
 }
 
 export interface Source {
@@ -60,6 +79,8 @@ export interface Note {
   sources: Record<string, Source>;
   /** Set on a paper's own reading notes — the note its "Take notes" opens. */
   paperId?: string;
+  /** How many sticky notes this note has had; the next one is `stickyCount + 1`. */
+  stickyCount?: number;
   createdAt: string;
   updatedAt: string;
 }

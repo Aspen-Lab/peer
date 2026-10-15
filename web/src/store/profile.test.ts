@@ -5,6 +5,7 @@ import type { StateStorage } from "zustand/middleware";
 import { defaultProfile, type Paper, type UserProfile } from "@/types";
 import { cleanPreferenceLedger } from "@/lib/preferences/ledger";
 import { selectedSenseConcept } from "@/lib/feed/senses";
+import { localCalendarDate } from "@/lib/local-calendar-date";
 import {
   exportProfileDocument,
   migrateProfileStore,
@@ -14,65 +15,96 @@ import {
   useProfileStore,
 } from "./profile";
 
-type SurfaceTopicField =
-  | "eventRequiredTopics"
-  | "eventExploreTopics"
-  | "jobRequiredTopics"
-  | "jobExploreTopics";
-
 const profileFixture: UserProfile = {
   ...defaultProfile,
   researchTopics: ["paper-required"],
   softTopics: ["paper-explore"],
-  eventRequiredTopics: ["event-required"],
-  eventExploreTopics: ["event-explore"],
-  jobRequiredTopics: ["job-required"],
-  jobExploreTopics: ["job-explore"],
 };
 
-function expectOnlyTopicFieldChanged(
-  field: SurfaceTopicField,
-  update: (topics: string[]) => void,
-) {
-  const before = useProfileStore.getState().profile;
-  const next = [`next-${field}`];
+// The fields the profile used to hold for the events and jobs feeds, which are
+// stopped (P9-32, rulings 60). None is part of UserProfile any more.
+const LEGACY_PROFILE_KEYS = [
+  "eventRequiredTopics",
+  "eventExploreTopics",
+  "jobRequiredTopics",
+  "jobExploreTopics",
+  "adzunaAppId",
+  "adzunaAppKey",
+  "usajobsApiKey",
+  "usajobsUserAgent",
+] as const;
 
-  update(next);
+const LEGACY_STORE_ACTIONS = [
+  "updateEventTopics",
+  "updateEventSoftTopics",
+  "updateJobTopics",
+  "updateJobSoftTopics",
+  "updateAdzunaKeys",
+  "updateUsajobsKeys",
+] as const;
 
-  expect(useProfileStore.getState().profile).toEqual({
-    ...before,
-    [field]: next,
-  });
+// What a device saved before the feeds were stopped holds in `peer-profile`.
+function legacyProfileBlob(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    ...defaultProfile,
+    researchTopics: ["paper-required"],
+    softTopics: ["paper-explore"],
+    eventRequiredTopics: ["event-required"],
+    eventExploreTopics: ["event-explore"],
+    jobRequiredTopics: ["job-required"],
+    jobExploreTopics: ["job-explore"],
+    adzunaAppId: "adzuna-id",
+    adzunaAppKey: "adzuna-secret",
+    usajobsApiKey: "usajobs-secret",
+    usajobsUserAgent: "me@example.test",
+    careerStage: "Postdoc",
+    industryVsAcademia: "academia",
+    locationPreferences: ["Chicago"],
+    authorisedCountries: ["Canada"],
+    tavilyEnabled: true,
+    tavilyApiKey: "tvly-device-key",
+    activeSearchInputs: {
+      papers: { required: ["paper-required"], explore: ["paper-explore"] },
+      events: { required: ["event-required"], explore: ["event-explore"] },
+      jobs: { required: ["job-required"], explore: ["job-explore"] },
+      careerStage: "Postdoc",
+      locationPreferences: ["Chicago"],
+      promotedOn: "2026-10-01",
+    },
+    ...overrides,
+  };
 }
 
-describe("profile per-surface topic setters", () => {
+describe("the profile holds nothing for events and jobs (P9-32)", () => {
   beforeEach(() => {
-    useProfileStore.setState({
-      profile: {
-        ...profileFixture,
-        researchTopics: [...profileFixture.researchTopics],
-        softTopics: [...(profileFixture.softTopics ?? [])],
-        eventRequiredTopics: [...profileFixture.eventRequiredTopics],
-        eventExploreTopics: [...profileFixture.eventExploreTopics],
-        jobRequiredTopics: [...profileFixture.jobRequiredTopics],
-        jobExploreTopics: [...profileFixture.jobExploreTopics],
-      },
-    });
+    useProfileStore.setState({ profile: { ...profileFixture } });
   });
 
-  it("writes each Events and Jobs topic field without changing another field", () => {
-    const store = useProfileStore.getState();
+  it("defaultProfile has none of the event or job topic lists and none of the Adzuna or USAJobs credentials", () => {
+    for (const key of LEGACY_PROFILE_KEYS) {
+      expect(defaultProfile, key).not.toHaveProperty(key);
+    }
+  });
 
-    expectOnlyTopicFieldChanged(
-      "eventRequiredTopics",
-      store.updateEventTopics,
-    );
-    expectOnlyTopicFieldChanged(
-      "eventExploreTopics",
-      store.updateEventSoftTopics,
-    );
-    expectOnlyTopicFieldChanged("jobRequiredTopics", store.updateJobTopics);
-    expectOnlyTopicFieldChanged("jobExploreTopics", store.updateJobSoftTopics);
+  it("the store offers no setter for them", () => {
+    const state = useProfileStore.getState();
+    for (const action of LEGACY_STORE_ACTIONS) {
+      expect(state, action).not.toHaveProperty(action);
+    }
+  });
+
+  it("editing the paper topics writes the paper lists and no other list", () => {
+    const before = useProfileStore.getState().profile;
+
+    useProfileStore.getState().updateTopics(["next-required"]);
+    useProfileStore.getState().updateSoftTopics(["next-explore"]);
+
+    expect(useProfileStore.getState().profile).toEqual({
+      ...before,
+      researchTopics: ["next-required"],
+      softTopics: ["next-explore"],
+      feedIntent: undefined,
+    });
   });
 });
 
@@ -132,80 +164,144 @@ describe("work authorisation countries", () => {
 });
 
 describe("profile persistence migration", () => {
-  it("seeds empty per-surface fields from the v2 Papers topics", () => {
+  it("a v2 profile migrates with its Papers topics and its theme, and no event or job list is seeded from them", () => {
     const persistedV2 = {
       profile: {
         displayName: "Migrating member",
         researchTopics: ["solid-state battery"],
         softTopics: ["sodium-ion"],
-        eventRequiredTopics: [],
-        eventExploreTopics: [],
-        jobRequiredTopics: [],
-        jobExploreTopics: [],
         colorTheme: "lavender",
       },
     };
 
-    const migrated = migrateProfileStore(persistedV2, 2);
+    const migrated = migrateProfileStore(persistedV2) as {
+      profile: Record<string, unknown>;
+    };
 
     expect(migrated).toMatchObject({
       profile: {
         researchTopics: ["solid-state battery"],
         softTopics: ["sodium-ion"],
-        eventRequiredTopics: ["solid-state battery"],
-        eventExploreTopics: ["sodium-ion"],
-        jobRequiredTopics: ["solid-state battery"],
-        jobExploreTopics: ["sodium-ion"],
         colorTheme: "light:violet",
       },
     });
-    expect(migrateProfileStore(migrated, 2)).toEqual(migrated);
+    for (const key of LEGACY_PROFILE_KEYS) {
+      expect(migrated.profile, key).not.toHaveProperty(key);
+    }
+    expect(migrateProfileStore(migrated)).toEqual(migrated);
   });
 
-  it("does not overwrite user edits after the profile reaches v3", () => {
-    const migrated = migrateProfileStore(
-      {
-        profile: {
-          researchTopics: ["solid-state battery"],
-          softTopics: ["sodium-ion"],
-        },
-      },
-      2,
-    ) as { profile: Record<string, unknown> };
-    const editedV3 = {
-      ...migrated,
-      profile: {
-        ...migrated.profile,
-        eventRequiredTopics: ["electrochemistry conferences"],
-        eventExploreTopics: [],
-        jobRequiredTopics: ["battery scientist"],
-        jobExploreTopics: ["national laboratory"],
-      },
+  it("a v7 profile loses its event and job topic lists and its Adzuna and USAJobs credentials, however the reader had edited them, and keeps everything else", () => {
+    const migrated = migrateProfileStore({ profile: legacyProfileBlob() }) as {
+      profile: Record<string, unknown>;
     };
 
-    expect(migrateProfileStore(editedV3, 3)).toEqual(editedV3);
+    for (const key of LEGACY_PROFILE_KEYS) {
+      expect(migrated.profile, key).not.toHaveProperty(key);
+    }
+    expect(migrated.profile).toMatchObject({
+      researchTopics: ["paper-required"],
+      softTopics: ["paper-explore"],
+      careerStage: "Postdoc",
+      industryVsAcademia: "academia",
+      locationPreferences: ["Chicago"],
+      authorisedCountries: ["Canada"],
+      tavilyEnabled: true,
+      tavilyApiKey: "tvly-device-key",
+    });
+    expect(JSON.stringify(migrated)).not.toMatch(/event-required|job-required|adzuna-secret|usajobs-secret/);
+  });
+
+  it("a v7 profile's active snapshot keeps its Papers half and drops the events and jobs halves", () => {
+    const migrated = migrateProfileStore({ profile: legacyProfileBlob() }) as {
+      profile: { activeSearchInputs: Record<string, unknown> };
+    };
+
+    expect(migrated.profile.activeSearchInputs).toEqual({
+      papers: { required: ["paper-required"], explore: ["paper-explore"] },
+      careerStage: "Postdoc",
+      locationPreferences: ["Chicago"],
+      promotedOn: "2026-10-01",
+    });
+  });
+
+  it("does not touch the device's other keys (lastSynced, syncedAccountId) and does not edit what it was given", () => {
+    const persisted = {
+      profile: legacyProfileBlob(),
+      lastSynced: { displayName: "Alice", researchTopics: ["a"] },
+      syncedAccountId: "user-1",
+    };
+    const before = JSON.stringify(persisted);
+
+    const migrated = migrateProfileStore(persisted) as Record<string, unknown>;
+
+    expect(migrated.lastSynced).toEqual({ displayName: "Alice", researchTopics: ["a"] });
+    expect(migrated.syncedAccountId).toBe("user-1");
+    expect(JSON.stringify(persisted)).toBe(before);
   });
 
   it("defaults a v3 profile with no work-authorisation field to empty", () => {
     expect(
-      migrateProfileStore(
-        {
-          profile: {
-            displayName: "Existing member",
-          },
+      migrateProfileStore({
+        profile: {
+          displayName: "Existing member",
         },
-        3,
-      ),
+      }),
     ).toMatchObject({
       profile: {
         authorisedCountries: [],
       },
     });
   });
+
+  it("rehydrating a v7 blob from storage installs a profile with none of the legacy fields", async () => {
+    // The snapshot is today's, so hydration keeps it as the migration left it
+    // (promoteSearchInputs would otherwise rebuild it Papers-only on its own).
+    const todaysSnapshot = {
+      papers: { required: ["paper-required"], explore: ["paper-explore"] },
+      events: { required: ["event-required"], explore: ["event-explore"] },
+      jobs: { required: ["job-required"], explore: ["job-explore"] },
+      careerStage: "Postdoc",
+      locationPreferences: ["Chicago"],
+      promotedOn: localCalendarDate(),
+    };
+    let stored = JSON.stringify({
+      state: { profile: legacyProfileBlob({ activeSearchInputs: todaysSnapshot }) },
+      version: 7,
+    });
+    const storage: StateStorage = {
+      getItem: () => stored,
+      setItem: (_name, value) => {
+        stored = value;
+      },
+      removeItem: () => {
+        stored = "";
+      },
+    };
+    vi.stubGlobal("window", { localStorage: storage });
+    try {
+      vi.resetModules();
+      const mod = await import("./profile");
+      await mod.useProfileStore.persist.rehydrate();
+
+      const hydrated = mod.useProfileStore.getState().profile as unknown as Record<string, unknown>;
+      for (const key of LEGACY_PROFILE_KEYS) {
+        expect(hydrated, key).not.toHaveProperty(key);
+      }
+      expect(hydrated.researchTopics).toEqual(["paper-required"]);
+      expect(hydrated.activeSearchInputs).not.toHaveProperty("events");
+      expect(hydrated.activeSearchInputs).not.toHaveProperty("jobs");
+      // and what is written back holds none of it either
+      mod.useProfileStore.getState().updateDisplayName("Rewritten");
+      expect(stored).not.toMatch(/event-required|job-required|adzuna|usajobs|eventRequiredTopics|jobExploreTopics/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe("promoteSearchInputs", () => {
-  it("creates the active snapshot on first run", () => {
+  it("creates the active snapshot on first run: Papers only", () => {
     const promoted = promoteSearchInputs(
       profileFixture,
       new Date(2026, 6, 28, 8, 30),
@@ -215,14 +311,6 @@ describe("promoteSearchInputs", () => {
       papers: {
         required: ["paper-required"],
         explore: ["paper-explore"],
-      },
-      events: {
-        required: ["event-required"],
-        explore: ["event-explore"],
-      },
-      jobs: {
-        required: ["job-required"],
-        explore: ["job-explore"],
       },
       careerStage: profileFixture.careerStage,
       locationPreferences: profileFixture.locationPreferences,
@@ -238,8 +326,6 @@ describe("promoteSearchInputs", () => {
     const pendingEdit = {
       ...promoted,
       researchTopics: ["pending-paper-edit"],
-      eventRequiredTopics: ["pending-event-edit"],
-      jobRequiredTopics: ["pending-job-edit"],
     };
 
     expect(
@@ -256,10 +342,6 @@ describe("promoteSearchInputs", () => {
       ...firstDay,
       researchTopics: ["next-paper"],
       softTopics: ["next-paper-explore"],
-      eventRequiredTopics: ["next-event"],
-      eventExploreTopics: ["next-event-explore"],
-      jobRequiredTopics: ["next-job"],
-      jobExploreTopics: ["next-job-explore"],
       careerStage: "Postdoc",
       locationPreferences: ["Chicago"],
     };
@@ -272,18 +354,24 @@ describe("promoteSearchInputs", () => {
         required: ["next-paper"],
         explore: ["next-paper-explore"],
       },
-      events: {
-        required: ["next-event"],
-        explore: ["next-event-explore"],
-      },
-      jobs: {
-        required: ["next-job"],
-        explore: ["next-job-explore"],
-      },
       careerStage: "Postdoc",
       locationPreferences: ["Chicago"],
       promotedOn: "2026-07-29",
     });
+  });
+
+  it("writes a Papers-only snapshot even from a profile that still holds event and job topics", () => {
+    const legacy = {
+      ...profileFixture,
+      eventRequiredTopics: ["event-required"],
+      jobRequiredTopics: ["job-required"],
+    } as UserProfile;
+
+    const promoted = promoteSearchInputs(legacy, new Date(2026, 6, 28, 8, 30));
+
+    expect(promoted.activeSearchInputs).not.toHaveProperty("events");
+    expect(promoted.activeSearchInputs).not.toHaveProperty("jobs");
+    expect(JSON.stringify(promoted.activeSearchInputs)).not.toMatch(/event-required|job-required/);
   });
 });
 
@@ -301,14 +389,12 @@ describe("bootstrap promotion — first-time onboarding", () => {
       {
         ...firstOpen,
         researchTopics: ["battery"],
-        eventRequiredTopics: ["battery"],
-        jobRequiredTopics: ["battery"],
       },
       NOW,
     );
 
     expect(afterOnboarding.activeSearchInputs?.papers.required).toEqual(["battery"]);
-    expect(afterOnboarding.activeSearchInputs?.events.required).toEqual(["battery"]);
+    expect(afterOnboarding.activeSearchInputs).not.toHaveProperty("events");
   });
 
   it("still refuses a same-day promotion once real inputs exist", () => {
@@ -942,17 +1028,23 @@ describe("a backup file carries no credential", () => {
     displayName: "Peter",
     researchTopics: ["LCO"],
     tavilyApiKey: "tvly-secret",
-    adzunaAppId: "adzuna-id",
-    adzunaAppKey: "adzuna-secret",
-    usajobsApiKey: "usajobs-secret",
-    usajobsUserAgent: "me@example.test",
     feedAiProvider: "openai",
     feedAiApiKey: "sk-secret",
     jevApiKey: JEV,
   };
+  // The Adzuna and USAJobs credentials are no longer part of UserProfile, but a
+  // profile saved on a device before can still hold them: the export strips
+  // them by name all the same.
+  const legacyCredentialProfile = {
+    ...credentialProfile,
+    adzunaAppId: "adzuna-id",
+    adzunaAppKey: "adzuna-secret",
+    usajobsApiKey: "usajobs-secret",
+    usajobsUserAgent: "me@example.test",
+  } as UserProfile;
 
   it("exportProfileDocument leaves out the Jev key, the model key and every other credential-like field", () => {
-    const document = exportProfileDocument(credentialProfile);
+    const document = exportProfileDocument(legacyCredentialProfile);
     for (const field of [
       "jevApiKey",
       "feedAiApiKey",
@@ -968,6 +1060,8 @@ describe("a backup file carries no credential", () => {
     expect(serialized).not.toContain(JEV);
     expect(serialized).not.toContain("sk-secret");
     expect(serialized).not.toContain("tvly-secret");
+    expect(serialized).not.toContain("adzuna-secret");
+    expect(serialized).not.toContain("usajobs-secret");
   });
 
   it("still exports everything else, and does not edit the profile it was given", () => {

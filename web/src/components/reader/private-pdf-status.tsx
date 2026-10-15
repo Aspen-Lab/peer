@@ -19,16 +19,20 @@ export function PrivatePdfStatus({ upload, onDeleted, attachedToTitle }: {
   return <div className="mt-3 font-sans text-caption text-text-muted">
     {attachedToTitle && <p className="text-text">Attached to: {attachedToTitle}</p>}
     <p>Private PDF · retained for 30 days after upload · keywords inform your recommendations.</p>
-    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+    {/* P9-23 (A P9-W2's N5): 184 × 16 and 57 × 16 px on a phone. Where there
+     * is no hover each action takes the shell's touch rule — 44 px tall, as
+     * notes-button.tsx and reader-tabs.tsx — with 8 px between them when the
+     * row wraps; with a mouse it is the row it was. */}
+    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 [@media(hover:none)]:gap-y-2">
       {/* 9-24 (A9-12): a ledger-only undo, separate from deleting the file —
        * "this doesn't represent me" without giving up the private PDF. */}
       {documentKey && (
-        <button type="button" className="underline underline-offset-4 hover:text-heading"
+        <button type="button" className="underline underline-offset-4 hover:text-heading [@media(hover:none)]:min-h-11"
           onClick={() => forget(documentKey)}>
           Forget what Peer learned from this
         </button>
       )}
-      <button type="button" disabled={busy} className="underline underline-offset-4 hover:text-red"
+      <button type="button" disabled={busy} className="underline underline-offset-4 hover:text-red [@media(hover:none)]:min-h-11"
         onClick={async () => {
           setBusy(true); setError(null);
           try {

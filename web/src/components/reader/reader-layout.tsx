@@ -1,32 +1,104 @@
 "use client";
 
 // Arranges the reader's blocks — it renders none of them. Below xl the
-// children come back as a fragment in the spec's order, so the DOM is
-// today's; from xl they are placed on the spread: plate, title and decision
-// in the panel, the words, the additions and the Next row in the column.
-// The block order, strings and type are untouched; only the place. The rail
-// is not a block any more: position and the way back live in the shell.
+// children come back as a fragment, from xl they are placed on the spread:
+// plate, title, decision and tab strip in the panel, the common blocks, the
+// active tab's blocks and the Next row in the column. The block order, strings
+// and type are untouched; only the place. The rail is not a block any more:
+// position and the way back live in the shell.
+//
+// P7-14 (R2, Q1): the decision block — the commands: "Read it here", Save,
+// Copy — follows the title in BOTH layouts, before the abstract and before
+// the question box. It used to follow the abstract below xl, so that a screen
+// reader would meet the abstract first; the owner asked for the commands
+// directly under the title and answered that the narrow layout is no
+// exception. The DOM order is the visual order.
+//
+// P7-14 (R10): a paper Peer has read in full has two tabs, "Summary" and
+// "Paper digestion". The page hands this file the strip (`tabs`), the blocks
+// both tabs share (`common`: "Before you read" and the answers); the
+// active tab's blocks are `words` and `additions` as before, in one tabpanel. `common` is built here from its slot alone and drawn BEFORE
+// the panel, outside it, in both layouts — it never reads the tab, so a
+// switch cannot remount the question field or lose what the reader typed.
+//
+// P9-04 (X3): in one column the tab strip stands directly above its tabpanel. The order is plate,
+// title, decision, the common blocks, the strip, the panel, Next: on a phone the strip used
+// to stand under the decision, with the question box and more (about 2,000 px) between it and the
+// panel it switches. The spread is unchanged: there the strip is in the panel beside the column, a
+// remote control for the column by design (R10).
+//
+// P9-04 (X2): the panel scrolls as one. The panel, bounded by the window in `reader-panel` (globals.css),
+// is the one scroll region, and nothing inside it scrolls on its own. (P10-04b: now the sticky part, below.)
+//
+// P10-02 (ruling §1h.78): the paper's terms strip, which stood in the panel under the tab strip (after
+// the common blocks in one column), is deleted, and with it its `terms` slot. The paper's own definitions
+// still feed "Explain this" and the plate; they are not a block of this layout.
+//
+// P10-04 (review 3.1; A8): the reading map stands directly under the strip — in the panel on the spread, so
+// it floats with the strip (the panel is the sticky, window-bounded scroll region) and scrolls inside the
+// panel when it is taller than the window; in one column between the strip and the tabpanel, with no
+// stickiness there. It is a slot of its own, outside the tabpanel: under both tabs, never remounted by a
+// switch, and nothing of it is duplicated in the column.
+//
+// P10-04b (A8, X-A1; ruling §1h.87 (a)): the panel is split. At 1440 x 1000 the plate, the six-line title and the
+// decision block filled 760 of the sticky panel's 892 px, so no row of the map was in view; the owner's A8 wants
+// the map to float so that "wherever the reader is" it can be used. Now the head (plate, title, decision) is in
+// normal flow and scrolls away with the page, and the sticky part is the strip and the map (`PANEL_STICKY_CLASS`):
+// under the masthead at every scroll past the head, window-bounded, the map scrolling inside it only when it is
+// taller than the room. This supersedes P9-04's "the panel scrolls as one" for the head: the panel has no scroll
+// region of its own any more. The DOM order is unchanged; for a paper with no strip and no map the head is the
+// sticky part, as the whole panel was.
 //
 // The structure is chosen in JS rather than with `display: contents` and
-// `order`, because a CSS re-ordering would have a screen reader announce
-// the decision before the abstract on a phone. Crossing 80rem remounts the
-// blocks (the authors toggle resets); a window resize across the
-// breakpoint is rare and gets no transition.
+// `order`, so what a screen reader announces is what the page shows. Crossing
+// 80rem remounts the blocks (the authors toggle resets); a window resize
+// across the breakpoint is rare and gets no transition.
 
-import { useEffect, useRef, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { fitZoom, READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
-import { COLUMN_CLASS, PANEL_CLASS, SPREAD_GRID, SPREAD_QUERY } from "./spread";
+import { TABPANEL_ID, tabId } from "./reader-tabs";
+import { COLUMN_CLASS, PANEL_CLASS, PANEL_STICKY_CLASS, PANEL_TAIL_CLASS, SPREAD_GRID, SPREAD_QUERY } from "./spread";
+import type { ReaderTab } from "./use-reader-tab";
+
+/** The id of the wrapper that holds the blocks both tabs share. */
+export const COMMON_ID = "reader-common";
+
+/**
+ * Where a tab the reader picks starts, once its blocks are on the page: the page goes there only if it has
+ * scrolled off the top. On the spread the column opens with the common blocks, so that is the start (the
+ * panel when there are none). In one column (P9-04, X3) the common blocks stand ABOVE the strip and the
+ * panel directly below it, so the start is the panel — `scroll-mt-20` leaves the strip in view above it —
+ * and never the common blocks: a pick made at the strip must not throw the page back up to them.
+ * `doc` is the document (a stub in the tests).
+ */
+export function scrollToTabStart(spread: boolean, doc: Pick<Document, "getElementById">): void {
+  const start = (spread ? doc.getElementById(COMMON_ID) : null) ?? doc.getElementById(TABPANEL_ID);
+  if (start && start.getBoundingClientRect().top < 0) start.scrollIntoView({ block: "start" });
+}
 
 interface ReaderLayoutProps {
   /** From `useSpread()`; the page owns it so its own effects can depend on it. */
   spread: boolean;
   plate: ReactNode;
   title: ReactNode;
-  words: ReactNode;
+  /** The commands, then the sentence — straight after the title in both
+   *  layouts (P7-14, R2 + Q1). */
   decision: ReactNode;
-  /** The paper's contents, in the panel under the decision — spread only;
-   *  below it the paper's own block prints the same list. */
-  contents?: ReactNode;
+  /** P7-14 (R10): the Summary / Paper digestion strip. Under the decision block in the
+   *  spread's panel; in one column (P9-04) directly above the tabpanel it switches.
+   *  Present only on a paper Peer has read in full; its presence is what makes
+   *  `words` and `additions` a tabpanel. */
+  tabs?: ReactNode;
+  /** P10-04 (review 3.1): the reading map. Directly under the strip in the spread's panel (it floats with
+   *  the strip and scrolls inside the panel); in one column between the strip and the tabpanel. Under both
+   *  tabs, outside the tabpanel. */
+  map?: ReactNode;
+  /** The tab on show, for the tabpanel's label. */
+  tab?: ReaderTab;
+  /** The blocks both tabs share ("Before you read" and the answers), above the
+   *  active tab's blocks in the column. Q6: one state, never remounted by a tab. */
+  common?: ReactNode;
+  words: ReactNode;
   additions: ReactNode;
   next: ReactNode;
 }
@@ -99,7 +171,6 @@ export function usePageZoom(): number {
 }
 
 export function ReaderLayout(p: ReaderLayoutProps) {
-  const panelRef = useRef<HTMLDivElement>(null);
   // S15/S21: read here, not threaded as a prop from page.tsx — this file
   // already self-contains its other layout-affecting state (`useSpread`),
   // so the reading-size scale follows the same shape. Sets --reading-scale
@@ -110,43 +181,67 @@ export function ReaderLayout(p: ReaderLayoutProps) {
   const readingScale = useResolvedReadingScale();
   const readingScaleStyle = { "--reading-scale": readingScale } as CSSProperties;
 
-  // The panel's height, for the sticky rule: a panel taller than the
-  // viewport pins by its bottom so the decision stays and the plate scrolls
-  // away. Written as `--panel-h` — keep that name: `globals.css` gives every
-  // inline variable whose name contains `--i` a stagger delay.
-  useEffect(() => {
-    const el = panelRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => {
-      el.style.setProperty("--panel-h", `${el.offsetHeight}px`);
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [p.spread]);
+  // P7-14 (R2): no panel-height measuring. The panel pins by its top
+  // (`globals.css`, `reader-panel`); it used to measure itself so that a panel
+  // taller than the window could pin by its bottom and keep the decision in view.
+
+  const tabbed = p.tabs !== undefined && p.tabs !== null;
+  // P10-04b: the strip and the map are the spread panel's sticky part; with neither, the head is.
+  const tail = tabbed || (p.map !== undefined && p.map !== null);
+  // Built from the slot alone — the tab is not read here, on purpose (see the header).
+  const common = p.common ? (
+    <div id={COMMON_ID} className="reading-scaled scroll-mt-20" style={readingScaleStyle}>{p.common}</div>
+  ) : null;
+  const blocks = (
+    <>
+      <div className="reading-scaled" style={readingScaleStyle}>{p.words}</div>
+      <div className="reading-scaled" style={readingScaleStyle}>{p.additions}</div>
+    </>
+  );
 
   if (!p.spread) {
-    // Today's DOM, byte for byte except for the two new scale wrappers:
-    // spec order, fragments flatten. `decision` sits between `words` and
-    // `additions` here (screen-reader order), so each gets its own thin
-    // wrapper rather than one shared one around both.
+    // One column: the blocks in reading order. `words` and `additions` each get
+    // a thin scale wrapper of their own — the decision and the strip are not scaled.
+    const panel = tabbed ? (
+      // `flow-root`: the first block's own top gap (the map's 24px, a band's 48px) stays inside the panel
+      // instead of collapsing out through it, so the panel's box begins at the strip's foot (P9-04, X3).
+      <div role="tabpanel" id={TABPANEL_ID} aria-labelledby={p.tab ? tabId(p.tab) : undefined} className="scroll-mt-20 flow-root">{blocks}</div>
+    ) : (
+      blocks
+    );
     return (
       <>
         {p.plate}
         {p.title}
-        <div className="reading-scaled" style={readingScaleStyle}>{p.words}</div>
         {p.decision}
-        <div className="reading-scaled" style={readingScaleStyle}>{p.additions}</div>
+        {common}
+        {/* P9-04 (X3): the strip stands directly above the panel it switches (`aria-controls`),
+            after the blocks both tabs share — not four screens above it. */}
+        {p.tabs}
+        {/* P10-04 (review 3.1): the map, directly under the strip it stands with and above the panel it
+            helps the reader move through; outside the panel, so it shows under both tabs. */}
+        {p.map}
+        {panel}
         {p.next}
       </>
     );
   }
 
+  // The same, in the column: a flex column, so the Next row can take the free space.
+  const panel = tabbed ? (
+    <div role="tabpanel" id={TABPANEL_ID} aria-labelledby={p.tab ? tabId(p.tab) : undefined} className="scroll-mt-20 xl:flex xl:flex-col">
+      {blocks}
+    </div>
+  ) : (
+    blocks
+  );
+
   return (
-    // S20: `--reading-scale` set here too, not only on the two `words`/
+    // S20: `--reading-scale` set here too, not only on the `words`/
     // `additions` wraps below — `grid-template-columns` (spread.ts) is a
     // regular property, not a custom one, so its own `var()` resolves fresh
     // per element from whatever is inherited AT THAT ELEMENT. The grid div
-    // is an ancestor of the two existing wraps, not a descendant, so it
+    // is an ancestor of the existing wraps, not a descendant, so it
     // needs the variable set on itself; `readingScaleStyle` is the same
     // constant those wraps already use, reused rather than duplicated.
     <div className={SPREAD_GRID} style={readingScaleStyle}>
@@ -154,15 +249,39 @@ export function ReaderLayout(p: ReaderLayoutProps) {
           Fit's own DOM query to [data-zoom-root], see usePageZoom above) —
           left on the element as a stable selector future code may still
           want, costs nothing to keep. */}
-      <div ref={panelRef} className={PANEL_CLASS} data-reader-panel="">
-        {p.plate}
-        {p.title}
-        {p.decision}
-        {p.contents}
+      <div className={PANEL_CLASS} data-reader-panel="">
+        {tail ? (
+          <>
+            {/* P10-04b (A8, X-A1): the head — plate, title, decision — is in normal flow and scrolls away
+                with the page. */}
+            {p.plate}
+            {p.title}
+            {p.decision}
+            {/* The holder is the sticky part's containing block: it takes the rest of the panel's height
+                (which is the column's), and carries the strip's 32px gap, so the margin is not the sticky
+                element's own. */}
+            <div className="xl:mt-8 xl:flex-1">
+              {/* The strip and the map (P10-04) stay under the masthead while the reader scrolls the column;
+                  the map scrolls inside when it is taller than the window's remaining height. */}
+              <div className={PANEL_TAIL_CLASS} data-reader-sticky="">
+                {p.tabs}
+                {p.map}
+              </div>
+            </div>
+          </>
+        ) : (
+          // No strip and no map (a paper with no body): there is nothing to float but the head, so the head is
+          // the sticky part, as the whole panel was.
+          <div className={PANEL_STICKY_CLASS} data-reader-sticky="">
+            {p.plate}
+            {p.title}
+            {p.decision}
+          </div>
+        )}
       </div>
       <div className={COLUMN_CLASS}>
-        <div className="reading-scaled" style={readingScaleStyle}>{p.words}</div>
-        <div className="reading-scaled" style={readingScaleStyle}>{p.additions}</div>
+        {common}
+        {panel}
         {/* Takes the free space on a page shorter than the panel, so the row
             sits bottom-right level with the DOI line; on a long page it is
             simply last. Never at the top — full text arriving later must

@@ -1,3 +1,5 @@
+> Jobs and events were removed from Peer; this file is history.
+
 # Event & job relevance architecture
 
 How Peer decides which conferences and job postings to show. This surface was

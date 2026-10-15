@@ -6,9 +6,9 @@ import { compileSearchBrief } from "@/lib/feed/profile-compiler";
 import { derivePoolCacheKey } from "@/lib/opportunities/pool-cache";
 
 const doc = { title: "Solid electrolytes for lithium metal batteries", source: "pdf" as const, figureCaptions: [], sections: [
-  { heading: "Abstract", canonical: "abstract", text: "Solid electrolytes improve lithium metal batteries. Solid electrolytes support lithium transport." },
-  { heading: "Methods", canonical: "methods", text: "Impedance spectroscopy measures lithium transport. Impedance spectroscopy measures conductivity." },
-  { heading: "References", canonical: "references", text: "Marine biology. Marine biology. Marine biology. Marine biology." },
+  { id: "s0", heading: "Abstract", canonical: "abstract", text: "Solid electrolytes improve lithium metal batteries. Solid electrolytes support lithium transport." },
+  { id: "s1", heading: "Methods", canonical: "methods", text: "Impedance spectroscopy measures lithium transport. Impedance spectroscopy measures conductivity." },
+  { id: "s2", heading: "References", canonical: "references", text: "Marine biology. Marine biology. Marine biology. Marine biology." },
 ] };
 const key = "a".repeat(64);
 const at = "2026-09-19T00:00:00Z";
@@ -95,8 +95,8 @@ describe("upload concept extraction quality (9-21)", () => {
     source: "pdf",
     figureCaptions: [],
     sections: [
-      { heading: "Abstract", canonical: "abstract", text: "Perovskite oxide cathodes improve solid state batteries. Perovskite oxide cathodes show high conductivity." },
-      { heading: "Methods", canonical: "methods", text: "X-ray diffraction confirms the perovskite oxide structure. X-ray diffraction measures three distinct phases. There are three phases in total; each of the three phases was indexed separately." },
+      { id: "s0", heading: "Abstract", canonical: "abstract", text: "Perovskite oxide cathodes improve solid state batteries. Perovskite oxide cathodes show high conductivity." },
+      { id: "s1", heading: "Methods", canonical: "methods", text: "X-ray diffraction confirms the perovskite oxide structure. X-ray diffraction measures three distinct phases. There are three phases in total; each of the three phases was indexed separately." },
     ],
   };
 
@@ -118,8 +118,8 @@ describe("upload concept extraction quality (9-21)", () => {
     source: "pdf",
     figureCaptions: [],
     sections: [
-      { heading: "Abstract", canonical: "abstract", text: "Graph neural network models improve node classification. Graph neural network models beat prior benchmark algorithms." },
-      { heading: "Results", canonical: "results", text: "Our benchmark algorithm improves accuracy on four nodes. Each of the four nodes was tested twice; all four nodes converged. Nodes were checked for stability, and the nodes held up under load." },
+      { id: "s0", heading: "Abstract", canonical: "abstract", text: "Graph neural network models improve node classification. Graph neural network models beat prior benchmark algorithms." },
+      { id: "s1", heading: "Results", canonical: "results", text: "Our benchmark algorithm improves accuracy on four nodes. Each of the four nodes was tested twice; all four nodes converged. Nodes were checked for stability, and the nodes held up under load." },
     ],
   };
 
@@ -144,7 +144,7 @@ describe("upload concept extraction quality (9-21)", () => {
     source: "pdf",
     figureCaptions: [],
     sections: [
-      { heading: "Abstract", canonical: "abstract", text: "Layered nickel rich cathode materials show improved thermal stability. Layered nickel rich cathode materials retain capacity." },
+      { id: "s0", heading: "Abstract", canonical: "abstract", text: "Layered nickel rich cathode materials show improved thermal stability. Layered nickel rich cathode materials retain capacity." },
     ],
   };
 
@@ -161,8 +161,8 @@ describe("upload concept extraction quality (9-21)", () => {
     source: "pdf",
     figureCaptions: [],
     sections: [
-      { heading: "Abstract", canonical: "abstract", text: "Lithium metal anode protection reduces dendrite growth. Lithium metal anode protection improves cycling." },
-      { heading: "References", canonical: "references", text: "Quantum computing algorithms. Quantum computing algorithms. Quantum computing algorithms for optimization." },
+      { id: "s0", heading: "Abstract", canonical: "abstract", text: "Lithium metal anode protection reduces dendrite growth. Lithium metal anode protection improves cycling." },
+      { id: "s1", heading: "References", canonical: "references", text: "Quantum computing algorithms. Quantum computing algorithms. Quantum computing algorithms for optimization." },
     ],
   };
 
@@ -170,5 +170,73 @@ describe("upload concept extraction quality (9-21)", () => {
     const concepts = extractUploadConcepts(referenceDecoyDoc);
     expect(concepts.some((c) => c.label.includes("quantum"))).toBe(false);
     expect(concepts.some((c) => c.label.includes("lithium metal anode"))).toBe(true);
+  });
+});
+
+describe("the extraction version keys the cached reading of an upload (P7-11)", () => {
+  // A laptop that pulled P7-10 and opened the owner's paper holds the text read
+  // at version 3: citation numbers glued to words, the date box in the
+  // Introduction, notation lifted out as equations. 4 retires it, so the paper
+  // is read again under the hygiene rules.
+  it("is past the reading that kept citation numbers, the date box and notation torn from sentences", () => {
+    expect(UPLOAD_CONCEPT_EXTRACTION_VERSION).toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe("the extraction version after the end matter and the bucket rules (P7-18)", () => {
+  // A laptop that pulled P7-11 and opened the owner's paper holds the text read at version 4: the
+  // author-affiliation fragments as thirteen sections, and 2.1–2.5 and 4.1–4.5 filed `body`, so the
+  // page said "no methods section". 5 retires it, and the paper is read again under the new rules.
+  it("is past the reading that kept the end matter in the body and lost the subsections' buckets", () => {
+    expect(UPLOAD_CONCEPT_EXTRACTION_VERSION).toBeGreaterThanOrEqual(5);
+  });
+
+  it("is the number the server's cache of an upload's text is keyed by", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const source = await readFile(new URL("../papers/full-text.ts", import.meta.url), "utf8");
+    expect(source).toContain("uploadDocKey(meta.ownerKey ?? \"\", hash16, meta.revision, UPLOAD_CONCEPT_EXTRACTION_VERSION)");
+  });
+});
+
+describe("the extraction version after the numbered-equation and glyph rules (P8-03)", () => {
+  // A laptop that pulled P7-18 and opened the owner's paper holds the text read at version 5: nineteen
+  // sentence fragments lifted out as "equations", and an end-matter heading behind a box or bullet glyph
+  // ("■ ACKNOWLEDGMENTS") read as a section, with the apparatus after it. 6 retires it, and the paper is
+  // read again under the numbered-equation and glyph rules.
+  it("is past the reading that lifted unnumbered symbol lines as equations and missed a glyph-led end-matter heading", () => {
+    expect(UPLOAD_CONCEPT_EXTRACTION_VERSION).toBeGreaterThanOrEqual(6);
+  });
+});
+
+describe("the extraction version after the empty numbered parent is kept (P10-04)", () => {
+  // Text read under 9 has no section for "2. RESULTS AND DISCUSSION" (a numbered heading holding only its
+  // subsections was dropped), so the map showed no group row. 10 retires it, and the paper is read again.
+  it("is past the reading that dropped an empty numbered parent", () => {
+    expect(UPLOAD_CONCEPT_EXTRACTION_VERSION).toBeGreaterThanOrEqual(10);
+  });
+});
+
+describe("the extraction version after the running-head and page-break rules and the figure sizes (P10-33, P10-34)", () => {
+  // Text read under 10 drops a paragraph whose words repeat a running head, joins two paragraphs across a page break
+  // where the first had ended its sentence, and carries no figure sizes; 11 retires it, and the paper is read again.
+  // A saved note keeps its passage through the new split by its quote (P10-35).
+  it("is past the reading that dropped repeating paragraphs and carried no figure sizes", () => {
+    expect(UPLOAD_CONCEPT_EXTRACTION_VERSION).toBeGreaterThanOrEqual(11);
+  });
+});
+
+describe("the extraction version after a PMC section's nested subsections are kept (P10-40)", () => {
+  // Text read under 11 folds a PMC section's first nested subsection into its parent; 12 retires it, and the paper is
+  // read again. A saved note keeps its passage through the new split by its quote (P10-35).
+  it("is past the reading that folded a nested PMC subsection into its parent", () => {
+    expect(UPLOAD_CONCEPT_EXTRACTION_VERSION).toBeGreaterThanOrEqual(12);
+  });
+});
+
+describe("the extraction version after a cut sentence is joined across a page break or a figure (P10-42)", () => {
+  // Text read under 12 breaks a sentence with no full stop where a page break or a floating figure falls and the next
+  // line opens with a capital (round 4's X-A9); 13 retires it. A saved note keeps its passage by its quote (P10-35).
+  it("is past the reading that cut a sentence at a capital after a page break or a figure", () => {
+    expect(UPLOAD_CONCEPT_EXTRACTION_VERSION).toBeGreaterThanOrEqual(13);
   });
 });

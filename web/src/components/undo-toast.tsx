@@ -1,17 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Paper, Event, Job } from "@/types";
 import { useFeedStore } from "@/store/feed";
-
-function titleOf(
-  kind: "paper" | "event" | "job",
-  item: Paper | Event | Job,
-): string {
-  if (kind === "paper") return (item as Paper).title;
-  if (kind === "event") return (item as Event).name;
-  return (item as Job).roleTitle;
-}
 
 export function UndoToast() {
   const pending = useFeedStore((s) => s.pendingDismissal);
@@ -41,7 +31,7 @@ export function UndoToast() {
 
   if (!pending) return null;
 
-  const title = titleOf(pending.kind, pending.item);
+  const title = pending.item.title;
   const shortTitle = title.length > 48 ? `${title.slice(0, 46)}…` : title;
 
   return (

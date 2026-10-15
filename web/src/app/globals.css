@@ -293,6 +293,33 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; }
      is a tokenization, not a visual change. */
   --color-positive: #047857;
   --color-positive-strong: #065f46;
+  /* P1-05 (reading helper §1f.13–14): the route's tints — how a section
+     answers the reader's questions, drawn behind its row in the contents,
+     its heading in the body and its line in the map. A second hue in a
+     monochrome theme, by the author's explicit request (2026-10-05), and
+     confined to these three tokens: a background only, never a text colour,
+     never used for anything else. P10-06 (review 3.2): three greens ordered by
+     how much a section says about the question — strong the deepest, faint the
+     lightest (relative luminance .78 / .86 / .89) — and a fourth, a cooler
+     green, for the model's background marks. The palette's muted text is
+     ≥ 4.5:1 on each (4.55 / 4.99 / 5.17 / 4.80), the heading text ≥ 9:1. P10-26: the
+     faint green a step darker (#eff9f3 → #e9f6ef) so that it can be seen — 1.03:1 → 1.065:1 against the page. */
+  --color-route-strong: #cbedd8;
+  --color-route-medium: #dff4e8;
+  --color-route-faint: #e9f6ef;
+  --color-route-background: #dbefea;
+  /* P10-09f (review 7.1c): the highlighter — the words a sticky note was taken on stay marked in the paper. A pale
+     yellow, none of the route's greens, a background only; the paragraph's own ink stays on it (P10-46: a step paler,
+     #fcee9e → #fdf0a6, so that the nested shade stands off it — muted #666 4.97:1, heading #1d1d1d 14.6:1; 1.106:1
+     against the page). */
+  --color-note-mark: #fdf0a6;
+  /* P10-20: the second shade of the highlighter — a note taken inside another note's words is a mark inside its mark,
+     a little deeper and warmer (muted #666 4.53:1, heading #1d1d1d 13.3:1); a background only, read by the body's nested
+     note `<mark>`. P10-46: 1.097:1 against the highlighter above (it was 1.077:1, a faint step). */
+  --color-note-nested: #fbe48d;
+  /* P10-46 (BACKLOG-70): the blue of the anchor square (the small button that scrolls the paper to a note's passage), a token
+     where it was a literal `#3b82f6` in `note-tags.tsx`; one blue that reads on this ground (≥ 3:1 against the page). */
+  --color-anchor: #3b82f6;
   --color-border: color-mix(in srgb, var(--color-heading) 6%, transparent);
   --color-border-strong: color-mix(in srgb, var(--color-heading) 12%, transparent);
   --color-skeleton-base: color-mix(in srgb, var(--color-heading) 5%, transparent);
@@ -337,6 +364,21 @@ html[data-mode="dark"] {
      requires. */
   --color-positive: #047857;
   --color-positive-strong: #065f46;
+  /* P1-05: the route's tints on the dark ground — low-luminance greens,
+     strong the furthest from the ground (P10-06: strong / medium / faint at
+     relative luminance .046 / .032 / .021, background a cooler green at .035);
+     muted text stays ≥ 4.5:1 on each (4.65 / 5.45 / 6.32 / 5.27). */
+  --color-route-strong: #1d4430;
+  --color-route-medium: #19382a;
+  --color-route-faint: #152c21;
+  --color-route-background: #173a36;
+  /* P10-09f: the highlighter on the dark ground (muted #a9a9a9 4.87:1, heading #f3f3f3 10.3:1). */
+  --color-note-mark: #403a14;
+  /* P10-20: the nested mark on the dark ground, a little deeper than the highlighter (muted #a9a9a9 5.61:1). */
+  --color-note-nested: #3a2f10;
+  /* P10-46 (BACKLOG-70): the blue of the anchor square (the small button that scrolls the paper to a note's passage), a token
+     where it was a literal `#3b82f6` in `note-tags.tsx`; one blue that reads on this ground (≥ 3:1 against the page). */
+  --color-anchor: #3b82f6;
   --color-border: rgba(255, 255, 255, 0.09);
   --color-border-strong: rgba(255, 255, 255, 0.17);
   --color-skeleton-base: rgba(255, 255, 255, 0.05);
@@ -380,6 +422,18 @@ html[data-mode="dark"] {
      block's own "identical to the block above" comment. */
   --color-positive: #047857;
   --color-positive-strong: #065f46;
+  /* P1-05: the route's tints, as in the explicit-dark block above. */
+  --color-route-strong: #1d4430;
+  --color-route-medium: #19382a;
+  --color-route-faint: #152c21;
+  --color-route-background: #173a36;
+  /* P10-09f: the highlighter on the dark ground (muted #a9a9a9 4.87:1, heading #f3f3f3 10.3:1). */
+  --color-note-mark: #403a14;
+  /* P10-20: the nested mark on the dark ground, a little deeper than the highlighter (muted #a9a9a9 5.61:1). */
+  --color-note-nested: #3a2f10;
+  /* P10-46 (BACKLOG-70): the blue of the anchor square (the small button that scrolls the paper to a note's passage), a token
+     where it was a literal `#3b82f6` in `note-tags.tsx`; one blue that reads on this ground (≥ 3:1 against the page). */
+  --color-anchor: #3b82f6;
   --color-border: rgba(255, 255, 255, 0.09);
   --color-border-strong: rgba(255, 255, 255, 0.17);
   --color-skeleton-base: rgba(255, 255, 255, 0.05);
@@ -481,52 +535,83 @@ html[data-mode="dark"] {
   backdrop-filter: blur(18px) saturate(1.25);
 }
 
-/* The reading spread's left panel (≥ xl). Pinned by its top while it fits
-   under the chrome; when it is taller than the viewport it pins by its
-   bottom instead, so the plate scrolls away and the decision stays.
+/* P10-04b (A8, X-A1): this utility is the panel's STICKY PART, not the whole
+   panel. The panel itself (`PANEL_CLASS`, spread.ts) stretches over the row
+   and is not sticky; its head — the plate, the title, the decision block —
+   is in normal flow and scrolls away with the page; the part below is this
+   utility: the Summary / Paper digestion strip and the reading map (or, for
+   a paper with no body, the head), pinned under the masthead, the window's
+   height at most, and the map — `overflow-y: auto` on its own section —
+   scrolling inside it when it is taller than the room. The old reading
+   (the panel pinned as one, 760 of its 892px taken by the head, no row of the
+   map in view on arrival) is below, as it was written.
+
+   The reading spread's left panel (≥ xl), pinned by its top: the plate, the
+   title, the decision block (the commands, then the sentence, the reading
+   controls and the DOI), the Summary / Paper digestion tabs and the Terms
+   strip. P7-14 (R2): the question box and the map moved to the column, so the
+   panel pins at `top: 4rem` and nothing measures it. (It used to pin by its
+   BOTTOM once it was taller than the window, so that the decision, then at its
+   end, stayed in view while the plate scrolled away; that took a ResizeObserver
+   and `--panel-h`, and is gone.)
    4rem = the article's xl top padding, so the stuck position is the
    first-paint position and the panel never slides; the masthead is 48px
    and never taller (its scrolled state changes background only), so it is
-   cleared with 16px to spare. 1.5rem keeps the
-   DOI line 24px above the viewport edge in bottom-stick mode. min(), not
-   max(): with max() a short panel would be pushed down at scroll 0.
-   --panel-h is written by a ResizeObserver; until it runs, 0px makes the
-   min() resolve to 4rem — a plain top-stick, never a broken first paint.
-   Desktop-only, so vh, no dvh. Any ancestor with an overflow other than
-   visible silently kills the sticky — main, the article and the grid
-   wrapper must keep it.
+   cleared with 16px to spare. Desktop-only. Any ancestor with an overflow
+   other than visible silently kills the sticky — main, the article and the
+   grid wrapper must keep it.
+
+   A panel pinned by its top has no way to show what is below the window, so
+   the panel is the window's height at most, and it scrolls as one (P9-04,
+   X2): nothing inside it scrolls on its own. The terms strip used to be a
+   flex item that shrank to a 112px window and scrolled inside itself (one of
+   eight terms in view, a scroll region inside the panel's own); it is an
+   ordinary block now, so when the blocks together are taller than the window
+   the panel scrolls, with a thin bar, and the last term is reached by
+   scrolling it. The 6px of side padding, taken back by the negative margin,
+   is the room the focus ring (2px + 3px offset) needs inside the scroll
+   port; it moves nothing.
 
    Ruling 19 (round 7, second pass): under Fit's whole-page `zoom`, a CSS
    length declared inside a zoomed ancestor is resolved in that ancestor's
    LOCAL (pre-zoom) space, then painted at `local × zoom` — so this panel's
    own `top` would drift to `4rem × zoom` on screen unless divided back
    down first (confirmed by execution: 4rem at zoom 1.8 painted at 115.2px,
-   not 64px, until divided). `--panel-h` needs NO such division: it is
-   written from `el.offsetHeight` (reader-layout.tsx), and `offsetWidth`/
-   `offsetHeight` already report the local, pre-zoom size on every element
-   regardless of its own or an ancestor's zoom — dividing it again would
-   under-compensate it. `100vh`, `--legend-h` and the flat margin DO need
-   dividing: each resolves (or is declared) in local space, then gets the
-   same ambient-zoom multiplication as everything else in the box when
-   painted, same as the 4rem case. Division binds tighter than subtraction
-   in CSS calc(), so this parses as intended with one outer calc() and no
-   nested wrappers. `--page-zoom` defaults to 1 (set on `page.tsx`'s
+   not 64px, until divided). `100vh`, `--legend-h` and the flat lengths DO
+   need dividing the same way. `--page-zoom` defaults to 1 (set on `page.tsx`'s
    `<PageContainer data-zoom-root>`, Fit off or not applicable) so this
-   formula is byte-identical to the un-zoomed one whenever Fit is off. */
+   is byte-identical to the un-zoomed value whenever Fit is off. */
 :root {
-  /* `KeyLegend` is `h-[var(--legend-h)]`; the panel reserves the same
-     number. They were 28px and 24px, so at bottom-stick the DOI line sat 4px
-     behind an 18px-blur glass bar — the normal state at 1280x800, not an
-     edge case. */
+  /* `KeyLegend` is `h-[var(--legend-h)]`; the panel keeps clear of it. */
   --legend-h: 1.75rem;
 }
 
 @utility reader-panel {
   position: sticky;
-  top: min(
-    calc(4rem / var(--page-zoom, 1)),
-    calc(100vh / var(--page-zoom, 1) - var(--panel-h, 0px) - var(--legend-h) / var(--page-zoom, 1) - 1rem / var(--page-zoom, 1))
-  );
+  top: calc(4rem / var(--page-zoom, 1));
+  display: flex;
+  flex-direction: column;
+  max-height: calc((100vh - 4rem - var(--legend-h) - 1rem) / var(--page-zoom, 1));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  margin-inline: -6px;
+  padding-inline: 6px;
+}
+
+/* P7-15 (R7, ruling Q4): the "Explain this?" conversation is a dock at the window's right edge and it
+   must cover nothing, so while it is open the page keeps its width clear. The box (mounted outside
+   the zoomed page container, in the window's own pixels) writes `--explain-dock` on the document's
+   root — the dock's 360px and a 16px gap — and takes it off when it closes (`explain-dock.ts`).
+   The shell's <main> pads its right side by it, so the page container, whose `max-w` is a cap on
+   the room it is given, is given what is left and centres itself in that: at 1440 the spread moves
+   left by 184px and the column gives up 8px of its 640; at 1920 the 1184px spread keeps its widths and
+   moves 188px; at 1280 the column narrows from 640 to 472 — and the panel's track never changes.
+   Padding the shell, not the container, because the container's three caps (xl, 2xl, and Fit's zoom
+   on top of both) are then left exactly as they are: nothing here repeats their arithmetic. Unset,
+   the padding is 0 and nothing moves, on every page. */
+.peer-main-content {
+  padding-right: var(--explain-dock, 0px);
 }
 
 /* ── The measure ──────────────────────────────────────────────────────

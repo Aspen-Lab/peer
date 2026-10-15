@@ -198,3 +198,30 @@ describe("BriefingEmpty (EMPTY-STATE-REASON)", () => {
   // `BriefingEmpty` trusts its caller, the same way it already trusts
   // `reason` to be one of the literal values its own type allows.
 });
+
+// P8-01 (BACKLOG-29 = 22; ABC-DEEP-REPORT-READING-HELPER.md §1h.41 (a)): the
+// home page asked for a failing /api/feed without end, because its auto-load
+// effect did not know a load had already tried the key and failed. The
+// decision is `shouldAutoLoad` now (lib/feed/auto-load.test.ts), the effect
+// that applies it is `useFeedAutoLoad` (auto-load.effects.test.ts, on the
+// hook runtime, against the real store), and this pins the page's own wiring
+// the way the describe above does — the page cannot be rendered here.
+describe("page.tsx source — the auto-load is told which key already failed (P8-01)", () => {
+  const source = readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
+
+  it("hands the store's feedFailedKey to useFeedAutoLoad", () => {
+    expect(source).toContain("useFeedStore((s) => s.feedFailedKey)");
+    const call = source.indexOf("useFeedAutoLoad({");
+    expect(call).toBeGreaterThan(-1);
+    const args = source.slice(call, source.indexOf("});", call));
+    expect(args).toContain("failedKey: feedFailedKey");
+    expect(args).toContain("autoLoadKey: feedAutoLoadKey");
+    expect(args).toContain("topicsKey: feedTopicsKey");
+    expect(args).toContain("loading: isLoading");
+  });
+
+  it("keeps the reader's own retry a direct loadFeed, not governed by the skip", () => {
+    expect(source).toContain('onRetry={() => void loadFeed({ lanes: ["papers"] })}');
+    expect(source).toContain('rerank.current = setTimeout(() => void loadFeed({ lanes: ["papers"] }), 400);');
+  });
+});

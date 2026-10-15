@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import { defaultProfile, type UserProfile } from "@/types";
 import {
   STEP_META,
-  connectorCount,
   firstIncompleteStep,
   isStepDone,
   stepIndexFromKey,
@@ -12,11 +11,36 @@ function profileWith(patch: Partial<UserProfile>): UserProfile {
   return { ...defaultProfile, ...patch };
 }
 
+// A profile saved on a device from before the events and jobs feeds were
+// stopped: the fields are gone from the type, but the stored blob can still
+// hold them until the store's v8 migration has run.
+function legacyProfileWith(legacy: Record<string, unknown>): UserProfile {
+  return { ...defaultProfile, ...legacy } as UserProfile;
+}
+
 describe("stepIndexFromKey", () => {
   it("resolves the direct walkthrough step and ignores invalid values", () => {
     expect(stepIndexFromKey("ai")).toBe(STEP_META.findIndex((m) => m.key === "ai"));
     expect(stepIndexFromKey("unknown")).toBeNull();
     expect(stepIndexFromKey(null)).toBeNull();
+  });
+
+  it("a link to the retired Data step opens the first unfinished step instead", () => {
+    expect(stepIndexFromKey("connectors")).toBeNull();
+  });
+});
+
+describe("STEP_META", () => {
+  it("has six steps and no Data step (the events and jobs data sources are stopped)", () => {
+    expect(STEP_META.map((m) => m.key)).toEqual([
+      "basics",
+      "topics",
+      "work",
+      "radar",
+      "ai",
+      "persona",
+    ]);
+    expect(STEP_META.map((m) => m.label)).not.toContain("Data");
   });
 });
 
@@ -42,11 +66,11 @@ describe("isStepDone", () => {
     ).toBe(true);
   });
 
-  it("topics: Events and Jobs never change the Papers Required gate", () => {
+  it("topics: only the Papers Required list counts, even on a device that still holds event and job topics", () => {
     expect(
       isStepDone(
         "topics",
-        profileWith({
+        legacyProfileWith({
           eventRequiredTopics: ["battery conferences"],
           jobRequiredTopics: ["battery scientist"],
         }),
@@ -56,7 +80,7 @@ describe("isStepDone", () => {
     expect(
       isStepDone(
         "topics",
-        profileWith({
+        legacyProfileWith({
           researchTopics: ["batteries"],
           eventRequiredTopics: [],
           eventExploreTopics: [],
@@ -109,7 +133,6 @@ describe("isStepDone", () => {
     expect(isStepDone("ai", defaultProfile, false, "signed-in")).toBe(false);
     // and the other steps are not moved by this either way.
     expect(isStepDone("radar", defaultProfile, false, "signed-in")).toBe(false);
-    expect(isStepDone("connectors", defaultProfile, false, "signed-in")).toBe(false);
     expect(isStepDone("topics", defaultProfile, false, "signed-in")).toBe(false);
   });
 
@@ -123,49 +146,8 @@ describe("isStepDone", () => {
     expect(isStepDone("ai", keyed, false, "unconfigured")).toBe(true);
   });
 
-  it("connectors: only Tavily counts, and only when fully configured", () => {
-    // Adzuna and USAJobs existed solely to widen JOB coverage; jobs are no
-    // longer a product surface, so their keys no longer make the step done.
-    expect(
-      isStepDone(
-        "connectors",
-        profileWith({ adzunaAppId: "id", adzunaAppKey: "key" }),
-        false,
-      ),
-    ).toBe(false);
-    expect(
-      isStepDone(
-        "connectors",
-        profileWith({ tavilyEnabled: true, tavilyApiKey: "tvly-x" }),
-        false,
-      ),
-    ).toBe(true);
-    // Tavily key without the toggle is not active.
-    expect(
-      isStepDone("connectors", profileWith({ tavilyApiKey: "tvly-x" }), false),
-    ).toBe(false);
-  });
-
   it("persona: driven by the passed-in flag", () => {
     expect(isStepDone("persona", defaultProfile, true)).toBe(true);
-  });
-});
-
-describe("connectorCount", () => {
-  it("counts Tavily once and ignores the retired job connectors", () => {
-    expect(connectorCount(defaultProfile)).toBe(0);
-    expect(
-      connectorCount(
-        profileWith({
-          tavilyEnabled: true,
-          tavilyApiKey: "t",
-          adzunaAppId: "a",
-          adzunaAppKey: "b",
-          usajobsApiKey: "u",
-          usajobsUserAgent: "e@x.com",
-        }),
-      ),
-    ).toBe(1);
   });
 });
 
@@ -195,8 +177,6 @@ describe("firstIncompleteStep", () => {
       feedFocus: "tight",
       feedAiProvider: "openai",
       feedAiApiKey: "sk",
-      tavilyEnabled: true,
-      tavilyApiKey: "t",
     });
     expect(firstIncompleteStep(p, true, "signed-in")).toBe(STEP_META.length - 1);
   });

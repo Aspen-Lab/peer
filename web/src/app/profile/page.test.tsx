@@ -3,9 +3,11 @@ import { join } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { defaultProfile } from "@/types";
+import { defaultProfile, type UserAiProvider } from "@/types";
+import { FEED_AI_PROVIDER_OPTIONS } from "@/components/profile/ai-setup";
 import {
   ColorThemePicker,
+  DashboardView,
   DataSourcesLink,
   LearnedPreferences,
   EmailSettingsView,
@@ -757,5 +759,271 @@ describe("Profile page - the Paper screening row (Jev key)", () => {
 
   it("never reads or writes the key itself: the setup component owns it", () => {
     expect(source).not.toMatch(/jevApiKey|updateJevApiKey/);
+  });
+});
+
+
+// P9-24 (§1h.57; the key session's K1 note, A P9-W2's P9-KEY check): the Profile's view mode printed no provider and no
+// saved-key line, only the Edit form did, so the page's text was identical with a key and without one. The view mode now
+// says which AI provider is set and that a key is saved on this device — one plain line — and never any character of the
+// key. `DashboardView` is the view mode's card and renders without a store or a router (it takes the profile as a prop),
+// so the rendered markup is the real thing, not a mock of it.
+describe("DashboardView - the AI setup line (P9-24)", () => {
+  // An invented key of 40 characters. It is not a real key. Letters and digits only, so the markup's escaping cannot hide a
+  // leaked piece of it, and the control test below shows that none of its 4-character pieces turns up on the page by chance.
+  const KEY = "zQ7vXk9LmW3RtB5nHc1JdY8fPa4GgS2eUo6iNq0A";
+  const PIECES = Array.from({ length: KEY.length - 3 }, (_, i) => KEY.slice(i, i + 4));
+  const NO_KEY_LINE = FEED_AI_PROVIDER_OPTIONS.find((option) => option.value === "default")!.label;
+
+  function view(feedAiProvider: UserAiProvider, feedAiApiKey: string | undefined) {
+    return renderToStaticMarkup(
+      createElement(DashboardView, {
+        profile: { ...defaultProfile, feedAiProvider, feedAiApiKey },
+        displayName: "Ada",
+        onEdit: () => {},
+      }),
+    );
+  }
+
+  /** The text of every element that holds the AI setup line (an exact text node, so extra characters would show). */
+  function aiLine(html: string): string | null {
+    const band = html.slice(html.indexOf("AI setup"));
+    const match = band.match(/<span>([^<]*)<\/span><\/p>/);
+    return match ? match[1] : null;
+  }
+
+  it("with a provider and a key saved, says the provider and that the key is saved on this device", () => {
+    const html = view("gemini", KEY);
+    expect(html).toContain("AI setup");
+    expect(aiLine(html)).toBe("Gemini · key saved on this device");
+  });
+
+  it("names each provider by its short label, and nothing else about the key", () => {
+    const labels: [UserAiProvider, string][] = [
+      ["gemini", "Gemini"],
+      ["openai", "OpenAI"],
+      ["anthropic", "Claude"],
+      ["qwen", "Qwen"],
+      ["deepseek", "DeepSeek"],
+    ];
+    for (const [provider, label] of labels) {
+      expect(aiLine(view(provider, KEY))).toBe(`${label} · key saved on this device`);
+    }
+  });
+
+  it("prints no character of the key: not the key, and not any 4-character piece of it, in text or in an attribute", () => {
+    // Control: with no key stored, none of the pieces is on the page, so a piece found with the key stored came from the key.
+    for (const provider of ["gemini", "openai", "anthropic", "qwen", "deepseek"] as const) {
+      const without = view(provider, undefined);
+      expect(PIECES.filter((piece) => without.includes(piece))).toEqual([]);
+      const withKey = view(provider, KEY);
+      expect(aiLine(withKey)).not.toBeNull();
+      expect(withKey).not.toContain(KEY);
+      expect(PIECES.filter((piece) => withKey.includes(piece))).toEqual([]);
+    }
+  });
+
+  it("says the same thing for a short key and a long one: nothing in the line depends on the key's length or its end", () => {
+    const short = view("gemini", "zQ7vXk9L");
+    const long = view("gemini", KEY + KEY);
+    expect(aiLine(short)).toBe(aiLine(long));
+    expect(aiLine(short)).not.toMatch(/\d/);
+  });
+
+  it("with the default provider and no key, says Peer reads without a model - the Profile's own no-key label", () => {
+    const html = view("default", "");
+    expect(aiLine(html)).toBe(NO_KEY_LINE);
+    expect(html).not.toContain("key saved on this device");
+  });
+
+  it("with a provider chosen but no key (or only spaces), still says no key, because Peer then reads without a model", () => {
+    for (const key of [undefined, "", "   "]) {
+      const html = view("gemini", key);
+      expect(aiLine(html)).toBe(NO_KEY_LINE);
+      expect(html).not.toContain("key saved on this device");
+    }
+  });
+
+  it("is plain text: the AI setup band holds no button, input, select or link, and Edit's own control is still the one 'adjust'", () => {
+    const html = view("gemini", KEY);
+    expect(html.indexOf("AI setup")).toBeGreaterThan(-1);
+    const band = html.slice(html.indexOf("AI setup"));
+    expect(band).not.toMatch(/<(button|input|select|textarea|a)[\s>]/);
+    expect(html.match(/adjust</g)).toHaveLength(1);
+  });
+
+  it("makes the page's text differ with a key and without one (K1: it was identical)", () => {
+    const text = (html: string) => html.replace(/<[^>]*>/g, "\u0001");
+    expect(text(view("gemini", KEY))).not.toBe(text(view("default", "")));
+  });
+});
+
+// P9-52 (A P9-W3's N5, §6 item 5): on a phone (390 x 844, touch) the Profile's five text actions were 16 to 18 px
+// tall: "adjust" 31 x 16, "Reset" 29 x 16, "Replay walkthrough" 129 x 18, "Reset profile to defaults" 152 x 18, and (in
+// restore-backup.tsx) "Restore from a backup file" 150 x 18. Where there is no hover (`hover: none`) each is at least
+// 44 px tall, the rule P9-23 set for the Delete PDF / Forget actions (`[@media(hover:none)]:min-h-11`); with a mouse
+// nothing moves. Layout is not computed in this node environment: the boxes are in the checkpoint
+// (docs/reading-helper-abc/P9-52-C-*.md), and this block pins the classes that make them. "adjust" and "Reset" render
+// from the exported `DashboardView` and `LearnedPreferences`; the other two are in the hook-wired page, so they are
+// read from its source, as the blocks above read it.
+describe("the Profile's small text actions are touch targets where there is no hover (P9-52, N5)", () => {
+  const TOUCH_FLOOR = "[@media(hover:none)]:min-h-11";
+  const classesOf = (tag: string) => (/\bclass="([^"]*)"/.exec(tag)?.[1] ?? "").split(/\s+/).filter(Boolean);
+  const buttonTag = (html: string, label: string) =>
+    (html.match(/<button\b[^>]*>[^<]*<\/button>/g) ?? []).find((tag) => tag.endsWith(`>${label}</button>`)) ?? "";
+  const source = readFileSync(join(process.cwd(), "src/app/profile/page.tsx"), "utf8");
+  /** The className of the <button> whose text is `label`: the last className before the label, after its `<button`. */
+  const sourceClasses = (label: string): string[] => {
+    const at = source.indexOf(label);
+    expect(at, label).toBeGreaterThan(-1);
+    const open = source.lastIndexOf("<button", at);
+    const names = [...source.slice(open, at).matchAll(/className="([^"]*)"/g)];
+    return (names.at(-1)?.[1] ?? "").split(/\s+/).filter(Boolean);
+  };
+  const T0 = "2026-10-12T00:00:00.000Z";
+  const learned = () =>
+    renderToStaticMarkup(
+      createElement(LearnedPreferences, {
+        profile: {
+          ...defaultProfile,
+          preferenceLedger: {
+            "text:reed bed": { key: "text:reed bed", label: "reed bed", source: "paper_keyword" as const, positive: 2, negative: 0, lastSeenAt: T0 },
+          },
+        },
+        onReset: () => {},
+      }),
+    );
+  const dashboard = () => renderToStaticMarkup(createElement(DashboardView, { profile: { ...defaultProfile }, displayName: "Ada", onEdit: () => {} }));
+
+  it("makes 'adjust' (the Signals header's action) at least 44 px tall where there is no hover", () => {
+    const tag = buttonTag(dashboard(), "adjust");
+
+    expect(tag).not.toBe("");
+    expect(classesOf(tag)).toContain(TOUCH_FLOOR);
+  });
+
+  it("makes 'Reset' (What Peer has learned) at least 44 px tall where there is no hover", () => {
+    const tag = buttonTag(learned(), "Reset");
+
+    expect(tag).not.toBe("");
+    expect(classesOf(tag)).toContain(TOUCH_FLOOR);
+  });
+
+  it("makes 'Replay walkthrough' at least 44 px tall where there is no hover", () => {
+    expect(sourceClasses("Replay walkthrough")).toContain(TOUCH_FLOOR);
+  });
+
+  it("makes 'Reset profile to defaults' at least 44 px tall where there is no hover", () => {
+    expect(sourceClasses("Reset profile to defaults")).toContain(TOUCH_FLOOR);
+  });
+
+  it("leaves a mouse's boxes alone: the same words, the same quiet colours, no height floor outside hover:none", () => {
+    const boxes = [
+      classesOf(buttonTag(dashboard(), "adjust")),
+      classesOf(buttonTag(learned(), "Reset")),
+      sourceClasses("Replay walkthrough"),
+      sourceClasses("Reset profile to defaults"),
+    ];
+
+    for (const classes of boxes) {
+      for (const cls of classes) {
+        if (/(^|:)(min-h|h)-/.test(cls)) expect(cls.startsWith("[@media(hover:none)]:"), cls).toBe(true);
+      }
+    }
+    expect(boxes[0]).toEqual(expect.arrayContaining(["text-caption", "text-text-faint/80", "hover:text-accent"]));
+    expect(boxes[1]).toEqual(expect.arrayContaining(["text-caption", "text-text-faint/80", "shrink-0"]));
+    expect(boxes[2]).toEqual(expect.arrayContaining(["inline-flex", "items-center", "gap-1.5", "text-meta", "text-text-faint"]));
+    expect(boxes[3]).toEqual(expect.arrayContaining(["inline-flex", "items-center", "gap-1.5", "text-meta", "text-text-faint"]));
+  });
+});
+
+// P9-54 (A P9-W3's N5, the remainder P9-52 named): P9-52 raised the two first steps of the Profile's two-step controls
+// to 44 px on touch ("Reset" in What Peer has learned, "Reset profile to defaults"), and left their second steps at the
+// height of their text: a thumb that hit a 44 px "Reset" met a 16 px "Reset all" in the same place, and a 44 px "Reset
+// profile to defaults" a 18 px "Confirm reset". The second step is every button that appears only after a first press:
+// "Reset all" and its "Cancel" (in `LearnedPreferences`), "Confirm reset" and its "Cancel" (in the page's reset section).
+// Where there is no hover (`hover: none`) each is at least 44 px tall, the same one class P9-52 and P9-23 used
+// (`[@media(hover:none)]:min-h-11`); with a mouse nothing moves. Layout is not computed in this node environment, and a
+// second step cannot be rendered here (no test in this project simulates a press, and the confirmation is `useState`
+// inside the component), so the classes are read from the source, as the block above reads the hook-wired page's two
+// buttons. The boxes are in the checkpoint (docs/reading-helper-abc/P9-54-C-*.md).
+describe("the Profile's second-step buttons are touch targets where there is no hover (P9-54, N5)", () => {
+  const TOUCH_FLOOR = "[@media(hover:none)]:min-h-11";
+  const source = readFileSync(join(process.cwd(), "src/app/profile/page.tsx"), "utf8");
+  /** The slice of the source from `from` to the next `to`: the two components that hold a second step. */
+  const region = (from: string, to: string): string => {
+    const start = source.indexOf(from);
+    expect(start, from).toBeGreaterThan(-1);
+    const end = source.indexOf(to, start);
+    expect(end, to).toBeGreaterThan(start);
+    return source.slice(start, end);
+  };
+  /** Every <button> of `text`, in source order: its words (the text after its last `>`) and its className's classes. */
+  const buttonsIn = (text: string): Array<{ label: string; classes: string[] }> => {
+    const found: Array<{ label: string; classes: string[] }> = [];
+    for (let end = text.indexOf("</button>"); end !== -1; end = text.indexOf("</button>", end + 1)) {
+      const chunk = text.slice(text.lastIndexOf("<button", end), end);
+      const names = [...chunk.matchAll(/className="([^"]*)"/g)];
+      found.push({
+        label: chunk.slice(chunk.lastIndexOf(">") + 1).trim(),
+        classes: (names.at(-1)?.[1] ?? "").split(/\s+/).filter(Boolean),
+      });
+    }
+    return found;
+  };
+  /** The one button of `text` whose words are `label`: it must be there, and there once. */
+  const buttonIn = (text: string, label: string): string[] => {
+    const same = buttonsIn(text).filter((b) => b.label === label);
+    expect(same.length, label).toBe(1);
+    return same[0].classes;
+  };
+  // What Peer has learned: "Reset" -> "Reset all" / "Cancel". The reset section: "Reset profile to defaults" ->
+  // "Confirm reset" / "Cancel".
+  const learned = region("export function LearnedPreferences", "function PastBriefings");
+  const resetSection = region("{/* ── Reset ──", "<VersionLine");
+
+  it("makes 'Reset all' (the second step of What Peer has learned) at least 44 px tall where there is no hover", () => {
+    expect(buttonIn(learned, "Reset all")).toContain(TOUCH_FLOOR);
+  });
+
+  it("makes that step's 'Cancel' at least 44 px tall where there is no hover", () => {
+    expect(buttonIn(learned, "Cancel")).toContain(TOUCH_FLOOR);
+  });
+
+  it("makes 'Confirm reset' (the second step of Reset profile to defaults) at least 44 px tall where there is no hover", () => {
+    expect(buttonIn(resetSection, "Confirm reset")).toContain(TOUCH_FLOOR);
+  });
+
+  it("makes that step's 'Cancel' at least 44 px tall where there is no hover", () => {
+    expect(buttonIn(resetSection, "Cancel")).toContain(TOUCH_FLOOR);
+  });
+
+  it("is the same two steps, with the same words and the same quiet colours, and a mouse's boxes are the ones they were", () => {
+    const steps = [
+      buttonIn(learned, "Reset all"),
+      buttonIn(learned, "Cancel"),
+      buttonIn(resetSection, "Confirm reset"),
+      buttonIn(resetSection, "Cancel"),
+    ];
+
+    // No height of any kind outside `hover: none`: a mouse's box is still the height of its words.
+    for (const classes of steps) {
+      for (const cls of classes) {
+        if (/(^|:)(min-h|h|py|pt|pb|my|mt|mb)-/.test(cls)) expect(cls.startsWith("[@media(hover:none)]:"), cls).toBe(true);
+      }
+    }
+    // The colours and the press feedback each step already had.
+    const confirms = ["text-red", "hover:text-red/80", "font-medium", "active:scale-95"];
+    const cancels = ["text-text-faint", "hover:text-text-muted", "active:scale-95"];
+    expect(steps[0]).toEqual(expect.arrayContaining(confirms));
+    expect(steps[1]).toEqual(expect.arrayContaining(cancels));
+    expect(steps[2]).toEqual(expect.arrayContaining(confirms));
+    expect(steps[3]).toEqual(expect.arrayContaining(cancels));
+  });
+
+  it("keeps each pair of steps centred on one line, so a taller button grows the row and does not skew it", () => {
+    // The learned card's pair is `flex items-center gap-3`; the reset panel's is `flex items-center gap-3 ml-auto`.
+    expect(learned).toMatch(/<span className="text-caption flex items-center gap-3 shrink-0">/);
+    expect(resetSection).toMatch(/<div className="flex items-center gap-3 ml-auto">/);
   });
 });

@@ -11,7 +11,7 @@ import { fetchPaperById } from "@/lib/papers/fetch-by-id";
 import { getFullText, type FullTextResult } from "@/lib/papers/full-text";
 import { buildReading } from "@/lib/papers/reading";
 import { rawItemToPaper } from "@/lib/feed/mapper";
-import { bareUploadId, uploadMetaToPaper } from "@/lib/papers/upload-store";
+import { bareUploadId, claimsUploadId, uploadMetaToPaper } from "@/lib/papers/upload-store";
 import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
 
 /**
@@ -69,6 +69,15 @@ export async function GET(
   // client-only reading that never runs buildReading's real pdf_empty
   // provenance logic at all — confirmed by execution.
   const uploadHash16 = bareUploadId(decodedId);
+  // P0-05 (§1e.1): an id that claims to be an upload in a spelling
+  // `bareUploadId` does not accept (`UPLOAD:<hash16>`) is not found — never
+  // looked up as an upload, and never handed to the public paper lookup.
+  if (!uploadHash16 && claimsUploadId(decodedId)) {
+    return NextResponse.json(
+      { error: "Paper not found" },
+      { status: 404, headers: NO_STORE_HEADERS },
+    );
+  }
   if (uploadHash16) {
     const meta = await ownedUpload(uploadHash16);
     if (!meta) {
@@ -126,7 +135,13 @@ export async function GET(
     if (!stillCurrent || stillCurrent.revision !== startRevision) {
       return NextResponse.json({ error: "Upload no longer available" }, { status: 410, headers: PRIVATE_UPLOAD_HEADERS });
     }
-    return NextResponse.json(buildReading(paper, fullText), { headers: PRIVATE_UPLOAD_HEADERS });
+    // P9-42 (§1h.67): the captions and their pages were read from the attached
+    // PDF, so its figure pictures are drawn from it too — `supplement` is the
+    // canonical `upload:<hash16>` (`bareUploadId` accepted it), the same id the
+    // text was read from. The figure-image route answers it to its owner only.
+    return NextResponse.json(buildReading(paper, fullText, new Date(), { figuresFrom: supplement }), {
+      headers: PRIVATE_UPLOAD_HEADERS,
+    });
   }
 
   const fullText = await fullTextWithin(

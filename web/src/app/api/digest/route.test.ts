@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { inspect } from "node:util";
 import {
   deployedRuntimeEnv,
   signedIn,
@@ -88,6 +89,95 @@ describe("POST /api/digest", () => {
     const call = mocks.generateDigest.mock.calls[0][0];
     expect(call.papers).toHaveLength(20);
     expect(call.papers[0].title).toHaveLength(800);
+  });
+
+  // P5-06b item 1 (§1h.20 (a)): the failure line says the kind and the status of
+  // the error, never the error. The prompt this route sends holds the papers'
+  // abstracts and the reader's `contextHint` (up to 4,000 characters of their own
+  // profile text); an OpenAI-compatible provider's thrown message holds up to 400
+  // characters of the response body, and a body can quote the request. The route's
+  // answer to the caller is not changed by this: a failure is still the reading
+  // without a model.
+  describe("when the provider throws", () => {
+    // Invented. Not a title, a brief or a profile line that anyone has.
+    const MARKER = "Quillfeather-Tarn-marker";
+    const papers = [{ id: "paper-1", title: "Paper" }];
+
+    type Call = { method: "log" | "info" | "debug" | "warn" | "error"; args: unknown[] };
+    const calls: Call[] = [];
+    const spies: { mockRestore: () => void }[] = [];
+
+    beforeEach(() => {
+      calls.length = 0;
+      for (const method of ["log", "info", "debug", "warn", "error"] as const) {
+        spies.push(
+          vi.spyOn(console, method).mockImplementation((...args: unknown[]) => {
+            calls.push({ method, args });
+          }),
+        );
+      }
+      mocks.resolveProvider.mockReturnValue({
+        id: "openai",
+        generateDigest: mocks.generateDigest,
+      });
+    });
+
+    afterEach(() => {
+      for (const spy of spies.splice(0)) spy.mockRestore();
+    });
+
+    /** One console argument as text, objects and errors in depth (their message and stack included). */
+    function render(argument: unknown): string {
+      return typeof argument === "string"
+        ? argument
+        : inspect(argument, { depth: 10, breakLength: Infinity });
+    }
+
+    function everythingLogged(): string {
+      return calls.map((c) => c.args.map(render).join(" ")).join("\n");
+    }
+
+    it("an Error whose message quotes the prompt and carries status 400: the same answer as today, one line with the kind and the status, no argument holds the quoted text", async () => {
+      mocks.generateDigest.mockRejectedValue(
+        Object.assign(
+          new Error(`OpenAI API error 400: {"error":"bad request: ${MARKER} is not valid"}`),
+          { status: 400 },
+        ),
+      );
+
+      const response = await POST(
+        request({ papers, contextHint: `my open question is ${MARKER}` }),
+      );
+
+      // What the caller sees is unchanged: a failure is the reading without a model.
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ bullets: [], noLlm: false });
+
+      const errors = calls.filter((c) => c.method === "error");
+      expect(errors).toHaveLength(1);
+      const line = errors[0].args;
+      expect(line).toHaveLength(1);
+      expect(line[0]).toBe("[digest] openai error: Error status 400");
+      expect(String(line[0])).toContain("[digest]");
+      expect(String(line[0])).toContain("openai");
+      expect(String(line[0])).toContain("Error");
+      expect(String(line[0])).toContain("400");
+      // No console method of any level carries the quoted text.
+      expect(everythingLogged()).not.toContain(MARKER);
+    });
+
+    it("a thrown string: the line says string and nothing of the string", async () => {
+      mocks.generateDigest.mockRejectedValue(`the provider said: ${MARKER}`);
+
+      const response = await POST(request({ papers }));
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ bullets: [], noLlm: false });
+      const errors = calls.filter((c) => c.method === "error");
+      expect(errors).toHaveLength(1);
+      expect(errors[0].args).toEqual(["[digest] openai error: string"]);
+      expect(everythingLogged()).not.toContain(MARKER);
+    });
   });
 
   describe("in a deployed runtime", () => {

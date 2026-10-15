@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { defaultProfile, type UserProfile } from "@/types";
-import { opportunityRequestBody, paperFeedRequestBody } from "@/store/feed";
+import { paperFeedRequestBody } from "@/store/feed";
 import type { AuthOutcome } from "@/components/profile-sync";
-import { aiAvailability, feedsUseAi, hasUserLlmOverride } from "./ai-tier";
+import { aiAvailability, explainWindowAvailable, feedsUseAi, hasUserLlmOverride } from "./ai-tier";
 
 /**
  * RULING 66a / 68a (round 25 C, item 2). **THE ONE PREDICATE, IN EVERY STATE,
@@ -119,12 +119,47 @@ describe("aiAvailability — the ONE predicate", () => {
   });
 });
 
+// P8-06 (the manager's ruling on the first paint): the always-on explain window is the one surface that does not wait for
+// the sign-in check when the reader's key is their own local override. Everything else keeps `aiAvailability` (above).
+describe("explainWindowAvailable — the explain window's own question (P8-06)", () => {
+  it("a local key shows the window in the first paint: `unknown` is enough", () => {
+    expect(explainWindowAvailable(BYOK, "unknown")).toBe(true);
+    // …although the model predicate still says none for that moment, which is why the others do not change.
+    expect(aiAvailability(BYOK, "unknown")).toBe("none");
+    expect(feedsUseAi(BYOK, "unknown")).toBe(false);
+  });
+
+  it("with no local key there is no window, whatever the sign-in check says — Peer has no key to lend", () => {
+    for (const auth of ALL_OUTCOMES) expect(explainWindowAvailable(NO_KEY, auth), auth).toBe(false);
+  });
+
+  it("is `aiAvailability`'s answer in every settled state: a signed-in reader and an unconfigured copy have it, a confirmed sign-out has not", () => {
+    expect(explainWindowAvailable(BYOK, "signed-in")).toBe(true);
+    expect(explainWindowAvailable(BYOK, "unconfigured")).toBe(true);
+    expect(explainWindowAvailable(BYOK, "signed-out")).toBe(false);
+    for (const auth of ["signed-in", "signed-out", "unconfigured"] as const) {
+      expect(explainWindowAvailable(BYOK, auth), auth).toBe(aiAvailability(BYOK, auth) !== "none");
+    }
+  });
+
+  it("reads the local key as `hasUserLlmOverride` does: a provider and a non-blank key, both", () => {
+    expect(explainWindowAvailable({ ...BYOK, feedAiApiKey: "   " }, "unknown")).toBe(false);
+    expect(explainWindowAvailable({ ...BYOK, feedAiProvider: "default" }, "unknown")).toBe(false);
+    for (const profile of [BYOK, NO_KEY, { ...BYOK, feedAiApiKey: " " }, { ...BYOK, feedAiProvider: "default" as const }]) {
+      expect(explainWindowAvailable(profile, "unknown"), JSON.stringify([profile.feedAiProvider, Boolean(profile.feedAiApiKey?.trim())])).toBe(hasUserLlmOverride(profile));
+    }
+  });
+});
+
 describe("the chip and the feeds cannot disagree again", () => {
-  it("computes the chip's boolean and ALL THREE request builders' aiTier from one predicate", () => {
-    // **THE ANTI-DRIFT LOCK.** It covers the jobs, events AND papers builders:
-    // the papers builder was the one that drifted once, when `store/feed.ts`
-    // re-implemented both halves inline with a local `hasUserLlmOverride` that
-    // SHADOWED the imported function of the same name.
+  // P9-31 — RE-AIMED (§1c): this block used to cover three request builders (jobs, events, papers).
+  // Jobs and events are not processed (the owner's decision, §1a.18 (f)) and their builder is gone
+  // from the store, so each test keeps its papers half unchanged and drops the jobs / events half.
+  it("computes the chip's boolean and the paper request builder's aiTier from one predicate", () => {
+    // **THE ANTI-DRIFT LOCK.** It covers the papers builder, the one that
+    // drifted once, when `store/feed.ts` re-implemented both halves inline
+    // with a local `hasUserLlmOverride` that SHADOWED the imported function of
+    // the same name.
     //
     // The environment loop proves the answer is the same in both runtimes,
     // because no client code may decide AI availability from `NODE_ENV`
@@ -138,13 +173,6 @@ describe("the chip and the feeds cannot disagree again", () => {
           vi.stubEnv("NODE_ENV", env);
           const expected = feedsUseAi(profile, auth) ? 2 : 0;
           const where = `${env}/${label}/${auth}`;
-
-          for (const surface of ["jobs", "events"] as const) {
-            const body = opportunityRequestBody(profile, surface, [], auth);
-            expect(`${where}/${surface} -> ${body.aiTier}`).toBe(
-              `${where}/${surface} -> ${expected}`,
-            );
-          }
 
           // The papers builder ANDs its own surface toggle on top, so it is
           // compared with that toggle ON — the question is whether the
@@ -164,9 +192,9 @@ describe("the chip and the feeds cannot disagree again", () => {
     }
   });
 
-  it("keeps the papers toggle able to turn papers OFF without moving the others", () => {
-    // The toggle is a real, separate choice about one surface. Collapsing the
-    // predicates must not collapse that too.
+  it("keeps the papers toggle able to turn papers OFF while the predicate itself still allows a model", () => {
+    // The toggle is a real, separate choice about the papers surface.
+    // Collapsing the predicates must not collapse that too.
     const papers = paperFeedRequestBody(
       BYOK,
       ADVISOR_SEEDS,
@@ -175,14 +203,11 @@ describe("the chip and the feeds cannot disagree again", () => {
       "signed-in",
     );
     expect(papers.aiTier).toBe(0);
-    expect(opportunityRequestBody(BYOK, "jobs", [], "signed-in").aiTier).toBe(2);
+    expect(feedsUseAi(BYOK, "signed-in")).toBe(true);
   });
 
   it("asks for tier 0 and sends no key for a signed-in reader who has not added one", () => {
     // Peer has no model of its own: signing in does not buy a tier.
-    const jobs = opportunityRequestBody(NO_KEY, "jobs", [], "signed-in");
-    expect(jobs.aiTier).toBe(0);
-    expect(jobs.llmOverride).toBeUndefined();
     const papers = paperFeedRequestBody(
       NO_KEY,
       ADVISOR_SEEDS,
@@ -196,12 +221,6 @@ describe("the chip and the feeds cannot disagree again", () => {
 
   it("sends the reader's own key only when it will be used", () => {
     // Signed in, with a key: tier 2 and the reader's own override.
-    const byok = opportunityRequestBody(BYOK, "jobs", [], "signed-in");
-    expect(byok.aiTier).toBe(2);
-    expect(byok.llmOverride).toEqual({
-      provider: "openai",
-      apiKey: "not-a-real-key",
-    });
     const papers = paperFeedRequestBody(
       BYOK,
       ADVISOR_SEEDS,
@@ -217,9 +236,6 @@ describe("the chip and the feeds cannot disagree again", () => {
 
     // Signed out, with a key: tier 0 and the key does not leave the browser.
     for (const auth of ["signed-out", "unknown"] as const) {
-      const jobs = opportunityRequestBody(BYOK, "jobs", [], auth);
-      expect(jobs.aiTier).toBe(0);
-      expect(jobs.llmOverride).toBeUndefined();
       const feed = paperFeedRequestBody(BYOK, ADVISOR_SEEDS, true, [], auth);
       expect(feed.aiTier).toBe(0);
       expect(feed.llmOverride).toBeUndefined();

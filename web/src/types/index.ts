@@ -7,6 +7,13 @@ export type PaperSource = "arxiv" | "neurIPS" | "iclr" | "icml" | "chi" | "other
 
 export type ItemFeedback = "liked" | "saved" | "notInterested" | "moreLikeThis";
 
+/**
+ * Where a ledger concept came from. The last members (`job_tag`,
+ * `event_topic`, `opportunity_facet`) belong to the stopped events and jobs
+ * feeds: nothing writes them now, and the ledger deletes the entries that were
+ * recorded from those feeds when it is cleaned. They stay in the union so a
+ * stored ledger or a backup file that names them is still a valid value.
+ */
 export type PreferenceConceptSource =
   | "openalex_topic"
   | "openalex_keyword"
@@ -41,30 +48,27 @@ export interface PreferenceConcept {
   extractionVersion?: number;
 }
 
-/** Which feed surface a piece of feedback came from. */
-export type FeedItemKind = "paper" | "event" | "job";
-
 export interface PreferenceLedgerEntry extends PreferenceConcept {
   uploads?: Record<string, { at: string; weight: number }>;
+  /**
+   * P5-02: a reader's settled question on one paper named this term. Keyed by
+   * an opaque per-paper key (`questionSourceKey`), one piece of evidence per
+   * paper, at a weight far below an upload's. Separate from likes and
+   * dislikes, so it can be taken out without touching them.
+   */
+  questions?: Record<string, { at: string; weight: number }>;
   positive: number;
   negative: number;
   lastPositiveAt?: string;
   lastNegativeAt?: string;
   /**
-   * Positive evidence inferred from a facet selection. Kept separate from
-   * explicit save/like evidence so scoring can cap and decay it independently.
+   * Positive evidence inferred from a facet selection of the stopped events and
+   * jobs feeds. Nothing writes it and nothing scores it any more; the ledger
+   * still carries it through cleaning on an entry that holds it.
    */
   facetPositive?: number;
   lastFacetAt?: string;
   lastSeenAt: string;
-  /**
-   * The surface the feedback was recorded from. Ledger influence is
-   * directional: paper feedback informs events (strongly) and jobs
-   * (moderately), event feedback informs jobs (weakly), and job/event
-   * feedback never flows back into paper scoring. Entries without an
-   * origin are legacy paper entries.
-   */
-  origin?: FeedItemKind;
   /**
    * Set by a deliberate lean the reader made on a term — "more of this",
    * "less of this" from the reading graph — rather than evidence inferred from
@@ -158,207 +162,6 @@ export interface Paper {
   extractionVersion?: number;
 }
 
-// ── Event ──
-
-export type EventType =
-  | "conference"
-  | "workshop"
-  | "seminar"
-  | "meetup"
-  | "job-fair"
-  | "career-fair"
-  | "summit"
-  | "expo"
-  | "hackathon";
-
-// B2-09. Kept beside the union like `careerStages` / `industryPreferences`
-// below — the event report needs the actual runtime values to tell a real
-// EventType apart from prose that merely looks like one.
-export const eventTypes: EventType[] = [
-  "conference",
-  "workshop",
-  "seminar",
-  "meetup",
-  "job-fair",
-  "career-fair",
-  "summit",
-  "expo",
-  "hackathon",
-];
-
-export interface OpportunityPlace {
-  city?: string;
-  region?: string;
-  country?: string;
-}
-
-export type OpportunityFormat = "in-person" | "online" | "hybrid";
-
-export interface OpportunityFacetCounts {
-  location: Record<string, number>;
-  month: Record<string, number>;
-  format: Record<OpportunityFormat, number>;
-}
-
-export interface OpportunityFacetSelection {
-  /** OR within a group; different groups combine with AND. */
-  location?: string[];
-  month?: string[];
-  format?: OpportunityFormat[];
-}
-
-export interface EventFee {
-  label: string;
-  standard?: string;
-  student?: string;
-  online?: string;
-  deadline?: string;
-}
-
-export interface EventOrg {
-  name: string;
-  descriptor?: string;
-  relevance?: string;
-  atEvent?: string;
-}
-
-export interface EventPerson {
-  name: string;
-  role?: string;
-  institution?: string;
-  /**
-   * B2-16 / Ruling 13. The short "why glance at this one" line —
-   * `EventOrg.descriptor`'s equivalent. Plate 03's examples ("2 papers in
-   * your feed", "Matches a topic you typed") are both Tier 0, computed
-   * locally in `events/[id]/page.tsx` alongside `relevance`; this field lets
-   * a future extraction source it directly the same way org descriptors are,
-   * without a render-layer change.
-   */
-  descriptor?: string;
-  relevance?: string;
-  speaking?: string;
-}
-
-export interface Event {
-  id: string;
-  name: string;
-  type: EventType;
-  date: string;
-  endDate?: string;
-  location: string;
-  place?: OpportunityPlace;
-  isOnline: boolean;
-  deadline?: string;
-  registrationDeadline?: string;
-  fees?: EventFee[];
-  activities?: string[];
-  organisations?: EventOrg[];
-  people?: EventPerson[];
-  travelGrant?: string;
-  invitationLetter?: boolean;
-  expectedSize?: number;
-  shortDescription: string;
-  /** A source-owned summary that may be stated in an event report. */
-  reportSummary?: {
-    text: string;
-    authority: "source-record" | "page-owned";
-  };
-  relevanceReason: string;
-  /** Shown separately when weak facet history materially changed rank. */
-  facetPreferenceReason?: string;
-  linkRegistration?: string;
-  linkOfficial?: string;
-  relevanceScore?: number;
-  isSaved?: boolean;
-  feedback?: ItemFeedback;
-  preferenceSignals?: PreferenceConcept[];
-  // Detailed-card fields (additive for cross-branch merge safety).
-  rank?: string;
-  tags?: string[];
-  matchedTerms?: string[];
-  locationFit?: number;
-}
-
-// ── Job ──
-
-export type RoleKind =
-  | "internship"
-  | "phd-position"
-  | "postdoc"
-  | "staff"
-  | "faculty";
-
-export interface Job {
-  id: string;
-  roleTitle: string;
-  companyOrLab?: string;
-  location: string;
-  place?: OpportunityPlace;
-  isRemote: boolean;
-  /**
-   * B2-06. Plate 02 needs a three-state work mode (LOCATION tile's sub-line,
-   * subtitle's third segment); `isRemote` alone cannot express "hybrid".
-   * Additive beside `isRemote` — every existing reader of `isRemote` (feed,
-   * filters, scoring) is unchanged. Only ever set from a signal the posting
-   * actually gives (an explicit "hybrid" / "on-site" mention, or `isRemote`
-   * itself); `undefined` when the posting states neither, never a guess.
-   */
-  workMode?: "on-site" | "hybrid" | "remote";
-  keyRequirements: string[];
-  matchReason: string;
-  /** Shown separately when weak facet history materially changed rank. */
-  facetPreferenceReason?: string;
-  linkPosting?: string;
-  postedDate?: string;
-  applicationDeadline?: string;
-  startDate?: string;
-  /**
-   * B3-06 / Ruling 20. Plate 02's STARTS tile sub-line ("flexible") --
-   * whether the posting itself says the start date can move. Additive;
-   * `undefined` unless the posting states it explicitly, never inferred
-   * from silence, exactly like `workMode` (B2-06).
-   */
-  startDateFlexible?: boolean;
-  contractLength?: string;
-  applicationMaterials?: string[];
-  /**
-   * V26-J06 / Ruling 74. Plate 02's `ELIGIBILITY` row — the posting's own
-   * clause about who may apply. Never derived from `keyRequirements` (Peer's
-   * own skills list) and never from LLM enrichment.
-   */
-  eligibility?: string;
-  /**
-   * V26-J06 / Ruling 74. Plate 02's `TEAM` row, NAME HALF ONLY. The plate
-   * also carries a headcount (`, 14 researchers`); no honest source for it
-   * exists on the no-LLM path, so its absence is an ACCEPTED, NAMED COST
-   * under Ruling 74 and must not be "fixed" by inventing a number.
-   */
-  team?: string;
-  roleKind?: RoleKind;
-  visa?: {
-    state: "sponsors" | "not-stated" | "wont-sponsor";
-    evidence?: string;
-    country?: string;
-  };
-  relevanceScore?: number;
-  isSaved?: boolean;
-  feedback?: ItemFeedback;
-  preferenceSignals?: PreferenceConcept[];
-  // Detailed-card fields (additive for cross-branch merge safety).
-  salary?: {
-    min: number;
-    max: number;
-    currency: string;
-    period: "hour" | "month" | "year";
-  };
-  salaryIsEstimated?: boolean;
-  employmentType?: string;
-  sourceId?: string;
-  summary?: string;
-  matchedTerms?: string[];
-  locationFit?: number;
-}
-
 // ── User Profile ──
 
 export type CareerStage =
@@ -378,8 +181,6 @@ export interface SurfaceTopics {
 
 export interface ActiveSearchInputs {
   papers: SurfaceTopics;
-  events: SurfaceTopics;
-  jobs: SurfaceTopics;
   careerStage?: CareerStage;
   locationPreferences: string[];
   promotedOn: string;
@@ -415,10 +216,6 @@ export type ColorTheme = `${ThemeMode}:${ThemeAccent}`;
 export interface UserProfile {
   displayName: string;
   researchTopics: string[];
-  eventRequiredTopics: string[];
-  eventExploreTopics: string[];
-  jobRequiredTopics: string[];
-  jobExploreTopics: string[];
   activeSearchInputs?: ActiveSearchInputs;
   careerStage: CareerStage;
   industryVsAcademia: IndustryAcademiaPreference;
@@ -442,6 +239,21 @@ export interface UserProfile {
    * should rise to the top of the briefing.
    */
   currentChallenges?: string;
+  /**
+   * P5-01 (blueprint P5): questions the reader brings to most papers — up to
+   * five, 500 characters each, kept as typed. They show as one group in the dropdown
+   * of a paper's question bar and are never filled in. Browser only: the
+   * sync's payload leaves the field out (`remoteProfilePayload`). Read through
+   * `cleanQuestions`; absent means none.
+   */
+  standingQuestions?: string[];
+  /**
+   * P10-03 (ruling §1h.78; the owner's review 2.3): whether the words of the questions the reader
+   * submits on papers tune the recommendations (`syncQuestionTerms`). Absent means on; `false`
+   * means the ledger learns nothing from submitted questions (and removes nothing it learned).
+   * It replaces the per-question opt-out tick.
+   */
+  questionsTuneRecommendations?: boolean;
   /** Local v1 selection metadata; profile API persistence remains a separate P1 item. */
   selectedSenseConcepts?: SelectedSenseConcept[];
   /** Canonical v1 retrieval card; server persistence is intentionally opt-in. */
@@ -533,20 +345,14 @@ export interface UserProfile {
    */
   digestEmail?: string;
   /**
-   * Optional per-user data-source API keys for the jobs & events feeds. All
-   * kept in local browser state (never synced to the shared profile row) so
-   * users can bring their own keys without writing secrets server-side. Each
-   * unlocks broader coverage:
-   *   • Tavily   — web discovery of conferences + academic job boards (all fields)
-   *   • Adzuna   — industry job aggregator across 19 countries (app_id + app_key)
-   *   • USAJobs  — US federal / national-lab research posts (key + contact email)
+   * Optional per-user Tavily web-search switch and key. Kept in local browser
+   * state (never synced to the shared profile row) so users can bring their own
+   * key without writing secrets server-side. No screen sets them now: the
+   * onboarding step that did went with the stopped events and jobs feeds, and
+   * the fields stay for a device or a backup that holds one.
    */
   tavilyEnabled: boolean;
   tavilyApiKey?: string;
-  adzunaAppId?: string;
-  adzunaAppKey?: string;
-  usajobsApiKey?: string;
-  usajobsUserAgent?: string;
   /**
    * Optional per-user AI override for Tier 2 reranking. Also local-only so
    * users can bring their own normal API key without syncing secrets to the
@@ -573,14 +379,28 @@ export interface UserProfile {
   colorTheme: ColorTheme;
   /**
    * ISO timestamp of when the user completed (or skipped) the first-run
-   * onboarding wizard. `null` means they have never been through it, which is
-   * what gates the welcome flow. Local-only for now (persisted to localStorage
-   * via the zustand store, NOT synced to the Supabase profile row), so a fresh
-   * browser re-shows onboarding — and clearing localStorage fully resets it,
-   * which keeps local dev testing simple. See `web/supabase/` for the optional
-   * migration to make this cross-device later.
+   * onboarding wizard. `null` means they have never been through it. Local-only
+   * for now (persisted to localStorage via the zustand store, NOT synced to the
+   * Supabase profile row), so a fresh browser re-shows onboarding — and
+   * clearing localStorage fully resets it, which keeps local dev testing
+   * simple. See `web/supabase/` for the optional migration to make this
+   * cross-device later.
+   *
+   * It is not what keeps the walkthrough from opening a second time —
+   * `welcomeSkipped` is: "Replay walkthrough" clears this on purpose.
    */
   onboardedAt?: string | null;
+  /**
+   * True once the first-visit walkthrough has been dealt with: the first-run
+   * gate sent the reader to /welcome (or they opened it), or they skipped it,
+   * finished it or chose a field on the home page. `FirstRunGate` sends a
+   * profile that has never been set up to /welcome only while this is unset,
+   * so the walkthrough opens on its own once per browser. Local-only, exactly
+   * like `onboardedAt`: persisted with the profile in localStorage, no server
+   * column. Left out of `defaultProfile` on purpose — absent reads as false,
+   * and a profile stored before this field existed needs no migration.
+   */
+  welcomeSkipped?: boolean;
 }
 
 export const defaultProfile: UserProfile = {
@@ -588,10 +408,6 @@ export const defaultProfile: UserProfile = {
   // Empty by design — first-run users see the profile-setup nudge in the
   // header rather than a feed pre-tuned for someone else's PhD.
   researchTopics: [],
-  eventRequiredTopics: [],
-  eventExploreTopics: [],
-  jobRequiredTopics: [],
-  jobExploreTopics: [],
   careerStage: "PhD Year 3",
   industryVsAcademia: "both",
   locationPreferences: [],
@@ -623,10 +439,6 @@ export const defaultProfile: UserProfile = {
   digestEmail: "",
   tavilyEnabled: false,
   tavilyApiKey: "",
-  adzunaAppId: "",
-  adzunaAppKey: "",
-  usajobsApiKey: "",
-  usajobsUserAgent: "",
   feedAiProvider: "default",
   feedAiApiKey: "",
   jevApiKey: "",

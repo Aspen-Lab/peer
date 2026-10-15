@@ -1,16 +1,20 @@
 // The reading page as Markdown — what `c` copies.
 //
-// The same sheet, in the same order, with the same honesty: the abstract with
-// the ink marks as bold, every quote with the heading it came from, every
-// model claim followed by its verified evidence, and a "Not on this page" list
-// generated from `omitted` rather than typed. The frontmatter says what the
-// text was read from (`basis`) so a note taken from an abstract is never later
-// mistaken for one taken from the paper.
+// The notes only (P7-12, the owner's order): the title, one `DOI:` line under
+// it when the paper has one, and the page's sections in the page's order and
+// words — the skim, the abstract with the ink marks as bold, the Decision
+// sentences, the reader's questions and the answers, every quote with the
+// heading it came from, every model claim followed by its verified evidence.
+// No YAML front matter, no list of what is not on the page, no BibTeX block:
+// the copy says what the page has, and the Decision sentences already say what
+// it was read from. (The Obsidian note template, `lib/notes/templates.ts`,
+// keeps its own front matter; it is not this export.)
 
 import type { Paper } from "@/types";
-import { APP_VERSION } from "@/lib/version";
+import { FOR_YOUR_QUESTIONS, MAP, PEERS_READING, REPORT_HEADING } from "@/components/reader/copy";
 import { displayHeading, quoteAttribution } from "./reading";
-import type { OmitReason, PaperReading, ReadingBlock, ReadingQuote } from "./reading";
+import type { PaperReading, ReadingBlock, ReadingQuote } from "./reading";
+import type { ReadingMap } from "./reading-map";
 
 /** One model claim with the sentence that supports it. */
 export interface MarkdownClaim {
@@ -26,6 +30,24 @@ export interface MarkdownKeyResult extends Omit<MarkdownClaim, "text"> {
   detail: string;
   /** Restored: what is new about this result. Peer's line, no evidence. */
   novelty?: string;
+}
+
+/** An answer to one of the reader's questions (P2-05): Peer's sentence, the
+ *  paper's verbatim evidence for it, and where in the paper that sits. */
+export interface MarkdownAnswer extends MarkdownClaim {
+  /** The section that holds the evidence — resolved against the reading's map. */
+  sectionId?: string;
+  /** PDFs only: that section's page. */
+  page?: number;
+}
+
+/** Pass 2's answer to one question (P2-05). Structurally `QuestionAnswers`;
+ *  `question` is the reader's own text, which the server wrote back. */
+export interface MarkdownQuestionAnswers {
+  question: string;
+  verdict: "answered" | "partly" | "not_addressed" | "unverified";
+  answers: MarkdownAnswer[];
+  readNext: { sectionId: string; why: string; kind: "answer" | "background" }[];
 }
 
 /**
@@ -44,6 +66,8 @@ export interface MarkdownReport {
   limitations?: MarkdownClaim[];
   relationToYourWork?: { basedOn: string; items: MarkdownClaim[] };
   nextStep?: MarkdownClaim | null;
+  /** P2-05: present only when the reader's questions were put to the report. */
+  forYourQuestions?: MarkdownQuestionAnswers[];
   provenance?: { basis: "model-abstract" | "model-fulltext" };
 }
 
@@ -55,92 +79,29 @@ const HEADING: Record<Exclude<ReadingBlock, "skim">, string> = {
   nextStep: "Next step",
 };
 
-/** How a block is named in the "Not on this page" list. */
-const BLOCK_NAME: Record<ReadingBlock, string> = {
-  skim: "the skim",
-  findings: "findings",
-  method: "method",
-  caveats: "caveats",
-  forYou: "for your project",
-  nextStep: "next step",
-};
-
-/** Why, in the "Not on this page" list; plural where blocks are listed together. */
-const REASON_PHRASE: Record<OmitReason, { one: string; many: string }> = {
-  no_abstract: {
-    one: "no abstract is published where Peer can read it",
-    many: "no abstract is published where Peer can read it",
-  },
-  not_in_abstract: { one: "not in the abstract", many: "not in the abstract" },
-  no_section: {
-    one: "no such section in the full text",
-    many: "no such sections in the full text",
-  },
-  pdf_only_hosted: {
-    one: "the PDF is readable only by a self-hosted Peer",
-    many: "the PDF is readable only by a self-hosted Peer",
-  },
-  pdf_empty: {
-    one: "this PDF has no readable text",
-    many: "this PDF has no readable text",
-  },
-  paywalled: {
-    one: "the full text is behind access",
-    many: "the full text is behind access",
-  },
-  needs_key: { one: "needs a key", many: "need a key" },
-  needs_full_text: { one: "needs the full text", many: "need the full text" },
-  no_profile: {
-    one: "needs a current project in Profile",
-    many: "need a current project in Profile",
-  },
-  no_verified_claim: {
-    one: "the model gave no sentence for it that could be verified",
-    many: "the model gave no sentences for them that could be verified",
-  },
-};
-
-const REASON_ORDER: OmitReason[] = [
-  "no_abstract",
-  "not_in_abstract",
-  "no_section",
-  "pdf_only_hosted",
-  "pdf_empty",
-  "paywalled",
-  "needs_full_text",
-  "no_profile",
-  "no_verified_claim",
-  "needs_key",
-];
-
-function joinList(items: string[]): string {
-  if (items.length <= 1) return items.join("");
-  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
-}
-
-function capitalize(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-/** YAML scalar: quoted, with the two characters that would break it escaped. */
-function yaml(value: string | number | undefined | null): string {
-  if (value === undefined || value === null || value === "") return '""';
-  if (typeof value === "number") return String(value);
-  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
-}
-
 function quoteLine(quote: ReadingQuote): string {
-  return `> ${quote.text} — ${quoteAttribution(quote.from)}`;
+  return `> ${oneLine(`${quote.text} — ${quoteAttribution(quote.from)}`)}`;
 }
 
-function evidenceLine(claim: Omit<MarkdownClaim, "text">): string | null {
+/** A quote's words with where they came from: "<sentence> — §Heading", and
+ *  " · p.N" after it when the page is known (P2-05: an answer's evidence;
+ *  every other quote has no page and reads as it always did). */
+function evidenceText(claim: Omit<MarkdownClaim, "text"> & { page?: number }): string | null {
   if (!claim.evidence) return null;
+  const quote = oneLine(claim.evidence);
+  if (!quote) return null;
   const where = claim.evidenceWhere
     ? claim.evidenceWhere === "abstract"
       ? "abstract"
       : `§${displayHeading(claim.evidenceWhere)}`
     : null;
-  return where ? `> ${claim.evidence} — ${where}` : `> ${claim.evidence}`;
+  if (!where) return quote;
+  return oneLine(`${quote} — ${where}${typeof claim.page === "number" ? ` · ${MAP.page(claim.page)}` : ""}`);
+}
+
+function evidenceLine(claim: Omit<MarkdownClaim, "text"> & { page?: number }): string | null {
+  const text = evidenceText(claim);
+  return text === null ? null : `> ${text}`;
 }
 
 function claimBlock(lead: string, claim: Omit<MarkdownClaim, "text">): string[] {
@@ -153,144 +114,208 @@ function spaced(groups: string[][]): string[] {
   return groups.flatMap((group, i) => (i < groups.length - 1 ? [...group, ""] : group));
 }
 
+/**
+ * One line: runs of whitespace become a space, the ends are trimmed. The paper's text reaches the
+ * writer with the line breaks of its text layer inside it (a PDF abstract's `⟨003⟩` at a line end;
+ * the page's `<p>` collapses them, Markdown does not), and so does a typed question. Everything the
+ * writer prints of the paper's words goes through this, so a paragraph stays one block and a `**`
+ * never opens on a line break (P9-06).
+ */
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+/** The words of one question's answer, as the page's "For your questions" block
+ *  says them (P2-05). The Markdown export and the reading note (`lib/notes/templates.ts`,
+ *  which takes the verdict and the quotes) share this one writer, so they cannot drift
+ *  from each other. The page does not call it: its verdict and role words come from the
+ *  same `FOR_YOUR_QUESTIONS` copy, but `for-your-questions.tsx` builds its own "Read next"
+ *  meta line (`readNextLabel`) — the same words, with the minutes on a no-break space so
+ *  "3 min" never wraps apart on a screen, where this writer keeps the plain space Markdown
+ *  carries anywhere. The two are held together by the cross-check in
+ *  `reading-markdown.questions.test.ts`, which reads the page's no-break space as a space
+ *  and the export's text as it is. */
+export interface QuestionEntryLines {
+  /** "Answered", "Partly answered", "This paper does not address: <question>.",
+   *  or the unverified line (P2-08b). */
+  verdict: string;
+  /** Per answer: Peer's sentence, and the paper's — "<evidence> — §Heading · p.N"
+   *  (null when the answer carries no evidence). */
+  answers: { text: string; quote: string | null }[];
+  /** "§Heading · p.N · M min — why", with " · background" for a background
+   *  section. An id the map does not hold is left out, as the page leaves it out. */
+  readNext: string[];
+}
+
+/**
+ * `map` is the reading's: where an answer names no heading or page, the section
+ * it points at supplies them, and "Read next" resolves its ids. Without a map
+ * the answers read from their own fields and there is no "Read next".
+ */
+export function questionEntryLines(entry: MarkdownQuestionAnswers, map?: ReadingMap): QuestionEntryLines {
+  const sections = new Map((map?.sections ?? []).map((section) => [section.id, section]));
+  const verdict = (() => {
+    switch (entry.verdict) {
+      case "answered":
+        return FOR_YOUR_QUESTIONS.answered;
+      case "partly":
+        return FOR_YOUR_QUESTIONS.partly;
+      case "not_addressed":
+        return FOR_YOUR_QUESTIONS.notAddressed(entry.question);
+      case "unverified":
+        return FOR_YOUR_QUESTIONS.unverified;
+    }
+  })();
+  return {
+    verdict,
+    answers: entry.answers.map((answer) => {
+      const section = answer.sectionId ? sections.get(answer.sectionId) : undefined;
+      return {
+        text: answer.text,
+        quote: evidenceText({
+          evidence: answer.evidence,
+          evidenceWhere: answer.evidenceWhere ?? section?.heading ?? "abstract",
+          page: typeof answer.page === "number" ? answer.page : section?.page,
+        }),
+      };
+    }),
+    readNext: entry.readNext.flatMap((item) => {
+      const section = sections.get(item.sectionId);
+      if (!section) return [];
+      const label = [
+        `§${section.heading}`,
+        ...(typeof section.page === "number" ? [MAP.page(section.page)] : []),
+        MAP.minutes(section.minutes),
+        ...(item.kind === "background" ? [FOR_YOUR_QUESTIONS.background] : []),
+      ].join(" · ");
+      return [oneLine(`${label} — ${item.why}`)];
+    }),
+  };
+}
+
+/** The "For your questions" block's paragraphs: per question the question, the
+ *  verdict, each answer's sentence then its quoted evidence, and "Read next". */
+function questionGroups(entries: readonly MarkdownQuestionAnswers[], map?: ReadingMap): string[][] {
+  const groups: string[][] = [];
+  for (const entry of entries) {
+    const lines = questionEntryLines(entry, map);
+    groups.push([`**${oneLine(entry.question)}**`], [lines.verdict]);
+    for (const answer of lines.answers) {
+      if (answer.text) groups.push([answer.text]);
+      if (answer.quote) groups.push([`> ${answer.quote}`]);
+    }
+    if (lines.readNext.length > 0) {
+      groups.push([FOR_YOUR_QUESTIONS.readNext], lines.readNext.map((line) => `- ${line}`));
+    }
+  }
+  return groups;
+}
+
 function abstractParagraphs(reading: PaperReading): string[] {
   const { sentences, introCount, marks } = reading.abstract;
   const inked = new Set(marks);
+  // P9-06: a sentence is one line before the bold wrap goes on — a break inside it (or at its
+  // ends) would split the paragraph, or leave the `**` opening on a line break, where it is not bold.
+  // A sentence with nothing left in it is not printed, marked or not.
   const render = (from: number, to: number) =>
     sentences
       .slice(from, to)
-      .map((sentence, offset) => (inked.has(from + offset) ? `**${sentence}**` : sentence))
+      .flatMap((sentence, offset) => {
+        const words = oneLine(sentence);
+        if (!words) return [];
+        return [inked.has(from + offset) ? `**${words}**` : words];
+      })
       .join(" ");
   const paragraphs: string[] = [];
   const split = Math.min(Math.max(introCount, 0), sentences.length);
   if (split > 0) paragraphs.push(render(0, split));
   if (split < sentences.length) paragraphs.push(render(split, sentences.length));
-  return paragraphs;
+  return paragraphs.filter(Boolean);
 }
 
-function extractYear(paper: Paper): number | null {
-  if (paper.publishedDate) {
-    const y = new Date(paper.publishedDate).getFullYear();
-    if (!Number.isNaN(y)) return y;
-  }
-  const match = paper.venue.match(/\b(19|20)\d{2}\b/);
-  if (match) return parseInt(match[0], 10);
-  return null;
-}
-
-/** A BibTeX entry from the record. Moved here from the page; unchanged. */
-export function buildBibTeX(paper: Paper): string {
-  const year = extractYear(paper) ?? new Date().getFullYear();
-  const firstAuthorLast =
-    (paper.authors[0] ?? "unknown")
-      .split(/\s+/)
-      .pop()
-      ?.toLowerCase()
-      .replace(/[^a-z]/g, "") ?? "unknown";
-  const firstTitleWord =
-    paper.title
-      .split(/\s+/)[0]
-      .toLowerCase()
-      .replace(/[^a-z]/g, "") || "paper";
-  const key = `${firstAuthorLast}${year}${firstTitleWord}`;
-  const authors = paper.authors.join(" and ");
-  return `@inproceedings{${key},
-  title={${paper.title}},
-  author={${authors}},
-  booktitle={${paper.venue}},
-  year={${year}}${paper.linkArxiv ? `,\n  url={${paper.linkArxiv}}` : ""}
-}`;
-}
+/** The heading over the reader's settled questions when no report answers them (P7-12). */
+const YOUR_QUESTIONS = "Your questions";
 
 /**
  * Render the reading, and the model report when there is one, as Markdown.
  *
  * `sentences` are the Decision block's, from `describeAvailability`, so the
  * export says the same thing about what was read as the page does.
- * `generatedAt` exists so tests can pin the frontmatter.
+ *
+ * P2-05: `questions` are the reader's settled questions for this paper (never
+ * the gist). A report that carries `forYourQuestions` adds the "For your
+ * questions" block, in the page's place and words; with no such block, the
+ * settled questions print as a short "Your questions" list in the same place
+ * (P7-12: they used to ride in the front matter, which is gone) so they are not
+ * lost. Without either, the export is the sheet and nothing else.
  */
 export function readingToMarkdown(
   paper: Paper,
   reading: PaperReading,
   report: MarkdownReport | null,
   sentences: string[],
-  generatedAt: Date = new Date(),
+  questions: readonly string[] = [],
 ): string {
-  const basis = report?.provenance?.basis
-    ?? (reading.provenance.fullText === "html" || reading.provenance.fullText === "pdf"
-      ? "sections"
-      : "abstract");
+  const asked = questions.map(oneLine).filter(Boolean);
+  const doi = oneLine(paper.doi ?? "");
 
-  const lines: string[] = [
-    "---",
-    `title: ${yaml(paper.title)}`,
-    `authors: [${paper.authors.map((author) => yaml(author)).join(", ")}]`,
-    `venue: ${yaml(paper.venue)}`,
-    `date: ${yaml(paper.publishedDate)}`,
-    `doi: ${yaml(paper.doi)}`,
-    `url: ${yaml(reading.source?.url ?? paper.linkPaper)}`,
-    `source: ${yaml(reading.provenance.sourceLabel)}`,
-    `basis: ${basis}`,
-    `pages: ${yaml(reading.provenance.pageCount)}`,
-    `generated: ${yaml(generatedAt.toISOString())}`,
-    `peer_version: ${yaml(APP_VERSION)}`,
-    "---",
-    "",
-    `# ${paper.title}`,
-    "",
-  ];
-
-  // Which blocks the export has something for, so the omissions list below
-  // does not name a block the model filled.
-  const filled = new Set<ReadingBlock>();
+  const lines: string[] = [`# ${oneLine(paper.title)}`, ""];
+  if (doi) lines.push(`DOI: ${doi}`, "");
 
   const skim = report?.skim?.filter((claim) => claim.text) ?? [];
   if (skim.length > 0) {
     lines.push(skim.map((claim) => claim.text).join(" "), "");
     lines.push(
-      `*Peer's skim, from the ${basis === "model-fulltext" ? "full text" : "abstract"}*`,
+      `*Peer's skim, from the ${report?.provenance?.basis === "model-fulltext" ? "full text" : "abstract"}*`,
       "",
     );
-    filled.add("skim");
   }
 
   const paragraphs = abstractParagraphs(reading);
   if (paragraphs.length > 0) {
     for (const paragraph of paragraphs) lines.push(paragraph, "");
     lines.push("*From the abstract · claim and numbers in ink*", "");
-    filled.add("skim");
   } else if (reading.provenance.tldr) {
-    lines.push(reading.provenance.tldr, "");
+    lines.push(oneLine(reading.provenance.tldr), "");
     lines.push("*TLDR by Semantic Scholar — machine-written, not the authors' words*", "");
   }
 
   if (sentences.length > 0) lines.push(sentences.join(" "), "");
 
-  const section = (block: Exclude<ReadingBlock, "skim">, body: string[]) => {
-    if (body.length === 0) return;
-    lines.push(`## ${HEADING[block]}`, "", ...body, "");
-    filled.add(block);
-  };
-  // The restored sections have no slot in the omissions list: they are
-  // Peer's reading, present when the model wrote them and silent otherwise.
+  // A section is present when it has something to say, and silent otherwise.
   const extra = (heading: string, body: string[]) => {
     if (body.length === 0) return;
     lines.push(`## ${heading}`, "", ...body, "");
   };
-  const PEERS = "*Peer's reading — not a quote*";
+  const section = (block: Exclude<ReadingBlock, "skim">, body: string[]) => extra(HEADING[block], body);
+  // The attribution under a block Peer wrote with no sentence of the paper to show for it: the
+  // page's own footer words (`PEERS_READING`), in the italic line this export gives Peer's lines.
+  const PEERS = `*${PEERS_READING}*`;
 
-  // The page's order: the proposal (merged with the old "what is new"
-  // block — S6, they duplicated each other), the method, the results (or a
-  // review's contents), then the rewrite's own blocks. "Why it fits you" is
-  // deleted (S6).
+  // P9-27 (the owner, §1a.18 (b)): the page's "What is new here" — the proposal's `newHere` lines,
+  // Peer's reading — is a block of its own, the first of the Summary's report blocks, right after
+  // the words that open it. So here: its own section right after the opening (everything above the
+  // first `##`: the skim, the abstract, the Decision sentences — a heading earlier would take the
+  // Decision line under it), written whether or not the proposal has a summary, once, under `PEERS`.
+  // With no line to show there is no section. Each result's own novelty line stays with its result.
+  const newHere = (report?.whatItProposes?.newHere ?? []).map(oneLine).filter(Boolean);
+  extra(
+    REPORT_HEADING.newHere,
+    newHere.length > 0 ? [...spaced(newHere.map((line) => [line])), "", PEERS] : [],
+  );
+
+  // P2-05: the answers to the reader's questions, where the page puts them —
+  // after the Decision block, before "What it proposes". P7-12: with no answers,
+  // the settled questions themselves, one bullet each, in the same place.
+  const answered = report?.forYourQuestions ?? [];
+  if (answered.length > 0) extra(FOR_YOUR_QUESTIONS.heading, spaced(questionGroups(answered, reading.map)));
+  else if (asked.length > 0) extra(YOUR_QUESTIONS, asked.map((question) => `- ${question}`));
+
+  // The page's order: the proposal alone (P9-27: the "new here" lines are the section above's —
+  // S6 had merged them into it), the method, the results (or a review's contents), then the
+  // rewrite's own blocks. "Why it fits you" is deleted (S6).
   const proposal = report?.whatItProposes?.summary?.trim();
-  const newHere = report?.whatItProposes?.newHere?.filter(Boolean) ?? [];
-  if (proposal) {
-    extra(
-      "What it proposes",
-      newHere.length > 0 ? [proposal, "", ...newHere, "", PEERS] : [proposal],
-    );
-  }
+  if (proposal) extra("What it proposes", [proposal]);
 
   const methods = report?.whatItProposes?.methods?.filter((claim) => claim.text) ?? [];
   if (methods.length > 0) {
@@ -345,20 +370,5 @@ export function readingToMarkdown(
     section("nextStep", claimBlock(report.nextStep.text, report.nextStep));
   }
 
-  // "Not on this page", grouped by reason, in the reasons' own order.
-  const missing = reading.omitted.filter((entry) => !filled.has(entry.block));
-  if (missing.length > 0) {
-    lines.push("## Not on this page", "");
-    for (const reason of REASON_ORDER) {
-      const blocks = missing.filter((entry) => entry.reason === reason).map((entry) => entry.block);
-      if (blocks.length === 0) continue;
-      const names = capitalize(joinList(blocks.map((block) => BLOCK_NAME[block])));
-      const phrase = REASON_PHRASE[reason][blocks.length > 1 ? "many" : "one"];
-      lines.push(`- ${names} — ${phrase}`);
-    }
-    lines.push("");
-  }
-
-  lines.push("```bibtex", buildBibTeX(paper), "```", "");
   return lines.join("\n");
 }

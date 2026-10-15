@@ -146,6 +146,35 @@ describe("owner-only full article supplement", () => {
     expect(mocks.getFigurePool).not.toHaveBeenCalled();
     expect(mocks.resolveProvider).not.toHaveBeenCalled();
   });
+  // P0-05 (§1e.1, A's F1): only the canonical `upload:<hash16>` is an
+  // upload id. A case variant used to skip this route's owner check (it
+  // tested `startsWith("upload:")`) while the full-text reader still read
+  // the PDF; it is now refused as "not found" before any text, figure or
+  // model work — on both transports, and even where the owner check would
+  // pass for the canonical id.
+  it.each(["application/json", "application/x-ndjson"])("refuses a non-canonical upload id with 404 before any work (%s)", async (accept) => {
+    mocks.ownedUpload.mockResolvedValue({ paperIds: [paper.id], revision: 1 });
+    mocks.resolveProvider.mockReturnValue({ generateJsonText: vi.fn() });
+    const hash = "0123456789abcdef";
+    const bodies = [
+      { paper: { ...paper, id: `UPLOAD:${hash}` }, deepReport: true },
+      { paper: { ...paper, id: `Upload:${hash}` }, deepReport: true },
+      { paper: { ...paper, id: `upload:${hash.toUpperCase()}` }, deepReport: true },
+      { paper: { ...paper, fullTextUploadId: `UPLOAD:${hash}` }, deepReport: true },
+      { paper: { ...paper, fullTextUploadId: "" }, deepReport: true },
+    ];
+    for (const body of bodies) {
+      const response = await POST(request(body, accept));
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: "Upload not found." });
+    }
+    expect(mocks.ownedUpload).not.toHaveBeenCalled();
+    expect(mocks.getFullText).not.toHaveBeenCalled();
+    expect(mocks.getFigurePool).not.toHaveBeenCalled();
+    expect(mocks.resolveProvider).not.toHaveBeenCalled();
+    expect(mocks.generateDeepReport).not.toHaveBeenCalled();
+  });
+
   it("refuses an owned PDF attached to a different article", async () => {
     mocks.ownedUpload.mockResolvedValue({ paperIds: ["arxiv:different"] });
     const response = await POST(request({ paper: { ...paper, fullTextUploadId: "upload:0123456789abcdef" } }));
@@ -591,6 +620,83 @@ describe("POST /api/papers/report — a deep report is not metered by Peer", () 
     expect(events.some((event) => (event as { type: string }).type === "quota")).toBe(false);
     expect(mocks.generateDeepReport).not.toHaveBeenCalled();
   });
+
+  // ── F6 (P2-07, §1g.9; B's guide P2-07-B §3) ──────────────────────────
+  // The provider is resolved ONCE, first (after the sign-in gate and the owner
+  // checks), and handed to whichever transport answers; a deep request with no
+  // provider that can write is a tier 0 answer that reads nothing and asks
+  // nothing. (P4-00: this was "the unit is charged only once a provider can
+  // write"; there is no unit any more, so the cases about the charge, the spent
+  // allowance and the company budget's refusal went with it, and what is left is
+  // the resolution order, which the stream's tier 0 exit and the JSON fallback
+  // still share.)
+  describe("F6 — the provider is resolved once, before any text is read (P2-07)", () => {
+    const attached = { paper: { ...paper, fullTextUploadId: "upload:0123456789abcdef" }, deepReport: true };
+    const TRANSPORTS = ["application/json", "application/x-ndjson"] as const;
+    const TIER0 = [
+      { type: "mode", aiMode: "tier0" },
+      { type: "stage", stage: "done", label: "Basic report ready", pct: 100 },
+    ];
+
+    beforeEach(() => {
+      mocks.ownedUpload.mockResolvedValue({ paperIds: [paper.id], revision: 1 });
+    });
+
+    it.each(TRANSPORTS)("(1) no provider → tier 0: no text read, no model asked, no allowance counter (%s)", async (accept) => {
+      mocks.resolveProvider.mockReturnValue(null);
+      const increments = spyOnCounter();
+
+      const response = await POST(request(attached, accept));
+      if (accept === "application/x-ndjson") {
+        expect(await readEvents(response)).toEqual(TIER0);
+      } else {
+        const body = (await response.json()) as PaperReport;
+        expect(body.noLlm).toBe(true);
+        expect(body).not.toHaveProperty("quota");
+      }
+
+      expect(response.status).toBe(200);
+      expect(keysTouched(increments).filter((key) => !key.startsWith("rate:"))).toEqual([]);
+      expect(mocks.getFullText).not.toHaveBeenCalled();
+      expect(mocks.generateDeepReport).not.toHaveBeenCalled();
+    });
+
+    it.each(TRANSPORTS)("(1) a provider without generateJsonText → the same tier 0 (%s)", async (accept) => {
+      mocks.resolveProvider.mockReturnValue({});
+
+      const response = await POST(request(attached, accept));
+      if (accept === "application/x-ndjson") expect(await readEvents(response)).toEqual(TIER0);
+      else expect(((await response.json()) as PaperReport).noLlm).toBe(true);
+
+      expect(mocks.getFullText).not.toHaveBeenCalled();
+      expect(mocks.generateDeepReport).not.toHaveBeenCalled();
+    });
+
+    it.each(TRANSPORTS)("(3) a provider present → one resolution, one deep report, and no counter but the gate's hour (%s)", async (accept) => {
+      const increments = spyOnCounter();
+
+      const response = await POST(request(attached, accept));
+      expect(response.status).toBe(200);
+      if (accept === "application/x-ndjson") {
+        const events = await readEvents(response);
+        expect(events[0]).toEqual({ type: "mode", aiMode: "tier2" });
+        expect(events.map((event) => event.type)).toContain("report");
+      } else {
+        await response.json();
+      }
+
+      expect(mocks.generateDeepReport).toHaveBeenCalledTimes(1);
+      expect(mocks.resolveProvider).toHaveBeenCalledTimes(1);
+      expect(keysTouched(increments).filter((key) => !key.startsWith("rate:"))).toEqual([]);
+    });
+
+    it.each(TRANSPORTS)("(6) a shallow request reads no full text and builds no deep report (%s)", async (accept) => {
+      await POST(request({ paper }, accept)).then((r) => r.text());
+
+      expect(mocks.getFullText).not.toHaveBeenCalled();
+      expect(mocks.generateDeepReport).not.toHaveBeenCalled();
+    });
+  });
 });
 
 /**
@@ -634,5 +740,65 @@ describe("POST /api/papers/report — a failed model call degrades quietly", () 
 
     expect(body.noLlm).toBe(true);
     expect(mocks.bindFiguresToReport).not.toHaveBeenCalled();
+  });
+});
+
+// P9-53 — the report is bound to a PDF's figures by the figure-image route's URL
+// (`figure-binding.ts`), and that URL names the paper whose PDF the text and the
+// pool were read from. So the route hands the binder the id it read them with:
+// the paper's own, or — where the reader attached a PDF of their own — the
+// upload's (the figure route answers an upload to its owner only). Both
+// transports, both calls.
+describe("POST /api/papers/report — the figure binder is told whose PDF it is", () => {
+  const doc = {
+    title: paper.title,
+    source: "pdf",
+    sections: [{ heading: "Results", canonical: "results", text: "Full article results." }],
+    figureCaptions: [{ ordinal: 0, label: "Figure 1", caption: "A caption.", page: 2 }],
+  };
+
+  beforeEach(() => {
+    mocks.resolveProvider.mockReturnValue({ generateJsonText: vi.fn() });
+    mocks.getFullText.mockResolvedValue({ status: "ok", doc, attempts: [] });
+    mocks.getFigurePool.mockResolvedValue({ entries: [{ imageUrl: "data:image/png;base64,test" }], attempted: true });
+    mocks.generateDeepReport.mockResolvedValue(generatedReport);
+    mocks.bindFiguresToReport.mockResolvedValue(generatedReport);
+  });
+
+  async function run(body: Record<string, unknown>, accept: string): Promise<void> {
+    const response = await POST(request(body, accept));
+    expect(response.status).toBe(200);
+    if (accept.includes("ndjson")) await readEvents(response);
+    else await response.json();
+  }
+
+  it.each(["application/json", "application/x-ndjson"])("passes a public paper's own id, with its title and the document's captions (%s)", async (accept) => {
+    await run({ paper, deepReport: true }, accept);
+
+    expect(mocks.bindFiguresToReport).toHaveBeenCalledTimes(1);
+    const args = mocks.bindFiguresToReport.mock.calls[0][0];
+    expect(args.paper).toEqual({ title: paper.title, id: paper.id });
+    expect(args.captions).toBe(doc.figureCaptions);
+  });
+
+  it.each(["application/json", "application/x-ndjson"])("passes the upload's id where a PDF of the reader's own was attached, the id the text and the pool were read with (%s)", async (accept) => {
+    const fullTextUploadId = "upload:0123456789abcdef";
+    mocks.ownedUpload.mockResolvedValue({ paperIds: [paper.id], revision: 1 });
+
+    await run({ paper: { ...paper, fullTextUploadId }, deepReport: true }, accept);
+
+    const args = mocks.bindFiguresToReport.mock.calls[0][0];
+    expect(args.paper).toEqual({ title: paper.title, id: fullTextUploadId });
+    expect(mocks.getFullText).toHaveBeenCalledWith(expect.objectContaining({ paperId: fullTextUploadId }));
+    expect(mocks.getFigurePool).toHaveBeenCalledWith(expect.objectContaining({ itemId: fullTextUploadId }));
+  });
+
+  it.each(["application/json", "application/x-ndjson"])("passes an upload's own id when the paper is the upload (%s)", async (accept) => {
+    const uploadId = "upload:fedcba9876543210";
+    mocks.ownedUpload.mockResolvedValue({ paperIds: [uploadId], revision: 1 });
+
+    await run({ paper: { ...paper, id: uploadId }, deepReport: true }, accept);
+
+    expect(mocks.bindFiguresToReport.mock.calls[0][0].paper).toEqual({ title: paper.title, id: uploadId });
   });
 });

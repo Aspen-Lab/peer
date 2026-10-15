@@ -21,8 +21,7 @@ export function UploadConsentDialog({ file, onAccept, onCancel }: {
       </p>
       <label className="mt-4 flex items-start gap-3 font-sans text-body-sm">
         <input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} className="mt-1" />
-        <span>I am authorized to upload, store and process this article in Peer, including with my AI provider.
-          Having subscription access alone may not grant these permissions.</span>
+        <span>I am authorized to upload, store and process this article in Peer, including with my AI provider.</span>
       </label>
       <p className="mt-3 font-sans text-caption text-text-muted">Only upload authorized copies. Peer does not bypass paywalls or share your PDF with other readers.</p>
       <div className="mt-5 flex justify-end gap-2">

@@ -8,8 +8,18 @@ export const STARTER = {
   line: "These are real papers from today, across a few broad fields. Pick the one you work in and this becomes your briefing — everything else is optional.",
   placeholder: "or type your field",
   submit: "Use this",
-  rest: "The longer setup — project, methods, sources, your own model key —",
-  restLink: "is here.",
+  /** The line above the two buttons. It used to end in a grey "is here." link. */
+  rest: "Or take the longer setup: project, methods, sources, your own model key.",
+  /** The two buttons. "Add a key" goes straight to the key step. */
+  setup: "Set up Peer",
+  addKey: "Add a key",
+};
+
+/** The one line that stays on the home page after the sample card is gone,
+ *  until the reader adds a key or sends it away. */
+export const KEY_HINT = {
+  line: "Add a key to turn on the model",
+  dismiss: "Dismiss",
 };
 
 /** The sync state, said in words at the top right. The refresh control used to

@@ -61,8 +61,9 @@ describe("citing", () => {
     expect(authorYear(sourceOf(ROSE, "k"))).toBe("Rose et al., 2024");
     expect(authorYear(sourceOf({ ...ROSE, authors: ["A Rose", "B Ma"] }, "k"))).toBe("Rose & Ma, 2024");
     expect(authorYear(sourceOf(SOLO, "k"))).toBe("Müller, 2021");
-    expect(authorYear(sourceOf({ ...SOLO, publishedDate: undefined }, "k"))).toBe("Müller, n.d.");
-    expect(authorYear(sourceOf({ ...SOLO, authors: [] }, "k"))).toBe("The Theory of, 2021");
+    // Re-aimed (§1c, P10-09e rule 4): no ", n.d." for an unknown year; the title's first four words for no author.
+    expect(authorYear(sourceOf({ ...SOLO, publishedDate: undefined }, "k"))).toBe("Müller");
+    expect(authorYear(sourceOf({ ...SOLO, authors: [] }, "k"))).toBe("The Theory of Everything, 2021");
   });
 });
 
@@ -216,7 +217,8 @@ function noteOf(partial: Partial<Note>): Note {
 describe("export", () => {
   const sources = { rose2024applications: sourceOf(ROSE, "rose2024applications"), muller2021theory: sourceOf(SOLO, "muller2021theory") };
 
-  it("writes Markdown Obsidian and Pandoc both read, prompts left behind", () => {
+  // Re-aimed (§1c, P10-09e rule 2): the quote block in the input ("line one / line two") no longer leaves a `> ` line.
+  it("writes Markdown Obsidian and Pandoc both read, prompts and quote blocks left behind", () => {
     const md = toMarkdown(
       noteOf({
         title: 'A "draft"',
@@ -255,9 +257,6 @@ describe("export", () => {
         "2. second",
         "- [x] check",
         "",
-        "> line one",
-        "> line two",
-        "",
         "```",
         "x = 1",
         "```",
@@ -274,6 +273,7 @@ describe("export", () => {
       ].join("\n"),
     );
     expect(md).not.toContain("never exported");
+    expect(md).not.toContain("line one");
   });
 
   it("writes BibTeX with the same keys, honorifics dropped and specials escaped", () => {
@@ -303,15 +303,16 @@ describe("templates", () => {
     expect(abstractOpening("")).toBeNull();
   });
 
-  it("gives a paper its own notes: its card, its words, headings to answer", () => {
+  // Re-aimed (§1c, P10-09e rule 1) from "its card, its words, headings to answer": the note is the title line; the abstract
+  // quote, the headings and their prompts are not placed (the full pin is in templates.reading.test.ts).
+  it("gives a paper its own notes: its title line, and nothing placed after it", () => {
     const note = readingNote(ROSE, "2026-09-18T00:00:00.000Z");
     expect(note.paperId).toBe(ROSE.id);
     expect(note.title).toBe(ROSE.title);
-    expect(note.blocks[0]).toMatchObject({ type: "paper", cite: "rose2024applications" });
+    expect(note.blocks).toHaveLength(1);
+    expect(note.blocks[0]).toMatchObject({ type: "h1", text: ROSE.title });
     expect(note.sources.rose2024applications.paperId).toBe(ROSE.id);
-    expect(note.blocks[1]).toMatchObject({ type: "quote" });
-    // What the reader is to write is a prompt, not text.
-    for (const b of note.blocks.filter((x) => x.hint)) expect(b.text).toBe("");
+    expect(note.blocks.some((b) => b.type === "quote" || b.hint)).toBe(false);
   });
 
   it("drafts related work with one paragraph per paper, keys kept apart", () => {

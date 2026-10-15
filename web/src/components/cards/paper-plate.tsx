@@ -7,7 +7,7 @@
 
 import { useState } from "react";
 import type { Paper } from "@/types";
-import { useResolvedFigure } from "@/components/paper-figure";
+import { useResolvedFigure, type FigureState } from "@/components/paper-figure";
 import { FigureLightbox } from "@/components/reader/figure-lightbox";
 
 /**
@@ -46,14 +46,173 @@ export const PLATE_TERM_CLASS = [
 ];
 
 /**
- * A figure the caller already holds — the deep report's bound
- * `whatItProposes.figureImageUrl` + `figureCaption`. It replaces whatever the
- * resolver found; the resolver still runs, because its `/api/figure` entry is
- * the one the card primed and the page shares.
+ * A figure the caller already holds. It replaces whatever the resolver found; the resolver still runs,
+ * because its `/api/figure` entry is the one the card primed and the page shares.
+ *
+ * P9-55: the reading page does not pass one. It used to hand the plate the deep report's bound
+ * `whatItProposes.figureImageUrl` + `figureCaption`, which landed 2-3 s after the first paint on a keyed
+ * first visit with no cached report and swapped the plate's picture; the bound caption (three lines at 1440
+ * and at 390) then moved the title +68.8 px / +68.7 px. The plate is the figure route's answer for the paper
+ * alone — the picture the briefing's tile had, with a key and without one — and the report's bound figure is
+ * drawn by the report's own sections (`isSameFigure` keeps it from being drawn twice).
  */
 export interface PlateFigure {
   imageUrl: string;
   caption?: string | null;
+}
+
+/**
+ * P9-49 (N6): is the lead picture's figure still on its way — the figure route has not answered
+ * (`idle`), the report has bound nothing, no picture is in hand?
+ *
+ * The reading page asks it twice, of the same state: here, to hold the figure's own box until the
+ * picture lands (or the route says there is none), and in `papers/[id]/page.tsx`, to keep the plate's
+ * slot (and the card shell that frames it) in the layout while it is held. (`bound` is the plate's
+ * `figure` prop; the page passes none since P9-55, so only the route can end the hold.) Without a key the plate used
+ * to be drawn only when `POST /api/figure` returned (4-5 s on an upload), and the title and the decision
+ * block moved 96 px (1440) / 120 px (390) down under a reader about to press "Read it here".
+ *
+ * Once the route has answered — with a picture, or with none — this is false; a picture that never comes
+ * takes its held box away in one step (to the terms plate when the paper has terms, to nothing when it
+ * has none).
+ */
+export function leadFigurePending(
+  figure: Pick<FigureState, "status" | "imageUrl">,
+  bound?: PlateFigure | null,
+): boolean {
+  return figure.status === "idle" && !figure.imageUrl && !bound?.imageUrl;
+}
+
+/** What gives the figure's box its height: 16:9 and nothing taller, in a container the terms are sized by. */
+const BOX_SHAPE = "overflow-hidden aspect-[16/9] @container";
+
+/** The figure's own box: the mat, 16:9, with the plate's own crop marks. A picture stands in it, and so does the held slot. */
+const FIGURE_BOX = `tile-cover cropmarks [--cm-inset:6px] [--cm-c:var(--plate-ink-faint)] ${BOX_SHAPE}`;
+
+/**
+ * P9-49 (X3): below the spread the plate is as wide as the column (up to 712 px) and 16:9, so 337 to 400
+ * px tall at 768-1024 — a screen a reader with two settled questions scrolls before the body. On the lead
+ * picture it is capped at 240 px: the box keeps the column's width (`w-full`: left to itself, a browser
+ * that carries the cap through the 16:9 ratio would narrow the mat and leave the caption wider than its
+ * plate) and loses the height — a wide mat — and the picture stands in it `object-contain`: a landscape
+ * figure is drawn at the cap's height, a tall one (a 9:16 profile) at the cap's height too and narrower,
+ * centred; nothing is cropped. From the spread (`xl`) the panel is 320/360 px wide, the plate 180/202 px
+ * tall, and nothing changes.
+ */
+const LEAD_CAP = "max-xl:max-h-[240px] max-xl:w-full";
+
+/**
+ * P9-57: the lead plate whose picture did not load. The figure route found a picture and the box was held for it
+ * (320 × 180 at 1440, 350 × 196.9 at 390); the browser could not draw it (an owner-only route that answers 404, a
+ * publisher's host that refuses every request) and the plate fell to the 2.4:1 terms plate — 133 and 146 px, so the
+ * title and the decision block under it moved up 47 px and 51 px, under a reader about to press "Read it here" — and
+ * the caption the reading page sets under the plate stayed under it, naming a picture that is not drawn. It keeps
+ * the box instead, class for class the figure's own shape (`BOX_SHAPE`, `LEAD_CAP`), with the look of the terms plate
+ * (the card's surface and grain, the paper's words set at the foot — no mat, no crop marks: nothing was cropped, and
+ * there is no reproduction to register), and the caption goes with the picture it named.
+ *
+ * The caption is the reading page's `<figcaption>`, the next child of the `<figure>` the plate stands in, and the
+ * page cannot see this failure (it is the plate's own state: the browser's `error` event on its `<img>`), so the
+ * variant at the end hides it from here: `figure:has(&) > figcaption`, a figure whose plate has lost its picture has
+ * no caption. `papers/[id]/page.tsx` stands in that shape, and `paper-plate.error.test.tsx` reads it. The feed's
+ * tiles do not pass `lead`; theirs falls to the 2.4:1 plate as it always did.
+ */
+const LEAD_LOST_BOX = `tile-cover grain ${BOX_SHAPE} ${LEAD_CAP} [figure:has(&)>figcaption]:hidden`;
+
+// ── The lead picture's caption (P9-49, N8) ──────────────────────────────────────────────────────────
+//
+// A sentence or nothing. The head cut every caption to 140 characters with an ellipsis written after the
+// cut, so a caption whose cut fell on a full stop read "…films.…", and — under the spread's two-line clamp —
+// a no-key page showed the paper's page-1 graphic with the abstract's own block ("ABSTRACT: …") for a
+// caption, stopped mid-sentence. The figure engine pairs a graphic with the nearest block of text when no
+// "Figure N" is near it (`pdf-engine.ts`, `bestCaptionForRegion`), and on a page 1 that block is often the
+// abstract. It is not the picture's caption, and the plate then has none (the feed's tile has none either;
+// its title is the line under it).
+
+/** The room under the plate, in characters: the head's `CAPTION_CHARS`. */
+export const LEAD_CAPTION_CHARS = 140;
+
+const squeeze = (text: string | null | undefined): string => (text ?? "").replace(/\s+/g, " ").trim();
+
+/**
+ * Is this block the paper's abstract, not a caption? It opens with the word "Abstract" in any case
+ * ("ABSTRACT: …", "Abstract. …", "abstract — …"), or it is the reading's abstract itself (`abstract`, when
+ * the caller has it): its first 80 characters stand in the abstract's text.
+ */
+export function isAbstractBlock(caption: string | null | undefined, abstract?: string | null): boolean {
+  const text = squeeze(caption);
+  if (!text) return false;
+  if (/^abstract\b/i.test(text)) return true;
+  const own = squeeze(abstract).toLowerCase();
+  const probe = text.toLowerCase().slice(0, 80);
+  return own.length >= 40 && probe.length >= 40 && own.includes(probe);
+}
+
+/** Words that end in a stop without ending a sentence. */
+const ABBREVIATION = /^(?:fig|figs|eq|eqs|ref|refs|sec|secs|tab|no|nos|vs|cf|al|approx|ca|dr|mr|mrs|ms|prof|st|vol|pp|resp|e\.g|i\.e)$/i;
+/** The word in front of a figure's number: "Figure 4", "Fig. 2", "Table 1". */
+const LABEL_WORD = /^(?:fig|figs|figure|figures|table|tab|panel|plate|scheme|eq|eqs|equation|sec|section|ref)$/i;
+
+/** Where the sentences of `text` end: the index just after each real stop (and the quotes or brackets closing on it). */
+function sentenceEnds(text: string): number[] {
+  const ends: number[] = [];
+  const stop = /[.!?]["'”’)\]]*(?=\s+[A-Z0-9"“'‘(\[])/g;
+  for (let hit = stop.exec(text); hit; hit = stop.exec(text)) {
+    const words = text.slice(0, hit.index).split(" ");
+    const word = words[words.length - 1] ?? "";
+    const before = (words[words.length - 2] ?? "").replace(/[.:]+$/, "");
+    if (ABBREVIATION.test(word)) continue; // "Fig.", "et al.", "e.g.", "vs."
+    if (/^[A-Z]$/.test(word)) continue; // an initial: "J. R. Okafor"
+    if (/^\d+[a-z]?$/.test(word) && LABEL_WORD.test(before)) continue; // the label: "Figure 4."
+    ends.push(hit.index + hit[0].length);
+  }
+  return ends;
+}
+
+/**
+ * The caption the reading page sets under its lead picture: whole, or absent.
+ *
+ *  - An abstract block (`isAbstractBlock`) is never a caption: null.
+ *  - A caption that fits the room is returned as it is, white space made single.
+ *  - A longer one is cut where a sentence ends — the longest run of whole sentences that fits — and not
+ *    otherwise marked: the stop is the end. A leading "Figure 4." is a label, not a sentence.
+ *  - If one sentence is longer than the room it is cut at a word, with one ellipsis and no stop or comma
+ *    in front of it (never "films.…").
+ */
+export function leadCaption(caption: string | null | undefined, abstract?: string | null): string | null {
+  const text = squeeze(caption);
+  if (!text || isAbstractBlock(text, abstract)) return null;
+  if (text.length <= LEAD_CAPTION_CHARS) return text;
+  let whole = 0;
+  for (const end of sentenceEnds(text)) {
+    if (end > LEAD_CAPTION_CHARS) break;
+    whole = end;
+  }
+  if (whole > 0) return text.slice(0, whole);
+  const room = text.slice(0, LEAD_CAPTION_CHARS - 1);
+  // The next character decides whether the room ends on a word's end or inside a word.
+  const at = /\s/.test(text[LEAD_CAPTION_CHARS - 1] ?? "") ? room.length : room.lastIndexOf(" ");
+  const cut = at > LEAD_CAPTION_CHARS / 2 ? room.slice(0, at) : room;
+  return `${cut.replace(/[\s,;:.!?\-–—(\[]+$/, "")}…`;
+}
+
+/**
+ * P9-55: is `bound` — a figure the report bound to one of its sections — the picture the lead plate already
+ * draws? A bound figure is drawn once, at the first place the page has it, and the plate is the first: the
+ * section stands down for it. The same HTML figure has the same URL in both. A PDF figure does not: the figure
+ * route hands the plate a `data:` URL and the binder hands the report the figure-image route's URL for the same
+ * region (P9-53), so there the caption — the extractor's, the same text on both sides — says it is the same
+ * figure. A false "different" draws a picture twice; a false "same" would lose one, so only an exact URL or an
+ * exact caption (white space made single, case ignored) counts, and a plate with no picture is no match.
+ */
+export function isSameFigure(
+  plate: { imageUrl?: string | null; caption?: string | null } | null | undefined,
+  bound: { imageUrl?: string | null; caption?: string | null } | null | undefined,
+): boolean {
+  if (!plate?.imageUrl || !bound?.imageUrl) return false;
+  if (plate.imageUrl === bound.imageUrl) return true;
+  const own = squeeze(plate.caption).toLowerCase();
+  return own.length > 0 && own === squeeze(bound.caption).toLowerCase();
 }
 
 /**
@@ -77,6 +236,8 @@ export function PaperPlate({
   imageAlt,
   className,
   lightbox = false,
+  lead = false,
+  abstract,
 }: {
   paper: Paper;
   terms?: string[];
@@ -94,6 +255,17 @@ export function PaperPlate({
    * off so every other caller is unaffected by construction.
    */
   lightbox?: boolean;
+  /**
+   * P9-49 (N6): the reading page's lead picture. While its figure is still being looked for it holds the
+   * figure's own box — the mat the picture will stand in — so nothing below it moves when the picture
+   * lands. The briefing feed's tiles (`feed-tile.tsx`) do not pass this and are drawn exactly as before.
+   */
+  lead?: boolean;
+  /**
+   * P9-49 (N8): the reading's abstract, for the lead picture only. A block of the figure engine's that is the
+   * abstract is not the picture's caption — not under it, not in its alt, not in the lightbox.
+   */
+  abstract?: string | null;
 }) {
   // The same args as the card, so the page and the card read one cache entry.
   const resolved = useResolvedFigure({
@@ -107,11 +279,15 @@ export function PaperPlate({
   // the same as being able to show it — biorxiv answers 401 for every one.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const src = bound?.imageUrl ?? resolved.imageUrl;
-  const caption = bound ? (bound.caption ?? null) : resolved.caption;
+  const rawCaption = bound ? (bound.caption ?? null) : resolved.caption;
+  // P9-49 (N8): on the lead picture an abstract block is no caption (the feed's tiles are unchanged).
+  const caption = lead && isAbstractBlock(rawCaption, abstract) ? null : rawCaption;
   // `hideFigure` is the resolver's verdict on its own candidate; a bound figure
   // was chosen by the report, so the verdict does not apply to it.
-  const showFigure =
-    Boolean(src) && (bound ? true : !resolved.hideFigure) && failedSrc !== src;
+  const pictureFailed = failedSrc !== null && failedSrc === src;
+  const showFigure = Boolean(src) && (bound ? true : !resolved.hideFigure) && !pictureFailed;
+  // P9-57: the lead picture that was drawn and did not load keeps its box (`LEAD_LOST_BOX`).
+  const lostLead = lead && pictureFailed;
 
   // Nothing to show and nothing to set: no plate. A window is worth its space
   // only when something is in it, and a paper with neither a figure nor a term
@@ -119,8 +295,11 @@ export function PaperPlate({
   // its own title, rather than carrying an empty window the height of a
   // picture. (`src` and not `showFigure`: an image that was found and then
   // failed to load still keeps the window, because the callers laid out for
-  // one and cannot see the failure.)
-  if (!src && terms.length === 0) return null;
+  // one and cannot see the failure — the lead plate keeps its height and
+  // takes its caption with it.)
+  // P9-49 (N6): the lead picture's slot is held while its figure is on the way, with terms or without.
+  const pending = lead && leadFigurePending(resolved, bound);
+  if (!src && terms.length === 0 && !pending) return null;
 
   // Plain concatenation, not `cn`: the card passes no class, and its markup
   // must stay byte-for-byte what it was.
@@ -136,9 +315,27 @@ export function PaperPlate({
   // These words are Peer's own composition, allocated across the briefing by
   // `allocatePlateTerms`; nothing was cropped, and a mark that appears on both
   // branches marks neither.
-  const base = showFigure
-    ? "tile-cover cropmarks [--cm-inset:6px] [--cm-c:var(--plate-ink-faint)] overflow-hidden aspect-[16/9] @container"
-    : "tile-cover grain overflow-hidden aspect-[2.4/1] @container";
+  const base = lostLead
+    ? LEAD_LOST_BOX
+    : showFigure || pending
+      ? lead
+        ? `${FIGURE_BOX} ${LEAD_CAP}`
+        : FIGURE_BOX
+      : "tile-cover grain overflow-hidden aspect-[2.4/1] @container";
+
+  // The held slot: the box and nothing in it — no picture, no caption, no word of the paper's own
+  // ("nothing on it is invented"). Class for class the box the picture stands in, so its landing adds
+  // no height; the picture fades in over the same mat.
+  if (pending) {
+    return (
+      <div
+        data-plate="figure"
+        data-plate-pending=""
+        aria-hidden
+        className={className ? `${base} ${className}` : base}
+      />
+    );
+  }
 
   // A mat exists to hold a picture. With a figure the plate is a mat — light,
   // because scientific figures are drawn on white and matting is what keeps a

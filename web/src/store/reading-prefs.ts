@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { PLAIN_DEFAULT_LEVEL, isPlainLevel, type PlainLevel } from "@/lib/papers/plain-levels";
 import {
   TWO_XL_BREAKPOINT_PX,
   TWO_XL_COLUMN_PX,
@@ -42,9 +43,17 @@ const MAX_SCALE_INDEX = READING_SCALE_STEPS.length - 1;
 interface ReadingPrefsState {
   scaleIndex: number;
   fit: boolean;
+  /** P4-01 (blueprint §3.6; §1h.12 (h)): the level the reader last chose for "Say it plainly" —
+   *  one of the three, `undergrad` until they choose. Remembered here with the other reading
+   *  preferences, so the next paragraph and the next paper start at it. A blob persisted before
+   *  this key existed has none, and zustand's persist merges it over the initial state below, so
+   *  it reads as the default exactly as a fresh reader's does — which is why `version` stays 1. */
+  plainLevel: PlainLevel;
   increaseScale: () => void;
   decreaseScale: () => void;
   setFit: (fit: boolean) => void;
+  /** Choose a level for "Say it plainly". Anything that is not one of the three is ignored. */
+  setPlainLevel: (level: PlainLevel) => void;
   /** Ctrl/⌘+0: back to 1x on the ladder. Does not touch `fit` — Fit is a
    *  separate, composable knob (Ruling 19), not something a ladder reset
    *  is expected to clear. */
@@ -56,11 +65,15 @@ export const useReadingPrefsStore = create<ReadingPrefsState>()(
     (set) => ({
       scaleIndex: DEFAULT_SCALE_INDEX,
       fit: false,
+      plainLevel: PLAIN_DEFAULT_LEVEL,
       increaseScale: () =>
         set((state) => ({ scaleIndex: Math.min(MAX_SCALE_INDEX, state.scaleIndex + 1) })),
       decreaseScale: () =>
         set((state) => ({ scaleIndex: Math.max(0, state.scaleIndex - 1) })),
       setFit: (fit) => set({ fit }),
+      setPlainLevel: (level) => {
+        if (isPlainLevel(level)) set({ plainLevel: level });
+      },
       resetScale: () => set({ scaleIndex: DEFAULT_SCALE_INDEX }),
     }),
     {

@@ -248,14 +248,23 @@ describe("scan 3 — no operator search credential is read anywhere", () => {
     expect(accepted).toHaveLength(0);
   });
 
-  it("the three adapters still exist and take the reader's credentials from the request (a rename would otherwise make the scan above vacuous)", () => {
+  // RE-AIMED, NOT DELETED (P9-33, §1h.60). This case used to assert that the
+  // three adapters still existed and read the request's `apiKeys`, so that a
+  // rename could not make the scans above vacuous. The adapters are deleted
+  // with the jobs feed, which is the stronger form of the same guarantee: the
+  // scans above (no environment read of any job-source name, anywhere in
+  // `src` or `scripts`) are unchanged and still bind a revival, and this case
+  // now keeps the three files from coming back unreviewed.
+  it("no job-source adapter exists: the three were deleted with the jobs feed and must not return", () => {
     for (const file of [
       "src/lib/jobs/sources/adzuna.ts",
       "src/lib/jobs/sources/jsearch.ts",
       "src/lib/jobs/sources/usajobs.ts",
     ]) {
-      expect(fs.existsSync(path.join(process.cwd(), file)), `${file} is gone`).toBe(true);
-      expect(code(path.join(process.cwd(), file)), `${file} must read the request's apiKeys`).toMatch(/query\.apiKeys\?\./);
+      expect(
+        fs.existsSync(path.join(process.cwd(), file)),
+        `${file} was deleted with the jobs feed (P9-33) and must not return`,
+      ).toBe(false);
     }
   });
 });
@@ -504,20 +513,35 @@ describe("scan 5 — every route that can reach a model is behind requireAiReque
   });
 
   it("reports the guarded count, so a DROP is visible rather than silent", () => {
-    // A's standing tally as an assertion. Five routes carry the guard today:
-    // the feed, the digest, the figure resolver, the paper report and the
-    // test-digest diagnostic. A route losing it would otherwise show up only as
-    // an absence, and an absence is what nobody notices. (The upload route used
-    // to be a sixth, for a model-written title; it reaches no model now and has
-    // its own sign-in.)
+    // A's standing tally as an assertion. Eight routes carry the guard today: the
+    // feed, the digest, the figure resolver, the paper report, the test-digest
+    // diagnostic and, since P3-02, P3-03 and P4-01, the three reading-helper routes
+    // that ask a model about one paper ("Explain this?", the paragraph gists and
+    // "Say it plainly"). A
+    // route losing it would otherwise show up only as an absence, and an absence
+    // is what nobody notices. (The upload route used to be another, for a
+    // model-written title; it reaches no model now and has its own sign-in.)
     const guarded = apiRouteFiles().filter((file) =>
       code(path.join(process.cwd(), file)).includes(GUARD),
     );
 
+    // P3-02 (§1h.2): `papers/[id]/explain` — "Explain this?" asks a model for one
+    // passage and runs the same shared check, in the same place (after the owner
+    // checks, before the provider is resolved). P3-03 (§1h.6):
+    // `papers/[id]/paragraph-guide` — Peer's paragraph gists ask a small model once
+    // per document, the same way. P4-01 (§1h.12 (h)): `papers/[id]/plain` — "Say it
+    // plainly" asks a small model to rewrite one paragraph, gated
+    // `requireAiRequest("paper-plain", 40)` in the same place as the explain route's.
+    // The count moves from five to eight BECAUSE three spending routes were added
+    // behind the guard, and the routes are named so a later drop shows as a name,
+    // not only a number.
     expect(guarded).toEqual([
       "src/app/api/digest/route.ts",
       "src/app/api/feed/route.ts",
       "src/app/api/figure/route.ts",
+      "src/app/api/papers/[id]/explain/route.ts",
+      "src/app/api/papers/[id]/paragraph-guide/route.ts",
+      "src/app/api/papers/[id]/plain/route.ts",
       "src/app/api/papers/report/route.ts",
       "src/app/api/test-digest/route.ts",
     ]);

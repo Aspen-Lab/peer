@@ -65,14 +65,8 @@ const fullyPopulatedProfile: UserProfile = {
   ...defaultProfile,
   displayName: "Alice Chen",
   researchTopics: ["battery materials"],
-  eventRequiredTopics: ["conference-topic"],
-  eventExploreTopics: ["conference-explore"],
-  jobRequiredTopics: ["job-topic"],
-  jobExploreTopics: ["job-explore"],
   activeSearchInputs: {
     papers: { required: ["battery materials"], explore: [] },
-    events: { required: ["conference-topic"], explore: ["conference-explore"] },
-    jobs: { required: ["job-topic"], explore: ["job-explore"] },
     careerStage: "Postdoc",
     locationPreferences: ["Chicago"],
     promotedOn: "2026-09-29",
@@ -124,10 +118,6 @@ const fullyPopulatedProfile: UserProfile = {
   digestEmail: "alice@example.edu",
   tavilyEnabled: true,
   tavilyApiKey: "tvly-secret",
-  adzunaAppId: "adzuna-id",
-  adzunaAppKey: "adzuna-secret",
-  usajobsApiKey: "usajobs-secret",
-  usajobsUserAgent: "me@example.test",
   feedAiProvider: "openai",
   feedAiApiKey: "sk-secret",
   // An invented string. It is not, and never was, a key.
@@ -163,8 +153,6 @@ describe("remoteProfilePayload — full field enumeration (§1bk.8 AMENDMENT)", 
         "digestTimezone",
         "dislikedTopics",
         "displayName",
-        "eventExploreTopics",
-        "eventRequiredTopics",
         "feedAvoidBroadSurveys",
         "feedAvoidOldPapers",
         "feedAvoidReviews",
@@ -176,8 +164,6 @@ describe("remoteProfilePayload — full field enumeration (§1bk.8 AMENDMENT)", 
         "feedMethodMode",
         "feedSourceMix",
         "industryVsAcademia",
-        "jobExploreTopics",
-        "jobRequiredTopics",
         "locationPreferences",
         "onboardedAt",
         "paperCount",
@@ -242,6 +228,54 @@ describe("remoteProfilePayload — credential redaction (§1aj)", () => {
       expect(payload).not.toHaveProperty(key);
     }
     expect(JSON.stringify(payload)).not.toContain("jev-test-sentinel-not-a-key-0000");
+  });
+
+  // P9-32 (rulings 60, R3): the profile holds nothing for the stopped events and
+  // jobs feeds, and the push never carries it — even from a blob that is read
+  // before the store's v8 migration has dropped the old fields.
+  it("never carries an event or job field, nor the events/jobs half of the active snapshot, from a profile that still holds them", () => {
+    const legacy = {
+      ...defaultProfile,
+      displayName: "Aspen",
+      eventRequiredTopics: ["conference-topic"],
+      eventExploreTopics: ["conference-explore"],
+      jobRequiredTopics: ["job-topic"],
+      jobExploreTopics: ["job-explore"],
+      adzunaAppId: "adzuna-id",
+      adzunaAppKey: "adzuna-secret",
+      usajobsApiKey: "usajobs-secret",
+      usajobsUserAgent: "me@example.test",
+      activeSearchInputs: {
+        papers: { required: ["battery materials"], explore: [] },
+        events: { required: ["conference-topic"], explore: [] },
+        jobs: { required: ["job-topic"], explore: [] },
+        locationPreferences: [],
+        promotedOn: "2026-10-12",
+      },
+    } as UserProfile;
+    const payload = remoteProfilePayload(legacy);
+    for (const key of [
+      "eventRequiredTopics",
+      "eventExploreTopics",
+      "jobRequiredTopics",
+      "jobExploreTopics",
+      "adzunaAppId",
+      "adzunaAppKey",
+      "usajobsApiKey",
+      "usajobsUserAgent",
+    ]) {
+      expect(payload).not.toHaveProperty(key);
+    }
+    expect(payload.activeSearchInputs).toEqual({
+      papers: { required: ["battery materials"], explore: [] },
+      locationPreferences: [],
+      promotedOn: "2026-10-12",
+    });
+    const text = JSON.stringify(payload);
+    for (const value of ["conference-topic", "job-topic", "adzuna-secret", "usajobs-secret"]) {
+      expect(text).not.toContain(value);
+    }
+    expect(payload.displayName).toBe("Aspen");
   });
 
   it("still carries ordinary profile fields through", () => {
@@ -789,7 +823,7 @@ describe("pullMergeAndPush — the lost-update mitigation (§1bq.3)", () => {
   // proven separately by the mitigation test above). A REAL, empty
   // `reconcilePushPayload` output is not reachable with a real
   // `defaultProfile`-shaped profile (PROFILE-SYNC-A's own Check 3 finding:
-  // several no-server-column fields, e.g. eventRequiredTopics/
+  // several no-server-column fields, e.g. activeSearchInputs/
   // deepReportEnabled/onboardedAt, are always present, harmlessly, in every
   // payload) — so this proves the REACHABLE half of "nothing to push" (the
   // list itself is excluded) rather than a literal `{}`, and the baselines

@@ -12,6 +12,14 @@
 // says what today is, the box is where to look for what today is not. Mono,
 // hairline, the `/` cap that names its shortcut — the same objects the
 // masthead is made of.
+//
+// P9-52 (A P9-W3's N5): where there is no hover the input was 23 px tall in a
+// 36 px box. It is 44 px there and the box is 44 px (the Upload menu form's
+// height beside it): the box's 1 px border leaves 42 inside, so the input
+// stands 1 px out over it each way (`-my-px`; the border is the box's, and
+// shows through the input's transparent ground). The box also sits 4 px higher
+// (`-mt-1`), so its centre stays on the centre of the 36 px Upload square in
+// the actions row, which is `items-start`. A mouse's box is as it was.
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -39,7 +47,7 @@ export function SearchBox({ className = "" }: { className?: string }) {
         event.preventDefault();
         submit();
       }}
-      className={`relative flex h-9 w-full sm:w-[280px] items-center rounded-md border border-border-strong bg-surface transition-[border-color,box-shadow] duration-150 ease-snap focus-within:border-text-faint focus-within:shadow-[0_1px_0_var(--color-border-strong)] ${className}`}
+      className={`relative flex h-9 w-full sm:w-[280px] items-center rounded-md border border-border-strong bg-surface transition-[border-color,box-shadow] duration-150 ease-snap focus-within:border-text-faint focus-within:shadow-[0_1px_0_var(--color-border-strong)] [@media(hover:none)]:-mt-1 [@media(hover:none)]:h-11 ${className}`}
     >
       <svg
         className="pointer-events-none ml-3 shrink-0 text-text-faint"
@@ -80,7 +88,7 @@ export function SearchBox({ className = "" }: { className?: string }) {
         enterKeyHint="search"
         autoComplete="off"
         spellCheck={false}
-        className="min-w-0 flex-1 bg-transparent px-2.5 font-mono text-meta text-text placeholder:text-text-faint outline-none [&::-webkit-search-cancel-button]:hidden"
+        className="min-w-0 flex-1 bg-transparent px-2.5 font-mono text-meta text-text placeholder:text-text-faint outline-none [&::-webkit-search-cancel-button]:hidden [@media(hover:none)]:-my-px [@media(hover:none)]:h-11"
       />
       <Kbd pointerOnly className="mr-1.5">
         /

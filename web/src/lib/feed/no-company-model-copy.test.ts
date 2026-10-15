@@ -27,6 +27,14 @@ const PHRASES: ReadonlyArray<{ name: string; pattern: RegExp }> = [
   { name: "works free", pattern: /\bworks (?:fully )?free\b/i },
   { name: "Peer Pro", pattern: /\bPeer Pro\b/ },
   { name: "a trial of the plan", pattern: /\b(?:free trial|trial ends|days left)\b/i },
+  // P4-00c (N3; ruling §1h.10): every model call runs on the reader's own key and the
+  // only bound is each route's hourly limit, so no rendered string speaks of an
+  // allowance, a quota, a count used up or a deep-report unit. Whole words: "quotation"
+  // and "quotable" are not "quota".
+  { name: "an allowance", pattern: /\ballowance\b/i },
+  { name: "a quota", pattern: /\bquota\b/i },
+  { name: "used up", pattern: /\bused up\b/i },
+  { name: "a deep-report unit", pattern: /\bdeep[- ]report units?\b/i },
 ];
 
 function sourceFiles(dir: string): string[] {
