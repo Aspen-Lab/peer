@@ -55,6 +55,14 @@ describe("where it stands", () => {
     expect(editor).toContain('router.push("/saved")');
   });
 
+  it("ends the record's life when the page is left any way but its own button: a lease, held while the page stands, that only the button lets go", () => {
+    const link = readFileSync(resolve(__dirname, "back-link.tsx"), "utf8");
+
+    expect(link).toMatch(/leaseReturn\(\(\) => dropPlaceFor\(noteId\)\)/);
+    expect(link).toMatch(/lease\.mount\(\);\s*return \(\) => lease\.unmount\(\);/);
+    expect(link).toMatch(/onLeave=\{target\.fromPaper \? lease\.leave : undefined\}/);
+  });
+
   it("leaves the page's own not-found state alone: it names no paper, so its way out stays Saved", () => {
     const page = readFileSync(resolve(__dirname, "page.tsx"), "utf8");
 
