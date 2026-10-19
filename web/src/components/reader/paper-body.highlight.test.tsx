@@ -91,7 +91,7 @@ function marksOf(html: string): { open: string; style: string; insideHighlight: 
       continue;
     }
     out.push({ open: token[0], style: /style="([^"]*)"/.exec(token[0])?.[1] ?? "", insideHighlight: stack.some(Boolean) });
-    stack.push(/data-highhl(?:-part)?=/.test(token[0]));
+    stack.push(/data-highlight(?:-part)?=/.test(token[0]));
   }
   return out;
 }

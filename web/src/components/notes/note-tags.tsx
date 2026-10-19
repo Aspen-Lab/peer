@@ -21,7 +21,7 @@ import type { Route } from "next";
 import { useSyncExternalStore, type ReactNode } from "react";
 import type { PaperReading } from "@/lib/papers/reading";
 import { stickyTitle } from "@/lib/notes/blocks";
-import type { NoteAnchor } from "@/lib/notes/types";
+import type { HighlightColourId, NoteAnchor } from "@/lib/notes/types";
 import { useWindows } from "@/lib/reader/windows";
 import { anchorRange, readingNoteFor, resolveAnchors, useLostPassages, useNotesStore } from "@/store/notes";
 
@@ -38,13 +38,31 @@ const MARK_FLASH_CLASSES = ["outline", "outline-2", "outline-offset-2", "outline
 
 // ── The marked words in the paragraph ─────────────────────────────────────
 
-/** A sticky's place in its paragraph: the anchor map's entry (`start` / `end` / `quote` only when the anchor has a range). */
+/**
+ * A sticky's place in its paragraph: the anchor map's entry (`start` / `end` / `quote` only when the anchor has a range).
+ * P11-09 (owner item 8): a highlight rides the same map. A spot with a `colour` is a highlight — drawn in that colour, with
+ * no number and no tag (`n` is 0) — and `order` is its place among the note's blocks, which tells two of them apart.
+ */
 export interface AnchorSpot {
   id: string;
   n: number;
   start?: number;
   end?: number;
   quote?: string;
+  colour?: HighlightColourId;
+  order?: number;
+}
+
+/** Whether a spot is a highlight's (it has a colour) and not a sticky's. */
+export const isHighlightSpot = (spot: AnchorSpot): boolean => spot.colour !== undefined;
+
+/**
+ * P11-09: which of two spots over the same words is the outer mark. A sticky is the outer of a highlight; two stickies are
+ * told by their numbers, two highlights by their `order` (the earlier is the outer). With stickies only this is the number
+ * order the paragraph always had.
+ */
+export function tieOrder(a: AnchorSpot, b: AnchorSpot): number {
+  return Number(isHighlightSpot(a)) - Number(isHighlightSpot(b)) || (a.order ?? a.n) - (b.order ?? b.n);
 }
 
 /**
@@ -67,7 +85,7 @@ export function rangeOf(text: string, spot: AnchorSpot): { start: number; end: n
 /**
  * P10-09f (rule 2), P10-20: cut a paragraph's text for the highlighter. Each note whose range the text still holds
  * marks its own words, in the order they stand; a note whose words lie wholly inside another's is drawn as its own
- * mark inside that one (`inner`; equal ranges: the earlier note is the outer); a later note that only overlaps an
+ * mark inside that one (`inner`; equal ranges: a sticky is the outer of a highlight, else the earlier note — `tieOrder`); a later note that only overlaps an
  * earlier one starts its mark where the earlier ends (the pair never cross); a note with no range, or one the text no
  * longer holds, has its tag at the paragraph's end. The text is never changed: the runs and marks, in order, are
  * exactly the paragraph.
@@ -80,8 +98,8 @@ export function passageSegments(text: string, spots: readonly AnchorSpot[]): Pas
     if (range) pool.push({ spot, ...range });
     else loose.push(spot);
   }
-  // Outer before inner: by start, then the longer first, then the earlier note.
-  pool.sort((a, b) => a.start - b.start || b.end - a.end || a.spot.n - b.spot.n);
+  // Outer before inner: by start, then the longer first, then (P11-09) a sticky before a highlight, then the earlier note.
+  pool.sort((a, b) => a.start - b.start || b.end - a.end || tieOrder(a.spot, b.spot));
   // The runs of [lo, hi): the pool's ranges that end by `hi`, taken in order, each cutting its own inside the same way.
   const cut = (lo: number, hi: number, depth: number): PassageSegment[] => {
     const out: PassageSegment[] = [];
@@ -109,8 +127,11 @@ export function passageSegments(text: string, spots: readonly AnchorSpot[]): Pas
 /** U+2060, which allows no line break on either side of it. */
 const WORD_JOINER = "\u2060";
 
-/** The reference tag after a passage: [N], opens sticky N. */
-export function NoteTag({ n, id }: { n: number; id: string }) {
+/**
+ * The reference tag after a passage: [N], opens sticky N. P11-09: `ink`, given when the tag stands inside a highlight, is the
+ * colour of its words there — the tag's own muted ink is not made for a bright highlight behind it. Without it, as it was.
+ */
+export function NoteTag({ n, id, ink }: { n: number; id: string; ink?: string }) {
   return (
     <sup className="ml-0.5 select-none whitespace-nowrap align-super">
       {/* P10-20: a word joiner before the tag — no line break between the last marked word and the tag, so a line never opens with "[2]". */}
@@ -120,6 +141,7 @@ export function NoteTag({ n, id }: { n: number; id: string }) {
         aria-label={`Open note ${n}`}
         onClick={() => useWindows.getState().open({ id, kind: "sticky", title: stickyTitle(n) })}
         className="select-none px-px font-mono text-meta leading-none text-text-muted underline-offset-2 hover:text-heading hover:underline"
+        {...(ink ? { style: { color: ink } } : {})}
       >
         {`[${n}]`}
       </button>

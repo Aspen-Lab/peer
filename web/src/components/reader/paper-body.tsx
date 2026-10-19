@@ -32,8 +32,10 @@ import { paragraphKey } from "@/store/plain-rewrites";
 import { repairAnchors, resolveAnchors, useLostPassages } from "@/store/notes";
 import { ASK, BODY, ROUTE } from "./copy";
 import { ParagraphPlainControl, PlainRewrite, plainOffered, type PlainView } from "./plain-button";
-import { NoteTag, passageSegments, rangeOf, type AnchorSpot } from "@/components/notes/note-tags";
+import { NoteTag, isHighlightSpot, passageSegments, rangeOf, tieOrder, type AnchorSpot } from "@/components/notes/note-tags";
 import type { NoteAnchorMap } from "@/lib/notes/blocks";
+import { highlightPaint } from "@/lib/notes/highlight-colours";
+import type { HighlightColourId } from "@/lib/notes/types";
 
 /** Each section is a destination: the map's rows jump here, and `scroll-mt`
  *  keeps the heading clear of the sticky masthead. */
@@ -734,6 +736,7 @@ function Figure({ figure }: { figure: ReadingFigure }) {
  * on stay marked (`<mark data-note="N">`, the highlighter token) and the note's tag [N] stands right after them; a
  * note with no words to mark (no range, or the text no longer holds it) has its tag at the paragraph's end. The text
  * is the same text in the same order — only cut into runs — and with no notes it is the paragraph as it was.
+ * P11-09: a highlight (a spot with a `colour`) is drawn here too, in its own colour and with no tag — see `notedRuns`.
  */
 function NotedText({ text, spots }: { text: string; spots?: NoteAnchorMap[string] }) {
   if (!spots || spots.length === 0) return <MathText text={text} />;
@@ -795,7 +798,7 @@ export function coveringSegments(text: string, spots: readonly AnchorSpot[]): Co
   const clipped = spots
     .map((spot) => ({ spot, range: rangeOf(text, spot) }))
     .filter((one): one is { spot: AnchorSpot; range: { start: number; end: number } } => one.range !== null)
-    .sort((a, b) => a.range.start - b.range.start || a.spot.n - b.spot.n);
+    .sort((a, b) => a.range.start - b.range.start || tieOrder(a.spot, b.spot));
   for (const { spot, range } of clipped) {
     const mark = markOf(tree, spot);
     if (mark && mark.from > range.start) tree = overlay(tree, range.start, mark.from, spot, 0);
@@ -807,25 +810,65 @@ export function coveringSegments(text: string, spots: readonly AnchorSpot[]): Co
 const MARK_OUTER = "bg-[color:var(--color-note-mark)] text-inherit";
 const MARK_INNER = "bg-[color:var(--color-note-nested)] text-inherit";
 
-/** The runs of a paragraph, or of one mark: text, marks (their own nested runs inside, the tag right after), loose tags. */
-function notedRuns(text: string, segments: readonly CoveringSegment[]) {
+/**
+ * P11-09 (owner item 8; B P11-04 §3.2, I3): what a mark stands in when it sits inside a highlight — the highlight's colour, and
+ * the ink of the shade painted under the words there. Every mark and every tag inside a highlight sets its own ink: the
+ * paragraph's ink is no longer the only ink there is, and the muted ink of a sticky is not made for a bright highlight.
+ */
+interface Within {
+  colour: HighlightColourId;
+  ink: string;
+}
+
+/**
+ * The runs of a paragraph, or of one mark: text, marks (their own nested runs inside, the tag right after), loose tags.
+ *
+ * P11-09: a highlight's spot (it has a `colour`) is a `<mark data-highlight="id">` painted inline — its fill at depth 0, its deeper
+ * shade nested (`highlightPaint`) — with the ink best on that shade, and no tag; its `part` marks (a later highlight's words
+ * that lie inside an earlier mark) carry `data-highlight-part`. A sticky's mark inside a highlight wears the highlight's deep
+ * shade and ink and keeps its tag. A paragraph with no highlight in it renders as it always did.
+ */
+function notedRuns(text: string, segments: readonly CoveringSegment[], within?: Within) {
   return segments.map((segment, k) => {
     if (segment.kind === "text") return <MathText key={`t${k}`} text={text.slice(segment.from, segment.to)} />;
-    if (segment.kind === "tag") return <NoteTag key={`g${segment.spot.id}`} n={segment.spot.n} id={segment.spot.id} />;
+    const { spot } = segment;
+    if (segment.kind === "tag") {
+      // A highlight has no tag, even when the words it stood on are gone.
+      return isHighlightSpot(spot) ? null : <NoteTag key={`g${spot.id}`} n={spot.n} id={spot.id} ink={within?.ink} />;
+    }
+    if (isHighlightSpot(spot)) {
+      const colour = spot.colour as HighlightColourId;
+      const paint = highlightPaint(colour, segment.depth);
+      const style = { backgroundColor: paint.bg, color: paint.ink };
+      const inner = notedRuns(text, segment.inner, { colour, ink: paint.ink });
+      return segment.part ? (
+        <mark key={`p${spot.id}:${k}`} data-highlight-part={spot.id} style={style}>
+          {inner}
+        </mark>
+      ) : (
+        <mark key={`h${spot.id}`} data-highlight={spot.id} style={style}>
+          {inner}
+        </mark>
+      );
+    }
+    // A sticky's mark inside a highlight: the highlight's deep shade and its ink, in place of the highlighter tokens.
+    const worn = within ? highlightPaint(within.colour, 1) : null;
+    const wear = worn ? { style: { backgroundColor: worn.bg, color: worn.ink } } : null;
+    const inner = notedRuns(text, segment.inner, within && worn ? { colour: within.colour, ink: worn.ink } : within);
     // A part of a later note's mark inside an earlier mark: its words in the nested shade, no tag (the note's tag stands after its last word).
     if (segment.part) {
       return (
-        <mark key={`p${segment.spot.id}:${k}`} data-note-part={segment.spot.n} className={MARK_INNER}>
-          {notedRuns(text, segment.inner)}
+        <mark key={`p${spot.id}:${k}`} data-note-part={spot.n} {...(wear ?? { className: MARK_INNER })}>
+          {inner}
         </mark>
       );
     }
     return (
-      <Fragment key={`m${segment.spot.id}`}>
-        <mark data-note={segment.spot.n} className={segment.depth === 0 ? MARK_OUTER : MARK_INNER}>
-          {notedRuns(text, segment.inner)}
+      <Fragment key={`m${spot.id}`}>
+        <mark data-note={spot.n} {...(wear ?? { className: segment.depth === 0 ? MARK_OUTER : MARK_INNER })}>
+          {inner}
         </mark>
-        <NoteTag n={segment.spot.n} id={segment.spot.id} />
+        <NoteTag n={spot.n} id={spot.id} ink={within?.ink} />
       </Fragment>
     );
   });
