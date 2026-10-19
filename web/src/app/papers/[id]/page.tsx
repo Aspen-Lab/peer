@@ -1431,19 +1431,20 @@ function Reader({
           </figure>
           )
         }
-        title={<TitleBlock paper={paper} recommendation={recommendation} now={now} />}
+        // P11-16: from 1024 css px the title stands in the left pane, where it is clamped to four lines (`pane`).
+        title={<TitleBlock paper={paper} recommendation={recommendation} now={now} pane={spread} />}
+        // P11-16: the decision block is two parts. The commands stand under the title, in the left pane's fixed zone, where they stay in
+        // view (and carry the decided-read observer's ref); the details — the sentence, the private-PDF line, the DOI, the progress — follow
+        // the map in its scroll zone, and in one column follow the commands.
         decision={
           <DecisionBlock
+            part="commands"
             ref={decisionRef}
-            sentences={sentences}
-            stage={model.stage}
             // P7-12 (R4): the reader is already on the uploaded file's own page; its source is the
             // private file route, so no "Open the PDF" command. `RecordBlock` keeps `reading.source`
             // to dedupe its "Publisher" door against.
             source={isUploadId ? null : reading.source}
-            doi={paper.doi}
             isSaved={paper.isSaved}
-            showAddKey={showAddKey}
             onSave={save}
             onSkip={isUploadId ? undefined : skip}
             onCopy={copy}
@@ -1454,6 +1455,15 @@ function Reader({
             onRead={hasBody ? readHere : undefined}
             readLabel={BODY.open}
             uploadAction={!paper.id.startsWith("upload:") && uploadsAvailable ? <UploadButton targetPaper={paper} onUploaded={setUpload} /> : undefined}
+          />
+        }
+        details={
+          <DecisionBlock
+            part="details"
+            sentences={sentences}
+            stage={model.stage}
+            doi={paper.doi}
+            showAddKey={showAddKey}
             uploadStatus={upload ? <PrivatePdfStatus upload={upload}
               attachedToTitle={!paper.id.startsWith("upload:") ? paper.title : undefined}
               onDeleted={() => {

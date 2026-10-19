@@ -233,7 +233,9 @@ describe("ReaderLayout, the three panes, a paper with a body (R10; P11-16)", () 
   });
 
   it("the column's first block starts level with the pane's top, as the spread's did: its own top gaps are dropped", () => {
-    const wrapper = html.slice(html.lastIndexOf("<div", html.indexOf('id="reader-common"') - 1), html.indexOf('id="reader-common"'));
+    const commonTag = html.lastIndexOf("<div", html.indexOf('id="reader-common"'));
+    const start = html.lastIndexOf("<div", commonTag - 1);
+    const wrapper = html.slice(start, html.indexOf(">", start) + 1);
 
     expect(wrapper).toContain("[&amp;&gt;:first-child&gt;:first-child]:mt-0");
     expect(wrapper).toContain("[&amp;&gt;:first-child&gt;:first-child&gt;:first-child]:mt-0");
@@ -363,11 +365,14 @@ describe("reader-layout.tsx source (P7-14)", () => {
   // P11-16, RE-AIMED from "the spread's panel: {p.decision} right after {p.title}, then {p.tabs}, and nothing after it": the left pane's fixed
   // zone is the title, the commands and the strip; its scroll zone the map, the plate and the details.
   it("the three panes: {p.decision} right after {p.title} and then {p.tabs} in the fixed zone; {p.map}, {p.plate}, {p.details} in the scroll zone", () => {
-    const fixed = spread.slice(spread.indexOf("fixed"), spread.indexOf("scroll"));
-    const scroll = spread.slice(spread.indexOf("scroll", spread.indexOf("fixed")));
+    const zones = body.slice(body.indexOf("const head = ("), body.indexOf("<ReaderShell"));
+    const fixed = zones.slice(0, zones.indexOf("const rest = ("));
+    const scroll = zones.slice(zones.indexOf("const rest = ("));
 
-    expect(fixed.slice(fixed.indexOf("{p.title}") + "{p.title}".length, fixed.indexOf("{p.decision}")).trim()).toBe("");
+    // Nothing stands between the title and the commands but the opening of the wrapper that tightens their gap.
+    expect(fixed.slice(fixed.indexOf("{p.title}") + "{p.title}".length, fixed.indexOf("{p.decision}")).replace(/<div className="[^"]*">/g, "").trim()).toBe("");
     expect(fixed.indexOf("{p.tabs}")).toBeGreaterThan(fixed.indexOf("{p.decision}"));
+    expect(fixed.indexOf("<ReadingControls")).toBeLessThan(fixed.indexOf("{p.title}"));
     expect(fixed).not.toContain("{p.map}");
     expect(scroll.indexOf("{p.plate}")).toBeGreaterThan(scroll.indexOf("{p.map}"));
     expect(scroll.indexOf("{p.details}")).toBeGreaterThan(scroll.indexOf("{p.plate}"));
