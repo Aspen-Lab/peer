@@ -372,7 +372,7 @@ describe("the note editor draws it, for the window and for /notes/<id>", () => {
   it("draws a highlight block as a HighlightRow, beside the divider and the paper card", () => {
     expect(rowCode).toMatch(/b\.type === "divider"/);
     expect(rowCode).toMatch(/b\.type === "paper"/);
-    expect(rowCode).toMatch(/b\.type === "highlight"\) \{\s*content = \(?\s*<HighlightRow block=\{b\}/);
+    expect(rowCode).toMatch(/b\.type === "highlight"\) \{[\s\S]*?content = \(?\s*<HighlightRow block=\{b\}/);
     expect(rowCode.indexOf('b.type === "paper"')).toBeLessThan(rowCode.indexOf('b.type === "highlight"'));
     expect(rowCode.indexOf('b.type === "highlight"')).toBeLessThan(rowCode.indexOf("editing && b.type === \"code\""));
   });

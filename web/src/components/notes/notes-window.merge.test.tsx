@@ -151,7 +151,7 @@ describe("the store's own highlight actions, against the window's stale copy (P1
   });
 
   it("a highlight recoloured by setHighlightColour keeps its new colour through the window's merge", () => {
-    const { id, base } = seeded();
+    const { id } = seeded();
     const made = useNotesStore.getState().addHighlight(id, { paperId: PAPER, paragraphId: PARAGRAPH, passage: "tide pools", paragraphText: TEXT, hint: 8 })!;
     const stale = useNotesStore.getState().notes[id].blocks; // what the window started from, and still holds
     useNotesStore.getState().setHighlightColour(id, made.id, "pink");

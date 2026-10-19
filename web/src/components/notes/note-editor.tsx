@@ -54,7 +54,7 @@ import {
   type MutableRefObject,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import type { Block, BlockType, Citable, Note, NoteAnchor, Source } from "@/lib/notes/types";
+import type { Block, BlockType, Citable, HighlightColourId, Note, NoteAnchor, Source } from "@/lib/notes/types";
 import {
   block,
   canIndent,
@@ -104,6 +104,7 @@ import { COMMAND } from "@/components/ui/command";
 import { NotesBackLink } from "./back-link";
 import { cn } from "@/lib/cn";
 import { caretCoords, caretLine, offsetFromPoint } from "./caret";
+import { HighlightRow, blockAccepts, withHighlightColour } from "./highlight-row";
 import { InlineText } from "./inline-text";
 import { NoteToolbar, markForKey, typeAfterToggle } from "./note-toolbar";
 import { Surface, insertText, type SurfaceEdit } from "./wysiwyg-field";
@@ -239,6 +240,10 @@ interface RowApi {
   noteId: (title: string) => string | null;
   missingNote: (title: string) => void;
   citation: (key: string) => void;
+  /** P11-08: a highlight row's colour button — the editor's copy of the note takes the colour and saves it with the rest. */
+  highlightColour: (id: string, colour: HighlightColourId) => void;
+  /** P11-08: a highlight row's ×, which is the block menu's Delete (and so has its undo). */
+  highlightRemove: (id: string) => void;
 }
 
 interface RowProps {
@@ -308,6 +313,11 @@ const Row = memo(function Row({ block: b, first, number, editing, sources, dragg
       </div>
     ) : (
       <p className="annotation py-2 text-text-faint">A paper card whose source is missing.</p>
+    );
+  } else if (b.type === "highlight") {
+    // P11-08: a highlight is placed, not typed — its row is the square, its words, its colour and a ×; there is nothing here to edit.
+    content = (
+      <HighlightRow block={b} onColour={(colour) => api.current.highlightColour(b.id, colour)} onRemove={() => api.current.highlightRemove(b.id)} />
     );
   } else if (editing && b.type === "code") {
     content = (
@@ -1246,6 +1256,13 @@ export function NoteEditor({
 
     citation: showPaper,
 
+    highlightColour: (id, colour) => {
+      const next = withHighlightColour(docRef.current.blocks, id, colour);
+      if (next !== docRef.current.blocks) setBlocks(next);
+    },
+
+    highlightRemove: (id) => blockAction(id, "delete"),
+
     missingNote: (title) => {
       const made = { ...blankNote(), title };
       addNote(made);
@@ -1627,6 +1644,8 @@ export function NoteEditor({
     if (i === -1) return;
     const blocks = docRef.current.blocks;
     const b = blocks[i];
+    // P11-08: a highlight takes Delete and nothing else — a copy would be a second mark over the same words, and it has none to turn into a heading.
+    if (!blockAccepts(b.type, action)) return;
     if (action === "up" || action === "down") {
       const gap = action === "up" ? i - 1 : i + 2;
       if (gap >= 0 && gap <= blocks.length) setBlocks(moveBlock(blocks, i, gap));
@@ -2042,7 +2061,7 @@ function MenuItem({
   );
 }
 
-function BlockMenu({
+export function BlockMenu({
   top,
   block: b,
   onAction,
@@ -2097,15 +2116,20 @@ function BlockMenu({
           <span aria-hidden className="my-1 block h-px bg-border" />
         </>
       )}
-      <button type="button" role="menuitem" className={cn(item, "text-text-muted")} onClick={() => onAction("up")}>
-        Move up
-      </button>
-      <button type="button" role="menuitem" className={cn(item, "text-text-muted")} onClick={() => onAction("down")}>
-        Move down
-      </button>
-      <button type="button" role="menuitem" className={cn(item, "text-text-muted")} onClick={() => onAction("duplicate")}>
-        Duplicate
-      </button>
+      {/* P11-08: a highlight's menu is Delete alone (it is still moved by its grip). */}
+      {blockAccepts(b.type, "duplicate") && (
+        <>
+          <button type="button" role="menuitem" className={cn(item, "text-text-muted")} onClick={() => onAction("up")}>
+            Move up
+          </button>
+          <button type="button" role="menuitem" className={cn(item, "text-text-muted")} onClick={() => onAction("down")}>
+            Move down
+          </button>
+          <button type="button" role="menuitem" className={cn(item, "text-text-muted")} onClick={() => onAction("duplicate")}>
+            Duplicate
+          </button>
+        </>
+      )}
       <button type="button" role="menuitem" className={cn(item, "text-text-muted hover:text-red")} onClick={() => onAction("delete")}>
         Delete
       </button>
