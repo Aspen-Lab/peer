@@ -107,49 +107,94 @@ describe("ReaderLayout, one column, a paper with a body (R10)", () => {
   });
 });
 
-describe("ReaderLayout, the spread, a paper with no body (R2)", () => {
-  const html = render(true);
-  const panelAt = html.indexOf("data-reader-panel");
-  const columnAt = html.indexOf("xl:flex xl:flex-col");
+// P11-16 (B P11-01 §2.3, §2.4, §3.2; ruling §1h.113 (a)), RE-AIMED from the two-column spread's cases: from 1024 css px the blocks are
+// placed in the three-pane shell's zones. The left pane's fixed zone holds the reading controls, the title, the commands and the
+// Summary / Paper digestion strip; its scroll zone the map, then the plate and the details; the centre the common blocks, the active
+// tab's blocks and Next. A paper with no strip and no map has no scroll zone: the pane scrolls as one (`whole`).
+const PANES = { details: mark("DETAILS") };
 
-  it("the panel holds the plate, the title and the decision; the column the abstract, the additions and Next", () => {
-    expect(panelAt).toBeGreaterThan(-1);
-    expect(columnAt).toBeGreaterThan(panelAt);
-    expect(ascending(order(html, ["PLATE", "TITLE", "DECISION"]))).toBe(true);
-    for (const name of ["PLATE", "TITLE", "DECISION"]) {
-      expect(at(html, name)).toBeGreaterThan(panelAt);
-      expect(at(html, name)).toBeLessThan(columnAt);
+/** The three panes' regions of a rendered page: from each region's opening tag to the next region's. */
+function panes(html: string) {
+  const left = html.indexOf("data-reader-left=");
+  const fixed = html.indexOf("data-reader-left-fixed");
+  const scroll = html.indexOf("data-reader-left-scroll");
+  const divider = html.indexOf('data-reader-divider="left"');
+  const centre = html.indexOf("data-reader-centre");
+  const margin = html.indexOf("data-reader-margin");
+  return {
+    left,
+    centre,
+    margin,
+    pane: html.slice(left, divider),
+    fixed: html.slice(fixed, scroll),
+    scroll: html.slice(scroll, divider),
+    column: html.slice(centre, margin),
+  };
+}
+
+describe("ReaderLayout, the three panes, a paper with no body (R2; P11-16)", () => {
+  const html = render(true, PANES);
+  const { left, centre, pane, column } = panes(html);
+
+  it("the left pane holds the controls, the title, the commands, the plate and the details; the centre the abstract, the additions and Next", () => {
+    expect(left).toBeGreaterThan(-1);
+    expect(centre).toBeGreaterThan(left);
+    expect(ascending([pane.indexOf('aria-label="Reading controls"'), ...order(pane, ["TITLE", "DECISION", "PLATE", "DETAILS"])])).toBe(true);
+    for (const name of ["TITLE", "DECISION", "PLATE", "DETAILS"]) {
+      expect(at(html, name)).toBeGreaterThan(left);
+      expect(at(html, name)).toBeLessThan(centre);
     }
-    expect(ascending([columnAt, ...order(html, ["WORDS", "ADDITIONS", "NEXT"])])).toBe(true);
+    expect(ascending([centre, ...order(html, ["WORDS", "ADDITIONS", "NEXT"])])).toBe(true);
+    for (const name of ["WORDS", "ADDITIONS", "NEXT"]) expect(pane).not.toContain(`data-mark="${name}"`);
   });
 
-  it("still puts the decision straight after the title when nothing else fills the panel", () => {
-    expect(ascending(order(render(true, { plate: null }), ["TITLE", "DECISION", "WORDS"]))).toBe(true);
+  it("has no strip and no map to float, so no zones: the pane scrolls as one", () => {
+    expect(html).toContain('data-mode="whole"');
+    expect(html).not.toContain("data-reader-left-fixed");
+    expect(html).not.toContain("data-reader-left-scroll");
+  });
+
+  it("still puts the commands straight after the title when nothing else fills the pane", () => {
+    const bare = render(true, { ...PANES, plate: null });
+
+    expect(ascending(order(bare, ["TITLE", "DECISION", "DETAILS", "WORDS"]))).toBe(true);
+  });
+
+  it("the column holds the paper's blocks and nothing of the pane", () => {
+    for (const name of ["TITLE", "DECISION", "PLATE", "DETAILS"]) expect(column).not.toContain(`data-mark="${name}"`);
   });
 });
 
-describe("ReaderLayout, the spread, a paper with a body (R10)", () => {
-  const html = tabbed(true);
-  const panelAt = html.indexOf("data-reader-panel");
-  const columnAt = html.indexOf("xl:flex xl:flex-col");
+describe("ReaderLayout, the three panes, a paper with a body (R10; P11-16)", () => {
+  const html = tabbed(true, { ...PANES, map: mark("MAP") });
+  const { fixed, scroll, column, left, centre, margin } = panes(html);
 
-  it("the panel: plate, title, decision, the tab strip — and none of the column's blocks (P10-02: no terms after it)", () => {
-    expect(ascending(order(html, ["PLATE", "TITLE", "DECISION", "TABS"]))).toBe(true);
-    for (const name of ["PLATE", "TITLE", "DECISION", "TABS"]) {
-      expect(at(html, name)).toBeGreaterThan(panelAt);
-      expect(at(html, name)).toBeLessThan(columnAt);
-    }
+  it("the fixed zone: the reading controls, the title, the commands, the tab strip — in that order, and nothing else", () => {
+    expect(fixed.indexOf('aria-label="Reading controls"')).toBeGreaterThan(-1);
+    expect(ascending([fixed.indexOf('aria-label="Reading controls"'), ...order(fixed, ["TITLE", "DECISION", "TABS"])])).toBe(true);
+    for (const name of ["MAP", "PLATE", "DETAILS", "COMMON", "WORDS", "ADDITIONS", "NEXT"]) expect(fixed).not.toContain(`data-mark="${name}"`);
+  });
+
+  it("the scroll zone: the map first, then the plate, then the details — and none of the fixed zone's or the column's blocks", () => {
+    expect(ascending(order(scroll, ["MAP", "PLATE", "DETAILS"]))).toBe(true);
+    for (const name of ["TITLE", "DECISION", "TABS", "COMMON", "WORDS", "ADDITIONS", "NEXT"]) expect(scroll).not.toContain(`data-mark="${name}"`);
+    expect(html).toContain('data-mode="split"');
   });
 
   it("the column: the common blocks first, then the active tab's blocks, then Next", () => {
-    expect(ascending([columnAt, ...order(html, ["COMMON", "WORDS", "ADDITIONS", "NEXT"])])).toBe(true);
+    expect(ascending(order(column, ["COMMON", "WORDS", "ADDITIONS", "NEXT"]))).toBe(true);
+    for (const name of ["TITLE", "DECISION", "TABS", "MAP", "PLATE", "DETAILS"]) expect(column).not.toContain(`data-mark="${name}"`);
   });
 
-  it("the panel has no contents rail and no question box any more", () => {
-    const panel = html.slice(panelAt, columnAt);
+  it("the DOM order is the visual order: the left pane, then the centre, then the margin", () => {
+    expect(ascending([left, centre, margin])).toBe(true);
+  });
 
-    expect(panel).not.toContain('data-mark="COMMON"');
-    expect(panel).not.toContain("<nav");
+  it("the pane has no contents rail and no question box any more", () => {
+    const pane = html.slice(left, centre);
+
+    expect(pane).not.toContain('data-mark="COMMON"');
+    expect(pane).not.toContain("<nav");
   });
 
   it("the common blocks stand in the same place, with the same markup, whichever tab is on show", () => {
@@ -163,21 +208,35 @@ describe("ReaderLayout, the spread, a paper with a body (R10)", () => {
 
     expect(summary.position).toBeGreaterThan(-1);
     expect(summary.chunk).toBe(digestion.chunk);
-    // Everything before the common blocks is the same too: the panel and the strip are not redrawn by the switch.
+    // Everything before the common blocks is the same too: the left pane and the strip are not redrawn by the switch.
     expect(summary.before).toBe(digestion.before);
     expect(summary.chunk).toContain('data-mark="COMMON"');
   });
 
-  // P9-04 (X2): the panel scrolls as one; nothing the layout puts inside it scrolls, shrinks or has a floor.
-  // P10-02: it held the terms as its example; the terms are gone, the panel's own contents are the same.
-  it("nothing the layout adds inside the panel scrolls, shrinks or has a floor (P9-04, X2)", () => {
-    const panel = html.slice(html.indexOf("data-reader-panel"), columnAt);
-    const inside = panel.slice(panel.indexOf(">") + 1);
+  // P9-04 (X2), RE-AIMED: the panel scrolled as one, and nothing the layout put inside it scrolled, shrank or had a floor. The scroll zone
+  // is the shell's one scroller now, and the layout's own wrappers in either zone still add none of those.
+  it("nothing the layout adds inside the pane's zones scrolls, shrinks or has a floor (P9-04, X2)", () => {
+    const wrappers = (zone: string) => zone.match(/<div\b[^>]*>/g) ?? [];
 
-    expect(inside).toContain('data-mark="TABS"');
-    // The panel's own tag carries `reader-panel` (sticky, window-high, overflow-y: auto); no other tag in it
-    // has a class that scrolls (`overflow-*`), gives (`shrink`) or keeps a floor (`min-h-*`, `max-h-*`).
-    expect(inside).not.toMatch(/class="[^"]*(?:overflow|shrink|min-h-|max-h-)[^"]*"/);
+    for (const zone of [fixed, scroll]) {
+      expect(wrappers(zone).length).toBeGreaterThan(0);
+      for (const tag of wrappers(zone)) expect(tag).not.toMatch(/class="[^"]*(?:overflow|shrink|min-h-|max-h-)[^"]*"/);
+    }
+  });
+
+  // goToPassage lands a paragraph at y 80 (`scroll-mt-20` = the masthead's 48 + 32, paper-body.tsx); a picked tab starts at the same y.
+  it("the common blocks and the tabpanel keep `scroll-mt-20`, so a tab's start lands at y 80 as the passages do (P11-16)", () => {
+    const tag = (marker: string) => html.slice(html.lastIndexOf("<", html.indexOf(marker)), html.indexOf(">", html.indexOf(marker)) + 1);
+
+    expect(tag('id="reader-common"')).toMatch(/class="[^"]*\bscroll-mt-20\b/);
+    expect(tag('role="tabpanel"')).toMatch(/class="[^"]*\bscroll-mt-20\b/);
+  });
+
+  it("the column's first block starts level with the pane's top, as the spread's did: its own top gaps are dropped", () => {
+    const wrapper = html.slice(html.lastIndexOf("<div", html.indexOf('id="reader-common"') - 1), html.indexOf('id="reader-common"'));
+
+    expect(wrapper).toContain("[&amp;&gt;:first-child&gt;:first-child]:mt-0");
+    expect(wrapper).toContain("[&amp;&gt;:first-child&gt;:first-child&gt;:first-child]:mt-0");
   });
 
   it("an empty words slot (Paper digestion) leaves the additions where they were in the tabpanel", () => {
@@ -185,6 +244,22 @@ describe("ReaderLayout, the spread, a paper with a body (R10)", () => {
 
     expect(ascending([shown.indexOf('role="tabpanel"'), at(shown, "ADDITIONS"), at(shown, "NEXT")])).toBe(true);
     absent(shown, "WORDS");
+  });
+});
+
+// One column: the details (the sentence, the private-PDF line, the reading controls, the DOI, the progress) follow the commands — the
+// page hands them in a slot of their own now (P11-16), and the order is the one the decision block always had.
+describe("ReaderLayout, one column, the details after the commands (P11-16)", () => {
+  it("plate, title, decision, details, then the common blocks, the strip, the active tab's blocks, Next", () => {
+    const html = tabbed(false, PANES);
+
+    expect(ascending(order(html, ["PLATE", "TITLE", "DECISION", "DETAILS", "COMMON", "TABS", "WORDS", "ADDITIONS", "NEXT"]))).toBe(true);
+    expect(html).not.toContain("data-reader-shell");
+  });
+
+  it("with no details the page is exactly what it was", () => {
+    expect(tabbed(false)).not.toContain("DETAILS");
+    expect(ascending(order(tabbed(false), ["PLATE", "TITLE", "DECISION", "COMMON", "TABS", "WORDS", "ADDITIONS", "NEXT"]))).toBe(true);
   });
 });
 
@@ -196,17 +271,23 @@ describe("ReaderLayout, the spread, a paper with a body (R10)", () => {
 describe("ReaderLayout, the map under the strip (P10-04, A8)", () => {
   const withMap = (spread: boolean, over: Record<string, unknown> = {}) => tabbed(spread, { map: mark("MAP"), ...over });
 
-  it("on the spread: in the panel, directly after the tab strip (the terms slot is gone, P10-02)", () => {
-    const html = withMap(true);
-    const panelAt = html.indexOf("data-reader-panel");
-    const columnAt = html.indexOf("xl:flex xl:flex-col");
+  // P11-16, RE-AIMED: the strip is the fixed zone's last block and the map the scroll zone's first — the strip never scrolls away, and
+  // the map is what the pane scrolls. The two are no longer adjacent siblings, but nothing stands between them but the zones' edge.
+  it("on the three panes: the strip ends the left pane's fixed zone and the map opens its scroll zone (the terms slot is gone, P10-02)", () => {
+    const html = withMap(true, PANES);
+    const { fixed, scroll, column } = panes(html);
 
-    expect(ascending(order(html, ["PLATE", "TITLE", "DECISION", "TABS", "MAP"]))).toBe(true);
-    expect(html).toContain('<i data-mark="TABS">TABS</i><i data-mark="MAP">MAP</i>');
-    expect(at(html, "MAP")).toBeGreaterThan(panelAt);
-    expect(at(html, "MAP")).toBeLessThan(columnAt);
+    expect(ascending(order(html, ["TITLE", "DECISION", "TABS", "MAP", "PLATE", "DETAILS"]))).toBe(true);
+    expect(fixed).toContain('data-mark="TABS"');
+    expect(fixed).not.toContain('data-mark="MAP"');
+    // Nothing follows the strip in the fixed zone but the closing tags of its wrappers; nothing precedes the map in the scroll zone but
+    // the zone's own tag and the opening tags of the layout's wrappers.
+    const tabsEnd = html.indexOf('<i data-mark="TABS">TABS</i>') + '<i data-mark="TABS">TABS</i>'.length;
+    expect(html.slice(tabsEnd, html.indexOf("data-reader-left-scroll"))).toMatch(/^(?:<\/div>)*<div [^>]*$/);
+    expect(scroll).toMatch(/^[^>]*>(?:<div[^>]*>)*<i data-mark="MAP">MAP<\/i>/);
+    expect(ascending(order(scroll, ["MAP", "PLATE", "DETAILS"]))).toBe(true);
     // Nothing of it in the column, and the column is as it was.
-    expect(html.slice(columnAt)).not.toContain('data-mark="MAP"');
+    expect(column).not.toContain('data-mark="MAP"');
     expect(html.split('data-mark="MAP"').length - 1).toBe(1);
   });
 
@@ -256,8 +337,9 @@ describe("ReaderLayout, the map under the strip (P10-04, A8)", () => {
 describe("reader-layout.tsx source (P7-14)", () => {
   const source = readFileSync(resolve(process.cwd(), "src/components/reader/reader-layout.tsx"), "utf8");
   const body = source.slice(source.indexOf("export function ReaderLayout"));
-  const stacked = body.slice(body.indexOf("if (!p.spread)"), body.indexOf("<div className={SPREAD_GRID}"));
-  const spread = body.slice(body.indexOf("<div className={SPREAD_GRID}"));
+  // P11-16, RE-AIMED: the one-column branch ends where the shell's begins (`<ReaderShell`, not the two-column grid).
+  const stacked = body.slice(body.indexOf("if (!p.spread)"), body.indexOf("<ReaderShell"));
+  const spread = body.slice(body.indexOf("<ReaderShell"));
 
   it("one column: {p.decision} right after {p.title}, before the tabs, the common blocks and the abstract", () => {
     expect(stacked.slice(stacked.indexOf("{p.title}") + "{p.title}".length, stacked.indexOf("{p.decision}")).trim()).toBe("");
@@ -278,16 +360,28 @@ describe("reader-layout.tsx source (P7-14)", () => {
     expect(stacked.indexOf("{p.tabs}")).toBeGreaterThan(stacked.indexOf("{common}"));
   });
 
-  it("the spread's panel: {p.decision} right after {p.title}, then {p.tabs}, and nothing after it", () => {
-    const panel = spread.slice(spread.indexOf("data-reader-panel"), spread.indexOf("COLUMN_CLASS"));
+  // P11-16, RE-AIMED from "the spread's panel: {p.decision} right after {p.title}, then {p.tabs}, and nothing after it": the left pane's fixed
+  // zone is the title, the commands and the strip; its scroll zone the map, the plate and the details.
+  it("the three panes: {p.decision} right after {p.title} and then {p.tabs} in the fixed zone; {p.map}, {p.plate}, {p.details} in the scroll zone", () => {
+    const fixed = spread.slice(spread.indexOf("fixed"), spread.indexOf("scroll"));
+    const scroll = spread.slice(spread.indexOf("scroll", spread.indexOf("fixed")));
 
-    expect(panel.slice(panel.indexOf("{p.title}") + "{p.title}".length, panel.indexOf("{p.decision}")).trim()).toBe("");
-    expect(panel.indexOf("{p.tabs}")).toBeGreaterThan(panel.indexOf("{p.decision}"));
-    // P10-04: the map is in the panel, directly after the strip, and nothing after it (the terms slot is gone, P10-02).
-    expect(panel.indexOf("{p.map}")).toBeGreaterThan(panel.indexOf("{p.tabs}"));
-    expect(panel.slice(panel.indexOf("{p.map}") + "{p.map}".length).replace(/<\/div>[\s\S]*$/, "").trim()).toBe("");
-    expect(panel).not.toContain("{p.common}");
-    expect(panel).not.toContain("{common}");
+    expect(fixed.slice(fixed.indexOf("{p.title}") + "{p.title}".length, fixed.indexOf("{p.decision}")).trim()).toBe("");
+    expect(fixed.indexOf("{p.tabs}")).toBeGreaterThan(fixed.indexOf("{p.decision}"));
+    expect(fixed).not.toContain("{p.map}");
+    expect(scroll.indexOf("{p.plate}")).toBeGreaterThan(scroll.indexOf("{p.map}"));
+    expect(scroll.indexOf("{p.details}")).toBeGreaterThan(scroll.indexOf("{p.plate}"));
+    expect(scroll).not.toContain("{p.tabs}");
+    expect(spread).not.toContain("{p.common}");
+  });
+
+  it("one column: {p.details} right after {p.decision}", () => {
+    expect(stacked.slice(stacked.indexOf("{p.decision}") + "{p.decision}".length, stacked.indexOf("{p.details}")).trim()).toBe("");
+  });
+
+  it("is placed by the shell: no two-column grid, no sticky part, no panel class of spread.ts", () => {
+    expect(source).toContain("<ReaderShell");
+    expect(source).not.toMatch(/SPREAD_GRID|PANEL_CLASS|PANEL_STICKY_CLASS|PANEL_TAIL_CLASS|COLUMN_CLASS|data-reader-panel|data-reader-sticky/);
   });
 
   it("the common blocks are drawn before the tab panel and outside it, in both layouts, and do not read the tab", () => {

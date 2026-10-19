@@ -155,3 +155,37 @@ describe("the sentence carries no status words while a stage shows (P10-47)", ()
     });
   }
 });
+
+// P11-16: the page hands the block to the layout in two slots (`decision`, the commands, and `details`, the sentence and the progress). The
+// status is the details', so it is drawn once whichever zone of the left pane, or whichever place in the column, the details stand in.
+describe("the report's status line is drawn once with the block in two slots (P11-16)", () => {
+  const layouts: Array<[string, Record<string, unknown>]> = [
+    ["one column", { spread: false }],
+    ["the three panes, with the strip and the map", { spread: true, tabs: createElement("i", null, "TABS"), map: createElement("i", null, "MAP"), tab: "digestion" }],
+    ["the three panes, no strip and no map", { spread: true }],
+  ];
+  for (const [layout, over] of layouts) {
+    for (const [name, stage] of STATES) {
+      it(`${layout}, ${name}: the page carries one status line, in the details`, () => {
+        const props = { sentences: ["Read from the abstract."], stage, source: null, isSaved: false, showAddKey: false, onSave: NOOP, onCopy: NOOP, onOpen: NOOP };
+        const html = renderToStaticMarkup(
+          createElement(ReaderLayout, {
+            plate: createElement("i", null, "PLATE"),
+            title: createElement("i", null, "TITLE"),
+            decision: createElement(DecisionBlock, { ...props, part: "commands" } as never),
+            details: createElement(DecisionBlock, { ...props, part: "details" } as never),
+            words: createElement("i", null, "WORDS"),
+            additions: createElement("i", null, "ADDITIONS"),
+            next: createElement("i", null, "NEXT"),
+            ...over,
+          } as never),
+        );
+        const seen = statusIn(html, stage);
+
+        expect(seen.lines).toBe(stage ? 1 : 0);
+        expect(seen.bars).toBe(stage && stage.pct !== null ? 1 : 0);
+        expect(seen.said).toBe(stage ? 1 : 0);
+      });
+    }
+  }
+});

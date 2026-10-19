@@ -237,3 +237,89 @@ describe("the page's two tabs (P7-14, R10)", () => {
     expect(tabProblems(wrong)).toEqual(["the blocks a tab mounts are not armed for their approach"]);
   });
 });
+
+// ── P11-16: the decision block in two slots, the title in the pane ───────────────────────────────
+// B P11-01 §2.3 and §3.2 (ruling §1h.113 (a)): from 1024 css px the left pane's fixed zone holds the title, the commands and the strip, and its
+// scroll zone the map, the plate and the details. So the page hands the decision block to the layout in two slots, as two views of the one
+// component — `decision` (the commands, carrying the decided-read observer's ref) and `details` (the sentence, the private-PDF line, the reading
+// controls in one column, the DOI, the progress) — and tells the title when it stands in the pane, where it is clamped.
+
+/** What is wrong with the page's decision slots and its title in the panes; empty when it is right. */
+function paneProblems(source: string): string[] {
+  const code = text(source);
+  const problems: string[] = [];
+  const commands = between(code, " decision={", " details={");
+  const details = between(code, " details={", " tabs={");
+
+  if (!commands) problems.push("the `decision` slot moved, or is not followed by a `details` slot");
+  if (!details) problems.push("the `details` slot moved, or does not stand before the strip");
+  if (count(code, "<DecisionBlock") !== 2) problems.push("the decision block is not built exactly twice, as its two parts");
+
+  if (commands) {
+    if (!commands.includes('<DecisionBlock part="commands"')) problems.push("the `decision` slot is not the commands part");
+    if (!commands.includes("ref={decisionRef}")) problems.push("the commands do not carry the decided-read observer's ref");
+    for (const prop of ["onSave={save}", "onCopy={copy}", "onOpen={decide}", "source={isUploadId ? null : reading.source}", "uploadAction="]) {
+      if (!commands.includes(prop)) problems.push(`the commands lost \`${prop}\``);
+    }
+    for (const prop of ["sentences=", "stage=", "uploadStatus=", "doi=", "showAddKey="]) {
+      if (commands.includes(prop)) problems.push(`the commands carry the details' \`${prop}\``);
+    }
+  }
+  if (details) {
+    if (!details.includes('<DecisionBlock part="details"')) problems.push("the `details` slot is not the details part");
+    for (const prop of ["sentences={sentences}", "stage={model.stage}", "doi={paper.doi}", "showAddKey={showAddKey}", "uploadStatus="]) {
+      if (!details.includes(prop)) problems.push(`the details lost \`${prop}\``);
+    }
+    for (const prop of ["ref=", "onSave=", "onCopy=", "onOpen=", "source=", "uploadAction="]) {
+      if (details.includes(prop)) problems.push(`the details carry the commands' \`${prop}\``);
+    }
+  }
+
+  // The title is clamped to four lines only where it stands in the pane: the layout's own switch, which the page already holds.
+  if (!code.includes("title={<TitleBlock paper={paper} recommendation={recommendation} now={now} pane={spread} />}")) {
+    problems.push("the title is not told when it stands in the left pane");
+  }
+  if (count(code, "pane={spread}") !== 1) problems.push("`pane={spread}` is not on the layout's title alone");
+  return problems;
+}
+
+describe("the page hands the layout the decision block in two slots and the title its pane (P11-16)", () => {
+  it("is wired as the three-pane design says", () => {
+    expect(paneProblems(source)).toEqual([]);
+  });
+
+  it("would notice the details holding the observer's ref (the commands are what stays on screen)", () => {
+    const wrong = source.replace("ref={decisionRef}", "").replace('part="details"', 'part="details" ref={decisionRef}');
+
+    expect(wrong).not.toBe(source);
+    expect(paneProblems(wrong)).toEqual(expect.arrayContaining(["the commands do not carry the decided-read observer's ref", "the details carry the commands' `ref=`"]));
+  });
+
+  it("would notice the sentence handed to the commands again", () => {
+    const wrong = source.replace('part="commands"', 'part="commands" sentences={sentences}');
+
+    expect(wrong).not.toBe(source);
+    expect(paneProblems(wrong)).toContain("the commands carry the details' `sentences=`");
+  });
+
+  it("would notice the two parts folded back into one block", () => {
+    const wrong = source.replace('part="details"', 'part="commands"');
+
+    expect(wrong).not.toBe(source);
+    expect(paneProblems(wrong)).toContain("the `details` slot is not the details part");
+  });
+
+  it("would notice the title no longer told its pane", () => {
+    const wrong = source.replace(" pane={spread} />", " />");
+
+    expect(wrong).not.toBe(source);
+    expect(paneProblems(wrong)).toContain("the title is not told when it stands in the left pane");
+  });
+
+  it("would notice the details moved behind the strip", () => {
+    const wrong = source.replace(" details={", " detailz={");
+
+    expect(wrong).not.toBe(source);
+    expect(paneProblems(wrong)).toContain("the `decision` slot moved, or is not followed by a `details` slot");
+  });
+});

@@ -64,3 +64,39 @@ describe("ReadingControls — touch targets under hover:none (N5)", () => {
     }
   });
 });
+
+// P11-16 (B P11-01 §2.3): in the three-pane page the strip stands at the top of the left pane (the layout draws it there, with `spread`), so
+// Fit has a layout to balance and is enabled, and the strip takes no gap above it — the pane's header row has its own. In one column and
+// wherever the strip is drawn without `spread`, it is the strip it was.
+describe("ReadingControls — in the left pane (P11-16)", () => {
+  const pane = () => renderToStaticMarkup(createElement(ReadingControls, { spread: true }));
+
+  it("enables Fit: the three panes are a layout it can balance", () => {
+    const fit = tags(pane(), "button").find((b) => attr(b, "aria-label") === "Fit to screen") ?? "";
+
+    expect(fit).not.toBe("");
+    expect(fit).not.toContain("disabled");
+    expect(attr(fit, "title")).toBeUndefined();
+  });
+
+  it("is the same five buttons in the same order, with the same sizes", () => {
+    const buttons = tags(pane(), "button");
+
+    expect(buttons.map((b) => attr(b, "aria-label"))).toEqual(NAMES);
+    for (const b of buttons) {
+      expect(classes(b)).toEqual(expect.arrayContaining(["h-7", "w-7", "[@media(hover:none)]:min-h-11", "[@media(hover:none)]:min-w-11"]));
+    }
+  });
+
+  it("takes no gap above it in the pane, and keeps the one column's 20px gap without `spread`", () => {
+    expect(classes(tags(pane(), "div")[0] ?? "")).not.toContain("mt-5");
+    expect(classes(tags(html(), "div")[0] ?? "")).toContain("mt-5");
+  });
+
+  it("leaves Fit disabled in one column, as before", () => {
+    const fit = tags(html(), "button").find((b) => attr(b, "aria-label") === "Fit to screen") ?? "";
+
+    expect(fit).toContain("disabled");
+    expect(attr(fit, "title")).toBe("Fit needs the two-column layout");
+  });
+});

@@ -314,3 +314,62 @@ describe("DecisionBlock — the notes row (P7-14, R9)", () => {
     expect(without).not.toContain("NOTES-ROW");
   });
 });
+
+// P11-16 (B P11-01 §2.3, §3.2; ruling §1h.113 (a)): the block splits into the commands and the details. The three-pane page puts the commands
+// in the left pane's fixed zone, under the title, and the details — the sentence, the private-PDF line, the DOI, the progress — in its scroll
+// zone, after the map; one column puts them one after the other, as the block always was. Both parts are the one component, `part=` picks
+// the view; with none it is the whole block, in the order every test above reads.
+describe("DecisionBlock — the commands and the details apart (P11-16)", () => {
+  const DOI_VALUE = "10.1021/jacs.5c15436";
+  const base = {
+    sentences: ["SENTENCE-MARK says what Peer has read."],
+    stage: { label: "Reading", pct: 40 },
+    onRead: NOOP,
+    readLabel: "Read it here",
+    source: { label: "Open on arXiv", url: "https://arxiv.org/abs/2601.00001" },
+    doi: DOI_VALUE,
+    isSaved: false,
+    showAddKey: false,
+    onSave: NOOP,
+    onSkip: NOOP,
+    onCopy: NOOP,
+    onOpen: NOOP,
+    notesAction: createElement("p", null, "NOTES-ROW"),
+    uploadAction: createElement("p", null, "UPLOAD-ROW"),
+    uploadStatus: createElement("p", null, "PRIVATE-PDF-LINE"),
+  };
+  const part = (which: "commands" | "details" | undefined) =>
+    renderToStaticMarkup(createElement(DecisionBlock, (which ? { ...base, part: which } : base) as never));
+
+  it("the commands: the read command, the source, Save · Skip · Copy, the notes and the upload rows — and none of the details", () => {
+    const html = part("commands");
+    const rows = ["Read it here", "Open on arXiv", ">Save<", ">Skip<", ">Copy<", "NOTES-ROW", "UPLOAD-ROW"].map((needle) => html.indexOf(needle));
+
+    expect(rows.every((index) => index >= 0)).toBe(true);
+    expect([...rows].sort((a, b) => a - b)).toEqual(rows);
+    for (const gone of ["SENTENCE-MARK", "PRIVATE-PDF-LINE", 'aria-label="Reading controls"', `doi:${DOI_VALUE}`, 'role="progressbar"', "Reading…"]) {
+      expect(html).not.toContain(gone);
+    }
+  });
+
+  it("the details: the sentence, the private-PDF line, the reading controls (one column), the DOI, the progress — and no command", () => {
+    const html = part("details");
+    const after = ["SENTENCE-MARK", "PRIVATE-PDF-LINE", 'aria-label="Reading controls"', `doi:${DOI_VALUE}`, 'role="progressbar"'].map((needle) => html.indexOf(needle));
+
+    expect(after.every((index) => index >= 0)).toBe(true);
+    expect([...after].sort((a, b) => a - b)).toEqual(after);
+    for (const gone of [">Save<", ">Skip<", ">Copy<", "Read it here", "Open on arXiv", "NOTES-ROW", "UPLOAD-ROW"]) expect(html).not.toContain(gone);
+  });
+
+  it("the two parts say, between them, everything the whole block says — once", () => {
+    const whole = part(undefined).replace(/<[^>]*>/g, "");
+    const apart = (part("commands") + part("details")).replace(/<[^>]*>/g, "");
+
+    expect(apart).toBe(whole);
+    expect(whole.split("SENTENCE-MARK").length - 1).toBe(1);
+  });
+
+  it("the commands part is the observer's element: it is a block of its own, as the page's decided-read ref needs", () => {
+    expect(part("commands").startsWith("<div")).toBe(true);
+  });
+});
