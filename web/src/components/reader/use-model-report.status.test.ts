@@ -25,19 +25,15 @@ const net = vi.hoisted(() => ({
   script: null as unknown,
   /** Requests the stub has begun and not ended. */
   open: 0,
-  // What the tests wait on (P11-18, BACKLOG-97). A wait is for the thing its assertion needs, never for
-  // a number of timer ticks: under load the page is slow, not wrong. The stubs count what they do and the
-  // page counts what it draws; `until` polls these.
+  // What the tests wait on (P11-18, BACKLOG-97; `test-support/page-pacing`). A wait is for the thing its
+  // assertion needs, never for a number of timer ticks: under load the page is slow, not wrong. The stubs
+  // count what they do; `until` polls these.
   /** Streams read out to their end, or let go. */
   ended: 0,
   /** Requests that said all their stages, saw them drawn, and wait to be released. */
   held: 0,
   /** JSON fallbacks answered. */
   jsonAnswered: 0,
-  /** Renders of the page so far. */
-  draws: 0,
-  /** Waits that ran out their ceiling, named: `drive` fails the test with them. */
-  lapsed: [] as string[],
 }));
 
 vi.mock("@/lib/papers/report-stream", () => ({
@@ -60,6 +56,7 @@ vi.mock("@/components/profile-sync", () => ({
 
 import { useEffect, useState } from "react";
 import { hookRuntime } from "@/test-support/hook-runtime";
+import { CEILING_MS, TEST_TIMEOUT_MS, drawn, pacing, resetPacing, throwIfLapsed, until } from "@/test-support/page-pacing";
 import { defaultProfile, type Paper, type UserProfile } from "@/types";
 import { buildReportKey, rememberReport, useModelReport, type ModelReportState } from "./use-model-report";
 
@@ -99,39 +96,8 @@ const paper: Paper = {
 };
 const QUESTION = "Which layer kept the most soil water?";
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-/** The longest any wait waits: generous, so a loaded machine is slow and not wrong. A wait that runs it out fails its test. */
-const CEILING_MS = 20_000;
 // A test is several waits long at worst; the runner's 5 s would cut a slow machine off before the ceiling speaks.
-vi.setConfig({ testTimeout: 3 * CEILING_MS });
-
-/**
- * Poll `condition` on real timers until it holds: the wait for what an assertion needs. It stops when `signal`
- * aborts (the page was let go) and at the ceiling, which is recorded under `what` for `drive` to fail the test with.
- */
-async function until(condition: () => boolean, what: string, signal?: AbortSignal): Promise<boolean> {
-  const stop = Date.now() + CEILING_MS;
-  while (!condition()) {
-    if (signal?.aborted) return false;
-    if (Date.now() >= stop) {
-      net.lapsed.push(what);
-      return false;
-    }
-    await sleep(2);
-  }
-  return true;
-}
-
-/**
- * Resolves once the page has drawn again. The hook's own state change comes first (the stubs call this after an
- * event the hook has handled), so the render it waits for carries that event: each event is on the page before the
- * next one is sent, however slow the machine.
- */
-async function drawn(signal?: AbortSignal): Promise<void> {
-  const from = net.draws;
-  await until(() => net.draws > from, "the page to draw", signal);
-}
+vi.setConfig({ testTimeout: TEST_TIMEOUT_MS });
 
 /** The stream as the hook reads it, counted once it has run to its end or been let go. */
 async function* counted(stream: AsyncGenerator<Record<string, unknown>>) {
@@ -233,7 +199,7 @@ async function drive(
   const opened = await hookRuntime.mount(
     () => {
       const state = useModelReport({ paper, profile: reader, questions: asked() });
-      net.draws += 1;
+      pacing.draws += 1;
       history.push({ stage: state.stage, report: state.report, failed: state.failed, open: net.open });
       const [tick, setTick] = useState(0);
       useEffect(() => {
@@ -253,7 +219,7 @@ async function drive(
         }
         waiting.since = waiting.since || Date.now();
         if (Date.now() - waiting.since >= CEILING_MS) {
-          net.lapsed.push(next.what);
+          pacing.lapsed.push(next.what);
           queued.length = 0;
           return;
         }
@@ -265,10 +231,7 @@ async function drive(
     // The ceiling is what bounds a run, not the number of rounds a slow machine gets through.
     { maxRounds: 100_000 },
   );
-  if (net.lapsed.length > 0) {
-    opened.unmount();
-    throw new Error(`timed out after ${CEILING_MS} ms waiting for: ${net.lapsed.join("; ")}`);
-  }
+  throwIfLapsed(opened.unmount);
   return { opened, history };
 }
 
@@ -281,8 +244,7 @@ function resetNet() {
   net.ended = 0;
   net.held = 0;
   net.jsonAnswered = 0;
-  net.draws = 0;
-  net.lapsed.length = 0;
+  resetPacing();
 }
 
 /** What every test ends with: a request left running was let go when its page unmounted; wait for it to wind down, so none outlives its test. */
