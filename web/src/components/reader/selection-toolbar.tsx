@@ -17,6 +17,10 @@
 //
 // Under 768 px the pill is not drawn: the thumb bar's cell is the explain control there (§1h.66), and "Take
 // notes" on a phone is deferred. The press keeps the selection: `mousedown` is not allowed to move the caret.
+//
+// P11-13 (the owner's items 5 and 8; B P11-03 §2; ruling §1h.113): three actions, not two — Explain this, Take notes and
+// Highlight. Highlight is drawn only where the page hands a handler (`onHighlight`) and says the selection can be highlighted
+// (`canHighlight`); until the page passes them it is absent. Highlight needs no key: it is a Tier 0 act.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PaperTerm } from "@/lib/papers/report";
@@ -33,7 +37,18 @@ export function selectionCanExplain(input: { canAsk: boolean; terms: readonly Pa
   return input.canAsk || definingTerm(input.terms, input.passage) !== null;
 }
 
-export const SELECTION_LABELS = { explain: "Explain this", note: "Take notes" } as const;
+export const SELECTION_LABELS = { explain: "Explain this", note: "Take notes", highlight: "Highlight" } as const;
+
+export type SelectionAction = "explain" | "note" | "highlight";
+
+/**
+ * Which of the three actions are on offer, in the order they stand: Explain this when the page can explain (P10-08b), Take notes
+ * always, Highlight only when the page hands a handler and says the selection can be highlighted. Pure.
+ */
+export function offeredActions(input: { canExplain: boolean; onHighlight?: unknown; canHighlight?: boolean }): SelectionAction[] {
+  const highlight = typeof input.onHighlight === "function" && input.canHighlight === true;
+  return [...(input.canExplain ? (["explain"] as const) : []), "note", ...(highlight ? (["highlight"] as const) : [])];
+}
 
 /** The room between the pill and the selection's first line. */
 export const TOOLBAR_GAP_PX = 6;
@@ -77,6 +92,7 @@ export function SelectionToolbarView({
   canExplain,
   onExplain,
   onTakeNote,
+  onHighlight,
   innerRef,
 }: {
   place: ToolbarPlace;
@@ -84,10 +100,15 @@ export function SelectionToolbarView({
   canExplain: boolean;
   onExplain: () => void;
   onTakeNote: () => void;
+  /** P11-13: the third action. Absent, there is no Highlight button (the page has none to hand, or it cannot highlight this selection). */
+  onHighlight?: () => void;
   innerRef?: (el: HTMLDivElement | null) => void;
 }) {
   // A press must not move the selection: the words stay highlighted while the pill is used.
   const keep = (event: { preventDefault: () => void }) => event.preventDefault();
+  // A divider on the left of every button but the first.
+  let drawn = 0;
+  const button = () => (drawn++ === 0 ? BUTTON : `${BUTTON} border-l border-border-strong`);
   return (
     <div
       ref={innerRef}
@@ -98,13 +119,18 @@ export function SelectionToolbarView({
       className="fixed z-[70] flex items-stretch whitespace-nowrap border border-border-strong bg-surface font-mono text-caption shadow-card-hover"
     >
       {canExplain && (
-        <button type="button" data-selection-explain="" onMouseDown={keep} onClick={onExplain} className={BUTTON}>
+        <button type="button" data-selection-explain="" onMouseDown={keep} onClick={onExplain} className={button()}>
           {SELECTION_LABELS.explain}
         </button>
       )}
-      <button type="button" data-selection-note="" onMouseDown={keep} onClick={onTakeNote} className={canExplain ? `${BUTTON} border-l border-border-strong` : BUTTON}>
+      <button type="button" data-selection-note="" onMouseDown={keep} onClick={onTakeNote} className={button()}>
         {SELECTION_LABELS.note}
       </button>
+      {onHighlight && (
+        <button type="button" data-selection-highlight="" onMouseDown={keep} onClick={onHighlight} className={button()}>
+          {SELECTION_LABELS.highlight}
+        </button>
+      )}
     </div>
   );
 }
@@ -133,12 +159,18 @@ export function SelectionToolbar({
   canExplain,
   onExplain,
   onTakeNote,
+  onHighlight,
+  canHighlight = false,
 }: {
   target: ExplainSelection | null;
   /** The page can explain this selection (`selectionCanExplain`). */
   canExplain: boolean;
   onExplain: () => void;
   onTakeNote: (target: ExplainSelection) => void;
+  /** P11-13: the page's highlight (C P11-07's `useHighlight`). Until the page passes it there is no Highlight button. */
+  onHighlight?: (target: ExplainSelection) => void;
+  /** P11-13: the page can highlight this selection (`canHighlight(target)`: paper-body selections only). */
+  canHighlight?: boolean;
 }) {
   const [frame, setFrame] = useState<Frame | null>(null);
   const [size, setSize] = useState(FIRST_SIZE);
@@ -173,5 +205,8 @@ export function SelectionToolbar({
   }, [shown]);
 
   if (!target || !place) return null;
-  return <SelectionToolbarView place={place} canExplain={canExplain} onExplain={onExplain} onTakeNote={() => onTakeNote(target)} innerRef={(el) => (box.current = el)} />;
+  const highlight = offeredActions({ canExplain, onHighlight, canHighlight }).includes("highlight") ? () => onHighlight?.(target) : undefined;
+  return (
+    <SelectionToolbarView place={place} canExplain={canExplain} onExplain={onExplain} onTakeNote={() => onTakeNote(target)} onHighlight={highlight} innerRef={(el) => (box.current = el)} />
+  );
 }
