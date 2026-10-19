@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DOCK_BOTTOM_PX, DOCK_STACK_FLOOR_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_VAR, DOCK_WIDTH_VAR, columnBottomPx, dockInStack, legendHeightPx, reserveDock } from "@/components/reader/explain-dock";
 import { block } from "@/lib/notes/blocks";
-import { MIN_FRONT_PX, NOTES_MIN_FRONT_PX, NOTES_WINDOW_ID, WINDOW_HEADER_PX, bindWindowsReserve, columnTop, holdInPlace, stackLayout, stackRoom, stackRows, useWindows, type FloatingWindow } from "./windows";
+import { EXPLAIN_WINDOW_ID, MIN_FRONT_PX, NOTES_MIN_FRONT_PX, NOTES_WINDOW_ID, WINDOW_HEADER_PX, bindWindowsReserve, columnTop, holdInPlace, stackFrameIn, stackLayout, stackRoom, stackRows, useWindows, type FloatingWindow } from "./windows";
 
 // P10-09a (review 7.1a; ruling §1h.78): the windows at the right stand like cascaded cards — only the headers of
 // the ones behind show (each later window offset by a header's height), the raised one in front and full; a header
@@ -550,5 +550,184 @@ describe("Fit mode: the windows stand on the legend's own top (P10-31, BACKLOG-4
     for (const [, , zoom] of fits) expect(legendHeightPx(zoom)).toBeGreaterThan(DOCK_BOTTOM_PX);
     expect(legendHeightPx(1)).toBe(DOCK_BOTTOM_PX);
     expect(legendHeightPx(Number.NaN)).toBe(DOCK_BOTTOM_PX);
+  });
+});
+
+// ── One card stack in the margin (P11-14, rule 2; B P11-03 §3.2, §3.3; ruling §1h.113) ──────────────────────────────────────────
+//
+// `WindowKind` gains `figure` and `highlight` and `explain` is used; the stack takes a front height per kind (a sticky 260, a highlight
+// 140, the explain card its content, the notes window and a figure all the room), a header press raises, the X closes, opening raises;
+// and the cascade starts where the first card opened — level with its selection (R-open, O-6) — and stays there while it stands.
+
+describe("stackLayout — one front height per kind (P11-14, rule 2)", () => {
+  const card = (id: string, kind: FloatingWindow["kind"], order: number): FloatingWindow => ({ id, kind, title: id, order });
+  const band = { top: 100, bottom: 900 };
+
+  it("a sticky in front is 260 and a highlight 140, with no height asked for", () => {
+    expect(stackLayout([card("s", "sticky", 1)], band)[0]).toMatchObject({ top: 100, height: 260, front: true });
+    expect(stackLayout([card("h", "highlight", 1)], band)[0]).toMatchObject({ top: 100, height: 140, front: true });
+  });
+
+  it("the notes window and a figure in front take all the room the band leaves", () => {
+    expect(stackLayout([card("n", "notes", 1)], band)[0]).toMatchObject({ height: 800, front: true });
+    expect(stackLayout([card("f", "figure", 1)], band)[0]).toMatchObject({ height: 800, front: true });
+    const under = stackLayout([card("a", "sticky", 1), card("f", "figure", 2)], band);
+    expect(under.map((r) => [r.id, r.top, r.height])).toEqual([["a", 100, 40], ["f", 140, 760]]);
+  });
+
+  it("the explain card in front is its content, at most the room, and the whole room until its content is known", () => {
+    expect(stackLayout([card("e", "explain", 1)], { ...band, frontHeights: { explain: 380 } })[0]).toMatchObject({ height: 380 });
+    expect(stackLayout([card("e", "explain", 1)], { ...band, frontHeights: { explain: 5000 } })[0]).toMatchObject({ height: 800 });
+    expect(stackLayout([card("e", "explain", 1)], band)[0]).toMatchObject({ height: 800 });
+  });
+
+  it("a frame's height for a kind wins over the default, and the legacy frontHeight is the sticky's", () => {
+    expect(stackLayout([card("s", "sticky", 1)], { ...band, frontHeights: { sticky: 300 } })[0].height).toBe(300);
+    expect(stackLayout([card("s", "sticky", 1)], { ...band, frontHeight: 200 })[0].height).toBe(200);
+  });
+
+  it("every kind behind another is a header, in one cascade 40 px apart, and a header press (raise) brings it forward", () => {
+    useWindows.setState({ windows: [], clock: 0, origin: null });
+    const { open, raise } = useWindows.getState();
+    open({ id: "a", kind: "sticky", title: "Note 1" });
+    open({ id: "f", kind: "figure", title: "Figure 1" });
+    open({ id: EXPLAIN_WINDOW_ID, kind: "explain", title: "Explain this" });
+    let rows = stackLayout(useWindows.getState().windows, band);
+    expect(rows.map((r) => [r.id, r.top, r.height, r.front])).toEqual([["a", 100, 40, false], ["f", 140, 40, false], [EXPLAIN_WINDOW_ID, 180, 720, true]]);
+    raise("a");
+    rows = stackLayout(useWindows.getState().windows, band);
+    expect(rows.map((r) => r.id)).toEqual(["f", EXPLAIN_WINDOW_ID, "a"]);
+    expect(rows[2]).toMatchObject({ id: "a", front: true, top: 180, height: 260 });
+  });
+
+  it("lifts the column to keep the front its least height — the explain card 250, the figure 240 — never above the band's top", () => {
+    const rows = stackLayout([card("a", "sticky", 1), card("b", "sticky", 2), card("e", "explain", 3)], { top: 700, bottom: 900, minTop: 48, frontHeights: { explain: 400 } });
+    expect(rows.map((r) => r.top)).toEqual([570, 610, 650]);
+    expect(rows[2].height).toBe(250);
+    const figure = stackLayout([card("a", "sticky", 1), card("f", "figure", 2)], { top: 800, bottom: 900, minTop: 48 });
+    expect(figure[0].top).toBe(900 - 40 - 240);
+    expect(figure[1].height).toBe(240);
+  });
+});
+
+describe("stackRows — the figure and the highlight stand in the stack too (P11-14, rule 2)", () => {
+  const frame = { top: 100, bottom: 900 };
+  it("holds a figure card and a highlight card whatever the paper's note holds", () => {
+    const windows: FloatingWindow[] = [
+      { id: "f", kind: "figure", title: "Figure 1", order: 1 },
+      { id: "h", kind: "highlight", title: "Highlight", order: 2 },
+      { id: NOTES_WINDOW_ID, kind: "notes", title: "Your notes", order: 3 },
+    ];
+    expect(stackRows(windows, [], frame).map((r) => r.id)).toEqual(["f", "h", NOTES_WINDOW_ID]);
+  });
+});
+
+describe("useWindows — where the cascade starts (R-open, O-6; P11-14 rule 2)", () => {
+  beforeEach(() => useWindows.setState({ windows: [], clock: 0, origin: null }));
+
+  it("the first card of an empty margin opens at the anchor it was given; a later card joins where the oldest stands", () => {
+    const { open } = useWindows.getState();
+    expect(useWindows.getState().origin).toBeNull();
+    open({ ...sticky(1), anchorTop: 333 });
+    expect(useWindows.getState().origin).toBe(333);
+    open({ ...sticky(2), anchorTop: 640 });
+    expect(useWindows.getState().origin).toBe(333);
+  });
+
+  it("a card opened with no anchor starts the cascade at the top of the margin, and opening a card that is open moves nothing", () => {
+    const { open } = useWindows.getState();
+    open({ id: NOTES_WINDOW_ID, kind: "notes", title: "Your notes" });
+    expect(useWindows.getState().origin).toBeNull();
+    open({ id: NOTES_WINDOW_ID, kind: "notes", title: "Your notes", anchorTop: 500 });
+    expect(useWindows.getState().origin).toBeNull();
+  });
+
+  it("closing the last card forgets where the cascade started; closing one of two keeps it", () => {
+    const { open, close } = useWindows.getState();
+    open({ ...sticky(1), anchorTop: 333 });
+    open(sticky(2));
+    close("s1");
+    expect(useWindows.getState().origin).toBe(333);
+    close("s2");
+    expect(useWindows.getState().origin).toBeNull();
+    open({ ...sticky(3), anchorTop: 410 });
+    expect(useWindows.getState().origin).toBe(410);
+  });
+
+  it("an explain card that stands alone follows its selection; once a second card joins the origin is frozen", () => {
+    const { open, follow } = useWindows.getState();
+    open({ id: EXPLAIN_WINDOW_ID, kind: "explain", title: "Explain this" });
+    follow(250);
+    expect(useWindows.getState().origin).toBe(250);
+    follow(310);
+    expect(useWindows.getState().origin).toBe(310);
+    open(sticky(1));
+    follow(500);
+    expect(useWindows.getState().origin).toBe(310);
+  });
+
+  it("only an explain card may follow: a lone sticky stays where it opened, and nothing follows with no card", () => {
+    const { open, follow } = useWindows.getState();
+    follow(120);
+    expect(useWindows.getState().origin).toBeNull();
+    open({ ...sticky(1), anchorTop: 333 });
+    follow(120);
+    expect(useWindows.getState().origin).toBe(333);
+  });
+});
+
+describe("stackFrameIn — the band the cascade stands in (P11-14, rule 2)", () => {
+  const band = { top: 48, bottom: 860 };
+  it("starts at the margin's top with no origin, and at the origin where there is one", () => {
+    expect(stackFrameIn(band, null)).toEqual({ top: 48, bottom: 860, minTop: 48 });
+    expect(stackFrameIn(band, 333)).toEqual({ top: 333, bottom: 860, minTop: 48 });
+  });
+
+  it("holds the origin inside the band: never above the masthead's foot, never below the legend's strip", () => {
+    expect(stackFrameIn(band, 10).top).toBe(48);
+    expect(stackFrameIn(band, 5000).top).toBe(860);
+  });
+});
+
+describe("stackRows — the explain card is one of the stack (P11-14, rule 4; O-8, BACKLOG-66)", () => {
+  const frame = { top: 100, bottom: 900 };
+  const heads = [1, 2].map((n) => block("h3", `Note ${n}`, { anchor: { paperId: "p", paragraphId: `paper-section-0-p${n}`, quote: "q", n } }));
+  const sticky = (id: string, order: number) => ({ id, kind: "sticky" as const, title: id, order });
+
+  it("holds the explain card with the stickies and the notes window in one cascade, 40 px apart, and no card stands under it", () => {
+    const windows = [
+      sticky(heads[0].id, 1),
+      { id: EXPLAIN_WINDOW_ID, kind: "explain" as const, title: "Explain this", order: 2 },
+      { id: NOTES_WINDOW_ID, kind: "notes" as const, title: "Your notes", order: 3 },
+      sticky(heads[1].id, 4),
+    ];
+    const rows = stackRows(windows, heads, frame);
+    expect(rows.map((r) => r.id)).toEqual([heads[0].id, EXPLAIN_WINDOW_ID, NOTES_WINDOW_ID, heads[1].id]);
+    expect(rows.map((r) => r.top)).toEqual([100, 140, 180, 220]);
+    expect(rows.map((r) => r.front)).toEqual([false, false, false, true]);
+  });
+
+  it("every card's header is reachable whatever the order the four were opened in: 40 px apart, inside the band, the front above the foot", () => {
+    const heads2 = [block("h3", "Note 1", { anchor: { paperId: "p", paragraphId: "paper-section-0-p1", quote: "q", n: 1 } })];
+    const idOf = { sticky: heads2[0].id, explain: EXPLAIN_WINDOW_ID, notes: NOTES_WINDOW_ID, figure: "figure:1" } as const;
+    type Kind = keyof typeof idOf;
+    const permutations = (items: readonly Kind[]): Kind[][] =>
+      items.length <= 1 ? [[...items]] : items.flatMap((item, i) => permutations([...items.slice(0, i), ...items.slice(i + 1)]).map((rest) => [item, ...rest]));
+    for (const height of [480, 720, 1000]) {
+      const bottom = height - 40;
+      for (const order of permutations(["sticky", "explain", "notes", "figure"])) {
+        const windows = order.map((kind, i) => ({ id: idOf[kind], kind, title: kind, order: i + 1 }));
+        const rows = stackRows(windows, heads2, { top: 300, bottom, minTop: DOCK_TOP_PX, frontHeights: { explain: 420 } });
+        const label = `${height} px, ${order.join(" > ")}`;
+        expect(rows, label).toHaveLength(4);
+        rows.forEach((row, i) => {
+          expect(row.top, label).toBeGreaterThanOrEqual(DOCK_TOP_PX);
+          if (i > 0) expect(row.top - rows[i - 1].top, label).toBe(WINDOW_HEADER_PX);
+        });
+        const front = rows[3];
+        expect(front.top + front.height, label).toBeLessThanOrEqual(bottom);
+        expect(front.height, label).toBeGreaterThanOrEqual(WINDOW_HEADER_PX);
+      }
+    }
   });
 });

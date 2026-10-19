@@ -1,0 +1,297 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// P11-14 rules 3 and 4 (B P11-03 §3, B P11-01 §3.1, §4 C4; rulings §1h.113, O-6, O-7, O-8, BACKLOG-66): the explain card is one card of
+// the margin's stack. It registers in `useWindows` as `explain` while it stands (from 1024 px), takes its frame from the margin's rect, is
+// level with its paragraph while it stands alone and a header when another card is raised over it; and nothing is reserved when it opens:
+// no custom property on the document's root, no scroll to hold the words (the margin is a grid track, the text never moves). The box runs on
+// the minimal hook runtime (no DOM here); the element tree it returns is inspected and its handlers called. Every text is invented.
+vi.mock("react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react")>();
+  const { hookRuntime } = await import("@/test-support/hook-runtime");
+  return { ...actual, ...hookRuntime.hooks };
+});
+
+import { useEffect, useState } from "react";
+import type { ReactElement, ReactNode } from "react";
+import { hookRuntime } from "@/test-support/hook-runtime";
+import { DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX } from "./explain-dock";
+import { EXPLAIN_WINDOW_ID, WINDOW_HEADER_PX, useWindows } from "@/lib/reader/windows";
+import { placeInMargin, useMarginStore, type MarginRect } from "@/lib/reader/margin";
+import type { ExplainAnswer } from "@/lib/papers/explain";
+import type { ExplainTurn } from "@/store/explain-threads";
+import type { PaperReading } from "@/lib/papers/reading";
+import { ExplainBox, ExplainCard, type AskResult } from "./explain-box";
+import type { ReplyResult } from "./explain-thread";
+import type { ExplainSelection } from "./paper-body";
+
+const REPLY: ExplainTurn = { role: "peer", text: "A bigger share of plates changes how the metal carries load.", peer: true };
+const ANSWER: ExplainAnswer = { meaning: "A share of a sample turned to plates.", here: { text: "It compares alloys.", peer: true } };
+const reading = {
+  body: [
+    { id: "s1", canonical: "introduction", heading: "1 Introduction", paragraphs: ["Hot parts creep."] },
+    { id: "s2", canonical: "methods", heading: "2 Methods", paragraphs: ["Specimens.", "We define the rafting ratio."] },
+  ],
+  map: { totalMinutes: 1, sections: [] },
+} as unknown as Pick<PaperReading, "body" | "map">;
+
+const selection = (top: number, paragraphTop?: number): ExplainSelection => ({
+  sectionIndex: 1,
+  paragraphIndex: 1,
+  passage: "The rafting ratio rose from 0.2 to 0.7.",
+  rect: { left: 300, top, right: 420, bottom: top + 20 },
+  bounds: { left: 100, top, right: 420, bottom: top + 20 },
+  ...(paragraphTop !== undefined ? { paragraph: { left: 100, top: paragraphTop, right: 700, bottom: paragraphTop + 120 } } : {}),
+});
+
+/** The margin a shell would register: 400 px wide at the right, the masthead's foot down to the legend's strip. */
+const MARGIN: MarginRect = { left: 1000, width: 400, top: 48, bottom: 860 };
+
+type Props = Parameters<typeof ExplainBox>[0];
+type Props2 = Record<string, unknown> & { children?: ReactNode };
+
+function elements(node: ReactNode): ReactElement<Props2>[] {
+  if (Array.isArray(node)) return node.flatMap(elements);
+  if (!node || typeof node !== "object" || !("props" in node)) return [];
+  const element = node as ReactElement<Props2>;
+  return [element, ...elements(element.props.children)];
+}
+
+const cardOf = (tree: ReactNode) => elements(tree).find((el) => el.type === ExplainCard);
+const styleOf = (tree: ReactNode) => cardOf(tree)?.props.style as Record<string, number | string | undefined> | undefined;
+
+let listeners: Map<string, Set<(event: unknown) => void>>;
+const fire = (type: string, event: unknown) => [...(listeners.get(type) ?? [])].forEach((listener) => listener(event));
+function recorder() {
+  return {
+    addEventListener: (type: string, listener: (event: unknown) => void) => {
+      listeners.set(type, (listeners.get(type) ?? new Set()).add(listener));
+    },
+    removeEventListener: (type: string, listener: (event: unknown) => void) => {
+      listeners.get(type)?.delete(listener);
+    },
+  };
+}
+let scrollBy: ReturnType<typeof vi.fn>;
+function stubWindow(width = 1440, height = 900) {
+  scrollBy = vi.fn();
+  vi.stubGlobal("window", { ...recorder(), innerWidth: width, innerHeight: height, scrollBy, requestAnimationFrame: (fn: () => void) => setTimeout(fn, 0), cancelAnimationFrame: (id: number) => clearTimeout(id) });
+}
+let root: Map<string, string>;
+let setProperty: ReturnType<typeof vi.fn>;
+let removeProperty: ReturnType<typeof vi.fn>;
+function stubRoot() {
+  root = new Map();
+  setProperty = vi.fn((name: string, value: string) => void root.set(name, value));
+  removeProperty = vi.fn((name: string) => void root.delete(name));
+  vi.stubGlobal("document", { ...recorder(), documentElement: { style: { setProperty, removeProperty } } });
+}
+
+let openRef: { current: (() => void) | null } = { current: null };
+beforeEach(() => {
+  openRef = { current: null };
+  listeners = new Map();
+  stubRoot();
+  stubWindow();
+  useWindows.setState({ windows: [], clock: 0, origin: null });
+  useMarginStore.setState({ rect: MARGIN });
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  useMarginStore.setState({ rect: null });
+  useWindows.setState({ windows: [], clock: 0, origin: null });
+});
+
+type Step = (tree: ReactNode, ctx: { props: Props; rerender: () => void }) => void;
+async function scenario(initial: Props, steps: Step[]) {
+  const ctx = { props: initial, rerender: () => {}, tree: null as ReactNode };
+  const trees: ReactNode[] = [];
+  const mounted = await hookRuntime.mount(() => {
+    const tree = ExplainBox(ctx.props);
+    const [step, setStep] = useState(0);
+    const [, setTick] = useState(0);
+    ctx.rerender = () => setTick((n) => n + 1);
+    trees.push(tree);
+    ctx.tree = tree;
+    useEffect(() => {
+      const run = steps[step];
+      if (!run) return;
+      run(ctx.tree, ctx);
+      setStep(step + 1);
+    }, [step]);
+    return tree;
+  });
+  return { trees, mounted, last: () => trees[trees.length - 1] };
+}
+const wait = () => new Promise((resolve) => setTimeout(resolve, 5));
+/** The reader selects `next` in the body: the page hands the box a new target. */
+const selectNext =
+  (next: ExplainSelection | null, over: Partial<Props> = {}): Step =>
+  (_tree, ctx) => {
+    ctx.props = { ...ctx.props, target: next, ...over };
+    ctx.rerender();
+  };
+const open = () => {
+  if (!openRef.current) throw new Error("the box has not published its open action");
+  openRef.current();
+};
+const base = (target: ExplainSelection, over: Partial<Props> = {}): Props => ({
+  target,
+  terms: [],
+  canAsk: true,
+  onAsk: vi.fn(async (): Promise<AskResult> => ANSWER),
+  cached: ANSWER,
+  cachedTurns: [],
+  onReply: vi.fn(async (): Promise<ReplyResult> => REPLY),
+  reading,
+  openRef,
+  ...over,
+});
+const explainRegistered = () => useWindows.getState().windows.find((w) => w.id === EXPLAIN_WINDOW_ID);
+
+describe("ExplainBox — nothing is reserved and nothing moves when it opens (P11-14 rule 3)", () => {
+  it("writes no custom property on the document's root and never scrolls the page, on opening, on a new passage and on closing", async () => {
+    const run = await scenario(base(selection(380)), [() => open(), () => fire("keydown", { key: "Escape", preventDefault: vi.fn(), stopPropagation: vi.fn() })]);
+    await wait();
+    expect(setProperty).not.toHaveBeenCalled();
+    expect(removeProperty).not.toHaveBeenCalled();
+    expect(root.size).toBe(0);
+    expect(scrollBy).not.toHaveBeenCalled();
+    run.mounted.unmount();
+  });
+});
+
+describe("ExplainBox — one card of the margin's stack (P11-14 rule 4; O-8, BACKLOG-66)", () => {
+  it("registers in useWindows as the explain card when it opens, and leaves when it closes", async () => {
+    expect(explainRegistered()).toBeUndefined();
+    const run = await scenario(base(selection(380)), [() => open()]);
+    await wait();
+    expect(explainRegistered()).toMatchObject({ id: EXPLAIN_WINDOW_ID, kind: "explain" });
+    expect(cardOf(run.last())).toBeDefined();
+    fire("keydown", { key: "Escape", preventDefault: vi.fn(), stopPropagation: vi.fn() });
+    run.mounted.unmount();
+    expect(explainRegistered()).toBeUndefined();
+  });
+
+  it("closing with the card's own Close leaves the stack too", async () => {
+    const run = await scenario(base(selection(380)), [() => open(), (tree) => (cardOf(tree)!.props.onClose as () => void)()]);
+    await wait();
+    expect(cardOf(run.last())).toBeUndefined();
+    run.mounted.unmount();
+    expect(explainRegistered()).toBeUndefined();
+  });
+
+  it("takes its frame from the margin's rect: its left and width, and no right edge of its own", async () => {
+    const run = await scenario(base(selection(380)), [() => open()]);
+    await wait();
+    const style = styleOf(run.last())!;
+    expect(style.left).toBe(MARGIN.left);
+    expect(style.width).toBe(MARGIN.width);
+    expect(style).not.toHaveProperty("right");
+    expect(cardOf(run.last())!.props.dock).toBe(true);
+    run.mounted.unmount();
+  });
+
+  it("without a registered margin it keeps the right edge, 360 px wide (a page without the shell)", async () => {
+    useMarginStore.setState({ rect: null });
+    const run = await scenario(base(selection(380)), [() => open()]);
+    await wait();
+    expect(styleOf(run.last())).toMatchObject({ right: 0, width: 360 });
+    run.mounted.unmount();
+  });
+
+  it("stands alone level with its paragraph, held in the margin's band for its whole height, and is the whole room beyond that", async () => {
+    // The paragraph's first line is at 300: the card opens there.
+    const level = await scenario(base(selection(380, 300)), [() => open()]);
+    await wait();
+    expect(styleOf(level.last())!.top).toBe(300);
+    expect(useWindows.getState().origin).toBe(300);
+    level.mounted.unmount();
+    // A paragraph low on the screen: lifted until its least height (the thread's floor) stands above the band's foot.
+    const low = await scenario(base(selection(780, 760)), [() => open()]);
+    await wait();
+    expect(styleOf(low.last())!.top).toBe(placeInMargin(MARGIN, 760, DOCK_THREAD_FLOOR_PX));
+    expect(styleOf(low.last())!.top).toBe(MARGIN.bottom - DOCK_THREAD_FLOOR_PX);
+    // Above the masthead: no higher than the band's top.
+    low.mounted.unmount();
+    const high = await scenario(base(selection(20, 10)), [() => open()]);
+    await wait();
+    expect(styleOf(high.last())!.top).toBe(DOCK_TOP_PX);
+    high.mounted.unmount();
+  });
+
+  it("stands at z 60, the stack's base, alone; it no longer sits over the whole stack at 70", async () => {
+    const run = await scenario(base(selection(380, 300)), [() => open()]);
+    await wait();
+    expect(styleOf(run.last())!.zIndex).toBe(60);
+    run.mounted.unmount();
+  });
+
+  it("is a header tall, with a way to raise it, when another card is raised over it; a header press raises it back", async () => {
+    const run = await scenario(base(selection(380, 300)), [
+      () => open(),
+      () => useWindows.getState().open({ id: "s1", kind: "sticky", title: "Note 1" }),
+    ]);
+    await wait();
+    // The sticky joined after the explain card: it is the front, the explain card a header at the cascade's origin.
+    const behind = cardOf(run.last())!;
+    expect(behind.props.behind).toBe(true);
+    expect(styleOf(run.last())).toMatchObject({ top: 300, maxHeight: WINDOW_HEADER_PX, zIndex: 60 });
+    (behind.props.onRaise as () => void)();
+    await wait();
+    const front = cardOf(run.last())!;
+    expect(front.props.behind).toBeFalsy();
+    const order = (id: string) => useWindows.getState().windows.find((w) => w.id === id)!.order;
+    expect(order(EXPLAIN_WINDOW_ID)).toBeGreaterThan(order("s1"));
+    run.mounted.unmount();
+  });
+
+  it("the cascade's origin is frozen once a second card joins: the explain card no longer follows its paragraph", async () => {
+    const run = await scenario(base(selection(380, 300)), [() => open(), () => useWindows.getState().open({ id: "s1", kind: "sticky", title: "Note 1" })]);
+    await wait();
+    expect(useWindows.getState().origin).toBe(300);
+    run.mounted.unmount();
+  });
+
+  it("taking a new passage into it raises it over the cards that stand: opening raises", async () => {
+    const second = { ...selection(600, 580), paragraphIndex: 0, passage: "Specimens were machined from a single casting." };
+    const run = await scenario(base(selection(380, 300)), [
+      () => open(),
+      () => useWindows.getState().open({ id: "s1", kind: "sticky", title: "Note 1" }),
+      selectNext(second, { cached: undefined }),
+      () => open(),
+    ]);
+    await wait();
+    const order = (id: string) => useWindows.getState().windows.find((w) => w.id === id)!.order;
+    expect(order(EXPLAIN_WINDOW_ID)).toBeGreaterThan(order("s1"));
+    expect(cardOf(run.last())!.props.behind).toBeFalsy();
+    run.mounted.unmount();
+  });
+
+  it("Escape closes it and a press outside it closes nothing, as before (the order of Escape is unchanged)", async () => {
+    const run = await scenario(base(selection(380, 300)), [() => open()]);
+    await wait();
+    fire("pointerdown", { target: { closest: () => null } });
+    await wait();
+    expect(explainRegistered()).toBeDefined();
+    const escape = { key: "Escape", defaultPrevented: false, preventDefault: vi.fn(), stopPropagation: vi.fn() };
+    fire("keydown", escape);
+    await wait();
+    expect(escape.preventDefault).toHaveBeenCalled();
+    expect(explainRegistered()).toBeUndefined();
+    run.mounted.unmount();
+  });
+});
+
+describe("ExplainBox — below 1024 px it is the card and the sheet, outside the stack (P11-14 rule 4)", () => {
+  it("does not register in the stack at 900 px (the card under the selection) or at 390 px (the sheet)", async () => {
+    for (const width of [900, 390]) {
+      stubWindow(width, 900);
+      const run = await scenario(base(selection(380, 300)), [() => open()]);
+      await wait();
+      expect(cardOf(run.last()), `${width}`).toBeDefined();
+      expect(explainRegistered(), `${width}`).toBeUndefined();
+      expect(styleOf(run.last())!.zIndex, `${width}`).toBeUndefined();
+      run.mounted.unmount();
+    }
+  });
+});
