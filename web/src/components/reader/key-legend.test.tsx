@@ -29,6 +29,15 @@ describe("KeyLegend", () => {
   });
 });
 
+// P11-13 (rule 3): the two new keys are in the one table, so they are in the legend: `n notes` and `h highlight`.
+describe("KeyLegend — the selection's keys (P11-13)", () => {
+  it("says n notes and h highlight, for a paper and for an upload alike", () => {
+    for (const keys of [PAPER_KEYS, paperKeysFor({ upload: true })]) {
+      expect(entries(renderToStaticMarkup(createElement(KeyLegend, { keys })))).toEqual(expect.arrayContaining(["n notes", "h highlight", "e explain"]));
+    }
+  });
+});
+
 // P10-21 rule 7 (round 2's reader, confirmed by the director): the fixed strip at the foot of the page was a
 // translucent, blurred bar (`glass-bar`), and the paper's words showed through it, garbled, while the page was
 // scrolled. It takes the page's surface colour, opaque.

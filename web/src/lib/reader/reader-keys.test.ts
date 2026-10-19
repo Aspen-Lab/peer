@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useEffect, useState } from "react";
 
 // P1-03: the keyboard layer itself is driven below on the minimal hook
 // runtime (no DOM here) to show `q` typed into the question field is typing,
@@ -27,6 +28,7 @@ import {
   readerHelpItems,
   registerReaderActions,
   resolvePaperKey,
+  selectionActions,
 } from "./reader-keys";
 
 describe("resolvePaperKey", () => {
@@ -342,3 +344,185 @@ describe("paperKeysFor (P1-08, P7-12)", () => {
   });
 });
 
+
+// ── P11-13 (rule 3; owner items 5 and 8; B P11-03 §2.4; ruling §1h.113 (b) O-4) ──────────────────────────────────────────────
+// `n` takes notes and `h` highlights, each on the selection the page holds, exactly as `e` explains it, and each inert with
+// nothing selected. Two actions, two rows in the one table the help sheet and the foot legend read.
+describe("the note and highlight keys (P11-13)", () => {
+  it("maps n to note and h to highlight, once each, with their own label and legend word", () => {
+    expect(resolvePaperKey("n")).toBe("note");
+    expect(resolvePaperKey("h")).toBe("highlight");
+    expect(PAPER_KEYS.find((entry) => entry.action === "note")).toEqual({
+      keys: ["n"],
+      action: "note",
+      label: "Take notes on the selected passage",
+      short: "notes",
+    });
+    expect(PAPER_KEYS.find((entry) => entry.action === "highlight")).toEqual({
+      keys: ["h"],
+      action: "highlight",
+      label: "Highlight the selected passage",
+      short: "highlight",
+    });
+    expect(PAPER_KEYS.filter((entry) => entry.keys.includes("n"))).toHaveLength(1);
+    expect(PAPER_KEYS.filter((entry) => entry.keys.includes("h"))).toHaveLength(1);
+    expect(resolvePaperKey("N")).toBeNull();
+    expect(resolvePaperKey("H")).toBeNull();
+  });
+
+  it("is on the help sheet and in every page's legend table, upload or not", () => {
+    expect(readerHelpItems()).toContainEqual({ keys: "n", label: "Take notes on the selected passage" });
+    expect(readerHelpItems()).toContainEqual({ keys: "h", label: "Highlight the selected passage" });
+    for (const upload of [true, false]) {
+      const actions = paperKeysFor({ upload }).map((entry) => entry.action);
+      expect(actions).toContain("note");
+      expect(actions).toContain("highlight");
+    }
+  });
+
+  it("leaves Escape as it was: with nothing else to close it is the page's back", () => {
+    expect(resolvePaperKey("Escape")).toBe("back");
+    expect(resolvePaperKey("Backspace")).toBe("back");
+  });
+});
+
+describe("selectionActions — the keys that act on the selection the page holds (P11-13)", () => {
+  type Target = { passage: string };
+
+  it("runs the handler on the selection the page holds at the moment of the press, not the one it held when it registered", () => {
+    let held: Target | null = { passage: "first" };
+    const note = vi.fn();
+    const keys = selectionActions(() => held, { note });
+    keys.note?.();
+    held = { passage: "second" };
+    keys.note?.();
+    expect(note.mock.calls).toEqual([[{ passage: "first" }], [{ passage: "second" }]]);
+  });
+
+  it("is inert with nothing selected: the handler is not called", () => {
+    const note = vi.fn();
+    const highlight = vi.fn();
+    const keys = selectionActions<Target>(() => null, { note, highlight });
+    keys.note?.();
+    keys.highlight?.();
+    expect(note).not.toHaveBeenCalled();
+    expect(highlight).not.toHaveBeenCalled();
+  });
+
+  it("registers only the actions the page has a handler for: no highlight handler, no `highlight` key (the page does not wire one yet)", () => {
+    const note = vi.fn();
+    expect(Object.keys(selectionActions<Target>(() => ({ passage: "x" }), { note }))).toEqual(["note"]);
+    expect(Object.keys(selectionActions<Target>(() => ({ passage: "x" }), {}))).toEqual([]);
+    expect(Object.keys(selectionActions<Target>(() => ({ passage: "x" }), { note, highlight: vi.fn() })).sort()).toEqual(["highlight", "note"]);
+  });
+
+  it("does not put anything under the explain key: `e` stays the explain box's own", () => {
+    const keys = selectionActions<Target>(() => ({ passage: "x" }), { note: vi.fn(), highlight: vi.fn() }) as Record<string, unknown>;
+    expect(keys.explain).toBeUndefined();
+  });
+});
+
+describe("the keyboard layer and the selection's keys (P11-13)", () => {
+  class FakeElement {
+    constructor(readonly tagName: string) {}
+    isContentEditable = false;
+    blur() {}
+  }
+  let keydown: ((event: unknown) => void) | null = null;
+
+  beforeEach(() => {
+    keydown = null;
+    vi.stubGlobal("HTMLElement", FakeElement);
+    vi.stubGlobal("HTMLInputElement", class extends FakeElement {});
+    vi.stubGlobal("window", {
+      location: { pathname: "/papers/openalex:W1" },
+      addEventListener: (type: string, listener: (event: unknown) => void) => {
+        if (type === "keydown") keydown = listener;
+      },
+      removeEventListener: () => {},
+      getSelection: () => ({ isCollapsed: true }),
+      matchMedia: () => ({ matches: false }),
+      setTimeout: (fn: () => void, ms: number) => setTimeout(fn, ms),
+      clearTimeout: (id: number) => clearTimeout(id),
+    });
+    vi.stubGlobal("document", { activeElement: null, getElementById: () => null, querySelectorAll: () => [] });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    registerReaderActions({})();
+  });
+
+  function press(key: string, target: unknown) {
+    const event = { key, target, metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, preventDefault: vi.fn() };
+    keydown?.(event);
+    return event;
+  }
+
+  it("leaves an n or an h typed into a field alone, and runs the page's note and highlight for one pressed anywhere else", async () => {
+    const note = vi.fn();
+    const highlight = vi.fn();
+    registerReaderActions({ note, highlight });
+    const mounted = await hookRuntime.mount(() => KeyboardLayer());
+
+    for (const tag of ["TEXTAREA", "INPUT"]) {
+      for (const key of ["n", "h"]) expect(press(key, new FakeElement(tag)).preventDefault).not.toHaveBeenCalled();
+    }
+    expect(note).not.toHaveBeenCalled();
+    expect(highlight).not.toHaveBeenCalled();
+
+    expect(press("n", new FakeElement("DIV")).preventDefault).toHaveBeenCalled();
+    expect(press("h", new FakeElement("DIV")).preventDefault).toHaveBeenCalled();
+    expect(note).toHaveBeenCalledTimes(1);
+    expect(highlight).toHaveBeenCalledTimes(1);
+    mounted.unmount();
+  });
+
+  it("leaves n and h inert on a page that registered neither (the highlight is not wired yet)", async () => {
+    registerReaderActions({ next: vi.fn() });
+    const mounted = await hookRuntime.mount(() => KeyboardLayer());
+
+    expect(press("n", new FakeElement("DIV")).preventDefault).not.toHaveBeenCalled();
+    expect(press("h", new FakeElement("DIV")).preventDefault).not.toHaveBeenCalled();
+    mounted.unmount();
+  });
+
+  it("acts on the selection and on nothing else: with the page's selection actions and no selection, the press does nothing", async () => {
+    type Target = { passage: string };
+    const note = vi.fn();
+    let held: Target | null = null;
+    registerReaderActions(selectionActions<Target>(() => held, { note }));
+    const mounted = await hookRuntime.mount(() => KeyboardLayer());
+
+    press("n", new FakeElement("DIV"));
+    expect(note).not.toHaveBeenCalled();
+    held = { passage: "the words" };
+    press("n", new FakeElement("DIV"));
+    expect(note).toHaveBeenCalledWith({ passage: "the words" });
+    mounted.unmount();
+  });
+
+  // The `g` chord reads its second key before the paper's table does, so `g` then `h` still goes to the briefing.
+  it("leaves the g chord's h to the chord: g then h highlights nothing", async () => {
+    const highlight = vi.fn();
+    registerReaderActions({ highlight });
+    let second: ReturnType<typeof press> | null = null;
+    const mounted = await hookRuntime.mount(() => {
+      KeyboardLayer();
+      const [step, setStep] = useState(0);
+      useEffect(() => {
+        if (step === 1) press("g", new FakeElement("DIV"));
+        if (step === 2) second = press("h", new FakeElement("DIV"));
+        if (step < 3) setStep(step + 1);
+      }, [step]);
+      return null;
+    });
+    expect(second).not.toBeNull();
+    expect(highlight).not.toHaveBeenCalled();
+    expect(second!.preventDefault).toHaveBeenCalled();
+    // …and a bare h, a moment later, is the highlight.
+    press("h", new FakeElement("DIV"));
+    expect(highlight).toHaveBeenCalledTimes(1);
+    mounted.unmount();
+  });
+});

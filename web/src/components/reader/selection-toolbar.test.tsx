@@ -4,7 +4,22 @@ import { createElement } from "react";
 import type { ReactElement, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { SELECTION_LABELS, SelectionToolbar, SelectionToolbarView, selectionCanExplain, toolbarPlace } from "./selection-toolbar";
+import {
+  CARD_SLACK_PX,
+  MODE_HYSTERESIS_PX,
+  OPEN_CARD_SELECTOR,
+  SELECTION_LABELS,
+  SelectionToolbar,
+  SelectionToolbarView,
+  actionsPlace,
+  barOffersHighlight,
+  offeredActions,
+  openCardRects,
+  selectionCanExplain,
+  toolbarPlace,
+  type ActionsMode,
+} from "./selection-toolbar";
+import { MARGIN_CARD_SELECTOR, placeInMargin, type MarginRect } from "@/lib/reader/margin";
 import type { PaperTerm } from "@/lib/papers/report";
 
 // P10-09a (review 7.1, 8.4; rubric B3; ruling §1h.78): selecting text shows one small pill just above the
@@ -61,7 +76,8 @@ describe("toolbarPlace", () => {
 
 describe("SelectionToolbarView", () => {
   it("is one pill with two buttons, Explain this and Take notes", () => {
-    expect(SELECTION_LABELS).toEqual({ explain: "Explain this", note: "Take notes" });
+    // P11-13 (rule 1): the labels gain "Highlight" — the third action, drawn only where the page hands a handler (below).
+    expect(SELECTION_LABELS).toEqual({ explain: "Explain this", note: "Take notes", highlight: "Highlight" });
     const html = renderToStaticMarkup(createElement(SelectionToolbarView, { place: { left: 300, top: 362, below: false }, canExplain: true, onExplain: () => {}, onTakeNote: () => {} }));
     expect(html.match(/<button\b/g)).toHaveLength(2);
     expect(html).toContain(">Explain this<");
@@ -174,5 +190,284 @@ describe("the page's hand-off (P10-08b, rule 3)", () => {
     const toolbar = readFileSync(resolve(process.cwd(), "src/components/reader/selection-toolbar.tsx"), "utf8").replace(/\s+/g, " ");
     expect(toolbar).toContain("<SelectionToolbarView place={place} canExplain={canExplain}");
     expect(toolbar).toContain("definingTerm(input.terms, input.passage)");
+  });
+});
+
+// ── P11-13 (owner items 5 and 8; B P11-03 §2; ruling §1h.113) ────────────────────────────────────────────────────────────────
+// The selection's actions stand in the right margin, level with the selection's first line: Explain this, Take notes and
+// Highlight, one under the other. Where there is no margin (a window under 1024 px, a page without the shell), or an open card
+// covers the place, the group is today's pill above the selection, now with the three buttons side by side. Under 768 px nothing
+// is drawn (the thumb bar has the cells). `margin.ts` (C P11-10) is the margin's code; this file only reads it. Every text and
+// number is invented.
+
+const MARGIN: MarginRect = { left: 1080, width: 360, top: 48, bottom: 960 };
+const SIZES = { margin: { width: 112, height: 90 }, above: { width: 285, height: 32 } };
+const place = (over: Partial<Parameters<typeof actionsPlace>[0]> = {}) =>
+  actionsPlace({ bounds, viewport: VIEW, margin: MARGIN, cards: [], sizes: SIZES, ...over });
+/** A card rect `gap` px under the group that a selection at `top` gets in the margin (the group's foot is `top + 90`). */
+const cardUnder = (top: number, gap: number) => ({ left: MARGIN.left, top: top + SIZES.margin.height + gap, right: MARGIN.left + MARGIN.width, bottom: top + SIZES.margin.height + gap + 200 });
+
+describe("actionsPlace — the group in the margin at the selection's height (P11-13, rule 2)", () => {
+  it("stands in the margin, 8 px in from its left edge, level with the selection's first line", () => {
+    expect(place()).toEqual({ mode: "margin", left: MARGIN.left + 8, top: 400, below: false });
+  });
+
+  it("takes its height from `placeInMargin`, the margin's own rule: held at the band's top under the masthead, at its foot near the bottom", () => {
+    const high = place({ bounds: { left: 300, top: 30, right: 520, bottom: 54 } })!;
+    expect(high.mode).toBe("margin");
+    expect(high.top).toBe(MARGIN.top);
+    expect(high.top).toBe(placeInMargin(MARGIN, 30, SIZES.margin.height));
+
+    const low = place({ bounds: { left: 300, top: 940, right: 520, bottom: 962 } })!;
+    expect(low.mode).toBe("margin");
+    expect(low.top).toBe(MARGIN.bottom - SIZES.margin.height);
+    expect(low.top).toBe(placeInMargin(MARGIN, 940, SIZES.margin.height));
+    // …and the whole group stays inside the band.
+    expect(low.top + SIZES.margin.height).toBeLessThanOrEqual(MARGIN.bottom);
+  });
+
+  it("follows the margin when it moves (a divider drag): the left edge is always the margin's plus 8", () => {
+    expect(place({ margin: { ...MARGIN, left: 900, width: 540 } })!.left).toBe(908);
+    expect(place({ margin: { ...MARGIN, left: 1180, width: 260 } })!.left).toBe(1188);
+  });
+
+  it("is today's pill, horizontal, above the selection when there is no margin: the same place `toolbarPlace` gives", () => {
+    const got = place({ margin: null })!;
+    expect(got).toEqual({ mode: "above", ...toolbarPlace({ bounds, viewport: VIEW, size: SIZES.above })! });
+    expect(got).toEqual({ mode: "above", left: 300, top: 400 - 32 - 6, below: false });
+    // The masthead leaves no room above: under the last line, as `toolbarPlace` has it.
+    const high = place({ margin: null, bounds: { left: 300, top: 60, right: 520, bottom: 84 } })!;
+    expect(high.mode).toBe("above");
+    expect(high.below).toBe(true);
+  });
+
+  it("draws nothing under 768 px, with a margin or without one", () => {
+    for (const width of [390, 600, 767]) {
+      expect(place({ viewport: { width, height: 800 } })).toBeNull();
+      expect(place({ viewport: { width, height: 800 }, margin: null })).toBeNull();
+    }
+    expect(place({ viewport: { width: 768, height: 800 }, margin: null })).not.toBeNull();
+  });
+
+  it("is hidden while the selection is wholly out of view, in the margin as in the pill", () => {
+    for (const margin of [MARGIN, null]) {
+      expect(place({ margin, bounds: { left: 300, top: 10, right: 520, bottom: 48 } })).toBeNull();
+      expect(place({ margin, bounds: { left: 300, top: 1000, right: 520, bottom: 1022 } })).toBeNull();
+      expect(place({ margin, bounds: { left: 300, top: 40, right: 520, bottom: 70 } })).not.toBeNull();
+    }
+  });
+
+  describe("an open card that covers the group (4 px of slack)", () => {
+    const covering = { left: MARGIN.left, top: 380, right: MARGIN.left + MARGIN.width, bottom: 700 };
+
+    it("sends the group above the selection, the pill, until the card is gone", () => {
+      const got = place({ cards: [covering] })!;
+      expect(got.mode).toBe("above");
+      expect(got).toEqual({ mode: "above", ...toolbarPlace({ bounds, viewport: VIEW, size: SIZES.above })! });
+      expect(place({ cards: [] })!.mode).toBe("margin");
+    });
+
+    it("counts a card within 4 px as covering, and one 4 px or more clear as not", () => {
+      expect(CARD_SLACK_PX).toBe(4);
+      // The group is 400–490 high; a card whose top is 3 px under its foot is covering, 4 px under is clear.
+      expect(place({ cards: [cardUnder(400, 3)] })!.mode).toBe("above");
+      expect(place({ cards: [cardUnder(400, 4)] })!.mode).toBe("margin");
+      // The same above it: a card whose bottom is 3 px over the group's top covers, 4 px over does not.
+      const over = (gap: number) => ({ left: MARGIN.left, top: 100, right: MARGIN.left + MARGIN.width, bottom: 400 - gap });
+      expect(place({ cards: [over(3)] })!.mode).toBe("above");
+      expect(place({ cards: [over(4)] })!.mode).toBe("margin");
+    });
+
+    it("is not troubled by a card at the other side of the window, or one nowhere near", () => {
+      expect(place({ cards: [{ left: 20, top: 380, right: 300, bottom: 700 }] })!.mode).toBe("margin");
+      expect(place({ cards: [{ left: MARGIN.left, top: 600, right: MARGIN.left + MARGIN.width, bottom: 900 }] })!.mode).toBe("margin");
+    });
+
+    it("looks at every card, not only the first", () => {
+      expect(place({ cards: [{ left: 20, top: 380, right: 300, bottom: 700 }, covering] })!.mode).toBe("above");
+    });
+  });
+
+  describe("12 px of hysteresis when it switches (a selection scrolling past a card's edge does not flicker)", () => {
+    it("is 12 px", () => {
+      expect(MODE_HYSTERESIS_PX).toBe(12);
+    });
+
+    it("goes above at once when covered, and comes back to the margin only after 12 px more of room", () => {
+      const at = (mode: ActionsMode | null, gap: number) => place({ mode, cards: [cardUnder(400, gap)] })!.mode;
+      // Standing in the margin (or fresh): the nominal rule, 4 px.
+      expect(at("margin", 3)).toBe("above");
+      expect(at("margin", 4)).toBe("margin");
+      expect(at(null, 3)).toBe("above");
+      expect(at(null, 4)).toBe("margin");
+      // Standing above: it stays until the card is 4 + 12 = 16 px clear.
+      expect(at("above", 3)).toBe("above");
+      expect(at("above", 10)).toBe("above");
+      expect(at("above", 15)).toBe("above");
+      expect(at("above", 16)).toBe("margin");
+    });
+
+    it("keeps one mode through a scroll past the card's edge, and changes twice at most", () => {
+      // A card at the top of the margin ends at y 500; the selection's first line scrolls from 520 up to 503 and back to 516.
+      const card = { left: MARGIN.left, top: 48, right: MARGIN.left + MARGIN.width, bottom: 500 };
+      const path = [520, 510, 505, 503, 506, 512, 515, 516, 520, 505, 503];
+      let mode: ActionsMode | null = null;
+      const seen: ActionsMode[] = [];
+      for (const top of path) {
+        const got = place({ mode, cards: [card], bounds: { left: 300, top, right: 520, bottom: top + 22 } })!;
+        mode = got.mode;
+        seen.push(got.mode);
+      }
+      expect(seen).toEqual(["margin", "margin", "margin", "above", "above", "above", "above", "margin", "margin", "margin", "above"]);
+    });
+  });
+});
+
+describe("openCardRects — the cards that stand open (P11-13, rule 2)", () => {
+  const el = (box: { left: number; top: number; right: number; bottom: number }) => ({
+    getBoundingClientRect: () => ({ ...box, width: box.right - box.left, height: box.bottom - box.top }),
+  });
+
+  it("asks for the margin's cards, the explain dock and the sticky and notes windows, until they all carry the margin's attribute", () => {
+    expect(OPEN_CARD_SELECTOR).toContain(MARGIN_CARD_SELECTOR);
+    expect(OPEN_CARD_SELECTOR).toContain("[data-explain-dock]");
+    expect(OPEN_CARD_SELECTOR).toContain("[data-sticky]");
+    expect(OPEN_CARD_SELECTOR).toContain("[data-notes-window]");
+  });
+
+  it("reads each one's rect, and leaves out a card with no box (hidden)", () => {
+    const asked: string[] = [];
+    const root = {
+      querySelectorAll: (selector: string) => {
+        asked.push(selector);
+        return [el({ left: 1080, top: 48, right: 1440, bottom: 88 }), el({ left: 0, top: 0, right: 0, bottom: 0 }), el({ left: 1080, top: 88, right: 1440, bottom: 400 })];
+      },
+    };
+    expect(openCardRects(root as never)).toEqual([
+      { left: 1080, top: 48, right: 1440, bottom: 88 },
+      { left: 1080, top: 88, right: 1440, bottom: 400 },
+    ]);
+    expect(asked).toEqual([OPEN_CARD_SELECTOR]);
+  });
+
+  it("is empty when no card is open", () => {
+    expect(openCardRects({ querySelectorAll: () => [] } as never)).toEqual([]);
+  });
+});
+
+describe("offeredActions — which of the three buttons are on offer (P11-13, rule 1)", () => {
+  const handler = () => {};
+
+  it("is Explain this, Take notes and Highlight, in that order, when the page can explain and has a highlight to hand", () => {
+    expect(offeredActions({ canExplain: true, onHighlight: handler, canHighlight: true })).toEqual(["explain", "note", "highlight"]);
+  });
+
+  it("leaves Explain this out when the page cannot explain (P10-08b, unchanged), and Highlight out until the page passes a handler and says it can", () => {
+    expect(offeredActions({ canExplain: false, onHighlight: handler, canHighlight: true })).toEqual(["note", "highlight"]);
+    expect(offeredActions({ canExplain: true })).toEqual(["explain", "note"]);
+    expect(offeredActions({ canExplain: true, onHighlight: handler })).toEqual(["explain", "note"]);
+    expect(offeredActions({ canExplain: true, onHighlight: handler, canHighlight: false })).toEqual(["explain", "note"]);
+    expect(offeredActions({ canExplain: true, canHighlight: true })).toEqual(["explain", "note"]);
+    expect(offeredActions({ canExplain: false })).toEqual(["note"]);
+  });
+});
+
+describe("SelectionToolbarView — the three actions, in the margin and above (P11-13, rules 1 and 2)", () => {
+  const IN_MARGIN = { mode: "margin" as const, left: 1088, top: 400, below: false };
+  const ABOVE = { mode: "above" as const, left: 300, top: 362, below: false };
+  const view = (over: Record<string, unknown> = {}) =>
+    createElement(SelectionToolbarView, { place: IN_MARGIN, canExplain: true, onExplain: () => {}, onTakeNote: () => {}, onHighlight: () => {}, ...over } as never);
+
+  it("holds Explain this, Take notes and Highlight, in that order, when the page hands a highlight", () => {
+    for (const mode of [IN_MARGIN, ABOVE]) {
+      const html = renderToStaticMarkup(view({ place: mode }));
+      expect(html.match(/<button\b/g)).toHaveLength(3);
+      expect(html.indexOf(">Explain this<")).toBeGreaterThan(-1);
+      expect(html.indexOf(">Explain this<")).toBeLessThan(html.indexOf(">Take notes<"));
+      expect(html.indexOf(">Take notes<")).toBeLessThan(html.indexOf(">Highlight<"));
+      expect(html).toContain("data-selection-highlight");
+    }
+  });
+
+  it("has no Highlight until the page passes a handler (it is not wired yet), and no Explain this where the page cannot explain", () => {
+    const none = renderToStaticMarkup(view({ onHighlight: undefined }));
+    expect(none.match(/<button\b/g)).toHaveLength(2);
+    expect(none).not.toContain("Highlight");
+    expect(none).not.toContain("data-selection-highlight");
+
+    const noExplain = renderToStaticMarkup(view({ canExplain: false }));
+    expect(noExplain.match(/<button\b/g)).toHaveLength(2);
+    expect(noExplain).toContain(">Take notes<");
+    expect(noExplain).toContain(">Highlight<");
+    expect(noExplain).not.toContain("Explain this");
+  });
+
+  it("stands one under the other at the margin's height: fixed at the place, a vertical toolbar named Selection actions", () => {
+    const html = renderToStaticMarkup(view());
+    expect(html).toContain("left:1088px");
+    expect(html).toContain("top:400px");
+    expect(html).toContain("fixed");
+    expect(html).toContain('role="toolbar"');
+    expect(html).toContain('aria-label="Selection actions"');
+    expect(html).toContain('aria-orientation="vertical"');
+    expect(html).toContain("flex-col");
+    expect(html).toContain('data-mode="margin"');
+  });
+
+  it("is today's horizontal pill above the selection otherwise: a row, no vertical orientation", () => {
+    const html = renderToStaticMarkup(view({ place: ABOVE }));
+    expect(html).toContain("left:300px");
+    expect(html).toContain("top:362px");
+    expect(html).toContain('data-mode="above"');
+    expect(html).not.toContain("flex-col");
+    expect(html).not.toContain('aria-orientation="vertical"');
+    // A place without a mode (the old `ToolbarPlace`) is the pill as it was.
+    const old = renderToStaticMarkup(view({ place: { left: 300, top: 362, below: false } }));
+    expect(old).toContain('data-mode="above"');
+  });
+
+  it("calls the three handlers, each from its own button, and every press keeps the selection", () => {
+    const onExplain = vi.fn();
+    const onTakeNote = vi.fn();
+    const onHighlight = vi.fn();
+    const tree = SelectionToolbarView({ place: IN_MARGIN, canExplain: true, onExplain, onTakeNote, onHighlight });
+    const buttons = elements(tree).filter((el) => el.type === "button");
+    expect(buttons).toHaveLength(3);
+    for (const button of buttons) {
+      const preventDefault = vi.fn();
+      (button.props.onMouseDown as (e: unknown) => void)({ preventDefault });
+      expect(preventDefault).toHaveBeenCalled();
+    }
+    (buttons[2].props.onClick as () => void)();
+    expect([onExplain.mock.calls.length, onTakeNote.mock.calls.length, onHighlight.mock.calls.length]).toEqual([0, 0, 1]);
+    (buttons[0].props.onClick as () => void)();
+    (buttons[1].props.onClick as () => void)();
+    expect([onExplain.mock.calls.length, onTakeNote.mock.calls.length, onHighlight.mock.calls.length]).toEqual([1, 1, 1]);
+  });
+
+  it("keeps a divider between the buttons that fits its direction: above the next in the column, left of it in the row", () => {
+    const column = renderToStaticMarkup(view());
+    expect(column).toContain("border-t");
+    expect(column).not.toContain("border-l");
+    const row = renderToStaticMarkup(view({ place: ABOVE }));
+    expect(row).toContain("border-l");
+  });
+});
+
+describe("the toolbar's use of the margin (P11-13; ruling §1h.113 (d))", () => {
+  const toolbar = readFileSync(resolve(process.cwd(), "src/components/reader/selection-toolbar.tsx"), "utf8").replace(/\s+/g, " ");
+
+  it("reads the margin through C P11-10's contract — useMarginRect and placeInMargin — and builds no margin of its own", () => {
+    expect(toolbar).toContain('from "@/lib/reader/margin"');
+    expect(toolbar).toContain("useMarginRect()");
+    expect(toolbar).toContain("placeInMargin(");
+    expect(toolbar).not.toContain("readMargin");
+    expect(toolbar).not.toContain("registerMargin");
+  });
+
+  it("reserves nothing and writes nothing on the page: the margin is empty until a selection, and the toolbar leaves it so", () => {
+    expect(toolbar).not.toContain("reserveDock");
+    expect(toolbar).not.toContain("setProperty");
+    expect(toolbar).not.toContain("--explain-dock");
   });
 });
