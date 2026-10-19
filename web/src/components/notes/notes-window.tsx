@@ -38,7 +38,7 @@ const STICKY_FRONT_HEIGHT_PX = 260;
 
 export type ExportKind = "copy" | "txt" | "md" | "doc" | "pdf";
 
-/** The export menu, in the order it stands. None of these formats carries a sticky note's quoted passage. */
+/** The export menu, in the order it stands. None of these formats carries a sticky note's quoted passage; every one carries a highlight's words (P11-08). */
 export const EXPORT_ITEMS: readonly { id: ExportKind; label: string; detail: string }[] = [
   { id: "copy", label: "Copy", detail: "the note as plain text" },
   { id: "txt", label: "Text (.txt)", detail: "words only, no markup" },

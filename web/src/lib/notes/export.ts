@@ -6,16 +6,24 @@
 // passage is `anchor.quote` on its heading block and is never any block's text, so none of these reads it; and
 // P10-09e (review 7.3, "the quoted text is not exported"): a `quote` block a note holds is skipped by every one.
 //
+// P11-08 (owner item 8, the owner's answer, ruling §1h.111 (d): "a highlight's words are in the overall note and in every
+// export"): a highlight is the one exception, and only a highlight. Its words are its whole content (`highlight.quote`, the
+// passage the reader marked), not context for words of their own, so every format carries them, each in a paragraph of its own:
+// Markdown as `==words==` (the notes' own highlight), plain text and Copy as the words, Word and PDF as a `<mark>` that has
+// its colour and its ink written into it (`mso-highlight:yellow` besides for Yellow, Word's own highlighter). A sticky's quote
+// and a `quote` block stay out, as above.
+//
 // The Markdown keeps citations as `[@key]` — Pandoc's syntax — and the .bib
 // carries the same keys, so `pandoc draft.md --citeproc --bibliography
 // draft.bib` turns a draft into a paper with its references formatted. In
 // Obsidian the same file reads as a note, front matter and all. Template
 // prompts are UI, never content: they do not leave.
 
-import type { Block, Note, Source } from "./types";
+import type { Block, HighlightColourId, Note, Source } from "./types";
 import { isWrapping, parseInline } from "./inline";
-import { citedKeys, isList, isTextual, listNumber } from "./blocks";
+import { citedKeys, isList, isTextual, listNumber, readHighlight } from "./blocks";
 import { authorYear, externalLink } from "./cite";
+import { highlightPaint } from "./highlight-colours";
 
 function yaml(s: string): string {
   return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
@@ -58,6 +66,13 @@ function isTitleLine(note: Pick<Note, "title" | "blocks">, b: Block, i: number):
   return i === 0 && b.type === "h1" && title !== "" && b.text.trim() === title;
 }
 
+/** P11-08: a highlight's words as an export carries them — the whole passage on one line; null when the block holds no readable ones
+ *  (a highlight whose field is missing or malformed, or whose passage is empty, leaves no line). */
+function highlightWords(b: Block): string | null {
+  const words = readHighlight(b)?.quote.replace(/\s+/g, " ").trim();
+  return words ? words : null;
+}
+
 function blockMarkdown(b: Block, blocks: Block[], i: number, sources: Record<string, Source>): string | null {
   // P10-09e (review 7.3): quoted text is not exported — a quote block leaves no line, in any format.
   if (b.type === "quote") return null;
@@ -93,8 +108,12 @@ function blockMarkdown(b: Block, blocks: Block[], i: number, sources: Record<str
       const link = linkOf(s);
       return `> [@${s.key}] ${authorYear(s)}. *${s.title}*.${s.venue ? ` ${s.venue}.` : ""}${link ? ` <${link}>` : ""}`;
     }
-    case "highlight":
-      return null; // P11-07: the type's contract only; the highlight's words are exported by P11-08 (ruling §1h.112 D1)
+    case "highlight": {
+      // P11-08: the notes' own highlight mark around the words. A star, an underscore and an equals sign in the paper's words are
+      // written with the dialect's escapes (`\*`, `\_`, `\=`), so the words come back as one mark and a renderer reads them the same.
+      const words = highlightWords(b);
+      return words === null ? null : `==${words.replace(/[*_=]/g, "\\$&")}==`;
+    }
   }
 }
 
@@ -215,7 +234,7 @@ function blockText(b: Block, blocks: Block[], i: number, sources: Record<string,
       return s ? `${authorYear(s)}. ${s.title}.${s.venue ? ` ${s.venue}.` : ""}` : null;
     }
     case "highlight":
-      return null; // P11-07: the type's contract only; the highlight's words are exported by P11-08 (ruling §1h.112 D1)
+      return highlightWords(b); // P11-08: the words, in a paragraph of their own
   }
 }
 
@@ -251,6 +270,13 @@ function esc(s: string): string {
 
 /** Word reads the highlighter from `mso-highlight`; the background is for every other reader of the file. */
 const HIGHLIGHT = 'style="background:#ffe066;mso-highlight:yellow"';
+
+/** P11-08: a highlight's mark in Word and print — its fill and its ink (the better of black and white on it) written into the style, so
+ *  the file needs no stylesheet to be right. `mso-highlight:yellow` only for Yellow: Word's highlighter has a fixed palette. */
+function highlightStyle(colour: HighlightColourId): string {
+  const { bg, ink } = highlightPaint(colour, 0);
+  return `background:${bg};color:${ink}${colour === "yellow" ? ";mso-highlight:yellow" : ""}`;
+}
 
 function htmlOf(src: string, sources: Record<string, Source>): string {
   return parseInline(src)
@@ -325,6 +351,13 @@ function bodyHtml(note: Note): string {
       case "paper": {
         const s = b.cite ? note.sources[b.cite] : undefined;
         if (s) out.push(`<blockquote>${esc(authorYear(s))}. <i>${esc(s.title)}</i>.${s.venue ? ` ${esc(s.venue)}.` : ""}</blockquote>\n`);
+        break;
+      }
+      case "highlight": {
+        // P11-08: the words in a paragraph of their own, in the highlight's colour.
+        const spot = readHighlight(b);
+        const words = highlightWords(b);
+        if (spot && words) out.push(`<p><mark style="${highlightStyle(spot.colour)}">${esc(words)}</mark></p>\n`);
         break;
       }
     }
