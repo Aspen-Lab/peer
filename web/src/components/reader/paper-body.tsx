@@ -27,6 +27,7 @@ import { GIST_QUESTION, MAX_STRONG_ROWS, type RouteResult, type RouteSection, ty
 import type { QuestionAnswers } from "@/lib/papers/report";
 import { Equation, MathText } from "./math";
 import { Band } from "@/components/ui/band";
+import { openFigure, useFigureOpen } from "@/lib/reader/figure-viewer";
 import { paragraphKey } from "@/store/plain-rewrites";
 import { repairAnchors, resolveAnchors, useLostPassages } from "@/store/notes";
 import { ASK, BODY, ROUTE } from "./copy";
@@ -668,16 +669,54 @@ function Figure({ figure }: { figure: ReadingFigure }) {
       }
     />
   );
+  // P11-12 (owner item 1; B P11-05 §6 C3): the picture is a button that opens the figure in the margin. The click goes through
+  // the store (`figure-viewer.ts`), so the body takes no new prop. The button is the picture's own box and nothing moves: in the
+  // aspect box it fills it (`block h-full w-full`; the box stays the mat's first child), and where the size is not known it is
+  // the picture's own width, centred, never wider than the mat (`mx-auto block max-w-full`) around the unchanged `img`. A
+  // figure with no picture is no button. The open figure — the store's key is the one this body's `Section` gives the figure —
+  // wears a quiet accent ring (D10), a shadow, so the keyboard's focus outline (`globals.css`) is not overridden.
+  const key = `${figure.label}:${figure.ordinal}`;
+  const open = useFigureOpen(key);
+  const opener = (boxClass: string) => (
+    <button
+      type="button"
+      aria-label={`Open ${figure.label} in the margin`}
+      aria-expanded={open}
+      onClick={(event) => {
+        if (!figure.imageUrl) return;
+        const button = event.currentTarget;
+        const img = button.querySelector("img");
+        const at = button.getBoundingClientRect();
+        openFigure({
+          key,
+          src: figure.imageUrl,
+          label: figure.label,
+          caption: figure.caption,
+          // The picture's own size once it has loaded; before that, the extractor's record of it (P10-26); else not known.
+          natural:
+            img && img.naturalWidth > 0 && img.naturalHeight > 0
+              ? { width: img.naturalWidth, height: img.naturalHeight }
+              : box && figure.width && figure.height
+                ? { width: figure.width, height: figure.height }
+                : null,
+          origin: { left: at.left, top: at.top, width: at.width, height: at.height },
+        });
+      }}
+      className={`${boxClass} cursor-zoom-in${open ? " ring-2 ring-accent/45" : ""}`}
+    >
+      {picture}
+    </button>
+  );
   return (
     <figure className="my-6">
       {showImage && (
         <div className={box ? figureMatClass(false) : figureMatClass(waiting)}>
           {box ? (
             <div className="mx-auto" style={box}>
-              {picture}
+              {opener("block h-full w-full")}
             </div>
           ) : (
-            picture
+            opener("mx-auto block max-w-full")
           )}
         </div>
       )}
