@@ -93,6 +93,8 @@ function blockMarkdown(b: Block, blocks: Block[], i: number, sources: Record<str
       const link = linkOf(s);
       return `> [@${s.key}] ${authorYear(s)}. *${s.title}*.${s.venue ? ` ${s.venue}.` : ""}${link ? ` <${link}>` : ""}`;
     }
+    case "highlight":
+      return null; // P11-07: the type's contract only; the highlight's words are exported by P11-08 (ruling §1h.112 D1)
   }
 }
 
@@ -212,6 +214,8 @@ function blockText(b: Block, blocks: Block[], i: number, sources: Record<string,
       const s = b.cite ? sources[b.cite] : undefined;
       return s ? `${authorYear(s)}. ${s.title}.${s.venue ? ` ${s.venue}.` : ""}` : null;
     }
+    case "highlight":
+      return null; // P11-07: the type's contract only; the highlight's words are exported by P11-08 (ruling §1h.112 D1)
   }
 }
 

@@ -165,6 +165,7 @@ const TYPE_LABEL: Record<BlockType, string> = {
   code: "Code",
   divider: "Divider",
   paper: "Paper card",
+  highlight: "Highlight",
 };
 
 const PLACEHOLDER: Partial<Record<BlockType, string>> = {

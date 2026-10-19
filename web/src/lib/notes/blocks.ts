@@ -8,9 +8,9 @@ import { authorYear } from "./cite";
 export const MAX_INDENT = 4;
 
 /** Blocks that hold words and take a caret. A divider and a paper card are
- *  placed, not typed in. */
+ *  placed, not typed in; a highlight (P11-07) is made from the paper's page and keeps its words in `highlight`. */
 export function isTextual(type: BlockType): boolean {
-  return type !== "divider" && type !== "paper";
+  return type !== "divider" && type !== "paper" && type !== "highlight";
 }
 
 export function isList(type: BlockType): boolean {

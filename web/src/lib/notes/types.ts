@@ -23,7 +23,8 @@ export type BlockType =
   | "quote"
   | "code"
   | "divider"
-  | "paper";
+  | "paper"
+  | "highlight";
 
 /** P10-09a (ruling §1h.78 (f)): the passage a sticky note was taken on. It rides on the sticky's `h3` block
  *  ("Note N") and is never a block's text, so no export carries it. */
@@ -42,10 +43,30 @@ export interface NoteAnchor {
   end?: number;
 }
 
+/** P11-07 (owner item 8; ruling §1h.112 D3): the six colours a highlight can wear. The table behind the ids (names, fills)
+ *  is `highlight-colours.ts`; a stored id that is not one of these reads as `yellow`. */
+export type HighlightColourId = "yellow" | "green" | "blue" | "pink" | "orange" | "ink";
+
+/** P11-07 (B P11-04 §2.2): the words a highlight was made on. It rides on a block of its own (`type: "highlight"`, `text`
+ *  empty) in the paper's note — not on a sticky's `anchor` — so a highlight is never numbered, never tagged and never taken
+ *  for an empty sticky. Unlike a sticky's quote, `quote` is the WHOLE passage: the highlight's words are its content. */
+export interface HighlightSpot {
+  paperId: string;
+  /** The paper's paragraph, as `paragraphAnchor` writes it (`paper-section-1-p2`). */
+  paragraphId: string;
+  /** The whole selected passage, whitespace collapsed, at most 1,200 characters (the selection's own cap). */
+  quote: string;
+  /** Where the words stand in the paragraph's text as the body renders it: `start` inclusive, `end` exclusive. Always present:
+   *  a highlight whose passage was not found whole is not made. */
+  start: number;
+  end: number;
+  colour: HighlightColourId;
+}
+
 export interface Block {
   id: string;
   type: BlockType;
-  /** Inline Markdown. Empty for a divider and a paper card. */
+  /** Inline Markdown. Empty for a divider, a paper card and a highlight. */
   text: string;
   /** 0–4: lists and paragraphs nest the way an outline does. */
   indent?: number;
@@ -57,6 +78,8 @@ export interface Block {
   hint?: string;
   /** A sticky note's heading ("Note N") carries the passage it was taken on. Never exported. */
   anchor?: NoteAnchor;
+  /** P11-07: a highlight's words, their place in the paper and their colour; only on a block of type `highlight`. */
+  highlight?: HighlightSpot;
 }
 
 export interface Source {
