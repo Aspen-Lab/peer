@@ -306,14 +306,31 @@ describe("globals.css — the highlighter token (P10-09f)", () => {
 // written by a ResizeObserver — so that the decision, then at the panel's bottom, stayed in view
 // while the plate scrolled away. The commands are under the title now and the question box and the
 // map moved to the column: `top: 4rem` and nothing to measure. A panel pinned by its top cannot show
-// what is below the window, so the panel is the window's height at most: a flex column that scrolls as
-// one (P9-04: nothing inside it scrolls or shrinks on its own — the Terms strip is an ordinary block in
-// it, shown whole, where it had been a window of its own at the panel's foot; on a phone, in one column,
-// it folds to two terms with a toggle). Source-text assertions, as above: a computed style in jsdom
-// would not resolve `calc()` against custom properties the way a browser does.
-describe("globals.css — the reader panel pins by its top (P7-14, R2)", () => {
-  const utility = css.slice(css.indexOf("@utility reader-panel {"));
-  const rule = utility.slice(0, utility.indexOf("\n}") + 2);
+// what is below the window, so the panel is the window's height at most. Source-text assertions, as
+// above: a computed style in jsdom would not resolve `calc()` against custom properties the way a
+// browser does.
+//
+// P11-10 (B P11-01 §2; ruling §1h.113 (a)) RE-AIM. `@utility reader-panel` — the sticky part of the old
+// two-column spread's panel — is replaced by the pane rule: the left pane of the three-pane shell is
+// `.reader-left`, pinned the same way. Its five tests are aimed at the new selector, each named:
+//   "is sticky, with a top of 4rem ..."          same assertions on `.reader-left`
+//   "has no bottom-pin arithmetic ..."           same assertions on `.reader-left`
+//   "is a window-high flex column ..."           same assertions on `.reader-left` (the max-height calc is verbatim)
+//   "keeps the focus ring inside the scroll port"  was `margin-inline: -6px; padding-inline: 6px`; the pane is a full-bleed column
+//                                                with its own side padding, `padding-inline: 16px 8px`, no negative margin
+//   "keeps --legend-h ..."                       unchanged
+// and the rule's new parts have tests of their own below.
+describe("globals.css — the reader's left pane pins by its top (P7-14, R2; re-aimed by P11-10)", () => {
+  const ruleOf = (selector: string) => {
+    const start = css.indexOf(`${selector} {`);
+    expect(start, `${selector} is in globals.css`).toBeGreaterThanOrEqual(0);
+    return css.slice(start, css.indexOf("\n}", start) + 2);
+  };
+  const rule = ruleOf(".reader-left");
+
+  it("replaces @utility reader-panel: the old utility is gone", () => {
+    expect(css).not.toContain("@utility reader-panel");
+  });
 
   it("is sticky, with a top of 4rem divided by the page zoom", () => {
     expect(rule).toMatch(/position:\s*sticky;/);
@@ -329,7 +346,7 @@ describe("globals.css — the reader panel pins by its top (P7-14, R2)", () => {
     expect(css).not.toContain("--panel-h:");
   });
 
-  it("is a window-high flex column that scrolls only when its fixed blocks are taller than the window", () => {
+  it("is a window-high flex column that scrolls only when its blocks are taller than the window", () => {
     expect(rule).toMatch(/display:\s*flex;/);
     expect(rule).toMatch(/flex-direction:\s*column;/);
     // 100vh less the top (4rem), the key legend and a rem of air — each divided by the page zoom, as `top` is.
@@ -337,13 +354,113 @@ describe("globals.css — the reader panel pins by its top (P7-14, R2)", () => {
     expect(rule).toMatch(/overflow-y:\s*auto;/);
   });
 
-  it("keeps the focus ring inside the scroll port: 6px of side padding taken back by a negative margin", () => {
-    expect(rule).toMatch(/margin-inline:\s*-6px;/);
-    expect(rule).toMatch(/padding-inline:\s*6px;/);
+  it("keeps the focus ring inside the scroll port: side padding on the pane, and no negative margin to take it back", () => {
+    expect(rule).toMatch(/padding-inline:\s*16px\s+8px;/);
+    expect(rule).not.toMatch(/margin-inline:/);
   });
 
   it("keeps --legend-h, which the key legend's own height reads", () => {
     expect(css).toMatch(/--legend-h:\s*1\.75rem;/);
+  });
+
+  // P10-21 (A P10-14 §8 item 7): at the very foot of the page the sticky part stops where its holder ends, 64 px above the window's
+  // bottom at 1280 x 720, and its top (43.9 px) stood 4 px under the masthead's bottom (48 px). A -12 px bottom margin lets it end
+  // 12 px below the holder: its top is 55.9 px there (B P11-01 §6 item 14; measured by the C).
+  it("keeps P10-21's -12px bottom margin, so the holder's end never lifts the pane's top into the masthead", () => {
+    expect(rule).toMatch(/margin-bottom:\s*-0\.75rem;/);
+  });
+
+  it("is split in two when it is given a fixed zone and a scroll zone: the pane clips, the scroll zone is the one scroller", () => {
+    expect(ruleOf('.reader-left[data-mode="split"]')).toMatch(/overflow:\s*hidden;/);
+    const scroll = ruleOf(".reader-left-scroll");
+    expect(scroll).toMatch(/flex:\s*1 1 auto;/);
+    expect(scroll).toMatch(/min-height:\s*0;/);
+    expect(scroll).toMatch(/overflow-y:\s*auto;/);
+    expect(ruleOf(".reader-left-fixed")).toMatch(/flex:\s*none;/);
+  });
+});
+
+// P11-10 rule 3 (B P11-01 §2.1, §2.3; ruling §1h.113 (a)): the grid, the rail, the peek, the dividers, the centre.
+describe("globals.css — the reader's three panes (P11-10)", () => {
+  const ruleOf = (selector: string) => {
+    const start = css.indexOf(`${selector} {`);
+    expect(start, `${selector} is in globals.css`).toBeGreaterThanOrEqual(0);
+    return css.slice(start, css.indexOf("\n}", start) + 2);
+  };
+
+  it("the grid is the left track, a 12px divider, the centre, a 12px divider and the margin", () => {
+    const grid = ruleOf(".reader-shell");
+    expect(grid).toMatch(/display:\s*grid;/);
+    expect(grid).toMatch(/grid-template-columns:\s*var\(--left-w\) 12px minmax\(0, 1fr\) 12px var\(--margin-w, 360px\);/);
+    expect(grid).toMatch(/--left-w:\s*var\(--left-pane-w, 320px\);/);
+  });
+
+  it("the left track is the rail's 48px in the rail and in the peek: the peek moves nothing", () => {
+    const rail = ruleOf('.reader-shell[data-left-state="peek"]');
+    expect(css).toContain('.reader-shell[data-left-state="rail"],\n.reader-shell[data-left-state="peek"] {');
+    expect(rail).toMatch(/--left-w:\s*48px;/);
+  });
+
+  it("the rail hides the pane (it is inert as well, from the shell) and the peek draws it over the centre, below the masthead, on the tokens", () => {
+    const both = ruleOf('.reader-left[data-state="peek"]');
+    expect(both).toMatch(/position:\s*fixed;/);
+    expect(both).toMatch(/z-index:\s*40;/);
+    expect(both).toMatch(/background:\s*var\(--color-surface\);/);
+    expect(both).toMatch(/border-right:\s*1px solid var\(--color-border-strong\);/);
+    expect(both).toMatch(/top:\s*calc\(3rem \/ var\(--page-zoom, 1\)\);/);
+    // The masthead is z-50; the peek stays under it.
+    expect(Number(/z-index:\s*(\d+);/.exec(both)?.[1])).toBeLessThan(50);
+    expect(ruleOf('.reader-left[data-state="rail"]')).toMatch(/visibility:\s*hidden;/);
+    expect(ruleOf('.reader-left[data-state="rail"]')).toMatch(/pointer-events:\s*none;/);
+    expect(ruleOf('.reader-left[data-state="peek"]')).toMatch(/box-shadow:/);
+  });
+
+  it("slides only where the reader has not asked for less motion", () => {
+    const at = css.indexOf("@media (prefers-reduced-motion: no-preference) {\n  .reader-left");
+    expect(at).toBeGreaterThan(0);
+    const media = css.slice(at, css.indexOf("\n}\n", at));
+    expect(media).toContain("transform 160ms");
+    // The only transitions declared on the panes are inside that block.
+    const outside = css.replace(media, "");
+    expect(outside).not.toMatch(/\.reader-left[^{]*\{[^}]*transition/);
+  });
+
+  it("the rail's button is not shown when the pane is pinned (the UA's [hidden] would lose to its display)", () => {
+    expect(ruleOf(".reader-rail-button[hidden]")).toMatch(/display:\s*none;/);
+  });
+
+  it("the dividers are 12px of col-resize hit area with a 1px line in the strong border token, the accent on hover, focus and drag", () => {
+    expect(ruleOf(".reader-divider")).toMatch(/cursor:\s*col-resize;/);
+    expect(ruleOf(".reader-divider")).toMatch(/touch-action:\s*none;/);
+    const hit = ruleOf(".reader-divider,\n.reader-divider-rest");
+    expect(hit).toMatch(/width:\s*12px;/);
+    expect(hit).toMatch(/align-self:\s*stretch;/);
+    const line = ruleOf(".reader-divider::before,\n.reader-divider-rest::before");
+    expect(line).toMatch(/width:\s*1px;/);
+    expect(line).toMatch(/background:\s*var\(--color-border-strong\);/);
+    const lit = css.slice(css.indexOf(".reader-divider:hover::before"));
+    expect(lit.slice(0, lit.indexOf("\n}") + 2)).toMatch(/\.reader-divider\[data-dragging\]::before[^}]*background:\s*var\(--color-accent\);/);
+  });
+
+  it("the centre's content is capped at 38em and centred, and the prose measures are lifted inside it", () => {
+    const inner = ruleOf(".reader-centre-inner");
+    expect(inner).toMatch(/max-width:\s*38em;/);
+    expect(inner).toMatch(/margin-inline:\s*auto;/);
+    expect(ruleOf(".reader-centre .measure,\n.reader-centre .measure-paper")).toMatch(/max-width:\s*none;/);
+    expect(ruleOf(".reader-centre")).toMatch(/min-width:\s*0;/);
+  });
+
+  it("the margin is an empty stretch cell with nothing drawn in it", () => {
+    const margin = ruleOf(".reader-margin");
+    expect(margin).toMatch(/align-self:\s*stretch;/);
+    expect(margin).not.toMatch(/background|border|padding/);
+  });
+
+  it("the shell neutralises the old reserve: no second gutter beside the margin's own track", () => {
+    const neutraliser = ruleOf(".peer-main-content:has([data-reader-shell])");
+    expect(neutraliser).toMatch(/padding-right:\s*0;/);
+    // C4 (P11-14) deletes the reserve and this rule with it; until then both stand.
+    expect(css).toMatch(/\.peer-main-content\s*\{\s*padding-right:\s*var\(--explain-dock, 0px\);/);
   });
 });
 

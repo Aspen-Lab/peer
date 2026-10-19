@@ -1,5 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { PANEL_STICKY_CLASS, PANEL_TAIL_CLASS, SPREAD_GRID, TWO_XL_PANEL_PX, XL_CAP_PX } from "./spread";
+import { DOCK_MIN_VIEWPORT_PX } from "./explain-dock";
+import { SHELL_MIN_VIEWPORT_PX } from "./pane-layout";
+import { PANEL_STICKY_CLASS, PANEL_TAIL_CLASS, SPREAD_GRID, SPREAD_QUERY, TWO_XL_PANEL_PX, XL_CAP_PX } from "./spread";
+
+// P11-10 rule 3 (B P11-01 §2.2, §4 C2; ruling §1h.113 (a)): `useSpread` — the one switch between the one-column page and the spread — now
+// asks for the three-pane shell's width, 64rem = 1024 css px (it asked for 80rem, the old two-column spread's xl). Everything below this
+// describe is the old spread's own arithmetic. It is KEPT, not rewritten, because the constants it pins still stand: `SPREAD_GRID` and
+// the caps are what the loading mat and the error states (`loading.tsx`, `page.tsx`'s `width="spread"` sites) still lay out with, and
+// `PANEL_*` / `COLUMN_CLASS` are what `reader-layout.tsx` still imports until the blocks move into the shell (P11-16 retires them with
+// it). Re-aimed: nothing in them; the file's new first describe is the new rule.
+describe("SPREAD_QUERY — the shell's width (P11-10)", () => {
+  it("is (min-width: 64rem)", () => {
+    expect(SPREAD_QUERY).toBe("(min-width: 64rem)");
+  });
+
+  it("is 1024 css px at the browser's 16px root: the shell's minimum and the explain dock's, one threshold", () => {
+    const rem = Number(/min-width:\s*([\d.]+)rem/.exec(SPREAD_QUERY)?.[1]);
+    expect(rem * 16).toBe(SHELL_MIN_VIEWPORT_PX);
+    expect(rem * 16).toBe(DOCK_MIN_VIEWPORT_PX);
+  });
+
+  it("is no longer the xl breakpoint", () => {
+    expect(SPREAD_QUERY).not.toContain("80rem");
+  });
+});
 
 // P6-03 (A P6-02 S1, mutation M8): the spread's panel tracks were pinned by no
 // test. Widening the xl panel from 320 to 360 left every test green, although
