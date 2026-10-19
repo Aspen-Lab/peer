@@ -3,29 +3,10 @@
 import { useCallback, useEffect, useId, useRef, useState, type PointerEvent, type Ref, type SyntheticEvent } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
+import { clampFigurePan, clampFigureSize, DETAIL_ZOOM, type Point, type Size } from "./figure-zoom";
 
-type Size = { width: number; height: number };
-type Point = { x: number; y: number };
-const DETAIL_ZOOM = 2;
-
-/** Fit the entire figure into the available space, preserving its aspect ratio. */
-export function clampFigureSize(natural: Size, viewport: Size): Size {
-  if (natural.width <= 0 || natural.height <= 0 || viewport.width <= 0 || viewport.height <= 0) {
-    return { width: 0, height: 0 };
-  }
-  const scale = Math.min(viewport.width * 0.96 / natural.width, viewport.height * 0.96 / natural.height);
-  return { width: natural.width * scale, height: natural.height * scale };
-}
-
-/** Keep every edge reachable without letting the zoomed figure get dragged away. */
-export function clampFigurePan(pan: Point, image: Size, viewport: Size): Point {
-  const limitX = Math.max(0, (image.width - viewport.width) / 2);
-  const limitY = Math.max(0, (image.height - viewport.height) / 2);
-  return {
-    x: Math.max(-limitX, Math.min(limitX, pan.x)),
-    y: Math.max(-limitY, Math.min(limitY, pan.y)),
-  };
-}
+// The math moved to figure-zoom.ts (P11-11, shared with the margin's figure card); the clamps stay this module's exports.
+export { clampFigurePan, clampFigureSize, DETAIL_ZOOM };
 
 function setRef(ref: Ref<HTMLImageElement> | undefined, node: HTMLImageElement | null) {
   if (typeof ref === "function") ref(node);
