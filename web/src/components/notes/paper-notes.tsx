@@ -23,6 +23,7 @@ import type { ReadingNoteExtras } from "@/lib/notes/templates";
 import { Band } from "@/components/ui/band";
 import { COMMAND } from "@/components/ui/command";
 import { citableFromPaper } from "@/lib/notes/cite";
+import { rememberPlace } from "@/lib/notes/return-to-paper";
 import { notesCiting, readingNoteFor, useNotesHydrated, useNotesStore } from "@/store/notes";
 
 /** P2-05, then P10-09e: `questions` (the reader's settled ones, never the gist) and the
@@ -46,6 +47,9 @@ interface NotesInputs {
  *
  * P10-09b (review 7.2): given `openWindow` (the reading page's edge tab), the note opens as the floating window
  * and nothing navigates; without it (a phone's row, the upload page's band) it goes to `/notes/<id>` as before.
+ *
+ * P11-06 (the owner's item 3): a press that navigates first hands the note's id to `remember`, which records where the reader is
+ * on the paper (tab, scroll, paragraph) so the notes page can offer "Back to paper". The window leaves the paper nowhere, so it records nothing.
  */
 export function openPaperNotes({
   own,
@@ -55,20 +59,28 @@ export function openPaperNotes({
   ensure,
   push,
   openWindow,
+  remember,
 }: NotesInputs & {
   own: Pick<Note, "id"> | undefined;
   ensure: (paper: Citable, extras?: ReadingNoteExtras) => string;
   push: (href: string) => void;
   openWindow?: () => void;
+  remember?: (noteId: string) => void;
 }): void {
   if (own) {
     if (openWindow) openWindow();
-    else push(`/notes/${own.id}`);
+    else {
+      remember?.(own.id);
+      push(`/notes/${own.id}`);
+    }
     return;
   }
   const id = ensure(citableFromPaper(paper), { questions, forYourQuestions });
   if (openWindow) openWindow();
-  else push(`/notes/${id}`);
+  else {
+    remember?.(id);
+    push(`/notes/${id}`);
+  }
 }
 
 /**
@@ -84,7 +96,17 @@ export function usePaperNotes({ paper, questions, forYourQuestions, openWindow }
   const own = readingNoteFor(notes, paper.id);
   const citing = notesCiting(notes, paper.id).filter((n) => n.id !== own?.id);
   const open = () =>
-    openPaperNotes({ own, paper, questions, forYourQuestions, ensure, push: (href) => router.push(href as Route), openWindow });
+    openPaperNotes({
+      own,
+      paper,
+      questions,
+      forYourQuestions,
+      ensure,
+      push: (href) => router.push(href as Route),
+      openWindow,
+      // P11-06: only a press that leaves the paper records the place to come back to.
+      remember: openWindow ? undefined : (noteId) => { rememberPlace({ paperId: paper.id, noteId }); },
+    });
   return { ready, own, citing, open };
 }
 

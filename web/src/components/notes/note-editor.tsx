@@ -101,6 +101,7 @@ import { blankNote } from "@/lib/notes/templates";
 import { newestFirst, useNotesStore } from "@/store/notes";
 import { useFeedStore } from "@/store/feed";
 import { COMMAND } from "@/components/ui/command";
+import { NotesBackLink } from "@/app/notes/[id]/back-link";
 import { cn } from "@/lib/cn";
 import { caretCoords, caretLine, offsetFromPoint } from "./caret";
 import { InlineText } from "./inline-text";
@@ -1740,9 +1741,8 @@ export function NoteEditor({
         {/* The page's own bar: where it lives, that it is kept, and out. */}
         {!compact && <div className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pl-10">
           <div className="flex items-center gap-3">
-            <Link href="/saved" className="eyebrow text-text-faint hover:text-heading">
-              ← Saved
-            </Link>
+            {/* P11-06 (the owner's item 3): "Back to paper" when opened from a paper, else the Saved link as it was. */}
+            <NotesBackLink noteId={note.id} />
             <button
               type="button"
               className={`${COMMAND} lg:hidden`}
