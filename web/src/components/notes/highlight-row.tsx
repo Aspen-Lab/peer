@@ -98,6 +98,25 @@ export function blockAccepts(type: BlockType, action: string): boolean {
   return type !== "highlight" || action === "delete";
 }
 
+// ── What closes the swatches ──────────────────────────────────────────────
+
+/**
+ * The swatches open under the row, in its flow, so closing them moves every row below up. A press on another row's button (its square,
+ * its ×) must still be a click on it: closed on `pointerdown`, the row would move away between the press and the release, and the click
+ * would land on nothing. So it closes on the `click` itself, seen in the capture phase — the page's layout has not moved yet when the
+ * click that is on its way to a button below is dispatched, and the button gets it. Returns the function that removes the listener.
+ */
+export function watchOutsideClick(
+  doc: Pick<Document, "addEventListener" | "removeEventListener">,
+  rules: { inside: (target: EventTarget | null) => boolean; close: () => void },
+): () => void {
+  const onClick = (event: Event) => {
+    if (!rules.inside(event.target)) rules.close();
+  };
+  doc.addEventListener("click", onClick, true);
+  return () => doc.removeEventListener("click", onClick, true);
+}
+
 // ── The row ───────────────────────────────────────────────────────────────
 
 /** A press on one of the row's buttons must not move the page's selection or the editor's focus: they are used as a pen is. */
@@ -199,14 +218,10 @@ export function HighlightRow({ block, onColour, onRemove }: { block: Block; onCo
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement | null>(null);
 
-  // The swatches close on a press anywhere but on the row (the colour button and the swatches are inside it).
+  // The swatches close on a click anywhere but on the row (the colour button and the swatches are inside it).
   useEffect(() => {
     if (!open) return;
-    const onPress = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("pointerdown", onPress, true);
-    return () => document.removeEventListener("pointerdown", onPress, true);
+    return watchOutsideClick(document, { inside: (target) => root.current !== null && target !== null && root.current.contains(target as Node), close: () => setOpen(false) });
   }, [open]);
 
   // Opened, the current colour has the keyboard (the swatches are a radio group: arrows move the choice).

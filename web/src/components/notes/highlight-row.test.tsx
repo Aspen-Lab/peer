@@ -17,6 +17,7 @@ import {
   goToHighlight,
   highlightGoal,
   highlightIsLost,
+  watchOutsideClick,
   withHighlightColour,
 } from "./highlight-row";
 
@@ -228,6 +229,57 @@ describe("HighlightRow — the connected row", () => {
     const html = renderToStaticMarkup(createElement(HighlightRow, { block: odd, onColour: () => {}, onRemove: () => {} }));
     expect(html).toContain('aria-label="Yellow"');
     expect(html).toContain("background-color:#ffe600");
+  });
+});
+
+describe("watchOutsideClick — what closes the swatches", () => {
+  const fakeDoc = () => {
+    const listeners: { type: string; fn: (e: { target: unknown }) => void; capture: unknown }[] = [];
+    const doc = {
+      addEventListener: vi.fn((type: string, fn: (e: { target: unknown }) => void, capture?: unknown) => void listeners.push({ type, fn, capture })),
+      removeEventListener: vi.fn((type: string, fn: (e: { target: unknown }) => void, capture?: unknown) => {
+        const at = listeners.findIndex((one) => one.type === type && one.fn === fn && one.capture === capture);
+        if (at >= 0) listeners.splice(at, 1);
+      }),
+    };
+    return { doc: doc as unknown as Pick<Document, "addEventListener" | "removeEventListener">, listeners };
+  };
+  const row = {};
+  const elsewhere = {};
+
+  it("listens for the click, in the capture phase, and for nothing earlier: a press that starts on another row's button must still end on it", () => {
+    const { doc, listeners } = fakeDoc();
+    watchOutsideClick(doc, { inside: (target) => target === row, close: () => {} });
+    expect(listeners).toHaveLength(1);
+    expect(listeners[0].type).toBe("click");
+    expect(listeners[0].capture).toBe(true);
+    for (const early of ["pointerdown", "mousedown", "touchstart"]) expect(listeners.some((one) => one.type === early)).toBe(false);
+  });
+
+  it("closes on a click outside the row, and not on one inside it (the colour button, the swatches)", () => {
+    const { doc, listeners } = fakeDoc();
+    const close = vi.fn();
+    watchOutsideClick(doc, { inside: (target) => target === row, close });
+    listeners[0].fn({ target: row });
+    expect(close).not.toHaveBeenCalled();
+    listeners[0].fn({ target: elsewhere });
+    expect(close).toHaveBeenCalledTimes(1);
+    listeners[0].fn({ target: null });
+    expect(close).toHaveBeenCalledTimes(2);
+  });
+
+  it("takes its listener off again", () => {
+    const { doc, listeners } = fakeDoc();
+    const off = watchOutsideClick(doc, { inside: () => false, close: () => {} });
+    expect(listeners).toHaveLength(1);
+    off();
+    expect(listeners).toHaveLength(0);
+  });
+
+  it("is what the connected row uses while its swatches are open", () => {
+    const code = read("src/components/notes/highlight-row.tsx");
+    expect(code).toMatch(/if \(!open\) return;\s*return watchOutsideClick\(document,/);
+    expect(code).not.toMatch(/addEventListener\("pointerdown"/);
   });
 });
 
