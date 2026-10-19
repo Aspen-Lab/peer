@@ -175,7 +175,8 @@ describe("DecisionBlock — the DOI (P7-12, R6)", () => {
     expect(link).not.toBeNull();
     const [tag, inner] = [link![0], link![1]];
     expect(tag).toContain("font-mono");
-    expect(tag).toContain("xl:wrap-anywhere");
+    // P11-16, RE-AIMED: the wrap rule is the left pane's (from 1024 css px, `lg:`), not the old spread panel's (`xl:`).
+    expect(tag).toContain("lg:wrap-anywhere");
     expect(tag).toContain("[@media(hover:none)]:min-h-11");
     expect(inner).toContain("<svg");
     expect(inner.replace(/<svg\b.*?<\/svg>/g, "")).toBe(`doi:${DOI_VALUE}`);

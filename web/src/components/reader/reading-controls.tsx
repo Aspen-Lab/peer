@@ -6,6 +6,11 @@
 // controls. Sized with the panel's own (non-scaling) type steps, never the
 // --reading-scale-driven reading tokens: only the article text these buttons
 // control moves, not the controls themselves.
+//
+// P11-16 (B P11-01 §2.3; ruling §1h.113 (a)): from 1024 css px the strip stands at the top of the left pane (`ReaderLayout` draws it there, with
+// `spread`): Fit has a layout to balance and is enabled, and there is no gap above it — the pane's header row above has its own. In one column
+// the decision block's details draw it, without `spread`, as ever. It is the caller that knows the layout, so the strip no longer asks
+// `useSpread` (and `reader-layout.tsx` can import it without a cycle).
 
 import { IconButton } from "@/components/ui/button";
 import { IconExpand, IconMoon, IconSun } from "@/components/icons";
@@ -13,7 +18,6 @@ import { withThemeTransition, withZoomTransition } from "@/lib/theme";
 import { useProfileStore } from "@/store/profile";
 import { READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
 import type { ColorTheme, ThemeMode } from "@/types";
-import { useSpread } from "./reader-layout";
 
 // P9-23 (A P9-W2's N5): 28 × 28 px, 4 px apart, on a phone. Where there is no
 // hover each control takes the shell's touch rule (notes-button.tsx,
@@ -26,16 +30,14 @@ function Divider() {
   return <span aria-hidden className="mx-1 h-4 w-px bg-border-strong" />;
 }
 
-export function ReadingControls() {
+export function ReadingControls({ spread = false }: { spread?: boolean }) {
   const scaleIndex = useReadingPrefsStore((s) => s.scaleIndex);
   const increaseScale = useReadingPrefsStore((s) => s.increaseScale);
   const decreaseScale = useReadingPrefsStore((s) => s.decreaseScale);
   const atMaxScale = scaleIndex >= READING_SCALE_STEPS.length - 1;
   const atMinScale = scaleIndex <= 0;
 
-  // S21: Fit needs the two-column spread to have a panel and a column to
-  // balance.
-  const spread = useSpread();
+  // S21: Fit needs the spread (the three panes, P11-16) to have a pane and a column to balance.
   const fit = useReadingPrefsStore((s) => s.fit);
   const setFit = useReadingPrefsStore((s) => s.setFit);
 
@@ -55,7 +57,7 @@ export function ReadingControls() {
     <div
       role="group"
       aria-label="Reading controls"
-      className="mt-5 inline-flex items-center gap-1 [@media(hover:none)]:gap-2 border border-border-strong p-1"
+      className={`${spread ? "" : "mt-5 "}inline-flex items-center gap-1 [@media(hover:none)]:gap-2 border border-border-strong p-1`}
     >
       <IconButton
         aria-label="Larger text"

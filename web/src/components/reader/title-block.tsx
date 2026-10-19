@@ -3,6 +3,10 @@
 // Title and meta: where and when, the title, who — and, for a paper from
 // today's briefing, the one line saying why it is here. The authors line is a
 // real button: on a phone it is the tap target for the full list.
+//
+// P11-16 (B P11-01 §2.3; ruling §1h.113 (a)): from 1024 css px the title stands in the left pane's fixed zone, which never scrolls, and the owner's
+// six-line title would take the room the map needs. The page tells the block it is in the pane (`pane`): the title is clamped to four lines, the
+// whole of it in `title=` and in the markup, and it is set at the pane's size at every width (the one column's `sm:` step up is for a column).
 
 import { useState } from "react";
 import type { Paper } from "@/types";
@@ -89,11 +93,14 @@ export function TitleBlock({
   paper,
   recommendation,
   now,
+  pane = false,
 }: {
   paper: Paper;
   /** `relevanceReason`, only for a paper from today's briefing. */
   recommendation: string | null;
   now: number;
+  /** The title stands in the three-pane page's left pane (P11-16): four lines at most, the pane's size, a tighter top. */
+  pane?: boolean;
 }) {
   const meta = [shortVenue(paper.venue), formatDayAge(paper.publishedDate, now)].filter(
     Boolean,
@@ -103,10 +110,11 @@ export function TitleBlock({
   return (
     <header>
       {meta.length > 0 && (
-        <p className="annotation text-meta text-text-muted mt-6">{meta.join(" · ")}</p>
+        <p className={`annotation text-meta text-text-muted ${pane ? "mt-1" : "mt-6"}`}>{meta.join(" · ")}</p>
       )}
       <h1
-        className={`paper-line text-heading text-display-sm measure-title mt-2${long ? "" : " sm:text-display xl:text-display-sm"}`}
+        className={`paper-line text-heading text-display-sm measure-title mt-2${long || pane ? "" : " sm:text-display xl:text-display-sm"}${pane ? " line-clamp-4" : ""}`}
+        title={pane ? paper.title : undefined}
       >
         {paper.title}
       </h1>

@@ -11,6 +11,13 @@
 // `ReaderCommands`, the reading controls are `ReadingControls`, and this file
 // keeps the sentence, the private-PDF line it is handed, the DOI (a link to
 // the journal's page, P7-12) and the progress bar — in that order.
+//
+// P11-16 (B P11-01 §2.3, §3.2; ruling §1h.113 (a)): from 1024 css px the page is three panes, and the block is split between two of
+// them. `part="commands"` is the commands alone — the left pane's fixed zone, under the title, where they stay in view — and
+// `part="details"` is everything after them: the sentence, the private-PDF line, the DOI and the progress, in the pane's scroll zone after
+// the map. The page hands the two to the layout in two slots; in one column the layout draws them one after the other, so the block reads
+// as it always did, with the reading controls between the private-PDF line and the DOI. In the panes the controls stand at the top of the
+// left pane (the layout draws them), so the details leave them out. With no `part` the block is whole, in that same order.
 
 import Link from "next/link";
 import { ADD_KEY_HREF } from "@/lib/navigation/add-key-destination";
@@ -42,37 +49,16 @@ const TOUCH_INLINE = "[@media(hover:none)]:py-3.5";
  */
 const DOI_SHAPE = /^10\.\d{4,9}\/\S+$/;
 
-export function DecisionBlock({
-  ref,
-  sentences,
-  stage,
-  onRead,
-  readLabel,
-  source,
-  doi,
-  isSaved,
-  showAddKey,
-  onSave,
-  onSkip,
-  onCopy,
-  onOpen,
-  notesAction,
-  uploadAction,
-  uploadStatus,
-}: {
+/** What the commands need. */
+interface CommandsProps {
+  /** The decided-read observer's element (the page's `decisionRef`): carried by the commands, whole or alone, and by nothing else. */
   ref?: Ref<HTMLDivElement>;
-  sentences: string[];
-  /** While the model works: the stream's stage under the sentence. */
-  stage: { label: string; pct: number | null } | null;
   /** The paper's own text, where Peer holds it: the command that keeps the
    *  reader here rather than sending them to a PDF viewer. */
   onRead?: () => void;
   readLabel?: string;
   source: PaperReading["source"];
-  doi?: string;
   isSaved: boolean;
-  /** No provider configured and the sentence names a key. */
-  showAddKey: boolean;
   onSave: () => void;
   /** "Not interested, then next". P1-08 (§1f.19): absent on an uploaded
    *  PDF's page, which then has no Skip button. */
@@ -82,29 +68,49 @@ export function DecisionBlock({
   /** P7-14 (R9): the notes row in the command stack, which only a phone shows. */
   notesAction?: ReactNode;
   uploadAction?: ReactNode;
+}
+
+/** What the details need. */
+interface DetailsProps {
+  sentences: string[];
+  /** While the model works: the stream's stage under the sentence. */
+  stage: { label: string; pct: number | null } | null;
+  doi?: string;
+  /** No provider configured and the sentence names a key. */
+  showAddKey: boolean;
   uploadStatus?: ReactNode;
-}) {
-  // On the spread the block is a panel under the title: the sentence is a
-  // note there, set at the panel's size with a rule beside it. Below it the
-  // sentence is prose in the reading column. Either way it follows the
-  // commands (P7-14, R2), at the same distance.
+}
+
+export type DecisionBlockProps =
+  | (CommandsProps & DetailsProps & { part?: undefined })
+  | (CommandsProps & { part: "commands" })
+  | (Pick<CommandsProps, "ref"> & DetailsProps & { part: "details" });
+
+function Commands({ onRead, readLabel, source, isSaved, onSave, onSkip, onCopy, onOpen, notesAction, uploadAction }: CommandsProps) {
+  return (
+    <ReaderCommands
+      onRead={onRead}
+      readLabel={readLabel}
+      source={source}
+      isSaved={isSaved}
+      onSave={onSave}
+      onSkip={onSkip}
+      onCopy={onCopy}
+      onOpen={onOpen}
+      notesAction={notesAction}
+      uploadAction={uploadAction}
+    />
+  );
+}
+
+function Details({ sentences, stage, doi, showAddKey, uploadStatus }: DetailsProps) {
+  // From 1024 css px the sentence is a note in the left pane, set at the pane's size with a rule beside it, and the reading controls are
+  // at the top of that pane. Below it the sentence is prose in the reading column, and the controls follow the private-PDF line. Either
+  // way it follows the commands (P7-14, R2), at the same distance.
   const spread = useSpread();
 
   return (
-    <div ref={ref}>
-      <ReaderCommands
-        onRead={onRead}
-        readLabel={readLabel}
-        source={source}
-        isSaved={isSaved}
-        onSave={onSave}
-        onSkip={onSkip}
-        onCopy={onCopy}
-        onOpen={onOpen}
-        notesAction={notesAction}
-        uploadAction={uploadAction}
-      />
-
+    <>
       <p
         className={
           spread
@@ -130,7 +136,7 @@ export function DecisionBlock({
       </p>
       {uploadStatus}
 
-      <ReadingControls />
+      {!spread && <ReadingControls />}
 
       {doi && DOI_SHAPE.test(doi) && (
         // P7-12 (R6): the journal's own page, not a copy button. `doi.org` resolves
@@ -140,12 +146,11 @@ export function DecisionBlock({
           target="_blank"
           rel="noopener noreferrer"
           className={cn(
-            // `xl:wrap-anywhere`: a 60-char DOI is ≈450px of 12.5px mono and
-            // would overflow the spread's 320–360px panel; a phone has the full
-            // column and the DOI holds one line there as today. `w-fit
-            // max-w-full`: the link is as wide as its text, so the empty
-            // space beside a short DOI is not part of the target.
-            "flex w-fit max-w-full font-mono text-meta text-text-muted mt-3 hover:text-heading transition-colors xl:wrap-anywhere",
+            // `lg:wrap-anywhere` (P11-16: was `xl:`, the old spread's panel): a 60-char DOI is ≈450px of 12.5px mono and
+            // would overflow the left pane's 296px; a phone has the full column and the DOI holds one line there as
+            // today. `w-fit max-w-full`: the link is as wide as its text, so the empty space beside a short DOI is
+            // not part of the target.
+            "flex w-fit max-w-full font-mono text-meta text-text-muted mt-3 hover:text-heading transition-colors lg:wrap-anywhere",
             TOUCH_LINE,
           )}
         >
@@ -185,6 +190,24 @@ export function DecisionBlock({
           </p>
         </>
       )}
+    </>
+  );
+}
+
+export function DecisionBlock({ ref, ...props }: DecisionBlockProps) {
+  // The commands are the decided-read observer's element (`ref`): the part that stays on screen.
+  if (props.part === "commands") {
+    return (
+      <div ref={ref}>
+        <Commands {...props} />
+      </div>
+    );
+  }
+  if (props.part === "details") return <Details {...props} />;
+  return (
+    <div ref={ref}>
+      <Commands {...props} />
+      <Details {...props} />
     </div>
   );
 }

@@ -255,8 +255,11 @@ export function ReadingMapView({
       return next;
     });
 
+  // P11-16 (B P11-01 §2.3, §3.2): no scroller of its own. From 1024 css px the map stands in the left pane's scroll zone, which is the
+  // pane's one scroller (the map used to scroll inside the old spread's sticky panel with `xl:overflow-y-auto`, a second scroller where
+  // the layout now has one); in one column it was never bounded. The zone gives its contents the focus ring's room (`reader-layout.tsx`).
   return (
-    <section aria-label={MAP.heading} className="mt-6 xl:min-h-0 xl:overflow-y-auto xl:-mx-1.5 xl:px-1.5">
+    <section aria-label={MAP.heading} className="mt-6">
       <p className="eyebrow inline-flex items-center gap-2 text-text-faint">
         <span aria-hidden className="block h-[6px] w-[6px] shrink-0 bg-current" />
         {MAP.heading}

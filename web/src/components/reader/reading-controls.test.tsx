@@ -75,7 +75,7 @@ describe("ReadingControls — in the left pane (P11-16)", () => {
     const fit = tags(pane(), "button").find((b) => attr(b, "aria-label") === "Fit to screen") ?? "";
 
     expect(fit).not.toBe("");
-    expect(fit).not.toContain("disabled");
+    expect(fit).not.toContain('disabled=""');
     expect(attr(fit, "title")).toBeUndefined();
   });
 
