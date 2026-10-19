@@ -1377,7 +1377,7 @@ function Reader({
     // would paint once at full opacity and then snap to hidden.
     <>
     <PageContainer
-      width="spread"
+      width="reader"
       rhythm="reader"
       className={`${PAGE_CLASS} md:pb-16 outline-none`}
       tabIndex={-1}

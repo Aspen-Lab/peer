@@ -412,7 +412,7 @@ describe("globals.css — the reader's three panes (P11-10)", () => {
     expect(Number(/z-index:\s*(\d+);/.exec(both)?.[1])).toBeLessThan(50);
     expect(ruleOf('.reader-left[data-state="rail"]')).toMatch(/visibility:\s*hidden;/);
     expect(ruleOf('.reader-left[data-state="rail"]')).toMatch(/pointer-events:\s*none;/);
-    expect(ruleOf('.reader-left[data-state="peek"]')).toMatch(/box-shadow:/);
+    expect(css).toMatch(/\.reader-left\[data-state="peek"\] \{[^}]*box-shadow:/);
   });
 
   it("slides only where the reader has not asked for less motion", () => {

@@ -21,13 +21,22 @@ const tagWith = (html: string, attribute: string) => {
 };
 const count = (html: string, text: string) => html.split(text).length - 1;
 
+const NO_CHOICE: { leftPinned?: boolean; leftWidth?: number; marginWidth?: number } = { leftPinned: undefined, leftWidth: undefined, marginWidth: undefined };
+
+/** What the reader chose, as a server render sees it: through the store's INITIAL state (the shell's server snapshot), which is what a
+ *  hydrating render reads before <StoreHydrator/> has loaded the browser's copy. */
+function choose(patch: typeof NO_CHOICE) {
+  useReaderPanesStore.setState({ ...NO_CHOICE, ...patch });
+  vi.spyOn(useReaderPanesStore, "getInitialState").mockReturnValue(useReaderPanesStore.getState());
+}
+
 beforeEach(() => {
   vi.spyOn(console, "warn").mockImplementation(() => {});
-  useReaderPanesStore.setState({ leftPinned: undefined, leftWidth: undefined, marginWidth: undefined });
+  useReaderPanesStore.setState(NO_CHOICE);
 });
 afterEach(() => {
   vi.restoreAllMocks();
-  useReaderPanesStore.setState({ leftPinned: undefined, leftWidth: undefined, marginWidth: undefined });
+  useReaderPanesStore.setState(NO_CHOICE);
 });
 
 describe("ReaderShell — the grid", () => {
@@ -58,7 +67,7 @@ describe("ReaderShell — the grid", () => {
 
   it("shows each block exactly once, in every state (one DOM node per block)", () => {
     for (const pinned of [undefined, true, false]) {
-      useReaderPanesStore.setState({ leftPinned: pinned });
+      choose({ leftPinned: pinned });
       for (const left of [SPLIT, WHOLE]) {
         const html = render(left);
         for (const name of "whole" in left ? ["WHOLE", "CENTRE"] : ["FIXED", "SCROLL", "CENTRE"]) {
@@ -104,7 +113,7 @@ describe("ReaderShell — the left pane", () => {
   });
 
   it("is the rail when the reader collapsed it: inert, the rail button shown and labelled, no left divider but a plain gap", () => {
-    useReaderPanesStore.setState({ leftPinned: false });
+    choose({ leftPinned: false });
     const html = render();
     const pane = tagWith(html, "data-reader-left=");
     expect(pane).toContain('data-state="rail"');
@@ -121,7 +130,7 @@ describe("ReaderShell — the left pane", () => {
   });
 
   it("keeps the blocks in the DOM when it is the rail (nothing unmounts)", () => {
-    useReaderPanesStore.setState({ leftPinned: false });
+    choose({ leftPinned: false });
     const html = render();
     expect(html).toContain('data-mark="FIXED"');
     expect(html).toContain('data-mark="SCROLL"');
@@ -135,6 +144,16 @@ describe("ReaderShell — the centre", () => {
     expect(tagWith(html, "data-reader-centre=")).toContain("reader-centre");
     expect(centre.indexOf("data-reader-centre-inner")).toBeGreaterThan(0);
     expect(centre.indexOf('data-mark="CENTRE"')).toBeGreaterThan(centre.indexOf("data-reader-centre-inner"));
+  });
+});
+
+describe("ReaderShell — a hydrating render", () => {
+  it("reads the store's initial state, not the widths <StoreHydrator/> has loaded since: the markup of the server's render matches", () => {
+    useReaderPanesStore.setState({ leftPinned: false, leftWidth: 400, marginWidth: 450 });
+    const html = render();
+    expect(tagWith(html, "data-reader-shell")).toContain("--left-pane-w:320px");
+    expect(tagWith(html, "data-reader-shell")).toContain("--margin-w:360px");
+    expect(tagWith(html, "data-reader-shell")).toContain('data-left-state="pinned"');
   });
 });
 
@@ -155,7 +174,7 @@ describe("ReaderShell — the margin", () => {
 
   it("is not collapsible: no state, no toggle, no hidden margin — there is always one aside, and two dividers around the centre", () => {
     for (const pinned of [undefined, true, false]) {
-      useReaderPanesStore.setState({ leftPinned: pinned });
+      choose({ leftPinned: pinned });
       const html = render();
       expect(count(html, "<aside")).toBe(1);
       expect(html).toContain('data-reader-divider="margin"');
@@ -180,7 +199,7 @@ describe("ReaderShell — the dividers", () => {
   });
 
   it("report the remembered widths, and write them as the grid's custom properties", () => {
-    useReaderPanesStore.setState({ leftPinned: true, leftWidth: 400, marginWidth: 450 });
+    choose({ leftPinned: true, leftWidth: 400, marginWidth: 450 });
     const html = render();
     expect(tagWith(html, "data-reader-shell")).toContain("--left-pane-w:400px");
     expect(tagWith(html, "data-reader-shell")).toContain("--margin-w:450px");

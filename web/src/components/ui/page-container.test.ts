@@ -40,8 +40,8 @@ describe("the paper page uses it", () => {
   const page = readFileSync(resolve(process.cwd(), "src/app/papers/[id]/page.tsx"), "utf8");
 
   it("mounts the paper's article with width=\"reader\", and the other five containers (loading, error, empty states) keep the spread", () => {
-    expect(page.match(/width="reader"/g)).toHaveLength(1);
-    expect(page.match(/width="spread"/g)).toHaveLength(5);
+    expect(page.match(/<PageContainer\s+width="reader"/g)).toHaveLength(1);
+    expect(page.match(/<PageContainer\s+width="spread"/g)).toHaveLength(5);
     const at = page.indexOf('width="reader"');
     expect(page.slice(at, at + 200)).toContain('rhythm="reader"');
     expect(page.slice(at, at + 400)).toContain("data-zoom-root");
