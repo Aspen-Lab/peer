@@ -12,7 +12,6 @@ import {
   SelectionToolbar,
   SelectionToolbarView,
   actionsPlace,
-  barOffersHighlight,
   offeredActions,
   openCardRects,
   selectionCanExplain,
@@ -314,7 +313,7 @@ describe("actionsPlace — the group in the margin at the selection's height (P1
       let mode: ActionsMode | null = null;
       const seen: ActionsMode[] = [];
       for (const top of path) {
-        const got = place({ mode, cards: [card], bounds: { left: 300, top, right: 520, bottom: top + 22 } })!;
+        const got: NonNullable<ReturnType<typeof actionsPlace>> = place({ mode, cards: [card], bounds: { left: 300, top, right: 520, bottom: top + 22 } })!;
         mode = got.mode;
         seen.push(got.mode);
       }
