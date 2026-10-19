@@ -1,9 +1,10 @@
 // What can be done to a note's blocks, as pure functions — the editor calls
 // these and renders the result, so every rule here is testable without a DOM.
 
-import type { Block, BlockType, Note, NoteAnchor, Source } from "./types";
+import type { Block, BlockType, HighlightColourId, HighlightSpot, Note, NoteAnchor, Source } from "./types";
 import { citedIn, plainInline } from "./inline";
 import { authorYear } from "./cite";
+import { DEFAULT_HIGHLIGHT_COLOUR, isHighlightColour } from "./highlight-colours";
 
 export const MAX_INDENT = 4;
 
@@ -298,14 +299,68 @@ export function stickyBlocks(anchor: NoteAnchor): { header: Block; blocks: Block
 /** The paper's passages that carry stickies: per paragraph, each sticky by header id and number, in order. P10-09f:
  *  with the words' range and the quote it was taken from (`start`, `end`, `quote`), when the anchor has them — the
  *  body marks the words and checks the quote against the text before it draws the mark. */
-export type NoteAnchorMap = Record<string, { id: string; n: number; start?: number; end?: number; quote?: string }[]>;
+export type NoteAnchorMap = Record<
+  string,
+  {
+    id: string;
+    n: number;
+    start?: number;
+    end?: number;
+    quote?: string;
+    /** P11-07: only on a highlight's spot (`n` is 0 there): the colour its mark wears. */
+    colour?: HighlightColourId;
+    /** P11-07: only on a highlight's spot: its block's index in the note, so two marks over one range are laid in the order they were made. */
+    order?: number;
+  }[]
+>;
 
+/** P11-07: each highlight of the paper rides the same map as the stickies, as `{ id, n: 0, start, end, quote, colour, order }`
+ *  (`readHighlight` has read it: an unknown colour is yellow, a malformed one has no spot). A sticky's spot is as it always was. */
 export function anchorMap(note: Pick<Note, "blocks"> | undefined, paperId: string): NoteAnchorMap {
   const map: NoteAnchorMap = {};
-  for (const b of note?.blocks ?? []) {
-    if (b.type !== "h3" || !b.anchor || b.anchor.paperId !== paperId) continue;
+  (note?.blocks ?? []).forEach((b, order) => {
+    if (b.type === "highlight") {
+      const spot = readHighlight(b);
+      if (spot && spot.paperId === paperId) {
+        (map[spot.paragraphId] ??= []).push({ id: b.id, n: 0, start: spot.start, end: spot.end, quote: spot.quote, colour: spot.colour, order });
+      }
+      return;
+    }
+    if (b.type !== "h3" || !b.anchor || b.anchor.paperId !== paperId) return;
     const { n, start, end, quote } = b.anchor;
     (map[b.anchor.paragraphId] ??= []).push({ id: b.id, n, ...(start !== undefined && end !== undefined ? { start, end, quote } : {}) });
-  }
+  });
   return map;
+}
+
+// ── Highlights (P11-07; owner item 8; B P11-04 §2) ────────────────────────────────────────────────────────────
+//
+// A highlight is a block of its own in the paper's note — `type: "highlight"`, empty `text`, its words and place in `highlight`.
+// It is not a sticky: it has no number and no tag, it is never "empty" (its words are its content), and no sticky routine
+// (`stickySpan`, `withoutSticky`, `removeEmptySticky`) reads it as one. `stickySpan` ends at it, as at any block that is not text.
+
+/** The longest passage a highlight keeps: the whole of what was selected (the selection's own cap, `MAX_SELECTION_CHARS`). */
+export const HIGHLIGHT_QUOTE_MAX = 1200;
+
+/** A new highlight block for `spot`. */
+export function highlightBlock(spot: HighlightSpot): Block {
+  return block("highlight", "", { highlight: spot });
+}
+
+/**
+ * The spot of a highlight block as the paper's body may draw it, or null (invariant I8). Stored data is read with care: a
+ * colour that is not in the table (a preset removed later, a hand edit) reads as yellow; a block of another type, or one
+ * whose `highlight` is missing or not a whole spot (strings for ids and quote, integer offsets with `0 <= start < end`), has no
+ * spot — it is drawn nowhere. Never throws. The stored spot itself when it is already well-formed.
+ */
+export function readHighlight(b: Pick<Block, "type" | "highlight"> | null | undefined): HighlightSpot | null {
+  if (typeof b !== "object" || b === null || b.type !== "highlight") return null;
+  const stored: unknown = b.highlight;
+  if (typeof stored !== "object" || stored === null || Array.isArray(stored)) return null;
+  const { paperId, paragraphId, quote, start, end, colour } = stored as Record<string, unknown>;
+  if (typeof paperId !== "string" || typeof paragraphId !== "string" || typeof quote !== "string" || quote === "") return null;
+  if (typeof start !== "number" || typeof end !== "number" || !Number.isInteger(start) || !Number.isInteger(end)) return null;
+  if (start < 0 || start >= end) return null;
+  if (isHighlightColour(colour)) return stored as HighlightSpot;
+  return { paperId, paragraphId, quote, start, end, colour: DEFAULT_HIGHLIGHT_COLOUR };
 }

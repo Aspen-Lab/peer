@@ -12,8 +12,21 @@
 import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Block, Citable, Note } from "@/lib/notes/types";
-import { citedKeys, type NoteAnchorMap, stickyBlocks, stickyParagraphs, stickyQuote, stickySpan, stickyText, withStickyText } from "@/lib/notes/blocks";
+import type { Block, Citable, HighlightColourId, Note } from "@/lib/notes/types";
+import {
+  HIGHLIGHT_QUOTE_MAX,
+  citedKeys,
+  highlightBlock,
+  type NoteAnchorMap,
+  readHighlight,
+  stickyBlocks,
+  stickyParagraphs,
+  stickyQuote,
+  stickySpan,
+  stickyText,
+  withStickyText,
+} from "@/lib/notes/blocks";
+import { DEFAULT_HIGHLIGHT_COLOUR, isHighlightColour } from "@/lib/notes/highlight-colours";
 import { readingNote, type ReadingNoteExtras } from "@/lib/notes/templates";
 import { MATH_CLOSE, MATH_OPEN } from "@/lib/text/math";
 
@@ -35,16 +48,31 @@ export function stripTagText(passage: string): string {
  * passage (white space in the passage matches any white space in the paragraph; the selection arrives collapsed).
  * A formula's TeX is not prose: no match starts or ends inside one. Null when the passage is not found whole.
  * P10-35: `from` starts the search at that position, so the next occurrence can be asked for.
+ * P11-07 (B P11-04 §2.8): `hint` is where the reader's selection began in the paragraph (a character offset). A passage that
+ * stands more than once is found at the occurrence whose start is nearest the hint — the earlier of two equally near — not at
+ * the first; the hint is only a hint (a paragraph with a formula renders other text than it stores), so it never turns a
+ * found passage into none. Without a hint, or with one that is not a number, the first occurrence, as before.
  */
-export function locatePassage(paragraph: string, passage: string, from = 0): { start: number; end: number } | null {
+export function locatePassage(paragraph: string, passage: string, from = 0, hint?: number): { start: number; end: number } | null {
   // P10-24: a passage that still arrives with a tag's text (an older caller) is searched by its words.
   const words = stripTagText(passage).split(/\s+/).filter(Boolean);
   if (words.length === 0) return null;
   const masked = paragraph.replace(new RegExp(`${MATH_OPEN}[^${MATH_CLOSE}]*${MATH_CLOSE}`, "g"), (math) => "\u0000".repeat(math.length));
   const found = new RegExp(words.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s+"), "g");
-  found.lastIndex = Math.max(0, from);
-  const hit = found.exec(masked);
-  return hit ? { start: hit.index, end: hit.index + hit[0].length } : null;
+  const next = (at: number) => {
+    found.lastIndex = Math.max(0, at);
+    const hit = found.exec(masked);
+    return hit ? { start: hit.index, end: hit.index + hit[0].length } : null;
+  };
+  const first = next(from);
+  if (!first || hint === undefined || !Number.isFinite(hint)) return first;
+  let best = first;
+  for (let place = next(first.start + 1); place; place = next(place.start + 1)) {
+    // The starts only grow: once one is past the hint and no nearer than the best, no later one is.
+    if (place.start > hint && place.start - hint >= Math.abs(best.start - hint)) break;
+    if (Math.abs(place.start - hint) < Math.abs(best.start - hint)) best = place;
+  }
+  return best;
 }
 
 // ── P10-35 (BACKLOG-91): a note finds its passage again by its quote ──────
@@ -77,7 +105,7 @@ export function anchorHolds(text: string, spot: { start: number; end: number; qu
 
 /** One anchor's repair: where it stood (`was`, to know it is still the stored one) and where its words stand now. */
 export interface AnchorFix {
-  /** The sticky's heading id. */
+  /** The sticky's heading id — or, P11-07, a highlight's block id. */
   id: string;
   was: { paragraphId: string; start: number; end: number };
   paragraphId: string;
@@ -264,6 +292,32 @@ interface NotesState {
   /** P10-09c / P10-29: take a sticky out of the note when it holds no words — its heading and anchor with it, so the paper has
    *  no tag for a note that says nothing. A sticky with words stays. The number is not freed (`stickyCount` stands). */
   removeEmptySticky: (noteId: string, headerId: string) => void;
+  /**
+   * P11-07 (owner item 8; B P11-04 §2.2): append a highlight to the note: a block of type `highlight` with the whole passage
+   * (whitespace collapsed, at most `HIGHLIGHT_QUOTE_MAX` characters) and where it stands in the paragraph — the occurrence
+   * nearest `hint`, the selection's offset (`locatePassage`). Null when it cannot be made: the note is not there, the paragraph's
+   * text is not given, the passage is empty, too long, or not found whole in the paragraph (a highlight with no range would be
+   * invisible). A range the paper's note already highlights, in the same paragraph, makes no second block: `{ id, created: false }`
+   * of the existing one, its colour untouched. `colour` defaults to yellow. It never numbers or counts a sticky.
+   */
+  addHighlight: (
+    noteId: string,
+    at: {
+      paperId: string;
+      paragraphId: string;
+      passage: string;
+      /** The paragraph's text as the body renders it. Without it nothing is made. */
+      paragraphText?: string;
+      /** Where the selection began in the paragraph's text, to tell one occurrence of the passage from another. */
+      hint?: number;
+      colour?: HighlightColourId;
+    },
+  ) => { id: string; created: boolean } | null;
+  /** P11-07: change one highlight's colour; nothing else of it or of the note. A colour the table does not know, a block that is
+   *  not a highlight, and the colour it already has are no-ops. */
+  setHighlightColour: (noteId: string, blockId: string, colour: HighlightColourId) => void;
+  /** P11-07: take a highlight out of the note. Only a block of type `highlight` is taken; the paper's mark leaves in the same render. */
+  removeHighlight: (noteId: string, blockId: string) => void;
 }
 
 /**
@@ -280,8 +334,17 @@ export function repairAnchors(fixes: readonly AnchorFix[]): void {
     for (const [key, note] of Object.entries(s.notes)) {
       let touched = false;
       const blocks = note.blocks.map((b) => {
-        const fix = b.type === "h3" && b.anchor ? byId.get(b.id) : undefined;
-        if (!fix || !b.anchor) return b;
+        const fix = (b.type === "h3" && b.anchor) || (b.type === "highlight" && b.highlight) ? byId.get(b.id) : undefined;
+        if (!fix) return b;
+        // P11-07: a highlight is repaired in its own field, by the same rule.
+        if (b.type === "highlight" && b.highlight) {
+          const { paragraphId, start, end } = b.highlight;
+          if (paragraphId !== fix.was.paragraphId || start !== fix.was.start || end !== fix.was.end) return b;
+          if (paragraphId === fix.paragraphId && start === fix.start && end === fix.end) return b;
+          touched = true;
+          return { ...b, highlight: { ...b.highlight, paragraphId: fix.paragraphId, start: fix.start, end: fix.end } };
+        }
+        if (!b.anchor) return b;
         const { paragraphId, start, end } = b.anchor;
         if (paragraphId !== fix.was.paragraphId || start !== fix.was.start || end !== fix.was.end) return b;
         if (paragraphId === fix.paragraphId && start === fix.start && end === fix.end) return b;
@@ -400,6 +463,55 @@ export const useNotesStore = create<NotesState>()(
           if (blocks === note.blocks) return s;
           removedEmpty.add(headerId);
           return { notes: { ...s.notes, [noteId]: { ...note, blocks: [...blocks], updatedAt: new Date().toISOString() } } };
+        }),
+      addHighlight: (noteId, at) => {
+        const note = get().notes[noteId];
+        if (!note || at.paragraphText === undefined) return null;
+        // The passage is the paragraph's words — never a tag's text — whitespace collapsed; it is kept whole, not cut like a sticky's.
+        const quote = stripTagText(at.passage).replace(/\s+/g, " ").trim();
+        if (!quote || quote.length > HIGHLIGHT_QUOTE_MAX) return null;
+        const place = locatePassage(at.paragraphText, quote, 0, at.hint);
+        if (!place || !anchorHolds(at.paragraphText, { ...place, quote })) return null;
+        const twin = note.blocks.find((b) => {
+          const spot = readHighlight(b);
+          return spot && spot.paperId === at.paperId && spot.paragraphId === at.paragraphId && spot.start === place.start && spot.end === place.end;
+        });
+        if (twin) return { id: twin.id, created: false };
+        const made = highlightBlock({
+          paperId: at.paperId,
+          paragraphId: at.paragraphId,
+          quote,
+          ...place,
+          colour: isHighlightColour(at.colour) ? at.colour : DEFAULT_HIGHLIGHT_COLOUR,
+        });
+        set((s) => {
+          const current = s.notes[noteId];
+          if (!current) return s;
+          return { notes: { ...s.notes, [noteId]: { ...current, blocks: [...current.blocks, made], updatedAt: new Date().toISOString() } } };
+        });
+        return { id: made.id, created: true };
+      },
+      setHighlightColour: (noteId, blockId, colour) =>
+        set((s) => {
+          const note = s.notes[noteId];
+          if (!note || !isHighlightColour(colour)) return s;
+          let touched = false;
+          const blocks = note.blocks.map((b) => {
+            const spot = b.id === blockId ? readHighlight(b) : null;
+            // A stored colour the table does not know reads as yellow; choosing yellow writes it down.
+            if (!spot || b.highlight?.colour === colour) return b;
+            touched = true;
+            return { ...b, highlight: { ...spot, colour } };
+          });
+          return touched ? { notes: { ...s.notes, [noteId]: { ...note, blocks, updatedAt: new Date().toISOString() } } } : s;
+        }),
+      removeHighlight: (noteId, blockId) =>
+        set((s) => {
+          const note = s.notes[noteId];
+          if (!note) return s;
+          const blocks = note.blocks.filter((b) => !(b.id === blockId && b.type === "highlight"));
+          if (blocks.length === note.blocks.length) return s;
+          return { notes: { ...s.notes, [noteId]: { ...note, blocks, updatedAt: new Date().toISOString() } } };
         }),
     }),
     {
