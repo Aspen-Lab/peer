@@ -1664,7 +1664,7 @@ function Reader({
         inside the section links, so the quotes' "§Heading" is a link as
         everywhere. One per paper: a card never follows the reader to the next. */}
     <SectionLinks headings={bodyHeadings}>
-      {/* P11-14 (B P11-02 D3): a throw in the box leaves the paper and Tier 0 as they are and shows one quiet line in its place. */}
+      {/* P11-14 (B P11-02 D3): a throw in the box leaves the paper and everything else on the page as they are, and shows one quiet line in its place. */}
       <ExplainBoundary key={paper.id}>
         <ExplainBox key={paper.id} target={explainTarget} terms={terms} canAsk={explainCanAsk} onAsk={askExplain} cached={explainCached} cachedTurns={explainKeptThread?.turns} onReply={replyExplain} onSayMore={moreExplain} onResetThread={resetExplain} openRef={explainOpen} reading={reading} />
       </ExplainBoundary>
