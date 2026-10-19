@@ -151,7 +151,8 @@ describe("the page's Explain this? wiring (P3-02)", () => {
   });
 
   it("would notice the popover mounted inside the page container", () => {
-    const line = /\s*<SectionLinks headings=\{bodyHeadings\}>\s*<ExplainBox [^>]*\/>\s*<\/SectionLinks>/.exec(source)![0];
+    // P11-14 (re-aimed, §1c; rule 5): the box stands in its error boundary, between the section links and the box (and a comment on it).
+    const line = /\s*<SectionLinks headings=\{bodyHeadings\}>\s*(?:\{\/\*[^]*?\*\/\}\s*)?<ExplainBoundary [^>]*>\s*<ExplainBox [^>]*\/>\s*<\/ExplainBoundary>\s*<\/SectionLinks>/.exec(source)![0];
     const moved = source.replace(line, "").replace("<ReaderToast toast={toast} />", `${line.trim()}\n<ReaderToast toast={toast} />`);
 
     // Moved with its section links, it is inside the container, and the links are no longer after it.

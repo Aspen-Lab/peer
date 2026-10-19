@@ -116,6 +116,7 @@ import { ReaderTabs } from "@/components/reader/reader-tabs";
 import { useReaderTab } from "@/components/reader/use-reader-tab";
 import { useRestoreReaderPlace } from "@/lib/notes/return-to-paper";
 import { settledQuestions, useReadingQuestionsHydrated } from "@/store/reading-questions";
+import { ExplainBoundary } from "@/components/reader/explain-boundary";
 import { SelectionToolbar, selectionCanExplain } from "@/components/reader/selection-toolbar";
 import { StickyNotes, useTakeNote } from "@/components/notes/sticky-note";
 import { anchorMap } from "@/lib/notes/blocks";
@@ -1663,7 +1664,10 @@ function Reader({
         inside the section links, so the quotes' "§Heading" is a link as
         everywhere. One per paper: a card never follows the reader to the next. */}
     <SectionLinks headings={bodyHeadings}>
-      <ExplainBox key={paper.id} target={explainTarget} terms={terms} canAsk={explainCanAsk} onAsk={askExplain} cached={explainCached} cachedTurns={explainKeptThread?.turns} onReply={replyExplain} onSayMore={moreExplain} onResetThread={resetExplain} openRef={explainOpen} reading={reading} />
+      {/* P11-14 (B P11-02 D3): a throw in the box leaves the paper and Tier 0 as they are and shows one quiet line in its place. */}
+      <ExplainBoundary key={paper.id}>
+        <ExplainBox key={paper.id} target={explainTarget} terms={terms} canAsk={explainCanAsk} onAsk={askExplain} cached={explainCached} cachedTurns={explainKeptThread?.turns} onReply={replyExplain} onSayMore={moreExplain} onResetThread={resetExplain} openRef={explainOpen} reading={reading} />
+      </ExplainBoundary>
     </SectionLinks>
     {/* P10-09a (review 7.1, 8.4; ruling §1h.78): the pill above a selection with "Explain this" and "Take notes", and
         the sticky notes it opens at the right. Fixed, in the window's pixels, like the box above. */}
