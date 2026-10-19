@@ -9,7 +9,7 @@
 //   fallback if the height has changed by the time the reader is back). It is kept in `sessionStorage` — this tab
 //   only, never a server, never a shared store.
 //
-//   The notes page's button (`app/notes/[id]/back-link.tsx`) asks `backTarget` what to say: "Back to paper" when the
+//   The notes page's button (`components/notes/back-link.tsx`) asks `backTarget` what to say: "Back to paper" when the
 //   record names THIS note, "Saved" otherwise (from Saved, a deep link, a reload with no record). The page's one call
 //   (`useRestoreReaderPlace`, in `Reader`) puts the tab and the place back once the reading has rendered, then clears
 //   the record, so a later visit opens normally.

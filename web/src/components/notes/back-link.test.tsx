@@ -47,7 +47,7 @@ describe("the button", () => {
 
 describe("where it stands", () => {
   it("is the note editor's bar link, in place of the fixed Saved link; nothing else of the bar changes", () => {
-    const editor = readFileSync(resolve(__dirname, "../../../components/notes/note-editor.tsx"), "utf8");
+    const editor = readFileSync(resolve(__dirname, "note-editor.tsx"), "utf8");
 
     expect(editor).toMatch(/<NotesBackLink noteId=\{note\.id\} \/>/);
     expect(editor).not.toMatch(/<Link href="\/saved"[^>]*>\s*← Saved/);
@@ -64,7 +64,7 @@ describe("where it stands", () => {
   });
 
   it("leaves the page's own not-found state alone: it names no paper, so its way out stays Saved", () => {
-    const page = readFileSync(resolve(__dirname, "page.tsx"), "utf8");
+    const page = readFileSync(resolve(__dirname, "../../app/notes/[id]/page.tsx"), "utf8");
 
     expect(page).toMatch(/<Link href="\/saved" className=\{COMMAND\}>\s*← Saved/);
   });

@@ -101,7 +101,7 @@ import { blankNote } from "@/lib/notes/templates";
 import { newestFirst, useNotesStore } from "@/store/notes";
 import { useFeedStore } from "@/store/feed";
 import { COMMAND } from "@/components/ui/command";
-import { NotesBackLink } from "@/app/notes/[id]/back-link";
+import { NotesBackLink } from "./back-link";
 import { cn } from "@/lib/cn";
 import { caretCoords, caretLine, offsetFromPoint } from "./caret";
 import { InlineText } from "./inline-text";
