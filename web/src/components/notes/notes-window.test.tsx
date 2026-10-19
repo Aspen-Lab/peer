@@ -60,11 +60,16 @@ describe("NotesWindowView", () => {
       createElement(NotesWindowView, { top: 48, maxHeight: 900, menuOpen: false, notice: null, onClose: () => {}, onMenu: () => {}, onExport: () => {}, ...props }, createElement("p", null, "THE NOTE")),
     );
 
-  it("is fixed at the right edge, 360 wide, above the page, and scrolls inside itself", () => {
+  // P11-14 (re-aimed, §1c): was `right-0` and `w-[360px]` classes; the window takes `MarginCard`'s frame — the margin's left and width, else
+  // the right edge 360 px wide at most, as an inline style — and carries `data-margin-card`.
+  it("is fixed at the margin's frame (the right edge, 360 wide, where there is no margin), above the page, and scrolls inside itself", () => {
     const html = view();
     expect(html).toContain("fixed");
-    expect(html).toContain("right-0");
-    expect(html).toContain("w-[360px]");
+    expect(html).toContain("right:0");
+    expect(html).toContain("width:min(360px");
+    expect(html).toContain('data-margin-card="notes"');
+    const classes = /<section[^>]*class="([^"]*)"/.exec(html)?.[1] ?? "";
+    expect(classes).not.toMatch(/\bright-0\b|w-\[360px\]/);
     expect(html).toContain("top:48px");
     expect(html).toContain("max-height:900px");
     expect(html).toContain("overflow-y-auto");
@@ -99,11 +104,12 @@ describe("NotesWindowView", () => {
 // P10-09c (rule 2): in the stack the window is a card — whole when in front, its header alone when behind another.
 type ViewProps = Parameters<typeof NotesWindowView>[0];
 type El = ReactElement<Record<string, unknown> & { children?: ReactNode }>;
+// P11-14 (re-aimed, §1c): the window's header is `MarginCard`'s `header` prop, not a child; the walker visits both.
 function walk(node: ReactNode): El[] {
   if (Array.isArray(node)) return node.flatMap(walk);
   if (!node || typeof node !== "object" || !("props" in node)) return [];
   const el = node as El;
-  return [el, ...walk(el.props.children)];
+  return [el, ...walk(el.props.header as ReactNode), ...walk(el.props.children)];
 }
 const base: ViewProps = { top: 220, maxHeight: 700, menuOpen: false, notice: null, onClose: () => {}, onMenu: () => {}, onExport: () => {}, onRaise: () => {} };
 

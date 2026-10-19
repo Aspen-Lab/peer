@@ -188,9 +188,9 @@ describe("the cards take the frame, not their own right-0 and 360 px (P11-14 rul
     expect(sticky).not.toMatch(/w-\[min\(360px/);
   });
 
-  it("notes-window.tsx takes the card's frame and has neither right-0 nor w-[360px]", () => {
+  it("notes-window.tsx takes the card's frame: no fixed right-0 and no w-[360px] (its export menu hangs from its own header with an absolute right-0)", () => {
     expect(notes).toContain("MarginCard");
-    expect(notes).not.toMatch(/\bright-0\b/);
+    expect(notes).not.toMatch(/\bfixed\b[^"`]*\bright-0\b/);
     expect(notes).not.toMatch(/w-\[360px\]/);
   });
 });

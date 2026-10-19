@@ -1,8 +1,8 @@
 "use client";
 
 // P10-09b (the owner's review 7.2, 7.3, 7.5; B12, B13, B15): "Open your notes" opens the paper's whole note as a
-// floating window at the right — no navigation. It stands in the dock's column (360 px, flush with the right
-// edge) and takes the height its text needs down to the foot legend; past that it scrolls inside itself. It is `fixed`,
+// floating window at the right — no navigation. It stands in the margin (P11-14: `MarginCard`'s frame, the margin's left and width)
+// and takes the height its text needs down to the foot legend; past that it scrolls inside itself. It is `fixed`,
 // so the page scrolling under it never moves it: the sticky pad the reader keeps writing on while they read on.
 //
 // P10-09c (review 7.1a, B9): it is one of the floating windows (`lib/reader/windows.ts`): it registers there as
@@ -23,18 +23,14 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { DOCK_TOP_PX } from "@/components/reader/explain-dock";
+import { MarginCard } from "@/components/reader/margin-card";
 import type { Paper } from "@/types";
 import type { Block, Note, Source } from "@/lib/notes/types";
 import { fileName, toMarkdown, toPlainText, toPrintHtml, toWordHtml } from "@/lib/notes/export";
 import { downloadFile, printHtml } from "@/lib/notes/print";
-import { cn } from "@/lib/cn";
-import { NOTES_WINDOW_ID, holdInPlace, stackRows, useColumn, useWindows } from "@/lib/reader/windows";
+import { NOTES_WINDOW_ID, STACK_Z_BASE, holdInPlace, stackRows, useColumn, useWindows } from "@/lib/reader/windows";
 import { mergeText, readingNoteFor, useNotesStore } from "@/store/notes";
 import { NoteEditor } from "./note-editor";
-
-/** The sticky notes' height in front (the stack's frame needs it; the notes window in front takes what the screen leaves). */
-const STICKY_FRONT_HEIGHT_PX = 260;
 
 export type ExportKind = "copy" | "txt" | "md" | "doc" | "pdf";
 
@@ -81,7 +77,9 @@ export function NotesWindowView({
   children?: ReactNode;
 }) {
   return (
-    <section
+    <MarginCard
+      id={NOTES_WINDOW_ID}
+      kind="notes"
       aria-label="Your notes"
       data-notes-window=""
       onKeyDown={(event) => {
@@ -92,76 +90,81 @@ export function NotesWindowView({
         if (menuOpen) onMenu();
         else onClose();
       }}
-      className={cn(
-        "fixed right-0 flex w-[360px] max-w-[calc(100vw-1rem)] flex-col border border-r-0 border-border-strong bg-surface shadow-card",
-        !front && "overflow-hidden",
-      )}
-      style={front ? { top, maxHeight, zIndex: z } : { top, height, maxHeight, zIndex: z }}
-    >
-      <header className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border bg-surface pl-4 pr-2">
-        <h2 className="eyebrow min-w-0 flex-1 text-heading">
-          <button
-            type="button"
-            data-window-header=""
-            onClick={onRaise}
-            className="flex h-10 w-full items-center text-left transition-colors hover:text-text"
-          >
-            Your notes
-          </button>
-        </h2>
-        <div className="relative flex items-center gap-2">
-          {front && (
-            <span className="annotation text-text-faint" aria-live="polite">
-              {notice}
-            </span>
-          )}
-          {front && (
+      front={front}
+      top={top}
+      maxHeight={maxHeight}
+      {...(front ? {} : { height })}
+      z={z ?? STACK_Z_BASE}
+      keepMounted
+      // In front the export menu hangs below the header and may pass the window's foot; behind it clips to a header.
+      className={front ? "overflow-visible" : undefined}
+      header={
+        <header className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border bg-surface pl-4 pr-2">
+          <h2 className="eyebrow min-w-0 flex-1 text-heading">
             <button
               type="button"
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              onClick={onMenu}
-              className="eyebrow px-2 py-1 text-text-muted transition-colors hover:bg-bg-secondary hover:text-heading"
+              data-window-header=""
+              onClick={onRaise}
+              className="flex h-10 w-full items-center text-left transition-colors hover:text-text"
             >
-              Export <span aria-hidden>▾</span>
+              Your notes
             </button>
-          )}
-          {front && menuOpen && (
-            <>
-              <button type="button" aria-hidden tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={onMenu} />
-              <div role="menu" className="absolute right-0 top-full z-20 mt-1 w-56 border border-border-strong bg-surface py-1 shadow-card">
-                {EXPORT_ITEMS.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    role="menuitem"
-                    onClick={() => onExport(item.id)}
-                    className="block w-full px-3 py-2 text-left hover:bg-bg-secondary/70"
-                  >
-                    <span className="block text-body-sm text-heading">{item.label}</span>
-                    <span className="annotation block text-text-faint">{item.detail}</span>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-          <button
-            type="button"
-            aria-label="Close your notes"
-            onClick={onClose}
-            className="grid h-8 w-8 place-items-center text-body text-text-muted transition-colors hover:bg-bg-secondary hover:text-heading"
-          >
-            ×
-          </button>
-        </div>
-      </header>
+          </h2>
+          <div className="relative flex items-center gap-2">
+            {front && (
+              <span className="annotation text-text-faint" aria-live="polite">
+                {notice}
+              </span>
+            )}
+            {front && (
+              <button
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                onClick={onMenu}
+                className="eyebrow px-2 py-1 text-text-muted transition-colors hover:bg-bg-secondary hover:text-heading"
+              >
+                Export <span aria-hidden>▾</span>
+              </button>
+            )}
+            {front && menuOpen && (
+              <>
+                <button type="button" aria-hidden tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={onMenu} />
+                <div role="menu" className="absolute right-0 top-full z-20 mt-1 w-56 border border-border-strong bg-surface py-1 shadow-card">
+                  {EXPORT_ITEMS.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => onExport(item.id)}
+                      className="block w-full px-3 py-2 text-left hover:bg-bg-secondary/70"
+                    >
+                      <span className="block text-body-sm text-heading">{item.label}</span>
+                      <span className="annotation block text-text-faint">{item.detail}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            <button
+              type="button"
+              aria-label="Close your notes"
+              onClick={onClose}
+              className="grid h-8 w-8 place-items-center text-body text-text-muted transition-colors hover:bg-bg-secondary hover:text-heading"
+            >
+              ×
+            </button>
+          </div>
+        </header>
+      }
+    >
       <div hidden={!front} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-surface px-3 pb-4 [&_[role=toolbar]]:bg-surface">
         {children}
       </div>
       <p hidden={!front} className="annotation shrink-0 border-t border-border bg-surface px-4 py-2 text-text-faint">
         Kept in this browser
       </p>
-    </section>
+    </MarginCard>
   );
 }
 
@@ -255,7 +258,7 @@ export function NotesWindow({ paper, onClose }: { paper: Paper; onClose: () => v
   }, []);
   const column = useColumn(true);
   const row = note
-    ? stackRows(windows, note.blocks, { ...column, frontHeight: STICKY_FRONT_HEIGHT_PX, minTop: DOCK_TOP_PX }).find((r) => r.id === NOTES_WINDOW_ID)
+    ? stackRows(windows, note.blocks, column).find((r) => r.id === NOTES_WINDOW_ID)
     : undefined;
 
   useEffect(() => {

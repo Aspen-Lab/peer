@@ -1,7 +1,9 @@
 "use client";
 
 // P10-09a (the owner's review 7.1; rubric B7, B8, B10; ruling §1h.78): sticky notes. "Take notes" on a selection
-// opens a small numbered window at the right, in the explain dock's column, and the reader writes in it at once.
+// opens a small numbered window at the right, in the margin, and the reader writes in it at once. P11-14 (B P11-03 §3.2): it is a
+// card of the margin's stack — `MarginCard` is its frame (the margin's left and width, the 40 px header with its title, quote head and X);
+// the first one opens level with its selection and later cards cascade from there (R-open).
 // It imitates a sticky note: it floats while the page scrolls, it can be closed, and what is written in it is
 // saved as it is written — through into the paper's own note (`store/notes.ts`: `addSticky`, `setStickyText`),
 // as the "Note N" heading carrying the passage's anchor and the reader's paragraphs under it. Closing hides the
@@ -22,7 +24,7 @@ import { citableFromPaper } from "@/lib/notes/cite";
 import type { ReadingNoteExtras } from "@/lib/notes/templates";
 import type { Citable, NoteAnchor } from "@/lib/notes/types";
 import { paragraphAnchor, type ExplainSelection } from "@/components/reader/paper-body";
-import { DOCK_TOP_PX } from "@/components/reader/explain-dock";
+import { MarginCard } from "@/components/reader/margin-card";
 import { holdInPlace, readingAnchorTop, stackRows, useColumn, useWindows, type FloatingWindow, type StackFrame } from "@/lib/reader/windows";
 import { readingNoteFor, stripTagText, useLostPassages, useNotesStore, withoutSticky } from "@/store/notes";
 
@@ -34,9 +36,6 @@ import { WysiwygField } from "./wysiwyg-field";
  *  measured in the dev server, last keystroke to the notes window showing it took 301-333 ms with 250 (the window starts its
  *  editor afresh on the change), and the brief's bound is 300 ms from the keystroke to the window. */
 export const STICKY_SAVE_MS = 150;
-
-/** The window's height while it is in front. */
-const FRONT_HEIGHT_PX = 260;
 
 export function StickyWindowView({
   n,
@@ -68,7 +67,9 @@ export function StickyWindowView({
   lost?: boolean;
 }) {
   return (
-    <div
+    <MarginCard
+      id={`sticky-${n}`}
+      kind="sticky"
       role="group"
       aria-label={stickyTitle(n)}
       data-sticky={n}
@@ -78,51 +79,36 @@ export function StickyWindowView({
         event.preventDefault();
         onClose();
       }}
-      style={{ top, height, zIndex: z }}
-      className="fixed right-0 flex w-[min(360px,100vw)] flex-col overflow-hidden border border-border-strong bg-surface shadow-card-hover"
+      front={front}
+      top={top}
+      height={height}
+      z={z}
+      title={stickyTitle(n)}
+      headline={`“${quoteHead(stripTagText(quote))}”`}
+      closeAt="end"
+      closeLabel={`Close note ${n}`}
+      closeTitle="Close — the note stays in your notes"
+      onRaise={onRaise}
+      onClose={onClose}
+      headerAttrs={{ "data-sticky-header": "" }}
     >
-      <div className="flex h-10 shrink-0 items-stretch">
-        <button
-          type="button"
-          data-sticky-header=""
-          onClick={onRaise}
-          className="flex min-w-0 flex-1 items-center gap-2 px-3 text-left transition-colors hover:bg-surface-hover"
-        >
-          <span className="eyebrow shrink-0 text-heading">{stickyTitle(n)}</span>
-          <span className="min-w-0 truncate font-reading text-body-sm italic text-text-muted">{`“${quoteHead(stripTagText(quote))}”`}</span>
-        </button>
-        <button
-          type="button"
-          aria-label={`Close note ${n}`}
-          title="Close — the note stays in your notes"
-          onClick={(event) => {
-            event.stopPropagation();
-            onClose();
-          }}
-          className="grid w-10 shrink-0 place-items-center font-mono text-title leading-none text-text-muted transition-colors hover:bg-surface-hover hover:text-heading"
-        >
-          ×
-        </button>
+      <div className="flex min-h-0 flex-1 gap-2 border-t border-border-strong p-3">
+        {!lost && (
+          <span className="mt-1 shrink-0">
+            <AnchorSquare onClick={onGo} />
+          </span>
+        )}
+        <WysiwygField
+          autoFocus
+          value={text}
+          ariaLabel={stickyTitle(n)}
+          placeholder="Write here. It is saved in your notes."
+          onChange={onText}
+          className="min-h-0 flex-1 overflow-y-auto font-reading text-body-sm leading-[1.6] text-text"
+        />
       </div>
-      {front && (
-        <div className="flex min-h-0 flex-1 gap-2 border-t border-border-strong p-3">
-          {!lost && (
-            <span className="mt-1 shrink-0">
-              <AnchorSquare onClick={onGo} />
-            </span>
-          )}
-          <WysiwygField
-            autoFocus
-            value={text}
-            ariaLabel={stickyTitle(n)}
-            placeholder="Write here. It is saved in your notes."
-            onChange={onText}
-            className="min-h-0 flex-1 overflow-y-auto font-reading text-body-sm leading-[1.6] text-text"
-          />
-        </div>
-      )}
-      {front && lost && <p className="shrink-0 px-3 pb-2 font-reading text-body-sm italic text-text-faint">{PASSAGE_LOST_LINE}</p>}
-    </div>
+      {lost && <p className="shrink-0 px-3 pb-2 font-reading text-body-sm italic text-text-faint">{PASSAGE_LOST_LINE}</p>}
+    </MarginCard>
   );
 }
 
@@ -206,12 +192,25 @@ export function closeSticky(noteId: string, headerId: string, scroll?: (dy: numb
 }
 
 /**
+ * P11-14 rule 2, defect (c) (B P11-03 §1.3): where a sticky's anchor points. A paper selection is at its paragraph
+ * (`paper-section-1-p2`); a Summary or answer selection has no paragraph of the paper — its `sectionIndex` and `paragraphIndex` are −1,
+ * and `paper-section--1-p-1` pointed nowhere — so it is anchored by the container's own `paragraphId` that the selection carries, else
+ * by its source's name. Pure.
+ */
+export function stickyAnchorId(target: Pick<ExplainSelection, "sectionIndex" | "paragraphIndex"> & Partial<Pick<ExplainSelection, "passage" | "source" | "paragraphId">>): string {
+  if (target.source === undefined || target.source === "paper") return paragraphAnchor(target.sectionIndex, target.paragraphIndex);
+  return target.paragraphId || target.source;
+}
+
+/**
  * "Take notes" on a selection: the paper's note (made if it is not there, without navigating), the next numbered
- * sticky in it, anchored to the selection's paragraph, and its window opened.
+ * sticky in it, anchored to the selection's paragraph (or, for a Summary or answer selection, its own block — `stickyAnchorId`),
+ * and its window opened — level with the selection's first line when it is the first card of the margin (R-open).
  */
 export function takeStickyNote(
   // P10-09f: `paragraphText` is the paragraph as the body renders it; with it the anchor records where the words stand.
-  target: Pick<ExplainSelection, "sectionIndex" | "paragraphIndex" | "passage"> & Partial<Pick<ExplainSelection, "measure">> & { paragraphText?: string },
+  target: Pick<ExplainSelection, "sectionIndex" | "paragraphIndex" | "passage"> &
+    Partial<Pick<ExplainSelection, "measure" | "bounds" | "source" | "paragraphId">> & { paragraphText?: string },
   paper: Citable,
   extras?: ReadingNoteExtras,
   scroll?: (dy: number) => void,
@@ -220,17 +219,19 @@ export function takeStickyNote(
   const noteId = ensureReadingNote(paper, extras);
   const made = addSticky(noteId, {
     paperId: paper.id,
-    paragraphId: paragraphAnchor(target.sectionIndex, target.paragraphIndex),
+    paragraphId: stickyAnchorId(target),
     // P10-24: the words, never a note tag's text.
     passage: stripTagText(target.passage),
     paragraphText: target.paragraphText,
   });
   if (!made) return null;
+  // R-open: the first card of an empty margin opens level with the selection's first line, as the selection is now.
+  const anchorTop = target.measure?.()?.bounds.top ?? target.bounds?.top;
   // P10-09d (X-B1): the first window of the stack reserves the column and the text reflows; the selected words (else the first
   // paragraph on the screen) stay where the eyes are, as the explain window's reflow holds them (P7-15).
   holdInPlace({
     measure: () => target.measure?.()?.bounds.top ?? readingAnchorTop(),
-    change: () => useWindows.getState().open({ id: made.id, kind: "sticky", title: stickyTitle(made.n) }),
+    change: () => useWindows.getState().open({ id: made.id, kind: "sticky", title: stickyTitle(made.n), ...(anchorTop !== undefined ? { anchorTop } : {}) }),
     scroll,
   });
   return made;
@@ -396,7 +397,7 @@ export function StickyNotes({ paper, reveal }: { paper: Paper; reveal: (run: () 
 
   const column = useColumn(windows.some((w: FloatingWindow) => w.kind === "sticky"));
   if (!note) return null;
-  const rows = stickyRows(windows, note.blocks, { ...column, frontHeight: FRONT_HEIGHT_PX, minTop: DOCK_TOP_PX });
+  const rows = stickyRows(windows, note.blocks, column);
   return (
     <>
       {rows.map((row) => (

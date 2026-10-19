@@ -8,6 +8,7 @@ import { block, stickySpan, stickyText, stickyTitle } from "@/lib/notes/blocks";
 import type { Block } from "@/lib/notes/types";
 import { DOCK_VAR } from "@/components/reader/explain-dock";
 import { NOTES_WINDOW_ID, bindWindowsReserve, useWindows } from "@/lib/reader/windows";
+import { MarginCard, MarginCardShell, type MarginCardShellProps } from "@/components/reader/margin-card";
 import { WysiwygField } from "./wysiwyg-field";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
 import { reconcileWindow } from "./notes-window";
@@ -19,11 +20,13 @@ import { STICKY_SAVE_MS, StickyWindowView, closeSticky, makeStickyWriter, passag
 // everything. Every text is invented.
 
 type Props = Record<string, unknown> & { children?: ReactNode };
-/** The element tree with the (hook-free) function components expanded. */
+/** The element tree with the (hook-free) function components expanded. P11-14 (re-aimed, §1c): the window stands in `MarginCard`, which reads
+ *  the margin's rect with a hook; the tree is expanded through its hook-free shell (`MarginCardShell`, with no margin: the right edge). */
 function elements(node: ReactNode): ReactElement<Props>[] {
   if (Array.isArray(node)) return node.flatMap(elements);
   if (!node || typeof node !== "object" || !("props" in node)) return [];
   const element = node as ReactElement<Props>;
+  if (element.type === MarginCard) return [element, ...elements(MarginCardShell({ ...(element.props as unknown as MarginCardShellProps), frame: null }))];
   // the field has hooks (and is its own component, with its own tests): it is the leaf here
   if (typeof element.type === "function" && element.type !== WysiwygField) return [element, ...elements((element.type as (p: Props) => ReactNode)(element.props))];
   return [element, ...elements(element.props.children)];
