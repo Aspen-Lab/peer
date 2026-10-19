@@ -617,9 +617,14 @@ describe("ExplainBox — Escape and the thread (P3-02b)", () => {
   });
 });
 
-// ── The page makes room (P7-15, R7 / Q4) ────────────────────────────────
+// ── The page makes no room (P7-15, R7 / Q4; retired by P11-14) ──────────────────────────────────────
+//
+// P11-14 (re-aimed, §1c; B P11-01 §3.1): this group was "the page keeps the dock's width clear while it is open (P7-15)": two custom
+// properties on the document's root (`--explain-dock` 376px, `--explain-dock-width` 360px) written when the dock opened and taken off when
+// it closed, and the same on a resize across 1024 px. The margin is a grid track of the reader's shell now, so nothing is reserved: each
+// case below keeps its scenario and asserts that NOTHING is ever written on the root.
 
-describe("ExplainBox — the page keeps the dock's width clear while it is open (P7-15)", () => {
+describe("ExplainBox — the page keeps nothing clear for the dock, which opens, closes and follows the window without writing on it (P7-15, retired by P11-14)", () => {
   let root: Map<string, string>;
   const stubRoot = () => {
     root = new Map();
@@ -633,14 +638,14 @@ describe("ExplainBox — the page keeps the dock's width clear while it is open 
     stubWindow(width, height);
     for (const listener of listeners.get("resize") ?? []) listener({});
   };
-  const RESERVED = { "--explain-dock": "376px", "--explain-dock-width": "360px" };
+  const NOTHING_RESERVED = {} as const;
 
   beforeEach(() => {
     stubRoot();
     stubWindow(1440, 900);
   });
 
-  it("reserves nothing while only the button stands, and 376 px once the box is open as a dock (no key: the Tier 0 definition)", async () => {
+  it("reserves nothing while only the button stands, and nothing once the box is open as a dock either (no key: the Tier 0 definition; re-aimed, P11-14: was \"…and 376 px once the box is open…\")", async () => {
     // P10-08 (re-aimed): nothing stands before the page's `explain` action, with a key or without (`explain-box.entry.flow.test.tsx`).
     let before: Record<string, string> = { unset: "yes" };
     const defined = { ...first, passage: "The rafting ratio rose." };
@@ -655,11 +660,11 @@ describe("ExplainBox — the page keeps the dock's width clear while it is open 
 
     expect(before).toEqual({});
     expect(run.last().dock).toBe(true);
-    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    expect(Object.fromEntries(root)).toEqual(NOTHING_RESERVED);
     run.mounted.unmount();
   });
 
-  it("gives the width back when the box closes: Escape (no key), the Close button, and leaving the page", async () => {
+  it("writes nothing when the box closes: Escape (no key), the Close button, and leaving the page (re-aimed, P11-14: was \"gives the width back when…\")", async () => {
     // P8-06 (re-aimed, the manager's ruling on Escape): with a key and a body a window is always there, and
     // Escape only clears its passage back to the empty state (`explain-box.escape.flow.test.tsx`); the width goes
     // back with Close. Escape still closes, and still gives the width back, where no empty state stands behind the
@@ -679,19 +684,19 @@ describe("ExplainBox — the page keeps the dock's width clear while it is open 
 
     const open = await scenario(base(), [(tree) => click(tree)]);
     await wait();
-    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    expect(Object.fromEntries(root)).toEqual(NOTHING_RESERVED);
     open.mounted.unmount();
     expect(Object.fromEntries(root)).toEqual({});
   });
 
-  it("keeps it for the Tier 0 definition card as well, which is the dock too", async () => {
+  it("the Tier 0 definition card is the dock too, and reserves nothing either (re-aimed, P11-14: was \"keeps it for the Tier 0 definition card as well…\")", async () => {
     const target = { ...first, passage: "The rafting ratio rose." };
     const run = await scenario(base({ canAsk: false, terms: [term], target, cached: undefined }), [(tree) => click(tree)]);
     await wait();
 
     expect(run.last().status).toBe("none");
     expect(run.last().dock).toBe(true);
-    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    expect(Object.fromEntries(root)).toEqual(NOTHING_RESERVED);
     run.mounted.unmount();
   });
 
@@ -710,7 +715,7 @@ describe("ExplainBox — the page keeps the dock's width clear while it is open 
     }
   });
 
-  it("follows the window across 1024 px while the box is open: the width goes with the dock and comes back with it", async () => {
+  it("follows the window across 1024 px while the box is open: the dock is a card below it and a dock again from it, and nothing is written on the page either way (re-aimed, P11-14: was \"…the width goes with the dock and comes back with it\")", async () => {
     const seen: Array<{ dock: boolean; root: Record<string, string> }> = [];
     const snap = (tree: ReactNode) => seen.push({ dock: look(tree).dock, root: Object.fromEntries(root) });
     const run = await scenario(base(), [
@@ -732,25 +737,26 @@ describe("ExplainBox — the page keeps the dock's width clear while it is open 
     await wait();
 
     expect(seen).toEqual([
-      { dock: true, root: RESERVED },
+      { dock: true, root: NOTHING_RESERVED },
       { dock: false, root: {} },
-      { dock: true, root: RESERVED },
+      { dock: true, root: NOTHING_RESERVED },
       { dock: false, root: {} },
-      { dock: true, root: RESERVED },
+      { dock: true, root: NOTHING_RESERVED },
     ]);
     run.mounted.unmount();
   });
 });
 
-// The reflow moves the words. A selection deep in a paper sits hundreds of pixels lower (or higher) once
-// the column is narrower (or wide again): measured in a browser at 1280, a selection at the middle of the
-// window went to 1,095 px — below the window — when the dock opened, and the browser's own scroll
-// anchoring had moved the page by only 82. So the box holds the selection where it was on the screen:
-// it reads the selection's top, changes the layout, reads it again and scrolls the page by the
-// difference, all before the next paint.
-describe("ExplainBox — the selection stays where it was on the screen across the reflow (P7-15)", () => {
+// P11-14 (re-aimed, §1c; B P11-01 §3.1): this group was "the selection stays where it was on the screen across the reflow (P7-15)". The
+// reflow moved the words — a selection deep in a paper sat hundreds of pixels lower once the dock's width was kept clear and the column
+// narrower, measured in a browser at 1280 — so the box read the selection's top, changed the layout, read it again and scrolled the page
+// by the difference before the next paint. The margin is a grid track of the reader's shell now: nothing is reserved, the column never
+// narrows, the words never move when the dock opens or closes, and there is no reflow to hold the selection against. The scenarios stay;
+// each asserts that the page is never scrolled for the dock, even for a selection whose top WOULD have moved by a reflow (`reflowing`:
+// 300 in the wide page, 1,100 in the narrow one — a layout this page no longer has, so it is never asked for the narrow one).
+describe("ExplainBox — the selection stays where it was because the page never reflows (P7-15, retired by P11-14)", () => {
   let root: Map<string, string>;
-  /** A selection whose top depends on the layout: 300 in the wide page, 1,100 once the dock's width is kept clear. */
+  /** A selection whose top would depend on a layout that no longer exists: 300 in the wide page, 1,100 in a narrowed one. */
   const reflowing = (wide = 300, narrow = 1100): ExplainSelection => ({
     ...first,
     measure: () => {
@@ -769,20 +775,20 @@ describe("ExplainBox — the selection stays where it was on the screen across t
     stubWindow(1280, 800);
   });
 
-  it("scrolls the page by how far the words moved when the dock opens, and back by as far when it closes", async () => {
-    // P8-06 (re-aimed): closes with the Close button (Escape keeps the width reserved: nothing moves).
+  it("does not scroll the page when the dock opens, or when it closes (re-aimed, P11-14: was \"scrolls the page by how far the words moved when the dock opens, and back by as far when it closes\")", async () => {
     const run = await scenario(base({ target: reflowing() }), [(tree) => click(tree), () => {}, (tree) => closeOf(tree)()]);
     await wait();
 
-    expect(scrollBy.mock.calls).toEqual([[{ top: 800, behavior: "instant" }], [{ top: -800, behavior: "instant" }]]);
+    expect(scrollBy).not.toHaveBeenCalled();
+    expect(root.size).toBe(0);
     run.mounted.unmount();
   });
 
-  it("Escape closes the window as Close does (re-aimed, P10-08: was \"clears the passage and moves nothing: the width stays reserved\" — there is no empty state to go back to): the width goes back and the page scrolls back by as far", async () => {
+  it("Escape closes the window as Close does, and scrolls nothing (re-aimed, P11-14: was \"…the width goes back and the page scrolls back by as far\")", async () => {
     const run = await scenario(base({ target: reflowing() }), [(tree) => click(tree), () => {}, () => escape()]);
     await wait();
 
-    expect(scrollBy.mock.calls).toEqual([[{ top: 800, behavior: "instant" }], [{ top: -800, behavior: "instant" }]]);
+    expect(scrollBy).not.toHaveBeenCalled();
     expect(root.size).toBe(0);
     run.mounted.unmount();
   });
@@ -799,7 +805,7 @@ describe("ExplainBox — the selection stays where it was on the screen across t
     unmeasured.mounted.unmount();
   });
 
-  it("gives the width back without scrolling when the reader leaves the paper with the dock open", async () => {
+  it("scrolls nothing when the reader leaves the paper with the dock open (re-aimed, P11-14: was \"gives the width back without scrolling when…\")", async () => {
     const run = await scenario(base({ target: reflowing() }), [(tree) => click(tree)]);
     await wait();
     scrollBy.mockClear();
@@ -809,11 +815,9 @@ describe("ExplainBox — the selection stays where it was on the screen across t
     expect(scrollBy).not.toHaveBeenCalled();
   });
 
-  it("holds the NEW selection when the box closes with a new passage selected, not the one the box was opened for", async () => {
-    // P8-02 (BACKLOG-31): a new selection no longer closes the dock — it stays open, so the closing that
-    // can meet a new selection is the reader's (P8-06: the Close button; Escape only clears the passage) with the next
-    // passage selected and not explained.
-    // The old words are 300 wide / 1,100 narrow; the new ones 500 wide / 650 narrow: closing moves them by 150.
+  it("scrolls nothing when the box closes with a new passage selected, not for the one it was opened for and not for the new one (re-aimed, P11-14: was \"holds the NEW selection when the box closes…\")", async () => {
+    // P8-02 (BACKLOG-31): a new selection no longer closes the dock — it stays open, so the closing that can meet a new selection is the
+    // reader's (the Close button) with the next passage selected and not explained.
     const old = reflowing();
     const next: ExplainSelection = { ...reflowing(500, 650), passage: "Specimens were machined from a single casting." };
     const run = await scenario(base({ target: old }), [
@@ -828,8 +832,7 @@ describe("ExplainBox — the selection stays where it was on the screen across t
     ]);
     await wait();
 
-    // 800 on opening (the old words); on closing, the new words' own 650 -> 500, not the old ones' 1,100 -> 300.
-    expect(scrollBy.mock.calls).toEqual([[{ top: 800, behavior: "instant" }], [{ top: -150, behavior: "instant" }]]);
+    expect(scrollBy).not.toHaveBeenCalled();
     run.mounted.unmount();
   });
 });

@@ -5,10 +5,9 @@
 //
 //   `edge` — a small tab fixed at the viewport's right edge, from `md` up. It is in the window's
 //   pixels (mounted outside the zoomed page container, beside the "Explain this?" box), at least
-//   27rem from the top whatever the window's height, clear of the upper right 400px. P7-15: the
-//   AI discussion is a dock down the window's right edge (`explain-dock.ts`), and while it is open
-//   the tab stands against the dock's left edge (`--explain-dock-width`, set on the document's
-//   root), not under it; with no dock open that offset is 0 and the tab is on the window's edge.
+//   27rem from the top whatever the window's height, clear of the upper right 400px. P11-14 (B P11-01 §3.1): while a card
+//   stands in the margin — the explain card, a sticky, the notes window — the tab stands at the margin's left edge (the
+//   margin's rect, `useMarginRect()`), beside the cards instead of under them; with no card it is on the window's edge.
 //
 //   `row` — on a phone, where there is no edge to put a tab on, a full-width row in the command
 //   stack (`DecisionBlock`'s `notesAction`), set like the other commands.
@@ -26,6 +25,8 @@ import type { QuestionAnswers } from "@/lib/papers/report";
 import { buttonVariants } from "@/components/ui/button";
 import { COMMAND } from "@/components/ui/command";
 import { cn } from "@/lib/cn";
+import { useMarginRect } from "@/lib/reader/margin";
+import { useWindows } from "@/lib/reader/windows";
 import { NotesWindow } from "./notes-window";
 import { usePaperNotes } from "./paper-notes";
 
@@ -42,13 +43,19 @@ export function NotesButtonView({
   variant,
   has,
   shown = false,
+  beside = false,
+  marginLeft,
   onOpen,
 }: {
   variant: "edge" | "row";
   /** The paper already has a note of its own. */
   has: boolean;
-  /** The notes window stands (the edge tab only): the tab stands beside it, and a press closes it. */
+  /** The notes window stands (the edge tab only): a press closes it. */
   shown?: boolean;
+  /** A card stands in the margin (the explain card, a sticky, the notes window): the edge tab stands beside it, not under it. */
+  beside?: boolean;
+  /** The margin's left edge in the window's pixels, where a shell has registered one; else the cards stand at the right edge, 360 px wide. */
+  marginLeft?: number;
   onOpen: () => void;
 }) {
   const label = notesLabel(has);
@@ -73,15 +80,15 @@ export function NotesButtonView({
       onClick={onOpen}
       aria-expanded={shown}
       title={has ? undefined : TAKE_TITLE}
+      style={beside && marginLeft !== undefined ? { left: marginLeft, transform: "translateX(-100%)" } : undefined}
       className={cn(
-        // Fixed to the right edge — beside the AI dock instead of under it while that is open (`right` is
-        // the dock's width, set on the document's root by `explain-dock.ts`, else 0) — vertically from
-        // 27rem down (or the window's middle, if lower), clear of the upper right 400px. The label runs down the tab (vertical writing mode), so it is as
-        // narrow as a line of type: in that mode `px` pads the tab's top and bottom (the inline axis)
-        // and `py` its two sides, and the tab must not reach into the page's own side margin (24px).
-        // While the notes window stands the tab is beside it: at the larger of the dock's width and the window's.
-        shown ? "fixed right-[max(var(--explain-dock-width,0px),360px)]" : "fixed right-[var(--explain-dock-width,0px)]",
-        "top-[max(27rem,50vh)] z-40 hidden md:flex items-center border border-r-0 border-border-strong bg-surface px-3 py-1 shadow-card",
+        // Fixed to the right edge — beside the cards instead of under them while one stands in the margin (at the margin's left edge,
+        // from its rect; else the card's 360 px) — vertically from 27rem down (or the window's middle, if lower), clear of the upper
+        // right 400px. The label runs down the tab (vertical writing mode), so it is as narrow as a line of type: in that mode `px`
+        // pads the tab's top and bottom (the inline axis) and `py` its two sides, and the tab must not reach into the page's own
+        // side margin (24px).
+        beside ? (marginLeft === undefined ? "right-[min(360px,100vw)]" : "") : "right-0",
+        "fixed top-[max(27rem,50vh)] z-40 hidden md:flex items-center border border-r-0 border-border-strong bg-surface px-3 py-1 shadow-card",
         "eyebrow text-text-muted transition-colors hover:bg-surface-hover hover:text-heading [writing-mode:vertical-rl]",
       )}
     >
@@ -112,6 +119,8 @@ export function NotesButton({
     forYourQuestions,
     openWindow: variant === "edge" ? () => setShown(true) : undefined,
   });
+  const rect = useMarginRect();
+  const standing = useWindows((s) => s.windows.length > 0);
   if (!ready) return null;
   return (
     <>
@@ -119,6 +128,8 @@ export function NotesButton({
         variant={variant}
         has={own !== undefined}
         shown={variant === "edge" && shown}
+        beside={variant === "edge" && (standing || shown)}
+        marginLeft={rect?.left}
         onOpen={variant === "edge" && shown ? () => setShown(false) : open}
       />
       {variant === "edge" && shown && <NotesWindow paper={paper} onClose={() => setShown(false)} />}

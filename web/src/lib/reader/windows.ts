@@ -7,13 +7,12 @@
 //
 // `order` is the stacking: the window raised last has the highest, and stands in front.
 //
-// P10-09d (X-B1; ruling §1h.87 (c)): while any window stands, the column is reserved on the page as the explain window reserves
-// it (`reserveDock`, counted and shared): taken when the first window registers, given back when the last leaves, from 1024 px
-// only (`bindWindowsReserve`, below) — the paper's words move out of the column and are never covered.
+// P11-14 (B P11-01 §3.1, §4 C4): nothing is reserved on the page any more. The margin is a track of the reader's shell, so a card
+// opening or closing never moves the paper's words, and there is no reserve to bind, no place to hold and no scroll to make.
 
 import { useEffect, useState } from "react";
 import { create } from "zustand";
-import { DOCK_MIN_VIEWPORT_PX, DOCK_STACK_FLOOR_PX, DOCK_TOP_PX, PAGE_ZOOM_ROOT, PAGE_ZOOM_VAR, columnBottomPx, legendHeightPx, reserveDock } from "@/components/reader/explain-dock";
+import { DOCK_STACK_FLOOR_PX, DOCK_TOP_PX, PAGE_ZOOM_ROOT, PAGE_ZOOM_VAR, columnBottomPx, legendHeightPx } from "@/components/reader/explain-dock";
 import { useMarginRect, type MarginRect } from "@/lib/reader/margin";
 import type { Block } from "@/lib/notes/types";
 
@@ -277,102 +276,4 @@ export function useColumn(active: boolean): { top: number; bottom: number; minTo
   const band = stackFrameIn({ top: rect?.top ?? DOCK_TOP_PX, bottom: rect?.bottom ?? frame.bottom }, origin);
   // With the explain window standing the column keeps its place under it (or above it, `ceiling`); else it starts at the origin.
   return frame.ceiling !== undefined ? { ...frame, minTop: band.minTop } : band;
-}
-
-// ── The reserved column ───────────────────────────────────────────────────
-//
-// A window at the right stood over the text (A P10-10's X-B1: about 150 px of every line beside a sticky at 1440 unreadable);
-// the explain window kept the column clear (`--explain-dock`) and the text reflowed. One reserve now serves them all: this
-// binds the stack to `reserveDock`'s counted reserve, so the page's width is kept clear while at least one window of any kind
-// stands here OR the explain window stands (it takes its own, counted with the rest).
-//
-// Below `DOCK_MIN_VIEWPORT_PX` (1024 px, the explain window's own minimum) nothing is reserved: the notes window is a masthead
-// tab from 1024 px only, and a sticky opened on a narrower screen floats over the text as it always did.
-
-export interface ReserveEnv {
-  /** The document's root: what `reserveDock` writes the properties on. */
-  root: Parameters<typeof reserveDock>[0];
-  /** The window's width now, in CSS pixels. */
-  width: () => number;
-  /** Call `cb` when the window is resized; returns what stops it. */
-  onResize: (cb: () => void) => () => void;
-}
-
-/**
- * Keep `reserveDock`'s reserve taken while a window stands in `store` and the window is at least 1024 px wide: taken when
- * the first window registers, released when the last leaves or the window narrows past the minimum, and taken again when it
- * widens. Returns what unbinds it (and gives back any take it holds).
- */
-export function bindWindowsReserve(env: ReserveEnv, store: Pick<typeof useWindows, "getState" | "subscribe"> = useWindows): () => void {
-  let release: (() => void) | null = null;
-  const sync = () => {
-    const want = store.getState().windows.length > 0 && env.width() >= DOCK_MIN_VIEWPORT_PX;
-    if (want && !release) release = reserveDock(env.root);
-    else if (!want && release) {
-      release();
-      release = null;
-    }
-  };
-  const stop = store.subscribe(sync);
-  const stopResize = env.onResize(sync);
-  sync();
-  return () => {
-    stop();
-    stopResize();
-    release?.();
-    release = null;
-  };
-}
-
-if (typeof window !== "undefined" && typeof document !== "undefined") {
-  bindWindowsReserve({
-    root: document.documentElement,
-    width: () => window.innerWidth,
-    onResize: (cb) => {
-      window.addEventListener("resize", cb);
-      return () => window.removeEventListener("resize", cb);
-    },
-  });
-}
-
-/**
- * Where the reader's eyes are, as a top in viewport pixels: the selected words when a selection stands on the screen, else the
- * first paragraph of the paper that reaches below the masthead. Undefined where there is nothing to read (a server render, a page
- * without the paper's text).
- */
-export function readingAnchorTop(): number | undefined {
-  if (typeof window === "undefined" || typeof document === "undefined") return undefined;
-  const selection = window.getSelection?.();
-  if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
-    const box = selection.getRangeAt(0).getBoundingClientRect();
-    if (box.height > 0 && box.bottom > 0 && box.top < window.innerHeight) return box.top;
-  }
-  for (const paragraph of document.querySelectorAll('[id^="paper-section-"][id*="-p"]')) {
-    const box = paragraph.getBoundingClientRect();
-    if (box.bottom > DOCK_TOP_PX + 8) return box.top;
-  }
-  return undefined;
-}
-
-/**
- * P7-15's measure-before / measure-after (`explain-box.tsx`, the dock's reflow), shared: read where the reader's words are, make
- * the change that moves them (a window joining or leaving reserves or frees the column, and the text reflows), read again before
- * the next paint and scroll the page by the difference — the words stay where the eyes are. A move under a pixel, or no words to
- * measure, scrolls nothing. `scroll` is the page's own scroll unless a test gives another.
- */
-export function holdInPlace({
-  measure = readingAnchorTop,
-  change,
-  scroll = (dy) => {
-    if (typeof window !== "undefined") window.scrollBy({ top: dy, behavior: "instant" });
-  },
-}: {
-  measure?: () => number | undefined;
-  change: () => void;
-  scroll?: (dy: number) => void;
-}): void {
-  const before = measure();
-  change();
-  const after = before === undefined ? undefined : measure();
-  if (before !== undefined && after !== undefined && Math.abs(after - before) >= 1) scroll(after - before);
 }

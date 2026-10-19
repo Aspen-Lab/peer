@@ -109,11 +109,14 @@ function stubWindow(width = 1280, height = 800) {
   vi.stubGlobal("window", { ...recorder(), innerWidth: width, innerHeight: height, scrollBy, requestAnimationFrame: (fn: () => void) => setTimeout(fn, 0), cancelAnimationFrame: (id: number) => clearTimeout(id) });
 }
 
-// The document's root, where the page's width is kept clear: what is written and what is taken off.
+// The document's root: what is written on it and what is taken off. P11-14 (re-aimed, §1c; B P11-01 §3.1): the dock used to keep the page's
+// width clear with two custom properties on the root (`--explain-dock` 376px, `--explain-dock-width` 360px). The margin is a grid track of
+// the reader's shell now, so NOTHING is reserved: every assertion below that read "the properties are written / are taken off" reads
+// "nothing was ever written".
 let root: Map<string, string>;
 let setProperty: ReturnType<typeof vi.fn>;
 let removeProperty: ReturnType<typeof vi.fn>;
-const RESERVED = { "--explain-dock": "376px", "--explain-dock-width": "360px" };
+const NOTHING_RESERVED = {} as const;
 function stubRoot() {
   root = new Map();
   setProperty = vi.fn((name: string, value: string) => void root.set(name, value));
@@ -233,7 +236,7 @@ describe("ExplainBox — nothing stands on entering a paper (P10-08, review 8.5)
 });
 
 describe("ExplainBox — it opens from the page's explain action only (P10-08, review 8.4)", () => {
-  it("the action opens the selected passage in the dock, and only then is the page's width reserved", async () => {
+  it("the action opens the selected passage in the dock, and the page's width is never reserved — nothing is written (re-aimed, P11-14: was \"…and only then is the page's width reserved\")", async () => {
     const seen: Array<Record<string, string>> = [];
     const run = await scenario(base({ target: inParagraph(first, 400) }), [
       () => seen.push(Object.fromEntries(root)),
@@ -242,7 +245,8 @@ describe("ExplainBox — it opens from the page's explain action only (P10-08, r
     ]);
     await wait();
 
-    expect(seen).toEqual([{}, RESERVED]);
+    expect(seen).toEqual([{}, NOTHING_RESERVED]);
+    expect(setProperty).not.toHaveBeenCalled();
     expect(run.last().dock).toBe(true);
     expect(run.last().passage).toBe(first.passage);
     expect(run.last().status).toBe("answer");
@@ -291,13 +295,13 @@ describe("ExplainBox — it opens from the page's explain action only (P10-08, r
 });
 
 describe("ExplainBox — Close and Escape both close it (P10-08, review 8.5)", () => {
-  it("Close gives the width back, leaves no listener of the keyboard or the pointer, and no window", async () => {
+  it("Close leaves no listener of the keyboard or the pointer, and no window, and has nothing to give back (re-aimed, P11-14: was \"Close gives the width back…\")", async () => {
     const run = await scenario(base({ target: first }), [() => open(), (tree) => close(tree)]);
     await wait();
 
     expect(run.last().card).toBeUndefined();
-    expect(removeProperty).toHaveBeenCalledWith("--explain-dock");
-    expect(removeProperty).toHaveBeenCalledWith("--explain-dock-width");
+    expect(setProperty).not.toHaveBeenCalled();
+    expect(removeProperty).not.toHaveBeenCalled();
     expect(Object.fromEntries(root)).toEqual({});
     expect(listening("keydown")).toBe(0);
     expect(listening("pointerdown")).toBe(0);
@@ -334,15 +338,15 @@ describe("ExplainBox — Close and Escape both close it (P10-08, review 8.5)", (
     run.mounted.unmount();
   });
 
-  it("reopening a passage already explained shows its kept thread, and the width is reserved again", async () => {
+  it("reopening a passage already explained shows its kept thread, and still nothing is reserved (re-aimed, P11-14: was \"…and the width is reserved again\")", async () => {
     const kept = pair(1);
     const run = await scenario(base({ target: first, cachedTurns: kept }), [() => open(), (tree) => close(tree), () => open()]);
     await wait();
 
     expect(run.last().passage).toBe(first.passage);
     expect(run.last().thread?.turns).toEqual(kept);
-    expect(Object.fromEntries(root)).toEqual(RESERVED);
-    expect(setProperty).toHaveBeenCalledTimes(4);
+    expect(Object.fromEntries(root)).toEqual(NOTHING_RESERVED);
+    expect(setProperty).not.toHaveBeenCalled();
     run.mounted.unmount();
   });
 
@@ -371,12 +375,12 @@ describe("ExplainBox — while it is open (P8-02, P9-03b kept)", () => {
     // The window stood on the first passage through the new selection, with no control of its own for it…
     expect(seen).toEqual([first.passage]);
     expect(run.looks.every((l) => l.loose === 0)).toBe(true);
-    // …and the action took the new passage into it: never null on the way, the width never given back.
+    // …and the action took the new passage into it: never null on the way, nothing reserved or given back (re-aimed, P11-14).
     expect(run.looks.filter((l) => l.card).every((l) => l.passage !== null)).toBe(true);
     expect(run.last().passage).toBe(second.passage);
     expect(onAsk).toHaveBeenCalledTimes(1);
     expect(removeProperty).not.toHaveBeenCalled();
-    expect(setProperty).toHaveBeenCalledTimes(2);
+    expect(setProperty).not.toHaveBeenCalled();
     run.mounted.unmount();
   });
 
@@ -396,7 +400,7 @@ describe("ExplainBox — while it is open (P8-02, P9-03b kept)", () => {
     run.mounted.unmount();
   });
 
-  it("follows the window's width: the dock is a card below 1024 (the width given back) and a dock again at 1024 and over", async () => {
+  it("follows the window's width: the dock is a card below 1024 and a dock again at 1024 and over, and nothing is ever reserved (re-aimed, P11-14: was \"…(the width given back)…\")", async () => {
     const seen: Array<{ dock: boolean; root: Record<string, string> }> = [];
     const note: Step = (tree) => seen.push({ dock: look(tree).dock, root: Object.fromEntries(root) });
     const run = await scenario(base({ target: inParagraph(first, 400) }), [
@@ -416,9 +420,9 @@ describe("ExplainBox — while it is open (P8-02, P9-03b kept)", () => {
     await wait();
 
     expect(seen).toEqual([
-      { dock: true, root: RESERVED },
-      { dock: false, root: {} },
-      { dock: true, root: RESERVED },
+      { dock: true, root: NOTHING_RESERVED },
+      { dock: false, root: NOTHING_RESERVED },
+      { dock: true, root: NOTHING_RESERVED },
     ]);
     run.mounted.unmount();
   });
@@ -491,7 +495,7 @@ describe("ExplainBox — a selection of the Summary or an answer is explained li
       expect(run.last().style, target.source).toEqual({ right: 0, width: 360, top: 48, maxHeight: 800 - 48 - 28 });
       expect(run.last().card?.props.source, target.source).toBe(target.source);
       expect(onAsk, target.source).toHaveBeenCalledWith(expect.objectContaining({ passage: target.passage, source: target.source, paragraphId: target.paragraphId, sectionIndex: -1 }));
-      expect(Object.fromEntries(root), target.source).toEqual(RESERVED);
+      expect(Object.fromEntries(root), target.source).toEqual(NOTHING_RESERVED);
       run.mounted.unmount();
     }
   });

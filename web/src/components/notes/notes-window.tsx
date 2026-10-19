@@ -10,9 +10,9 @@
 // notes, 40 px apart, the raised one in front and whole, the column under the explain window. Behind another window it
 // shows its header alone (the editor stays mounted, hidden, so nothing it holds is lost); a press on the header raises it.
 //
-// P10-09d (X-B1): like the explain window it keeps the text column clear — joining the stack takes the shared reserve
-// (`reserveDock`, counted), so the paper's words move out of the column and are never covered; its header and the editor's
-// toolbar carry the window's own surface, so nothing of the text scrolling under them shows through.
+// P10-09d (X-B1): its header and the editor's toolbar carry the window's own surface, so nothing of the text scrolling under them
+// shows through. (P11-14: the paper's words are never covered because the margin is a track of the shell, not because the page
+// reserves a column for the stack.)
 //
 // Its body is the paper's one reading note (`readingNoteFor`, the note the Saved page opens at `/notes/<id>`),
 // in the block editor with the formatting toolbar: the sticky notes' "Note N" headings and their text in order,
@@ -28,7 +28,7 @@ import type { Paper } from "@/types";
 import type { Block, Note, Source } from "@/lib/notes/types";
 import { fileName, toMarkdown, toPlainText, toPrintHtml, toWordHtml } from "@/lib/notes/export";
 import { downloadFile, printHtml } from "@/lib/notes/print";
-import { NOTES_WINDOW_ID, STACK_Z_BASE, holdInPlace, stackRows, useColumn, useWindows } from "@/lib/reader/windows";
+import { NOTES_WINDOW_ID, STACK_Z_BASE, stackRows, useColumn, useWindows } from "@/lib/reader/windows";
 import { mergeText, readingNoteFor, useNotesStore } from "@/store/notes";
 import { NoteEditor } from "./note-editor";
 
@@ -249,12 +249,12 @@ export function NotesWindow({ paper, onClose }: { paper: Paper; onClose: () => v
   // The blocks the editor was started from, or last saw stored: what "unsaved" is measured against.
   const base = useRef<Block[] | null>(null);
 
-  // The window is one of the stack's: it joins when it stands and leaves when it closes. P10-09d (X-B1): joining reserves the
-  // column and the text reflows, so it joins before the first paint (no frame with the window over the words), and the reader's
-  // place — the selected words, else the first paragraph on the screen — is held across the reflow, going and coming.
+  // The window is one of the stack's: it joins when it stands and leaves when it closes. It joins before the first paint (no frame
+  // with the card missing from the stack); nothing is reserved and nothing is held in place — the margin is a track of the shell,
+  // and the paper's words do not move (P11-14).
   useLayoutEffect(() => {
-    holdInPlace({ change: () => useWindows.getState().open({ id: NOTES_WINDOW_ID, kind: "notes", title: "Your notes" }) });
-    return () => holdInPlace({ change: () => useWindows.getState().close(NOTES_WINDOW_ID) });
+    useWindows.getState().open({ id: NOTES_WINDOW_ID, kind: "notes", title: "Your notes" });
+    return () => useWindows.getState().close(NOTES_WINDOW_ID);
   }, []);
   const column = useColumn(true);
   const row = note

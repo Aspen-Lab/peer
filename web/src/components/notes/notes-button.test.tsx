@@ -38,19 +38,29 @@ describe("NotesButtonView — the tab at the right edge", () => {
 
     expect(html.match(/<button\b/g)).toHaveLength(1);
     expect(html).toContain('type="button"');
-    // P7-15: `right-0` became the dock's width with a fallback of 0px — the same edge when no dock is open.
-    for (const cls of ["fixed", "right-[var(--explain-dock-width,0px)]", "hidden", "md:flex"]) expect(html.split('"').some((attr) => attr.split(" ").includes(cls))).toBe(true);
+    // P11-14 (re-aimed, §1c): P7-15 had made `right-0` the dock's width with a fallback of 0px (`right-[var(--explain-dock-width,0px)]`);
+    // nothing is reserved now, so with no card standing the tab is on the window's edge again.
+    for (const cls of ["fixed", "right-0", "hidden", "md:flex"]) expect(html.split('"').some((attr) => attr.split(" ").includes(cls))).toBe(true);
   });
 
-  it("stands beside the AI dock when one is open, not under it: its right edge is the dock's left edge", () => {
-    const html = edge(false);
+  // P11-14 (re-aimed, §1c): was "stands beside the AI dock when one is open, not under it: its right edge is the dock's left edge"
+  // (`right-[var(--explain-dock-width,0px)]`, a property the dock wrote on the document's root). The cards stand in the margin now: while
+  // one stands (the explain card, a sticky, the notes window) the tab stands at the margin's left edge, from its rect; with no margin
+  // registered, at the card's 360 px; with no card, on the window's edge.
+  it("stands beside the cards when one stands in the margin, not under them: at the margin's left edge from its rect, else at the card's 360 px", () => {
+    const beside = renderToStaticMarkup(createElement(NotesButtonView, { variant: "edge", has: false, beside: true, marginLeft: 1080, onOpen: () => {} }));
 
-    // The dock is `z-[70]` and the tab `z-40`, so a tab left at `right: 0` would be hidden by it.
-    // `--explain-dock-width` is set on the document's root while the dock is open (explain-dock.ts) and is
-    // not set otherwise, when the fallback puts the tab on the window's edge as before.
-    expect(html).toContain("right-[var(--explain-dock-width,0px)]");
-    expect(html).not.toMatch(/\bright-0\b/);
-    expect(html).toContain("z-40");
+    // The cards are `z-60` and over, the tab `z-40`, so a tab left at `right: 0` would be hidden by them.
+    expect(beside).toContain("left:1080px");
+    expect(beside).toContain("translateX(-100%)");
+    expect(beside).not.toMatch(/\bright-0\b/);
+    expect(beside).toContain("z-40");
+    const noMargin = renderToStaticMarkup(createElement(NotesButtonView, { variant: "edge", has: false, beside: true, onOpen: () => {} }));
+    expect(noMargin).toContain("right-[min(360px,100vw)]");
+    expect(noMargin).not.toContain("left:");
+    const alone = renderToStaticMarkup(createElement(NotesButtonView, { variant: "edge", has: false, marginLeft: 1080, onOpen: () => {} }));
+    expect(alone).toMatch(/\bright-0\b/);
+    expect(alone).not.toContain("left:");
   });
 
   it("stands clear of the upper right 400px, where the AI dock will sit", () => {
@@ -221,7 +231,8 @@ describe("P10-09b — the edge tab opens the window, the row still navigates", (
   });
 
   it("the open tab stands beside the window, not under it", () => {
-    const html = renderToStaticMarkup(createElement(NotesButtonView, { variant: "edge", has: true, shown: true, onOpen: () => {} }));
+    // P11-14 (re-aimed): `NotesButton` passes `beside` while the window stands (its card is in the stack); the view no longer reads `shown` for the place.
+    const html = renderToStaticMarkup(createElement(NotesButtonView, { variant: "edge", has: true, shown: true, beside: true, onOpen: () => {} }));
     expect(html).toContain('aria-expanded="true"');
     expect(html).toContain("360px");
     const closed = renderToStaticMarkup(createElement(NotesButtonView, { variant: "edge", has: true, onOpen: () => {} }));

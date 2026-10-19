@@ -125,11 +125,14 @@ function stubWindow(width = 1440, height = 900) {
   vi.stubGlobal("window", { ...recorder(), innerWidth: width, innerHeight: height, scrollBy, requestAnimationFrame: (fn: () => void) => setTimeout(fn, 0), cancelAnimationFrame: (id: number) => clearTimeout(id) });
 }
 
-// The document's root, where the page's width is kept clear: what is written and what is taken off.
+// The document's root: what is written on it and what is taken off. P11-14 (re-aimed, §1c; B P11-01 §3.1): the dock used to keep the
+// page's width clear with two custom properties on the root (`--explain-dock` 376px, `--explain-dock-width` 360px). The margin is a grid
+// track of the reader's shell now, so NOTHING is reserved: every assertion below that read "the properties are written / are still
+// there / are taken off" reads "nothing was ever written".
 let root: Map<string, string>;
 let setProperty: ReturnType<typeof vi.fn>;
 let removeProperty: ReturnType<typeof vi.fn>;
-const RESERVED = { "--explain-dock": "376px", "--explain-dock-width": "360px" };
+const NOTHING_RESERVED = {} as const;
 function stubRoot() {
   root = new Map();
   setProperty = vi.fn((name: string, value: string) => void root.set(name, value));
@@ -222,8 +225,8 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     // button either; the page's `explain` action takes the new selection in.
     expect(run.last().explain).toBeUndefined();
     expect(run.last().button).toBeUndefined();
-    // The page's width stays clear, and a press outside the dock closes nothing.
-    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    // Nothing is reserved on the page (re-aimed, P11-14), and a press outside the dock closes nothing.
+    expect(Object.fromEntries(root)).toEqual(NOTHING_RESERVED);
     run.mounted.unmount();
   });
 
@@ -253,11 +256,11 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     expect(run.last().meaning).toBe(SECOND_ANSWER.meaning);
     expect(onAsk).toHaveBeenCalledTimes(1);
     expect(onAsk).toHaveBeenCalledWith(expect.objectContaining({ passage: second.passage, sectionIndex: 1, paragraphIndex: 0 }));
-    // It is the window's now: no button for it, and the width was reserved once and never given back.
+    // It is the window's now: no button for it, and nothing was reserved or given back (re-aimed, P11-14: was "reserved once and never given back").
     expect(run.last().button).toBeUndefined();
-    expect(setProperty).toHaveBeenCalledTimes(2);
+    expect(setProperty).not.toHaveBeenCalled();
     expect(removeProperty).not.toHaveBeenCalled();
-    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    expect(Object.fromEntries(root)).toEqual(NOTHING_RESERVED);
     // …and nothing moved the page.
     expect(scrollBy).not.toHaveBeenCalled();
     run.mounted.unmount();
@@ -372,30 +375,29 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     run.mounted.unmount();
   });
 
-  it("Close closes it and gives the width back — only then — after two passages", async () => {
+  it("Close closes it — only then — after two passages, and writes nothing on the page (re-aimed, P11-14: was \"…gives the width back — only then —…\")", async () => {
     // P8-06 (re-aimed): was "Escape closes it…". With a key and a body a window is always there: Escape clears the
-    // passage back to the empty state with the width still reserved (`explain-box.escape.flow.test.tsx`), and the
-    // width goes back with the Close button.
+    // passage back to the empty state (`explain-box.escape.flow.test.tsx`), and the window goes with the Close button.
     const run = await scenario(base(), [
       (tree) => click(tree),
       selectNext(second, { cached: SECOND_ANSWER }),
       (tree) => click(tree),
       (tree) => {
         expect(removeProperty).not.toHaveBeenCalled();
-        expect(Object.fromEntries(root)).toEqual(RESERVED);
+        expect(Object.fromEntries(root)).toEqual(NOTHING_RESERVED);
         (look(tree).card?.props.onClose as () => void)();
       },
     ]);
     await wait();
 
     expect(run.last().card).toBeUndefined();
-    expect(removeProperty).toHaveBeenCalledWith("--explain-dock");
-    expect(removeProperty).toHaveBeenCalledWith("--explain-dock-width");
+    expect(setProperty).not.toHaveBeenCalled();
+    expect(removeProperty).not.toHaveBeenCalled();
     expect(Object.fromEntries(root)).toEqual({});
     run.mounted.unmount();
   });
 
-  it("Escape after two passages closes the window and gives the width back (re-aimed, P10-08: was \"clears the window back to the empty state: the width stays reserved\" — there is no empty state)", async () => {
+  it("Escape after two passages closes the window and writes nothing on the page (re-aimed, P10-08: was \"clears the window back to the empty state: the width stays reserved\" — there is no empty state; P11-14: nothing to give back)", async () => {
     const kinds: string[] = [];
     const run = await scenario(base(), [
       (tree) => click(tree),
@@ -411,13 +413,13 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
     // No control stands for the selection that is still there: the selection buttons (the page's) and `e` open it again.
     expect(run.last().explain).toBeUndefined();
     expect(run.last().button).toBeUndefined();
-    expect(removeProperty).toHaveBeenCalledWith("--explain-dock");
-    expect(removeProperty).toHaveBeenCalledWith("--explain-dock-width");
+    expect(setProperty).not.toHaveBeenCalled();
+    expect(removeProperty).not.toHaveBeenCalled();
     expect(Object.fromEntries(root)).toEqual({});
     run.mounted.unmount();
   });
 
-  it("the Close button closes it and gives the width back, with a new selection standing", async () => {
+  it("the Close button closes it, with a new selection standing, and nothing is written on the page (re-aimed, P11-14: was \"…and gives the width back…\")", async () => {
     const run = await scenario(base(), [
       (tree) => click(tree),
       selectNext(second, { cached: SECOND_ANSWER }),
@@ -711,12 +713,12 @@ describe("ExplainBox — the window follows the selected paragraph's first line 
       { top: B_TOP, passage: first.passage, turns: kept, status: "answer" },
     ]);
     expect(run.last().style).toEqual({ right: 0, width: 360, top: B_TOP, maxHeight: 900 - B_TOP - 28 });
-    // Never a render without the window from its first opening on; the page's width never given back, nothing scrolled.
+    // Never a render without the window from its first opening on; nothing reserved or given back (re-aimed, P11-14), nothing scrolled.
     expect(fromOpen(run.looks).every((l) => l.card !== undefined)).toBe(true);
-    expect(setProperty).toHaveBeenCalledTimes(2);
+    expect(setProperty).not.toHaveBeenCalled();
     expect(removeProperty).not.toHaveBeenCalled();
     expect(scrollBy).not.toHaveBeenCalled();
-    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    expect(Object.fromEntries(root)).toEqual(NOTHING_RESERVED);
     run.mounted.unmount();
   });
 
@@ -859,7 +861,7 @@ describe("ExplainBox — the window follows the selected paragraph's first line 
 });
 
 describe("ExplainBox — the offered selection is taken into the open window by the page's explain action (P9-03b, ruling §1h.49; re-aimed, P10-08: was the window's own control)", () => {
-  it("the action explains the offered passage in the same window: no close, no intermediate null, the width never given back", async () => {
+  it("the action explains the offered passage in the same window: no close, no intermediate null, nothing reserved or given back (re-aimed, P11-14)", async () => {
     let resolve!: (value: AskResult) => void;
     const onAsk = vi.fn(() => new Promise<AskResult>((r) => (resolve = r)));
     const loading: Array<{ passage: string | null; status: string | null; top: number | undefined }> = [];
@@ -884,7 +886,7 @@ describe("ExplainBox — the offered selection is taken into the open window by 
     expect(fromOpen(run.looks).every((l) => l.passage !== null)).toBe(true);
     expect(run.last().explain).toBeUndefined();
     expect(run.last().style?.top).toBe(B_TOP);
-    expect(setProperty).toHaveBeenCalledTimes(2);
+    expect(setProperty).not.toHaveBeenCalled();
     expect(removeProperty).not.toHaveBeenCalled();
     expect(scrollBy).not.toHaveBeenCalled();
     run.mounted.unmount();

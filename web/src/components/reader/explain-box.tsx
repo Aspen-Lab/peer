@@ -26,13 +26,12 @@
 //
 // An answer already kept for the passage opens at once with no request, with the thread that followed it. Escape, a press outside the
 // window, or a new selection closes the CARD (640 to 1023 px) and the phone's sheet; a selection that merely goes away (a click in the
-// card collapses it) does not. P7-15: the dock is not closed by a press outside it — closing it gives the page its width back, and a
-// page that reflows on the press moves the word under the pointer before the press has chosen it. P8-02 (BACKLOG-31; the owner: "the
-// AI window should stay open", ruling §1h.41 (b)): nor is it closed by a new selection. Once open it stays, with the page's width kept
-// clear, until Escape or Close — the one thing that gives the width back; P10-08: Escape clears the passage AND closes the window
+// card collapses it) does not. P7-15: the dock is not closed by a press outside it — a press is the reader choosing the next word,
+// not asking to be rid of the window. P8-02 (BACKLOG-31; the owner: "the
+// AI window should stay open", ruling §1h.41 (b)): nor is it closed by a new selection. Once open it stays until Escape or Close;
+// P10-08: Escape clears the passage AND closes the window
 // (there is no empty state to go back to). Pressing "Explain this" on a new selection, or `e`, takes that passage into THE SAME window:
-// the session is replaced in place (never null in between, so `reserveDock`'s properties are not taken off and put on again and the
-// page does not reflow), the previous passage's thread staying the store's, kept for its passage. `e` on the open window with the same
+// the session is replaced in place (never null in between, so the card is not closed and opened again), the previous passage's thread staying the store's, kept for its passage. `e` on the open window with the same
 // passage (or none selected) goes to the input. Nothing here links off the page.
 //
 // P9-03b (ruling §1h.49; the owner, "level with the first line of the SELECTED paragraph"): while the window stands from 1024 px, it
@@ -97,7 +96,6 @@ import {
   dockInStack,
   legendHeightPx,
   newHeightGuard,
-  reserveDock,
   resetHeightGuard,
   settleHeight,
 } from "./explain-dock";
@@ -741,7 +739,6 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   // would take into it: the reader's current selection, when it is not the passage already there.
   const placed = open?.selection ?? null;
   const offered = target !== null && target.passage !== placed?.passage ? target : null;
-  const anchor = placed ?? target;
   // P9-03b: the selection the window stands level with: the settled one, else the last one it followed (derived while
   // rendering, like `stale`, so the move is in the same paint as the selection).
   if (target !== null && target !== followed) setFollowed(target);
@@ -800,31 +797,10 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
     };
   }, [placed, following]);
 
-  // P7-15 (R7, Q4): while the box stands as the dock the page keeps its width clear (`reserveDock`),
-  // so the text reflows beside it instead of running under it, and gives the width back when the box
-  // closes or the window narrows below the dock's. The reflow moves the words — a selection deep in a
-  // paper lands hundreds of pixels lower in a narrower column — so, before the next paint, the box
-  // reads where the selection's top is, changes the layout, reads it again and scrolls the page by the
-  // difference: the words stay where the reader's eyes are, and the highlight (the browser's own
-  // selection, which the reflow does not touch) and the button follow them.
-  // P10-08 (review 8.5): the page's width is kept clear only while a passage is open — taken when the dock opens, given back when it
-  // closes; on entering a paper nothing is reserved.
+  // From 1024 px the box stands in the margin (P11-14: one card of the margin's stack). Nothing is reserved for it and nothing moves
+  // when it opens or closes: the margin is a track of the reader's shell, so the paper's words stay where they are and there is no
+  // reflow to hold the selection against (P7-15's measure-before / measure-after and its scroll are retired with the reserve).
   const docked = open !== null && viewport.width >= DOCK_MIN_VIEWPORT_PX;
-  const reserved = useRef<(() => void) | null>(null);
-  useLayoutEffect(() => {
-    if (!docked && reserved.current === null) return;
-    const before = anchor?.measure?.()?.bounds.top;
-    if (docked) reserved.current = reserveDock(typeof document === "undefined" ? null : document.documentElement);
-    else {
-      reserved.current?.();
-      reserved.current = null;
-    }
-    const after = before === undefined ? undefined : anchor?.measure?.()?.bounds.top;
-    if (before !== undefined && after !== undefined && Math.abs(after - before) >= 1) window.scrollBy({ top: after - before, behavior: "instant" });
-    // `anchor` is read as it is when `docked` changes: the window's passage when it opens, the reader's current
-    // selection when it closes (P8-02: a new passage no longer closes the dock, so that is Escape, Close, or a narrower window).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [docked]);
   // P9-17 (ruling §1h.57): the window's whole height must be in view, so its height is read after each commit while the dock
   // stands: `scrollHeight` (the content, whatever `max-height` clips) and the border. It does not depend on where the window is,
   // so the move it causes settles at once. After every commit on purpose: whatever changes what the card holds — a reply, a draft,
@@ -856,14 +832,6 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   useLayoutEffect(
     () => () => {
       if (guardFrame.current !== undefined && typeof window !== "undefined") window.cancelAnimationFrame(guardFrame.current);
-    },
-    [],
-  );
-  // Leaving the paper with the dock open gives the width back — and scrolls nothing: the next page is not this one's.
-  useLayoutEffect(
-    () => () => {
-      reserved.current?.();
-      reserved.current = null;
     },
     [],
   );

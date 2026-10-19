@@ -2,11 +2,11 @@
 // stands level with the paragraph it explains (P8-02; BACKLOG-31, the owner's words, ruling §1h.41 (b)) — P9-03b
 // (ruling §1h.49): level with the SELECTED paragraph.
 //
-// From a window of 1024 px the box is not a card at the selection but a window
-// fixed at the right edge of the screen: flush with the edge, 360 px wide, in the
-// margin the page keeps clear (below), scrolling inside. P10-08 (review 8.5; the owner: no window on entering a paper): it exists only
-// while a passage is open — the selection buttons and `e` open it, Close and Escape close it — and the page's width is kept clear only
-// then (`reserveDock` when it opens, given back when it closes). Once it is open it STAYS open across
+// From a window of 1024 px the box is not a card at the selection but a card in the margin (P11-14: one card of the margin's stack,
+// `lib/reader/windows.ts`, `margin-card.tsx`; where no shell has registered a margin, a window fixed at the right edge: flush with the
+// edge, 360 px wide), scrolling inside. P10-08 (review 8.5; the owner: no window on entering a paper): it exists only
+// while a passage is open — the selection buttons and `e` open it, Close and Escape close it. P11-14: nothing is reserved for it — the
+// margin is a track of the reader's shell, so the paper's words never move when it opens or closes. Once it is open it STAYS open across
 // selections (`explain-box.tsx`), and its top is level with the first line of
 // the PARAGRAPH it stands at (below: the selected one), measured again as the page scrolls and the window
 // resizes:
@@ -244,69 +244,4 @@ export function dockInStack({
   const limit = Math.floor(columnBottomPx(height, legend)) - room - STACK_SLACK_PX;
   const standing = clampTo(paragraphTop, DOCK_TOP_PX, limit - DOCK_STACK_FLOOR_PX);
   return { top: standing, maxHeight: Math.max(limit - standing, DOCK_STACK_FLOOR_PX) };
-}
-
-// ── Making room ───────────────────────────────────────────────────────────
-//
-// The dock covers nothing (Q4): while it is open the page keeps its width clear. P10-09d (X-B1): so does every other floating
-// window at the right — the stickies and the notes window take the same reserve through the stack (`lib/reader/windows.ts`),
-// counted: the properties stay while any of them stands. The box is
-// mounted outside the page's container on purpose (its pixels are the window's, which the
-// container's zoom would scale), so it tells the page through two custom properties on the
-// document's root, written while the dock is open and taken off when it closes:
-//
-//   `--explain-dock`        what the page leaves free at its right: the dock and a gap, 376px.
-//                           `globals.css` pads the shell's <main> by it, so the page container — whose
-//                           width is a cap on the room it is given — is given the room that is left,
-//                           and centres itself in it: the spread moves left and the reading column
-//                           keeps its width where the cap allows, else it narrows; the panel never does.
-//   `--explain-dock-width`  the dock itself, 360px. The notes tab (`notes-button.tsx`) stands at this
-//                           offset from the window's edge, beside the dock instead of under it.
-
-/** The room between the page's right edge and the dock. */
-export const DOCK_GAP_PX = 16;
-
-/** What the page keeps clear: the dock and the gap. */
-export const DOCK_RESERVE_PX = DOCK_WIDTH_PX + DOCK_GAP_PX;
-
-export const DOCK_VAR = "--explain-dock";
-export const DOCK_WIDTH_VAR = "--explain-dock-width";
-
-type StyleRoot = { style?: Pick<CSSStyleDeclaration, "setProperty" | "removeProperty"> } | null | undefined;
-
-/** How many takers hold the reserve on each root (keyed by the root's style, which is what is written to). */
-const takers = new WeakMap<object, number>();
-
-/**
- * Keep the dock's width clear on the page: write the two properties on `root` (the document element)
- * and return what gives the take back. Quiet where there is no root to write to (a server render,
- * a test with a bare document).
- *
- * P10-09d (X-B1; ruling §1h.87 (c)): the reserve is shared and counted. Every floating window at the right — the explain window
- * here (`explain-box.tsx`), the stickies and the notes window through the stack (`lib/reader/windows.ts`) — takes it, the first
- * taker writes the properties, a later one only adds to the count, and the last release takes them off. So the text column is
- * clear of all of them while any stands, and closing one of two leaves the page as it was. A release given twice counts once.
- */
-export function reserveDock(root: StyleRoot): () => void {
-  const style = root?.style;
-  if (!style) return () => {};
-  const held = takers.get(style) ?? 0;
-  takers.set(style, held + 1);
-  if (held === 0) {
-    style.setProperty(DOCK_VAR, `${DOCK_RESERVE_PX}px`);
-    style.setProperty(DOCK_WIDTH_VAR, `${DOCK_WIDTH_PX}px`);
-  }
-  let released = false;
-  return () => {
-    if (released) return;
-    released = true;
-    const left = (takers.get(style) ?? 1) - 1;
-    if (left > 0) {
-      takers.set(style, left);
-      return;
-    }
-    takers.delete(style);
-    style.removeProperty(DOCK_VAR);
-    style.removeProperty(DOCK_WIDTH_VAR);
-  };
 }

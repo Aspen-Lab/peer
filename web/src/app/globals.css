@@ -748,28 +748,6 @@ html[data-mode="dark"] {
   min-width: 0;
 }
 
-/* P7-15 (R7, ruling Q4): the "Explain this?" conversation is a dock at the window's right edge and it
-   must cover nothing, so while it is open the page keeps its width clear. The box (mounted outside
-   the zoomed page container, in the window's own pixels) writes `--explain-dock` on the document's
-   root — the dock's 360px and a 16px gap — and takes it off when it closes (`explain-dock.ts`).
-   The shell's <main> pads its right side by it, so the page container, whose `max-w` is a cap on
-   the room it is given, is given what is left and centres itself in that: at 1440 the spread moves
-   left by 184px and the column gives up 8px of its 640; at 1920 the 1184px spread keeps its widths and
-   moves 188px; at 1280 the column narrows from 640 to 472 — and the panel's track never changes.
-   Padding the shell, not the container, because the container's three caps (xl, 2xl, and Fit's zoom
-   on top of both) are then left exactly as they are: nothing here repeats their arithmetic. Unset,
-   the padding is 0 and nothing moves, on every page. */
-.peer-main-content {
-  padding-right: var(--explain-dock, 0px);
-}
-
-/* P11-10 (B P11-01 §4 C2; ruling §1h.113 (a)): the reader shell has the margin as a track of its own, so nothing is reserved on the page
-   while it stands — the words do not move when a card opens. Until the reserve itself is retired (C4, P11-14) this keeps the shell
-   from being padded twice: the `--explain-dock` padding above is cancelled on a page that holds the shell. C4 deletes both rules. */
-.peer-main-content:has([data-reader-shell]) {
-  padding-right: 0;
-}
-
 /* ── The measure ──────────────────────────────────────────────────────
    A line of prose should run 60–75 characters. The reader asked for that
    with `max-w-[66ch]` and did not get it: `ch` is the width of the digit

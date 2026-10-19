@@ -456,11 +456,12 @@ describe("globals.css — the reader's three panes (P11-10)", () => {
     expect(margin).not.toMatch(/background|border|padding/);
   });
 
-  it("the shell neutralises the old reserve: no second gutter beside the margin's own track", () => {
-    const neutraliser = ruleOf(".peer-main-content:has([data-reader-shell])");
-    expect(neutraliser).toMatch(/padding-right:\s*0;/);
-    // C4 (P11-14) deletes the reserve and this rule with it; until then both stand.
-    expect(css).toMatch(/\.peer-main-content\s*\{\s*padding-right:\s*var\(--explain-dock, 0px\);/);
+  // Re-aimed by the manager at P11-14's landing (§1c; ruling §1h.117): P11-14 retired the reserve, and the neutraliser this case pinned
+  // went with it, as the case's own comment said it would. What it guarded — no second gutter beside the margin's own track — is now the
+  // absence of both rules (and `explain-dock.retired.test.ts` pins the layout side).
+  it("the shell needs no neutraliser: the old reserve is gone, so no second gutter stands beside the margin's own track", () => {
+    expect(css).not.toContain(".peer-main-content");
+    expect(css).not.toMatch(/padding-right:\s*var\(--explain-dock/);
   });
 });
 

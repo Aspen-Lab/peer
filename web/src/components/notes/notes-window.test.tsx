@@ -278,12 +278,17 @@ describe("export in the window", () => {
   });
 });
 
-describe("the notes window reserves the column (P10-09d, X-B1; rule 1)", () => {
+// P11-14 rule 3 (re-aimed, §1c): was "the notes window reserves the column (P10-09d, X-B1; rule 1)" — it joined the stack before the first paint,
+// "holding the reader's place across the reflow" (`holdInPlace`) and took no reserve of its own. The margin is a grid track of the reader's
+// shell now: nothing reflows when the window joins or leaves, so there is no place to hold. It still joins before the first paint, so no
+// frame shows it missing from the stack.
+describe("the notes window joins the stack before the first paint and holds nothing in place (P10-09d, X-B1, rule 1; re-aimed, P11-14)", () => {
   const win = read("src/components/notes/notes-window.tsx");
 
-  it("joins the stack before the first paint, holding the reader's place across the reflow, and takes no reserve of its own", () => {
-    expect(win).toMatch(/useLayoutEffect\(\(\) => \{\s*holdInPlace\(/);
+  it("joins the stack before the first paint, and neither holds the reader's place nor takes a reserve", () => {
+    expect(win).toMatch(/useLayoutEffect\(\(\) => \{\s*useWindows\.getState\(\)\.open\(/);
     expect(win).toContain('useWindows.getState().open({ id: NOTES_WINDOW_ID, kind: "notes"');
+    expect(win).not.toContain("holdInPlace");
     expect(win).not.toContain("reserveDock(");
   });
 });

@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DOCK_BOTTOM_PX, DOCK_STACK_FLOOR_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_VAR, DOCK_WIDTH_VAR, columnBottomPx, dockInStack, legendHeightPx, reserveDock } from "@/components/reader/explain-dock";
+import { beforeEach, describe, expect, it } from "vitest";
+import { DOCK_BOTTOM_PX, DOCK_STACK_FLOOR_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, columnBottomPx, dockInStack, legendHeightPx } from "@/components/reader/explain-dock";
 import { block } from "@/lib/notes/blocks";
-import { EXPLAIN_WINDOW_ID, MIN_FRONT_PX, NOTES_MIN_FRONT_PX, NOTES_WINDOW_ID, WINDOW_HEADER_PX, bindWindowsReserve, columnTop, holdInPlace, stackFrameIn, stackLayout, stackRoom, stackRows, useWindows, type FloatingWindow } from "./windows";
+import { EXPLAIN_WINDOW_ID, MIN_FRONT_PX, NOTES_MIN_FRONT_PX, NOTES_WINDOW_ID, WINDOW_HEADER_PX, columnTop, stackFrameIn, stackLayout, stackRoom, stackRows, useWindows, type FloatingWindow } from "./windows";
 
 // P10-09a (review 7.1a; ruling §1h.78): the windows at the right stand like cascaded cards — only the headers of
 // the ones behind show (each later window offset by a header's height), the raised one in front and full; a header
@@ -200,169 +200,17 @@ describe("stackRows — which windows stand in the column (P10-09c)", () => {
   });
 });
 
-// ── One reserved column for every window at the right (P10-09d, X-B1; ruling §1h.87 (c)) ────────────────────────────
+// ── Retired with the reserve (P11-14, rule 3; B P11-01 §3.1, §4 C4) ───────────────────────────────────────────────────────────────
 //
-// The explain window reserves the dock's column (`--explain-dock`) and the text reflows beside it; the stickies and the notes
-// window stood over the text (A P10-10: about 150 px of every line beside a sticky unreadable at 1440). Now the stack takes the
-// same, counted reserve when its first window registers and gives it back when its last leaves, from 1024 px only.
-
-/** A root that records its properties, and a window whose width and resizes the test drives. */
-function fakeEnv(width = 1440) {
-  const props = new Map<string, string>();
-  const style = {
-    setProperty: (name: string, value: string) => void props.set(name, value),
-    removeProperty: (name: string) => (props.delete(name), ""),
-  };
-  const listeners = new Set<() => void>();
-  const env = {
-    root: { style },
-    width: () => env.w,
-    w: width,
-    onResize: (cb: () => void) => {
-      listeners.add(cb);
-      return () => void listeners.delete(cb);
-    },
-  };
-  const resize = (next: number) => {
-    env.w = next;
-    for (const cb of [...listeners]) cb();
-  };
-  return { env, props, resize, reserved: () => props.has(DOCK_VAR) && props.has(DOCK_WIDTH_VAR) };
-}
-
-describe("every floating window reserves the column (P10-09d, rule 1)", () => {
-  let unbind: (() => void) | undefined;
-  beforeEach(() => useWindows.setState({ windows: [], clock: 0 }));
-  afterEach(() => {
-    unbind?.();
-    unbind = undefined;
-    useWindows.setState({ windows: [], clock: 0 });
-  });
-
-  it("the first window of any kind sets the page's reserve (376 px, the dock's 360 beside it) and the last to leave takes it off", () => {
-    const f = fakeEnv();
-    unbind = bindWindowsReserve(f.env);
-    expect(f.reserved()).toBe(false);
-    useWindows.getState().open(sticky(1));
-    expect(f.props.get(DOCK_VAR)).toBe("376px");
-    expect(f.props.get(DOCK_WIDTH_VAR)).toBe("360px");
-    useWindows.getState().open(sticky(2));
-    useWindows.getState().open({ id: NOTES_WINDOW_ID, kind: "notes", title: "Your notes" });
-    useWindows.getState().close("s1");
-    useWindows.getState().close(NOTES_WINDOW_ID);
-    expect(f.reserved()).toBe(true);
-    useWindows.getState().close("s2");
-    expect(f.reserved()).toBe(false);
-  });
-
-  it("the notes window alone reserves it, as a sticky does", () => {
-    const f = fakeEnv();
-    unbind = bindWindowsReserve(f.env);
-    useWindows.getState().open({ id: NOTES_WINDOW_ID, kind: "notes", title: "Your notes" });
-    expect(f.reserved()).toBe(true);
-    useWindows.getState().close(NOTES_WINDOW_ID);
-    expect(f.reserved()).toBe(false);
-  });
-
-  it("is one reserve shared with the explain window, in every order: the last of them to go takes it off", () => {
-    const f = fakeEnv();
-    unbind = bindWindowsReserve(f.env);
-    // open explain, open sticky, close explain: still reserved; close the sticky: released
-    const explain = reserveDock(f.env.root);
-    useWindows.getState().open(sticky(1));
-    explain();
-    expect(f.reserved()).toBe(true);
-    useWindows.getState().close("s1");
-    expect(f.reserved()).toBe(false);
-    // open sticky, open explain, close sticky: still reserved; close explain: released
-    useWindows.getState().open(sticky(2));
-    const again = reserveDock(f.env.root);
-    useWindows.getState().close("s2");
-    expect(f.reserved()).toBe(true);
-    again();
-    expect(f.reserved()).toBe(false);
-  });
-
-  it("opening a window the explain window's reserve already covers changes nothing on the page", () => {
-    const f = fakeEnv();
-    unbind = bindWindowsReserve(f.env);
-    const explain = reserveDock(f.env.root);
-    const before = [...f.props];
-    useWindows.getState().open(sticky(1));
-    expect([...f.props]).toEqual(before);
-    explain();
-    useWindows.getState().close("s1");
-  });
-
-  it("reserves nothing under 1024 px, and follows the window across it", () => {
-    const f = fakeEnv(900);
-    unbind = bindWindowsReserve(f.env);
-    useWindows.getState().open(sticky(1));
-    expect(f.reserved()).toBe(false);
-    f.resize(1023);
-    expect(f.reserved()).toBe(false);
-    f.resize(1024);
-    expect(f.reserved()).toBe(true);
-    f.resize(800);
-    expect(f.reserved()).toBe(false);
-    f.resize(1440);
-    useWindows.getState().close("s1");
-    expect(f.reserved()).toBe(false);
-  });
-
-  it("an open window on a wide screen that is then narrowed does not unbalance the explain window's own take", () => {
-    const f = fakeEnv(1440);
-    unbind = bindWindowsReserve(f.env);
-    const explain = reserveDock(f.env.root);
-    useWindows.getState().open(sticky(1));
-    f.resize(800);
-    expect(f.reserved()).toBe(true);
-    explain();
-    expect(f.reserved()).toBe(false);
-    f.resize(1440);
-    expect(f.reserved()).toBe(true);
-    useWindows.getState().close("s1");
-    expect(f.reserved()).toBe(false);
-  });
-
-  it("unbinding gives the reserve back", () => {
-    const f = fakeEnv();
-    const off = bindWindowsReserve(f.env);
-    useWindows.getState().open(sticky(1));
-    expect(f.reserved()).toBe(true);
-    off();
-    expect(f.reserved()).toBe(false);
-  });
-
-  it("raising or retitling a window keeps one take, not two", () => {
-    const f = fakeEnv();
-    unbind = bindWindowsReserve(f.env);
-    useWindows.getState().open(sticky(1));
-    useWindows.getState().open(sticky(1));
-    useWindows.getState().raise("s1");
-    useWindows.getState().close("s1");
-    expect(f.reserved()).toBe(false);
-  });
-});
-
-describe("holdInPlace — the reader's words stay where the eyes are (P10-09d, rule 2; P7-15's measure-before / measure-after)", () => {
-  it("measures, changes the layout, measures again and scrolls by the difference", () => {
-    let top = 300;
-    const scroll = vi.fn();
-    holdInPlace({ measure: () => top, change: () => void (top = 520), scroll });
-    expect(scroll).toHaveBeenCalledExactlyOnceWith(220);
-  });
-
-  it("does not scroll for a move under a pixel, nor where there is nothing to measure", () => {
-    const scroll = vi.fn();
-    let top = 300;
-    holdInPlace({ measure: () => top, change: () => void (top = 300.4), scroll });
-    const change = vi.fn();
-    holdInPlace({ measure: () => undefined, change, scroll });
-    expect(change).toHaveBeenCalledTimes(1);
-    expect(scroll).not.toHaveBeenCalled();
-  });
-});
+// Two groups of cases lived here — "every floating window reserves the column (P10-09d, rule 1)", eight cases of `bindWindowsReserve`
+// (the first window of any kind sets the page's 376 px reserve and the last to leave takes it off; one reserve shared with the explain
+// window in every order; nothing under 1024 px; a count that survives a resize; unbinding gives it back), and "holdInPlace — the reader's
+// words stay where the eyes are (P10-09d, rule 2)", two cases of the measure-before / measure-after scroll. The margin is a track of the
+// reader's shell, so no card reserves anything and nothing reflows when one opens: the functions are deleted, and with them these ten
+// cases. What they protected — the words do not move when a card opens — is pinned on the new mechanism: `explain-dock.retired.test.ts`
+// (no reserve, no custom property, no padding on <main>, no scroll compensation in the box or the stack), `explain-box.stack.flow.test.tsx`
+// (opening the explain card writes nothing on the root and scrolls nothing) and `sticky-note.test.tsx` ("a sticky reserves nothing and
+// moves nothing").
 
 // P10-18 (A P10-14 §4 X-B1, B9; ruling §1h.93 (a)): the explain window stands at z 70 over the stack (z 60+), and used to stand over
 // the stickies' headers, their X and the notes window's Export once it, three stickies and the notes window were more than the

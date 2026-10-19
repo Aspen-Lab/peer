@@ -115,7 +115,7 @@ export default function RootLayout({
             on /welcome. <main> carries no padding for either — the masthead
             is in flow and sticky, the thumb bar leaves its own spacer. */}
         <Masthead />
-        <main className="flex-1 peer-main-content">{children}</main>
+        <main className="flex-1">{children}</main>
         <ThumbBar />
         <UndoToast />
         <KeyboardLayer />

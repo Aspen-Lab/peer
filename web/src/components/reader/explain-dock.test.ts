@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { placeCard } from "./explain-box";
 import * as dock from "./explain-dock";
-import { DOCK_BOTTOM_PX, DOCK_GAP_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_RESERVE_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_VAR, DOCK_WIDTH_PX, DOCK_WIDTH_VAR, MASTHEAD_MIN_VIEWPORT_PX, PAGE_ZOOM_ROOT, PAGE_ZOOM_VAR, legendHeightPx, reserveDock } from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_WIDTH_PX, MASTHEAD_MIN_VIEWPORT_PX, PAGE_ZOOM_ROOT, PAGE_ZOOM_VAR, legendHeightPx } from "./explain-dock";
 
 // P7-15 (the owner's R7): the dock's rectangle is built from three numbers that the shell owns —
 // the masthead's height above it, the foot legend's below it, and the width of the card it
@@ -117,99 +117,15 @@ describe("the dock's rectangle against the shell that frames it", () => {
   });
 });
 
-// ── The page makes room (P7-15, R7 / Q4) ──────────────────────────────────
-
-describe("what the page keeps clear while the dock is open", () => {
-  it("is the dock and a 16 px gap: 376 px, named for the page's CSS and for the notes tab", () => {
-    expect(DOCK_GAP_PX).toBe(16);
-    expect(DOCK_RESERVE_PX).toBe(DOCK_WIDTH_PX + DOCK_GAP_PX);
-    expect(DOCK_RESERVE_PX).toBe(376);
-    expect(DOCK_VAR).toBe("--explain-dock");
-    expect(DOCK_WIDTH_VAR).toBe("--explain-dock-width");
-  });
-
-  it("is written on the document's root as two custom properties, and taken off again by what it returns", () => {
-    const style = { setProperty: vi.fn(), removeProperty: vi.fn() };
-    const release = reserveDock({ style });
-
-    expect(style.setProperty).toHaveBeenCalledWith("--explain-dock", "376px");
-    expect(style.setProperty).toHaveBeenCalledWith("--explain-dock-width", "360px");
-    expect(style.removeProperty).not.toHaveBeenCalled();
-    release();
-    expect(style.removeProperty).toHaveBeenCalledWith("--explain-dock");
-    expect(style.removeProperty).toHaveBeenCalledWith("--explain-dock-width");
-  });
-
-  // P10-09d (X-B1; ruling §1h.87 (c)): the reserve is shared by every floating window at the right and counted.
-  it("is counted: the first taker writes the properties, later ones only add to the count, the last release takes them off", () => {
-    const style = { setProperty: vi.fn(), removeProperty: vi.fn() };
-    const root = { style };
-    const a = reserveDock(root);
-    const b = reserveDock(root);
-    const c = reserveDock(root);
-    expect(style.setProperty).toHaveBeenCalledTimes(2);
-    a();
-    b();
-    expect(style.removeProperty).not.toHaveBeenCalled();
-    c();
-    expect(style.removeProperty).toHaveBeenCalledWith("--explain-dock");
-    expect(style.removeProperty).toHaveBeenCalledWith("--explain-dock-width");
-    expect(style.removeProperty).toHaveBeenCalledTimes(2);
-  });
-
-  it("a release given twice counts once, and a new take after the last release writes the properties afresh", () => {
-    const style = { setProperty: vi.fn(), removeProperty: vi.fn() };
-    const root = { style };
-    const a = reserveDock(root);
-    const b = reserveDock(root);
-    a();
-    a();
-    expect(style.removeProperty).not.toHaveBeenCalled();
-    b();
-    expect(style.removeProperty).toHaveBeenCalledTimes(2);
-    const c = reserveDock(root);
-    expect(style.setProperty).toHaveBeenCalledTimes(4);
-    c();
-    expect(style.removeProperty).toHaveBeenCalledTimes(4);
-  });
-
-  it("keeps a count for each root", () => {
-    const one = { setProperty: vi.fn(), removeProperty: vi.fn() };
-    const two = { setProperty: vi.fn(), removeProperty: vi.fn() };
-    const a = reserveDock({ style: one });
-    const b = reserveDock({ style: two });
-    a();
-    expect(one.removeProperty).toHaveBeenCalledTimes(2);
-    expect(two.removeProperty).not.toHaveBeenCalled();
-    b();
-    expect(two.removeProperty).toHaveBeenCalledTimes(2);
-  });
-
-  it("does nothing, and fails at nothing, where there is no root to write to", () => {
-    for (const root of [null, undefined, {}, { style: undefined }]) {
-      expect(() => reserveDock(root as never)()).not.toThrow();
-    }
-  });
-});
-
-describe("the page's width is kept at <main>, in CSS", () => {
-  const css = read("src/app/globals.css");
-
-  it("the shell's <main> is the class the rule names", () => {
-    expect(read("src/app/layout.tsx")).toMatch(/<main className="[^"]*\bpeer-main-content\b[^"]*">/);
-  });
-
-  it("<main> pads its right side by the reserved width, none when nothing is open", () => {
-    const rule = /\.peer-main-content\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
-
-    expect(rule).toMatch(new RegExp(`padding-right:\\s*var\\(${DOCK_VAR},\\s*0px\\);`));
-  });
-
-  it("the custom property the rule reads is the one the dock writes", () => {
-    expect(css).toContain(`var(${DOCK_VAR}, 0px)`);
-    expect(read("src/components/notes/notes-button.tsx")).toContain(`var(${DOCK_WIDTH_VAR},0px)`);
-  });
-});
+// ── Retired with the reserve (P11-14, rule 3; B P11-01 §3.1) ────────────────────────────────────────────────────────────────────────
+//
+// "The page makes room (P7-15, R7 / Q4)" stood here: "what the page keeps clear while the dock is open" — six cases of `reserveDock` (376 px
+// = the dock and a 16 px gap, named `--explain-dock` and `--explain-dock-width`; written on the document's root and taken off by what it
+// returns; counted for the first taker to write and the last release to take off; a release given twice counts once; a count for each
+// root; nothing, and no failure, where there is no root) — and "the page's width is kept at <main>, in CSS" — three cases (<main> carries
+// `peer-main-content`, which pads its right side by the reserved width; the custom property the rule reads is the one the dock writes
+// and the notes tab reads). The margin is a track of the reader's shell now: nothing is reserved, so the functions, the constants and
+// the CSS rule are deleted with these nine cases. Their absence is pinned in `explain-dock.retired.test.ts`.
 
 // ── No window before the reader asks (P10-08, review 8.5) ───────────────────────────────────────────
 
@@ -220,11 +136,14 @@ describe("no empty window stands (P10-08; replaces P8-06's rule for it, whose pi
     expect(read("src/components/reader/explain-dock.ts")).not.toContain(rule);
   });
 
-  it("the page's width is kept clear only by `reserveDock`, which the box calls when a passage opens the dock", () => {
+  // P11-14 (re-aimed, §1c): was "the page's width is kept clear only by `reserveDock`, which the box calls when a passage opens the dock"
+  // (`box.match(/reserveDock\(/g)).toHaveLength(1)`). Nothing is reserved now; the dock's mode is still decided in that one place.
+  it("the dock stands from a window of 1024 px while a passage is open, decided in one place, and the box reserves nothing", () => {
     const box = read("src/components/reader/explain-box.tsx");
 
     expect(box).toContain("const docked = open !== null && viewport.width >= DOCK_MIN_VIEWPORT_PX;");
-    expect(box.match(/reserveDock\(/g)).toHaveLength(1);
+    expect(box.match(/const docked =/g)).toHaveLength(1);
+    expect(box).not.toContain("reserveDock");
   });
 });
 
