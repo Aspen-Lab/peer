@@ -114,6 +114,7 @@ import { useDebouncedQuestions } from "@/components/reader/use-debounced-questio
 import { SectionLinks } from "@/components/reader/evidence-quote";
 import { ReaderTabs } from "@/components/reader/reader-tabs";
 import { useReaderTab } from "@/components/reader/use-reader-tab";
+import { useRestoreReaderPlace } from "@/lib/notes/return-to-paper";
 import { settledQuestions, useReadingQuestionsHydrated } from "@/store/reading-questions";
 import { SelectionToolbar, selectionCanExplain } from "@/components/reader/selection-toolbar";
 import { StickyNotes, useTakeNote } from "@/components/notes/sticky-note";
@@ -941,6 +942,8 @@ function Reader({
   const clearExplain = useCallback(() => selectExplain(null), [selectExplain]);
   const startOfTab = useCallback(() => scrollToTabStart(spread, document), [spread]);
   const { tab, select: selectTab, reveal } = useReaderTab({ hasBody, onChange: clearExplain, atStart: startOfTab });
+  // P11-06 (the owner's item 3): back from the notes page by "Back to paper", the tab and the place the reader left, once.
+  useRestoreReaderPlace({ paperId: paper.id, ready: fromServer, hasBody, tab, select: selectTab });
   // P10-08 (review 8.4): a selection in the Summary or an answer is an explain target too. The body listens for the whole document while
   // Paper digestion is open (its own `onSelect`, below); the Summary tab has no body to listen, so the page does.
   useSelectionListener(hasBody && tab !== "digestion" ? selectExplain : undefined);

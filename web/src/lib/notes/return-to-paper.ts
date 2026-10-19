@@ -36,6 +36,14 @@ export const HEIGHT_SLACK_PX = 16;
 /** How long the restore waits for the page to get its height back, or the paragraph to be on it, before it uses the recorded scroll. */
 export const SETTLE_MS = 3000;
 
+/**
+ * How long, after it has landed, the restore keeps the place while the page settles. For a moment after the reading arrives the page is
+ * still laying itself out: the left pane re-lays itself (with scroll anchoring on, the browser moves the scroll to keep some node of
+ * it still: 47 px, measured, 200 ms after landing) and, in one column, content above the paragraph grows (56 px). So for this long the
+ * browser's anchoring is off and a drift from the landing is put right at the next frame.
+ */
+export const HOLD_MS = 1500;
+
 /** The one key, in this tab's `sessionStorage`. */
 export const RETURN_KEY = "peer-return-to-paper";
 
@@ -249,6 +257,7 @@ export function decideRestore(record: PlaceRecord, now: { height: number; paragr
 /** The page, the clock and the reader, as the restore sees them. */
 export interface PlaceEnv {
   scrollHeight(): number;
+  scrollY(): number;
   /** The top, in the window's pixels, of the paragraph with this id; null where it is not on the page. */
   paragraphTop(id: string): number | null;
   scrollTo(top: number): void;
@@ -260,51 +269,68 @@ export interface PlaceEnv {
   frame(run: () => void): () => void;
   /** Told when the reader scrolls or presses a key; the result stops listening. */
   onUserScroll(run: () => void): () => void;
+  /** Switch the browser's scroll anchoring off; the result switches it back. */
+  hold(): () => void;
 }
 
 /**
  * Put the page back once: after a frame (the reading is on the page, not in the render that put it there), at the recorded scroll or,
  * if the height changed, on the recorded paragraph; waiting up to `SETTLE_MS` for either to be possible, then the recorded scroll.
- * Then the record is cleared. The reader scrolling first leaves the page to them (and clears it too). The result stops the restore
- * without clearing, for a page torn down before it landed.
+ * The record is cleared as it lands. For `HOLD_MS` after, the place is held while the page settles: scroll anchoring is off from the
+ * start until then, and a drift from the landing is put right at the next frame. The reader scrolling or pressing a key first leaves
+ * the page to them (and clears the record too). The result stops it all without clearing, for a page torn down before it landed.
  */
 export function restorePlace(record: PlaceRecord, env: PlaceEnv): () => void {
   const started = env.now();
+  let landedAt: number | null = null;
   let finished = false;
+  let cleared = false;
   let stopFrame: () => void = () => {};
-  const stopUser = env.onUserScroll(() => settle());
+  const release = env.hold();
+  const stopUser = env.onUserScroll(() => finish(true));
 
-  function settle() {
+  function finish(clear: boolean) {
     if (finished) return;
     finished = true;
     stopFrame();
     stopUser();
+    release();
+    if (clear) clearOnce();
+  }
+  function clearOnce() {
+    if (cleared) return;
+    cleared = true;
     env.drop();
   }
 
   const attempt = () => {
     if (finished) return;
+    const now = env.now();
     const landing = decideRestore(record, {
       height: env.scrollHeight(),
       paragraphTop: record.paragraphId === null ? null : env.paragraphTop(record.paragraphId),
     });
-    if (landing.kind === "scroll") env.scrollTo(landing.top);
-    else if (landing.kind === "paragraph") env.scrollBy(landing.by);
-    else if (env.now() - started >= SETTLE_MS) env.scrollTo(record.scrollY);
-    else {
-      stopFrame = env.frame(attempt);
-      return;
+    if (landedAt === null) {
+      if (landing.kind === "wait" && now - started < SETTLE_MS) {
+        stopFrame = env.frame(attempt);
+        return;
+      }
+      if (landing.kind === "scroll") env.scrollTo(landing.top);
+      else if (landing.kind === "paragraph") env.scrollBy(landing.by);
+      else env.scrollTo(record.scrollY);
+      landedAt = now;
+      clearOnce();
+    } else {
+      if (now - landedAt >= HOLD_MS) return finish(false);
+      // Settling: put right only what has moved, so a place that holds is not touched.
+      if (landing.kind === "scroll" && Math.abs(env.scrollY() - landing.top) >= 1) env.scrollTo(landing.top);
+      else if (landing.kind === "paragraph" && Math.abs(landing.by) >= 1) env.scrollBy(landing.by);
     }
-    settle();
+    stopFrame = env.frame(attempt);
   };
   stopFrame = env.frame(attempt);
 
-  return () => {
-    if (finished) return;
-    finished = true;
-    stopFrame();
-    stopUser();
-  };
+  return () => finish(false);
 }
 
 const USER_SCROLL_EVENTS = ["wheel", "touchstart", "keydown", "mousedown"] as const;
@@ -313,6 +339,7 @@ const USER_SCROLL_EVENTS = ["wheel", "touchstart", "keydown", "mousedown"] as co
 export function browserPlaceEnv(): PlaceEnv {
   return {
     scrollHeight: () => document.documentElement.scrollHeight,
+    scrollY: () => window.scrollY,
     paragraphTop: (id) => document.getElementById(id)?.getBoundingClientRect().top ?? null,
     scrollTo: (top) => window.scrollTo({ top, behavior: "instant" }),
     scrollBy: (dy) => window.scrollBy({ top: dy, behavior: "instant" }),
@@ -326,6 +353,14 @@ export function browserPlaceEnv(): PlaceEnv {
       for (const type of USER_SCROLL_EVENTS) window.addEventListener(type, run, { passive: true });
       return () => {
         for (const type of USER_SCROLL_EVENTS) window.removeEventListener(type, run);
+      };
+    },
+    hold: () => {
+      const root = document.documentElement;
+      const was = root.style.overflowAnchor;
+      root.style.overflowAnchor = "none";
+      return () => {
+        root.style.overflowAnchor = was;
       };
     },
   };
@@ -350,16 +385,21 @@ export function useRestoreReaderPlace({
   tab: ReturnTab;
   select: (tab: ReturnTab) => void;
 }): void {
-  // The record is held for this page from the first look; it is cleared in storage only when it has landed, so a page that mounts
+  // The record is held for this page from the first look; it is cleared in storage only as it lands, so a page that mounts
   // and is replaced before the reading arrives leaves it for the one that stays.
   const held = useRef<{ paperId: string; record: PlaceRecord | null } | null>(null);
+  // The restore under way, if any: it outlives the effect below (which runs again as the tab changes) but not the page.
+  const running = useRef<(() => void) | null>(null);
   useEffect(() => {
-    if (held.current?.paperId !== paperId) held.current = { paperId, record: peekPlace(paperId) };
+    if (held.current?.paperId === paperId) return;
+    running.current?.();
+    running.current = null;
+    held.current = { paperId, record: peekPlace(paperId) };
   }, [paperId]);
 
   useEffect(() => {
     const mine = held.current;
-    if (!mine) return;
+    if (!mine || running.current) return;
     const record = mine.record;
     const step = restoreStep(record, { ready, hasBody, tab });
     if (step.kind === "select") {
@@ -368,7 +408,7 @@ export function useRestoreReaderPlace({
     }
     if (step.kind !== "place" || !record) return;
     const env = browserPlaceEnv();
-    return restorePlace(record, {
+    running.current = restorePlace(record, {
       ...env,
       drop: () => {
         mine.record = null;
@@ -376,4 +416,12 @@ export function useRestoreReaderPlace({
       },
     });
   }, [paperId, ready, hasBody, tab, select]);
+
+  useEffect(
+    () => () => {
+      running.current?.();
+      running.current = null;
+    },
+    [],
+  );
 }

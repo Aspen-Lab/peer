@@ -5,6 +5,7 @@ import { tabId } from "@/components/reader/reader-tabs";
 import { READER_TABS } from "@/components/reader/use-reader-tab";
 import {
   HEIGHT_SLACK_PX,
+  HOLD_MS,
   RETURN_KEY,
   SETTLE_MS,
   backTarget,
@@ -267,17 +268,29 @@ describe("where the scroll lands (rule 2)", () => {
   });
 });
 
-/** A page whose frames, clock, scroll and reader are all under the test's hand. */
-function fakeEnv(page: { height: number; paragraphs: Record<string, number> }) {
+/**
+ * A page whose frames, clock, scroll and reader are all under the test's hand. `docY` is where each paragraph stands in the DOCUMENT; its
+ * top in the window is that less the scroll, as in a browser, so a scroll call moves what the next frame sees.
+ */
+function fakeEnv(init: { height: number; scrollY?: number; docY?: Record<string, number> }) {
+  const page = { height: init.height, scrollY: init.scrollY ?? 0, docY: { ...init.docY } as Record<string, number> };
   const frames: Array<() => void> = [];
   let clock = 0;
   const listeners = new Set<() => void>();
+  const anchoring = { off: false };
   const env: PlaceEnv & { calls: string[] } = {
     calls: [],
     scrollHeight: () => page.height,
-    paragraphTop: (id) => page.paragraphs[id] ?? null,
-    scrollTo: (top) => void env.calls.push(`to:${top}`),
-    scrollBy: (dy) => void env.calls.push(`by:${dy}`),
+    scrollY: () => page.scrollY,
+    paragraphTop: (id) => (id in page.docY ? page.docY[id] - page.scrollY : null),
+    scrollTo: (top) => {
+      env.calls.push(`to:${top}`);
+      page.scrollY = top;
+    },
+    scrollBy: (dy) => {
+      env.calls.push(`by:${dy}`);
+      page.scrollY += dy;
+    },
     drop: () => void env.calls.push("drop"),
     now: () => clock,
     frame: (cb) => {
@@ -291,9 +304,16 @@ function fakeEnv(page: { height: number; paragraphs: Record<string, number> }) {
       listeners.add(cb);
       return () => void listeners.delete(cb);
     },
+    hold: () => {
+      anchoring.off = true;
+      return () => {
+        anchoring.off = false;
+      };
+    },
   };
   return {
     env,
+    page,
     frame: (ms = 16) => {
       clock += ms;
       frames.splice(0).forEach((cb) => cb());
@@ -301,81 +321,151 @@ function fakeEnv(page: { height: number; paragraphs: Record<string, number> }) {
     pending: () => frames.length,
     listening: () => listeners.size,
     reader: () => [...listeners].forEach((cb) => cb()),
+    anchoring,
   };
 }
 
 describe("restoring the place once the reading has rendered (rule 2)", () => {
   it("scrolls to the recorded place after the first frame, never before it, once, and then clears the record", () => {
-    const page = fakeEnv({ height: 9000, paragraphs: { "paper-section-2-p3": 300 } });
+    const world = fakeEnv({ height: 9000, docY: { "paper-section-2-p3": 2992 } });
 
-    restorePlace(record(), page.env);
-    expect(page.env.calls).toEqual([]); // nothing in the render itself
-    page.frame();
-    expect(page.env.calls).toEqual(["to:3012", "drop"]);
-    page.frame();
-    page.frame();
-    expect(page.env.calls).toEqual(["to:3012", "drop"]); // once
-    expect(page.pending()).toBe(0);
-    expect(page.listening()).toBe(0);
+    restorePlace(record(), world.env);
+    expect(world.env.calls).toEqual([]); // nothing in the render itself
+    world.frame();
+    expect(world.env.calls).toEqual(["to:3012", "drop"]);
+    world.frame();
+    world.frame();
+    expect(world.env.calls).toEqual(["to:3012", "drop"]); // once: a place that holds is not touched again
   });
 
   it("lands on the recorded paragraph instead when the page's height changed", () => {
-    const page = fakeEnv({ height: 6400, paragraphs: { "paper-section-2-p3": 640 } });
+    const world = fakeEnv({ height: 6400, docY: { "paper-section-2-p3": 640 } });
 
-    restorePlace(record(), page.env);
-    page.frame();
+    restorePlace(record(), world.env);
+    world.frame();
+    world.frame();
 
-    expect(page.env.calls).toEqual(["by:660", "drop"]);
+    // The paragraph stood 20 px above the top of the view; it is 640 below it now: the page moves down by 660, and stays.
+    expect(world.env.calls).toEqual(["by:660", "drop"]);
+    expect(world.env.paragraphTop("paper-section-2-p3")).toBe(-20);
   });
 
   it("waits for the paragraph to be on the page, then lands on it", () => {
-    const world = { height: 1200, paragraphs: {} as Record<string, number> };
-    const page = fakeEnv(world);
+    const world = fakeEnv({ height: 1200 });
 
-    restorePlace(record(), page.env);
-    page.frame();
-    page.frame();
-    expect(page.env.calls).toEqual([]);
-    world.paragraphs["paper-section-2-p3"] = 100;
-    page.frame();
+    restorePlace(record(), world.env);
+    world.frame();
+    world.frame();
+    expect(world.env.calls).toEqual([]);
+    world.page.docY["paper-section-2-p3"] = 100;
+    world.frame();
 
-    expect(page.env.calls).toEqual(["by:120", "drop"]);
+    expect(world.env.calls).toEqual(["by:120", "drop"]);
   });
 
   it("gives up the wait and uses the recorded scroll when nothing to land on ever comes", () => {
-    const page = fakeEnv({ height: 1200, paragraphs: {} });
+    const world = fakeEnv({ height: 1200 });
 
-    restorePlace(record({ tab: "summary", paragraphId: null, paragraphTop: 0 }), page.env);
-    page.frame(SETTLE_MS - 100);
-    expect(page.env.calls).toEqual([]);
-    page.frame(200);
+    restorePlace(record({ tab: "summary", paragraphId: null, paragraphTop: 0 }), world.env);
+    world.frame(SETTLE_MS - 100);
+    expect(world.env.calls).toEqual([]);
+    world.frame(200);
 
-    expect(page.env.calls).toEqual(["to:3012", "drop"]);
+    expect(world.env.calls).toEqual(["to:3012", "drop"]);
   });
 
   it("leaves the page to the reader the moment they scroll, and clears the record", () => {
-    const page = fakeEnv({ height: 1200, paragraphs: {} });
+    const world = fakeEnv({ height: 1200 });
 
-    restorePlace(record(), page.env);
-    page.frame();
-    page.reader();
-    page.frame();
-    page.frame();
+    restorePlace(record(), world.env);
+    world.frame();
+    world.reader();
+    world.frame();
+    world.frame();
 
-    expect(page.env.calls).toEqual(["drop"]);
-    expect(page.pending()).toBe(0);
-    expect(page.listening()).toBe(0);
+    expect(world.env.calls).toEqual(["drop"]);
+    expect(world.pending()).toBe(0);
+    expect(world.listening()).toBe(0);
+    expect(world.anchoring.off).toBe(false);
   });
 
   it("stops without clearing when the page is torn down first (the record is kept for the page that stays)", () => {
-    const page = fakeEnv({ height: 9000, paragraphs: {} });
+    const world = fakeEnv({ height: 9000 });
 
-    const stop = restorePlace(record(), page.env);
+    const stop = restorePlace(record(), world.env);
     stop();
-    page.frame();
+    world.frame();
 
-    expect(page.env.calls).toEqual([]);
-    expect(page.pending()).toBe(0);
-    expect(page.listening()).toBe(0);
+    expect(world.env.calls).toEqual([]);
+    expect(world.pending()).toBe(0);
+    expect(world.listening()).toBe(0);
+    expect(world.anchoring.off).toBe(false);
+  });
+});
+
+describe("holding the place while the page settles (rule 2: it stops where the reader left, not a few lines off)", () => {
+  it("puts right a scroll the browser moved after the landing (scroll anchoring moved it by 47 px, 200 ms on)", () => {
+    const world = fakeEnv({ height: 9000, docY: { "paper-section-2-p3": 2992 } });
+
+    restorePlace(record(), world.env);
+    world.frame();
+    world.page.scrollY = 3012 - 47; // the browser's doing, not the reader's
+    world.frame();
+
+    expect(world.env.calls).toEqual(["to:3012", "drop", "to:3012"]);
+    expect(world.page.scrollY).toBe(3012);
+  });
+
+  it("keeps the recorded paragraph where it stood when content above it grows after the landing (56 px, in one column)", () => {
+    const world = fakeEnv({ height: 6400, docY: { "paper-section-2-p3": 640 } });
+
+    restorePlace(record(), world.env);
+    world.frame();
+    world.page.docY["paper-section-2-p3"] += 56;
+    world.frame();
+
+    expect(world.env.calls).toEqual(["by:660", "drop", "by:56"]);
+    expect(world.env.paragraphTop("paper-section-2-p3")).toBe(-20);
+  });
+
+  it("keeps the browser's scroll anchoring off from the start until the hold ends, then gives it back and stops", () => {
+    const world = fakeEnv({ height: 9000, docY: { "paper-section-2-p3": 2992 } });
+
+    restorePlace(record(), world.env);
+    expect(world.anchoring.off).toBe(true); // before the first frame
+    world.frame();
+    expect(world.anchoring.off).toBe(true); // landed, still settling
+    world.frame(HOLD_MS - 20);
+    expect(world.anchoring.off).toBe(true);
+    world.frame(20);
+
+    expect(world.anchoring.off).toBe(false);
+    expect(world.pending()).toBe(0);
+    expect(world.listening()).toBe(0);
+    // And once it has let go, a later move is the page's own and the reader's.
+    world.page.scrollY = 100;
+    world.frame();
+    expect(world.env.calls).toEqual(["to:3012", "drop"]);
+  });
+
+  it("lets go of the page at once when it is torn down in the hold, or the reader takes over in it", () => {
+    const torn = fakeEnv({ height: 9000, docY: { "paper-section-2-p3": 2992 } });
+    const stop = restorePlace(record(), torn.env);
+    torn.frame();
+    stop();
+    expect(torn.anchoring.off).toBe(false);
+    expect(torn.pending()).toBe(0);
+    torn.page.scrollY = 5;
+    torn.frame();
+    expect(torn.env.calls).toEqual(["to:3012", "drop"]);
+
+    const taken = fakeEnv({ height: 9000, docY: { "paper-section-2-p3": 2992 } });
+    restorePlace(record(), taken.env);
+    taken.frame();
+    taken.reader();
+    taken.page.scrollY = 3500; // the reader's scroll is not put back
+    taken.frame();
+    expect(taken.env.calls).toEqual(["to:3012", "drop"]);
+    expect(taken.anchoring.off).toBe(false);
   });
 });
