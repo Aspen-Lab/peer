@@ -81,7 +81,7 @@ describe("the page puts the boundary round the box (P11-14 rule 5)", () => {
 
   it("wraps the one <ExplainBox> in <ExplainBoundary>, keyed by the paper, so the next paper starts with a working box", () => {
     expect(page).toContain('import { ExplainBoundary } from "@/components/reader/explain-boundary";');
-    const open = page.indexOf("<ExplainBoundary");
+    const open = page.search(/<ExplainBoundary[\s>]/);
     const box = page.indexOf("<ExplainBox");
     const close = page.indexOf("</ExplainBoundary>");
     expect(open).toBeGreaterThan(0);
