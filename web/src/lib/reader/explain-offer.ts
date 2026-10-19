@@ -14,34 +14,74 @@
 // The box is the only writer: it publishes while the selection is settled, is the reader's to explain (a key, or a defined term of
 // the paper), is on the screen, and the viewport is under 768 px; it takes the offer back when any of that stops being true and
 // when the page is left. The bar is the only reader. A server render never sets it, so the server markup has no cell.
+//
+// P11-13 (B P11-03 §2.5; ruling §1h.113 (b) O-5): a second flag of the same kind for the bar's Highlight cell. The explain box keeps
+// publishing its own; the selection toolbar (`selection-toolbar.tsx`) is the writer of this one, while a settled selection on the
+// screen has a Highlight on offer (the page handed a handler and says the selection can be highlighted) and the viewport is under
+// 768 px. The two are independent: the bar shows the cells that are on offer. Take notes on a phone stays deferred.
 
 import { useSyncExternalStore } from "react";
 
-let offered = false;
-const listeners = new Set<() => void>();
+/** One boolean with subscribers: the shape both flags share. */
+function createOffer() {
+  let on = false;
+  const listeners = new Set<() => void>();
+  return {
+    get: () => on,
+    set(next: boolean) {
+      if (on === next) return;
+      on = next;
+      listeners.forEach((listener) => listener());
+    },
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+}
+
+const explain = createOffer();
+const highlight = createOffer();
 
 /** Whether a control is on offer for a settled selection right now. */
 export function explainOffered(): boolean {
-  return offered;
+  return explain.get();
 }
 
 /** The box's word: a control is on offer (`true`) or it is not. Saying what is already so tells nobody. */
 export function setExplainOffer(next: boolean): void {
-  if (offered === next) return;
-  offered = next;
-  listeners.forEach((listener) => listener());
+  explain.set(next);
 }
 
 /** Call `listener` after each change; returns what stops it. */
 export function subscribeExplainOffer(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
+  return explain.subscribe(listener);
 }
 
 /** The bar's read. The server's answer is the live one too: nothing sets the flag on a server, and on the client it is false when the
  *  bar first renders (the box that sets it mounts after), so hydration agrees. */
 export function useExplainOffer(): boolean {
   return useSyncExternalStore(subscribeExplainOffer, explainOffered, explainOffered);
+}
+
+/** Whether a Highlight is on offer for a settled selection right now (P11-13). */
+export function highlightOffered(): boolean {
+  return highlight.get();
+}
+
+/** The selection toolbar's word: a Highlight is on offer (`true`) or it is not. Saying what is already so tells nobody. */
+export function setHighlightOffer(next: boolean): void {
+  highlight.set(next);
+}
+
+/** Call `listener` after each change of the highlight offer; returns what stops it. */
+export function subscribeHighlightOffer(listener: () => void): () => void {
+  return highlight.subscribe(listener);
+}
+
+/** The bar's read of the highlight offer; the same server and hydration rule as `useExplainOffer`. */
+export function useHighlightOffer(): boolean {
+  return useSyncExternalStore(subscribeHighlightOffer, highlightOffered, highlightOffered);
 }

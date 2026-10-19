@@ -31,6 +31,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PaperTerm } from "@/lib/papers/report";
+import { setHighlightOffer } from "@/lib/reader/explain-offer";
 import { MARGIN_CARD_SELECTOR, placeInMargin, useMarginRect, type MarginRect } from "@/lib/reader/margin";
 import { useWindows } from "@/lib/reader/windows";
 import type { ExplainSelection, ViewRect } from "./paper-body";
@@ -270,7 +271,8 @@ export function SelectionToolbar({
   const [mode, setMode] = useState<ActionsMode | null>(null);
   const box = useRef<HTMLDivElement | null>(null);
   const margin = useMarginRect();
-  const buttons = offeredActions({ canExplain, onHighlight, canHighlight }).length;
+  const actions = offeredActions({ canExplain, onHighlight, canHighlight });
+  const buttons = actions.length;
 
   // Where the selection is now, with the cards that stand open beside it; and again after each scroll or resize, each change of the
   // window stack (a sticky opened, raised or closed — once its card has been drawn), each reflow of the page (the dock's reserve is
@@ -328,8 +330,18 @@ export function SelectionToolbar({
     setSizes((current) => (current[key]?.width === next.width && current[key]?.height === next.height ? current : { ...current, [key]: next }));
   }, [drawnMode, buttons]);
 
+  // P11-13 (rule 3): under 768 px the group is not drawn; the thumb bar's Highlight cell stands for it (`explain-offer.ts`) while a
+  // settled selection on the screen has a highlight on offer — the explain box says the same of its own cell. Taken back when any of
+  // that stops being true and when the page is left.
+  const onBar =
+    target !== null && frame !== null && frame.of === target && actions.includes("highlight") && frame.viewport.width < MASTHEAD_MIN_VIEWPORT_PX && frame.bounds.bottom > 0 && frame.bounds.top < frame.viewport.height;
+  useEffect(() => {
+    setHighlightOffer(onBar);
+  }, [onBar]);
+  useEffect(() => () => setHighlightOffer(false), []);
+
   if (!target || !place) return null;
-  const highlight = offeredActions({ canExplain, onHighlight, canHighlight }).includes("highlight") ? () => onHighlight?.(target) : undefined;
+  const highlight = actions.includes("highlight") ? () => onHighlight?.(target) : undefined;
   return (
     <SelectionToolbarView place={place} canExplain={canExplain} onExplain={onExplain} onTakeNote={() => onTakeNote(target)} onHighlight={highlight} innerRef={(el) => (box.current = el)} />
   );

@@ -13,6 +13,11 @@
 // above the bar covered 1,790–2,473 px² of them) — and "3 of 10" waits; ←
 // Briefing and Next → keep their columns. The cell goes with the selection.
 //
+// P11-13 (B P11-03 §2.5; ruling §1h.113 (b) O-5): the selection's actions now come to the bar as cells — [Explain this?] while the
+// explain box has one on offer and [Highlight] while the selection toolbar does (`explain-offer.ts`, one flag each). While either is
+// on offer the cells ARE the rail, each at least 44px tall and one share of its width, and "← Briefing", the position and "Next →"
+// wait; they come back when the selection goes. Take notes on a phone stays deferred.
+//
 // The row of 30px text tabs it replaces sat at the top of every page,
 // including the reading page, under the 44px target the page enforces for
 // its own buttons. Gestures stay in the content (the card and the plate are
@@ -26,7 +31,7 @@ import { useFeedStore } from "@/store/feed";
 import { RouteGlyph } from "@/components/shell/icons";
 import { BackToFeedLink } from "@/components/navigation/back-to-feed-link";
 import { EXPLAIN, RAIL } from "@/components/reader/copy";
-import { useExplainOffer } from "@/lib/reader/explain-offer";
+import { useExplainOffer, useHighlightOffer } from "@/lib/reader/explain-offer";
 import { paperNav } from "@/lib/reader/paper-nav";
 import { readerActions } from "@/lib/reader/reader-keys";
 import {
@@ -123,19 +128,25 @@ function Rail({
   const nav = paperNav(ids, id);
   const positioned = railHasPosition(nav);
   const explaining = useExplainOffer();
+  const highlighting = useHighlightOffer();
+  // P11-13: a selection on offer — the cells are the rail, one share of the width each.
+  if (explaining || highlighting) {
+    return (
+      <div className={`grid h-14 items-center gap-2 px-3 ${explaining && highlighting ? "grid-cols-2" : "grid-cols-1"}`}>
+        {explaining && <ExplainCell />}
+        {highlighting && <HighlightCell />}
+      </div>
+    );
+  }
   return (
     <div className="grid grid-cols-[1fr_auto_1fr] items-center h-14 px-3">
       <BackToFeedLink onBack={onBack} className={`${CELL_CLASS} justify-self-start text-text`}>
         {RAIL.back}
       </BackToFeedLink>
-      {explaining ? (
-        <ExplainCell />
-      ) : (
-        positioned && (
-          <span className="text-body-sm text-text-muted tabular-nums">
-            {RAIL.position(nav.index, nav.total)}
-          </span>
-        )
+      {positioned && (
+        <span className="text-body-sm text-text-muted tabular-nums">
+          {RAIL.position(nav.index, nav.total)}
+        </span>
       )}
       {positioned && (
         // Dimmed, not gone, at the last paper: the Next row in the content
@@ -154,11 +165,11 @@ function Rail({
 }
 
 /**
- * P9-41 (ruling §1h.66): the "Explain this?" control as the rail's centre cell, while a settled selection has one on offer. The pill's
- * words (its accessible name) and the pill's action — the page's own `explain`, what the `e` key calls: the explain window opens for
- * the selection and the box, which then has nothing on offer, takes the cell away. 44px tall (`min-h-11`, bare: the bar is a touch
- * surface by its place), in the 56px rail's middle, where "3 of 10" stood. The mouse-down is cancelled so the press does not take the
- * selection with it — the selection is what is explained.
+ * P9-41 (ruling §1h.66): the "Explain this?" control as a cell of the rail, while a settled selection has one on offer. The pill's words
+ * (its accessible name) and the pill's action — the page's own `explain`, what the `e` key calls: the explain window opens for
+ * the selection and the box, which then has nothing on offer, takes the cell away. 44px tall (`min-h-11`, bare: the bar is a touch surface
+ * by its place), in thumb reach. P11-13: it shares the rail with the Highlight cell and, alone, has the whole of it. The mouse-down is cancelled so the press does not take the selection with
+ * it — the selection is what is explained.
  */
 export function ExplainCell() {
   return (
@@ -167,9 +178,27 @@ export function ExplainCell() {
       data-explain-ask=""
       onMouseDown={(event) => event.preventDefault()}
       onClick={() => readerActions()?.explain?.()}
-      className="col-start-2 justify-self-center inline-flex min-h-11 items-center rounded-full border border-border-strong bg-surface px-4 font-mono text-caption text-heading transition-colors hover:bg-surface-hover"
+      className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-border-strong bg-surface px-4 font-mono text-caption text-heading transition-colors hover:bg-surface-hover"
     >
       {EXPLAIN.ask}
+    </button>
+  );
+}
+
+/**
+ * P11-13 (B P11-03 §2.5; ruling §1h.113 (b) O-5): the "Highlight" cell, while the selection toolbar has a highlight on offer. Its press
+ * is the page's own `highlight` action — what the `h` key calls — and, as the Explain cell's, it leaves the selection where it is.
+ */
+export function HighlightCell() {
+  return (
+    <button
+      type="button"
+      data-highlight-ask=""
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={() => readerActions()?.highlight?.()}
+      className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-border-strong bg-surface px-4 font-mono text-caption text-heading transition-colors hover:bg-surface-hover"
+    >
+      Highlight
     </button>
   );
 }

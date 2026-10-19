@@ -34,7 +34,7 @@ import { BackToFeedLink } from "@/components/navigation/back-to-feed-link";
 import { hasImmediateFeedHistoryEntry } from "@/lib/navigation/feed-history";
 import { NONE } from "@/lib/navigation/card-focus";
 import { paperNav } from "@/lib/reader/paper-nav";
-import { paperKeysFor, registerReaderActions, type ReaderActions } from "@/lib/reader/reader-keys";
+import { paperKeysFor, registerReaderActions, selectionActions, type ReaderActions } from "@/lib/reader/reader-keys";
 import { recommendationLine } from "@/lib/reader/recommendation";
 import { allocatePlateTerms } from "@/lib/papers/plate-terms";
 import { mergeTerms, paperDefinedTermsInReading, routeTermScope, termScopeKey, termScopeOfKey } from "@/lib/papers/terms";
@@ -1234,6 +1234,9 @@ function Reader({
       like,
       undoOrToggleRead,
       ...(hasBody ? { read: readHere, ask: focusFirstEmptyQuestion, explain: openExplain } : {}),
+      // P11-13 (rule 3): `n` takes notes on the selection the page holds, as `e` explains it; inert with none. `h` (highlight) joins here
+      // once the page passes C P11-07's handler: `selectionActions(() => explainTarget, { note: takeNote, highlight: … })`.
+      ...(hasBody ? selectionActions(() => explainTarget, { note: takeNote }) : {}),
       ...(isUploadId ? {} : { open }),
       copy,
       back,

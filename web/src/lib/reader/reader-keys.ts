@@ -21,6 +21,8 @@ export type ReaderAction =
   | "copy"
   | "back"
   | "ask"
+  | "note"
+  | "highlight"
   | "explain";
 
 export interface PaperKey {
@@ -58,6 +60,10 @@ export const PAPER_KEYS: readonly PaperKey[] = [
   // field itself, `q` is a letter — the layer never intercepts a key typed
   // into an input.
   { keys: ["q"], action: "ask", label: "Ask a question about this paper", short: "ask" },
+  // P11-13 (rule 3; owner items 5 and 8; ruling §1h.113 (b) O-4): the selection's other two actions, each on the selection the page
+  // holds exactly as `e` explains it, each inert with nothing selected (`selectionActions`). Typed into a field, they are letters.
+  { keys: ["n"], action: "note", label: "Take notes on the selected passage", short: "notes" },
+  { keys: ["h"], action: "highlight", label: "Highlight the selected passage", short: "highlight" },
   // P3-02b (§1h.3): open "Explain this?" on the selected passage, as its button
   // does. Typed into the box's own input, `e` is a letter.
   { keys: ["e"], action: "explain", label: "Explain the selected passage", short: "explain" },
@@ -139,4 +145,24 @@ export function registerReaderActions(actions: ReaderActions): () => void {
 
 export function readerActions(): ReaderActions | null {
   return current;
+}
+
+/**
+ * P11-13 (rule 3): the keys that act on the selection the page holds — `n` takes notes, `h` highlights — as handlers for the
+ * registry. `current` is read at the press, not at the registration, so a key always acts on the selection of the moment, and with
+ * nothing selected it does nothing. A handler the page does not have leaves its key out (inert): the page passes `highlight` only
+ * once it can highlight. `e` is not here: the explain box owns it (`openRef`). Generic over the page's selection type.
+ */
+export function selectionActions<T>(
+  current: () => T | null,
+  handlers: { note?: (target: T) => void; highlight?: (target: T) => void },
+): Pick<ReaderActions, "note" | "highlight"> {
+  const onSelection = (handler: (target: T) => void) => () => {
+    const target = current();
+    if (target !== null) handler(target);
+  };
+  return {
+    ...(handlers.note ? { note: onSelection(handlers.note) } : {}),
+    ...(handlers.highlight ? { highlight: onSelection(handlers.highlight) } : {}),
+  };
 }
