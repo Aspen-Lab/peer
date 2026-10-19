@@ -73,7 +73,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type Ref } from "react";
 import { hasUserLlmOverride } from "@/lib/feed/ai-tier";
 import { setExplainOffer } from "@/lib/reader/explain-offer";
-import { stackRoom, useWindows } from "@/lib/reader/windows";
+import { EXPLAIN_WINDOW_ID, WINDOW_HEADER_PX, stackFrameIn, stackLayout, useWindows, type FloatingWindow } from "@/lib/reader/windows";
+import { placeInMargin, useMarginStore, type MarginRect } from "@/lib/reader/margin";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import type { ExplainAnswer, ExplainItem } from "@/lib/papers/explain";
 import type { PaperReading } from "@/lib/papers/reading";
@@ -93,13 +94,14 @@ import {
   MODAL_OVER_PAGE,
   PAGE_ZOOM_ROOT,
   PAGE_ZOOM_VAR,
-  dockInStack,
+  columnBottomPx,
   legendHeightPx,
   newHeightGuard,
   resetHeightGuard,
   settleHeight,
 } from "./explain-dock";
 import { EvidenceQuote } from "./evidence-quote";
+import { MarginCardHeader } from "./margin-card";
 import { asItems, firstAnswerMessage, keyToSend, postExplain, moreReply, replyPair, sayMoreOf, type ReplyResult } from "./explain-thread";
 import type { ExplainSelection, ExplainSource, SelectionTarget, ViewRect, ViewRects } from "./paper-body";
 
@@ -250,6 +252,9 @@ export interface Place {
   top?: number;
   bottom?: number;
   maxHeight: number;
+  /** P11-14: the stack's row for the dock: a header tall (`height`) while another card is in front; its z in the stack. */
+  height?: number;
+  zIndex?: number;
 }
 
 /** A phone's sheet takes at most this share of the window's height. */
@@ -308,7 +313,37 @@ function styleOf(place: Place): CSSProperties {
     maxHeight: place.maxHeight,
     ...(place.top !== undefined ? { top: place.top } : {}),
     ...(place.bottom !== undefined ? { bottom: place.bottom } : {}),
+    ...(place.height !== undefined ? { height: place.height } : {}),
+    ...(place.zIndex !== undefined ? { zIndex: place.zIndex } : {}),
   };
+}
+
+// ── The stack ──────────────────────────────────────────────────────────
+
+/** What the box reads of the margin's stack: the cards in the order they stand — this one included, registered or not yet (it registers
+ *  after its first commit and is then the front, where it is laid out until then) — where the cascade started, and the margin's rect. */
+interface StackView {
+  windows: readonly FloatingWindow[];
+  origin: number | null;
+  rect: MarginRect | null;
+}
+
+function readStack(): StackView {
+  const { windows, origin } = useWindows.getState();
+  const ordered = [...windows].sort((a, b) => a.order - b.order);
+  const cards: FloatingWindow[] = ordered.some((w) => w.id === EXPLAIN_WINDOW_ID) ? ordered : [...ordered, { id: EXPLAIN_WINDOW_ID, kind: "explain", title: EXPLAIN.title, order: 0 }];
+  return { windows: cards.map((w, i) => ({ ...w, order: i + 1 })), origin, rect: useMarginStore.getState().rect };
+}
+
+/** The box alone in the stack follows its own paragraph, and the origin it pushes to the store is not news to it. */
+const aloneInStack = (windows: readonly FloatingWindow[]) => windows.length === 1 && windows[0].id === EXPLAIN_WINDOW_ID;
+
+/** The same stack as far as laying it out goes: the same cards of the same kinds in the same order. Its own registering changes nothing. */
+const sameCards = (a: readonly FloatingWindow[], b: readonly FloatingWindow[]) => a.length === b.length && a.every((w, i) => w.id === b[i].id && w.kind === b[i].kind);
+
+/** The band the card stands in: the margin's rect, else the masthead's foot down to the legend's strip at the right edge, 360 px wide. */
+function bandOf(rect: MarginRect | null, viewport: Viewport): MarginRect {
+  return rect ?? { left: viewport.width - DOCK_WIDTH_PX, width: DOCK_WIDTH_PX, top: DOCK_TOP_PX, bottom: columnBottomPx(viewport.height, legendOf(viewport)) };
 }
 
 /** P9-20 (BACKLOG-42): the page's Fit zoom, read from the page container (`--page-zoom`, `usePageZoom`'s number mirrored beside the CSS
@@ -493,6 +528,8 @@ export function ExplainCard({
   source,
   cardRef,
   inputRef,
+  behind,
+  onRaise,
 }: {
   passage: string;
   /** The heading of the section the passage sits in. */
@@ -518,10 +555,42 @@ export function ExplainCard({
   /** The card itself — the one thing that scrolls, and what the sheet's height is read from. */
   cardRef?: Ref<HTMLDivElement>;
   inputRef?: Ref<HTMLTextAreaElement>;
+  /** P11-14: another card of the margin's stack is in front, so only this card's header shows — a header tall, with the big highlighted X at
+   *  the start (O-7), the title and the passage's opening words; a press on it raises the card (`onRaise`). */
+  behind?: boolean;
+  onRaise?: () => void;
 }) {
   const asking = canAsk && status.kind === "answer" ? thread : undefined;
   const full = asking ? threadFull(asking.turns) : false;
   const sendBlocked = (asking?.pending ?? false) || full;
+  if (behind) {
+    // The card is the same element in the same place, a header tall; its body is not drawn (the thread and the draft live in the box's
+    // session, so nothing is lost) and its height is not measured (no `cardRef`) until it is raised.
+    return (
+      <div
+        role="region"
+        aria-label={EXPLAIN.card}
+        data-explain-card=""
+        data-explain-dock=""
+        data-explain-behind=""
+        data-margin-card="explain"
+        tabIndex={-1}
+        style={style}
+        className="fixed z-[70] flex flex-col overflow-hidden border border-r-0 border-border-strong bg-surface outline-none"
+      >
+        <MarginCardHeader
+          title={EXPLAIN.title}
+          headline={previewOf(passage)}
+          closeAt="start"
+          closeLabel={EXPLAIN.close}
+          onRaise={onRaise ?? (() => {})}
+          onClose={onClose}
+          headerAttrs={{ "data-explain-header": "" }}
+          closeAttrs={{ "data-explain-close": "" }}
+        />
+      </div>
+    );
+  }
   return (
     <div
       // P9-20 (BACKLOG-44; A P8-05 §11.8; the owner: "改"): a region, not a dialog. The window is non-modal and never traps the focus (the page
@@ -533,7 +602,7 @@ export function ExplainCard({
       aria-label={EXPLAIN.card}
       data-explain-card=""
       {...(sheet ? { "data-explain-sheet": "" } : {})}
-      {...(dock ? { "data-explain-dock": "" } : {})}
+      {...(dock ? { "data-explain-dock": "", "data-margin-card": "explain" } : {})}
       ref={cardRef}
       // The container can take the focus (never in the tab order), so a script can hand it the focus. It is no control, so it draws no ring.
       tabIndex={-1}
@@ -714,12 +783,24 @@ export interface ExplainBoxProps {
 export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cachedTurns, onReply, onSayMore, onResetThread, openRef }: ExplainBoxProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [viewport, setViewport] = useState<Viewport>(currentViewport);
-  // P10-18: what the other floating windows need below the dock (0 while none stands); a number, so the box re-renders only when the stack's need changes.
-  const [stackRoomPx, setStackRoomPx] = useState(() => stackRoom(useWindows.getState().windows));
+  // P11-14 (rule 4; O-8, BACKLOG-66): the card is one card of the margin's stack. What the box reads of it — the cards that stand, where the
+  // cascade started, the margin's rect — it reads with a store subscription (this box runs on the minimal hook runtime in its tests, which
+  // has no `useSyncExternalStore`). Alone in the stack the box pushes its own origin (below), so a change of the origin alone is not news.
+  const [stack, setStack] = useState<StackView>(readStack);
   useEffect(() => {
-    const read = () => setStackRoomPx(stackRoom(useWindows.getState().windows));
+    const read = () =>
+      setStack((previous) => {
+        const next = readStack();
+        const same = sameCards(previous.windows, next.windows) && previous.rect === next.rect && (previous.origin === next.origin || aloneInStack(next.windows));
+        return same ? previous : next;
+      });
     read();
-    return useWindows.subscribe(read);
+    const stopWindows = useWindows.subscribe(read);
+    const stopMargin = useMarginStore.subscribe(read);
+    return () => {
+      stopWindows();
+      stopMargin();
+    };
   }, []);
   // P9-03b: the last settled selection the reader made — what the window stands level with once the selection itself
   // has gone away (a click in the window collapses it; the window must not jump back from under the pointer).
@@ -967,14 +1048,23 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
       );
   };
 
+  // Opening raises (O-8): pressing Explain on a passage, or `e` on the open card, brings it in front of the cards that stand.
+  const raiseSelf = () => {
+    if (useWindows.getState().windows.some((w) => w.id === EXPLAIN_WINDOW_ID)) useWindows.getState().raise(EXPLAIN_WINDOW_ID);
+  };
+
   const openBox = () => {
     // A selection the window does not hold yet: explain it (in the window, when one is open).
     if (next) {
       start(next);
+      raiseSelf();
       return;
     }
     // Already open, with nothing new selected: `e` goes to the input, to ask the next thing.
-    if (open) inputRef.current?.focus();
+    if (open) {
+      raiseSelf();
+      inputRef.current?.focus();
+    }
   };
 
   const draft = open?.draft ?? "";
@@ -1058,24 +1148,57 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   }, [inBar]);
   useEffect(() => () => setExplainOffer(false), []);
 
+  // The selection the dock stands level with, and where that is now: the selection it follows (`stand`) from 1024 px, the passage it
+  // explains otherwise (P9-03b). Read before the early return below, because the stack's origin is pushed from an effect.
+  const levelSelection = open === null ? null : docked && stand ? stand : open.selection;
+  const levelWith = levelSelection === null ? null : whereOf(levelSelection);
+  // P10-08: a selection in the Summary or an answer has no paragraph of the paper; the card then stands at the masthead's foot.
+  const paragraphTop = levelSelection !== null && levelWith !== null ? levelTopOf(levelSelection, levelWith) : undefined;
+  // R-open (O-6): level with the paragraph, held in the margin's band for the whole of what the card needs — its measured height, and at
+  // least what a card that holds a passage needs to show its header, its controls and two lines of the answer (P9-17, rulings §1h.56,
+  // §1h.57). `placeInMargin` is the margin's own clamp.
+  const band = bandOf(stack.rect, viewport);
+  const levelTop = docked && levelWith !== null ? placeInMargin(band, paragraphTop ?? levelWith.bounds.top, Math.max(cardHeight ?? 0, DOCK_THREAD_FLOOR_PX)) : null;
+
+  // The card joins the stack while it stands at the margin (from 1024 px) and leaves when it closes; opening it raises it (`start`,
+  // `openBox`). Registered after the first commit — until then the render below lays it out as the front of the stack as it is.
+  useEffect(() => {
+    if (!docked) return;
+    useWindows.getState().open({ id: EXPLAIN_WINDOW_ID, kind: "explain", title: EXPLAIN.title });
+    return () => useWindows.getState().close(EXPLAIN_WINDOW_ID);
+  }, [docked]);
+  // Alone in the stack, the card keeps level with its paragraph as the page scrolls: it pushes where that is as the cascade's origin, and
+  // the moment a second card joins the origin is frozen (`useWindows.follow`). With a list of dependencies: it writes the store only.
+  useEffect(() => {
+    if (levelTop !== null) useWindows.getState().follow(levelTop);
+  }, [levelTop]);
+
   // Nothing is drawn until the reader asks: no empty window on entry, no pill beside a selection (review 8.4, 8.5). The window
   // exists only while a passage is open; the selection buttons and `e` open it (`openBox`, through `openRef`).
-  if (!open) return null;
-  // P9-03b: where the window stands level with: the selection it follows (`stand`), measured as of now.
-  const standAt = stand ? whereOf(stand) : null;
-
-  const placedAt = whereOf(open.selection);
-  // The dock stands level with the selected paragraph; the card and the sheet with the passage they explain.
-  const levelWith = docked && standAt ? standAt : placedAt;
-  const levelSelection = docked && stand ? stand : open.selection;
+  if (!open || levelWith === null) return null;
   // P9-17: the whole window stays in view (ruling §1h.57) — its measured height, and at least what a window that holds a passage
   // needs to show its header, its controls and two lines of the answer (ruling §1h.56).
-  const paragraphTop = levelTopOf(levelSelection, levelWith);
   const basePlace = placePanel(levelWith.bounds, viewport, paragraphTop, Math.max(cardHeight ?? 0, DOCK_THREAD_FLOOR_PX));
-  // P10-18 (X-B1, B9): the dock gives the stickies and the notes window their room — it shrinks (its body scrolls inside), so every other window's header stays reachable.
-  const place: Place = basePlace.kind === "dock" && basePlace.top !== undefined
-    ? { ...basePlace, ...dockInStack({ top: basePlace.top, paragraphTop: paragraphTop ?? levelWith.bounds.top, height: viewport.height, legend: legendOf(viewport), room: stackRoomPx }) }
-    : basePlace;
+  // From 1024 px the card is a row of the margin's stack: its top, its height (the whole room while it is in front — it is as tall as its
+  // content up to that and scrolls inside — or a header's while another card is in front) and its z come from the one stack layout the
+  // stickies and the notes window use, in the margin's own left and width (a page without the shell: the right edge, 360 px).
+  let place: Place = basePlace;
+  let behind = false;
+  if (basePlace.kind === "dock") {
+    const row = stackLayout(stack.windows, stackFrameIn(band, aloneInStack(stack.windows) ? levelTop : stack.origin)).find((one) => one.id === EXPLAIN_WINDOW_ID);
+    if (row) {
+      behind = !row.front;
+      place = {
+        kind: "dock",
+        ...(stack.rect ? { left: stack.rect.left } : { right: 0 }),
+        width: stack.rect ? stack.rect.width : DOCK_WIDTH_PX,
+        top: row.top,
+        maxHeight: row.height,
+        zIndex: row.z,
+        ...(behind ? { height: WINDOW_HEADER_PX } : {}),
+      };
+    }
+  }
   const heading = reading.body[open.selection.sectionIndex]?.heading ?? "";
   const threadView: ThreadView | undefined =
     canAsk && onReply && open.status.kind === "answer"
@@ -1102,9 +1225,11 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
       sheet={place.kind === "sheet"}
       dock={place.kind === "dock"}
       source={open.selection.source}
-      cardRef={cardRef}
+      cardRef={behind ? undefined : cardRef}
       inputRef={inputRef}
       style={styleOf(place)}
+      behind={behind}
+      onRaise={raiseSelf}
     />
   );
 }

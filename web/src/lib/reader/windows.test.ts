@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { DOCK_BOTTOM_PX, DOCK_STACK_FLOOR_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, columnBottomPx, dockInStack, legendHeightPx } from "@/components/reader/explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_STACK_FLOOR_PX, DOCK_TOP_PX, columnBottomPx, legendHeightPx } from "@/components/reader/explain-dock";
 import { block } from "@/lib/notes/blocks";
-import { EXPLAIN_WINDOW_ID, MIN_FRONT_PX, NOTES_MIN_FRONT_PX, NOTES_WINDOW_ID, WINDOW_HEADER_PX, columnTop, stackFrameIn, stackLayout, stackRoom, stackRows, useWindows, type FloatingWindow } from "./windows";
+import { EXPLAIN_WINDOW_ID, LEAST_FRONT_PX, MIN_FRONT_PX, NOTES_MIN_FRONT_PX, NOTES_WINDOW_ID, WINDOW_HEADER_PX, stackFrameIn, stackLayout, stackRows, useWindows, type FloatingWindow } from "./windows";
 
 // P10-09a (review 7.1a; ruling §1h.78): the windows at the right stand like cascaded cards — only the headers of
 // the ones behind show (each later window offset by a header's height), the raised one in front and full; a header
@@ -82,15 +82,10 @@ describe("stackLayout", () => {
     expect(stackLayout([w("a", 1), w("b", 2)], { top: 100, bottom: 900, frontHeight: 260, minTop: 48 })[0].top).toBe(100);
   });
 
-  it("moves the column above the explain window when there is room there and none under it", () => {
-    const rows = stackLayout([w("a", 1), w("b", 2), w("c", 3)], { top: 800, bottom: 960, frontHeight: 260, minTop: 48, ceiling: 700 });
-    expect(rows[0].top).toBe(48);
-    expect(rows[2].top + rows[2].height).toBeLessThanOrEqual(700);
-    expect(rows[2].height).toBeGreaterThanOrEqual(160);
-    // No room above either: lifted under the ceiling's reach as far as the screen allows, not above minTop.
-    const tight = stackLayout([w("a", 1), w("b", 2), w("c", 3)], { top: 300, bottom: 360, frontHeight: 260, minTop: 48, ceiling: 200 });
-    expect(tight[0].top).toBeGreaterThanOrEqual(48);
-  });
+  // P11-14 (rule 4; retired, §1c): "moves the column above the explain window when there is room there and none under it" — the column
+  // stepped round the explain window's box (`ceiling`): above it where it fitted, lifted under it where it did not. The explain card is a
+  // card of the stack now and nothing stands over the others, so there is no ceiling; what the case protected — the front keeps a usable
+  // height and the headers stay on the screen — is asserted with the explain card among the windows ("every card's header is reachable…").
 
   it("gives one window the whole front, and fits the front above the bottom", () => {
     expect(stackLayout([w("a", 1)], frame)[0]).toMatchObject({ top: 100, height: 260, front: true });
@@ -101,20 +96,10 @@ describe("stackLayout", () => {
   });
 });
 
-describe("columnTop — under the explain window", () => {
-  it("is the dock's top when no explain window stands", () => {
-    expect(columnTop(null)).toBe(DOCK_TOP_PX);
-  });
-
-  it("is just under the explain window's bottom when one stands", () => {
-    expect(columnTop({ bottom: 300 })).toBe(308);
-  });
-
-  it("is the dock's top plus 400 when the window stands but cannot be measured", () => {
-    expect(columnTop({ bottom: 0 })).toBe(DOCK_TOP_PX + 400);
-    expect(columnTop({ bottom: Number.NaN })).toBe(DOCK_TOP_PX + 400);
-  });
-});
+// P11-14 (rule 4; retired, §1c): "columnTop — under the explain window" — three cases of where the column started: the dock's top with no
+// explain window, just under its bottom (+ 8) when one stood, the dock's top + 400 when it stood but could not be measured. The column
+// does not read the explain window's box any more (it is a card of the stack, and the cascade starts at its origin — R-open, `stackFrameIn`),
+// so `columnTop` is deleted with these three cases.
 
 // P10-09c (review 7.1a, rubric B9): the notes window stands in the same stack as the sticky notes. The layout takes every
 // kind in one cascade: 40 px apart, the last raised in front and whole, the others only their headers; the notes window
@@ -152,20 +137,22 @@ describe("stackLayout — the notes window and the stickies in one cascade (P10-
 
   // The four cases the notes window's own box (`notesWindowBox`, P10-09b) used to answer, re-aimed to the stack (§1c).
   it("the notes window alone stands at the dock's top and takes the height down to the legend", () => {
-    const rows = stackLayout([notes(1)], { top: columnTop(null), bottom: 1000 - 32 - 8, frontHeight: 260, minTop: DOCK_TOP_PX });
+    const rows = stackLayout([notes(1)], { top: DOCK_TOP_PX, bottom: 1000 - 32 - 8, frontHeight: 260, minTop: DOCK_TOP_PX });
     expect(rows[0].top).toBe(DOCK_TOP_PX);
     expect(rows[0].height).toBe(1000 - DOCK_TOP_PX - 32 - 8);
   });
 
-  it("the notes window stands under the explain window with a gap, and takes what is left above the legend", () => {
-    const rows = stackLayout([notes(1)], { top: columnTop({ bottom: 500 }), bottom: 960, frontHeight: 260, minTop: DOCK_TOP_PX });
-    expect(rows[0].top).toBe(500 + 8);
+  // P11-14 (re-aimed, §1c): was "stands under the explain window with a gap" (`columnTop({ bottom: 500 })` = 508). The explain window is no longer
+  // above the column; the same layout is asked of a cascade that starts low (508, the origin R-open gave it).
+  it("the notes window stands where the cascade starts, and takes what is left above the legend", () => {
+    const rows = stackLayout([notes(1)], { top: 508, bottom: 960, frontHeight: 260, minTop: DOCK_TOP_PX });
+    expect(rows[0].top).toBe(508);
     expect(rows[0].height).toBe(960 - 508);
   });
 
-  it("the notes window is lifted, never shrunk below a height you can write in, when the explain window is low", () => {
+  it("the notes window is lifted, never shrunk below a height you can write in, when the cascade starts low (re-aimed, P11-14: was \"when the explain window is low\")", () => {
     expect(NOTES_MIN_FRONT_PX).toBe(240);
-    const rows = stackLayout([notes(1)], { top: columnTop({ bottom: 960 }), bottom: 960, frontHeight: 260, minTop: DOCK_TOP_PX });
+    const rows = stackLayout([notes(1)], { top: 968, bottom: 960, frontHeight: 260, minTop: DOCK_TOP_PX });
     expect(rows[0].height).toBe(NOTES_MIN_FRONT_PX);
     expect(rows[0].top).toBe(960 - NOTES_MIN_FRONT_PX);
   });
@@ -181,12 +168,14 @@ describe("stackRows — which windows stand in the column (P10-09c)", () => {
   const heads = [1, 2].map((n) => block("h3", `Note ${n}`, { anchor: { paperId: "p", paragraphId: `paper-section-0-p${n}`, quote: "q", n } }));
   const sticky = (id: string, order: number) => ({ id, kind: "sticky" as const, title: id, order });
 
-  it("holds the notes window and every sticky whose heading is in the note, and nothing else", () => {
+  // P11-14 (re-aimed, §1c; rule 4): was "holds the notes window and every sticky whose heading is in the note, and nothing else" with an explain
+  // window in the list that the rows left out. The explain card is a card of the stack now (see "stackRows — the explain card is one of the
+  // stack"); what is asserted here is unchanged: a sticky whose heading is gone takes no slot.
+  it("holds the notes window and every sticky whose heading is in the note, and no slot for one whose heading is gone", () => {
     const windows = [
       sticky(heads[0].id, 1),
       sticky("gone", 2),
       { id: NOTES_WINDOW_ID, kind: "notes" as const, title: "Your notes", order: 3 },
-      { id: "e", kind: "explain" as const, title: "Explain", order: 4 },
       sticky(heads[1].id, 5),
     ];
     const rows = stackRows(windows, heads, frame);
@@ -212,124 +201,103 @@ describe("stackRows — which windows stand in the column (P10-09c)", () => {
 // (opening the explain card writes nothing on the root and scrolls nothing) and `sticky-note.test.tsx` ("a sticky reserves nothing and
 // moves nothing").
 
-// P10-18 (A P10-14 §4 X-B1, B9; ruling §1h.93 (a)): the explain window stands at z 70 over the stack (z 60+), and used to stand over
-// the stickies' headers, their X and the notes window's Export once it, three stickies and the notes window were more than the
-// screen. Now it gives the stack room: it shrinks (its body scrolls inside), so every other window's header is reachable.
-describe("every window's header is reachable under the explain window (P10-18, X-B1, B9)", () => {
+// P10-18 (A P10-14 §4 X-B1, B9; ruling §1h.93 (a)): the explain window stood at z 70 over the stack (z 60+), and used to stand over the
+// stickies' headers, their X and the notes window's Export once it, three stickies and the notes window were more than the screen; it
+// gave the stack room (it shrank, `dockInStack`, `stackRoom`) so every other window's header was reachable.
+//
+// P11-14 (rule 4; O-8, BACKLOG-66; re-aimed, §1c): the explain card is a card of the stack. The cases below keep P10-18's, P10-31's
+// scenarios — the six orders in which the dump measured the windows were opened, the short screens, Fit — and their claim: every header
+// stands inside the band and is reachable, 40 px apart, and the front keeps a usable height. They are asked of the one stack layout
+// with the explain card among the windows, where they were asked of the dock's shrinking beside it. Retired with the functions they
+// tested: `stackRoom is what the explain window must leave…` (one case), `dockInStack` (7 cases in explain-dock.test.ts) and the
+// `ceiling` branch of `stackLayout`.
+describe("every card's header is reachable with the explain card in the stack (P10-18, X-B1, B9; re-aimed, P11-14: was \"…under the explain window\")", () => {
   const sticky = (n: number, order: number) => ({ id: `s${n}`, kind: "sticky" as const, title: `Note ${n}`, order });
   const notes = (order: number) => ({ id: NOTES_WINDOW_ID, kind: "notes" as const, title: "Your notes", order });
+  const explain = (order: number) => ({ id: EXPLAIN_WINDOW_ID, kind: "explain" as const, title: "Explain this", order });
 
-  // The six orders of opening the dump measured (A P10-14, `stack-orders`): the explain window is always in front of the stack
-  // (z 70), so what an order changes is which window of the column is the front — a sticky or the notes window — and how many.
+  // The six orders of opening the dump measured (A P10-14, `stack-orders`), now with the explain card where it was opened: first, in the
+  // middle, last, and before or after the notes window — so the front is a sticky, the notes window or the explain card.
   const orders: Array<[string, FloatingWindow[]]> = [
-    ["explain, then 3 stickies", [sticky(1, 1), sticky(2, 2), sticky(3, 3)]],
-    ["3 stickies, then explain", [sticky(1, 1), sticky(2, 2), sticky(3, 3)]],
-    ["explain, then 3 stickies, then the notes window", [sticky(1, 1), sticky(2, 2), sticky(3, 3), notes(4)]],
-    ["3 stickies, then explain, then the notes window", [sticky(1, 1), sticky(2, 2), sticky(3, 3), notes(4)]],
-    ["3 stickies, then the notes window, then explain", [sticky(1, 1), sticky(2, 2), sticky(3, 3), notes(4)]],
-    ["the notes window first, then 3 stickies, explain last", [notes(1), sticky(1, 2), sticky(2, 3), sticky(3, 4)]],
+    ["explain, then 3 stickies", [explain(1), sticky(1, 2), sticky(2, 3), sticky(3, 4)]],
+    ["3 stickies, then explain", [sticky(1, 1), sticky(2, 2), sticky(3, 3), explain(4)]],
+    ["explain, then 3 stickies, then the notes window", [explain(1), sticky(1, 2), sticky(2, 3), sticky(3, 4), notes(5)]],
+    ["3 stickies, then explain, then the notes window", [sticky(1, 1), sticky(2, 2), sticky(3, 3), explain(4), notes(5)]],
+    ["3 stickies, then the notes window, then explain", [sticky(1, 1), sticky(2, 2), sticky(3, 3), notes(4), explain(5)]],
+    ["the notes window first, then 3 stickies, explain last", [notes(1), sticky(1, 2), sticky(2, 3), sticky(3, 4), explain(5)]],
   ];
-
-  /** The page as the column and the explain window read it: the explain window's box from the dock's placement (the
-   *  window's natural height `natural`, as a thread of several answers makes it), the column's frame from that box. */
-  function stand(width: number, height: number, windows: Parameters<typeof stackRoom>[0], paragraphTop: number, natural = 449) {
-    const legend = DOCK_BOTTOM_PX;
-    const plainTop = Math.min(Math.max(paragraphTop, DOCK_TOP_PX), height - legend - Math.max(natural, DOCK_THREAD_FLOOR_PX));
-    const placed = dockInStack({ top: plainTop, paragraphTop, height, legend, room: stackRoom(windows) });
-    const box = { top: placed.top, bottom: placed.top + Math.min(natural, placed.maxHeight) };
-    const frame = { top: columnTop({ bottom: box.bottom }), bottom: columnBottomPx(height, legend), ceiling: Math.floor(box.top), frontHeight: 260, minTop: DOCK_TOP_PX };
-    return { width, box, frame, rows: stackLayout(windows, frame) };
-  }
 
   for (const [width, height] of [[1280, 720], [1440, 1000]] as const) {
     for (const [name, windows] of orders) {
-      it(`${width} × ${height}, ${name}: no header stands under the explain window, and every one is on the screen`, () => {
-        for (const paragraphTop of [48, 243, 296, 450, 700, 900]) {
-          const { box, frame, rows } = stand(width, height, windows, paragraphTop);
+      it(`${width} × ${height}, ${name}: every header is on the screen, inside the band, and the front keeps a usable height`, () => {
+        for (const origin of [48, 243, 296, 450, 700, 900]) {
+          const frame = stackFrameIn({ top: DOCK_TOP_PX, bottom: columnBottomPx(height, DOCK_BOTTOM_PX) }, origin);
+          const rows = stackLayout(windows, frame);
           expect(rows).toHaveLength(windows.length);
           for (const row of rows) {
             const header = { top: row.top, bottom: row.top + WINDOW_HEADER_PX };
-            const clear = header.bottom <= box.top || header.top >= box.bottom;
-            expect(clear, `${name}, paragraph at ${paragraphTop}: header ${header.top}-${header.bottom} against the explain window ${box.top}-${box.bottom}`).toBe(true);
-            expect(header.top).toBeGreaterThanOrEqual(DOCK_TOP_PX);
-            expect(header.bottom).toBeLessThanOrEqual(frame.bottom + 8);
+            expect(header.top, `${name}, origin ${origin}`).toBeGreaterThanOrEqual(DOCK_TOP_PX);
+            expect(header.bottom, `${name}, origin ${origin}`).toBeLessThanOrEqual(frame.bottom);
           }
           // The headers do not stand on each other either: 40 px apart, so each one's X is its own.
           const tops = rows.map((r) => r.top);
-          for (let i = 1; i < tops.length; i += 1) expect(tops[i] - tops[i - 1]).toBeGreaterThanOrEqual(WINDOW_HEADER_PX);
-          // The explain window keeps what it needs to be used: its header, its follow-up field and Send (rule 2).
-          expect(box.bottom - box.top).toBeGreaterThanOrEqual(250);
-          expect(box.bottom).toBeLessThanOrEqual(height - DOCK_BOTTOM_PX);
+          for (let i = 1; i < tops.length; i += 1) expect(tops[i] - tops[i - 1]).toBe(WINDOW_HEADER_PX);
+          // The front keeps what it needs: the notes window 240, a sticky 160, the explain card 250 (its header, its follow-up field and Send).
+          const front = rows[rows.length - 1];
+          const frontKind = windows[windows.length - 1].kind;
+          expect(front.height, `${name}, origin ${origin}`).toBeGreaterThanOrEqual(LEAST_FRONT_PX[frontKind]);
+          expect(front.top + front.height, `${name}, origin ${origin}`).toBeLessThanOrEqual(frame.bottom);
         }
       });
     }
   }
 
-  it("the explain window gives way only as much as the stack needs: the front keeps its usable height beside it", () => {
-    const four = [sticky(1, 1), sticky(2, 2), sticky(3, 3), notes(4)];
-    const { rows } = stand(1280, 720, four, 243);
-    expect(rows[3].height).toBeGreaterThanOrEqual(NOTES_MIN_FRONT_PX);
-    const three = [sticky(1, 1), sticky(2, 2), sticky(3, 3)];
-    expect(stand(1440, 1000, three, 296).rows[2].height).toBeGreaterThanOrEqual(MIN_FRONT_PX);
+  it("the front gives way only as much as the screen needs: the explain card keeps 250, the notes window 240, beside four headers", () => {
+    const four = [sticky(1, 1), sticky(2, 2), sticky(3, 3), explain(4)];
+    expect(stackLayout(four, stackFrameIn({ top: DOCK_TOP_PX, bottom: columnBottomPx(720, DOCK_BOTTOM_PX) }, 243))[3].height).toBeGreaterThanOrEqual(DOCK_STACK_FLOOR_PX);
+    const withNotes = [sticky(1, 1), sticky(2, 2), sticky(3, 3), notes(4)];
+    expect(stackLayout(withNotes, stackFrameIn({ top: DOCK_TOP_PX, bottom: columnBottomPx(720, DOCK_BOTTOM_PX) }, 243))[3].height).toBeGreaterThanOrEqual(NOTES_MIN_FRONT_PX);
+    expect(stackLayout([sticky(1, 1), sticky(2, 2), sticky(3, 3)], stackFrameIn({ top: DOCK_TOP_PX, bottom: columnBottomPx(1000, DOCK_BOTTOM_PX) }, 296))[2].height).toBeGreaterThanOrEqual(MIN_FRONT_PX);
   });
 
-  it("stackRoom is what the explain window must leave: a gap, a header per window behind, and the front's least height", () => {
-    expect(stackRoom([])).toBe(0);
-    expect(stackRoom([sticky(1, 1)])).toBe(8 + MIN_FRONT_PX);
-    expect(stackRoom([sticky(1, 1), sticky(2, 2), sticky(3, 3)])).toBe(8 + 2 * WINDOW_HEADER_PX + MIN_FRONT_PX);
-    expect(stackRoom([sticky(1, 1), sticky(2, 2), sticky(3, 3), notes(4)])).toBe(8 + 3 * WINDOW_HEADER_PX + NOTES_MIN_FRONT_PX);
-    // The notes window behind a sticky: the sticky is the front.
-    expect(stackRoom([notes(1), sticky(1, 2)])).toBe(8 + WINDOW_HEADER_PX + MIN_FRONT_PX);
-    // An explain window in the store is not part of the column.
-    expect(stackRoom([{ id: "e", kind: "explain", title: "Explain", order: 1 }])).toBe(0);
-  });
-
-  it("with the explain window standing and the column unable to rise above it, the column never lifts under it: the front gives way, not the headers", () => {
-    const rows = stackLayout([sticky(1, 1), sticky(2, 2), sticky(3, 3)], { top: 640, bottom: 680, frontHeight: 260, minTop: DOCK_TOP_PX, ceiling: 200 });
-    expect(rows[0].top).toBe(640);
-    expect(rows.every((r) => r.top >= 640)).toBe(true);
-    expect(rows[2].height).toBeGreaterThanOrEqual(WINDOW_HEADER_PX);
+  it("the explain card alone stands level with its origin and takes the room beneath it, as the dock did (P8-02, P9-17)", () => {
+    const band = { top: DOCK_TOP_PX, bottom: columnBottomPx(900, DOCK_BOTTOM_PX) };
+    expect(stackLayout([explain(1)], stackFrameIn(band, 300))[0]).toMatchObject({ top: 300, height: band.bottom - 300, front: true });
+    // Held in the band: never above the masthead's foot.
+    expect(stackLayout([explain(1)], stackFrameIn(band, 10))[0].top).toBe(DOCK_TOP_PX);
   });
 });
 
 // P10-31 (BACKLOG-86, 42): the stack on screens under 560 px high, and in Fit. Measured in the stubbed server (port 4045, an invented PDF,
 // the explain window with two follow-up replies, then stickies and the notes window in five orders): at 1280 × 520 the explain window
 // 48-298 (its floor, scrolling inside), the column 306-480 (the screen's 520 less the 40 px foot); at 1024 × 480 the same, the column
-// ending at 440; every header's X and the notes window's header answered `elementFromPoint`. The arithmetic below is the page's own
-// (the dock's placement, the column's frame, the stack's layout) at those sizes; the numbers are the measured boxes.
-describe("the stack on short screens (P10-31, BACKLOG-86)", () => {
+// ending at 440; every header's X and the notes window's header answered `elementFromPoint`.
+// P11-14 (rule 4; re-aimed, §1c): the explain card is a card of the stack, so these screens are asked of the one layout: every header is
+// on the screen — a header over the legend's strip at the lowest, never one off-screen — and each card's foot is above the foot legend.
+describe("the stack on short screens, with the explain card in it (P10-31, BACKLOG-86; re-aimed, P11-14)", () => {
   const stk = (n: number, order: number) => ({ id: `s${n}`, kind: "sticky" as const, title: `Note ${n}`, order });
   const nts = (order: number) => ({ id: NOTES_WINDOW_ID, kind: "notes" as const, title: "Your notes", order });
+  const exp = (order: number) => ({ id: EXPLAIN_WINDOW_ID, kind: "explain" as const, title: "Explain this", order });
 
-  function stand(height: number, windows: Parameters<typeof stackRoom>[0], paragraphTop: number, legend = DOCK_BOTTOM_PX, natural = 449) {
-    const plainTop = Math.min(Math.max(paragraphTop, DOCK_TOP_PX), height - legend - Math.max(natural, DOCK_THREAD_FLOOR_PX));
-    const placed = dockInStack({ top: plainTop, paragraphTop, height, legend, room: stackRoom(windows) });
-    const box = { top: placed.top, bottom: placed.top + Math.min(natural, placed.maxHeight) };
-    const frame = { top: columnTop({ bottom: box.bottom }), bottom: columnBottomPx(height, legend), ceiling: Math.floor(box.top), frontHeight: 260, minTop: DOCK_TOP_PX };
-    return { box, frame, rows: stackLayout(windows, frame) };
-  }
   const cases: Array<[string, FloatingWindow[]]> = [
-    ["two stickies", [stk(1, 1), stk(2, 2)]],
-    ["the notes window and a sticky", [nts(1), stk(1, 2)]],
-    ["the notes window and two stickies", [nts(1), stk(1, 2), stk(2, 3)]],
+    ["the explain card and two stickies", [exp(1), stk(1, 2), stk(2, 3)]],
+    ["two stickies and the explain card", [stk(1, 1), stk(2, 2), exp(3)]],
+    ["the notes window, a sticky and the explain card", [nts(1), stk(1, 2), exp(3)]],
+    ["the explain card, the notes window and two stickies", [exp(1), nts(2), stk(1, 3), stk(2, 4)]],
   ];
 
-  for (const [height, expected] of [[520, { explainBottom: 298, columnBottom: 480 }], [480, { explainBottom: 298, columnBottom: 440 }]] as const) {
+  for (const [height, columnBottom] of [[520, 480], [480, 440]] as const) {
     for (const [name, windows] of cases) {
-      it(`${height} px high, ${name}: every header is on the screen and clear of the explain window, which keeps its floor`, () => {
-        for (const paragraphTop of [48, 300, 450, 700]) {
-          const { box, frame, rows } = stand(height, windows, paragraphTop);
-          // The explain window keeps what it needs (its header, follow-up field and Send) and stands at the masthead's foot.
-          expect(box.top).toBe(DOCK_TOP_PX);
-          expect(box.bottom - box.top).toBe(DOCK_STACK_FLOOR_PX);
-          expect(box.bottom).toBe(expected.explainBottom);
-          expect(frame.bottom).toBe(expected.columnBottom);
+      it(`${height} px high, ${name}: every header is on the screen, and every card's foot is above the foot legend`, () => {
+        for (const origin of [48, 300, 450, 700]) {
+          const frame = stackFrameIn({ top: DOCK_TOP_PX, bottom: columnBottomPx(height, DOCK_BOTTOM_PX) }, origin);
+          expect(frame.bottom).toBe(columnBottom);
+          const rows = stackLayout(windows, frame);
           expect(rows).toHaveLength(windows.length);
           for (const row of rows) {
-            const header = { top: row.top, bottom: row.top + WINDOW_HEADER_PX };
-            expect(header.top, `a header stands under the explain window: ${header.top}-${header.bottom} against ${box.top}-${box.bottom}`).toBeGreaterThanOrEqual(box.bottom);
-            expect(header.bottom).toBeLessThanOrEqual(frame.bottom);
-            expect(row.top + row.height, "the window's foot is on the screen, above the foot legend").toBeLessThanOrEqual(frame.bottom);
+            expect(row.top, `${name}, origin ${origin}`).toBeGreaterThanOrEqual(DOCK_TOP_PX);
+            expect(row.top + WINDOW_HEADER_PX, `a header is off the screen: ${row.top}`).toBeLessThanOrEqual(height);
+            expect(row.top + row.height, "the card's foot is on the screen, above the foot legend").toBeLessThanOrEqual(height - DOCK_BOTTOM_PX);
           }
           // The column collapses toward its headers rather than leaving the screen: the front is at least a header, the others exactly one.
           const front = rows[rows.length - 1];
@@ -340,28 +308,12 @@ describe("the stack on short screens (P10-31, BACKLOG-86)", () => {
     }
   }
 
-  it("what the explain window must leave is what the measured stack took: 208 px for two stickies, 328 for the notes window and two stickies", () => {
-    expect(stackRoom([stk(1, 1), stk(2, 2)])).toBe(8 + WINDOW_HEADER_PX + MIN_FRONT_PX);
-    expect(stackRoom([stk(1, 1), stk(2, 2)])).toBe(208);
-    expect(stackRoom([nts(1), stk(1, 2)])).toBe(208);
-    expect(stackRoom([nts(1), stk(1, 2), stk(2, 3)])).toBe(8 + 2 * WINDOW_HEADER_PX + MIN_FRONT_PX);
-    expect(stackRoom([stk(1, 1), nts(2)])).toBe(8 + WINDOW_HEADER_PX + NOTES_MIN_FRONT_PX);
-  });
-
-  it("a screen that cannot give the whole room gives what is above the floor: the explain window holds 250 px, the column's front gives way", () => {
-    // 480 px high: the column's foot is 440; 48 + 250 + 8 leaves 134 below the explain window, the room asked is 208 — short by 74.
-    const { box, frame } = stand(480, [stk(1, 1), stk(2, 2)], 48);
-    expect(frame.bottom - (box.bottom + 8)).toBe(134);
-    expect(stackRoom([stk(1, 1), stk(2, 2)]) - 134).toBe(74);
-    expect(box.bottom - box.top).toBe(DOCK_STACK_FLOOR_PX);
-  });
-
-  it("with the explain window and four windows on a screen under 560 px high, no header is lower than the screen", () => {
-    // At 480 the fourth header's foot (466) passes the column's foot (440) by 26 px, into the legend's strip, and stays 14 px above the
-    // screen's end (BACKLOG-86's remainder: a header over the legend's strip, never one off-screen).
-    const four = [stk(1, 1), stk(2, 2), stk(3, 3), nts(4)];
+  it("with the explain card and four more windows on a screen under 560 px high, no header is lower than the screen", () => {
+    // At 480 the fifth header's foot passes the column's foot (440) by up to 26 px, into the legend's strip, and stays above the screen's end
+    // (BACKLOG-86's remainder: a header over the legend's strip, never one off-screen).
+    const five = [exp(1), stk(1, 2), stk(2, 3), stk(3, 4), nts(5)];
     for (const height of [520, 480]) {
-      const { rows } = stand(height, four, 48);
+      const rows = stackLayout(five, stackFrameIn({ top: DOCK_TOP_PX, bottom: columnBottomPx(height, DOCK_BOTTOM_PX) }, 48));
       expect(rows[rows.length - 1].top + WINDOW_HEADER_PX, `${height} px`).toBeLessThanOrEqual(height);
     }
   });
@@ -371,26 +323,27 @@ describe("the stack on short screens (P10-31, BACKLOG-86)", () => {
 // stand on its top, not on a flat 28 px. Measured in the stubbed server, the window grown to its cap by four follow-ups: the legend's box
 // 968-1000 / 1041.4-1080 / 1388.5-1440 at 1440 × 1000 / 1920 × 1080 / 2560 × 1440 (zoom 1.1418 / 1.3784 / 1.8378), the window's bottom on
 // exactly the legend's top — an overlap of 0 px at all three (A P8-05 had 4 / 11 / 23).
-describe("Fit mode: the windows stand on the legend's own top (P10-31, BACKLOG-42)", () => {
+// P11-14 (rule 4; re-aimed, §1c): the cards stand in the band that ends at `columnBottomPx` — the legend's top at the page's zoom less a
+// margin — so in Fit every card, the explain card among them, ends above the legend's own top: an overlap of 0 px, with a margin to spare.
+describe("Fit mode: the cards stand above the legend's own top (P10-31, BACKLOG-42; re-aimed, P11-14)", () => {
   const stk = (n: number, order: number) => ({ id: `s${n}`, kind: "sticky" as const, title: `Note ${n}`, order });
+  const exp = (order: number) => ({ id: EXPLAIN_WINDOW_ID, kind: "explain" as const, title: "Explain this", order });
   const fits: Array<[number, number, number, number]> = [[1440, 1000, 1.1417910447761195, 968], [1920, 1080, 1.3783783783783783, 1041.4], [2560, 1440, 1.837837837837838, 1388.5]];
 
   for (const [width, height, zoom, legendTop] of fits) {
-    it(`${width} × ${height} at zoom ${zoom.toFixed(3)}: the explain window ends on the legend's top (${legendTop}), the column above its box`, () => {
+    it(`${width} × ${height} at zoom ${zoom.toFixed(3)}: the explain card ends above the legend's top (${legendTop}), alone and beside three stickies`, () => {
       const legend = legendHeightPx(zoom);
       expect(height - legend).toBeCloseTo(legendTop, 0);
-      // Alone, grown to its cap: its bottom is the legend's top, overlap 0 where a flat 28 left 4 / 10.6 / 23.5.
-      const alone = dockInStack({ top: 48, paragraphTop: 48, height, legend, room: 0 });
-      expect(alone.top + alone.maxHeight).toBeCloseTo(legendTop, 0);
-      expect(alone.top + alone.maxHeight).toBeLessThanOrEqual(height - legend + 1e-9);
-      expect(alone.top + alone.maxHeight).toBeLessThan(height - DOCK_BOTTOM_PX + 1e-9);
-      // With three stickies beside it the column's foot is above the legend too, and so is the explain window's.
-      const windows = [stk(1, 1), stk(2, 2), stk(3, 3)];
-      const placed = dockInStack({ top: 48, paragraphTop: 48, height, legend, room: stackRoom(windows) });
-      expect(placed.top + placed.maxHeight).toBeLessThanOrEqual(height - legend);
-      const frame = { top: columnTop({ bottom: placed.top + placed.maxHeight }), bottom: columnBottomPx(height, legend), minTop: DOCK_TOP_PX, frontHeight: 260 };
-      expect(frame.bottom).toBeLessThanOrEqual(height - legend);
-      for (const row of stackLayout(windows, frame)) expect(row.top + row.height).toBeLessThanOrEqual(height - legend);
+      const band = { top: DOCK_TOP_PX, bottom: columnBottomPx(height, legend) };
+      expect(band.bottom).toBeLessThanOrEqual(height - legend);
+      // Alone, grown to the cap: its bottom is the band's foot, which is above the legend's top (a flat 28 left 4 / 10.6 / 23.5 px of overlap).
+      const alone = stackLayout([exp(1)], stackFrameIn(band, 48))[0];
+      expect(alone.top + alone.height).toBe(band.bottom);
+      expect(alone.top + alone.height).toBeLessThanOrEqual(height - legend);
+      // With three stickies the column's foot is above the legend too, and so is every card's.
+      for (const windows of [[exp(1), stk(1, 2), stk(2, 3), stk(3, 4)], [stk(1, 1), stk(2, 2), stk(3, 3), exp(4)]]) {
+        for (const row of stackLayout(windows, stackFrameIn(band, 48))) expect(row.top + row.height).toBeLessThanOrEqual(height - legend);
+      }
     });
   }
 

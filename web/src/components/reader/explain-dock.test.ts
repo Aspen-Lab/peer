@@ -209,60 +209,33 @@ describe("settleHeight — the after-every-commit height write cannot run away",
   });
 });
 
-// P10-18 (A P10-14 §4 X-B1; ruling §1h.93 (a)): the explain window gives the stack room.
-describe("dockInStack — the explain window leaves the stack its room (P10-18)", () => {
-  const legend = DOCK_BOTTOM_PX;
-  const room = (behind: number, front = 160) => 8 + behind * 40 + front;
-
-  it("is the plain placement when no window stands (room 0): its top, and down to the legend", () => {
-    expect(dock.dockInStack({ top: 300, paragraphTop: 300, height: 1000, legend, room: 0 })).toEqual({ top: 300, maxHeight: 1000 - 300 - legend });
-    expect(dock.dockInStack({ top: 48, paragraphTop: 10, height: 720, legend, room: 0 })).toEqual({ top: 48, maxHeight: 720 - 48 - legend });
-  });
-
-  it("the column's bottom is the screen less the foot legend and a margin, at least 40 px (windows.ts reads it the same)", () => {
+// P10-18 (A P10-14 §4 X-B1; ruling §1h.93 (a)) had the explain window give the stack room (`dockInStack`): seven cases — the plain
+// placement with no other window (room 0), the column's bottom, the column standing ABOVE the explain window where it fitted, the explain
+// window shrinking to leave the column its room below, its floor (`DOCK_STACK_FLOOR_PX`), never lower than the legend, and not depending on
+// its own measured height — and "the box asks the stack for its room" (one case: `dockInStack(…room: stackRoomPx)` once in the box).
+// P11-14 (rule 4; O-8, BACKLOG-66): the explain card is a card of the stack, so nothing stands over the others and there is nothing to make
+// room for. `dockInStack` and `stackRoom` are deleted with those eight cases; the invariants they protected (every header reachable, the
+// front keeps a usable height, the foot above the legend, in the six orders, on short screens and in Fit) are asserted of the one layout in
+// `windows.test.ts`, and the surviving one — the column's bottom — below.
+describe("columnBottomPx — the band's foot, which every card of the margin stands above (P10-18; margin.ts reads it)", () => {
+  it("is the screen less the foot legend and a margin, at least 40 px", () => {
     expect(dock.columnBottomPx(720, 28)).toBe(720 - 40);
     expect(dock.columnBottomPx(1000, 28 * 1.142)).toBe(1000 - 40);
     expect(dock.columnBottomPx(2000, 28 * 1.838)).toBe(2000 - (Math.ceil(28 * 1.838) + 8));
   });
 
-  it("where the column can stand above the explain window it does: the explain window keeps its place, no higher than the column needs", () => {
-    // 1440 × 1000, one sticky (room 168): the paragraph is low, the column fits above (48 + 168 = 216 <= 300).
-    expect(dock.dockInStack({ top: 300, paragraphTop: 300, height: 1000, legend, room: room(0) })).toEqual({ top: 300, maxHeight: 1000 - 300 - legend });
-    // The window was lifted high by a tall thread: it is brought down just enough to leave the column its place above.
-    expect(dock.dockInStack({ top: 100, paragraphTop: 300, height: 1000, legend, room: room(0) })).toEqual({ top: 48 + room(0), maxHeight: 1000 - 48 - room(0) - legend });
-  });
-
-  it("where the column cannot stand above it, the explain window shrinks to leave the column its room below, level with the paragraph still", () => {
-    // 1440 × 1000, three stickies (room 248), the paragraph at 250 (the column needs 48 + 248 = 296 above): the explain window ends 960 - 2 - 248 = 710 at the lowest.
-    const at = dock.dockInStack({ top: 250, paragraphTop: 250, height: 1000, legend, room: room(2) });
-    expect(at.top).toBe(250);
-    expect(at.top + at.maxHeight).toBe(1000 - 40 - 2 - room(2));
-    // 1280 × 720, three stickies and the notes window (room 368): it shrinks to its floor, from the masthead's foot.
-    const tight = dock.dockInStack({ top: 243, paragraphTop: 243, height: 720, legend, room: room(3, 240) });
-    expect(tight.maxHeight).toBeGreaterThanOrEqual(dock.DOCK_STACK_FLOOR_PX);
-    expect(tight.top + tight.maxHeight).toBeLessThanOrEqual(720 - 40 - 2 - room(3, 240) + 1);
-    expect(tight.top).toBeGreaterThanOrEqual(DOCK_TOP_PX);
-  });
-
-  it("never smaller than its floor, which holds its header, its follow-up field and Send; never lower than the legend", () => {
+  it("the explain card keeps a floor in front when the stack is lifted for it: its header, its follow-up field and Send", () => {
     expect(dock.DOCK_STACK_FLOOR_PX).toBeGreaterThanOrEqual(241);
-    const short = dock.dockInStack({ top: 48, paragraphTop: 48, height: 560, legend, room: room(3, 240) });
-    expect(short.top).toBe(DOCK_TOP_PX);
-    expect(short.maxHeight).toBe(dock.DOCK_STACK_FLOOR_PX);
-  });
-
-  it("does not depend on the window's own measured height: shrinking it cannot unshrink it", () => {
-    const a = dock.dockInStack({ top: 243, paragraphTop: 243, height: 720, legend, room: room(3, 240) });
-    const b = dock.dockInStack({ top: 332, paragraphTop: 243, height: 720, legend, room: room(3, 240) });
-    expect(a).toEqual(b);
+    expect(DOCK_TOP_PX).toBe(48);
   });
 });
 
-describe("the box asks the stack for its room (P10-18)", () => {
-  it("explain-box.tsx places the dock through dockInStack with the stack's room, once", () => {
+describe("the box lays itself out in the stack (P11-14, rule 4)", () => {
+  it("explain-box.tsx lays out through stackLayout once, with the explain card's id, and registers it", () => {
     const box = read("src/components/reader/explain-box.tsx");
-    expect(box.match(/dockInStack\(/g)).toHaveLength(1);
-    expect(box).toMatch(/dockInStack\(\{[^}]*room: stackRoomPx/);
-    expect(box).toMatch(/stackRoom\(useWindows\.getState\(\)\.windows\)/);
+    expect(box.match(/stackLayout\(/g)).toHaveLength(1);
+    expect(box).toContain("EXPLAIN_WINDOW_ID");
+    expect(box).toMatch(/useWindows\.getState\(\)\.open\(\{ id: EXPLAIN_WINDOW_ID, kind: "explain"/);
+    expect(box).toMatch(/useWindows\.getState\(\)\.close\(EXPLAIN_WINDOW_ID\)/);
   });
 });

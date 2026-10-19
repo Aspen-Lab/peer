@@ -227,21 +227,24 @@ describe("ExplainBox — one card of the margin's stack (P11-14 rule 4; O-8, BAC
   });
 
   it("is a header tall, with a way to raise it, when another card is raised over it; a header press raises it back", async () => {
+    const seen: Array<{ behind: unknown; style: Record<string, number | string | undefined> | undefined }> = [];
+    const note: Step = (tree) => seen.push({ behind: cardOf(tree)!.props.behind, style: styleOf(tree) });
     const run = await scenario(base(selection(380, 300)), [
       () => open(),
       () => useWindows.getState().open({ id: "s1", kind: "sticky", title: "Note 1" }),
+      note,
+      (tree) => (cardOf(tree)!.props.onRaise as () => void)(),
+      note,
     ]);
     await wait();
     // The sticky joined after the explain card: it is the front, the explain card a header at the cascade's origin.
-    const behind = cardOf(run.last())!;
-    expect(behind.props.behind).toBe(true);
-    expect(styleOf(run.last())).toMatchObject({ top: 300, maxHeight: WINDOW_HEADER_PX, zIndex: 60 });
-    (behind.props.onRaise as () => void)();
-    await wait();
-    const front = cardOf(run.last())!;
-    expect(front.props.behind).toBeFalsy();
+    expect(seen[0].behind).toBe(true);
+    expect(seen[0].style).toMatchObject({ top: 300, maxHeight: WINDOW_HEADER_PX, zIndex: 60 });
+    // A press on its header raises it back over the sticky: whole again, in front.
+    expect(seen[1].behind).toBeFalsy();
     const order = (id: string) => useWindows.getState().windows.find((w) => w.id === id)!.order;
     expect(order(EXPLAIN_WINDOW_ID)).toBeGreaterThan(order("s1"));
+    expect(styleOf(run.last())!.zIndex).toBe(61);
     run.mounted.unmount();
   });
 
@@ -268,15 +271,21 @@ describe("ExplainBox — one card of the margin's stack (P11-14 rule 4; O-8, BAC
   });
 
   it("Escape closes it and a press outside it closes nothing, as before (the order of Escape is unchanged)", async () => {
-    const run = await scenario(base(selection(380, 300)), [() => open()]);
-    await wait();
-    fire("pointerdown", { target: { closest: () => null } });
-    await wait();
-    expect(explainRegistered()).toBeDefined();
     const escape = { key: "Escape", defaultPrevented: false, preventDefault: vi.fn(), stopPropagation: vi.fn() };
-    fire("keydown", escape);
+    const stood: boolean[] = [];
+    const run = await scenario(base(selection(380, 300)), [
+      () => open(),
+      () => fire("pointerdown", { target: { closest: () => null } }),
+      () => stood.push(explainRegistered() !== undefined),
+      () => fire("keydown", escape),
+    ]);
     await wait();
+    // The press outside closed nothing: the card stood, and was in the stack, after it.
+    expect(stood).toEqual([true]);
+    // Escape closed it, as it always did (and went no further), and the card left the stack.
     expect(escape.preventDefault).toHaveBeenCalled();
+    expect(escape.stopPropagation).toHaveBeenCalled();
+    expect(cardOf(run.last())).toBeUndefined();
     expect(explainRegistered()).toBeUndefined();
     run.mounted.unmount();
   });

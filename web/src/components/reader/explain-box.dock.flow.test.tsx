@@ -26,9 +26,15 @@ import type { ExplainTurn } from "@/store/explain-threads";
 import { EXPLAIN } from "./copy";
 import { ExplainBox, ExplainCard, placeCard, type AskResult, type ThreadView } from "./explain-box";
 import { explainOffered } from "@/lib/reader/explain-offer";
-import { legendHeightPx } from "./explain-dock";
+import { columnBottomPx, legendHeightPx } from "./explain-dock";
 import type { ReplyResult } from "./explain-thread";
 import type { ExplainSelection } from "./paper-body";
+
+// P11-14 (re-aimed, §1c; rule 4): the dock's bottom was the legend's top (`height − legend`). The explain card is a card of the margin's
+// stack now and stands in its band, which ends at `columnBottomPx` — the legend's top less a margin (8 px; never nearer than 40 px to
+// the screen's foot): 860 on a 900-px screen with the legend at its flat 28. Every number below that ended on the legend's top ends there,
+// and the card stands at the stack's base z (60), where it stood over the stack at 70.
+const FOOT = (height: number, legend = 28) => columnBottomPx(height, legend);
 
 const SENTENCE = "We define the rafting ratio as the fraction of the gauge length covered by plates.";
 const term: PaperTerm = { term: "rafting ratio", definition: SENTENCE, evidence: SENTENCE, evidenceWhere: "2 Methods", sectionId: "s2", page: 2 };
@@ -541,7 +547,7 @@ describe("ExplainBox — the window stands level with the explained paragraph's 
     await wait();
 
     // No `bottom`: the window is as tall as what it holds, at most what is left below its top.
-    expect(run.last().style).toEqual({ right: 0, width: 360, top: 400, maxHeight: 900 - 400 - 28 });
+    expect(run.last().style).toEqual({ right: 0, width: 360, top: 400, maxHeight: FOOT(900) - 400, zIndex: 60 });
     expect(run.last().dock).toBe(true);
     run.mounted.unmount();
   });
@@ -561,19 +567,19 @@ describe("ExplainBox — the window stands level with the explained paragraph's 
     await wait();
 
     expect(run.last().status).toBe("none");
-    expect(run.last().style).toMatchObject({ right: 0, top: 330, maxHeight: 900 - 330 - 28 });
+    expect(run.last().style).toMatchObject({ right: 0, top: 330, maxHeight: FOOT(900) - 330 });
     run.mounted.unmount();
   });
 
   it("stays under the masthead while the paragraph is scrolled above it, and 360 px above the legend while it is far below (re-aimed, P9-17: a window that holds a passage keeps its header, its controls and two lines; was 160)", async () => {
     const above = await scenario(base({ target: inParagraph(first, -700) }), [(tree) => click(tree)]);
     await wait();
-    expect(above.last().style).toMatchObject({ top: 48, maxHeight: 900 - 48 - 28 });
+    expect(above.last().style).toMatchObject({ top: 48, maxHeight: FOOT(900) - 48 });
     above.mounted.unmount();
 
     const below = await scenario(base({ target: inParagraph(first, 4000) }), [(tree) => click(tree)]);
     await wait();
-    expect(below.last().style).toMatchObject({ top: 900 - 28 - 360, maxHeight: 360 });
+    expect(below.last().style).toMatchObject({ top: FOOT(900) - 360, maxHeight: 360 });
     below.mounted.unmount();
   });
 
@@ -625,7 +631,7 @@ describe("ExplainBox — the window stands level with the explained paragraph's 
 
     // Opened where the paragraph was read; then wherever the page puts it, held between 48 and 512 (900 − 28 − 360; re-aimed,
     // P9-17: it was 712, 900 − 28 − 160, the floor of a window with nothing in it).
-    expect(tops).toEqual([400, 300, 48, 512, 480]);
+    expect(tops).toEqual([400, 300, 48, FOOT(900) - 360, 480]);
     run.mounted.unmount();
   });
 
@@ -646,9 +652,9 @@ describe("ExplainBox — the window stands level with the explained paragraph's 
     ]);
     await wait();
 
-    // 600 − 28 − 360 = 212 is as low as it may stand; the paragraph at 500 is lower; the height is what is left of it
+    // The band ends at 600 − 40 = 560, so 560 − 360 = 200 is as low as it may stand; the paragraph at 500 is lower; the height is what is left of it
     // (re-aimed, P9-17: it was 412 and 160, the floor of a window with nothing in it).
-    expect(styles).toEqual([{ right: 0, width: 360, top: 212, maxHeight: 360 }]);
+    expect(styles).toEqual([{ right: 0, width: 360, top: FOOT(600) - 360, maxHeight: 360, zIndex: 60 }]);
     run.mounted.unmount();
   });
 
@@ -657,7 +663,7 @@ describe("ExplainBox — the window stands level with the explained paragraph's 
     await wait();
 
     expect(first.paragraph).toBeUndefined();
-    expect(run.last().style).toEqual({ right: 0, width: 360, top: first.bounds.top, maxHeight: 900 - first.bounds.top - 28 });
+    expect(run.last().style).toEqual({ right: 0, width: 360, top: first.bounds.top, maxHeight: FOOT(900) - first.bounds.top, zIndex: 60 });
     run.mounted.unmount();
   });
 
@@ -712,7 +718,7 @@ describe("ExplainBox — the window follows the selected paragraph's first line 
       { top: 400, passage: first.passage, turns: kept, status: "answer" },
       { top: B_TOP, passage: first.passage, turns: kept, status: "answer" },
     ]);
-    expect(run.last().style).toEqual({ right: 0, width: 360, top: B_TOP, maxHeight: 900 - B_TOP - 28 });
+    expect(run.last().style).toEqual({ right: 0, width: 360, top: B_TOP, maxHeight: FOOT(900) - B_TOP, zIndex: 60 });
     // Never a render without the window from its first opening on; nothing reserved or given back (re-aimed, P11-14), nothing scrolled.
     expect(fromOpen(run.looks).every((l) => l.card !== undefined)).toBe(true);
     expect(setProperty).not.toHaveBeenCalled();
@@ -753,7 +759,7 @@ describe("ExplainBox — the window follows the selected paragraph's first line 
     ]);
     await wait();
 
-    expect(tops).toEqual([900 - 28 - 360, 48]);
+    expect(tops).toEqual([FOOT(900) - 360, 48]);
     run.mounted.unmount();
   });
 
@@ -854,7 +860,7 @@ describe("ExplainBox — the window follows the selected paragraph's first line 
 
     // The third paragraph lies at 700: the window holds a passage, so it stops at 512 (re-aimed, P9-17: it followed to 700; the
     // second paragraph is at 440, was 560, inside the band).
-    expect(tops).toEqual([330, 440, 512]);
+    expect(tops).toEqual([330, 440, FOOT(900) - 360]);
     expect(removeProperty).not.toHaveBeenCalled();
     run.mounted.unmount();
   });
@@ -945,28 +951,28 @@ describe("ExplainBox — the window's bottom stands on the screen's bottom when 
     await wait();
 
     // Unmeasured it stood at the thread's floor (900 − 28 − 360 = 512); measured 520 px tall, 900 − 28 − 520 = 352.
-    expect(topsOf(fromOpen(run.looks))).toEqual([512, 352]);
-    expect(run.last().style).toEqual({ right: 0, width: 360, top: 352, maxHeight: 520 });
-    expect(run.last().style!.top! + 520).toBe(900 - 28);
+    expect(topsOf(fromOpen(run.looks))).toEqual([FOOT(900) - 360, FOOT(900) - 520]);
+    expect(run.last().style).toEqual({ right: 0, width: 360, top: FOOT(900) - 520, maxHeight: 520, zIndex: 60 });
+    expect(run.last().style!.top! + 520).toBe(FOOT(900));
     run.mounted.unmount();
   });
 
   it("keeps the thread's floor when what it holds is shorter than that, and is level with the paragraph wherever the whole window fits below it", async () => {
     const short = await scenario(base({ target: inParagraph(first, 4000) }), [(tree) => click(tree), giveCard(sized(200))]);
     await wait();
-    expect(short.last().style?.top).toBe(900 - 28 - 360);
+    expect(short.last().style?.top).toBe(FOOT(900) - 360);
     short.mounted.unmount();
 
     // 300 + 520 = 820 ≤ 872: all of it fits below the first line.
     const fits = await scenario(base({ target: inParagraph(first, 300) }), [(tree) => click(tree), giveCard(sized(520))]);
     await wait();
-    expect(fits.last().style).toEqual({ right: 0, width: 360, top: 300, maxHeight: 900 - 300 - 28 });
+    expect(fits.last().style).toEqual({ right: 0, width: 360, top: 300, maxHeight: FOOT(900) - 300, zIndex: 60 });
     fits.mounted.unmount();
 
     // 360 + 520 = 880 > 872: lifted by the 8 px that do not fit, to 352.
     const barely = await scenario(base({ target: inParagraph(first, 360) }), [(tree) => click(tree), giveCard(sized(520))]);
     await wait();
-    expect(barely.last().style?.top).toBe(352);
+    expect(barely.last().style?.top).toBe(FOOT(900) - 520);
     barely.mounted.unmount();
   });
 
@@ -974,7 +980,7 @@ describe("ExplainBox — the window's bottom stands on the screen's bottom when 
     const run = await scenario(base({ target: inParagraph(first, 4000) }), [(tree) => click(tree), giveCard(sized(2000))]);
     await wait();
 
-    expect(run.last().style).toEqual({ right: 0, width: 360, top: 48, maxHeight: 900 - 48 - 28 });
+    expect(run.last().style).toEqual({ right: 0, width: 360, top: 48, maxHeight: FOOT(900) - 48, zIndex: 60 });
     run.mounted.unmount();
   });
 
@@ -985,9 +991,10 @@ describe("ExplainBox — the window's bottom stands on the screen's bottom when 
       await wait();
 
       const style = run.last().style!;
-      expect(style.top, `${height} px`).toBe(height - 28 - 520);
+      // (At 600 px the band is 512 px high, under the card's 520: it stands at the masthead's foot.)
+      expect(style.top, `${height} px`).toBe(Math.max(48, FOOT(height) - 520));
       expect(style.top!, `${height} px`).toBeGreaterThanOrEqual(48);
-      expect(style.top! + 520, `${height} px`).toBeLessThanOrEqual(height - 28);
+      expect(style.top! + Math.min(520, style.maxHeight!), `${height} px`).toBeLessThanOrEqual(FOOT(height));
       run.mounted.unmount();
     }
   });
@@ -1004,14 +1011,14 @@ describe("ExplainBox — the window's bottom stands on the screen's bottom when 
     ]);
     await wait();
 
-    expect(topsOf(fromOpen(run.looks))).toEqual([512, 352, 172]);
+    expect(topsOf(fromOpen(run.looks))).toEqual([FOOT(900) - 360, FOOT(900) - 520, FOOT(900) - 700]);
     run.mounted.unmount();
   });
 
   it("does not move for a card it cannot measure (no height yet, or a card and a sheet): the thread's floor, as before", async () => {
     const run = await scenario(base({ target: inParagraph(first, 4000) }), [(tree) => click(tree), giveCard({ scrollTop: 0, scrollHeight: 520 })]);
     await wait();
-    expect(run.last().style?.top).toBe(900 - 28 - 360);
+    expect(run.last().style?.top).toBe(FOOT(900) - 360);
     run.mounted.unmount();
 
     stubWindow(800, 900);
@@ -1050,7 +1057,7 @@ describe("ExplainBox — the window's bottom stands on the legend's top as Fit s
 
         expect(run.last().dock, `${width} x ${height}`).toBe(true);
         // The legend's top is `height − 28 × zoom`; the window's bottom edge is not below it (it was 4.0 / 10.6 / 23.5 px below).
-        expect(bottomOf(run.last().style), `${width} x ${height}, paragraph ${paragraph}`).toBeCloseTo(height - legendHeightPx(factor), 6);
+        expect(bottomOf(run.last().style), `${width} x ${height}, paragraph ${paragraph}`).toBeCloseTo(FOOT(height, legendHeightPx(factor)), 6);
         run.mounted.unmount();
       }
     }
@@ -1063,7 +1070,7 @@ describe("ExplainBox — the window's bottom stands on the legend's top as Fit s
     const run = await scenario(base({ target: inParagraph(first, 4000) }), [(tree) => click(tree)]);
     await wait();
 
-    expect(run.last().style?.top).toBeCloseTo(1000 - legendHeightPx(1.142) - 360, 6);
+    expect(run.last().style?.top).toBeCloseTo(FOOT(1000, legendHeightPx(1.142)) - 360, 6);
     run.mounted.unmount();
   });
 
@@ -1083,8 +1090,8 @@ describe("ExplainBox — the window's bottom stands on the legend's top as Fit s
     const at = fromOpen(run.looks);
 
     // Fit off: the flat 28. Fit on: the legend's 51.5 — the same window, moved by the difference.
-    expect(bottomOf(at[0].style)).toBeCloseTo(1440 - 28, 6);
-    expect(bottomOf(run.last().style)).toBeCloseTo(1440 - legendHeightPx(1.838), 6);
+    expect(bottomOf(at[0].style)).toBeCloseTo(FOOT(1440), 6);
+    expect(bottomOf(run.last().style)).toBeCloseTo(FOOT(1440, legendHeightPx(1.838)), 6);
     expect(run.last().style?.top).toBeLessThan(at[0].style?.top ?? 0);
     run.mounted.unmount();
   });
@@ -1097,7 +1104,7 @@ describe("ExplainBox — the window's bottom stands on the legend's top as Fit s
       const run = await scenario(base({ target: inParagraph(first, 4000) }), [(tree) => click(tree)]);
       await wait();
 
-      expect(bottomOf(run.last().style), `root ${present}, zoom "${value}"`).toBeCloseTo(1000 - 28, 6);
+      expect(bottomOf(run.last().style), `root ${present}, zoom "${value}"`).toBeCloseTo(FOOT(1000), 6);
       run.mounted.unmount();
     }
   });

@@ -20,6 +20,7 @@ import type { PaperReading } from "@/lib/papers/reading";
 import type { PaperTerm } from "@/lib/papers/report";
 import type { ExplainTurn } from "@/store/explain-threads";
 import { ExplainBox, ExplainCard, type AskResult, type ThreadView } from "./explain-box";
+import { columnBottomPx } from "./explain-dock";
 import type { ReplyResult } from "./explain-thread";
 import type { ExplainSelection } from "./paper-body";
 
@@ -250,7 +251,8 @@ describe("ExplainBox — it opens from the page's explain action only (P10-08, r
     expect(run.last().dock).toBe(true);
     expect(run.last().passage).toBe(first.passage);
     expect(run.last().status).toBe("answer");
-    expect(run.last().style).toEqual({ right: 0, width: 360, top: 400, maxHeight: 800 - 400 - 28 });
+    // P11-14 (re-aimed): the card stands in the margin's band, which ends at `columnBottomPx` (the legend's top less a margin; was 800 - 28), at the stack's base z.
+    expect(run.last().style).toEqual({ right: 0, width: 360, top: 400, maxHeight: columnBottomPx(800, 28) - 400, zIndex: 60 });
     run.mounted.unmount();
   });
 
@@ -492,7 +494,7 @@ describe("ExplainBox — a selection of the Summary or an answer is explained li
 
       expect(run.last().dock, target.source).toBe(true);
       expect(run.last().passage, target.source).toBe(target.passage);
-      expect(run.last().style, target.source).toEqual({ right: 0, width: 360, top: 48, maxHeight: 800 - 48 - 28 });
+      expect(run.last().style, target.source).toEqual({ right: 0, width: 360, top: 48, maxHeight: columnBottomPx(800, 28) - 48, zIndex: 60 });
       expect(run.last().card?.props.source, target.source).toBe(target.source);
       expect(onAsk, target.source).toHaveBeenCalledWith(expect.objectContaining({ passage: target.passage, source: target.source, paragraphId: target.paragraphId, sectionIndex: -1 }));
       expect(Object.fromEntries(root), target.source).toEqual(NOTHING_RESERVED);

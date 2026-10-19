@@ -23,6 +23,7 @@ import type { PaperReading } from "@/lib/papers/reading";
 import type { PaperTerm } from "@/lib/papers/report";
 import { MAX_EXPLAIN_TURNS, type ExplainTurn } from "@/store/explain-threads";
 import { ExplainBox, ExplainCard, placeCard, type AskResult, type ThreadView } from "./explain-box";
+import { columnBottomPx } from "./explain-dock";
 import { firstAnswerMessage, type ReplyResult } from "./explain-thread";
 import type { ExplainSelection } from "./paper-body";
 
@@ -517,7 +518,8 @@ describe("ExplainBox — where the panel stands (P3-02b; P7-15, R7)", () => {
     const run = await scenario(base({ target: { ...first, paragraph: { left: 120, top: 260, right: 760, bottom: 520 } } }), [(tree) => click(tree)]);
     await wait();
 
-    expect(run.last().style).toEqual({ right: 0, width: 360, top: 260, maxHeight: 900 - 260 - 28 });
+    // P11-14 (re-aimed): the card stands in the margin's band, which ends at `columnBottomPx` (was 900 - 28), at the stack's base z.
+    expect(run.last().style).toEqual({ right: 0, width: 360, top: 260, maxHeight: columnBottomPx(900, 28) - 260, zIndex: 60 });
     expect(run.last().dock).toBe(true);
     run.mounted.unmount();
   });
@@ -530,7 +532,7 @@ describe("ExplainBox — where the panel stands (P3-02b; P7-15, R7)", () => {
         const run = await scenario(base({ target }), [(tree) => click(tree)]);
         await wait();
 
-        expect(run.last().style).toEqual({ right: 0, width: 360, top: 300, maxHeight: height - 300 - 28 });
+        expect(run.last().style).toEqual({ right: 0, width: 360, top: 300, maxHeight: columnBottomPx(height, 28) - 300, zIndex: 60 });
         expect(run.last().dock).toBe(true);
         run.mounted.unmount();
       }

@@ -20,6 +20,7 @@ import { hookRuntime } from "@/test-support/hook-runtime";
 import type { ExplainAnswer } from "@/lib/papers/explain";
 import type { PaperReading } from "@/lib/papers/reading";
 import { ExplainBox, ExplainCard, type AskResult } from "./explain-box";
+import { columnBottomPx } from "./explain-dock";
 import type { ExplainSelection } from "./paper-body";
 
 const ANSWER: ExplainAnswer = { meaning: "A share of a sample turned to plates.", here: { text: "It compares alloys.", peer: true } };
@@ -140,8 +141,9 @@ describe("ExplainBox — the after-every-commit layout effect cannot run away (P
     // Not one write per commit for ever (the head: a write on each of the runtime's 150 rounds); the burst is capped.
     expect(out.reads).toBeLessThanOrEqual(14);
     expect(out.renders).toBeLessThanOrEqual(16);
-    // The taller height, which never hides content: 900 - 28 (the legend) - 500 = 372 is where the window stands at the end.
-    expect(out.tops[out.tops.length - 1]).toBe(900 - 28 - 500);
+    // The taller height, which never hides content: the band's foot (P11-14: the legend's top less a margin, `columnBottomPx`) - 500 is where
+    // the window stands at the end (re-aimed, P11-14: was 900 - 28 - 500 = 372).
+    expect(out.tops[out.tops.length - 1]).toBe(columnBottomPx(900, 28) - 500);
   });
 
   it("a card that grows by 10 px each time it is read (a height that follows its own size): the burst is capped and the box goes quiet", async () => {
@@ -155,7 +157,7 @@ describe("ExplainBox — the after-every-commit layout effect cannot run away (P
   it("a card of a steady height settles at once: one write, one more read to see nothing changed", async () => {
     const out = await run(() => 520);
 
-    expect(out.tops.filter((top, i, all) => top !== all[i - 1])).toEqual([512, 900 - 28 - 520]);
+    expect(out.tops.filter((top, i, all) => top !== all[i - 1])).toEqual([columnBottomPx(900, 28) - 360, columnBottomPx(900, 28) - 520]);
     expect(out.reads).toBeLessThanOrEqual(4);
   });
 
@@ -169,7 +171,7 @@ describe("ExplainBox — the after-every-commit layout effect cannot run away (P
       },
     );
 
-    expect(out.tops.filter((top, i, all) => top !== all[i - 1])).toEqual([512, 352, 172]);
+    expect(out.tops.filter((top, i, all) => top !== all[i - 1])).toEqual([columnBottomPx(900, 28) - 360, columnBottomPx(900, 28) - 520, columnBottomPx(900, 28) - 700]);
   });
 
   it("the viewport is read when the reader or the window changes it, not after every commit: twenty idle commits ask the page's zoom no more than none", async () => {

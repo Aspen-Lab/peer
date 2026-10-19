@@ -387,6 +387,15 @@ export function StickyNotes({ paper, reveal }: { paper: Paper; reveal: (run: () 
     [],
   );
 
+  // A sticky whose "Note N" heading has left the paper's note (the notes window deleted it) is not drawn; it is taken out of the stack
+  // too, so every view of the stack — this one, the notes window's, the explain card's — counts the same windows and agrees on every position.
+  useEffect(() => {
+    if (!note) return;
+    for (const w of windows) {
+      if (w.kind === "sticky" && !note.blocks.some((b) => b.id === w.id && b.type === "h3" && b.anchor)) useWindows.getState().close(w.id);
+    }
+  }, [windows, note]);
+
   const column = useColumn(windows.some((w: FloatingWindow) => w.kind === "sticky"));
   if (!note) return null;
   const rows = stickyRows(windows, note.blocks, column);
