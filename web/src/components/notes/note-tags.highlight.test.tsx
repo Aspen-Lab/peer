@@ -118,8 +118,6 @@ function fakeParagraph(marks: FakeMark[], id = "paper-section-1-p0") {
 }
 
 const GOAL = { paperId: "p1", paragraphId: "paper-section-1-p0", highlightId: "h1" };
-// A goal typed as a highlight's: `goToPassage` takes a sticky's anchor or this.
-const go = goToPassage as unknown as (goal: typeof GOAL, env: { doc: Document; navigate: (href: string) => void }) => void;
 
 describe("goToPassage — a highlight is flashed through its marks (P11-09, rule 2)", () => {
   afterEach(() => {
@@ -139,7 +137,7 @@ describe("goToPassage — a highlight is flashed through its marks (P11-09, rule
   it("flashes the highlight's own mark and its nested parts together, and no other highlight's or sticky's mark", () => {
     vi.useFakeTimers();
     const { outer, part, other, stickyMark, stickyPart, paragraph, paragraphClasses, doc } = build();
-    go(GOAL, { doc, navigate: vi.fn() });
+    goToPassage(GOAL, { doc, navigate: vi.fn() });
     expect(outer.classes.size).toBeGreaterThan(0);
     expect(part.classes.size).toBeGreaterThan(0);
     expect([...outer.classes].sort()).toEqual([...part.classes].sort());
@@ -157,7 +155,7 @@ describe("goToPassage — a highlight is flashed through its marks (P11-09, rule
     const stickyClasses = [...sticky.classes].sort();
     expect(stickyClasses).toContain("outline");
     const { outer, part, doc } = build();
-    go(GOAL, { doc, navigate: vi.fn() });
+    goToPassage(GOAL, { doc, navigate: vi.fn() });
     expect([...outer.classes].sort()).toEqual(stickyClasses);
     vi.advanceTimersByTime(FLASH_MS - 1);
     expect(outer.classes.size).toBeGreaterThan(0);
@@ -170,7 +168,7 @@ describe("goToPassage — a highlight is flashed through its marks (P11-09, rule
     vi.useFakeTimers();
     const part = fakeMark({ "data-highlight-part": "h1" });
     const { doc, paragraphClasses } = fakeParagraph([part]);
-    go(GOAL, { doc, navigate: vi.fn() });
+    goToPassage(GOAL, { doc, navigate: vi.fn() });
     expect(part.classes.size).toBeGreaterThan(0);
     expect(paragraphClasses.size).toBe(0);
   });
@@ -179,20 +177,20 @@ describe("goToPassage — a highlight is flashed through its marks (P11-09, rule
     vi.useFakeTimers();
     const other = fakeMark({ "data-highlight": "h2" });
     const { doc, paragraphClasses } = fakeParagraph([other]);
-    go(GOAL, { doc, navigate: vi.fn() });
+    goToPassage(GOAL, { doc, navigate: vi.fn() });
     expect(other.classes.size).toBe(0);
     expect(paragraphClasses.size).toBeGreaterThan(0);
   });
 
   it("goes to the paper's page at the paragraph when it is not on this page, and asks the reading page to show the text first when it has registered", () => {
     const navigate = vi.fn();
-    go(GOAL, { doc: { getElementById: () => null } as unknown as Document, navigate });
+    goToPassage(GOAL, { doc: { getElementById: () => null } as unknown as Document, navigate });
     expect(navigate).toHaveBeenCalledWith("/papers/p1#paper-section-1-p0");
     const { paragraph, doc } = fakeParagraph([fakeMark({ "data-highlight": "h1" })]);
     const reveal = vi.fn((run: () => void) => run());
     const off = registerPassageHost({ paperId: "p1", reveal });
     const again = vi.fn();
-    go(GOAL, { doc, navigate: again });
+    goToPassage(GOAL, { doc, navigate: again });
     off();
     expect(reveal).toHaveBeenCalledTimes(1);
     expect(paragraph.scrollIntoView).toHaveBeenCalled();

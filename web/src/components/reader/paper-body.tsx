@@ -21,7 +21,7 @@
 // Peer's voice, and none of this is Peer's.
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 import type { PaperReading, ReadingFigure, ReadingSection } from "@/lib/papers/reading";
 import { GIST_QUESTION, MAX_STRONG_ROWS, type RouteResult, type RouteSection, type RouteTier } from "@/lib/papers/reading-map";
 import type { QuestionAnswers } from "@/lib/papers/report";
@@ -32,7 +32,7 @@ import { paragraphKey } from "@/store/plain-rewrites";
 import { repairAnchors, resolveAnchors, useLostPassages } from "@/store/notes";
 import { ASK, BODY, ROUTE } from "./copy";
 import { ParagraphPlainControl, PlainRewrite, plainOffered, type PlainView } from "./plain-button";
-import { NoteTag, isHighlightSpot, passageSegments, rangeOf, tieOrder, type AnchorSpot } from "@/components/notes/note-tags";
+import { NoteTag, highlightMarks, isHighlightSpot, passageSegments, rangeOf, tieOrder, type AnchorSpot } from "@/components/notes/note-tags";
 import type { NoteAnchorMap } from "@/lib/notes/blocks";
 import { highlightPaint } from "@/lib/notes/highlight-colours";
 import type { HighlightColourId } from "@/lib/notes/types";
@@ -533,6 +533,44 @@ export function readSelection(selection: SelectionLike | null): ExplainSelection
   return { ...target, ...where, measure: () => measureRange(range, start?.text) };
 }
 
+// ── A click on a highlight (P11-09; B P11-04 §3.3) ────────────────────────
+
+/** The few members of an element the click's reading needs, so a test can stand in for them. */
+interface HitElement {
+  nodeType: number;
+  parentElement: HitElement | null;
+  closest?(selector: string): HitElement | null;
+  getAttribute?(name: string): string | null;
+  querySelectorAll?(selector: string): ArrayLike<HitElement>;
+  getClientRects?(): ArrayLike<ViewRect>;
+  getBoundingClientRect?(): ViewRect;
+}
+
+/** The marks a highlight is drawn in: its own (`data-highlight`) and the nested parts of it (`data-highlight-part`). */
+const HIGHLIGHT_MARK = "mark[data-highlight], mark[data-highlight-part]";
+
+/**
+ * P11-09 (rule 2): what a click in the paper's body means to a highlight — the id of the highlight whose mark was clicked and
+ * the box of its first line (the strip stands level with it), or null. Null for a click with a selection that is not
+ * collapsed (a drag that ended on the mark, a double click: that is a selection, not a click), for a click on a control inside
+ * the paragraph (a sticky's tag keeps its own click), and for a click that is on no highlight's mark. A sticky's mark inside
+ * a highlight is the highlight's to click; the innermost highlight wins. `selection` is the page's, null when it has none.
+ */
+export function highlightClickOf(target: unknown, selection: { isCollapsed: boolean } | null): { id: string; rect: ViewRect } | null {
+  if (selection && !selection.isCollapsed) return null;
+  const node = target as HitElement | null;
+  const element = node ? (node.nodeType === 1 ? node : node.parentElement) : null;
+  if (!element?.closest || element.closest("button, a") !== null) return null;
+  const mark = element.closest(HIGHLIGHT_MARK);
+  const id = mark?.getAttribute?.("data-highlight") ?? mark?.getAttribute?.("data-highlight-part");
+  if (!mark || !id) return null;
+  // The first line of the highlight: its first mark in reading order (a nested part comes before its own mark), else the one clicked.
+  const marks = mark.closest?.("p")?.querySelectorAll?.(highlightMarks(id));
+  const first = marks && marks.length > 0 ? marks[0] : mark;
+  const box = first.getClientRects?.()[0] ?? first.getBoundingClientRect?.();
+  return box ? { id, rect: plain(box) } : null;
+}
+
 /**
  * Report the reader's selection to `onSelect`, and `null` whenever there is
  * none — once the reader has let go of it (P9-18, BACKLOG-45).
@@ -975,6 +1013,7 @@ export function PaperBody({
   plain,
   onSelect,
   noteAnchors,
+  onHighlightClick,
 }: {
   reading: PaperReading;
   route?: DrawRoute;
@@ -988,6 +1027,10 @@ export function PaperBody({
   /** P10-09a (review 7.1c): the paper's own note's anchors — per paragraph, the sticky notes taken on it —
    *  drawn as a small reference tag after the passage. Absent, and the body is what it was. */
   noteAnchors?: NoteAnchorMap;
+  /** P11-09 (owner item 8): told, with the highlight's id and the box of its first line, when a click with a collapsed selection
+   *  lands on a highlight's mark (the page raises the colour strip); a drag that ends on a mark is a selection and tells nothing.
+   *  Absent, and the body listens to no click. */
+  onHighlightClick?: (id: string, rect: ViewRect) => void;
 }) {
   useSelectionListener(onSelect);
   // `?? []`: the version gate above should mean this is always an array, and
@@ -1003,11 +1046,17 @@ export function PaperBody({
     useLostPassages.getState().setLost(resolved.lost);
   }, [resolved]);
   if (body.length === 0) return null;
+  // One listener on the body, not one per mark: the marks are drawn by `notedRuns` and nest, and a click on a nested mark
+  // must tell once (the innermost highlight), which the bubbling of one handler per mark would not.
+  const clickOnHighlight = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const hit = highlightClickOf(event.target, typeof window === "undefined" ? null : window.getSelection());
+    if (hit) onHighlightClick?.(hit.id, hit.rect);
+  };
 
   return (
     // `scroll-mt`: the masthead is sticky, and a heading scrolled to the
     // very top of the window lands under it.
-    <div id={PAPER_BODY_ID} className="scroll-mt-20">
+    <div id={PAPER_BODY_ID} className="scroll-mt-20" onClick={onHighlightClick ? clickOnHighlight : undefined}>
     <Band label={BODY.heading}>
       {/* P7-14 (R5): no contents here. The map is the paper's one contents
           list — it names the sections Peer reached, where the text was read

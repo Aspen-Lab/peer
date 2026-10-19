@@ -187,12 +187,25 @@ function flash(el: Element, classes: readonly string[] = FLASH_CLASSES): void {
   setTimeout(() => el.classList.remove(...classes), FLASH_MS);
 }
 
+/** P11-09: a highlight to go back to — the paper, its paragraph and the highlight's block id (`data-highlight`). */
+export interface HighlightGoal {
+  paperId: string;
+  paragraphId: string;
+  highlightId: string;
+}
+
+/** The selector of a highlight's marks in a paragraph: its own (`data-highlight`) and the nested parts of it (`data-highlight-part`), by block id. */
+export function highlightMarks(id: string): string {
+  const quoted = id.replace(/["\\]/g, "\\$&");
+  return `mark[data-highlight="${quoted}"], mark[data-highlight-part="${quoted}"]`;
+}
+
 /**
- * Scroll the paper to the sticky's passage and mark it for `FLASH_MS`; when the paper is not on this page, go to
- * its page at the paragraph. The reading page of that paper (registered) first brings the paper's text on show.
+ * Scroll the paper to the sticky's passage — or, P11-09, to a highlight's — and mark it for `FLASH_MS`; when the paper is not
+ * on this page, go to its page at the paragraph. The reading page of that paper (registered) first brings the paper's text on show.
  */
 export function goToPassage(
-  anchor: NoteAnchor,
+  anchor: NoteAnchor | HighlightGoal,
   env: { doc: Pick<Document, "getElementById">; navigate: (href: string) => void },
 ): void {
   const run = (): boolean => {
@@ -204,10 +217,14 @@ export function goToPassage(
     // for this note, else on the whole paragraph. P10-46: a note's words can stand in more than one mark — the first
     // ones nested inside an earlier note's mark (`data-note-part`), the rest in its own (`data-note`) — and the flash
     // covers them all.
+    // P11-09: a highlight's marks are `data-highlight` (its own) and `data-highlight-part` (its first words inside an earlier
+    // mark), found by its block id; the same flash. A highlight whose words are gone draws no mark: the paragraph flashes.
     const marks =
-      anchor.start !== undefined
-        ? Array.from(el.querySelectorAll(`mark[data-note="${anchor.n}"], mark[data-note-part="${anchor.n}"]`))
-        : [];
+      "highlightId" in anchor
+        ? Array.from(el.querySelectorAll(highlightMarks(anchor.highlightId)))
+        : anchor.start !== undefined
+          ? Array.from(el.querySelectorAll(`mark[data-note="${anchor.n}"], mark[data-note-part="${anchor.n}"]`))
+          : [];
     if (marks.length > 0) for (const mark of marks) flash(mark, MARK_FLASH_CLASSES);
     else flash(el);
     return true;

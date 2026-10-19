@@ -7,10 +7,10 @@ import { buildReading } from "@/lib/papers/reading";
 import { contrast } from "@/lib/notes/highlight-colours";
 import type { HighlightColourId } from "@/lib/notes/types";
 import type { Paper } from "@/types";
-import * as bodyModule from "./paper-body";
 import {
   PaperBody,
   coveringSegments,
+  highlightClickOf,
   paragraphAnchor,
   readSelection,
   sameSelection,
@@ -41,10 +41,6 @@ const fullText: FullTextResult = { status: "ok", attempts: [], doc, sourceLink: 
 const reading = buildReading(paper, fullText, new Date("2026-10-05T00:00:00.000Z"));
 const P1 = "Grain boundaries carry the strain.";
 const ID1 = paragraphAnchor(0, 1);
-// Read off the module so this file compiles before the function exists (the first commit of P11-09 is red on the contract).
-const highlightClickOf = (
-  bodyModule as unknown as { highlightClickOf: (target: unknown, selection: { isCollapsed: boolean } | null) => { id: string; rect: ViewRect } | null }
-).highlightClickOf;
 
 interface Spot {
   id: string;
