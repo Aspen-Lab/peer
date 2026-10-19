@@ -304,6 +304,13 @@ export interface SelectionTarget {
   source?: ExplainSource;
   /** P10-08: the container's own stable id — the paragraph's anchor for the paper, the block's key or the answer's index otherwise. */
   paragraphId?: string;
+  /**
+   * P11-09 (B P11-04 §2.8, I10): the length of the paragraph's words before the selection's start, a tag's text left out — a
+   * hint for telling the occurrence the reader selected from an earlier one of the same words ("tide pools", twice). The
+   * paper's body only, and only when the range could give it: a hint, never required (a formula's rendered text is not the
+   * paragraph's raw text, so it is the nearest occurrence that wins, not an exact one).
+   */
+  offset?: number;
 }
 
 /** A rectangle in the viewport's coordinates. */
@@ -367,6 +374,7 @@ export function sameSelection(a: ExplainSelection | null, b: ExplainSelection | 
     a.passage === b.passage &&
     (a.source ?? "paper") === (b.source ?? "paper") &&
     a.paragraphId === b.paragraphId &&
+    a.offset === b.offset &&
     sameRect(a.rect, b.rect) &&
     sameRect(a.bounds, b.bounds) &&
     sameOptionalRect(a.paragraph, b.paragraph)
@@ -395,8 +403,13 @@ interface ChildLike {
 interface RangeLike {
   startContainer: NodeLike;
   endContainer: NodeLike;
+  /** P11-09: where the range starts in `startContainer`; with the three members below, what the offset hint is read with (all optional: a hint, never required). */
+  startOffset?: number;
   endOffset: number;
   cloneRange(): RangeLike;
+  selectNodeContents?(node: unknown): void;
+  setEnd?(node: unknown, offset: number): void;
+  toString?(): string;
   cloneContents(): { querySelector(selector: string): unknown; childNodes?: ArrayLike<ChildLike> };
   getClientRects(): ArrayLike<ViewRect>;
   getBoundingClientRect(): ViewRect;
@@ -506,6 +519,25 @@ function wordsWithoutTags(contents: { childNodes?: ArrayLike<ChildLike> }): stri
   return skipped ? words : null;
 }
 
+/**
+ * P11-09 (B P11-04 §2.8, I10): the length of the paragraph's words before the range's start — a range from the start of the
+ * paragraph's `<p>` to the selection's start, read the way the passage is (a note's tag left out, `wordsWithoutTags`). Undefined
+ * when the range cannot give it (a member it needs is missing, or it throws): the offset is a hint and the selection goes on without.
+ */
+function wordsBefore(range: RangeLike, paragraph: ElementLike | undefined): number | undefined {
+  if (!paragraph || typeof range.startOffset !== "number") return undefined;
+  try {
+    const head = range.cloneRange();
+    if (!head.selectNodeContents || !head.setEnd) return undefined;
+    head.selectNodeContents(paragraph);
+    head.setEnd(range.startContainer, range.startOffset);
+    const words = wordsWithoutTags(head.cloneContents()) ?? head.toString?.();
+    return typeof words === "string" ? words.length : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** What the page's selection is, as an `ExplainSelection`, or null: nothing
  *  selected, a selection across paragraphs or outside the body, one with a
  *  formula in it, over-long, or not on screen. */
@@ -530,7 +562,9 @@ export function readSelection(selection: SelectionLike | null): ExplainSelection
   if (contents.querySelector(FORMULA_SELECTOR)) return null;
   const where = measureRange(range, start?.text);
   if (!where) return null;
-  return { ...target, ...where, measure: () => measureRange(range, start?.text) };
+  // P11-09: where in its paragraph the passage starts, for the paper's body (the Summary and the answers have no paragraph to anchor to).
+  const offset = start.source === "paper" ? wordsBefore(range, start.text) : undefined;
+  return { ...target, ...(offset !== undefined ? { offset } : {}), ...where, measure: () => measureRange(range, start?.text) };
 }
 
 // ── A click on a highlight (P11-09; B P11-04 §3.3) ────────────────────────
