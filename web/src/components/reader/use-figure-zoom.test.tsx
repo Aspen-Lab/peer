@@ -1,4 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 // P11-11 (B P11-05 §2.2; ruling §1h.113 (c) D1, D7): the pointer, the wheel and the keys of a zoomable figure — the hook the Summary's
 // lightbox and the margin's figure card share. The lightbox's settings (two steps, no wheel, no keys) are the behaviour it had; the
@@ -8,15 +10,17 @@ import { describe, expect, it, vi } from "vitest";
 // No DOM (this project's tests run in plain Node): the staged hook runtime renders the hook, a "surface" is an object that records the
 // native listeners put on it and answers the few members the hook reads, and an event is an object with the fields the hook reads. The
 // surface's rect is the drawn picture, computed from the last render as a browser would, so the wheel's anchor is the real thing.
+// The last block mounts the Summary's FigureViewer itself on the same runtime (useId is the one hook the runtime does not have).
 vi.mock("react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react")>();
   const { stagedRuntime } = await import("@/test-support/staged-runtime");
-  return { ...actual, ...stagedRuntime.hooks };
+  return { ...actual, ...stagedRuntime.hooks, useId: () => "figure-caption" };
 });
 
-import type { PointerEvent } from "react";
+import type { PointerEvent, ReactElement, ReactNode } from "react";
 import { stagedRuntime } from "@/test-support/staged-runtime";
-import { SUMMARY_ZOOM_STEPS } from "./figure-zoom";
+import { clampFigureSize, SUMMARY_ZOOM_STEPS } from "./figure-zoom";
+import { FigureViewer } from "./figure-lightbox";
 import { useFigureZoom, type FigureZoom, type FigureZoomOptions } from "./use-figure-zoom";
 
 // A 600 x 400 picture in a 400 x 300 box is fitted to 384 x 256; at 2x it is 768 x 512, which may be panned 184 across and 106 down.
@@ -606,5 +610,127 @@ describe("the pan is clamped at every size change", () => {
 
     expect(run.now.size).toEqual({ width: 384, height: 256 });
     expect(at(run.now.offset)).toEqual({ x: -184, y: 0 });
+  });
+});
+
+// ── The Summary's lightbox: this hook, with the Summary's settings ─────────────────────────────────────────────────────────────────
+// B P11-05 invariant 1: the lightbox is as it was. Its pixels are measured in a browser (the p02 script, before and after: identical);
+// what a unit can pin is what it asks of the hook and what it does with the answer — the labels, the two states, the cursor, the
+// style, the handlers on the button, and that nothing else is put on that button (no ref: no wheel, no keys).
+
+type Tree = ReactElement<Record<string, unknown> & { children?: ReactNode }>;
+function elements(node: ReactNode): Tree[] {
+  if (Array.isArray(node)) return node.flatMap(elements);
+  if (!node || typeof node !== "object" || !("props" in node)) return [];
+  const element = node as Tree;
+  return [element, ...elements(element.props.children)];
+}
+
+describe("the Summary's lightbox (FigureViewer) is the shared zoom core with the Summary's settings", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** The viewer mounted with a 1000 x 800 overlay and a 40-px caption: a viewport of 968 x 656 for the picture. */
+  function viewer() {
+    const document = { activeElement: null, body: { style: { overflow: "" } }, addEventListener: vi.fn(), removeEventListener: vi.fn() };
+    vi.stubGlobal("document", document);
+    vi.stubGlobal("HTMLElement", class {}); // the cleanup asks `previousFocus instanceof HTMLElement`
+    // The observer reports the overlay's size the moment it is asked to watch it.
+    vi.stubGlobal("ResizeObserver", class { callback: () => void; constructor(callback: () => void) { this.callback = callback; } observe() { this.callback(); } disconnect() {} });
+    const overlay = { clientWidth: 1000, clientHeight: 800, querySelectorAll: () => [] };
+    const caption = { getBoundingClientRect: () => ({ height: 40 }) };
+    const close = { focus: () => {} };
+    const attach = (tree: ReactNode) => {
+      const all = elements(tree);
+      const give = (el: Tree | undefined, value: unknown) => {
+        const ref = el?.props.ref as { current: unknown } | undefined;
+        if (ref) ref.current = value;
+      };
+      give(all.find((el) => el.type === "div" && el.props.role === "dialog"), overlay);
+      give(all.find((el) => el.type === "figcaption"), caption);
+      give(all.find((el) => el.type === "button" && el.props["aria-label"] === "Close figure"), close);
+    };
+    const onClose = vi.fn(); // one function for every render: the keydown effect depends on it
+    const mounted = stagedRuntime.mount(
+      () => FigureViewer({ src: "https://example.com/figure.png", alt: "Figure 1", caption: "A caption", natural: NATURAL, onClose }),
+      attach,
+    );
+    stagedRuntime.flush(); // the first commit's effects: the observer reports the frame
+    stagedRuntime.rerender(); // …and the picture is drawn
+    stagedRuntime.flush();
+    const button = () => elements(mounted.value).find((el) => el.type === "button" && el.props["aria-pressed"] !== undefined) as Tree;
+    const fire = (name: string, x: number, y: number, extra: Record<string, unknown> = {}) => {
+      const surface = { setPointerCapture: () => {}, releasePointerCapture: () => {}, hasPointerCapture: () => true, focus: () => {} };
+      const event = { type: name.toLowerCase().replace(/^on/, ""), clientX: x, clientY: y, pointerId: 1, button: 0, isPrimary: true, currentTarget: surface, preventDefault: () => {}, ...extra };
+      stagedRuntime.event(() => (button().props[name] as (event: unknown) => void)(event));
+    };
+    return { button, fire, document };
+  }
+
+  const fitted = clampFigureSize(NATURAL, { width: 968, height: 656 });
+
+  it("draws the picture on a button at fit: the Zoom-in label, not pressed, the zoom-in cursor, the style the lightbox always had", () => {
+    const { button } = viewer();
+
+    expect(button().props["aria-label"]).toBe("Zoom in on figure");
+    expect(button().props["aria-pressed"]).toBe(false);
+    expect(button().props.title).toBe("Click to zoom in");
+    expect(String(button().props.className)).toContain("cursor-zoom-in");
+    expect(button().props.style).toEqual({ width: fitted.width, height: fitted.height, transform: "translate(0px, 0px) scale(1)" });
+  });
+
+  it("a click goes to 2x and back: the labels flip, pressed follows, the cursor is grab", () => {
+    const { button } = viewer();
+
+    stagedRuntime.event(() => (button().props.onClick as () => void)());
+    expect(button().props["aria-label"]).toBe("Fit figure to screen");
+    expect(button().props["aria-pressed"]).toBe(true);
+    expect(button().props.title).toBe("Drag to pan; click to fit to screen");
+    expect(String(button().props.className)).toMatch(/cursor-grab$/);
+    expect((button().props.style as { transform: string }).transform).toBe("translate(0px, 0px) scale(2)");
+
+    stagedRuntime.event(() => (button().props.onClick as () => void)());
+    expect(button().props["aria-label"]).toBe("Zoom in on figure");
+    expect((button().props.style as { transform: string }).transform).toBe("translate(0px, 0px) scale(1)");
+  });
+
+  it("a drag pans the 2x picture (cursor grabbing while it lasts) and its release does not fit it", () => {
+    const { button, fire } = viewer();
+    stagedRuntime.event(() => (button().props.onClick as () => void)());
+
+    fire("onPointerDown", 500, 400);
+    expect(String(button().props.className)).toContain("cursor-grabbing");
+    fire("onPointerMove", 380, 360); // (-120, -40), the measured drag
+    expect((button().props.style as { transform: string }).transform).toBe("translate(-120px, -40px) scale(2)");
+    fire("onPointerUp", 380, 360);
+    expect(String(button().props.className)).toMatch(/cursor-grab$/);
+    stagedRuntime.event(() => (button().props.onClick as () => void)()); // the click that ends the drag
+    expect(button().props["aria-pressed"]).toBe(true);
+  });
+
+  it("puts the shared handlers on the button and nothing else: no ref, so no wheel and no key listener of the core is ever attached", () => {
+    const { button } = viewer();
+
+    for (const name of ["onClick", "onPointerDown", "onPointerMove", "onPointerUp", "onPointerCancel", "onLostPointerCapture"]) {
+      expect(typeof button().props[name], name).toBe("function");
+    }
+    expect(button().props.ref).toBeUndefined();
+    expect(button().props.onWheel).toBeUndefined();
+    expect(button().props.onKeyDown).toBeUndefined();
+  });
+
+  it("asks the core for the Summary's settings, and keeps its own capture keydown effect literally (read from the source)", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/components/reader/figure-lightbox.tsx"), "utf8").replace(/\s+/g, " ");
+
+    expect(source).toContain("export function FigureViewer(");
+    expect(source).toContain("useFigureZoom({ natural, viewport, steps: SUMMARY_ZOOM_STEPS, wheel: false, keys: false })");
+    expect(source).toContain('document.addEventListener("keydown", onKeyDown, true)');
+    expect(source).toMatch(/event\.stopPropagation\(\); if \(event\.key === "Escape"\) \{ event\.preventDefault\(\); onClose\(\);/);
+    expect(source).toContain("export { clampFigurePan, clampFigureSize, DETAIL_ZOOM };");
+  });
+
+  it("registers its Escape / Tab handler on the document in capture, as it did", () => {
+    const { document } = viewer();
+
+    expect(document.addEventListener).toHaveBeenCalledWith("keydown", expect.any(Function), true);
   });
 });
