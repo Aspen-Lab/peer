@@ -90,8 +90,9 @@ describe("a figure with no known size keeps the room it had (P10-26)", () => {
   const html = renderToStaticMarkup(createElement(PaperBody, { reading: unsized }));
 
   it("no box: the mat is the first-paint mat and the picture is as it was", () => {
+    // P11-12 (owner item 1): the picture stands inside the button that opens it, which sits where the picture sat.
     expect(html).not.toContain("aspect-ratio");
-    expect(html).toContain('<div class="bg-[var(--plate-mat)] p-3 sm:p-4"><img ');
+    expect(html).toContain('<div class="bg-[var(--plate-mat)] p-3 sm:p-4"><button type="button" aria-label="Open Figure 1 in the margin" aria-expanded="false" class="mx-auto block max-w-full cursor-zoom-in"><img ');
     expect(html).toContain('class="mx-auto block h-auto max-h-[32rem] w-auto max-w-full object-contain"');
   });
 
