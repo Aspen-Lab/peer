@@ -121,7 +121,7 @@ import { anchorMap } from "@/lib/notes/blocks";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
 import { explanationFor, passageHash, useExplainThreadsStore, type ExplainTurn } from "@/store/explain-threads";
 import { paragraphKey, usePlainRewritesStore } from "@/store/plain-rewrites";
-import { PLAIN_DEFAULT_LEVEL, isPlainLevel, type PlainLevel } from "@/lib/papers/plain-levels";
+import { PLAIN_DEFAULT_LEVEL, PLAIN_REWRITE_ENABLED, isPlainLevel, type PlainLevel } from "@/lib/papers/plain-levels";
 import { exampleQuestions } from "@/lib/reader/question-examples";
 import { deepReportRequested, useModelReport } from "@/components/reader/use-model-report";
 import { usePrivateSupplement } from "@/components/reader/use-private-supplement";
@@ -1008,7 +1008,8 @@ function Reader({
     }),
     [plainLevel, plainShown, plainBusy, plainNotices, onPlainToggle, onPlainLevel],
   );
-  const plainForBody = providerConfigured ? plainView : undefined;
+  // The owner turned "Say it plainly" off on 2026-10-19 (`PLAIN_REWRITE_ENABLED`): the body gets no plain view.
+  const plainForBody = PLAIN_REWRITE_ENABLED && providerConfigured ? plainView : undefined;
 
   // The report's provenance in the shape the reading's sentence table takes;
   // the reading never imports the report type. `deepRequested` is the
@@ -1182,7 +1183,7 @@ function Reader({
     // back first — the original stands alone again, the rewrite stays kept so the button shows it
     // again with no request — and the key does nothing else this press. Only for a reader who can
     // see one (a model is configured); otherwise it is what it always was.
-    if (providerConfigured && usePlainRewritesStore.getState().hideLatest(paper.id)) return;
+    if (PLAIN_REWRITE_ENABLED && providerConfigured && usePlainRewritesStore.getState().hideLatest(paper.id)) return;
     const store = useFeedStore.getState();
     if (store.pendingDismissal) store.undoDismiss();
     else if (store.readItems[paper.id]) store.markUnread(paper.id);

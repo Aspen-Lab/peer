@@ -12,6 +12,13 @@ export const PLAIN_LEVELS = ["highschool", "undergrad", "graduate"] as const;
 
 export type PlainLevel = (typeof PLAIN_LEVELS)[number];
 
+/**
+ * Whether "Say it plainly" is shown at all. The owner turned it off on 2026-10-19: no control under a
+ * paragraph, no rewrite beside one, and `u` no longer takes one back. The code, the route and the stored
+ * rewrites all stay; set this to `true` to bring the feature back as it was.
+ */
+export const PLAIN_REWRITE_ENABLED = false;
+
 /** The level a reader has until they choose another. */
 export const PLAIN_DEFAULT_LEVEL: PlainLevel = "undergrad";
 

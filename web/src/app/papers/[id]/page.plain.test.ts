@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { PLAIN_REWRITE_ENABLED } from "@/lib/papers/plain-levels";
 
 // P4-01 (blueprint §3.6 ⑥; rulings §1h.12 (h); §3d 15): the page's wiring of "Say it plainly".
 // `Reader` cannot be mounted in this Node-only suite, so — as the explain, terms and upload-skip
@@ -12,6 +13,10 @@ import { describe, expect, it } from "vitest";
 // and `u` takes the latest rewrite back BEFORE it does anything it did before. The checker is
 // also run on mutated copies of the source, so the test proves it would notice what it guards:
 // green on the page, red on each.
+//
+// 2026-10-19 (the owner): "Say it plainly" is switched off and its code kept. `PLAIN_REWRITE_ENABLED` (false) now leads
+// both joins — the body gets no plain view and `u` takes no rewrite back — so the checks and their mutations
+// above were re-aimed to read the switch first; nothing else they hold changed.
 
 /** What is wrong with the plain wiring of a page `source`; empty when it is right. */
 function plainProblems(source: string): string[] {
@@ -24,7 +29,8 @@ function plainProblems(source: string): string[] {
   // The body is handed the view — and only a reader with a model gets one.
   has("<PaperBody reading={reading} route={route} plain={plainForBody} onSelect={selectExplain} noteAnchors={noteAnchors} />", "the body is no longer handed the plain view");
   const forBody = /const plainForBody = ([^;]*);/.exec(text)?.[1] ?? "";
-  if (forBody !== "providerConfigured ? plainView : undefined") problems.push("the plain view is not absent for a reader with no model (the locked-block rule)");
+  if (!forBody.startsWith("PLAIN_REWRITE_ENABLED && ")) problems.push("the plain view is drawn while Say it plainly is switched off (PLAIN_REWRITE_ENABLED)");
+  if (forBody.replace(/^PLAIN_REWRITE_ENABLED && /, "") !== "providerConfigured ? plainView : undefined") problems.push("the plain view is not absent for a reader with no model (the locked-block rule)");
   if (/deepReport/i.test(forBody)) problems.push("Say it plainly is gated on deep reports being on");
 
   // The level: the reading preferences', one of the three or the default; chosen through the store.
@@ -67,7 +73,7 @@ function plainProblems(source: string): string[] {
     const dismiss = undo.indexOf("store.pendingDismissal");
     if (first < 0) problems.push("`u` no longer takes a plain rewrite back");
     else if (dismiss >= 0 && first > dismiss) problems.push("`u` takes a plain rewrite back only after it has done something else");
-    if (!/if \(providerConfigured && usePlainRewritesStore\.getState\(\)\.hideLatest\(paper\.id\)\) return;/.test(undo)) problems.push("`u` takes back a rewrite the reader cannot see, or does not stop after taking one back");
+    if (!/if \(PLAIN_REWRITE_ENABLED && providerConfigured && usePlainRewritesStore\.getState\(\)\.hideLatest\(paper\.id\)\) return;/.test(undo)) problems.push("`u` takes back a rewrite the reader cannot see, or does not stop after taking one back");
     if (!undo.includes("if (store.pendingDismissal) store.undoDismiss();")) problems.push("`u` no longer undoes a dismiss");
     if (!undo.includes("else if (store.readItems[paper.id]) store.markUnread(paper.id);")) problems.push("`u` no longer marks a read paper unread");
     if (!undo.includes("else store.markRead(paper.id, paper);")) problems.push("`u` no longer marks an unread paper read");
@@ -90,14 +96,14 @@ describe("the page's Say it plainly wiring (P4-01)", () => {
   });
 
   it("would notice the view offered to a reader with no model", () => {
-    const wrong = source.replace("const plainForBody = providerConfigured ? plainView : undefined;", "const plainForBody = plainView;");
+    const wrong = source.replace("const plainForBody = PLAIN_REWRITE_ENABLED && providerConfigured ? plainView : undefined;", "const plainForBody = PLAIN_REWRITE_ENABLED && plainView;");
 
     expect(wrong).not.toBe(source);
     expect(plainProblems(wrong)).toEqual(["the plain view is not absent for a reader with no model (the locked-block rule)"]);
   });
 
   it("would notice the view gated on the deep report switch, a gate this small click does not have", () => {
-    const wrong = source.replace("const plainForBody = providerConfigured ? plainView : undefined;", "const plainForBody = providerConfigured && profile.deepReportEnabled ? plainView : undefined;");
+    const wrong = source.replace("const plainForBody = PLAIN_REWRITE_ENABLED && providerConfigured ? plainView : undefined;", "const plainForBody = PLAIN_REWRITE_ENABLED && providerConfigured && profile.deepReportEnabled ? plainView : undefined;");
 
     expect(wrong).not.toBe(source);
     expect(plainProblems(wrong)).toEqual(expect.arrayContaining(["Say it plainly is gated on deep reports being on"]));
@@ -135,17 +141,17 @@ describe("the page's Say it plainly wiring (P4-01)", () => {
   });
 
   it("would notice `u` no longer taking a rewrite back, or taking it back after what it did before", () => {
-    const gone = source.replace(/\n\s*if \(providerConfigured && usePlainRewritesStore\.getState\(\)\.hideLatest\(paper\.id\)\) return;/, "");
+    const gone = source.replace(/\n\s*if \(PLAIN_REWRITE_ENABLED && providerConfigured && usePlainRewritesStore\.getState\(\)\.hideLatest\(paper\.id\)\) return;/, "");
     expect(gone).not.toBe(source);
     expect(plainProblems(gone)).toEqual(["`u` no longer takes a plain rewrite back", "`u` takes back a rewrite the reader cannot see, or does not stop after taking one back"]);
 
-    const after = source.replace(/(\n\s*)(if \(providerConfigured && usePlainRewritesStore\.getState\(\)\.hideLatest\(paper\.id\)\) return;)(\n\s*)(const store = useFeedStore\.getState\(\);)(\n\s*)(if \(store\.pendingDismissal\) store\.undoDismiss\(\);)/, "$1$4$5$6\n    $2");
+    const after = source.replace(/(\n\s*)(if \(PLAIN_REWRITE_ENABLED && providerConfigured && usePlainRewritesStore\.getState\(\)\.hideLatest\(paper\.id\)\) return;)(\n\s*)(const store = useFeedStore\.getState\(\);)(\n\s*)(if \(store\.pendingDismissal\) store\.undoDismiss\(\);)/, "$1$4$5$6\n    $2");
     expect(after).not.toBe(source);
     expect(plainProblems(after)).toContain("`u` takes a plain rewrite back only after it has done something else");
   });
 
   it("would notice `u` taking back a rewrite for a reader who cannot see one", () => {
-    const wrong = source.replace("if (providerConfigured && usePlainRewritesStore.getState().hideLatest(paper.id)) return;", "if (usePlainRewritesStore.getState().hideLatest(paper.id)) return;");
+    const wrong = source.replace("if (PLAIN_REWRITE_ENABLED && providerConfigured && usePlainRewritesStore.getState().hideLatest(paper.id)) return;", "if (PLAIN_REWRITE_ENABLED && usePlainRewritesStore.getState().hideLatest(paper.id)) return;");
 
     expect(wrong).not.toBe(source);
     expect(plainProblems(wrong)).toEqual(["`u` takes back a rewrite the reader cannot see, or does not stop after taking one back"]);
@@ -163,5 +169,25 @@ describe("the page's Say it plainly wiring (P4-01)", () => {
 
     expect(wrong).not.toBe(source);
     expect(plainProblems(wrong)).toEqual(["the kept rewrites are no longer this paper's"]);
+  });
+});
+
+describe("Say it plainly switched off (the owner, 2026-10-19)", () => {
+  it("is off: the switch is false, so the body is handed no plain view and `u` takes nothing back", () => {
+    expect(PLAIN_REWRITE_ENABLED).toBe(false);
+  });
+
+  it("would notice the body handed the view while the feature is switched off", () => {
+    const wrong = source.replace("const plainForBody = PLAIN_REWRITE_ENABLED && providerConfigured ? plainView : undefined;", "const plainForBody = providerConfigured ? plainView : undefined;");
+
+    expect(wrong).not.toBe(source);
+    expect(plainProblems(wrong)).toEqual(["the plain view is drawn while Say it plainly is switched off (PLAIN_REWRITE_ENABLED)"]);
+  });
+
+  it("would notice `u` taking back a hidden rewrite while the feature is switched off", () => {
+    const wrong = source.replace("if (PLAIN_REWRITE_ENABLED && providerConfigured && usePlainRewritesStore", "if (providerConfigured && usePlainRewritesStore");
+
+    expect(wrong).not.toBe(source);
+    expect(plainProblems(wrong)).toEqual(["`u` takes back a rewrite the reader cannot see, or does not stop after taking one back"]);
   });
 });
