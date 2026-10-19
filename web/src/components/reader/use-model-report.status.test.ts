@@ -20,23 +20,37 @@ type Script = (body: Record<string, unknown>, signal?: AbortSignal) => AsyncGene
 const net = vi.hoisted(() => ({
   streamCalls: [] as Array<Record<string, unknown>>,
   jsonCalls: 0,
-  /** How long the JSON fallback is held, and what it answers. */
-  jsonDelayMs: 0,
+  /** Whether the JSON fallback is held until the page has drawn the line that says it was asked again. */
+  jsonPaced: false,
   script: null as unknown,
   /** Requests the stub has begun and not ended. */
   open: 0,
+  // What the tests wait on (P11-18, BACKLOG-97). A wait is for the thing its assertion needs, never for
+  // a number of timer ticks: under load the page is slow, not wrong. The stubs count what they do and the
+  // page counts what it draws; `until` polls these.
+  /** Streams read out to their end, or let go. */
+  ended: 0,
+  /** Requests that said all their stages, saw them drawn, and wait to be released. */
+  held: 0,
+  /** JSON fallbacks answered. */
+  jsonAnswered: 0,
+  /** Renders of the page so far. */
+  draws: 0,
+  /** Waits that ran out their ceiling, named: `drive` fails the test with them. */
+  lapsed: [] as string[],
 }));
 
 vi.mock("@/lib/papers/report-stream", () => ({
   streamPaperReport: (body: Record<string, unknown>, signal?: AbortSignal) => {
     net.streamCalls.push(body);
-    return (net.script as Script)(body, signal);
+    return counted((net.script as Script)(body, signal));
   },
 }));
 vi.mock("@/lib/api", () => ({
-  apiFetch: async () => {
+  apiFetch: async (_path: string, init?: { signal?: AbortSignal }) => {
     net.jsonCalls += 1;
-    if (net.jsonDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, net.jsonDelayMs));
+    if (net.jsonPaced) await drawn(init?.signal);
+    net.jsonAnswered += 1;
     return { noLlm: true };
   },
 }));
@@ -87,6 +101,47 @@ const QUESTION = "Which layer kept the most soil water?";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** The longest any wait waits: generous, so a loaded machine is slow and not wrong. A wait that runs it out fails its test. */
+const CEILING_MS = 20_000;
+// A test is several waits long at worst; the runner's 5 s would cut a slow machine off before the ceiling speaks.
+vi.setConfig({ testTimeout: 3 * CEILING_MS });
+
+/**
+ * Poll `condition` on real timers until it holds: the wait for what an assertion needs. It stops when `signal`
+ * aborts (the page was let go) and at the ceiling, which is recorded under `what` for `drive` to fail the test with.
+ */
+async function until(condition: () => boolean, what: string, signal?: AbortSignal): Promise<boolean> {
+  const stop = Date.now() + CEILING_MS;
+  while (!condition()) {
+    if (signal?.aborted) return false;
+    if (Date.now() >= stop) {
+      net.lapsed.push(what);
+      return false;
+    }
+    await sleep(2);
+  }
+  return true;
+}
+
+/**
+ * Resolves once the page has drawn again. The hook's own state change comes first (the stubs call this after an
+ * event the hook has handled), so the render it waits for carries that event: each event is on the page before the
+ * next one is sent, however slow the machine.
+ */
+async function drawn(signal?: AbortSignal): Promise<void> {
+  const from = net.draws;
+  await until(() => net.draws > from, "the page to draw", signal);
+}
+
+/** The stream as the hook reads it, counted once it has run to its end or been let go. */
+async function* counted(stream: AsyncGenerator<Record<string, unknown>>) {
+  try {
+    yield* stream;
+  } finally {
+    net.ended += 1;
+  }
+}
+
 function reportEvent(body: Record<string, unknown>) {
   return {
     type: "report",
@@ -101,14 +156,22 @@ function reportEvent(body: Record<string, unknown>) {
   };
 }
 
-/** A request that says its stages, is held `holdMs` in the last one, then reports. */
-function staged(holdMs: number, stages: Array<[string, string, number]>): Script {
-  return async function* (body) {
+/**
+ * A request that says its stages, each on the page before the next, then waits until `release` holds and reports.
+ * Held with `release` never true, it stands in flight until the page is let go.
+ */
+function staged(stages: Array<[string, string, number]>, release: () => boolean = () => true): Script {
+  return async function* (body, signal) {
     net.open += 1;
     try {
       yield { type: "mode", aiMode: "tier2" };
-      for (const [stage, label, pct] of stages) yield { type: "stage", stage, label, pct };
-      await sleep(holdMs);
+      await drawn(signal);
+      for (const [stage, label, pct] of stages) {
+        yield { type: "stage", stage, label, pct };
+        await drawn(signal);
+      }
+      net.held += 1;
+      await until(release, "the held request to be released", signal);
     } finally {
       net.open -= 1;
     }
@@ -119,63 +182,127 @@ function staged(holdMs: number, stages: Array<[string, string, number]>): Script
 
 type Seen = Pick<ModelReportState, "stage" | "report" | "failed"> & { open: number };
 
+/** A step of `drive` that holds the next one back until the page has what the assertion needs. */
+interface Wait {
+  what: string;
+  ready: () => boolean;
+}
+type Act = (() => void) | Wait;
+const waitFor = (what: string, ready: () => boolean): Wait => ({ what, ready });
+
+/** `n` more requests have run to their end; the runtime then renders until nothing changes, so what the hook set on the way out is in the record. */
+function requestsEnded(n = 1): Wait {
+  const from = net.ended;
+  return waitFor(`${n} request(s) to end`, () => net.ended - from >= n);
+}
+
+/** A request has said all its stages, the page has drawn them, and it is held in flight. */
+function requestHeld(): Wait {
+  const from = net.held;
+  return waitFor("a request held at its last stage", () => net.held > from);
+}
+
 /**
- * One page open, every render recorded. `acts` run one per round (a number is a wait, kept alive
- * by a 1 ms poll), the settled questions read from `asked()` on each render as the page reads them.
+ * An act, then the wait for the page to take it up: the render that carries it, then the effects of that render,
+ * then the render of what those effects set. What is read after this is read from a page that has answered the act.
+ */
+function actAndSettle(history: Seen[], act: () => void): Act[] {
+  let mark = 0;
+  return [
+    () => {
+      mark = history.length;
+      act();
+    },
+    waitFor("the page to take the change up", () => history.length >= mark + 2),
+  ];
+}
+
+/**
+ * One page open, every render recorded. `acts` run one per round: a function runs, a wait is kept alive by a
+ * 1 ms poll until its condition holds. The settled questions are read from `asked()` on each render as the page
+ * reads them. A wait that runs out the ceiling ends the run and fails the test, naming what it waited for.
  */
 async function drive(
-  acts: Array<(() => void) | number>,
+  acts: Act[],
   asked: () => readonly string[] = () => [],
   history: Seen[] = [],
   reader: UserProfile = { ...profile, deepReportEnabled: true },
 ) {
   const queued = [...acts];
-  const clock = { until: 0 };
+  const waiting = { since: 0 };
   const opened = await hookRuntime.mount(
     () => {
       const state = useModelReport({ paper, profile: reader, questions: asked() });
+      net.draws += 1;
       history.push({ stage: state.stage, report: state.report, failed: state.failed, open: net.open });
       const [tick, setTick] = useState(0);
       useEffect(() => {
-        if (Date.now() < clock.until) {
-          const timer = setTimeout(() => setTick((n) => n + 1), 1);
-          return () => clearTimeout(timer);
-        }
-        const next = queued.shift();
+        const next = queued[0];
         if (next === undefined) return;
         if (typeof next === "function") {
+          queued.shift();
           next();
           setTick((n) => n + 1);
           return;
         }
-        clock.until = Date.now() + next;
+        if (next.ready()) {
+          queued.shift();
+          waiting.since = 0;
+          setTick((n) => n + 1);
+          return;
+        }
+        waiting.since = waiting.since || Date.now();
+        if (Date.now() - waiting.since >= CEILING_MS) {
+          net.lapsed.push(next.what);
+          queued.length = 0;
+          return;
+        }
         const timer = setTimeout(() => setTick((n) => n + 1), 1);
         return () => clearTimeout(timer);
       }, [tick]);
       return state;
     },
-    { maxRounds: 600 },
+    // The ceiling is what bounds a run, not the number of rounds a slow machine gets through.
+    { maxRounds: 100_000 },
   );
+  if (net.lapsed.length > 0) {
+    opened.unmount();
+    throw new Error(`timed out after ${CEILING_MS} ms waiting for: ${net.lapsed.join("; ")}`);
+  }
   return { opened, history };
+}
+
+/** What every test starts from. */
+function resetNet() {
+  net.streamCalls.length = 0;
+  net.jsonCalls = 0;
+  net.jsonPaced = false;
+  net.open = 0;
+  net.ended = 0;
+  net.held = 0;
+  net.jsonAnswered = 0;
+  net.draws = 0;
+  net.lapsed.length = 0;
+}
+
+/** What every test ends with: a request left running was let go when its page unmounted; wait for it to wind down, so none outlives its test. */
+async function windDown() {
+  await until(() => net.open === 0, "the requests to wind down");
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 }
 
 describe("useModelReport — the status line says what the page waits on, and clears (P10-41)", () => {
   beforeEach(() => {
     vi.stubGlobal("localStorage", memoryStorage());
     vi.stubGlobal("window", quietWindow);
-    net.streamCalls.length = 0;
-    net.jsonCalls = 0;
-    net.jsonDelayMs = 0;
-    net.open = 0;
+    resetNet();
   });
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.unstubAllGlobals();
-  });
+  afterEach(windDown);
 
   it("pending, then done: the stage stands while the request is in flight and is gone with the report", async () => {
-    net.script = staged(40, [["writing", "Writing the report", 75]]);
-    const { opened, history } = await drive([60]);
+    net.script = staged([["writing", "Writing the report", 75]]);
+    const { opened, history } = await drive([requestsEnded()]);
     opened.unmount();
 
     const during = history.filter((seen) => seen.stage !== null);
@@ -189,12 +316,12 @@ describe("useModelReport — the status line says what the page waits on, and cl
   });
 
   it("the report and the stage are never drawn together (the answers shown, nothing pending)", async () => {
-    net.script = staged(30, [
+    net.script = staged([
       ["reading", "Reading it", 35],
       ["writing", "Writing the report", 75],
       ["figures", "Adding figures", 92],
     ]);
-    const { opened, history } = await drive([80]);
+    const { opened, history } = await drive([requestsEnded()]);
     opened.unmount();
 
     expect(history.some((seen) => seen.report !== null)).toBe(true);
@@ -202,13 +329,14 @@ describe("useModelReport — the status line says what the page waits on, and cl
   });
 
   it("pending, then failed: an error before any report clears the stage and says the model could not finish", async () => {
-    net.script = async function* () {
+    net.script = async function* (_body: Record<string, unknown>, signal?: AbortSignal) {
       yield { type: "mode", aiMode: "tier2" };
       yield { type: "stage", stage: "writing", label: "Writing the report", pct: 75 };
-      await sleep(20);
+      await drawn(signal);
       yield { type: "error", message: "Peer could not finish the report stream." };
     };
-    const { opened, history } = await drive([80]);
+    // The error is asked again as JSON (the stub answers at once, with no model): the request ends when that answers.
+    const { opened, history } = await drive([waitFor("the JSON ask to answer", () => net.jsonAnswered >= 1)]);
     opened.unmount();
 
     expect(history.some((seen) => seen.stage !== null)).toBe(true);
@@ -219,12 +347,13 @@ describe("useModelReport — the status line says what the page waits on, and cl
   });
 
   it("the stage stands from the moment a model is asked, before the server's first stage event", async () => {
-    net.script = async function* (body: Record<string, unknown>) {
+    net.script = async function* (body: Record<string, unknown>, signal?: AbortSignal) {
       yield { type: "mode", aiMode: "tier2" };
-      await sleep(60);
+      // Held until the page has drawn: the mode event has arrived, no stage yet; the reader is waiting.
+      await drawn(signal);
       yield reportEvent(body);
     };
-    const { opened, history } = await drive([30]);
+    const { opened, history } = await drive([requestsEnded()]);
 
     // Held: the mode event has arrived, no stage yet; the reader is waiting.
     opened.unmount();
@@ -232,8 +361,8 @@ describe("useModelReport — the status line says what the page waits on, and cl
   });
 
   it("names the pass: reading with the reader's questions on it is 'Reading your questions'", async () => {
-    net.script = staged(60, [["reading", "Reading it", 35]]);
-    const { opened, history } = await drive([30], () => [QUESTION]);
+    net.script = staged([["reading", "Reading it", 35]]);
+    const { opened, history } = await drive([requestsEnded()], () => [QUESTION]);
     opened.unmount();
 
     expect(history.some((seen) => seen.stage?.label === "Reading your questions")).toBe(true);
@@ -241,25 +370,33 @@ describe("useModelReport — the status line says what the page waits on, and cl
   });
 
   it("names the pass: writing is 'Writing the report', reading without questions is 'Reading the paper'", async () => {
-    net.script = staged(60, [["writing", "Writing the report", 75]]);
-    const withWriting = await drive([30], () => [QUESTION]);
+    net.script = staged([["writing", "Writing the report", 75]]);
+    const withWriting = await drive([requestsEnded()], () => [QUESTION]);
     withWriting.opened.unmount();
     expect(withWriting.history.some((seen) => seen.stage?.label === "Writing the report")).toBe(true);
 
-    net.script = staged(60, [["reading", "Reading it", 35]]);
-    const plain = await drive([30]);
+    net.script = staged([["reading", "Reading it", 35]]);
+    const plain = await drive([requestsEnded()]);
     plain.opened.unmount();
     expect(plain.history.some((seen) => seen.stage?.label === "Reading the paper")).toBe(true);
     expect(plain.history.some((seen) => seen.stage?.label === "Reading your questions")).toBe(false);
   });
 
   it("a question settled while an earlier request is in flight: the label names that request, not a blank wait", async () => {
-    net.script = staged(250, [["writing", "Writing the report", 75]]);
+    // Held in its stage until the question has settled and the page has taken it up; then let go to finish.
+    let released = false;
+    net.script = staged([["writing", "Writing the report", 75]], () => released);
     let questions: readonly string[] = [];
     const seen: Array<Seen["stage"]> = [];
     const history: Seen[] = [];
     const { opened } = await drive(
-      [30, () => (questions = [QUESTION]), 20, () => seen.push(history[history.length - 1].stage), 300],
+      [
+        requestHeld(),
+        ...actAndSettle(history, () => (questions = [QUESTION])),
+        () => seen.push(history[history.length - 1].stage),
+        () => (released = true),
+        requestsEnded(),
+      ],
       () => questions,
       history,
     );
@@ -284,9 +421,15 @@ describe("useModelReport — the status line says what the page waits on, and cl
       resultsAndSignificance: { summary: "", keyResults: [] },
       provenance: { basis: "model-full-text", droppedClaims: 0 },
     } as never);
-    net.script = staged(250, [["writing", "Writing the report", 75]]);
+    // The request is held in flight, never released: it stands until the page is let go.
+    net.script = staged([["writing", "Writing the report", 75]], () => false);
     let questions: readonly string[] = [];
-    const { opened, history } = await drive([30, () => (questions = [QUESTION]), 80], () => questions);
+    const history: Seen[] = [];
+    const { opened } = await drive(
+      [requestHeld(), ...actAndSettle(history, () => (questions = [QUESTION]))],
+      () => questions,
+      history,
+    );
     opened.unmount();
 
     const answered = history.filter((seen) => seen.report !== null);
@@ -302,13 +445,22 @@ describe("useModelReport — the status line says what the page waits on, and cl
       yield { type: "stage", stage: "writing", label: "Writing the report", pct: 75 };
       await new Promise<void>((resolve) => signal?.addEventListener("abort", () => resolve()));
     };
-    // The deadline is the only timer of minutes the hook sets: fire it at once.
+    // The deadline is the only timer of minutes the hook sets: fire it at once — as soon as the page has drawn the
+    // stage it cuts short (a deadline that beat the first render would leave nothing to clear).
+    const history: Seen[] = [];
     const realSetTimeout = globalThis.setTimeout;
     vi.spyOn(globalThis, "setTimeout").mockImplementation(((handler: () => void, ms?: number, ...rest: unknown[]) =>
       ms !== undefined && ms >= 150_000 && ms <= 400_000
-        ? realSetTimeout(handler, 60)
+        ? realSetTimeout(
+            () =>
+              void until(
+                () => history.some((seen) => seen.stage !== null),
+                "the stage on the page before the deadline",
+              ).then(() => handler()),
+            0,
+          )
         : realSetTimeout(handler, ms, ...rest)) as typeof setTimeout);
-    const { opened, history } = await drive([160]);
+    const { opened } = await drive([requestsEnded()], () => [], history);
     opened.unmount();
 
     expect(history.some((seen) => seen.stage !== null)).toBe(true);
@@ -321,12 +473,13 @@ describe("useModelReport — the status line says what the page waits on, and cl
   });
 
   it("Tier 0: with no key no model is asked and no stage shows, at any render", async () => {
-    net.script = async function* () {
-      // The server's word takes a while: the page has nothing to show for it meanwhile.
-      await sleep(40);
+    net.script = async function* (_body: Record<string, unknown>, signal?: AbortSignal) {
+      // The server's word takes a while: the page has nothing to show for it meanwhile. It is held until the
+      // page has drawn, so the render of the wait is in the record.
+      await drawn(signal);
       yield { type: "mode", aiMode: "tier0" };
     };
-    const { opened, history } = await drive([30], () => [], [], { ...defaultProfile });
+    const { opened, history } = await drive([requestsEnded()], () => [], [], { ...defaultProfile });
     opened.unmount();
 
     expect(net.streamCalls).toHaveLength(1);
@@ -338,7 +491,7 @@ describe("useModelReport — the status line says what the page waits on, and cl
     net.script = async function* () {
       yield { type: "mode", aiMode: "tier0" };
     };
-    const { opened, history } = await drive([30]);
+    const { opened, history } = await drive([requestsEnded()]);
     opened.unmount();
 
     const last = history[history.length - 1];
@@ -347,13 +500,14 @@ describe("useModelReport — the status line says what the page waits on, and cl
   });
 
   it("the stream breaks and the request is asked again as JSON: the line says so, and clears with the answer", async () => {
-    net.jsonDelayMs = 60;
+    // The second ask is held until the page has drawn the line that says it is being made.
+    net.jsonPaced = true;
     net.script = async function* () {
       yield { type: "mode", aiMode: "tier2" };
       yield { type: "stage", stage: "writing", label: "Writing the report", pct: 75 };
       throw new Error("the connection was cut");
     };
-    const { opened, history } = await drive([120]);
+    const { opened, history } = await drive([waitFor("the second ask to answer", () => net.jsonAnswered >= 1)]);
     opened.unmount();
 
     expect(net.jsonCalls).toBe(1);
@@ -371,30 +525,36 @@ describe("useModelReport — the status line says what the page waits on, and cl
 
 const NEW_QUESTION = "Your new question — reading it";
 
-/** The request with no question rides the figures stage and is held there; the one with a question is a shorter run. */
-const firstThenQuestion: Script = async function* (body) {
-  net.open += 1;
-  try {
-    // Each event arrives on its own, as chunks do: a pause between them lets the page draw each one.
-    yield { type: "mode", aiMode: "tier2" };
-    await sleep(8);
-    if (Array.isArray(body.questions)) {
-      yield { type: "stage", stage: "reading", label: "Reading it", pct: 20 };
-      await sleep(8);
-      yield { type: "stage", stage: "writing", label: "Writing it", pct: 75 };
-      await sleep(40);
-    } else {
-      yield { type: "stage", stage: "writing", label: "Writing it", pct: 75 };
-      await sleep(8);
-      yield { type: "stage", stage: "figures", label: "Adding it", pct: 92 };
-      await sleep(250);
+/**
+ * The request with no question rides the figures stage and is held there until `release`; the one with a question is a
+ * shorter run. Each event arrives on its own, as chunks do, and is on the page before the next is sent.
+ */
+function firstThenQuestion(release: () => boolean): Script {
+  return async function* (body, signal) {
+    net.open += 1;
+    try {
+      yield { type: "mode", aiMode: "tier2" };
+      await drawn(signal);
+      if (Array.isArray(body.questions)) {
+        yield { type: "stage", stage: "reading", label: "Reading it", pct: 20 };
+        await drawn(signal);
+        yield { type: "stage", stage: "writing", label: "Writing it", pct: 75 };
+        await drawn(signal);
+      } else {
+        yield { type: "stage", stage: "writing", label: "Writing it", pct: 75 };
+        await drawn(signal);
+        yield { type: "stage", stage: "figures", label: "Adding it", pct: 92 };
+        await drawn(signal);
+        net.held += 1;
+        await until(release, "the held request to be released", signal);
+      }
+    } finally {
+      net.open -= 1;
     }
-  } finally {
-    net.open -= 1;
-  }
-  yield reportEvent(body);
-  yield { type: "stage", stage: "done", label: "Report ready", pct: 100 };
-};
+    yield reportEvent(body);
+    yield { type: "stage", stage: "done", label: "Report ready", pct: 100 };
+  };
+}
 
 /** The lines the reader sees, in order, each once however many renders drew it. */
 function seenLines(history: Seen[]): Array<[string, number | null]> {
@@ -412,21 +572,26 @@ describe("useModelReport — a queued question never sends the line backwards (P
   beforeEach(() => {
     vi.stubGlobal("localStorage", memoryStorage());
     vi.stubGlobal("window", quietWindow);
-    net.streamCalls.length = 0;
-    net.jsonCalls = 0;
-    net.jsonDelayMs = 0;
-    net.open = 0;
+    resetNet();
   });
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.unstubAllGlobals();
-  });
+  afterEach(windDown);
 
+  /** The reader's question settles while the first request is held at its last stage; the page takes it up; the first request is let go; both run to their end. */
   async function questionBehindARun() {
-    net.script = firstThenQuestion;
+    let released = false;
+    net.script = firstThenQuestion(() => released);
     let questions: readonly string[] = [];
     const history: Seen[] = [];
-    const { opened } = await drive([80, () => (questions = [QUESTION]), 500], () => questions, history);
+    const { opened } = await drive(
+      [
+        requestHeld(),
+        ...actAndSettle(history, () => (questions = [QUESTION])),
+        () => (released = true),
+        requestsEnded(2),
+      ],
+      () => questions,
+      history,
+    );
     opened.unmount();
     return history;
   }
@@ -485,8 +650,8 @@ describe("useModelReport — a queued question never sends the line backwards (P
   });
 
   it("no queued question: nothing names a new request", async () => {
-    net.script = firstThenQuestion;
-    const { opened, history } = await drive([400]);
+    net.script = firstThenQuestion(() => true);
+    const { opened, history } = await drive([requestsEnded()]);
     opened.unmount();
 
     expect(history.some((seen) => seen.stage?.label === NEW_QUESTION)).toBe(false);
