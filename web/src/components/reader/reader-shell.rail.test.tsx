@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // No DOM here (this project's tests run in plain Node): the shell runs on the staged hook runtime, with `useSyncExternalStore` as a state
@@ -133,6 +135,21 @@ function open() {
 
 const mouse = { pointerType: "mouse" };
 const touch = { pointerType: "touch" };
+/** A keydown as the shell reads it: the key, whether something has handled it, and what the shell does to it. */
+function keyEvent(key: string, handled = false) {
+  const event = {
+    key,
+    defaultPrevented: handled,
+    stopped: false,
+    preventDefault() {
+      event.defaultPrevented = true;
+    },
+    stopPropagation() {
+      event.stopped = true;
+    },
+  };
+  return event;
+}
 const call = (handler: unknown, event: unknown = {}) => (handler as Handler)(event);
 /** Time passes inside an event, so that the state a timer sets is rendered. */
 const wait = (ms: number) => stagedRuntime.event(() => vi.advanceTimersByTime(ms));
@@ -322,7 +339,7 @@ describe("the peek (D6): hover rests 150 ms, 250 ms after leaving, Escape", () =
     expect(env.keydown.size).toBe(1);
 
     env.focusOn("inside-pane");
-    stagedRuntime.event(() => env.keydown.forEach((cb) => cb({ key: "Escape" })));
+    stagedRuntime.event(() => env.keydown.forEach((cb) => cb(keyEvent("Escape"))));
     expect(page.look().state).toBe("rail");
     expect(page.focus.rail).toHaveBeenCalled();
   });
@@ -333,11 +350,85 @@ describe("the peek (D6): hover rests 150 ms, 250 ms after leaving, Escape", () =
     stagedRuntime.event(() => call(page.look().cell.props.onPointerEnter, mouse));
     wait(PEEK_OPEN_MS);
     stagedRuntime.flush();
-    stagedRuntime.event(() => env.keydown.forEach((cb) => cb({ key: "a" })));
+    stagedRuntime.event(() => env.keydown.forEach((cb) => cb(keyEvent("a"))));
     expect(page.look().state).toBe("peek");
-    stagedRuntime.event(() => env.keydown.forEach((cb) => cb({ key: "Escape" })));
+    stagedRuntime.event(() => env.keydown.forEach((cb) => cb(keyEvent("Escape"))));
     stagedRuntime.flush();
     expect(env.keydown.size).toBe(0);
+  });
+
+  // P11-16 follow-up (ruling §1h.115, item 1): Escape closed a peek AND ran the page's own Escape — "back to the briefing" — so a reader who
+  // opened the left pane and pressed Escape was taken off the paper (measured at 28 of 28 windows). `keyboard.tsx` listens on the WINDOW;
+  // the shell listens on the document, which a key meets first, so a key the shell prevents and stops never reaches the page.
+  describe("Escape in a peek goes no further", () => {
+    /** The page's "back to the briefing": what `keyboard.tsx`'s window listener would do with the key. */
+    const back = vi.fn();
+    /** A key as the browser delivers it: the document's listeners first, then — unless one stopped it — the window's. */
+    const press = (key: string, handled = false) => {
+      const event = keyEvent(key, handled);
+      stagedRuntime.event(() => {
+        env.keydown.forEach((cb) => cb(event));
+        if (!event.stopped) back(event);
+      });
+      return event;
+    };
+    const peeking = () => {
+      back.mockClear();
+      const page = railed();
+      stagedRuntime.event(() => call(page.look().cell.props.onPointerEnter, mouse));
+      wait(PEEK_OPEN_MS);
+      stagedRuntime.flush();
+      expect(page.look().state).toBe("peek");
+      return page;
+    };
+
+    it("closes the peek and the page's back does not run: the key is prevented and its propagation stopped", () => {
+      const page = peeking();
+
+      const event = press("Escape");
+
+      expect(page.look().state).toBe("rail");
+      expect(event.defaultPrevented).toBe(true);
+      expect(event.stopped).toBe(true);
+      expect(back).not.toHaveBeenCalled();
+    });
+
+    it("leaves a key something else has already handled: the peek stays, and the key is not taken again", () => {
+      const page = peeking();
+
+      const event = press("Escape", true);
+
+      expect(page.look().state).toBe("peek");
+      expect(event.stopped).toBe(false);
+    });
+
+    it("takes no other key: a letter reaches the page", () => {
+      const page = peeking();
+
+      const event = press("j");
+
+      expect(page.look().state).toBe("peek");
+      expect(event.defaultPrevented).toBe(false);
+      expect(back).toHaveBeenCalledTimes(1);
+    });
+
+    it("takes no Escape with no peek open: the page's own Escape is the page's", () => {
+      back.mockClear();
+      railed();
+      expect(env.keydown.size).toBe(0);
+
+      press("Escape");
+
+      expect(back).toHaveBeenCalledTimes(1);
+    });
+
+    it("rests on the page's own shape: `keyboard.tsx` handles Escape in a window listener, in the bubble phase, after the document's", () => {
+      const keyboard = readFileSync(resolve(process.cwd(), "src/components/keyboard.tsx"), "utf8");
+
+      expect(keyboard).toContain('window.addEventListener("keydown", handler);');
+      expect(keyboard).not.toMatch(/window\.addEventListener\("keydown", handler, (?:true|\{)/);
+      expect(keyboard).toContain('if (onPaperPage() && runReaderKey(e.key, e)) return;');
+    });
   });
 
   it("closes at once when a press lands outside the pane (a touch screen has no pointer to leave it), and not when it lands inside", () => {

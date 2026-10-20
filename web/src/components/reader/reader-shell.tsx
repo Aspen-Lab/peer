@@ -23,7 +23,8 @@ import { fitPanes } from "./pane-layout";
 //   pinned  a grid column, sticky under the masthead, window-high, scrolling inside itself;
 //   rail    a 48 px column holding one button; the pane is `inert` and out of sight;
 //   peek    the pane shown over the centre (fixed, a shadow, no re-flow): the pointer rested on the rail for 150 ms, or the rail was
-//           pressed on a touch screen. It closes 250 ms after the pointer leaves it, or on Escape; focus inside keeps it open. A press
+//           pressed on a touch screen. It closes 250 ms after the pointer leaves it, or on Escape (which goes no further: the page's own
+//           Escape, "back to the briefing", does not run); focus inside keeps it open. A press
 //           on the rail pins it; so does the pin button at the pane's top, which in a pinned pane collapses it again.
 // First visit: pinned where the default widths fit (1144 css px), else the rail. The choice and the widths are kept per browser
 // (`store/reader-panes.ts`); what the window forces (`fitPanes`) is never written back.
@@ -131,9 +132,14 @@ export function ReaderShell({ left, centre }: ReaderShellProps) {
       setPeeking(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      // A key something else has handled already (a control's own Escape, a modal) is theirs, as `explain-box.tsx`'s Escape leaves it.
+      if (event.key !== "Escape" || event.defaultPrevented) return;
       close();
       if (pane.current?.contains(document.activeElement)) rail.current?.focus();
+      // The page's own Escape is "back to the briefing" (`keyboard.tsx`, a window listener, on a paper page). This one closes a peek, and
+      // goes no further — as the explain card's does: with the key prevented and stopped here the reader stays on the paper.
+      event.preventDefault();
+      event.stopPropagation();
     };
     const onPointerDown = (event: Event) => {
       const target = event.target as Node | null;
