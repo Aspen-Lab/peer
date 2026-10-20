@@ -338,6 +338,10 @@ const metaText = (html: string, heading: string) => metaMarkup(html, heading).re
 const metaParts = (html: string, heading: string) =>
   [...metaMarkup(html, heading).matchAll(/<span data-meta-part="([a-z]+)"[^>]*>([^<]*)<\/span>/g)].map((m) => [m[1], m[2]] as const);
 
+/** The separator slots, in order: the text of each `data-meta-slot` span. */
+const metaSlots = (html: string, heading: string) =>
+  [...metaMarkup(html, heading).matchAll(/<span data-meta-slot="" class="[^"]*">([^<]*)<\/span>/g)].map((m) => m[1]);
+
 const wordsMap: ReadingMap = {
   sections: [
     { id: "w1", heading: "1 Introduction", canonical: "introduction", role: "setup", page: 1, words: 1234, minutes: 6, paragraphs: [] },
@@ -402,34 +406,43 @@ describe("ReadingMapView — each row says its words (P9-51, F08)", () => {
     }
   });
 
-  it("puts each part in a span of its own, with the separator as the first word of every part but the first", () => {
+  // P11-23 rule 2 (A P11-21 X-A2; ruling §1h.120), RE-AIMED from "puts each part in a span of its own, with the separator as the first word of every
+  // part but the first" and "keeps each part whole ... joins two parts with one plain space that stands outside both" (P9-51, which drew each
+  // separator with the part AFTER it: a break left "· 11 min" at the start of a line). The separator belongs to the part BEFORE it now, in a slot of
+  // its own beside the part, and the two runs ("setup · p.1", "1,234 words · 6 min") are the only places a line may break. What a reader or a copy gets
+  // is unchanged (the test above), and so is every part's own span, its text and its `whitespace-nowrap`.
+  it("puts each part in a span of its own, none of them opening with a separator, the separator after it in a slot of its own (the last part's slot empty)", () => {
     const html = renderWords();
 
-    expect(metaParts(html, "1 Introduction")).toEqual([["role", "setup"], ["page", "· p.1"], ["words", "· 1,234 words"], ["minutes", "· 6 min"]]);
-    expect(metaParts(html, "Problem Statement")).toEqual([["words", "90 words"], ["minutes", "· 1 min"]]);
+    expect(metaParts(html, "1 Introduction")).toEqual([["role", "setup"], ["page", "p.1"], ["words", "1,234 words"], ["minutes", "6 min"]]);
+    expect(metaParts(html, "Problem Statement")).toEqual([["words", "90 words"], ["minutes", "1 min"]]);
     expect(metaParts(html, "Appendix")).toEqual([["words", "0 words"]]);
     for (const row of wordsMap.sections) {
       const parts = metaParts(html, row.heading);
       expect(parts.length, row.heading).toBeGreaterThanOrEqual(1);
-      parts.forEach(([, text], index) => {
-        // No part ends on a separator or a space; none but the first starts with anything but "· ".
-        expect(text, `${row.heading}: ${text}`).not.toMatch(/[·\s]$/);
-        if (index > 0) expect(text.startsWith("· ")).toBe(true);
-        else expect(text.startsWith("·")).toBe(false);
-      });
+      for (const [, text] of parts) {
+        // No part starts or ends with a separator or a space: the separator is not part of a part.
+        expect(text, `${row.heading}: ${text}`).not.toMatch(/^[·\s]|[·\s]$/);
+      }
+      // The slots, in order: " ·" after every part but the last, which has an empty one (it only holds the room the box clips).
+      expect(metaSlots(html, row.heading), row.heading).toEqual([...parts.slice(1).map(() => " ·"), ""]);
     }
   });
 
-  it("keeps each part whole (whitespace-nowrap) and joins two parts with one plain space that stands outside both", () => {
+  it("keeps each part whole (whitespace-nowrap) and breaks a row only between its two runs: the plain space between them, none inside one", () => {
     const html = renderWords();
     const markup = metaMarkup(html, "1 Introduction");
     const classes = [...markup.matchAll(/<span data-meta-part="[a-z]+"[^>]*class="([^"]*)"/g)].map((m) => m[1].split(/\s+/));
 
     expect(classes).toHaveLength(4);
     for (const each of classes) expect(each).toContain("whitespace-nowrap");
-    // The only break the row has between parts is the plain space between two spans.
-    expect(markup.split("</span> <span data-meta-part=")).toHaveLength(4);
-    expect(markup.replace(/<span data-meta-part="[a-z]+"[^>]*>[^<]*<\/span>/g, "|").replace(/<[^>]*>/g, "")).toBe("| | | |");
+    // Two runs, each whole: where the section is, and how long it is. The one plain space between them is the row's only break.
+    const runs = [...markup.matchAll(/<span data-meta-run="([a-z]+)" class="([^"]*)">/g)].map((m) => [m[1], m[2].split(/\s+/)] as const);
+    expect(runs.map(([name]) => name)).toEqual(["place", "size"]);
+    for (const [, cls] of runs) expect(cls).toContain("whitespace-nowrap");
+    expect(markup).toContain('</span></span> <span data-meta-run="size"');
+    // A row with only the words and minutes has the one run, and so no break at all.
+    expect([...metaMarkup(html, "Problem Statement").matchAll(/data-meta-run="([a-z]+)"/g)].map((m) => m[1])).toEqual(["size"]);
   });
 
   // The copy: one function, the summary line's own number format (a thousands comma), "1 word" singular.

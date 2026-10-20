@@ -18,7 +18,9 @@ const tags = (markup: string, tag: string) => markup.match(new RegExp(`<${tag}\\
 const classes = (tagText: string) => (/\bclass="([^"]*)"/.exec(tagText)?.[1] ?? "").split(/\s+/).filter(Boolean);
 const attr = (tagText: string, name: string) => new RegExp(`\\s${name}="([^"]*)"`).exec(tagText)?.[1];
 
-const NAMES = ["Larger text", "Smaller text", "Day reading mode", "Night reading mode", "Fit to screen"];
+// P11-23 rule 3 (ruling §1h.121), RE-AIMED: the third button, the sun, was named "Day reading mode" and is named for what it does now, "Follow the system" —
+// with "(now dark)" / "(now light)" once the page can ask the media query, which a server render cannot (the cases are in reading-controls.system.test.tsx).
+const NAMES = ["Larger text", "Smaller text", "Follow the system", "Night reading mode", "Fit to screen"];
 
 describe("ReadingControls — five buttons, the names they had (N5)", () => {
   it("are the same five buttons with the same names, in the same order, in one labelled group", () => {
