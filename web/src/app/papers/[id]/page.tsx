@@ -1433,9 +1433,9 @@ function Reader({
         }
         // P11-16: from 1024 css px the title stands in the left pane, where it is clamped to four lines (`pane`).
         title={<TitleBlock paper={paper} recommendation={recommendation} now={now} pane={spread} />}
-        // P11-16: the decision block is two parts. The commands stand under the title, in the left pane's fixed zone, where they stay in
-        // view (and carry the decided-read observer's ref); the details — the sentence, the private-PDF line, the DOI, the progress — follow
-        // the map in its scroll zone, and in one column follow the commands.
+        // P11-16: the decision block is three parts. The commands stand under the title, in the left pane's fixed zone, where they stay in
+        // view (and carry the decided-read observer's ref); the details — the sentence, the private-PDF line, the DOI — follow the map in
+        // its scroll zone, and in one column follow the commands; the progress is the third part, below.
         decision={
           <DecisionBlock
             part="commands"
@@ -1461,7 +1461,6 @@ function Reader({
           <DecisionBlock
             part="details"
             sentences={sentences}
-            stage={model.stage}
             doi={paper.doi}
             showAddKey={showAddKey}
             uploadStatus={upload ? <PrivatePdfStatus upload={upload}
@@ -1472,6 +1471,9 @@ function Reader({
               }} /> : undefined}
           />
         }
+        // P11-16 follow-up: what the report is waiting on — the progress bar and its status line — stands in the left pane's fixed zone, directly
+        // after the commands, so it stays on screen while a report generates; in one column it follows the details, as it always did.
+        progress={<DecisionBlock part="progress" stage={model.stage} />}
         // P7-14 (R10): the strip under the decision block, only on a paper Peer has read in full.
         tabs={hasBody ? <ReaderTabs tab={tab} onSelect={selectTab} /> : undefined}
         tab={hasBody ? tab : undefined}

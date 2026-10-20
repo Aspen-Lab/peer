@@ -111,7 +111,7 @@ describe("ReaderLayout, one column, a paper with a body (R10)", () => {
 // placed in the three-pane shell's zones. The left pane's fixed zone holds the reading controls, the title, the commands and the
 // Summary / Paper digestion strip; its scroll zone the map, then the plate and the details; the centre the common blocks, the active
 // tab's blocks and Next. A paper with no strip and no map has no scroll zone: the pane scrolls as one (`whole`).
-const PANES = { details: mark("DETAILS") };
+const PANES = { details: mark("DETAILS"), progress: mark("PROGRESS") };
 
 /** The three panes' regions of a rendered page: from each region's opening tag to the next region's. */
 function panes(html: string) {
@@ -139,8 +139,8 @@ describe("ReaderLayout, the three panes, a paper with no body (R2; P11-16)", () 
   it("the left pane holds the controls, the title, the commands, the plate and the details; the centre the abstract, the additions and Next", () => {
     expect(left).toBeGreaterThan(-1);
     expect(centre).toBeGreaterThan(left);
-    expect(ascending([pane.indexOf('aria-label="Reading controls"'), ...order(pane, ["TITLE", "DECISION", "PLATE", "DETAILS"])])).toBe(true);
-    for (const name of ["TITLE", "DECISION", "PLATE", "DETAILS"]) {
+    expect(ascending([pane.indexOf('aria-label="Reading controls"'), ...order(pane, ["TITLE", "DECISION", "PROGRESS", "PLATE", "DETAILS"])])).toBe(true);
+    for (const name of ["TITLE", "DECISION", "PROGRESS", "PLATE", "DETAILS"]) {
       expect(at(html, name)).toBeGreaterThan(left);
       expect(at(html, name)).toBeLessThan(centre);
     }
@@ -172,10 +172,18 @@ describe("ReaderLayout, the three panes, a paper with a body (R10; P11-16)", () 
   // P11-16 follow-up (ruling §1h.115 item 2), RE-AIMED from "the fixed zone: the reading controls, the title, the commands, the tab strip": the
   // shell has a header slot now, and the reading controls stand in the pane's header row beside the pin button — in the DOM order the reader
   // sees, the pin first — so the fixed zone is the title, the commands and the strip.
-  it("the fixed zone: the title, the commands, the tab strip — in that order, and nothing else", () => {
+  it("the fixed zone: the title, the commands, the report's progress, the tab strip — in that order, and nothing else", () => {
     expect(fixed).not.toContain('aria-label="Reading controls"');
-    expect(ascending(order(fixed, ["TITLE", "DECISION", "TABS"]))).toBe(true);
+    expect(ascending(order(fixed, ["TITLE", "DECISION", "PROGRESS", "TABS"]))).toBe(true);
     for (const name of ["MAP", "PLATE", "DETAILS", "COMMON", "WORDS", "ADDITIONS", "NEXT"]) expect(fixed).not.toContain(`data-mark="${name}"`);
+  });
+
+  // P11-16 follow-up (ruling §1h.115 item 3): the progress stands directly after the commands, in the zone that never scrolls — it was the last
+  // thing of the details, which put it at the foot of the scroll zone, under a map of fourteen rows.
+  it("the progress follows the commands directly, in the fixed zone — never in the scroll zone", () => {
+    expect(fixed.slice(fixed.indexOf('<i data-mark="DECISION">DECISION</i>') + '<i data-mark="DECISION">DECISION</i>'.length)).toMatch(/^(?:<\/div>)*<i data-mark="PROGRESS">PROGRESS<\/i>/);
+    expect(scroll).not.toContain('data-mark="PROGRESS"');
+    expect(column).not.toContain('data-mark="PROGRESS"');
   });
 
   it("the pane's header row holds the pin and collapse button and then the reading controls, once, before the fixed zone", () => {
@@ -271,15 +279,16 @@ describe("ReaderLayout, the three panes, a paper with a body (R10; P11-16)", () 
 // One column: the details (the sentence, the private-PDF line, the reading controls, the DOI, the progress) follow the commands — the
 // page hands them in a slot of their own now (P11-16), and the order is the one the decision block always had.
 describe("ReaderLayout, one column, the details after the commands (P11-16)", () => {
-  it("plate, title, decision, details, then the common blocks, the strip, the active tab's blocks, Next", () => {
+  it("plate, title, decision, details, progress, then the common blocks, the strip, the active tab's blocks, Next", () => {
     const html = tabbed(false, PANES);
 
-    expect(ascending(order(html, ["PLATE", "TITLE", "DECISION", "DETAILS", "COMMON", "TABS", "WORDS", "ADDITIONS", "NEXT"]))).toBe(true);
+    expect(ascending(order(html, ["PLATE", "TITLE", "DECISION", "DETAILS", "PROGRESS", "COMMON", "TABS", "WORDS", "ADDITIONS", "NEXT"]))).toBe(true);
     expect(html).not.toContain("data-reader-shell");
   });
 
   it("with no details the page is exactly what it was", () => {
     expect(tabbed(false)).not.toContain("DETAILS");
+    expect(tabbed(false)).not.toContain("PROGRESS");
     expect(ascending(order(tabbed(false), ["PLATE", "TITLE", "DECISION", "COMMON", "TABS", "WORDS", "ADDITIONS", "NEXT"]))).toBe(true);
   });
 });
@@ -391,6 +400,9 @@ describe("reader-layout.tsx source (P7-14)", () => {
     // Nothing stands between the title and the commands but the opening of the wrapper that tightens their gap.
     expect(fixed.slice(fixed.indexOf("{p.title}") + "{p.title}".length, fixed.indexOf("{p.decision}")).replace(/<div className="[^"]*">/g, "").trim()).toBe("");
     expect(fixed.indexOf("{p.tabs}")).toBeGreaterThan(fixed.indexOf("{p.decision}"));
+    // P11-16 follow-up: the progress stands between the commands and the strip, in the fixed zone.
+    expect(fixed.indexOf("{p.progress}")).toBeGreaterThan(fixed.indexOf("{p.decision}"));
+    expect(fixed.indexOf("{p.progress}")).toBeLessThan(fixed.indexOf("{p.tabs}"));
     // The reading controls are the shell's `header`, beside the pin — not a block of either zone.
     expect(fixed).not.toContain("<ReadingControls");
     expect(spread).toContain("header={<ReadingControls spread />}");
@@ -398,11 +410,14 @@ describe("reader-layout.tsx source (P7-14)", () => {
     expect(scroll.indexOf("{p.plate}")).toBeGreaterThan(scroll.indexOf("{p.map}"));
     expect(scroll.indexOf("{p.details}")).toBeGreaterThan(scroll.indexOf("{p.plate}"));
     expect(scroll).not.toContain("{p.tabs}");
+    expect(scroll).not.toContain("{p.progress}");
     expect(spread).not.toContain("{p.common}");
   });
 
-  it("one column: {p.details} right after {p.decision}", () => {
+  it("one column: {p.details} right after {p.decision}, then {p.progress}, before the common blocks", () => {
     expect(stacked.slice(stacked.indexOf("{p.decision}") + "{p.decision}".length, stacked.indexOf("{p.details}")).trim()).toBe("");
+    expect(stacked.slice(stacked.indexOf("{p.details}") + "{p.details}".length, stacked.indexOf("{p.progress}")).trim()).toBe("");
+    expect(stacked.indexOf("{common}")).toBeGreaterThan(stacked.indexOf("{p.progress}"));
   });
 
   it("is placed by the shell: no two-column grid, no sticky part, no panel class of spread.ts", () => {

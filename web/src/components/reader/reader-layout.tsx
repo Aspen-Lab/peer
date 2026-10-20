@@ -10,7 +10,7 @@
 // filled the old spread's first 845 px, so the map stood at y 915 and was never on screen on arrival (and under 1280 css px there was no panel
 // at all). The left pane is split: what the reader needs in view while reading — the title, the commands, the strip — is a
 // fixed zone that never scrolls, and the map is the first thing of the pane's one scroller, so its first rows are on screen at 1280 x 720.
-// The decision block is two slots for it: `decision` (the commands) and `details` (the sentence, the private-PDF line, the DOI, the progress).
+// The decision block is three slots for it: `decision` (the commands), `details` (the sentence, the private-PDF line, the DOI) and `progress`.
 // The map stays outside the tabpanel, under both tabs, and no block remounts on a tab switch, a pin, a rail or peek change, or a drag: each
 // is built once here and appears once, and the shell keeps one DOM node per zone in every state.
 //
@@ -78,9 +78,13 @@ interface ReaderLayoutProps {
   /** The commands — straight after the title in both layouts (P7-14, R2 + Q1). In the panes: the left
    *  pane's fixed zone, which never scrolls. */
   decision: ReactNode;
-  /** P11-16: what follows the commands — the sentence, the private-PDF line, the DOI, the progress. In the
+  /** P11-16: what follows the commands — the sentence, the private-PDF line, the DOI. In the
    *  panes: the left pane's scroll zone, after the map and the plate; in one column straight after `decision`. */
   details?: ReactNode;
+  /** P11-16 follow-up (ruling §1h.115 item 3): the report's progress bar and status line. In the panes: the left pane's fixed
+   *  zone, directly after the commands, so it is on screen while a report generates; in one column after `details`, where it
+   *  always stood. Present only while a stage stands. */
+  progress?: ReactNode;
   /** P7-14 (R10): the Summary / Paper digestion strip. At the foot of the left pane's fixed zone in the panes;
    *  in one column (P9-04) directly above the tabpanel it switches.
    *  Present only on a paper Peer has read in full; its presence is what makes
@@ -213,6 +217,7 @@ export function ReaderLayout(p: ReaderLayoutProps) {
         {p.title}
         {p.decision}
         {p.details}
+        {p.progress}
         {common}
         {/* P9-04 (X3): the strip stands directly above the panel it switches (`aria-controls`),
             after the blocks both tabs share — not four screens above it. */}
@@ -236,7 +241,7 @@ export function ReaderLayout(p: ReaderLayoutProps) {
   );
 
   // The left pane. The shell's header row holds the pin and the collapse button, and the reading controls beside it (`header`); the fixed
-  // zone is the title, the commands and the strip. With nothing to float — no strip, no map — the pane scrolls as one.
+  // zone is the title, the commands, the report's progress while one stands, and the strip. With nothing to float — no strip, no map — the pane scrolls as one.
   // The pane is a window high at most and the fixed zone must leave the map room, so the blocks' own gaps — made for a page — are
   // tightened here, by the wrapper, and not in the blocks (they keep their gaps in one column): the commands 20 -> 12px under the title, the
   // strip 32 -> 16px under the commands, the map 24 -> 16px under the strip.
@@ -244,6 +249,7 @@ export function ReaderLayout(p: ReaderLayoutProps) {
     <>
       {p.title}
       <div className="[&>*>:first-child]:mt-3">{p.decision}</div>
+      {p.progress}
       {p.tabs ? <div className="[&>:first-child]:mt-4">{p.tabs}</div> : null}
     </>
   );

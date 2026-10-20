@@ -156,9 +156,10 @@ describe("the sentence carries no status words while a stage shows (P10-47)", ()
   }
 });
 
-// P11-16: the page hands the block to the layout in two slots (`decision`, the commands, and `details`, the sentence and the progress). The
-// status is the details', so it is drawn once whichever zone of the left pane, or whichever place in the column, the details stand in.
-describe("the report's status line is drawn once with the block in two slots (P11-16)", () => {
+// P11-16: the page hands the block to the layout in slots (`decision`, the commands; `details`, the sentence; and, from the follow-up of ruling
+// §1h.115 item 3, `progress`, the status). The status is the progress part's alone, so it is drawn once whichever zone of the left pane, or
+// whichever place in the column, the progress stands in.
+describe("the report's status line is drawn once with the block in three slots (P11-16)", () => {
   const layouts: Array<[string, Record<string, unknown>]> = [
     ["one column", { spread: false }],
     ["the three panes, with the strip and the map", { spread: true, tabs: createElement("i", null, "TABS"), map: createElement("i", null, "MAP"), tab: "digestion" }],
@@ -166,7 +167,7 @@ describe("the report's status line is drawn once with the block in two slots (P1
   ];
   for (const [layout, over] of layouts) {
     for (const [name, stage] of STATES) {
-      it(`${layout}, ${name}: the page carries one status line, in the details`, () => {
+      it(`${layout}, ${name}: the page carries one status line, in the progress`, () => {
         const props = { sentences: ["Read from the abstract."], stage, source: null, isSaved: false, showAddKey: false, onSave: NOOP, onCopy: NOOP, onOpen: NOOP };
         const html = renderToStaticMarkup(
           createElement(ReaderLayout, {
@@ -174,6 +175,7 @@ describe("the report's status line is drawn once with the block in two slots (P1
             title: createElement("i", null, "TITLE"),
             decision: createElement(DecisionBlock, { ...props, part: "commands" } as never),
             details: createElement(DecisionBlock, { ...props, part: "details" } as never),
+            progress: createElement(DecisionBlock, { ...props, part: "progress" } as never),
             words: createElement("i", null, "WORDS"),
             additions: createElement("i", null, "ADDITIONS"),
             next: createElement("i", null, "NEXT"),

@@ -16,8 +16,12 @@
 // them. `part="commands"` is the commands alone — the left pane's fixed zone, under the title, where they stay in view — and
 // `part="details"` is everything after them: the sentence, the private-PDF line, the DOI and the progress, in the pane's scroll zone after
 // the map. The page hands the two to the layout in two slots; in one column the layout draws them one after the other, so the block reads
-// as it always did, with the reading controls between the private-PDF line and the DOI. In the panes the controls stand at the top of the
-// left pane (the layout draws them), so the details leave them out. With no `part` the block is whole, in that same order.
+// as it always did, with the reading controls between the private-PDF line and the DOI. In the panes the controls stand in the left pane's
+// header row (the layout draws them), so the details leave them out. With no `part` the block is whole, in that same order.
+//
+// P11-16 follow-up (ruling §1h.115 item 3): the report's progress bar and status line are a third part, `part="progress"`. They are what the
+// reader waits on, so in the panes they stand in the fixed zone directly after the commands — never at the foot of the scroll zone, under
+// a map of fourteen rows — and in one column they follow the details, as the last thing of the block, where they always stood.
 
 import Link from "next/link";
 import { ADD_KEY_HREF } from "@/lib/navigation/add-key-destination";
@@ -73,18 +77,23 @@ interface CommandsProps {
 /** What the details need. */
 interface DetailsProps {
   sentences: string[];
-  /** While the model works: the stream's stage under the sentence. */
-  stage: { label: string; pct: number | null } | null;
   doi?: string;
   /** No provider configured and the sentence names a key. */
   showAddKey: boolean;
   uploadStatus?: ReactNode;
 }
 
+/** What the progress needs. */
+interface ProgressProps {
+  /** While the model works: the stream's stage, a label and how far along it is. */
+  stage: { label: string; pct: number | null } | null;
+}
+
 export type DecisionBlockProps =
-  | (CommandsProps & DetailsProps & { part?: undefined })
+  | (CommandsProps & DetailsProps & ProgressProps & { part?: undefined })
   | (CommandsProps & { part: "commands" })
-  | (Pick<CommandsProps, "ref"> & DetailsProps & { part: "details" });
+  | (Pick<CommandsProps, "ref"> & DetailsProps & { part: "details" })
+  | (Pick<CommandsProps, "ref"> & ProgressProps & { part: "progress" });
 
 function Commands({ onRead, readLabel, source, isSaved, onSave, onSkip, onCopy, onOpen, notesAction, uploadAction }: CommandsProps) {
   return (
@@ -103,7 +112,7 @@ function Commands({ onRead, readLabel, source, isSaved, onSave, onSkip, onCopy, 
   );
 }
 
-function Details({ sentences, stage, doi, showAddKey, uploadStatus }: DetailsProps) {
+function Details({ sentences, doi, showAddKey, uploadStatus }: DetailsProps) {
   // From 1024 css px the sentence is a note in the left pane, set at the pane's size with a rule beside it, and the reading controls are
   // at the top of that pane. Below it the sentence is prose in the reading column, and the controls follow the private-PDF line. Either
   // way it follows the commands (P7-14, R2), at the same distance.
@@ -158,7 +167,14 @@ function Details({ sentences, stage, doi, showAddKey, uploadStatus }: DetailsPro
           doi:{doi}
         </a>
       )}
+    </>
+  );
+}
 
+/** The stage the report is at, under the commands: drawn only while a stage stands. */
+function Progress({ stage }: ProgressProps) {
+  return (
+    <>
       {stage && (
         // S19: the last thing in the panel while generating — moved off
         // the sentence, widened, and labelled, so it reads as the whole
@@ -204,10 +220,12 @@ export function DecisionBlock({ ref, ...props }: DecisionBlockProps) {
     );
   }
   if (props.part === "details") return <Details {...props} />;
+  if (props.part === "progress") return <Progress {...props} />;
   return (
     <div ref={ref}>
       <Commands {...props} />
       <Details {...props} />
+      <Progress {...props} />
     </div>
   );
 }

@@ -38,4 +38,12 @@ describe("DecisionBlock, in the three panes (P11-16)", () => {
     expect(commands).toContain(">Save<");
     expect(commands).not.toContain("SENTENCE-MARK");
   });
+
+  it("the progress part is the same in the panes: the bar and the status line", () => {
+    const progress = html({ part: "progress", stage: { label: "Reading", pct: 40 } });
+
+    expect(progress).toContain('role="progressbar"');
+    expect(progress).toContain("Reading…");
+    expect(progress).not.toContain("SENTENCE-MARK");
+  });
 });

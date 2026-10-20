@@ -46,7 +46,7 @@ const tagWith = (html: string, attr: string) => {
 };
 const classOf = (tag: string) => /class="([^"]*)"/.exec(tag)?.[1] ?? "";
 
-const PANES = { details: mark("DETAILS") };
+const PANES = { details: mark("DETAILS"), progress: mark("PROGRESS") };
 
 describe("ReaderLayout, the three panes: the strip is the left pane's fixed zone, the map its scroll zone (P11-16; was P10-04b, A8)", () => {
   const html = render(true, PANES);
@@ -64,7 +64,7 @@ describe("ReaderLayout, the three panes: the strip is the left pane's fixed zone
   });
 
   it("the strip and the title and commands above it are in the fixed zone: they never scroll with the map", () => {
-    for (const name of ["TITLE", "DECISION", "TABS"]) {
+    for (const name of ["TITLE", "DECISION", "PROGRESS", "TABS"]) {
       expect(at(html, name)).toBeGreaterThan(fixedAt);
       expect(at(html, name)).toBeLessThan(scrollAt);
     }
@@ -107,7 +107,7 @@ describe("ReaderLayout, the three panes: the strip is the left pane's fixed zone
     expect(tagWith(bare, "data-reader-left=")).toContain('data-mode="whole"');
     expect(bare).not.toContain("data-reader-left-fixed");
     expect(bare).not.toContain("data-reader-left-scroll");
-    for (const name of ["TITLE", "DECISION", "PLATE", "DETAILS"]) expect(at(bare, name)).toBeGreaterThan(bare.indexOf("data-reader-left="));
+    for (const name of ["TITLE", "DECISION", "PROGRESS", "PLATE", "DETAILS"]) expect(at(bare, name)).toBeGreaterThan(bare.indexOf("data-reader-left="));
   });
 
   it("the commands (the decision block) still follow the title (P7-14), whatever the zones hold", () => {
