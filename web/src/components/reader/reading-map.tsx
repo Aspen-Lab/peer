@@ -47,6 +47,15 @@
 // narrow pane gets those two lines and not "6 min" alone. The one column draws the same markup; where nothing breaks it is pixel for pixel
 // what it was.
 //
+// P11-23 rule 4 (BACKLOG-104; ruling §1h.126): the summary line above the rows ("Read from PDF · 16 sections · 6,042 words · about 34 min") had the same
+// defect at the pane's default 320 (and from 313 to 332): its second line opened with "· about 34 min". It is left-aligned, where the rows' meta is
+// right-aligned, so the same clip works from the other side: in the pane the separator is drawn in a 2ch slot at the START of the part it introduces
+// ("· " before "about"), the box clips 2ch off its left edge (`-ml-[2ch]` on the lines inside it, `overflow-x-clip` on the box), and the first part has an
+// empty slot so that it begins at the edge. A part is one nowrap piece, so every line begins with a slot (the first's empty, any other's clipped) and a
+// break falls between parts. All of it is for the pane only (`[.reader-left_&]:`): the one column keeps the plain string's own breaks and is what it was,
+// glyph for glyph. The words are `MAP.summary`'s own (`copy.ts` is untouched): the line is split at its " · " and reads, to a reader and a copy, as the
+// one string it was.
+//
 // P10-04 (review 3.3; A10): the paper's own hierarchy. A row has its `level` (1 for "2.", 2 for "2.1", 3 for
 // "2.1.1") and is indented one step per level, in the one list (an inline padding, not a nested table, so the
 // keyboard walks the rows in order). A row with no paragraphs of its own that has rows under it is a group
@@ -199,6 +208,35 @@ function metaRuns(parts: ReturnType<typeof metaParts>) {
   return runs.filter((run) => run.parts.length > 0);
 }
 
+/**
+ * P11-23 rule 4: the map's summary line, drawn so that a break never leaves a separator at the start of a line — in the left pane. `MAP.summary`'s string,
+ * split at its separators; each part but the first is introduced by a slot holding "· " (the first has an empty one). In the pane (`.reader-left`, the
+ * ancestor the one column has none of) the slot is 2ch wide, a part is one nowrap piece (so every line begins with a slot: the first's empty, the others'
+ * clipped), and the box clips the 2ch that the lines inside it stand left of its left edge. In the one column none of that applies: the slot is a plain
+ * inline span of the same text and the parts wrap as the words always did, so the line is what it was, glyph for glyph. The box is the flex item the
+ * plain `<span>` was.
+ */
+function SummaryLine({ text }: { text: string }) {
+  const parts = text.split(" · ");
+  return (
+    <span data-map-summary="" className="[.reader-left_&]:overflow-x-clip">
+      <span className="block [.reader-left_&]:-ml-[2ch]">
+        {parts.map((part, index) => (
+          <Fragment key={index}>
+            {index > 0 ? " " : null}
+            <span className="[.reader-left_&]:whitespace-nowrap">
+              <span data-summary-slot="" className="[.reader-left_&]:inline-block [.reader-left_&]:w-[2ch] [.reader-left_&]:whitespace-pre">
+                {index > 0 ? "· " : null}
+              </span>
+              {part}
+            </span>
+          </Fragment>
+        ))}
+      </span>
+    </span>
+  );
+}
+
 /** P11-23 rule 2: the row's meta, drawn so that a break never leaves a separator at the start of a line (see the box's comment in the row). */
 function MetaLine({ parts }: { parts: ReturnType<typeof metaParts> }) {
   const last = parts[parts.length - 1];
@@ -320,7 +358,7 @@ export function ReadingMapView({
         <p className={["annotation mt-1 text-text-faint", shownOnPhone ? "" : "hidden sm:block"].join(" ").trim()}>{PEERS_READING}</p>
       )}
       <p className="annotation mt-2 flex items-baseline gap-3 text-text-faint">
-        <span>{MAP.summary(rowCount, map.totalMinutes, totalWords, source)}</span>
+        <SummaryLine text={MAP.summary(rowCount, map.totalMinutes, totalWords, source)} />
         <button
           type="button"
           aria-expanded={shownOnPhone}
