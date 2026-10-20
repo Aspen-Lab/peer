@@ -553,10 +553,12 @@ html[data-mode="dark"] {
 
    The pinned pane. 4rem = the article's top padding under the 48px masthead (`PageContainer`'s `reader` width), so the stuck position is
    the first-paint position and the pane never slides. Any ancestor with an overflow other than visible silently kills the sticky —
-   main, the article and the grid must keep it. `margin-bottom: -0.75rem` (P10-21): at the very foot of the page a sticky element stops
-   where its holder ends, and the holder ends 64px above the window's bottom at 1280 x 720, so the pane would stop with its top 4px
-   under the masthead; the negative margin lets it end 12px below the holder, in the page's own bottom room, so its top is never under
-   the masthead. Its blocks are two zones: a fixed one that never scrolls and a scroll zone that is the pane's only scroller (the
+   main, the article and the grid must keep it. `margin-bottom: -4rem` (P10-21; P11-23 rule 1, A P11-21 X-A1): at the very foot of the page a
+   sticky element stops where its holder ends, and the holder ends 4rem above the window's bottom (the page's own bottom room, `md:pb-16`
+   in `papers/[id]/page.tsx`), while the window-high pane would end only the legend and 1rem (44px) above it, so a pane that may hang
+   less than 20px (rem 1.25) below its holder is pushed up by the rest — -0.75rem hung 12px and the whole pane stepped up about 8px as the
+   page ended. The negative margin is the whole of that room: the holder's end never stops the pane, so nothing in it moves from the first
+   scroll to the last; it still ends 16px above the legend (its own max-height) and never under the masthead. Its blocks are two zones: a fixed one that never scrolls and a scroll zone that is the pane's only scroller (the
    map); a pane given its content `whole` scrolls as one. The 8px/16px of side padding are the room the focus ring (2px + 3px offset)
    needs inside the scroll port.
 
@@ -596,7 +598,7 @@ html[data-mode="dark"] {
   display: flex;
   flex-direction: column;
   max-height: calc((100vh - 4rem - var(--legend-h) - 1rem) / var(--page-zoom, 1));
-  margin-bottom: -0.75rem;
+  margin-bottom: -4rem;
   padding-inline: 16px 8px;
   overflow-y: auto;
   overscroll-behavior: contain;
