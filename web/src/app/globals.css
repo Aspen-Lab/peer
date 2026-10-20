@@ -630,29 +630,13 @@ html[data-mode="dark"] {
    (314 at 614, 305 at 600): it scrolled inside itself by 11-32 px and its foot was cut off until the report arrived. Here the title is clamped to
    three lines, not four (`title-block.tsx`: `data-pane-title`), and the gaps between the zone's blocks are 8 px, not 12 (`--pane-gap`, read with
    the 12 px fallback by the layout's wrappers and the progress part: the one column has no pane to set it). The progress is never hidden and
-   the map is never pushed off: the zone gets smaller, the cap above is not raised. From 700 css px the zone fits its cap with the full title.
-   P11-20 rule 2 (BACKLOG-100): a paper from the briefing also has a byline and an affiliation in the title block. On the same short windows each is
-   one line with an ellipsis (`title-block.tsx`: `data-pane-byline`, `data-pane-affiliation`, the whole of each in its `title=`); the control that
-   opens the rest and its comma (`data-pane-more`) would sit past the ellipsis, so they go; and the pane's details (`decision-block.tsx`:
-   `data-pane-byline-full`, drawn hidden) show the full list and the affiliation. The venue line, the commands and the progress are not touched. */
+   the map is never pushed off: the zone gets smaller, the cap above is not raised. From 700 css px the zone fits its cap with the full title. */
 @media (max-height: 699px) {
   .reader-left {
     --pane-gap: 0.5rem;
   }
   .reader-left [data-pane-title] {
     -webkit-line-clamp: 3;
-  }
-  .reader-left [data-pane-byline],
-  .reader-left [data-pane-affiliation] {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .reader-left [data-pane-more] {
-    display: none;
-  }
-  .reader-left [data-pane-byline-full] {
-    display: block;
   }
 }
 

@@ -29,10 +29,12 @@ import type { Ref, ReactNode } from "react";
 import { IconLink } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import type { PaperReading } from "@/lib/papers/reading";
+import type { Paper } from "@/types";
 import { useSpread } from "./reader-layout";
 import { ReaderCommands } from "./reader-commands";
 import { ReadingControls } from "./reading-controls";
 import { BUTTON } from "./copy";
+import { Bibliography } from "./title-block";
 
 /**
  * Touch room for a line of text that is a control, without moving the type:
@@ -77,10 +79,12 @@ interface CommandsProps {
 /** What the details need. */
 interface DetailsProps {
   sentences: string[];
-  /** P11-20 (rule 2): the paper's authors and the first author's affiliation. In the panes the details hold them whole, for a window under 700 css px
-   *  high, where the title block's byline is one line with an ellipsis (`globals.css`); everywhere else this draws nothing. */
-  authors?: readonly string[];
-  affiliation?: string;
+  /** P11-20 follow-up (item 2a): in the panes the paper's venue and age, byline, affiliation and recommendation head the details (`Bibliography`,
+   *  `title-block.tsx`) — the fixed zone holds the title alone. In one column, and without a `paper`, this draws nothing: the title block has them. */
+  paper?: Pick<Paper, "venue" | "publishedDate" | "authors" | "leadAffiliation">;
+  recommendation?: string | null;
+  /** The clock `paper`'s age is read against. */
+  now?: number;
   doi?: string;
   /** No provider configured and the sentence names a key. */
   showAddKey: boolean;
@@ -116,7 +120,7 @@ function Commands({ onRead, readLabel, source, isSaved, onSave, onSkip, onCopy, 
   );
 }
 
-function Details({ sentences, authors = [], affiliation, doi, showAddKey, uploadStatus }: DetailsProps) {
+function Details({ sentences, paper, recommendation, now = 0, doi, showAddKey, uploadStatus }: DetailsProps) {
   // From 1024 css px the sentence is a note in the left pane, set at the pane's size with a rule beside it, and the reading controls are
   // at the top of that pane. Below it the sentence is prose in the reading column, and the controls follow the private-PDF line. Either
   // way it follows the commands (P7-14, R2), at the same distance.
@@ -124,14 +128,7 @@ function Details({ sentences, authors = [], affiliation, doi, showAddKey, upload
 
   return (
     <>
-      {spread && (authors.length > 0 || affiliation) && (
-        // P11-20 (rule 2): hidden but for a window under 700 css px high (`globals.css` shows it there): the byline in the title block is one line
-        // with an ellipsis on such a window, and this is where the whole of it is.
-        <div data-pane-byline-full="" className="hidden mt-6 font-reading text-body leading-[1.55] text-text-muted">
-          {authors.length > 0 && <p>{authors.join(", ")}</p>}
-          {affiliation && <p className="annotation mt-2 text-text-faint">{affiliation}</p>}
-        </div>
-      )}
+      {spread && paper && <Bibliography paper={paper} recommendation={recommendation} now={now} />}
       <p
         className={
           spread

@@ -1477,6 +1477,10 @@ function Reader({
           <DecisionBlock
             part="details"
             sentences={sentences}
+            // P11-20 (item 2a): in the panes the fixed zone holds the title alone; the venue, byline, affiliation and recommendation head the details.
+            paper={paper}
+            recommendation={recommendation}
+            now={now}
             doi={paper.doi}
             showAddKey={showAddKey}
             uploadStatus={upload ? <PrivatePdfStatus upload={upload}
