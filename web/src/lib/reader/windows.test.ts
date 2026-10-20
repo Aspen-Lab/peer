@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { DOCK_BOTTOM_PX, DOCK_STACK_FLOOR_PX, DOCK_TOP_PX, columnBottomPx, legendHeightPx } from "@/components/reader/explain-dock";
 import { block } from "@/lib/notes/blocks";
-import { EXPLAIN_WINDOW_ID, LEAST_FRONT_PX, MIN_FRONT_PX, NOTES_MIN_FRONT_PX, NOTES_WINDOW_ID, WINDOW_HEADER_PX, stackFrameIn, stackLayout, stackRows, useWindows, type FloatingWindow } from "./windows";
+import { EXPLAIN_WINDOW_ID, MIN_FRONT_PX, NOTES_MIN_FRONT_PX, NOTES_WINDOW_ID, WINDOW_HEADER_PX, stackFrameIn, stackLayout, stackRows, useWindows, type FloatingWindow } from "./windows";
 
 // P10-09a (review 7.1a; ruling §1h.78): the windows at the right stand like cascaded cards — only the headers of
 // the ones behind show (each later window offset by a header's height), the raised one in front and full; a header
@@ -201,6 +201,13 @@ describe("stackRows — which windows stand in the column (P10-09c)", () => {
 // (opening the explain card writes nothing on the root and scrolls nothing) and `sticky-note.test.tsx` ("a sticky reserves nothing and
 // moves nothing").
 
+// What the front keeps at least when the screen is short (A P11-19, C2), written as numbers on purpose: the stack's own table
+// (`LEAST_FRONT_PX`) is what these cases hold to account, so they must not read it — a floor lowered there, the explain card's 250 to 100,
+// would lower the expectation with it and every case would stay green. A sticky 160, the notes window 240, the explain card 250 (its
+// header, its follow-up field and Send).
+const FRONT_FLOOR_PX = { sticky: 160, notes: 240, explain: 250 } as const;
+const floorOf = (windows: readonly FloatingWindow[]) => FRONT_FLOOR_PX[windows[windows.length - 1].kind as keyof typeof FRONT_FLOOR_PX];
+
 // P10-18 (A P10-14 §4 X-B1, B9; ruling §1h.93 (a)): the explain window stood at z 70 over the stack (z 60+), and used to stand over the
 // stickies' headers, their X and the notes window's Export once it, three stickies and the notes window were more than the screen; it
 // gave the stack room (it shrank, `dockInStack`, `stackRoom`) so every other window's header was reachable.
@@ -244,8 +251,7 @@ describe("every card's header is reachable with the explain card in the stack (P
           for (let i = 1; i < tops.length; i += 1) expect(tops[i] - tops[i - 1]).toBe(WINDOW_HEADER_PX);
           // The front keeps what it needs: the notes window 240, a sticky 160, the explain card 250 (its header, its follow-up field and Send).
           const front = rows[rows.length - 1];
-          const frontKind = windows[windows.length - 1].kind;
-          expect(front.height, `${name}, origin ${origin}`).toBeGreaterThanOrEqual(LEAST_FRONT_PX[frontKind]);
+          expect(front.height, `${name}, origin ${origin}`).toBeGreaterThanOrEqual(floorOf(windows));
           expect(front.top + front.height, `${name}, origin ${origin}`).toBeLessThanOrEqual(frame.bottom);
         }
       });
@@ -274,6 +280,7 @@ describe("every card's header is reachable with the explain card in the stack (P
 // ending at 440; every header's X and the notes window's header answered `elementFromPoint`.
 // P11-14 (rule 4; re-aimed, §1c): the explain card is a card of the stack, so these screens are asked of the one layout: every header is
 // on the screen — a header over the legend's strip at the lowest, never one off-screen — and each card's foot is above the foot legend.
+// A P11-19 (C2) restored what the re-aim had let go: the band's foot for every header and card, and the front's floor, as numbers.
 describe("the stack on short screens, with the explain card in it (P10-31, BACKLOG-86; re-aimed, P11-14)", () => {
   const stk = (n: number, order: number) => ({ id: `s${n}`, kind: "sticky" as const, title: `Note ${n}`, order });
   const nts = (order: number) => ({ id: NOTES_WINDOW_ID, kind: "notes" as const, title: "Your notes", order });
@@ -298,10 +305,16 @@ describe("the stack on short screens, with the explain card in it (P10-31, BACKL
             expect(row.top, `${name}, origin ${origin}`).toBeGreaterThanOrEqual(DOCK_TOP_PX);
             expect(row.top + WINDOW_HEADER_PX, `a header is off the screen: ${row.top}`).toBeLessThanOrEqual(height);
             expect(row.top + row.height, "the card's foot is on the screen, above the foot legend").toBeLessThanOrEqual(height - DOCK_BOTTOM_PX);
+            // A P11-19 C2 (the base asserted both against the column's own foot): every header ends inside the band, and so does every card.
+            expect(row.top + WINDOW_HEADER_PX, `${name}, origin ${origin}: a header ends below the band's foot`).toBeLessThanOrEqual(frame.bottom);
+            expect(row.top + row.height, `${name}, origin ${origin}: a card ends below the band's foot`).toBeLessThanOrEqual(frame.bottom);
           }
           // The column collapses toward its headers rather than leaving the screen: the front is at least a header, the others exactly one.
           const front = rows[rows.length - 1];
           expect(front.height).toBeGreaterThanOrEqual(WINDOW_HEADER_PX);
+          // ...and what is in front keeps its floor (the base kept the explain window at exactly 250 here): a sticky 160, the notes window
+          // 240, the explain card 250 — read from the numbers above, not from the stack's table.
+          expect(front.height, `${name}, origin ${origin}: the front keeps its floor`).toBeGreaterThanOrEqual(floorOf(windows));
           for (const row of rows.slice(0, -1)) expect(row.height).toBe(WINDOW_HEADER_PX);
         }
       });
