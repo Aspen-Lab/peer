@@ -382,3 +382,121 @@ describe("SelectionToolbar — the third action and the phone's cell (P11-13, ru
     expect(highlightOffered()).toBe(false);
   });
 });
+
+// ── P11-27 (ruling §1h.122) ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// Rule 1: a card standing at the selection's height does not take the group out of the margin: it stands there, level, over the card, and says so
+// (`data-over-card`). Rule 2: a selection in a caption or a heading is offered Take notes and Highlight in the margin; Explain this is not offered for it
+// (the explain route finds a passage in the paper's paragraphs only, so it would answer "not in the paper": see `lib/papers/explain.ts`, `locatePassage`).
+type Peek = { place: ActionsPlace | null; canExplain: unknown; overCard: unknown; onHighlight: unknown };
+const peek = (tree: ReactNode): Peek => {
+  const element = tree as ReactElement<{ place: ActionsPlace; canExplain: unknown; overCard: unknown; onHighlight: unknown }> | null;
+  return element && typeof element === "object" && "props" in element
+    ? { place: element.props.place, canExplain: element.props.canExplain, overCard: element.props.overCard, onHighlight: element.props.onHighlight }
+    : { place: null, canExplain: undefined, overCard: undefined, onHighlight: undefined };
+};
+const lookNow: (into: Peek[]) => Step = (into) => (ctx) => void into.push(peek(ctx.tree));
+
+describe("SelectionToolbar — over a card (P11-27 rule 1; ruling §1h.122)", () => {
+  const covering = { left: MARGIN.left, top: 380, right: MARGIN.left + MARGIN.width, bottom: 700 };
+
+  it("stays in the margin, level with the selection's first line, when a card stands at that height, and says it stands over the card", async () => {
+    stub.margin = MARGIN;
+    cards = [covering];
+    const run = await scenario(base());
+    const got = peek(run.trees[run.trees.length - 1]);
+    run.mounted.unmount();
+    expect(got.place).toEqual({ mode: "margin", left: MARGIN.left + 8, top: 400, below: false });
+    expect(got.overCard).toBe(true);
+  });
+
+  it("does not move when the card comes and goes under it, and the word over-card follows the card", async () => {
+    stub.margin = MARGIN;
+    const seen: Peek[] = [];
+    const run = await scenario(base(), [
+      wait,
+      lookNow(seen),
+      () => {
+        cards = [covering];
+        fire("scroll");
+      },
+      lookNow(seen),
+      () => {
+        cards = [{ ...covering, top: 600, bottom: 800 }];
+        fire("scroll");
+      },
+      lookNow(seen),
+      () => {
+        cards = [];
+        fire("scroll");
+      },
+      lookNow(seen),
+    ]);
+    run.mounted.unmount();
+    expect(seen.map((one) => one.place?.mode)).toEqual(["margin", "margin", "margin", "margin"]);
+    expect(seen.map((one) => one.place?.top)).toEqual([400, 400, 400, 400]);
+    expect(seen.map((one) => one.overCard)).toEqual([false, true, false, false]);
+  });
+
+  it("stays in the margin at every height of the first line with a card over the whole band", async () => {
+    stub.margin = MARGIN;
+    cards = [{ left: MARGIN.left, top: MARGIN.top, right: MARGIN.left + MARGIN.width, bottom: MARGIN.bottom }];
+    const tops: Array<number | undefined> = [];
+    const modes: Array<string | undefined> = [];
+    for (const at of [60, 200, 330, 520, 700, 820]) {
+      measureTop = at;
+      const run = await scenario(base());
+      const got = peek(run.trees[run.trees.length - 1]);
+      run.mounted.unmount();
+      modes.push(got.place?.mode);
+      tops.push(got.place?.top);
+    }
+    expect(modes).toEqual(["margin", "margin", "margin", "margin", "margin", "margin"]);
+    expect(tops[2]).toBe(330);
+  });
+
+  it("is still the pill above the selection where there is no margin, with a card or without one", async () => {
+    stub.margin = null;
+    cards = [covering];
+    const run = await scenario(base());
+    const got = peek(run.trees[run.trees.length - 1]);
+    run.mounted.unmount();
+    expect(got.place?.mode).toBe("above");
+  });
+});
+
+describe("SelectionToolbar — a selection in a caption or a heading (P11-27 rule 2)", () => {
+  const block = (kind: "heading" | "caption") => selection({ sectionIndex: 1, paragraphIndex: kind === "heading" ? 4 : 5, paragraphId: kind === "heading" ? "paper-section-1-p4" : "paper-section-1-p5", source: "paper", block: kind } as Partial<ExplainSelection>);
+
+  it("is offered Take notes and Highlight in the margin, level with the selection: the group stands as it does for a paragraph", async () => {
+    stub.margin = MARGIN;
+    for (const kind of ["heading", "caption"] as const) {
+      const run = await scenario(base({ target: block(kind), onHighlight: vi.fn(), canHighlight: true }));
+      const got = peek(run.trees[run.trees.length - 1]);
+      run.mounted.unmount();
+      expect(got.place).toEqual({ mode: "margin", left: MARGIN.left + 8, top: 400, below: false });
+      expect(typeof got.onHighlight, kind).toBe("function");
+    }
+  });
+
+  it("is not offered Explain this, whatever the page says it can explain: the route would not find the passage", async () => {
+    stub.margin = MARGIN;
+    for (const kind of ["heading", "caption"] as const) {
+      const run = await scenario(base({ target: block(kind), canExplain: true, onHighlight: vi.fn(), canHighlight: true }));
+      const got = peek(run.trees[run.trees.length - 1]);
+      run.mounted.unmount();
+      expect(got.canExplain, kind).toBe(false);
+    }
+  });
+
+  it("is offered Explain this for a paragraph exactly as before (the page's word stands)", async () => {
+    stub.margin = MARGIN;
+    const yes = await scenario(base({ canExplain: true }));
+    const yesNow = peek(yes.trees[yes.trees.length - 1]);
+    yes.mounted.unmount();
+    const no = await scenario(base({ canExplain: false }));
+    const noNow = peek(no.trees[no.trees.length - 1]);
+    no.mounted.unmount();
+    expect(yesNow.canExplain).toBe(true);
+    expect(noNow.canExplain).toBe(false);
+  });
+});

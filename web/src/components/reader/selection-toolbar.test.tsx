@@ -19,6 +19,7 @@ import {
   type ActionsMode,
 } from "./selection-toolbar";
 import { MARGIN_CARD_SELECTOR, placeInMargin, type MarginRect } from "@/lib/reader/margin";
+import { STACK_Z_BASE } from "@/lib/reader/windows";
 import type { PaperTerm } from "@/lib/papers/report";
 
 // P10-09a (review 7.1, 8.4; rubric B3; ruling §1h.78): selecting text shows one small pill just above the
@@ -471,5 +472,86 @@ describe("the toolbar's use of the margin (P11-13; ruling §1h.113 (d))", () => 
     expect(toolbar).not.toContain("reserveDock");
     expect(toolbar).not.toContain("setProperty");
     expect(toolbar).not.toContain("--explain-dock");
+  });
+});
+
+// ── P11-27 rule 1 (owner item 5: "在选中的文字的同一高度的右侧margin部分显示"; round 1's walk X-1; ruling §1h.122, which amends §1h.113 (b) O-2) ──────────────────
+// The group never leaves the margin: with a margin registered it stands there, level with the selection's first line, whatever card stands at that height —
+// over the card, above it in z-order, on its own surface (the theme's surface, its border, a shadow), never over the centre column's words. The pill above
+// the selection is for a window with no margin (under 1024 px) and nothing else. Cards the caller still lists are ignored by the place. Every number is invented.
+describe("actionsPlace — over a card the group stays in the margin (P11-27 rule 1; ruling §1h.122)", () => {
+  const LEVEL = { mode: "margin", left: MARGIN.left + 8, top: 400, below: false };
+  const covering = { left: MARGIN.left, top: 380, right: MARGIN.left + MARGIN.width, bottom: 700 };
+
+  it("stands in the margin, level with the first line, with a card standing at that height — the Explain card's whole height, a sticky's, a figure's", () => {
+    expect(place({ cards: [covering] })).toEqual(LEVEL);
+    expect(place({ cards: [{ ...covering, top: 48, bottom: 860 }] })).toEqual(LEVEL);
+    expect(place({ cards: [{ ...covering, top: 300, bottom: 560 }] })).toEqual(LEVEL);
+  });
+
+  it("stands where it stood with a card 3 px under it, a card 3 px over it, a card on its very rect, and every card at once", () => {
+    expect(place({ cards: [cardUnder(400, 3)] })).toEqual(LEVEL);
+    expect(place({ cards: [cardUnder(400, 0)] })).toEqual(LEVEL);
+    expect(place({ cards: [{ left: MARGIN.left, top: 100, right: MARGIN.left + MARGIN.width, bottom: 397 }] })).toEqual(LEVEL);
+    expect(place({ cards: [{ left: MARGIN.left, top: 400, right: MARGIN.left + 112, bottom: 490 }] })).toEqual(LEVEL);
+    expect(place({ cards: [covering, cardUnder(400, 3), { left: MARGIN.left, top: 48, right: MARGIN.left + MARGIN.width, bottom: 120 }] })).toEqual(LEVEL);
+  });
+
+  it("is never the pill above while a margin stands: at every first-line height, with a card over the whole band", () => {
+    const wall = [{ left: MARGIN.left, top: MARGIN.top, right: MARGIN.left + MARGIN.width, bottom: MARGIN.bottom }];
+    for (let top = 56; top <= 940; top += 12) {
+      const got = place({ cards: wall, bounds: { left: 300, top, right: 520, bottom: top + 22 } })!;
+      expect(got.mode, String(top)).toBe("margin");
+      expect(got.top, String(top)).toBe(placeInMargin(MARGIN, top, SIZES.margin.height));
+    }
+  });
+
+  it("never leaves the margin sideways, so never stands over the centre column's words: its left is the margin's plus 8, its right inside the margin", () => {
+    for (const margin of [MARGIN, { ...MARGIN, left: 1000, width: 280 }, { ...MARGIN, left: 1180, width: 260 }]) {
+      const got = place({ margin, cards: [{ left: margin.left, top: 380, right: margin.left + margin.width, bottom: 700 }] })!;
+      expect(got.left).toBe(margin.left + 8);
+      expect(got.left + SIZES.margin.width).toBeLessThanOrEqual(margin.left + margin.width);
+    }
+  });
+
+  it("is the pill above the selection where there is no margin, with a card or without one: below 1024 nothing changes", () => {
+    const got = place({ margin: null, cards: [covering] })!;
+    expect(got).toEqual({ mode: "above", ...toolbarPlace({ bounds, viewport: VIEW, size: SIZES.above })! });
+    expect(place({ margin: null, viewport: { width: 1000, height: 800 } })!.mode).toBe("above");
+  });
+
+  it("has retired the O-2 fallback: no slack to a card, no hysteresis between two modes", async () => {
+    const toolbar = (await import("./selection-toolbar")) as Record<string, unknown>;
+    expect(toolbar.CARD_SLACK_PX).toBeUndefined();
+    expect(toolbar.MODE_HYSTERESIS_PX).toBeUndefined();
+  });
+});
+
+describe("SelectionToolbarView — the group's own surface over a card (P11-27 rule 1)", () => {
+  const IN_MARGIN = { mode: "margin" as const, left: 1088, top: 400, below: false };
+  const html = (over: Record<string, unknown> = {}) =>
+    renderToStaticMarkup(createElement(SelectionToolbarView, { place: IN_MARGIN, canExplain: true, onExplain: () => {}, onTakeNote: () => {}, onHighlight: () => {}, ...over } as never));
+  const classes = (markup: string) => (markup.match(/^<div[^>]*class="([^"]*)"/)?.[1] ?? "").split(/\s+/);
+
+  it("stands above every card of the stack in z-order: its z is over the stack's, whose first card is `STACK_Z_BASE` and one more for each card", () => {
+    const z = Number(classes(html()).find((c) => c.startsWith("z-["))?.match(/\d+/)?.[0]);
+    expect(z).toBeGreaterThan(STACK_Z_BASE + 9);
+    // …and under the page's dialogs (the figure's lightbox and the key sheet stand at z-[80]).
+    expect(z).toBeLessThan(80);
+  });
+
+  it("is its own surface: the theme's surface colour (opaque, no tint from the card under it), a border and a shadow", () => {
+    const c = classes(html());
+    expect(c).toContain("bg-surface");
+    expect(c).toContain("border");
+    expect(c).toContain("border-border-strong");
+    expect(c).toContain("shadow-card-hover");
+    for (const token of c) expect(token).not.toMatch(/^bg-surface\/|^opacity-|^backdrop-/);
+  });
+
+  it("says when it stands over a card, and says nothing when it does not", () => {
+    expect(html({ overCard: true })).toContain("data-over-card");
+    expect(html({ overCard: false })).not.toContain("data-over-card");
+    expect(html()).not.toContain("data-over-card");
   });
 });

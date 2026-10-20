@@ -190,6 +190,8 @@ let winListeners: Map<string, Set<Listener>>;
 let frames: Array<(time: number) => void>;
 let askedFrames: number;
 let mark: ViewRect | null;
+/** P11-27: the lines of the mark after its first, for a highlight that runs over more than one line. */
+let extraLines: ViewRect[];
 let cards: ViewRect[];
 let stripThere: boolean;
 const fire = (map: Map<string, Set<Listener>>, type: string, event?: unknown) => [...(map.get(type) ?? [])].forEach((one) => one(event));
@@ -200,6 +202,7 @@ function stubPage() {
   frames = [];
   askedFrames = 0;
   mark = null;
+  extraLines = [];
   cards = [];
   stripThere = false;
   const track = (map: Map<string, Set<Listener>>) => ({
@@ -210,7 +213,7 @@ function stubPage() {
     ...track(docListeners),
     documentElement: {},
     querySelector: (selector: string) => {
-      if (selector.startsWith("mark[data-highlight")) return mark ? { getClientRects: () => [mark], getBoundingClientRect: () => mark } : null;
+      if (selector.startsWith("mark[data-highlight")) return mark ? { getClientRects: () => [mark, ...extraLines], getBoundingClientRect: () => mark } : null;
       if (selector === "[data-highlight-strip]") return stripThere ? {} : null;
       return null;
     },
@@ -485,5 +488,211 @@ describe("the host's source", () => {
   it("takes the frame with `flushSync`, so the strip is repainted in the frame of the scroll that moved its mark", () => {
     expect(code(HOST)).toMatch(/flushSync\(/);
     expect(code(HOST)).toMatch(/requestAnimationFrame/);
+  });
+});
+
+// ── P11-27 rule 1 (owner item 5; round 1's walk X-1; ruling §1h.122): the strip follows the rule the selection's actions follow ─────────────────────────────
+// With a margin it stands in the margin, level with the mark's first line, 8 px in from the margin's left edge, whatever card stands at that height: over
+// the card (the strip is `z-[70]`, over the stack's cards), never above the mark over the centre column's words. Cards the caller still lists are ignored.
+describe("stripStanding — over a card the strip stays in the margin (P11-27 rule 1)", () => {
+  const stand = (extra: Record<string, unknown> = {}, mark = line(300)) => {
+    const input = { mark, viewport: VIEW, margin: MARGIN, ...extra };
+    return stripStanding(input as Parameters<typeof stripStanding>[0]);
+  };
+
+  it("stands in the margin, level with the mark, with the Explain card, a sticky or a figure at that height", () => {
+    for (const cards of [[card(280, 600)], [card(48, 860)], [card(300, 560)], [card(280, 600), card(48, 120)]]) {
+      expect(stand({ cards })).toEqual({ mode: "margin", left: 1008, top: 300, width: 264 });
+    }
+  });
+
+  it("stands where it stood with a card 3 px under it, over it, on its very rect", () => {
+    expect(stand({ cards: [card(300 + STRIP_ROW_PX + 3, 800)] })).toEqual({ mode: "margin", left: 1008, top: 300, width: 264 });
+    expect(stand({ cards: [card(100, 297)] })).toEqual({ mode: "margin", left: 1008, top: 300, width: 264 });
+    expect(stand({ cards: [card(300, 300 + STRIP_ROW_PX)] })).toEqual({ mode: "margin", left: 1008, top: 300, width: 264 });
+  });
+
+  it("is never above the mark while a margin stands, at any height of the mark, with a card over the whole band", () => {
+    for (let top = 40; top <= 880; top += 20) {
+      const got = stand({ cards: [card(48, 860)] }, line(top))!;
+      expect(got.mode, String(top)).toBe("margin");
+      expect(got.left, String(top)).toBe(1008);
+    }
+  });
+
+  it("has retired the O-2 fallback: no slack to a card, no hysteresis", async () => {
+    const toolbar = (await import("@/components/reader/selection-toolbar")) as Record<string, unknown>;
+    expect(toolbar.CARD_SLACK_PX).toBeUndefined();
+    expect(toolbar.MODE_HYSTERESIS_PX).toBeUndefined();
+  });
+});
+
+describe("HighlightStripHost — over a card (P11-27 rule 1)", () => {
+  it("stays in the margin, level with its mark, when a card opens at that height: over the card, never above the mark", () => {
+    const host = mountHost();
+    mark = line(300);
+    host.act(() => useHighlightStrip.getState().show("h1", 300));
+    expect(host.props).toMatchObject({ left: 1008, top: 300 });
+    cards = [card(280, 600)];
+    host.act(() => useWindows.getState().open({ id: "sticky-1", kind: "sticky", title: "Note 1" }));
+    frame();
+    expect(host.props).toMatchObject({ left: 1008, top: 300 });
+    cards = [];
+    host.act(() => useWindows.getState().close("sticky-1"));
+    frame();
+    expect(host.props).toMatchObject({ left: 1008, top: 300 });
+  });
+
+  it("stands in the margin from the first, with a card already at the mark's height when the strip is raised", () => {
+    cards = [card(48, 860)];
+    const host = mountHost();
+    mark = line(412);
+    host.act(() => useHighlightStrip.getState().show("h1", 412));
+    expect(host.props).toMatchObject({ left: 1008, top: 412, width: 264 });
+  });
+});
+
+// ── P11-27 rule 3 (round 1's walk, Theme-B readers; ruling §1h.123): the strip leaves when its mark leaves the window ─────────────────────────────────────
+// It shows only while some part of its mark is inside the window — below the masthead's foot (the margin's band top) and above the window's foot, the
+// bounds the selection's actions use. Scrolled out, above or below, it goes at once and the store forgets it: scrolling back does not bring it up; a click
+// on the mark does, as it did. Held at the band's edge while a later line of the mark is still in. Escape, a press elsewhere and a new selection hide it, and a
+// press on the strip keeps it, as they did (`highlight-strip.tsx`).
+describe("stripStanding — the strip leaves when its mark leaves the window (P11-27 rule 3)", () => {
+  const stand = (mark: ViewRect, box?: ViewRect) => stripStanding({ mark, ...(box ? { box } : {}), viewport: VIEW, margin: MARGIN, cards: [] } as Parameters<typeof stripStanding>[0]);
+  const at = (top: number, bottom = top + 18): ViewRect => ({ left: 400, top, right: 700, bottom });
+
+  it("goes the moment the mark's last line is above the band's top, however near the window it is", () => {
+    expect(stand(at(-300))).toBeNull();
+    expect(stand(at(-60, -42))).toBeNull();
+    expect(stand(at(30, 48))).toBeNull();
+  });
+
+  it("stays while one pixel of the mark is under the masthead's foot, held at the band's top", () => {
+    expect(stand(at(31, 49))).toMatchObject({ mode: "margin", top: 48 });
+  });
+
+  it("goes the moment the mark's top is at the window's foot or below it", () => {
+    expect(stand(at(900))).toBeNull();
+    expect(stand(at(1000))).toBeNull();
+    expect(stand(at(1500))).toBeNull();
+  });
+
+  it("stays while one pixel of the mark is inside the window's foot, held at the band's foot", () => {
+    expect(stand(at(899))).toMatchObject({ mode: "margin", top: 860 - STRIP_ROW_PX });
+  });
+
+  it("has retired the screen of grace: a mark a screen away used to keep its strip", () => {
+    return import("./highlight-strip-host").then((host) => {
+      expect((host as Record<string, unknown>).AWAY_SCREENS).toBeUndefined();
+    });
+  });
+
+  it("stays while a later line of the mark is still in the window: the whole mark's box counts, not only its first line", () => {
+    const first = at(-10, 8);
+    expect(stand(first)).toBeNull();
+    expect(stand(first, { left: 400, top: -10, right: 700, bottom: 66 })).toMatchObject({ mode: "margin", top: 48 });
+    expect(stand(first, { left: 400, top: -10, right: 700, bottom: 40 })).toBeNull();
+    // Below the window the first line is the one in view: the box does not matter.
+    expect(stand(at(880, 898), { left: 400, top: 880, right: 700, bottom: 950 })).toMatchObject({ mode: "margin" });
+    expect(stand(at(901, 919), { left: 400, top: 901, right: 700, bottom: 980 })).toBeNull();
+  });
+});
+
+describe("markBox — the whole of a highlight's mark, read now (P11-27 rule 3)", () => {
+  const box = (top: number, bottom = top + 18): ViewRect => ({ left: 100, top, right: 220, bottom });
+  const docOf = (found: Record<string, unknown> | null) => {
+    const asked: string[] = [];
+    return { asked, doc: { querySelector: (selector: string) => (asked.push(selector), found) } as unknown as Pick<Document, "querySelector"> };
+  };
+
+  it("runs from the top of the first piece's first line to the bottom of the last line of the highlight's own mark", async () => {
+    const { markBox } = (await import("./highlight-strip-host")) as unknown as { markBox: (doc: Pick<Document, "querySelector">, id: string) => ViewRect | null };
+    const { asked, doc } = docOf({ getClientRects: () => [box(300), box(318), box(336)], getBoundingClientRect: () => ({ left: 100, top: 300, right: 400, bottom: 354 }) });
+    expect(markBox(doc, "h1")).toEqual({ left: 100, top: 300, right: 220, bottom: 354 });
+    expect(asked).toEqual(['mark[data-highlight="h1"], mark[data-highlight-part="h1"]', 'mark[data-highlight="h1"]']);
+  });
+
+  it("falls back on the bounding box, copies the numbers, and is null with no mark on the page", async () => {
+    const { markBox } = (await import("./highlight-strip-host")) as unknown as { markBox: (doc: Pick<Document, "querySelector">, id: string) => ViewRect | null };
+    expect(markBox(docOf({ getClientRects: () => [], getBoundingClientRect: () => box(40, 76) }).doc, "h1")).toEqual(box(40, 76));
+    const live = { left: 1, top: 2, right: 3, bottom: 4, width: 2, height: 2, x: 1, y: 2 };
+    expect(markBox(docOf({ getClientRects: () => [live], getBoundingClientRect: () => live }).doc, "h1")).toEqual({ left: 1, top: 2, right: 3, bottom: 4 });
+    expect(markBox(docOf(null).doc, "h1")).toBeNull();
+  });
+});
+
+describe("HighlightStripHost — the strip leaves when its mark leaves the window (P11-27 rule 3)", () => {
+  function raised() {
+    const host = mountHost();
+    mark = line(300);
+    host.act(() => useHighlightStrip.getState().show("h1", 300));
+    return host;
+  }
+  const scrollTo = (host: ReturnType<typeof mountHost>, next: ViewRect | null, lines: ViewRect[] = []) => {
+    mark = next;
+    extraLines = lines;
+    host.act(() => fire(winListeners, "scroll"));
+    frame();
+  };
+
+  it("goes when the mark scrolls out above, and scrolling back does not bring it up", () => {
+    const host = raised();
+    scrollTo(host, line(-300));
+    expect(host.tree).toBeNull();
+    expect(useHighlightStrip.getState().id).toBeNull();
+    scrollTo(host, line(300));
+    expect(host.tree).toBeNull();
+  });
+
+  it("goes when the mark scrolls out below, and scrolling back does not bring it up", () => {
+    const host = raised();
+    scrollTo(host, line(950));
+    expect(host.tree).toBeNull();
+    expect(useHighlightStrip.getState().id).toBeNull();
+    scrollTo(host, line(300));
+    expect(host.tree).toBeNull();
+  });
+
+  it("comes back by a click on the mark (the store names it again), level with the mark", () => {
+    const host = raised();
+    scrollTo(host, line(-300));
+    expect(host.tree).toBeNull();
+    scrollTo(host, line(300));
+    host.act(() => useHighlightStrip.getState().show("h1", 300));
+    expect(host.tree?.type).toBe(HighlightStrip);
+    expect(host.props).toMatchObject({ left: 1008, top: 300 });
+  });
+
+  it("follows the mark while any part of it is in the window, held at the band's top while only a later line is", () => {
+    const host = raised();
+    scrollTo(host, line(-10), [{ left: 400, top: 8, right: 700, bottom: 26 }, { left: 400, top: 26, right: 700, bottom: 44 }, { left: 400, top: 44, right: 700, bottom: 62 }]);
+    expect(host.tree?.type).toBe(HighlightStrip);
+    expect(host.props.top).toBe(48);
+    // The last line goes under the masthead too: the whole mark is out, the strip goes.
+    scrollTo(host, line(-80), [{ left: 400, top: -62, right: 700, bottom: -44 }, { left: 400, top: -44, right: 700, bottom: -26 }]);
+    expect(host.tree).toBeNull();
+    expect(useHighlightStrip.getState().id).toBeNull();
+  });
+
+  it("keeps today's other ways out: Escape hides it, a press on the strip keeps it (the strip's own listeners), and a new selection hides it", () => {
+    const host = raised();
+    stripThere = true;
+    const event = { key: "Escape", defaultPrevented: false, preventDefault: vi.fn(), stopPropagation: vi.fn() };
+    host.act(() => fire(docListeners, "keydown", event));
+    expect(host.tree).toBeNull();
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    host.act(() => useHighlightStrip.getState().show("h1", 300));
+    expect(host.tree?.type).toBe(HighlightStrip);
+    host.act(() => useHighlightStrip.getState().hide());
+    expect(host.tree).toBeNull();
+  });
+
+  it("is not made to go by a card opening at its height (rule 1): only the mark leaving the window takes it away", () => {
+    const host = raised();
+    cards = [card(48, 860)];
+    host.act(() => useWindows.getState().open({ id: "sticky-1", kind: "sticky", title: "Note 1" }));
+    frame();
+    expect(host.tree?.type).toBe(HighlightStrip);
+    expect(host.props.top).toBe(300);
   });
 });
