@@ -58,4 +58,4 @@ Stop: every theme ≥ **99** in two consecutive rounds (§1h.111 (b)); a theme t
 
 | round | head | Theme A (three panes, the way back) | Theme B (the margin) | notes |
 |---|---|---|---|---|
-| 1 | 2d7a89b9 | **81.25** (median of the readers 81.25 / 83.3 / 81.25; A 87.5; director 81.25) — A7 FAIL on a briefing paper; extras: the map's meta wrap 0.5, the pane's step at the foot 0.25, the Day button pressed in a dark OS 0.25, the blank band after keyboard focus 0.25 | (walk running) | §1h.120, §1h.121 |
+| 1 | 2d7a89b9 | **81.25** (median of the readers 81.25 / 83.3 / 81.25; A 87.5; director 81.25) — A7 FAIL on a briefing paper; extras: the map's meta wrap 0.5, the pane's step at the foot 0.25, the Day button pressed in a dark OS 0.25, the blank band after keyboard focus 0.25 | **79.17** (median of the readers 79.17 / 85.42 / 70.83; A 79.2; director 79.17) — B3 FAIL (the explain card's top rises when the answer lands); extras: the buttons over the paper's line 1.0, the stacked figure a thumbnail 0.25, a caption's or heading's selection offers nothing 0.25 | §1h.120–§1h.123 |
