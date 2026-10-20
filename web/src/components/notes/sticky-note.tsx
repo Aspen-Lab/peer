@@ -26,11 +26,12 @@ import type { Citable, NoteAnchor } from "@/lib/notes/types";
 import { paragraphAnchor, type ExplainSelection } from "@/components/reader/paper-body";
 import { useFrontEscape } from "@/components/reader/front-escape";
 import { MarginCard } from "@/components/reader/margin-card";
+import { hashTarget, summaryBlockFromHash } from "@/components/reader/use-reader-tab";
 import { stackRows, useColumn, useWindows, type FloatingWindow, type StackFrame } from "@/lib/reader/windows";
 import { readingNoteFor, stripTagText, useLostPassages, useNotesStore, withoutSticky } from "@/store/notes";
 
 export { withoutSticky };
-import { AnchorSquare, PASSAGE_LOST_LINE, goToPassage, registerPassageHost } from "./note-tags";
+import { ANSWERS_BLOCK_ID, AnchorSquare, PASSAGE_LOST_LINE, goToPassage, registerPassageHost } from "./note-tags";
 import { WysiwygField } from "./wysiwyg-field";
 
 /** A sticky writes through into the paper's note no later than this long after the last keystroke. P10-09c: 150 ms, not 250 —
@@ -278,6 +279,35 @@ export function passageFromHash(hash: string): string | null {
   return /^paper-section-\d+-p\d+$/.test(id) ? id : null;
 }
 
+/**
+ * P11-20 (rule 1): the block a page's `#hash` names that is not a paragraph of the paper — a Summary block (`summary-proposal`) or the answers' block
+ * (`answers-block`), which the notes page's blue square arrives with for a note taken there — or null.
+ */
+export function blockFromHash(hash: string): string | null {
+  const summary = summaryBlockFromHash(hash);
+  if (summary !== null) return summary;
+  return hashTarget(hash) === ANSWERS_BLOCK_ID ? ANSWERS_BLOCK_ID : null;
+}
+
+/**
+ * The arrival of the notes page's blue square: the address names a paragraph of the paper, a Summary block or the answers' block. Waits for it to be on
+ * the page — a quarter second at a time, forty times (the body, the report and the answers come after the page does; for a Summary block the tab was
+ * chosen by `use-reader-tab.ts`) — and then goes to it once with `go`. Returns how to stop waiting, or undefined where the address names nothing.
+ */
+export function followHash(hash: string, doc: Pick<Document, "getElementById">, go: (id: string) => void): (() => void) | undefined {
+  const id = passageFromHash(hash) ?? blockFromHash(hash);
+  if (!id) return undefined;
+  let tries = 0;
+  const timer = setInterval(() => {
+    tries += 1;
+    const found = doc.getElementById(id) !== null;
+    if (!found && tries < 40) return;
+    clearInterval(timer);
+    if (found) go(id);
+  }, 250);
+  return () => clearInterval(timer);
+}
+
 /** The open stickies as rows of the stack: each with its number and quote from its "Note N" heading in the paper's
  *  note (a window whose heading is gone is dropped), placed as cascaded cards. P10-09c: the cascade holds every window
  *  of the column — the notes window too — so the stickies' tops leave a slot for its header (`stackRows`). */
@@ -357,20 +387,14 @@ export function StickyNotes({ paper, reveal }: { paper: Paper; reveal: (run: () 
 
   // The blue square asks this page to show the paper's text before it scrolls there.
   useEffect(() => registerPassageHost({ paperId: paper.id, reveal }), [paper.id, reveal]);
-  // The notes page's blue square comes here with `#paper-section-1-p2`: once the body is on the page, scroll to it.
-  useEffect(() => {
-    const id = passageFromHash(window.location.hash);
-    if (!id) return;
-    let tries = 0;
-    const timer = setInterval(() => {
-      tries += 1;
-      const found = document.getElementById(id) !== null;
-      if (!found && tries < 40) return;
-      clearInterval(timer);
-      if (found) goToPassage({ paperId: paper.id, paragraphId: id, quote: "", n: 0 }, { doc: document, navigate: () => {} });
-    }, 250);
-    return () => clearInterval(timer);
-  }, [paper.id]);
+  // The notes page's blue square comes here with `#paper-section-1-p2`, `#summary-proposal` or `#answers-block`: once it is on the page, scroll to it.
+  useEffect(
+    () =>
+      followHash(window.location.hash, document, (id) =>
+        goToPassage({ paperId: paper.id, paragraphId: id, quote: "", n: 0 }, { doc: document, navigate: () => {} }),
+      ),
+    [paper.id],
+  );
   // P10-29 (BACKLOG-71): a sticky left open and empty when the reader leaves the page is taken out of the note, with its anchor:
   // on a route change (this unmount — it must run before the cards are closed below) and where the tab closes (`pagehide`).
   useEffect(() => {

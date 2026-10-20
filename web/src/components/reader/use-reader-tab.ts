@@ -20,10 +20,31 @@
 //
 // `onChange` is told on every real change, by whichever path; the page clears a selection held for
 // "Explain this?" with it, since the body that held that selection is the thing that has just gone.
+//
+// P11-20 (rule 1; C P11-17b "For the manager" 1): the notes page's blue square for a note taken on a Summary block navigates to
+// `/papers/<id>#summary-proposal`. The paper opens on Paper digestion (Q5), which does not hold that block, so a paper with a body whose address
+// names a Summary block opens on the Summary instead — once, after the first commit — and the page's arrival (`followHash`, `sticky-note.tsx`)
+// scrolls to the block once it is on the page. It is not a pick (the tab does not scroll to its start), and what the reader picks after it is theirs.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type ReaderTab = "summary" | "digestion";
+
+/** The id a page's `#hash` names, decoded; null when the address is not valid percent-encoding. */
+export function hashTarget(hash: string): string | null {
+  try {
+    return decodeURIComponent(hash.replace(/^#/, ""));
+  } catch {
+    return null;
+  }
+}
+
+/** The Summary block a page's `#hash` names (the notes page's blue square arrives with one), or null. The ids of the Summary's blocks begin with
+ *  `summary-` (`SUMMARY_ID_PREFIX`, `note-tags.tsx`; a test holds the two equal). */
+export function summaryBlockFromHash(hash: string): string | null {
+  const id = hashTarget(hash);
+  return id !== null && /^summary-[a-z][a-z-]*$/.test(id) ? id : null;
+}
 
 /** The tabs, in the order the strip shows them. */
 export const READER_TABS: readonly ReaderTab[] = ["summary", "digestion"];
@@ -38,6 +59,22 @@ export interface ReaderTabState {
   select: (tab: ReaderTab) => void;
   /** Make sure the paper's own text is on the page, then run `run`. */
   reveal: (run: () => void) => void;
+}
+
+/**
+ * The arrival of the notes page's blue square for a Summary block: when the address names one (`summaryBlockFromHash`), `show` is told once, the first
+ * time a body is on the page (a paper with no body is on the Summary already). Read after the first commit, not during a render: in a client-side
+ * navigation the address is changed after the render that mounts the page. Never again, so what the reader picks afterwards stands, though the address
+ * still names the block. `show` is the page's own switch, handed in as `useRestoreReaderPlace` is handed `select` (`return-to-paper.ts`): one more render,
+ * on this address only.
+ */
+function useArriveOnSummary({ hasBody, show }: { hasBody: boolean; show: () => void }): void {
+  const arrived = useRef(false);
+  useEffect(() => {
+    if (arrived.current || !hasBody) return;
+    arrived.current = true;
+    if (typeof window !== "undefined" && summaryBlockFromHash(window.location.hash) !== null) show();
+  }, [hasBody, show]);
 }
 
 export function useReaderTab({
@@ -85,6 +122,12 @@ export function useReaderTab({
     },
     [hasBody, tab, switchTo],
   );
+
+  // The address names a Summary block: the Summary is the tab that holds it.
+  const showSummary = useCallback(() => {
+    switchTo("summary");
+  }, [switchTo]);
+  useArriveOnSummary({ hasBody, show: showSummary });
 
   // After the render that put `tab` on the page: the jump a reveal waited for, else the start of a
   // tab the reader picked. Each is taken once, whatever makes this run again.
