@@ -20,6 +20,7 @@ import { placeInMargin, useMarginStore, type MarginRect } from "@/lib/reader/mar
 import type { ExplainAnswer } from "@/lib/papers/explain";
 import type { ExplainTurn } from "@/store/explain-threads";
 import type { PaperReading } from "@/lib/papers/reading";
+import { explainOffered } from "@/lib/reader/explain-offer";
 import { ExplainBox, ExplainCard, type AskResult } from "./explain-box";
 import type { ReplyResult } from "./explain-thread";
 import type { ExplainSelection } from "./paper-body";
@@ -401,5 +402,68 @@ describe("ExplainBox — the card keeps its top at the selection when the answer
     expect(styleOf(run.last())).toMatchObject({ top: 300, maxHeight: WINDOW_HEADER_PX, height: WINDOW_HEADER_PX });
     expect(useWindows.getState().origin).toBe(300);
     run.mounted.unmount();
+  });
+});
+
+// ── P11-26 rule 4 (§1h.127; C P11-27's report): a selection in a caption or a heading is not the Explain box's ───────────────────────────
+//
+// Take notes and Highlight are offered on a selection in a figure's caption or a section's heading (their ids have a paragraph's shape; the
+// target carries its `block` kind). The explain route finds a passage among the paragraphs only, so a card opened there said "Select text from the
+// paper itself". `e`, the thumb bar's cell and the selection's button open the box through the same `open`: it does nothing for such a selection, and
+// the box takes no notice of it at all — an open card stays where it stands, behind or in front. A paragraph, a Summary block and an answer are as before.
+describe("ExplainBox — nothing opens for a caption or a heading (P11-26 rule 4; §1h.127)", () => {
+  const as = (block: string | undefined, over: Partial<ExplainSelection> = {}): ExplainSelection => ({ ...selection(380, 300), ...(block !== undefined ? { block } : {}), ...over }) as ExplainSelection;
+
+  for (const block of ["caption", "heading"]) {
+    it(`\`e\` on a ${block} selection opens no card, registers no window and asks for nothing`, async () => {
+      const onAsk = vi.fn(async (): Promise<AskResult> => ANSWER);
+      const run = await scenario(base(as(block), { onAsk }), [() => open()]);
+      await wait();
+      expect(cardOf(run.last())).toBeUndefined();
+      expect(explainRegistered()).toBeUndefined();
+      expect(onAsk).not.toHaveBeenCalled();
+      run.mounted.unmount();
+    });
+
+    it(`with a card open, a ${block} selection and \`e\` change nothing: the card keeps its passage, its place and its place in the stack`, async () => {
+      const onAsk = vi.fn(async (): Promise<AskResult> => ANSWER);
+      const run = await scenario(base(selection(380, 300), { onAsk, cached: undefined }), [
+        () => open(),
+        () => useWindows.getState().open({ id: "s1", kind: "sticky", title: "Note 1" }),
+        selectNext(as(block, { ...selection(700, 640), passage: "A figure's caption, selected.", paragraphIndex: 0 }), { cached: undefined }),
+        () => open(),
+      ]);
+      await wait();
+      // Still the first passage's card, a header behind the sticky; `e` neither raised it nor asked for the caption.
+      expect(cardOf(run.last())!.props.passage).toBe("The rafting ratio rose from 0.2 to 0.7.");
+      expect(cardOf(run.last())!.props.behind).toBe(true);
+      expect(styleOf(run.last())).toMatchObject({ top: 300, maxHeight: WINDOW_HEADER_PX });
+      expect(onAsk).toHaveBeenCalledTimes(1);
+      const order = (id: string) => useWindows.getState().windows.find((w) => w.id === id)!.order;
+      expect(order(EXPLAIN_WINDOW_ID)).toBeLessThan(order("s1"));
+      run.mounted.unmount();
+    });
+
+    it(`the thumb bar's cell is not offered for a ${block} selection (under 768 px), and is for a paragraph's`, async () => {
+      stubWindow(600, 800);
+      const paragraph = await scenario(base(as(undefined)), []);
+      await wait();
+      expect(explainOffered()).toBe(true);
+      paragraph.mounted.unmount();
+      const captioned = await scenario(base(as(block)), []);
+      await wait();
+      expect(explainOffered()).toBe(false);
+      captioned.mounted.unmount();
+    });
+  }
+
+  it("a paragraph, a Summary block and an answer open as they always did, whatever else the target carries", async () => {
+    for (const over of [as(undefined), as("paragraph"), as(undefined, { source: "summary" }), as(undefined, { source: "answer" })]) {
+      const run = await scenario(base(over), [() => open()]);
+      await wait();
+      expect(cardOf(run.last()), JSON.stringify({ block: (over as { block?: string }).block, source: over.source })).toBeDefined();
+      expect(explainRegistered()).toMatchObject({ id: EXPLAIN_WINDOW_ID });
+      run.mounted.unmount();
+    }
   });
 });
