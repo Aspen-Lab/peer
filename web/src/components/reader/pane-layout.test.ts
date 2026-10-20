@@ -15,7 +15,6 @@ import {
   MARGIN_DEFAULT_PX,
   MARGIN_MAX_PX,
   MARGIN_MIN_PX,
-  PINNED_DEFAULTS_MIN_VIEWPORT_PX,
   RAIL_PX,
   SHELL_MIN_VIEWPORT_PX,
   clampPane,
@@ -50,9 +49,9 @@ describe("the numbers of B §2.2", () => {
     expect(MARGIN_DEFAULT_PX).toBe(DOCK_WIDTH_PX);
   });
 
-  it("all three panes pinned at the defaults need 1144 px; the narrowest panes need less than the shell's minimum", () => {
-    expect(PINNED_DEFAULTS_MIN_VIEWPORT_PX).toBe(320 + 440 + 360 + 24);
-    expect(PINNED_DEFAULTS_MIN_VIEWPORT_PX).toBe(1144);
+  // Re-aimed (P11-20 rule 3, §1c): was "all three panes pinned at the defaults need 1144 px; the narrowest panes need less than the shell's minimum".
+  // The 1144 lines went with `PINNED_DEFAULTS_MIN_VIEWPORT_PX` (retired, `pane-layout.retired.test.ts`); the narrowest panes' lines stay.
+  it("the narrowest panes need less than the shell's minimum", () => {
     expect(LEFT_MIN_PX + MARGIN_MIN_PX + CENTRE_MIN_PX + 2 * DIVIDER_PX).toBe(984);
     expect(984).toBeLessThanOrEqual(SHELL_MIN_VIEWPORT_PX);
     expect(RAIL_PX + MARGIN_MIN_PX + CENTRE_MIN_PX + 2 * DIVIDER_PX).toBe(792);

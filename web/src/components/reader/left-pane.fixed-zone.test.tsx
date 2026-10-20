@@ -56,8 +56,12 @@ describe("the fixed zone on a short window (globals.css)", () => {
     expect(ruleIn(CSS, ".reader-left-fixed")).toMatch(/max-height:\s*calc\(0\.62\s*\*\s*\(100vh\s*-\s*4rem\s*-\s*var\(--legend-h\)\s*-\s*1rem\)\s*\/\s*var\(--page-zoom,\s*1\)\);/);
   });
 
+  // Re-aimed (P11-20 rule 2, §1c): the block now also holds the byline's rules — they clip a line (`overflow`), take the control that opens the rest
+  // away (`display: none`) and show the details' copy (`display: block`); `left-pane.byline.test.tsx` pins them. What this test says is unchanged for
+  // everything else: no rule of the block, but the byline's, hides anything or scrolls anything, and none names the progress, the map or the zone.
   it("changes nothing else on a short window: no display, no visibility, no overflow rule for the progress or the map", () => {
-    const block = shortBlock();
+    const block = shortBlock().replace(/[^{}]*\[data-pane-(?:byline|affiliation|more|byline-full)\][^{}]*\{[^}]*\}/g, "");
+    expect(block).toContain("--pane-gap");
     expect(block).not.toMatch(/display:\s*none|visibility:\s*hidden|overflow/);
     expect(block).not.toMatch(/progress|reader-left-scroll|reader-left-fixed/);
   });

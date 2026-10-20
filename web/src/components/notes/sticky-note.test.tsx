@@ -11,7 +11,9 @@ import { MarginCard, MarginCardShell, type MarginCardShellProps } from "@/compon
 import { WysiwygField } from "./wysiwyg-field";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
 import { reconcileWindow } from "./notes-window";
-import { STICKY_SAVE_MS, StickyWindowView, closeSticky, makeStickyWriter, passageFromHash, stickyFollowText, stickyRows, takeStickyNote, withoutSticky } from "./sticky-note";
+import { SUMMARY_ID } from "@/components/reader/paper-words";
+import { ANSWERS_BLOCK_ID, SUMMARY_ID_PREFIX } from "./note-tags";
+import { STICKY_SAVE_MS, StickyWindowView, blockFromHash, closeSticky, followHash, makeStickyWriter, passageFromHash, stickyFollowText, stickyRows, takeStickyNote, withoutSticky } from "./sticky-note";
 
 // P10-09a (review 7.1; rubric B7–B10; ruling §1h.78): "Take notes" opens a numbered sticky at the right, its
 // header "Note N" with the passage's first words quoted and a Close (×), a text area focused at once; typing writes
@@ -223,6 +225,106 @@ describe("passageFromHash — the notes page's square arrives with the paragraph
     expect(passageFromHash("#elsewhere")).toBeNull();
     expect(passageFromHash("")).toBeNull();
     expect(passageFromHash("#%E0%A4%A")).toBeNull();
+  });
+
+  it("a Summary block's id or the answers' block is not a paragraph: it is the other function's, and a paragraph is not theirs", () => {
+    expect(passageFromHash("#summary-proposal")).toBeNull();
+    expect(passageFromHash("#answers-block")).toBeNull();
+    expect(blockFromHash("#paper-section-1-p2")).toBeNull();
+  });
+});
+
+// P11-20 rule 1 (C P11-17b "For the manager" 1; ruling §1h.118): the notes PAGE's blue square for a note taken on a Summary block or an answer
+// navigates to `/papers/<id>#summary-proposal` or `#answers-block`; the paper opens on Paper digestion, and the arrival knew only the paper's own
+// paragraphs, so the page stayed at the top. `blockFromHash` names those two kinds; `followHash` is the arrival (the poll the page always had, for a
+// paragraph, now for either). The tab is chosen in `use-reader-tab.ts` (its own test). Invented ids.
+describe("blockFromHash — the notes page's square arrives with a Summary block or the answers' block in the address", () => {
+  it("reads a Summary block's id and the answers' block, and nothing else", () => {
+    expect(blockFromHash("#summary-proposal")).toBe("summary-proposal");
+    expect(blockFromHash("#summary-new-here")).toBe("summary-new-here");
+    expect(blockFromHash("#answers-block")).toBe("answers-block");
+    expect(blockFromHash("#summary-")).toBeNull();
+    expect(blockFromHash("#summary")).toBeNull();
+    expect(blockFromHash("#Summary-proposal")).toBeNull();
+    expect(blockFromHash("#summary-proposal x")).toBeNull();
+    expect(blockFromHash("#answers")).toBeNull();
+    expect(blockFromHash("#answers-block-2")).toBeNull();
+    expect(blockFromHash("#elsewhere")).toBeNull();
+    expect(blockFromHash("")).toBeNull();
+    expect(blockFromHash("#%E0%A4%A")).toBeNull();
+  });
+
+  it("knows every id the page gives a Summary block, and the answers' block: the square can arrive at any block it can leave from", () => {
+    for (const id of Object.values(SUMMARY_ID)) expect(blockFromHash(`#${id}`), id).toBe(id);
+    expect(blockFromHash(`#${ANSWERS_BLOCK_ID}`)).toBe(ANSWERS_BLOCK_ID);
+    expect(SUMMARY_ID_PREFIX).toBe("summary-");
+  });
+});
+
+describe("followHash — the arrival waits for its block, then goes there once (the paragraph's poll, as it was)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+  /** A page that holds the ids put in `present` — and none before. */
+  const pageHolding = () => {
+    const present = new Set<string>();
+    return { present, doc: { getElementById: (asked: string) => (present.has(asked) ? ({} as HTMLElement) : null) } };
+  };
+
+  for (const id of ["summary-proposal", "answers-block", "paper-section-0-p2"]) {
+    it(`#${id}: goes to it once the page holds it — not before, and not twice`, () => {
+      const seen: string[] = [];
+      const { present, doc } = pageHolding();
+      followHash(`#${id}`, doc, (target) => seen.push(target));
+      vi.advanceTimersByTime(250 * 3);
+      expect(seen).toEqual([]);
+      present.add(id);
+      vi.advanceTimersByTime(250);
+      expect(seen).toEqual([id]);
+      vi.advanceTimersByTime(250 * 10);
+      expect(seen).toEqual([id]);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+  }
+
+  it("gives up after forty looks, a quarter second apart, and goes nowhere", () => {
+    const seen: string[] = [];
+    let looks = 0;
+    followHash("#summary-proposal", { getElementById: () => (looks++, null) }, (target) => seen.push(target));
+    vi.advanceTimersByTime(250 * 39);
+    expect(vi.getTimerCount()).toBe(1);
+    vi.advanceTimersByTime(250);
+    expect(looks).toBe(40);
+    expect(seen).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("leaving the page stops the wait", () => {
+    const seen: string[] = [];
+    const { present, doc } = pageHolding();
+    const stop = followHash("#answers-block", doc, (target) => seen.push(target));
+    expect(typeof stop).toBe("function");
+    stop?.();
+    present.add("answers-block");
+    vi.advanceTimersByTime(250 * 5);
+    expect(seen).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("an address with no block or paragraph in it starts no wait at all", () => {
+    for (const hash of ["", "#", "#elsewhere", "#paper-section-1", "#summary-"]) {
+      expect(followHash(hash, { getElementById: () => null }, () => {}), hash).toBeUndefined();
+    }
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("StickyNotes arrives through it, with the address the window has now and the paper it shows", () => {
+    const src = readFileSync(resolve(process.cwd(), "src/components/notes/sticky-note.tsx"), "utf8");
+    expect(src).toMatch(/followHash\(window\.location\.hash,\s*document,/);
+    expect(src).not.toMatch(/passageFromHash\(window\.location\.hash\)/);
   });
 });
 
