@@ -364,10 +364,15 @@ describe("globals.css — the reader's left pane pins by its top (P7-14, R2; re-
   });
 
   // P10-21 (A P10-14 §8 item 7): at the very foot of the page the sticky part stops where its holder ends, 64 px above the window's
-  // bottom at 1280 x 720, and its top (43.9 px) stood 4 px under the masthead's bottom (48 px). A -12 px bottom margin lets it end
-  // 12 px below the holder: its top is 55.9 px there (B P11-01 §6 item 14; measured by the C).
-  it("keeps P10-21's -12px bottom margin, so the holder's end never lifts the pane's top into the masthead", () => {
-    expect(rule).toMatch(/margin-bottom:\s*-0\.75rem;/);
+  // bottom at 1280 x 720, and its top (43.9 px) stood 4 px under the masthead's bottom (48 px). A -12 px bottom margin let it end
+  // 12 px below the holder: its top was 55.9 px there (B P11-01 §6 item 14; measured by the C).
+  //
+  // P11-23 rule 1 (A P11-21 X-A1), RE-AIMED from "keeps P10-21's -12px bottom margin": 12 px was 8 px short of the 20 the pane needs (the page's 4rem of
+  // bottom room less the 44 px the window-high pane keeps above the window's bottom), so the whole pane stepped up about 8 px as the page ended. The margin
+  // is the whole of that room, -4rem: the holder's end never lifts the pane's top into the masthead, and never moves it at all. The rule that causes it
+  // (the overhang against the page's room and the pane's clearance, at every Fit zoom) is pinned in `components/reader/left-pane.foot.test.ts`.
+  it("keeps a bottom margin that is the whole of the page's foot room (-4rem; P10-21's -12px fell 8 px short), so the holder's end never lifts the pane", () => {
+    expect(rule).toMatch(/margin-bottom:\s*-4rem;/);
   });
 
   it("is split in two when it is given a fixed zone and a scroll zone: the pane clips, the scroll zone is the one scroller", () => {
