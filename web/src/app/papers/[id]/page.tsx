@@ -119,6 +119,7 @@ import { settledQuestions, useReadingQuestionsHydrated } from "@/store/reading-q
 import { ExplainBoundary } from "@/components/reader/explain-boundary";
 import { SelectionToolbar, selectionCanExplain } from "@/components/reader/selection-toolbar";
 import { StickyNotes, useTakeNote } from "@/components/notes/sticky-note";
+import { FigureHost } from "@/components/reader/figure-host";
 import { anchorMap } from "@/lib/notes/blocks";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
 import { explanationFor, passageHash, useExplainThreadsStore, type ExplainTurn } from "@/store/explain-threads";
@@ -1673,6 +1674,8 @@ function Reader({
         the sticky notes it opens at the right. Fixed, in the window's pixels, like the box above. */}
     <SelectionToolbar target={explainTarget} canExplain={selectionCanExplain({ canAsk: explainCanAsk, terms, passage: explainTarget?.passage ?? null })} onExplain={openExplain} onTakeNote={takeNote} />
     <StickyNotes key={paper.id} paper={paper} reveal={reveal} />
+    {/* P11-15 (owner item 1): a figure opened from the paper's body, in the margin's stack, or the lightbox where there is no margin. One per paper, as the stickies: the store's keys repeat across papers. */}
+    <FigureHost key={paper.id} />
     {/* P7-14 (R9): the notes, as a small tab fixed at the window's right edge (from `md`; a phone has
         the row in the command stack instead). Beside the explain box, for the same reason: it is
         placed in the window's pixels, which the zoom on the page container would scale. */}
