@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { useCallback, useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import type { PaperReading } from "@/lib/papers/reading";
+import type { AnchorSection } from "@/lib/notes/anchor-blocks";
 import { stickyTitle } from "@/lib/notes/blocks";
 import type { HighlightColourId, NoteAnchor } from "@/lib/notes/types";
 import { useWindows } from "@/lib/reader/windows";
@@ -299,7 +300,8 @@ export function goToPassage(
 /** P10-35's quiet line, said beside a lost note's heading and in its sticky window. */
 export const PASSAGE_LOST_LINE = "This passage is not in this version of the paper.";
 
-type Body = readonly { readonly paragraphs: readonly string[] }[];
+/** P11-27: the sections of a reading as far as an anchor goes — paragraphs, and (where the stored reading has them) the heading and the figures' captions. */
+type Body = readonly AnchorSection[];
 
 /** The key of the reading the reading page keeps in this browser (`use-reading.ts`); an entry's key starts with the paper's id. */
 const READING_CACHE_KEY = "peer-reading-v2";

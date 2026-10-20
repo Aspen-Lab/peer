@@ -30,6 +30,7 @@ import { Band } from "@/components/ui/band";
 import { openFigure, useFigureOpen } from "@/lib/reader/figure-viewer";
 import { paragraphKey } from "@/store/plain-rewrites";
 import { repairAnchors, resolveAnchors, useLostPassages } from "@/store/notes";
+import { captionBlock, captionText, headingBlock, setBodyOnShow } from "@/lib/notes/anchor-blocks";
 import { ASK, BODY, ROUTE } from "./copy";
 import { ParagraphPlainControl, PlainRewrite, plainOffered, type PlainView } from "./plain-button";
 import { NoteTag, highlightMarks, isHighlightSpot, passageSegments, rangeOf, tieOrder, type AnchorSpot } from "@/components/notes/note-tags";
@@ -276,6 +277,12 @@ export function markedClass(base: string, mark: SectionMark | null, extra?: stri
 // notes are in no marked container, so they are no target. Anything else is no target. The body's markup is untouched: this reads the DOM's
 // selection and the ids the paragraphs already carry (`paragraphAnchor`) and the attribute the page puts on a container; nothing is added
 // to what renders here.
+//
+// P11-27 rule 2 (owner items 5 and 8; round 1's walk X-4; ruling §1h.122): a figure's caption and a section's heading are targets too — each its own container, with
+// an anchor of its own in the shape of a paragraph's (`paper-section-<k>-p<n>`; n counts the section's paragraphs, then its heading, then its captions:
+// `lib/notes/anchor-blocks.ts`). The heading carries its id and the marker `data-anchor-block="heading"`; the figure carries its id and `data-anchor-block="caption"`,
+// and the words of the caption are its `figcaption`'s (the picture's button is no part of them). The target says which it is (`block`); a selection across two
+// containers is still no target.
 
 /** The longest passage a selection may be (characters, whitespace collapsed). */
 export const MAX_SELECTION_CHARS = 1200;
@@ -311,6 +318,8 @@ export interface SelectionTarget {
    * paragraph's raw text, so it is the nearest occurrence that wins, not an exact one).
    */
   offset?: number;
+  /** P11-27 (rule 2): the selection is in a section's heading or a figure's caption (its anchor's `n` is the heading's block or a caption's); absent for a paragraph's. */
+  block?: "heading" | "caption";
 }
 
 /** A rectangle in the viewport's coordinates. */
@@ -374,6 +383,7 @@ export function sameSelection(a: ExplainSelection | null, b: ExplainSelection | 
     a.passage === b.passage &&
     (a.source ?? "paper") === (b.source ?? "paper") &&
     a.paragraphId === b.paragraphId &&
+    a.block === b.block &&
     a.offset === b.offset &&
     sameRect(a.rect, b.rect) &&
     sameRect(a.bounds, b.bounds) &&
@@ -433,6 +443,23 @@ function paragraphOf(node: NodeLike | null): { id: string; text: ElementLike } |
   return PARAGRAPH_ANCHOR.test(host.id) ? { id: host.id, text } : null;
 }
 
+/** P11-27: the attribute a heading and a figure carry (`"heading"`, `"caption"`) beside their anchor id, and the elements whose words are the block's: the heading
+ *  itself, and the figure's `figcaption` (the figure's picture is no part of the caption). */
+export const ANCHOR_BLOCK_ATTRIBUTE = "data-anchor-block";
+export const ANCHOR_BLOCK_TEXT_SELECTOR = `[${ANCHOR_BLOCK_ATTRIBUTE}="heading"], figcaption`;
+
+/** The heading or the caption (the element that carries its anchor id and `data-anchor-block`) that holds `node`, inside the paper's body, with its text element. */
+function blockOf(node: NodeLike | null): { id: string; text: ElementLike; block: "heading" | "caption" } | null {
+  if (!node) return null;
+  const element = node.nodeType === 1 ? (node as unknown as ElementLike) : node.parentElement;
+  const text = element?.closest(ANCHOR_BLOCK_TEXT_SELECTOR) ?? null;
+  if (!text) return null;
+  const host = text.getAttribute?.(ANCHOR_BLOCK_ATTRIBUTE) ? text : text.parentElement;
+  const kind = host?.getAttribute?.(ANCHOR_BLOCK_ATTRIBUTE);
+  if (!host || (kind !== "heading" && kind !== "caption") || host.closest(`#${PAPER_BODY_ID}`) === null) return null;
+  return PARAGRAPH_ANCHOR.test(host.id) ? { id: host.id, text, block: kind } : null;
+}
+
 /** The attribute the page puts on a container whose text may be explained, and the values it takes besides the body's own paragraphs. */
 export const EXPLAIN_SOURCE_ATTRIBUTE = "data-explain-source";
 const EXPLAIN_SOURCE_SELECTOR = `[${EXPLAIN_SOURCE_ATTRIBUTE}]`;
@@ -446,8 +473,10 @@ interface Place {
   container: unknown;
   /** The target's own stable id: the paragraph's anchor; else the block's `data-explain-id` or `id`, else the container's, else its kind. */
   id: string;
-  /** The paper's `<p>`, whose box is the paragraph's (P8-02); none for the Summary and the answers. */
+  /** The paper's `<p>`, whose box is the paragraph's (P8-02); none for the Summary and the answers. P11-27: a heading's or a caption's own element. */
   text?: ElementLike;
+  /** P11-27: the container is a heading or a caption of the paper's body. */
+  block?: "heading" | "caption";
 }
 
 /**
@@ -458,6 +487,8 @@ function placeOf(node: NodeLike | null): Place | null {
   if (!node) return null;
   const paper = paragraphOf(node);
   if (paper) return { source: "paper", container: paper.id, id: paper.id, text: paper.text };
+  const anchored = blockOf(node);
+  if (anchored) return { source: "paper", container: anchored.id, id: anchored.id, text: anchored.text, block: anchored.block };
   const element = node.nodeType === 1 ? (node as unknown as ElementLike) : node.parentElement;
   const container = element?.closest(EXPLAIN_SOURCE_SELECTOR) ?? null;
   const kind = container?.getAttribute?.(EXPLAIN_SOURCE_ATTRIBUTE);
@@ -564,7 +595,7 @@ export function readSelection(selection: SelectionLike | null): ExplainSelection
   if (!where) return null;
   // P11-09: where in its paragraph the passage starts, for the paper's body (the Summary and the answers have no paragraph to anchor to).
   const offset = start.source === "paper" ? wordsBefore(range, start.text) : undefined;
-  return { ...target, ...(offset !== undefined ? { offset } : {}), ...where, measure: () => measureRange(range, start?.text) };
+  return { ...target, ...(start.block ? { block: start.block } : {}), ...(offset !== undefined ? { offset } : {}), ...where, measure: () => measureRange(range, start?.text) };
 }
 
 // ── A click on a highlight (P11-09; B P11-04 §3.3) ────────────────────────
@@ -712,7 +743,32 @@ export function figureBoxStyle(figure: ReadingFigure): CSSProperties | null {
 /** The picture ratio (width / height) under which a figure may be narrower than half the column at the 32rem cap: (40rem column / 2) / 32rem. */
 const FIGURE_TALL_RATIO = 20 / 32;
 
-function Figure({ figure }: { figure: ReadingFigure }) {
+/**
+ * P11-27 (rule 2): a figure's caption as the page draws it — the label in the quiet face, then " · " and the caption's words, then (where the picture is not drawn
+ * and the extractor knew the page) " · p.N of the PDF". The words of the anchor (`captionText`) are all of it but, for a picture that failed to load, the page it says
+ * after them. With notes on the caption its words are cut into runs and marks like a paragraph's; with none it is the markup it was.
+ */
+function CaptionText({ figure, spots, failed }: { figure: ReadingFigure; spots?: NoteAnchorMap[string]; failed: boolean }) {
+  const text = captionText(figure);
+  const tail = failed && Boolean(figure.imageUrl) && typeof figure.page === "number" ? ` \u00b7 p.${figure.page} of the PDF` : "";
+  if (!spots || spots.length === 0) {
+    return (
+      <>
+        <span className="text-text-muted">{figure.label}</span>
+        {text.slice(figure.label.length)}
+        {tail}
+      </>
+    );
+  }
+  return (
+    <>
+      {notedRuns(text, coveringSegments(text, spots), undefined, figure.label.length)}
+      {tail}
+    </>
+  );
+}
+
+function Figure({ figure, anchor, spots }: { figure: ReadingFigure; /** P11-27: the caption's anchor id (`paper-section-<k>-p<n>`). */ anchor: string; /** The notes and highlights taken on the caption's words. */ spots?: NoteAnchorMap[string] }) {
   const [failed, setFailed] = useState(false);
   const [waiting, setWaiting] = useState(false);
   const showImage = Boolean(figure.imageUrl) && !failed;
@@ -782,7 +838,7 @@ function Figure({ figure }: { figure: ReadingFigure }) {
     </button>
   );
   return (
-    <figure className="my-6">
+    <figure id={anchor} {...{ [ANCHOR_BLOCK_ATTRIBUTE]: "caption" }} className="my-6 scroll-mt-20">
       {showImage && (
         <div className={box ? figureMatClass(false) : figureMatClass(waiting)}>
           {box ? (
@@ -795,9 +851,7 @@ function Figure({ figure }: { figure: ReadingFigure }) {
         </div>
       )}
       <figcaption className="annotation mt-2 leading-[1.6] text-text-faint measure-mono">
-        <span className="text-text-muted">{figure.label}</span>
-        {figure.caption ? ` \u00b7 ${figure.caption}` : ""}
-        {!showImage && typeof figure.page === "number" ? ` \u00b7 p.${figure.page} of the PDF` : ""}
+        <CaptionText figure={figure} spots={spots} failed={failed} />
       </figcaption>
     </figure>
   );
@@ -893,6 +947,22 @@ interface Within {
 }
 
 /**
+ * P11-27: a run of plain text. In a caption the first `labelEnd` characters are the figure's label ("Figure 1"), drawn in the quiet face as it always was — wherever
+ * a mark runs across it: the label stays a label inside the mark. Inside a highlight the label takes the highlight's ink (the muted face is not made for a bright
+ * fill). Without `labelEnd` — a paragraph, a heading — it is the text, as it was.
+ */
+function plainRun(text: string, from: number, to: number, key: string, within: Within | undefined, labelEnd: number | undefined) {
+  if (labelEnd === undefined || from >= labelEnd) return <MathText key={key} text={text.slice(from, to)} />;
+  const cut = Math.min(to, labelEnd);
+  return (
+    <Fragment key={key}>
+      <span {...(within ? {} : { className: "text-text-muted" })}>{text.slice(from, cut)}</span>
+      {cut < to ? <MathText text={text.slice(cut, to)} /> : null}
+    </Fragment>
+  );
+}
+
+/**
  * The runs of a paragraph, or of one mark: text, marks (their own nested runs inside, the tag right after), loose tags.
  *
  * P11-09: a highlight's spot (it has a `colour`) is a `<mark data-highlight="id">` painted inline — its fill at depth 0, its deeper
@@ -900,9 +970,9 @@ interface Within {
  * that lie inside an earlier mark) carry `data-highlight-part`. A sticky's mark inside a highlight wears the highlight's deep
  * shade and ink and keeps its tag. A paragraph with no highlight in it renders as it always did.
  */
-function notedRuns(text: string, segments: readonly CoveringSegment[], within?: Within) {
+function notedRuns(text: string, segments: readonly CoveringSegment[], within?: Within, labelEnd?: number) {
   return segments.map((segment, k) => {
-    if (segment.kind === "text") return <MathText key={`t${k}`} text={text.slice(segment.from, segment.to)} />;
+    if (segment.kind === "text") return plainRun(text, segment.from, segment.to, `t${k}`, within, labelEnd);
     const { spot } = segment;
     if (segment.kind === "tag") {
       // A highlight has no tag, even when the words it stood on are gone.
@@ -912,7 +982,7 @@ function notedRuns(text: string, segments: readonly CoveringSegment[], within?: 
       const colour = spot.colour as HighlightColourId;
       const paint = highlightPaint(colour, segment.depth);
       const style = { backgroundColor: paint.bg, color: paint.ink };
-      const inner = notedRuns(text, segment.inner, { colour, ink: paint.ink });
+      const inner = notedRuns(text, segment.inner, { colour, ink: paint.ink }, labelEnd);
       return segment.part ? (
         <mark key={`p${spot.id}:${k}`} data-highlight-part={spot.id} style={style}>
           {inner}
@@ -926,7 +996,7 @@ function notedRuns(text: string, segments: readonly CoveringSegment[], within?: 
     // A sticky's mark inside a highlight: the highlight's deep shade and its ink, in place of the highlighter tokens.
     const worn = within ? highlightPaint(within.colour, 1) : null;
     const wear = worn ? { style: { backgroundColor: worn.bg, color: worn.ink } } : null;
-    const inner = notedRuns(text, segment.inner, within && worn ? { colour: within.colour, ink: worn.ink } : within);
+    const inner = notedRuns(text, segment.inner, within && worn ? { colour: within.colour, ink: worn.ink } : within, labelEnd);
     // A part of a later note's mark inside an earlier mark: its words in the nested shade, no tag (the note's tag stands after its last word).
     if (segment.part) {
       return (
@@ -980,11 +1050,11 @@ function Section({
         .map((e, k) => (
           <Equation key={`eq:${i}:${k}`} equation={e} />
         ))}
-      {figures
-        .filter((f) => f.after === i)
-        .map((f) => (
-          <Figure key={`${f.label}:${f.ordinal}`} figure={f} />
-        ))}
+      {figures.map((f, k) =>
+        f.after === i ? (
+          <Figure key={`${f.label}:${f.ordinal}`} figure={f} anchor={paragraphAnchor(index, captionBlock(section, k))} spots={noteAnchors?.[paragraphAnchor(index, captionBlock(section, k))]} />
+        ) : null,
+      )}
     </>
   );
   /** Whether the paper set an equation or a figure right after paragraph `i`. */
@@ -996,11 +1066,14 @@ function Section({
     <section id={sectionAnchor(index)} className="mt-8 scroll-mt-20 first:mt-6">
       {/* P1-05: the route marks the heading — an attribute and a tint,
           nothing else — and never the paragraphs under it. */}
+      {/* P11-27 (rule 2): the heading is a block of its own — its anchor id and marker, and the notes and highlights taken on its words. */}
       <h3
+        id={paragraphAnchor(index, headingBlock(section))}
+        {...{ [ANCHOR_BLOCK_ATTRIBUTE]: "heading" }}
         data-route={mark?.tier}
-        className={markedClass(`font-reading font-medium text-heading text-title leading-[1.3]${alone ? "" : " mb-2"}`, mark, HEADING_MARK)}
+        className={markedClass(`font-reading font-medium text-heading text-title leading-[1.3] scroll-mt-20${alone ? "" : " mb-2"}`, mark, HEADING_MARK)}
       >
-        <MathText text={section.heading} />
+        <NotedText text={section.heading} spots={noteAnchors?.[paragraphAnchor(index, headingBlock(section))]} />
       </h3>
       {!alone && (
       <div className="font-reading text-title leading-[1.65] text-text-muted measure-paper space-y-4 reading-justify">
@@ -1079,6 +1152,12 @@ export function PaperBody({
     if (resolved.fixes.length > 0) repairAnchors(resolved.fixes);
     useLostPassages.getState().setLost(resolved.lost);
   }, [resolved]);
+  // P11-27 (rule 2): the notes store reads the words of a heading or a caption from the body on show (the hooks that take a note or a highlight know only the
+  // paragraphs). Memory only; taken back when the body goes.
+  useEffect(() => {
+    setBodyOnShow(body);
+    return () => setBodyOnShow(null);
+  }, [body]);
   if (body.length === 0) return null;
   // One listener on the body, not one per mark: the marks are drawn by `notedRuns` and nest, and a click on a nested mark
   // must tell once (the innermost highlight), which the bubbling of one handler per mark would not.

@@ -57,8 +57,9 @@ export function highlightSelection(
   },
 ): { id: string; created: boolean } | null {
   if (!canHighlight(target)) return null;
+  // P11-27 (rule 2): the lookup knows a section's paragraphs; the words of a heading or a caption (an index past the paragraphs) are read by the store from the body on
+  // show (`addHighlight`), which makes nothing where it has none either.
   const paragraphText = input.body?.[target.sectionIndex]?.paragraphs[target.paragraphIndex];
-  if (paragraphText === undefined) return null;
   const had = readingNoteFor(useNotesStore.getState().notes, input.paper.id) !== undefined;
   const noteId = useNotesStore.getState().ensureReadingNote(citableFromPaper(input.paper), {
     questions: input.questions,

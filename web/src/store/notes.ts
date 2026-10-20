@@ -13,6 +13,7 @@ import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Block, Citable, HighlightColourId, Note } from "@/lib/notes/types";
+import { anchorBlocks, anchorTextOnShow, blockAt, parseAnchorId, type AnchorSection } from "@/lib/notes/anchor-blocks";
 import {
   HIGHLIGHT_QUOTE_MAX,
   citedKeys,
@@ -113,8 +114,6 @@ export interface AnchorFix {
   end: number;
 }
 
-const PARAGRAPH_ID = /^paper-section-(\d+)-p(\d+)$/;
-
 /**
  * P10-35 (rules 1-3): the anchors a paper body can draw. An anchor whose paragraph holds its words at `[start, end)` is kept
  * as it is, with no search (it reads only its own paragraph). One whose paragraph does not — the paragraphs moved, because a
@@ -122,9 +121,11 @@ const PARAGRAPH_ID = /^paper-section-(\d+)-p(\d+)$/;
  * whole body, nearest section first. The words found once repair the anchor (`fixes`); found more than once, the occurrence
  * nearest the old position; not found, the anchor is `lost` and drawn nowhere. An anchor with no range (its passage crossed
  * paragraphs) has nothing to check and stays at its paragraph. Pure; the body is only read.
+ * P11-27 (rule 2): a section's blocks are its paragraphs, then its heading, then its captions (`lib/notes/anchor-blocks.ts`): an
+ * anchor on a heading or a caption is checked and searched like a paragraph's, among all of them.
  */
 export function resolveAnchors(
-  body: readonly { readonly paragraphs: readonly string[] }[],
+  body: readonly AnchorSection[],
   anchors: NoteAnchorMap,
 ): { map: NoteAnchorMap; fixes: AnchorFix[]; lost: string[] } {
   const map: NoteAnchorMap = {};
@@ -132,9 +133,9 @@ export function resolveAnchors(
   const lost: string[] = [];
   const put = (paragraphId: string, spot: NoteAnchorMap[string][number]) => (map[paragraphId] ??= []).push(spot);
   for (const [paragraphId, spots] of Object.entries(anchors)) {
-    const at = PARAGRAPH_ID.exec(paragraphId);
-    const [si, pj] = at ? [Number(at[1]), Number(at[2])] : [-1, -1];
-    const text = at ? body[si]?.paragraphs[pj] : undefined;
+    const at = parseAnchorId(paragraphId);
+    const [si, pj] = at ? [at.section, at.index] : [-1, -1];
+    const text = at ? blockAt(body[si], pj)?.text : undefined;
     for (const spot of spots) {
       const { start, end, quote } = spot;
       if (start === undefined || end === undefined || quote === undefined) {
@@ -170,20 +171,21 @@ function nearer(a: readonly number[], b: readonly number[]): boolean {
 
 /** Where the quote stands in the body, nearest to `(si, pj)` / `start`: the anchor's own section first, then the whole body. */
 function findQuote(
-  body: readonly { readonly paragraphs: readonly string[] }[],
+  body: readonly AnchorSection[],
   quote: string,
   si: number,
   pj: number,
   start: number,
 ): { section: number; paragraph: number; start: number; end: number } | null {
   type Hit = { section: number; paragraph: number; start: number; end: number; rank: number[] };
-  /** The nearest occurrence in one section: the nearest paragraph to the old one, then the nearest offset. */
+  /** The nearest occurrence in one section: the nearest block (a paragraph, the heading, a caption) to the old one, then the nearest offset. */
   const within = (section: number): Hit | null => {
     let best: Hit | null = null;
-    const paragraphs = body[section]?.paragraphs ?? [];
-    for (let j = 0; j < paragraphs.length; j++) {
-      for (let place = locatePassage(paragraphs[j], quote); place; place = locatePassage(paragraphs[j], quote, place.start + 1)) {
-        if (!anchorHolds(paragraphs[j], { ...place, quote })) continue;
+    const blocks = anchorBlocks(body[section]);
+    for (let j = 0; j < blocks.length; j++) {
+      const text = blocks[j].text;
+      for (let place = locatePassage(text, quote); place; place = locatePassage(text, quote, place.start + 1)) {
+        if (!anchorHolds(text, { ...place, quote })) continue;
         const rank = [Math.abs(section - si), Math.abs(j - pj), Math.abs(place.start - start)];
         if (!best || nearer(rank, best.rank)) best = { section, paragraph: j, ...place, rank };
       }
@@ -430,7 +432,9 @@ export const useNotesStore = create<NotesState>()(
         const n = Math.max(note.stickyCount ?? 0, used) + 1;
         // P10-24: the passage is the paragraph's words — never a tag's text — for the quote and for the range alike.
         const passage = stripTagText(at.passage);
-        const place = at.paragraphText === undefined ? null : locatePassage(at.paragraphText, passage);
+        // P11-27: the words of a heading or a caption are not in the paragraph lookup the callers make; the body on show has them.
+        const text = at.paragraphText ?? anchorTextOnShow(at.paragraphId);
+        const place = text === undefined ? null : locatePassage(text, passage);
         const { header, blocks } = stickyBlocks({ paperId: at.paperId, paragraphId: at.paragraphId, quote: stickyQuote(passage), n, ...(place ?? {}) });
         set((s) => {
           const current = s.notes[noteId];
@@ -466,12 +470,14 @@ export const useNotesStore = create<NotesState>()(
         }),
       addHighlight: (noteId, at) => {
         const note = get().notes[noteId];
-        if (!note || at.paragraphText === undefined) return null;
+        // P11-27: a heading's or a caption's words are read from the body on show when the caller gives no paragraph text.
+        const paragraphText = at.paragraphText ?? anchorTextOnShow(at.paragraphId);
+        if (!note || paragraphText === undefined) return null;
         // The passage is the paragraph's words — never a tag's text — whitespace collapsed; it is kept whole, not cut like a sticky's.
         const quote = stripTagText(at.passage).replace(/\s+/g, " ").trim();
         if (!quote || quote.length > HIGHLIGHT_QUOTE_MAX) return null;
-        const place = locatePassage(at.paragraphText, quote, 0, at.hint);
-        if (!place || !anchorHolds(at.paragraphText, { ...place, quote })) return null;
+        const place = locatePassage(paragraphText, quote, 0, at.hint);
+        if (!place || !anchorHolds(paragraphText, { ...place, quote })) return null;
         const twin = note.blocks.find((b) => {
           const spot = readHighlight(b);
           return spot && spot.paperId === at.paperId && spot.paragraphId === at.paragraphId && spot.start === place.start && spot.end === place.end;

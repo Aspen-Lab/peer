@@ -269,7 +269,10 @@ export function SelectionToolbar({
   const [sizes, setSizes] = useState<Record<string, Size>>({});
   const box = useRef<HTMLDivElement | null>(null);
   const margin = useMarginRect();
-  const actions = offeredActions({ canExplain, onHighlight, canHighlight });
+  // P11-27 (rule 2): Explain this is not offered for a selection in a heading or a caption, whatever the page says it can explain: the explain route looks for the
+  // passage in the paper's paragraphs and would answer "not in the paper" (`lib/papers/explain.ts`, `locatePassage`).
+  const explainable = canExplain && target?.block === undefined;
+  const actions = offeredActions({ canExplain: explainable, onHighlight, canHighlight });
   const buttons = actions.length;
 
   // Where the selection is now, with the cards that stand open beside it; and again after each scroll or resize, each change of the
@@ -345,6 +348,6 @@ export function SelectionToolbar({
   if (!target || !place) return null;
   const highlight = actions.includes("highlight") ? () => onHighlight?.(target) : undefined;
   return (
-    <SelectionToolbarView place={place} canExplain={canExplain} onExplain={onExplain} onTakeNote={() => onTakeNote(target)} onHighlight={highlight} overCard={overCard} innerRef={(el) => (box.current = el)} />
+    <SelectionToolbarView place={place} canExplain={explainable} onExplain={onExplain} onTakeNote={() => onTakeNote(target)} onHighlight={highlight} overCard={overCard} innerRef={(el) => (box.current = el)} />
   );
 }

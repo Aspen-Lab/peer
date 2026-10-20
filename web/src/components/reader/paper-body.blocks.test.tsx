@@ -129,6 +129,12 @@ describe("PaperBody — the marks a note and a highlight are drawn with, in a he
     expect(out).toMatch(/<mark data-note="1"[^>]*><span class="text-text-muted">Figure 1<\/span> · Creep<\/mark>/);
   });
 
+  it("draws the label inside a highlight in the highlight's ink: the quiet face is not made for a bright fill", () => {
+    const out = figcaption(render({ [CAPTION_ID(0)]: [spot("h1", 0, FIG1, 0, FIG1.indexOf("Creep") + 5, { colour: "yellow", order: 0 })] }), 0);
+    expect(out).toMatch(/<mark data-highlight="h1"[^>]*><span>Figure 1<\/span> \u00b7 Creep<\/mark>/);
+    expect(out).not.toContain("text-text-muted");
+  });
+
   it("paints a highlight on the caption's words in its colour, with its ink, and with no tag", () => {
     const start = FIG2.indexOf("sketch");
     const out = figcaption(render({ [CAPTION_ID(1)]: [spot("h1", 0, FIG2, start, start + 6, { colour: "pink", order: 0 })] }), 1);
