@@ -107,10 +107,12 @@ export const CARD_SLACK_PX = 4;
 export const MODE_HYSTERESIS_PX = 12;
 
 /**
- * The open cards: those the margin will carry (`data-margin-card`) and, until every card in the page carries it, today's own — the
- * explain dock and the sticky and notes windows.
+ * The open cards: those the margin carries, by their one marker, `data-margin-card`. P11-17c rule 4: every card of the margin carries it —
+ * the explain card in front and behind, a sticky, the notes window and the figure (`margin-card.markers.test.tsx` pins each, in the markup) —
+ * so the legacy list (`[data-explain-dock]`, `[data-sticky]`, `[data-notes-window]`) that stood beside it is retired. A new kind of card
+ * carries the marker, or the selection's actions are drawn over it.
  */
-export const OPEN_CARD_SELECTOR = [MARGIN_CARD_SELECTOR, "[data-explain-dock]", "[data-sticky]", "[data-notes-window]"].join(", ");
+export const OPEN_CARD_SELECTOR = MARGIN_CARD_SELECTOR;
 
 /** The rects of the cards that stand open, in the window's pixels; a card with no box (hidden) is left out. */
 export function openCardRects(root: Pick<ParentNode, "querySelectorAll">): ViewRect[] {
