@@ -418,6 +418,8 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.unstubAllGlobals();
+  // The pictures the card keeps by address live as long as the tab; each case starts without them.
+  figureCardModule.forgetPictures();
 });
 
 describe("FigureCard: the zoom, the box and the focus", () => {
@@ -678,5 +680,53 @@ describe("the picture the card draws is the one already loaded; until one is, it
         card.unmount();
       }
     });
+  });
+});
+
+// ── P11-26 rule 3: the helpers the card draws with ────────────────────────────────────────────────────
+
+describe("drawPicture and the kept pictures (P11-26 rule 3; §1h.123)", () => {
+  const picture = (name: string) => ({ src: name, complete: true, naturalWidth: 600, naturalHeight: 400 }) as unknown as figureCardModule.LoadedPicture;
+
+  it("draws a picture at its own size into the canvas: the canvas is the picture's pixels, drawn once", () => {
+    const drawImage = vi.fn();
+    const canvas = { width: 300, height: 150, getContext: vi.fn(() => ({ drawImage })) };
+    const shown = picture("drawn");
+    figureCardModule.drawPicture(canvas as never, shown as never);
+    expect(canvas.width).toBe(600);
+    expect(canvas.height).toBe(400);
+    expect(canvas.getContext).toHaveBeenCalledWith("2d");
+    expect(drawImage).toHaveBeenCalledTimes(1);
+    expect(drawImage).toHaveBeenCalledWith(shown, 0, 0, 600, 400);
+  });
+
+  it("draws nothing, and throws nothing, where the canvas has no 2d context", () => {
+    expect(() => figureCardModule.drawPicture({ width: 0, height: 0, getContext: () => null } as never, picture("none") as never)).not.toThrow();
+  });
+
+  it("keeps the last six pictures by address, the one used last the longest, and gives the kept one back", () => {
+    for (let i = 0; i < 8; i += 1) figureCardModule.keepPicture(`/api/figure/p1/kept-${i}`, picture(`kept-${i}`));
+    expect(figureCardModule.keptPicture("/api/figure/p1/kept-0")).toBeNull();
+    expect(figureCardModule.keptPicture("/api/figure/p1/kept-1")).toBeNull();
+    // Using the oldest of the six makes it the newest: two more pushes the others out first.
+    const second = figureCardModule.keptPicture("/api/figure/p1/kept-2");
+    expect(second).not.toBeNull();
+    figureCardModule.keepPicture("/api/figure/p1/kept-8", picture("kept-8"));
+    figureCardModule.keepPicture("/api/figure/p1/kept-9", picture("kept-9"));
+    expect(figureCardModule.keptPicture("/api/figure/p1/kept-2")).toBe(second);
+    expect(figureCardModule.keptPicture("/api/figure/p1/kept-3")).toBeNull();
+  });
+
+  it("says so when the card's own request fails, instead of 'Loading the figure…'", () => {
+    const html = markup({ failed: true } as Partial<FigureCardViewProps>);
+    expect(html).toContain("The figure could not be loaded.");
+    expect(html).not.toContain("Loading the figure…");
+  });
+
+  it("marks the card's own request as failed from the picture's error", () => {
+    const card = mount({ figure: REF({ key: "Figure 3:err", src: "/api/figure/p1/err" }) });
+    expect((card.view as unknown as { failed?: boolean }).failed).toBe(false);
+    card.act(() => (card.view as unknown as { onPictureError: () => void }).onPictureError());
+    expect((card.view as unknown as { failed?: boolean }).failed).toBe(true);
   });
 });
