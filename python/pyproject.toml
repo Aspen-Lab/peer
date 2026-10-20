@@ -7,7 +7,7 @@ name = "peer-news"
 version = "0.1.0"
 description = "Self-hosted information agent — fetches, tags, scores, and filters internet content"
 requires-python = ">=3.11"
-license = "MIT"
+license = "AGPL-3.0-only"
 dependencies = [
     "click>=8.1",
     "pyyaml>=6.0",
