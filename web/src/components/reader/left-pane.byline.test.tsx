@@ -117,7 +117,8 @@ describe("the short-window rules for the byline (globals.css)", () => {
 
   it("show the details' copy of the byline there, and only there", () => {
     expect(declarationsFor(shortBlock(), ".reader-left [data-pane-byline-full]")).toMatch(/display:\s*block;/);
-    expect(CSS.replace(shortBlock(), "")).not.toMatch(/data-pane-(byline|affiliation|more)/);
+    // The rest of the stylesheet, comments aside (the one above the block explains the rules and names the hooks).
+    expect(CSS.replace(shortBlock(), "").replace(/\/\*[\s\S]*?\*\//g, "")).not.toMatch(/data-pane-(byline|affiliation|more)/);
   });
 
   it("leave the venue line, the title's other rule, the commands, the progress and the map alone: no rule of the block names them", () => {

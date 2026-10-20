@@ -7,6 +7,11 @@
 // P11-16 (B P11-01 §2.3; ruling §1h.113 (a)): from 1024 css px the title stands in the left pane's fixed zone, which never scrolls, and the owner's
 // six-line title would take the room the map needs. The page tells the block it is in the pane (`pane`): the title is clamped to four lines, the
 // whole of it in `title=` and in the markup, and it is set at the pane's size at every width (the one column's `sm:` step up is for a column).
+//
+// P11-20 (rule 2; BACKLOG-100): a paper from the briefing also has a byline (three names and "and N more") and the first author's affiliation, about
+// 117 px more in that fixed zone. In the pane the byline and the affiliation carry hooks (`data-pane-byline`, `data-pane-affiliation`) and the whole
+// of each in `title=`: on a window under 700 css px high `globals.css` makes each one line with an ellipsis and takes the control that opens the rest
+// (`data-pane-more`, with its comma) away, and the pane's details (`decision-block.tsx`) hold the full list. The venue line is never touched.
 
 import { useState } from "react";
 import type { Paper } from "@/types";
@@ -53,7 +58,7 @@ export function initialName(name: string): string {
  * Serif, like the title above it: these are the paper's own words. The mono on
  * this page is Peer talking.
  */
-function AuthorLine({ authors, affiliation }: { authors: string[]; affiliation?: string }) {
+function AuthorLine({ authors, affiliation, pane = false }: { authors: string[]; affiliation?: string; pane?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const hidden = authors.length - COLLAPSED_AUTHORS;
   const className = "font-reading text-body-lg leading-[1.45] text-text mt-3";
@@ -61,29 +66,40 @@ function AuthorLine({ authors, affiliation }: { authors: string[]; affiliation?:
   const names =
     hidden <= 0 || expanded ? authors.join(", ") : authors.slice(0, COLLAPSED_AUTHORS).join(", ");
 
+  // The comma that leads into the control, and the control: one element in the pane, so a short window can take both away.
+  const more = (
+    <>
+      {expanded ? " " : ", "}
+      {/* The names stay the accessible name — an `aria-label` on the
+          button would replace them and a screen reader would never hear
+          an author. */}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className="annotation text-text-faint hover:text-heading underline decoration-border-strong underline-offset-4 transition-colors [@media(hover:none)]:py-3"
+      >
+        {expanded ? AUTHORS.showFewer : AUTHORS.showMore(hidden)}
+      </button>
+    </>
+  );
+
   return (
     <div className="mt-3">
-      <p className={`${className} mt-0 measure-lede`}>
+      <p
+        className={`${className} mt-0 measure-lede`}
+        {...(pane ? { "data-pane-byline": "", title: authors.join(", ") } : {})}
+      >
         {names}
-        {hidden > 0 && (
-          <>
-            {expanded ? " " : ", "}
-            {/* The names stay the accessible name — an `aria-label` on the
-                button would replace them and a screen reader would never hear
-                an author. */}
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              aria-expanded={expanded}
-              className="annotation text-text-faint hover:text-heading underline decoration-border-strong underline-offset-4 transition-colors [@media(hover:none)]:py-3"
-            >
-              {expanded ? AUTHORS.showFewer : AUTHORS.showMore(hidden)}
-            </button>
-          </>
-        )}
+        {hidden > 0 && (pane ? <span data-pane-more="">{more}</span> : more)}
       </p>
       {affiliation && (
-        <p className="annotation text-text-faint mt-1.5">{affiliation}</p>
+        <p
+          className="annotation text-text-faint mt-1.5"
+          {...(pane ? { "data-pane-affiliation": "", title: affiliation } : {})}
+        >
+          {affiliation}
+        </p>
       )}
     </div>
   );
@@ -121,7 +137,7 @@ export function TitleBlock({
         {paper.title}
       </h1>
       {paper.authors.length > 0 && (
-        <AuthorLine authors={paper.authors} affiliation={paper.leadAffiliation} />
+        <AuthorLine authors={paper.authors} affiliation={paper.leadAffiliation} pane={pane} />
       )}
       {recommendation && (
         <p className="font-sans text-body-sm text-text-muted mt-1">{recommendation}</p>

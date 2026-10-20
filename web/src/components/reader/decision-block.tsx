@@ -77,6 +77,10 @@ interface CommandsProps {
 /** What the details need. */
 interface DetailsProps {
   sentences: string[];
+  /** P11-20 (rule 2): the paper's authors and the first author's affiliation. In the panes the details hold them whole, for a window under 700 css px
+   *  high, where the title block's byline is one line with an ellipsis (`globals.css`); everywhere else this draws nothing. */
+  authors?: readonly string[];
+  affiliation?: string;
   doi?: string;
   /** No provider configured and the sentence names a key. */
   showAddKey: boolean;
@@ -112,7 +116,7 @@ function Commands({ onRead, readLabel, source, isSaved, onSave, onSkip, onCopy, 
   );
 }
 
-function Details({ sentences, doi, showAddKey, uploadStatus }: DetailsProps) {
+function Details({ sentences, authors = [], affiliation, doi, showAddKey, uploadStatus }: DetailsProps) {
   // From 1024 css px the sentence is a note in the left pane, set at the pane's size with a rule beside it, and the reading controls are
   // at the top of that pane. Below it the sentence is prose in the reading column, and the controls follow the private-PDF line. Either
   // way it follows the commands (P7-14, R2), at the same distance.
@@ -120,6 +124,14 @@ function Details({ sentences, doi, showAddKey, uploadStatus }: DetailsProps) {
 
   return (
     <>
+      {spread && (authors.length > 0 || affiliation) && (
+        // P11-20 (rule 2): hidden but for a window under 700 css px high (`globals.css` shows it there): the byline in the title block is one line
+        // with an ellipsis on such a window, and this is where the whole of it is.
+        <div data-pane-byline-full="" className="hidden mt-6 font-reading text-body leading-[1.55] text-text-muted">
+          {authors.length > 0 && <p>{authors.join(", ")}</p>}
+          {affiliation && <p className="annotation mt-2 text-text-faint">{affiliation}</p>}
+        </div>
+      )}
       <p
         className={
           spread
