@@ -119,6 +119,7 @@ import { settledQuestions, useReadingQuestionsHydrated } from "@/store/reading-q
 import { ExplainBoundary } from "@/components/reader/explain-boundary";
 import { SelectionToolbar, selectionCanExplain } from "@/components/reader/selection-toolbar";
 import { StickyNotes, useTakeNote } from "@/components/notes/sticky-note";
+import { canHighlight, useHighlight } from "@/components/notes/highlight";
 import { FigureHost } from "@/components/reader/figure-host";
 import { anchorMap } from "@/lib/notes/blocks";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
@@ -930,6 +931,10 @@ function Reader({
   // P10-09a (review 7.1, 8.4): "Take notes" on the selection — a numbered sticky note at the right, saved into the
   // paper's own note. The pill that offers it and "Explain this" is `SelectionToolbar` (mounted by the box below).
   const takeNote = useTakeNote({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions, body: reading?.body });
+  // P11-17b (owner item 8; B P11-04 §5; ruling §1h.112): "Highlight" on the selection — the passage painted in the paper (Yellow, black words), kept as a
+  // block of the paper's own note, the colour strip raised in the margin. Beside `takeNote`, with the same inputs. A Tier 0 act: it needs no key and no
+  // model, so the toolbar offers it whether or not the page can explain (`canHighlight` below is the paper's body only, never `canExplain`'s).
+  const highlight = useHighlight({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions, body: reading?.body });
   // The tags the passages carry: the sticky notes in the paper's own note, by paragraph.
   const readingNote = useNotesStore((state) => readingNoteFor(state.notes, paper.id));
   const noteAnchors = useMemo(() => anchorMap(readingNote, paper.id), [readingNote, paper.id]);
@@ -1237,9 +1242,9 @@ function Reader({
       like,
       undoOrToggleRead,
       ...(hasBody ? { read: readHere, ask: focusFirstEmptyQuestion, explain: openExplain } : {}),
-      // P11-13 (rule 3): `n` takes notes on the selection the page holds, as `e` explains it; inert with none. `h` (highlight) joins here
-      // once the page passes C P11-07's handler: `selectionActions(() => explainTarget, { note: takeNote, highlight: … })`.
-      ...(hasBody ? selectionActions(() => explainTarget, { note: takeNote }) : {}),
+      // P11-13 (rule 3): `n` takes notes on the selection the page holds, as `e` explains it; inert with none. P11-17b (rule 1): `h` highlights it, and
+      // the phone's thumb bar Highlight cell calls the same action. A Summary or an answer selection is no highlight (`highlightSelection` leaves it).
+      ...(hasBody ? selectionActions(() => explainTarget, { note: takeNote, highlight }) : {}),
       ...(isUploadId ? {} : { open }),
       copy,
       back,
@@ -1671,8 +1676,9 @@ function Reader({
       </ExplainBoundary>
     </SectionLinks>
     {/* P10-09a (review 7.1, 8.4; ruling §1h.78): the pill above a selection with "Explain this" and "Take notes", and
-        the sticky notes it opens at the right. Fixed, in the window's pixels, like the box above. */}
-    <SelectionToolbar target={explainTarget} canExplain={selectionCanExplain({ canAsk: explainCanAsk, terms, passage: explainTarget?.passage ?? null })} onExplain={openExplain} onTakeNote={takeNote} />
+        the sticky notes it opens at the right. Fixed, in the window's pixels, like the box above. P11-17b: and "Highlight" — for the paper's body
+        only, with or without a key. */}
+    <SelectionToolbar target={explainTarget} canExplain={selectionCanExplain({ canAsk: explainCanAsk, terms, passage: explainTarget?.passage ?? null })} onExplain={openExplain} onTakeNote={takeNote} onHighlight={highlight} canHighlight={canHighlight(explainTarget)} />
     <StickyNotes key={paper.id} paper={paper} reveal={reveal} />
     {/* P11-15 (owner item 1): a figure opened from the paper's body, in the margin's stack, or the lightbox where there is no margin. One per paper, as the stickies: the store's keys repeat across papers. Its key is not the stickies' (a sibling's), or React meets two children with one key. */}
     <FigureHost key={`figure:${paper.id}`} />
