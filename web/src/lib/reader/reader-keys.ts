@@ -9,6 +9,8 @@
 // chose not to wire `next`) the key is inert and falls through to the global
 // keys.
 
+import { PLAIN_REWRITE_ENABLED } from "@/lib/papers/plain-levels";
+
 export type ReaderAction =
   | "next"
   | "prev"
@@ -37,6 +39,18 @@ export interface PaperKey {
   short: string;
 }
 
+/**
+ * P11-17a rule 3: `u`'s words, under the "Say it plainly" switch (`plain-levels.ts`). The page's
+ * `u` takes a plain rewrite back only while the switch is on, so only then does the row say so.
+ * Chosen here, where the table is built: the keyboard layer, the help sheet and the legend still
+ * read the one table.
+ */
+export function undoLabel(plainRewriteEnabled: boolean): string {
+  return plainRewriteEnabled
+    ? "Undo a plain rewrite or a dismiss, else mark unread / read"
+    : "Undo a dismiss, else mark unread / read";
+}
+
 export const PAPER_KEYS: readonly PaperKey[] = [
   { keys: ["j", "]", "ArrowRight"], action: "next", label: "Next paper", short: "next" },
   { keys: ["k", "[", "ArrowLeft"], action: "prev", label: "Previous paper", short: "prev" },
@@ -46,10 +60,13 @@ export const PAPER_KEYS: readonly PaperKey[] = [
   // P4-01 (§1h.12 (h)): one row. With a plain rewrite showing, `u` takes the latest one back first
   // (the original stands alone again; the rewrite stays kept); only when none shows does it do
   // what it did — undo a dismiss, else mark unread / read.
+  // P11-17a rule 3: the words follow the "Say it plainly" switch (`undoLabel`). Off (the owner's
+  // 2026-10-19 switch), `u` takes no rewrite back and the row says "Undo a dismiss, else mark
+  // unread / read"; with `PLAIN_REWRITE_ENABLED` true the label is P4-01's above, byte-identical.
   {
     keys: ["u"],
     action: "undoOrToggleRead",
-    label: "Undo a plain rewrite or a dismiss, else mark unread / read",
+    label: undoLabel(PLAIN_REWRITE_ENABLED),
     short: "undo",
   },
   // `t` for the text: `r` is the briefing's own key and stays global.
