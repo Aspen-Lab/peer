@@ -216,6 +216,18 @@ export const MAP = {
   },
 } as const;
 
+/** P11-35: the word that opens the map's fact line before the terms ("mentions growing ×6, …"). */
+const MENTIONS_LEAD = "mentions";
+/** P11-35: how many of a section's terms the fact line states. */
+const MENTIONS_STATED = 3;
+/**
+ * P11-35: the terms the fact line states, one string each ("growing ×6"): the first three, most mentioned first. `ROUTE.mentions` joins them into the
+ * one plain line; the map draws them piece by piece (`reading-map.tsx`'s `MentionsLine`), so that a term's last word and its count never part at a line's
+ * end. Both are these strings with their plain spaces: no no-break space or joiner, for the string is also what a screen reader hears and a copy takes.
+ */
+const mentioned = (hits: ReadonlyArray<{ term: string; count: number }>): string[] =>
+  hits.slice(0, MENTIONS_STATED).map((hit) => `${hit.term} ×${hit.count}`);
+
 /**
  * P1-05 (§1f.13; blueprint §2 boundary 1, §3.3): the route's words. A tier is
  * a suggestion of how to read a section, stated as a fact about the section —
@@ -233,12 +245,12 @@ export const ROUTE = {
   /** P2-04b: the map's fact line for a `background` mark with no Tier 0 hits
    *  (the report named the section as context for an answer; no count to give). */
   backgroundWhy: "background · context for an answer",
-  /** The facts behind a tint: the reader's terms the section uses, and how often. */
-  mentions: (hits: ReadonlyArray<{ term: string; count: number }>) =>
-    `mentions ${hits
-      .slice(0, 3)
-      .map((hit) => `${hit.term} ×${hit.count}`)
-      .join(", ")}`,
+  /** The facts behind a tint: the reader's terms the section uses, and how often. One plain string, every space a plain space (P11-35: the map draws
+   *  the same words in pieces, `mentionsLead` and `mentioned`, and its text is this string; nothing else reads it — no export, feed or JSON carries it). */
+  mentions: (hits: ReadonlyArray<{ term: string; count: number }>) => `${MENTIONS_LEAD} ${mentioned(hits).join(", ")}`,
+  /** P11-35: the fact line's opening word, and its stated terms one by one ("growing ×6"), for the map's drawing of `mentions`. */
+  mentionsLead: MENTIONS_LEAD,
+  mentioned,
   /** The questions that tinted a row: "Q1, Q3". */
   questions: (numbers: readonly number[]) => numbers.map((n) => `Q${n}`).join(", "),
 } as const;

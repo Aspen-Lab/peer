@@ -56,6 +56,18 @@
 // glyph for glyph. The words are `MAP.summary`'s own (`copy.ts` is untouched): the line is split at its " · " and reads, to a reader and a copy, as the
 // one string it was.
 //
+// P11-35 (round 2, Theme A reader r1's extra 4; ruling §1h.133): a row's fact line ("relevant · mentions growing ×6, LCO ×6, parameter ×4") broke between a term
+// and its count at the pane's default 320 ("… growing ×6, LCO" / "×6, parameter ×4"): the browser may break at any space, and the one before "×" is one. A term's
+// last word and its count are now one unit (`MentionsLine`: an `inline-block` span, `max-w-full`, with the comma after the count inside it), so the line breaks
+// after a comma or inside a multi-word term, never between the word and "×n". A unit longer than the line (a long term in the narrowest pane) wraps inside itself
+// (`wrap-anywhere` on the line, inherited), runs nothing past the pane, and keeps the count with the last letters of the term (a `whitespace-nowrap` piece holds
+// them: a term that fits a line alone but not with its count broke at the space, and the count stood alone on the next line). The text is the string
+// `ROUTE.mentions` always was, plain spaces and all — the spans carry the "cannot break", not the characters, so a selection copied from the line, a screen reader
+// and the string itself are one and the same. Nothing else reads that string: no export, feed or JSON carries it (`reading-map.fact.test.tsx` pins the one caller).
+// The same rule, checked at every other place of the map that draws a count beside a word: the rows' meta ("1,041 words", "6 min") is whole parts already (P11-23) and
+// the summary line is whole parts in the pane; in the one column the summary line let a count part from its word ("about 24" / "min", at some widths from 419 to
+// 485 px), and `CountedPart` keeps each closing count and its word in one `nowrap` run.
+//
 // P10-04 (review 3.3; A10): the paper's own hierarchy. A row has its `level` (1 for "2.", 2 for "2.1", 3 for
 // "2.1.1") and is indented one step per level, in the one list (an inline padding, not a nested table, so the
 // keyboard walks the rows in order). A row with no paragraphs of its own that has rows under it is a group
@@ -79,7 +91,7 @@
 // And a map of one row (no key, or the guide not yet answered) starts open, so a headless paper's map is its
 // paragraphs under their one row, not a closed line.
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
 import type { PaperReading } from "@/lib/papers/reading";
 import {
   gistRoute,
@@ -209,6 +221,24 @@ function metaRuns(parts: ReturnType<typeof metaParts>) {
 }
 
 /**
+ * P11-35 (rule 1: every place that draws a count beside a word): a part's closing count and its word ("24 min", "4,255 words", "9 sections") are one `nowrap` run, so a
+ * line never ends on the count and opens on its word ("about 24" / "min"). In the pane a part is whole already and this changes nothing; in the one column, where the
+ * parts wrap as the words always did, it is the only difference: the break that fell between a count and its word falls before the count instead. A part with no
+ * count in it ("Read from PDF") is drawn as it was. The text is the part's own, plain spaces and all.
+ */
+function CountedPart({ text }: { text: string }) {
+  const counted = /^([\s\S]*?)(\d[\d,]*\s\S+)$/.exec(text);
+  return counted ? (
+    <>
+      {counted[1]}
+      <span className="whitespace-nowrap">{counted[2]}</span>
+    </>
+  ) : (
+    <>{text}</>
+  );
+}
+
+/**
  * P11-23 rule 4: the map's summary line, drawn so that a break never leaves a separator at the start of a line — in the left pane. `MAP.summary`'s string,
  * split at its separators; each part but the first is introduced by a slot holding "· " (the first has an empty one). In the pane (`.reader-left`, the
  * ancestor the one column has none of) the slot is 2ch wide, a part is one nowrap piece (so every line begins with a slot: the first's empty, the others'
@@ -228,12 +258,50 @@ function SummaryLine({ text }: { text: string }) {
               <span data-summary-slot="" className="[.reader-left_&]:inline-block [.reader-left_&]:w-[2ch] [.reader-left_&]:whitespace-pre">
                 {index > 0 ? "· " : null}
               </span>
-              {part}
+              <CountedPart text={part} />
             </span>
           </Fragment>
         ))}
       </span>
     </span>
+  );
+}
+
+/** P11-35: how many characters at the end of a term's last word travel with its count when a term must break inside itself ("…ethane ×14" breaks as "…etha" / "ne ×14"). */
+const COUNT_COMPANY = 3;
+
+/**
+ * P11-35: the fact line's terms ("mentions growing ×6, LCO ×6, parameter ×4"), drawn so that a term's last word and its count never part at a line's end. The text is
+ * `ROUTE.mentions`' own, joined the same way with plain spaces. Each stated term is cut before its last word: what stands before it (the first words of a multi-word
+ * term) is plain text and may break; the last word, the space, the "×" and the count — and the comma after them, so no line opens with one — are one `inline-block`
+ * span, which the line breaker takes whole and clamps to the line (`max-w-full`; the line is `wrap-anywhere`, so a unit longer than the line wraps inside itself
+ * instead of running past the pane). Inside it the space is no place to break: the last `COUNT_COMPANY` characters of the word, the space and the count are a
+ * `whitespace-nowrap` piece, so a term that fits a line alone but not with its count breaks inside the word and the count follows its last letters, not alone. The one
+ * plain space after each comma is where the line may break.
+ */
+function MentionsLine({ hits }: { hits: ReadonlyArray<{ term: string; count: number }> }) {
+  const stated = ROUTE.mentioned(hits);
+  return (
+    <>
+      {`${ROUTE.mentionsLead} `}
+      {stated.map((piece, index) => {
+        // "multi word term ×6": the count is the last " ×…", the unit starts at the last space before it.
+        const countAt = piece.lastIndexOf(" ×");
+        const wordAt = piece.lastIndexOf(" ", countAt - 1) + 1;
+        const letters = Array.from(piece.slice(wordAt, countAt));
+        const last = index === stated.length - 1;
+        return (
+          <Fragment key={index}>
+            {piece.slice(0, wordAt)}
+            <span data-mention-unit="" className="inline-block max-w-full">
+              {letters.slice(0, -COUNT_COMPANY).join("")}
+              <span className="whitespace-nowrap">{`${letters.slice(-COUNT_COMPANY).join("")}${piece.slice(countAt)}${last ? "" : ","}`}</span>
+            </span>
+            {last ? null : " "}
+          </Fragment>
+        );
+      })}
+    </>
   );
 }
 
@@ -393,14 +461,15 @@ export function ReadingMapView({
             const lineTiers = (part ? sectionMark(route, part.sectionId) : null)?.paragraphs ?? mark?.paragraphs;
             // P2-04b (§1g.15): a background mark Tier 0 found nothing in has no
             // counts to state, so it says what the mark is for, not the bare tier.
-            const fact = group
+            // P11-35: the words are `ROUTE.mentions`' own, drawn by `MentionsLine` so that a term and its count never part.
+            const fact: ReactNode = group
               ? null
               : mark
               ? mark.hits.length > 0
                 ? // P10-06: "strongest · mentions …", "relevant · mentions …", and for the faintest just "mentions …".
                   mark.tier === "faint"
-                  ? ROUTE.mentions(mark.hits)
-                  : `${ROUTE.tiers[mark.tier]} · ${ROUTE.mentions(mark.hits)}`
+                  ? <MentionsLine hits={mark.hits} />
+                  : <>{`${ROUTE.tiers[mark.tier]} · `}<MentionsLine hits={mark.hits} /></>
                 : mark.tier === "background"
                   ? ROUTE.backgroundWhy
                   : ROUTE.tiers[mark.tier]
@@ -448,7 +517,7 @@ export function ReadingMapView({
                   </div>
                 </div>
                 {/* Peer's words: the tier and the counts behind it. */}
-                {fact && <p className="annotation pl-5 text-text-faint">{fact}</p>}
+                {fact && <p className="annotation pl-5 text-text-faint wrap-anywhere">{fact}</p>}
                 {/* The paper's words: the sentence that says most. */}
                 {expanded && mark?.evidence && (
                   <p className="mt-1 pl-5 font-reading italic text-body-sm leading-[1.45] text-text-muted">

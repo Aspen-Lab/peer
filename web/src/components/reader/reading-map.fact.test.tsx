@@ -10,8 +10,9 @@ import { ReadingMapView } from "./reading-map";
 // P11-35 (round 2, Theme A reader r1's extra 4; §1h.133): in the left pane's map a row's fact line broke between a term and its count — at 1440 x 900,
 // "1. INTRODUCTION" read "relevant · mentions growing ×6, LCO" with "×6, parameter ×4" on the next line. The rule: a term and its count never part. In every
 // fact line, at every pane width from 240 to 480 px, the last word of a term and its "×n" stay on one line; the line still breaks after a comma and inside a
-// long multi-word term; a term longer than the line still wraps and nothing runs past the pane. What leaves the page stays plain: the words are drawn in a span
-// that cannot break between the word and its count, and the text is the string `ROUTE.mentions` always was, with plain spaces.
+// long multi-word term; a term longer than the line still wraps and nothing runs past the pane — and when a term fits a line alone but not with its count, the
+// count follows the term's last letters rather than standing alone. What leaves the page stays plain: the words are drawn in spans that cannot break between the
+// word and its count, and the text is the string `ROUTE.mentions` always was, with plain spaces.
 //
 // A node test cannot lay a line out. This file pins the structure that does it, and simulates the lines of a monospace face (the fact line is `annotation`: a
 // character is 7.2 px at the 12-px `text-caption`, as `reading-map.meta.test.tsx` has it) at every pane width from 240 to 480 px, every row, every level; the
@@ -37,8 +38,10 @@ const HITS: Record<string, { term: string; count: number }[]> = {
   // Multi-word terms: the break may fall inside the term, never between its last word and the count.
   f3: [{ term: "crack growth", count: 12 }, { term: "twinned lattice interface", count: 3 }, { term: "film", count: 2 }],
   f4: [{ term: "film", count: 2 }],
+  // A term of 23 letters: it fits the narrowest line (27 characters) alone, and not with " ×12,".
+  f5: [{ term: "polytetrafluoroethylene", count: 12 }, { term: "film", count: 2 }],
 };
-const TIERS = { f1: "medium", f2: "strong", f3: "background", f4: "faint" } as const;
+const TIERS = { f1: "medium", f2: "strong", f3: "background", f4: "faint", f5: "medium" } as const;
 const route = {
   byQuestion: [
     {
@@ -72,8 +75,9 @@ const SAID: Record<string, string> = {
   f2: `${ROUTE.tiers.strong} · ${ROUTE.mentions(HITS.f2)}`,
   f3: `${ROUTE.tiers.background} · ${ROUTE.mentions(HITS.f3)}`,
   f4: ROUTE.mentions(HITS.f4),
+  f5: `${ROUTE.tiers.medium} · ${ROUTE.mentions(HITS.f5)}`,
 };
-const ROWS = map.sections.slice(0, 4).map((row) => ({ id: row.id, heading: row.heading, level: row.level ?? 1 }));
+const ROWS = map.sections.map((row) => ({ id: row.id, heading: row.heading, level: row.level ?? 1 }));
 
 // ── The line breaker's view of the markup ────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -81,12 +85,14 @@ interface Word {
   text: string;
   /** Where the word starts in the line's flat text. */
   at: number;
-  /** The word may be broken anywhere when it is longer than the line (`overflow-wrap: anywhere` or `break-word`, and no `nowrap`). */
+  /** The word may be broken between its characters when it is longer than the line (`overflow-wrap: anywhere` or `break-word`, and no `nowrap`). */
   wraps: boolean;
+  /** Per character: inside a `whitespace-nowrap` piece, where no line breaks. */
+  locked: boolean[];
 }
+const wrapsClass = (c: string) => c === "wrap-anywhere" || c === "break-words" || c === "[overflow-wrap:anywhere]";
 /** The unbreakable runs a browser would see: an atomic inline (`inline-block`) or a `whitespace-nowrap` span is one word, and a plain space outside them is a break. */
 function wordsOf(open: string, inner: string): { flat: string; words: Word[] } {
-  const wrapsClass = (c: string) => c === "wrap-anywhere" || c === "break-words" || c === "[overflow-wrap:anywhere]";
   const rootWraps = classesOf(open).some(wrapsClass);
   const stack: { atomic: boolean; wraps: boolean; nowrap: boolean }[] = [];
   const words: Word[] = [];
@@ -102,7 +108,10 @@ function wordsOf(open: string, inner: string): { flat: string; words: Word[] } {
       continue;
     }
     const insideAtom = stack.some((s) => s.atomic);
-    const wraps = !stack.some((s) => s.nowrap) && (rootWraps || stack.some((s) => s.wraps));
+    const nowrap = stack.some((s) => s.nowrap);
+    // A word may be broken between its characters when it is not a `nowrap` run as a whole (its outermost atom is no `nowrap`) and an element on it or the line asks for it.
+    const outer = stack.find((s) => s.atomic);
+    const wraps = (outer === undefined || !outer.nowrap) && (rootWraps || stack.some((s) => s.wraps));
     for (const ch of decode(m[4])) {
       const at = flat.length;
       flat += ch;
@@ -111,41 +120,50 @@ function wordsOf(open: string, inner: string): { flat: string; words: Word[] } {
         continue;
       }
       if (current === null) {
-        current = { text: "", at, wraps };
+        current = { text: "", at, wraps, locked: [] };
         words.push(current);
       }
       current.text += ch;
+      current.locked.push(nowrap);
     }
   }
   return { flat, words };
 }
 
-/** Greedy lines of a monospace face `width` characters wide: the line index of every non-space character of the flat text, and the words that ran past the line. */
+/**
+ * Greedy lines of a monospace face `width` characters wide: the line index of every non-space character of the flat text, the words that ran past the line, the
+ * lines' text. A word that fits goes whole to the line where it fits, after a plain space or at the next line's start. A word longer than the line starts a line and
+ * breaks between its characters (when it may: `wraps`), except inside its `nowrap` pieces, which move whole to the next line when they do not fit the rest of this one.
+ */
 function lay(words: Word[], width: number): { lineOf: Map<number, number>; overflow: string[]; lines: string[] } {
   const lineOf = new Map<number, number>();
   const overflow: string[] = [];
   const lines: string[] = [""];
   let line = 0;
   let col = 0;
+  const newLine = () => {
+    line += 1;
+    lines[line] = "";
+    col = 0;
+  };
   for (const word of words) {
     if (col > 0 && col + 1 + word.text.length <= width) {
       lines[line] += " ";
       col += 1;
-    } else if (col > 0) {
-      line += 1;
-      lines[line] = "";
-      col = 0;
-    }
+    } else if (col > 0) newLine();
     if (word.text.length > width && !word.wraps) overflow.push(word.text);
-    for (let i = 0; i < word.text.length; i += 1) {
-      if (col >= width && word.wraps) {
-        line += 1;
-        lines[line] = "";
-        col = 0;
+    // The segments a line may not split: a run of locked characters, or one free character.
+    for (let i = 0; i < word.text.length; ) {
+      let j = i + 1;
+      if (word.locked[i]) while (j < word.text.length && word.locked[j]) j += 1;
+      // A `nowrap` piece longer than the line has no way to wrap: it runs past the pane.
+      if (word.wraps && word.locked[i] && j - i > width) overflow.push(word.text.slice(i, j));
+      if (word.wraps && word.text.length > width && col > 0 && col + (j - i) > width) newLine();
+      for (; i < j; i += 1) {
+        lineOf.set(word.at + i, line);
+        lines[line] += word.text[i];
+        col += 1;
       }
-      lineOf.set(word.at + i, line);
-      lines[line] += word.text[i];
-      col += 1;
     }
   }
   return { lineOf, overflow, lines };
@@ -222,19 +240,17 @@ describe("a map term and its count never part (P11-35)", () => {
     /** The characters of a fact line: the pane less its side padding (24), the row's indent (12 a level less the first) and the line's own 20. */
     const widthCh = (pane: number, level: number) => Math.floor((pane - 24 - (level - 1) * 12 - 20) / CH);
 
-    it("never puts a count on a line other than the line of its term's last word, where the word and the count fit a line", () => {
+    it("never puts a count on a line other than the line of its term's last word, and never splits the count: at every width, including where the word fits a line alone and the word with its count does not", () => {
       for (const row of ROWS) {
         const { open, inner } = factOf(row.heading);
         const { flat, words } = wordsOf(open, inner);
         for (let pane = 240; pane <= 480; pane += 1) {
-          const width = widthCh(pane, row.level);
-          const { lineOf } = lay(words, width);
+          const { lineOf } = lay(words, widthCh(pane, row.level));
           for (const m of flat.matchAll(/(\S+) ×(\d+)/g)) {
-            const unit = `${m[1]} ×${m[2]},`;
-            if (unit.length > width) continue; // a unit longer than the line has no line to stay on
             const end = (m.index ?? 0) + m[1].length - 1;
-            const count = (m.index ?? 0) + m[1].length + 1;
-            expect(lineOf.get(end), `${row.heading} at ${pane}px: "${m[0]}" parts`).toBe(lineOf.get(count));
+            const times = end + 2;
+            expect(lineOf.get(end), `${row.heading} at ${pane}px: "${m[0]}" parts`).toBe(lineOf.get(times));
+            expect(lineOf.get(times + m[2].length), `${row.heading} at ${pane}px: "${m[0]}" splits its count`).toBe(lineOf.get(times));
           }
         }
       }
@@ -261,20 +277,66 @@ describe("a map term and its count never part (P11-35)", () => {
     });
   });
 
-  it("clamps a unit wider than the line to it and lets it wrap inside: `inline-block max-w-full` and `wrap-anywhere`, never `whitespace-nowrap`", () => {
+  // The unit: `<span data-mention-unit class="inline-block max-w-full">` the word's free letters, then `<span class="whitespace-nowrap">` its last three letters, the space, the count and the comma.
+  const unitsOf = (inner: string) => [...inner.matchAll(/<span data-mention-unit=""([^>]*)>([^<]*)<span([^>]*)>([^<]*)<\/span><\/span>/g)].map((m) => ({ outer: classesOf(m[1]), free: m[2], inner: classesOf(m[3]), piece: m[4] }));
+
+  it("keeps the count with the last letters of the term: the last three letters, the space, the count and the comma are one `nowrap` piece, the letters before them free", () => {
+    for (const row of ROWS) {
+      const { inner } = factOf(row.heading);
+      const stated = HITS[row.id].slice(0, 3);
+      const units = unitsOf(inner);
+
+      expect(units.length, row.heading).toBe(stated.length);
+      stated.forEach((hit, index) => {
+        const word = hit.term.split(" ").pop() ?? "";
+        const comma = index < stated.length - 1 ? "," : "";
+        expect(units[index].free, `${row.heading}: ${hit.term}`).toBe(word.slice(0, -3));
+        expect(units[index].piece, `${row.heading}: ${hit.term}`).toBe(`${word.slice(-3)} ×${hit.count}${comma}`);
+        expect(units[index].inner, `${row.heading}: ${hit.term}`).toContain("whitespace-nowrap");
+      });
+    }
+  });
+
+  it("clamps a unit wider than the line to it and lets it wrap inside: `inline-block max-w-full` and `wrap-anywhere` (on it or the line), the unit itself never `whitespace-nowrap`", () => {
     for (const row of ROWS) {
       const { open, inner } = factOf(row.heading);
-      const classes = classesOf(open);
-      const units = [...inner.matchAll(/<(span)([^>]*)>([^<]* ×\d+,?)<\/span>/g)];
+      const units = unitsOf(inner);
 
       expect(units.length, row.heading).toBe(HITS[row.id].slice(0, 3).length);
       for (const unit of units) {
-        const own = classesOf(unit[2]);
-        expect(own, `${row.heading}: ${unit[3]}`).toEqual(expect.arrayContaining(["inline-block", "max-w-full"]));
-        expect(own, `${row.heading}: ${unit[3]}`).not.toContain("whitespace-nowrap");
-        expect([...own, ...classes].some((c) => c === "wrap-anywhere" || c === "break-words" || c === "[overflow-wrap:anywhere]"), `${row.heading}: ${unit[3]}`).toBe(true);
+        expect(unit.outer, `${row.heading}: ${unit.piece}`).toEqual(expect.arrayContaining(["inline-block", "max-w-full"]));
+        expect(unit.outer, `${row.heading}: ${unit.piece}`).not.toContain("whitespace-nowrap");
+        expect([...unit.outer, ...classesOf(open)].some(wrapsClass), `${row.heading}: ${unit.piece}`).toBe(true);
       }
     }
+  });
+});
+
+// Rule 1's last bullet: every other place in the map that draws a count beside a word. The rows' meta ("1,041 words", "6 min") is whole nowrap parts (P11-23, pinned in
+// `reading-map.meta.test.tsx`); the summary line is whole parts in the pane (P11-23 rule 4) and, in the one column, drew "about 24" / "min" at some widths until
+// `CountedPart`; the questions' line ("Q1, Q3", `ROUTE.questions`) is only ever the row's `title` (a tooltip) and is not drawn in the page's lines.
+describe("every other place the map draws a count beside a word (P11-35 rule 1)", () => {
+  const summaryHtml = renderToStaticMarkup(createElement(ReadingMapView, { map, source: "PDF" }));
+  const box = summaryHtml.slice(summaryHtml.indexOf("<span data-map-summary"), summaryHtml.indexOf("<button", summaryHtml.indexOf("<span data-map-summary")));
+
+  it("the summary line, in the one column: a count never parts from its word, at any line width from 20 to 80 characters", () => {
+    // The pane's classes are gated by `.reader-left` and do not apply here: `classesOf` keeps them as written, so only the ungated classes make a run unbreakable.
+    const { flat, words } = wordsOf("", box);
+
+    expect(flat).toBe(`Read from PDF · 5 sections · 4,795 words · about 29 min`);
+    for (let width = 20; width <= 80; width += 1) {
+      const { lineOf } = lay(words, width);
+      for (const m of flat.matchAll(/(\d[\d,]*) (sections?|words?|min)\b/g)) {
+        const last = (m.index ?? 0) + m[1].length - 1;
+        const word = (m.index ?? 0) + m[1].length + 1;
+        expect(lineOf.get(last), `at ${width} characters: "${m[0]}" parts`).toBe(lineOf.get(word));
+      }
+    }
+  });
+
+  it("the questions' line is no line of the page: \"Q1, Q3\" is the row's `title`, a tooltip, and no text of the map", () => {
+    expect(html).toContain('title="Q1"');
+    expect(textOf(html)).not.toMatch(/\bQ\d/);
   });
 });
 
@@ -287,7 +349,9 @@ describe("what leaves the page stays plain (P11-35 rule 2)", () => {
       const path = join(dir, name);
       return statSync(path).isDirectory() ? walk(path) : /\.(ts|tsx)$/.test(name) && !/\.test\.tsx?$/.test(name) ? [path] : [];
     });
-  const sources = walk(SRC).map((path) => ({ path: relative(SRC, path), text: readFileSync(path, "utf8") }));
+  /** The code of a file, its comments taken out (a comment may name `ROUTE.mentions`). */
+  const codeOf = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+  const sources = walk(SRC).map((path) => ({ path: relative(SRC, path), text: codeOf(readFileSync(path, "utf8")) }));
 
   it("is read by the map's fact line alone: no other source file (an export, a feed, a route, a store) uses the route's mention strings", () => {
     const callers = sources.filter(({ text }) => /ROUTE\.mention\w*/.test(text)).map(({ path }) => path);

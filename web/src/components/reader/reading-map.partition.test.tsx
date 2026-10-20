@@ -85,6 +85,10 @@ function rowOf(html: string, heading: string): string {
   return html.slice(start, next < 0 ? html.length : next);
 }
 const opened = (...positions: number[]) => ({ openRows: positions });
+// P11-35 (re-aimed, §1c): the fact line is drawn in parts (`MentionsLine`: each term's last word and its count in one span, so that they never part at a line's end), so
+// its words are no longer one contiguous string of the markup. The text a reader or a copy gets is the same, plain spaces and all: these read it as the line's text,
+// the tags removed, and compare it in full.
+const factText = (row: string): string | undefined => /<p class="annotation pl-5 [^"]*">([\s\S]*?)<\/p>/.exec(row)?.[1].replace(/<[^>]*>/g, "");
 
 describe("ReadingMapView — a partition's group rows (B P10-05 §3.1)", () => {
   it("draws one row per part where the trunk's row was, then the paper's own rows", () => {
@@ -298,7 +302,7 @@ describe("ReadingMapView — a group row is marked from its paragraphs (B §4)",
     const results = rowOf(html, "Results");
 
     expect(results).toContain('data-route="strong"');
-    expect(results).toContain("mentions lattice ×2, quillwort ×2, crack ×1");
+    expect(factText(results)).toBe("strongest · mentions lattice ×2, quillwort ×2, crack ×1");
     expect(results).toContain("strongest");
     const line = results.slice(results.indexOf('href="#paper-section-0-p12"') - 80);
     expect(line).toContain('data-route="strong"');
@@ -306,7 +310,7 @@ describe("ReadingMapView — a group row is marked from its paragraphs (B §4)",
 
   it("tints the group that only mentions faintly, and says \"not mentioned\" for a group that does not mention", () => {
     expect(rowOf(html, "Introduction")).toContain('data-route="faint"');
-    expect(rowOf(html, "Introduction")).toContain("mentions quillwort ×1");
+    expect(factText(rowOf(html, "Introduction"))).toBe("mentions quillwort ×1");
     expect(rowOf(html, "Discussion")).not.toContain("data-route");
     expect(rowOf(html, "Discussion")).toContain(ROUTE.tiers.none);
   });

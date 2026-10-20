@@ -41,8 +41,9 @@ const unescape = (text: string) => text.replace(/&amp;/g, "&");
 const classesOf = (markup: string, pattern: RegExp) => unescape(pattern.exec(markup)?.[1] ?? "").split(/\s+/).filter(Boolean);
 
 /** The line's parts in order: the slot's text, and the part's own text after it. */
+// P11-35 (re-aimed, §1c): a part's closing count and its word are one `nowrap` run inside the part (`CountedPart`), so the part's text is read with that run's tags removed.
 const partsOf = (markup: string) =>
-  [...markup.matchAll(/<span class="[^"]*"><span data-summary-slot="" class="[^"]*">([^<]*)<\/span>([^<]*)<\/span>/g)].map((m) => ({ slot: m[1], part: m[2] }));
+  [...markup.matchAll(/<span class="[^"]*"><span data-summary-slot="" class="[^"]*">([^<]*)<\/span>((?:[^<]|<span class="whitespace-nowrap">[^<]*<\/span>)*)<\/span>(?= <span class=|<\/span><\/span>)/g)].map((m) => ({ slot: m[1], part: m[2].replace(/<[^>]*>/g, "") }));
 
 const LINES = [
   { html: render({ source: "PDF" }), text: MAP.summary(2, 34, 6042, "PDF") },
@@ -101,13 +102,19 @@ describe("the map's summary line at a break: a separator never opens a line in t
     for (const wrapper of wrappers) expect(wrapper).toEqual([`${PANE}whitespace-nowrap`]);
   });
 
-  it("changes nothing in the one column: every class that shapes the line is for the pane, so outside it the line is the plain string, its breaks included", () => {
-    for (const { html } of LINES) {
+  // P11-35 (re-aimed, §1c): "changes nothing in the one column" stood for P11-23's rule 4, which left the one column's breaks as they were. P11-35's rule 1 (a count and its
+  // word never part, at every place that draws one) changes exactly one thing there: each part's closing count and its word ("34 min", "6,042 words", "2 sections") are a
+  // `whitespace-nowrap` run, so a break that fell between them falls before the count. The rest is as it was: every other class that shapes the line is for the pane, so outside
+  // it the line is the plain string, its other breaks included, and the pane's own (whole nowrap parts) is the same.
+  it("changes the one column in one way only: every class that shapes the line is for the pane, but `block` and one `whitespace-nowrap` run holding each part's closing count and its word", () => {
+    for (const { html, text } of LINES) {
       const markup = boxOf(html);
       const classes = [...markup.matchAll(/class="([^"]*)"/g)].flatMap((m) => unescape(m[1]).split(/\s+/)).filter(Boolean);
+      const counted = text.split(" · ").map((part) => /\d[\d,]*\s\S+$/.exec(part)?.[0]).filter((run): run is string => run !== undefined);
 
-      // Only `block` (a block span inside the box, a line layout of its own that wraps as the box's text did) is not gated.
-      expect(classes.filter((c) => !c.startsWith(PANE)), "classes that apply in the one column").toEqual(["block"]);
+      expect(counted.length, text).toBe(3);
+      expect(classes.filter((c) => !c.startsWith(PANE)), "classes that apply in the one column").toEqual(["block", ...counted.map(() => "whitespace-nowrap")]);
+      expect([...markup.matchAll(/<span class="whitespace-nowrap">([^<]*)<\/span>/g)].map((m) => m[1]), text).toEqual(counted);
     }
   });
 });

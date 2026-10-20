@@ -41,6 +41,10 @@ const summaryText = (html: string): string => {
 };
 /** The whole markup as text: the tags removed. */
 const textOf = (html: string): string => html.replace(/<[^>]*>/g, "");
+// P11-35 (re-aimed, §1c): the fact line is drawn in parts (`MentionsLine`: each term's last word and its count in one span, so that they never part at a line's end), so
+// its words are no longer one contiguous string of the markup. The text a reader or a copy gets is the same, plain spaces and all: these read it as the line's text,
+// the tags removed, and compare it in full.
+const factText = (row: string): string | undefined => /<p class="annotation pl-5 [^"]*">([\s\S]*?)<\/p>/.exec(row)?.[1].replace(/<[^>]*>/g, "");
 
 describe("ReadingMapView", () => {
   it("heads the table with the summary line", () => {
@@ -219,9 +223,9 @@ describe("ReadingMapView — the route (P1-05)", () => {
   it("states the facts beside a tinted row — tier and counts, as the reader typed the terms — and 'not mentioned' for the rest", () => {
     const html = render({ route });
 
-    expect(rowOf(html, "1 Introduction")).toContain(`${ROUTE.tiers.strong} · mentions LCO ×3, H1-3 ×3, creep ×2`);
+    expect(factText(rowOf(html, "1 Introduction"))).toBe(`${ROUTE.tiers.strong} · mentions LCO ×3, H1-3 ×3, creep ×2`);
     // P10-06 (re-aimed, §1c): the faintest tier states no tier word, only the counts.
-    expect(rowOf(html, "2.1 Samples")).toContain(">mentions samples ×1<");
+    expect(factText(rowOf(html, "2.1 Samples"))).toBe("mentions samples ×1");
     expect(rowOf(html, "2.1 Samples")).not.toContain(`${ROUTE.tiers.faint} ·`);
     expect(rowOf(html, "Problem Statement")).toContain(`>${ROUTE.tiers.none}<`);
   });
@@ -312,7 +316,7 @@ describe("ReadingMapView — the background mark's fact line (P2-04b)", () => {
   it("keeps 'background · mentions …' when the mark has hits, and never shows the context line then", () => {
     const html = render({ route: backgroundRoute });
 
-    expect(rowOf(html, "2.1 Samples")).toContain(`${ROUTE.tiers.background} · mentions samples ×2`);
+    expect(factText(rowOf(html, "2.1 Samples"))).toBe(`${ROUTE.tiers.background} · mentions samples ×2`);
     expect(rowOf(html, "2.1 Samples")).not.toContain(ROUTE.backgroundWhy);
   });
 
