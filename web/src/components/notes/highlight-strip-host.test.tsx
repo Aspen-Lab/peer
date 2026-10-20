@@ -242,8 +242,12 @@ function frame() {
   settle();
 }
 
+/** The host a test mounted, taken down after it: its subscriptions are on stores that outlive the test. */
+let standing: { unmount: () => void } | null = null;
+
 function mountHost(paperId = "p1") {
   const mounted = stagedRuntime.mount(() => HighlightStripHost({ paperId }));
+  standing = mounted;
   stagedRuntime.flush();
   settle();
   return {
@@ -272,10 +276,12 @@ beforeEach(() => {
   stubPage();
 });
 afterEach(() => {
-  vi.unstubAllGlobals();
+  standing?.unmount();
+  standing = null;
   useMarginStore.setState({ rect: null });
   useHighlightStrip.setState({ id: null, top: 0 });
   useWindows.setState({ windows: [], clock: 0, origin: null });
+  vi.unstubAllGlobals();
 });
 
 describe("HighlightStripHost — raising the strip", () => {

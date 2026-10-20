@@ -120,6 +120,8 @@ import { ExplainBoundary } from "@/components/reader/explain-boundary";
 import { SelectionToolbar, selectionCanExplain } from "@/components/reader/selection-toolbar";
 import { StickyNotes, useTakeNote } from "@/components/notes/sticky-note";
 import { canHighlight, useHighlight } from "@/components/notes/highlight";
+import { useHighlightStrip } from "@/components/notes/highlight-strip";
+import { HighlightStripHost } from "@/components/notes/highlight-strip-host";
 import { FigureHost } from "@/components/reader/figure-host";
 import { anchorMap } from "@/lib/notes/blocks";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
@@ -1524,7 +1526,7 @@ function Reader({
             {/* P7-14 (R10): Paper digestion — the paper: everything the extractor read. Its map
                 (P1-04, R5) is the layout's `map` slot now (P10-04), under the strip, under both tabs. */}
             {/* The paper, when Peer reached it. */}
-            <PaperBody reading={reading} route={route} plain={plainForBody} onSelect={selectExplain} noteAnchors={noteAnchors} />
+            <PaperBody reading={reading} route={route} plain={plainForBody} onSelect={selectExplain} noteAnchors={noteAnchors} onHighlightClick={(id, rect) => useHighlightStrip.getState().show(id, rect.top)} />
           </>
         ) : (
           <div data-explain-source="summary" className="contents">
@@ -1682,6 +1684,10 @@ function Reader({
     <StickyNotes key={paper.id} paper={paper} reveal={reveal} />
     {/* P11-15 (owner item 1): a figure opened from the paper's body, in the margin's stack, or the lightbox where there is no margin. One per paper, as the stickies: the store's keys repeat across papers. Its key is not the stickies' (a sibling's), or React meets two children with one key. */}
     <FigureHost key={`figure:${paper.id}`} />
+    {/* P11-17b (owner item 8; B P11-04 §5): the highlight's colour strip, in the margin, level with its mark — raised by the Highlight action and by a click
+        on a mark (`onHighlightClick` above). One per paper, as the stickies and the figure host: it hides the strip when it unmounts. Outside the zoom
+        container, as the cards are: it is placed in the window's pixels. */}
+    <HighlightStripHost key={`highlight-strip:${paper.id}`} paperId={paper.id} />
     {/* P7-14 (R9): the notes, as a small tab fixed at the window's right edge (from `md`; a phone has
         the row in the command stack instead). Beside the explain box, for the same reason: it is
         placed in the window's pixels, which the zoom on the page container would scale. */}
