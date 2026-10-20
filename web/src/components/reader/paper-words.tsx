@@ -12,6 +12,7 @@ import type { PaperReading } from "@/lib/papers/reading";
 import { pickClaimMark } from "@/lib/papers/skim";
 import { ScrambleText } from "@/components/scramble-text";
 import { AbstractToggle } from "./abstract-toggle";
+import { SECTION_GAP } from "@/components/ui/band";
 import { SectionAttribution } from "./evidence-quote";
 import { LeadClaim } from "./lead-claim";
 import { ABSTRACT_FOOTER, TLDR_LINE, attribution, skimFooter } from "./copy";
@@ -46,10 +47,17 @@ export const SUMMARY_ID = {
 
 /**
  * A block of the Summary under its id: a plain element around what the block draws, and nothing at all around nothing (a block the page does not
- * draw leaves no empty element). A block's own margins collapse through it, so the page lays out as it did.
+ * draw leaves no empty element). A block's own margins collapse through it, so the page lays out as it did — with one exception the caller owns: the
+ * centre column drops the top gap of the first block it opens with (`reader-layout.tsx`: `[&>:first-child>:first-child>:first-child]:mt-0`), which is
+ * the block's own element, and with this around it is this element. A block that can open the column (the lead claim, the abstract's toggle: a paper
+ * with no body) therefore hands its top gap to this element (`className`), so the column's rule drops it as it did.
  */
-export function SummaryBlock({ id, children }: { id: string; children?: ReactNode }) {
-  return children ? <div id={id}>{children}</div> : null;
+export function SummaryBlock({ id, className, children }: { id: string; className?: string; children?: ReactNode }) {
+  return children ? (
+    <div id={id} className={className}>
+      {children}
+    </div>
+  ) : null;
 }
 
 function Paragraph({
@@ -190,12 +198,13 @@ export function PaperWords({
         <Deck skim={skim} basis={basis} quoted={quotedSkim} scramble={scramble} />
       )}
       {lead !== null && (
-        <SummaryBlock id={SUMMARY_ID.claim}>
+        // The band's own gap above it (`SECTION_GAP`) moves to the element around it: the column's first-block rule reaches that element.
+        <SummaryBlock id={SUMMARY_ID.claim} className={`${SECTION_GAP} [&>section]:mt-0`}>
           <LeadClaim sentence={sentences[lead]} />
         </SummaryBlock>
       )}
-      <SummaryBlock id={SUMMARY_ID.abstract}>
-        <AbstractToggle className="mt-12">
+      <SummaryBlock id={SUMMARY_ID.abstract} className="mt-12">
+        <AbstractToggle>
           <div className="font-reading text-lead leading-[1.6] text-text-muted measure-paper mt-4 space-y-4 reading-justify">
             {split > 0 && <Paragraph sentences={sentences.slice(0, split)} from={0} inked={inked} />}
             {split < sentences.length && (

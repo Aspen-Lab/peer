@@ -5,6 +5,7 @@ import { ANSWERS_BLOCK_ID, FLASH_MS, SUMMARY_ID_PREFIX, goToPassage } from "@/co
 import { stickyAnchorId } from "@/components/notes/sticky-note";
 import type { PaperReading } from "@/lib/papers/reading";
 import type { Claim, PaperReport } from "@/lib/papers/report";
+import { SECTION_GAP } from "@/components/ui/band";
 import { ForYourQuestions } from "./for-your-questions";
 import { EXPLAIN_SOURCE_ATTRIBUTE, readSelection, type SelectionLike } from "./paper-body";
 import { PaperWords, SUMMARY_ID, SummaryBlock } from "./paper-words";
@@ -52,6 +53,11 @@ describe("SummaryBlock", () => {
   it("is the block's own element, under its id, around whatever the block draws", () => {
     const html = renderToStaticMarkup(createElement(SummaryBlock, { id: "summary-x" }, createElement("section", null, "Words")));
     expect(html).toBe('<div id="summary-x"><section>Words</section></div>');
+  });
+
+  it("carries the class it is given, and none when it is given none", () => {
+    expect(renderToStaticMarkup(createElement(SummaryBlock, { id: "summary-x", className: "mt-12" }, createElement("section", null, "Words")))).toBe('<div id="summary-x" class="mt-12"><section>Words</section></div>');
+    expect(renderToStaticMarkup(createElement(SummaryBlock, { id: "summary-x" }, createElement("section", null, "Words")))).not.toContain("class=");
   });
 
   it("draws nothing around nothing: a block that is not there leaves no empty element behind", () => {
@@ -104,6 +110,28 @@ describe("PaperWords — each block that stands in the Summary's container has i
 
   it("with neither, there is nothing to hold an id", () => {
     expect(words({ reading: reading({ sentences: [], introCount: 0 }) })).toBe("");
+  });
+
+  // The centre column drops the top gap of the first block it opens with (`reader-layout.tsx`: `[&>:first-child>:first-child>:first-child]:mt-0`), which is
+  // the block's own element — and with a wrapper around it, the wrapper. A block that can open the column (a paper with no body: the lead claim, the
+  // abstract) hands its top gap to the wrapper, so the rule drops it as it did; measured on the real page at 1280, 1440 and 390, light and dark.
+  it("the abstract's top gap stands on the element around it, not on its toggle: the column's first-block rule reaches the former", () => {
+    const html = words({ reading: reading(), skim: SKIM, basis: "model-fulltext", quotedSkim: [] });
+    const wrapper = /<div id="summary-abstract"([^>]*)>(<section[^>]*>)/.exec(html);
+    expect(wrapper).not.toBeNull();
+    expect(wrapper![1]).toContain("mt-12");
+    expect(wrapper![2]).not.toContain("mt-12");
+  });
+
+  it("the lead claim's top gap (the band's own, `SECTION_GAP`) stands on the element around it, and the band's own is taken off", () => {
+    const html = words({ reading: reading() });
+    const wrapper = /<div id="summary-claim" class="([^"]*)">(<section[^>]*>)/.exec(html);
+    expect(wrapper).not.toBeNull();
+    const classes = wrapper![1].replaceAll("&amp;", "&").replaceAll("&gt;", ">").split(" ");
+    for (const gap of SECTION_GAP.split(" ")) expect(classes).toContain(gap);
+    expect(classes).toContain("[&>section]:mt-0");
+    // The band's own section still carries its gap in its markup (the class that the wrapper's rule overrides), as the claim has always been drawn.
+    expect(wrapper![2]).toContain("mt-12");
   });
 
   it("keeps the abstract's toggle, whose footer the decided-read observer watches, inside the abstract's block, where it was", () => {
