@@ -7,8 +7,9 @@
 //   - the header, 40 px: the label ("Figure 3") and the caption's head, and the X at the top right — a 40 px accent square, as the explain
 //     card's is (D8). A press on the header brings the card forward; the X closes it and brings nothing forward;
 //   - the zoom row (36 px; only while in front): minus, the readout, plus and Fit — the shared zoom core's steps, fit to 6x (D7);
-//   - the picture on the plate mat: the zoom core's surface (a click toggles fit and 2x, a drag pans, the wheel zooms about the pointer
-//     — D1 — and `+ = - 0` and the arrows work while the focus is on it);
+//   - the picture on the plate mat, which has no padding (P11-17c rule 3: the picture is fitted into the card's whole width): the zoom
+//     core's surface (a click toggles fit and 2x, a drag pans, the wheel zooms about the pointer — D1 — and `+ = - 0` and the arrows work
+//     while the focus is on it);
 //   - the caption, whole (D3), in the reading face; it scrolls inside, at most 30 % of the card's height.
 // Behind another card only the header shows. The card is non-modal (`role="region"`, no `aria-modal`, Tab is not trapped): the page behind
 // stays usable, and Explain's and the keyboard layer's Escape are not shut out (B P11-05 §2.3).
@@ -34,21 +35,19 @@ export const FIGURE_ZOOM_ROW_PX = 36;
 /** The caption takes at most this share of the card's height (D3) and scrolls inside. */
 export const FIGURE_CAPTION_SHARE = 0.3;
 
-/** The mat's padding around the picture: the picture is fitted into, and panned inside, the box less this on every side. */
-export const FIGURE_MAT_PAD_PX = 8;
-
 /** The caption's tallest, in pixels, for a card `height` tall. */
 export function captionMaxHeight(height: number): number {
   return Math.max(0, Math.floor(height * FIGURE_CAPTION_SHARE));
 }
 
-/** The box the picture is fitted into, from the mat's own measured box: net of its padding. */
+/**
+ * The box the picture is fitted into: the mat's own measured box, whole. P11-17c rule 3 (the owner: the figure "enlarged into the whole right
+ * margin"; C P11-15 "For the manager" 5): the 8-px padding that was taken off every side is gone, so at Fit the picture is the zoom core's fit
+ * (0.96, `clampFigureSize`) of the card's whole inner width — 382 px in a 400-px margin, 398 inside the card's border — not 366.7.
+ */
 export function figureViewport(box: Size | null): Size {
   if (!box) return { width: 0, height: 0 };
-  return {
-    width: Math.max(0, box.width - 2 * FIGURE_MAT_PAD_PX),
-    height: Math.max(0, box.height - 2 * FIGURE_MAT_PAD_PX),
-  };
+  return { width: Math.max(0, box.width), height: Math.max(0, box.height) };
 }
 
 /** What the view needs of the zoom core. */
@@ -167,7 +166,6 @@ export function FigureCardView({ label, caption, src, front, top, height, z, fra
         ref={boxRef}
         data-figure-box=""
         className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden border-y border-border-strong bg-[var(--plate-mat)]"
-        style={{ padding: FIGURE_MAT_PAD_PX }}
       >
         <button
           ref={surfaceRef}
