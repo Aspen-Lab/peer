@@ -937,7 +937,8 @@ function Reader({
   const takeNote = useTakeNote({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions, body: reading?.body });
   // P11-17b (owner item 8; B P11-04 §5; ruling §1h.112): "Highlight" on the selection — the passage painted in the paper (Yellow, black words), kept as a
   // block of the paper's own note, the colour strip raised in the margin. Beside `takeNote`, with the same inputs. A Tier 0 act: it needs no key and no
-  // model, so the toolbar offers it whether or not the page can explain (`canHighlight` below is the paper's body only, never `canExplain`'s).
+  // model, so the toolbar offers it whether or not the page can explain (`canHighlight` below is its own gate, never `canExplain`'s: a paragraph, a heading or a caption of the
+  // paper's body, and, since P11-28, a Summary block or an answer).
   const highlight = useHighlight({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions, body: reading?.body });
   // The tags the passages carry: the sticky notes in the paper's own note, by paragraph.
   const readingNote = useNotesStore((state) => readingNoteFor(state.notes, paper.id));
@@ -1717,8 +1718,8 @@ function Reader({
       </ExplainBoundary>
     </SectionLinks>
     {/* P10-09a (review 7.1, 8.4; ruling §1h.78): the pill above a selection with "Explain this" and "Take notes", and
-        the sticky notes it opens at the right. Fixed, in the window's pixels, like the box above. P11-17b: and "Highlight" — for the paper's body
-        only, with or without a key. */}
+        the sticky notes it opens at the right. Fixed, in the window's pixels, like the box above. P11-17b: and "Highlight" — wherever `canHighlight`
+        accepts the selection (a paragraph, a heading or a caption of the paper's body; since P11-28 a Summary block or an answer), with or without a key. */}
     <SelectionToolbar target={explainTarget} canExplain={selectionCanExplain({ canAsk: explainCanAsk, terms, passage: explainTarget?.passage ?? null })} onExplain={openExplain} onTakeNote={takeNote} onHighlight={highlight} canHighlight={canHighlight(explainTarget)} />
     <StickyNotes key={paper.id} paper={paper} reveal={reveal} />
     {/* P11-15 (owner item 1): a figure opened from the paper's body, in the margin's stack, or the lightbox where there is no margin. One per paper, as the stickies: the store's keys repeat across papers. Its key is not the stickies' (a sibling's), or React meets two children with one key. */}

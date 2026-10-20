@@ -45,7 +45,7 @@ function rule1Problems(source: string): string[] {
   const bar = between(p, "<SelectionToolbar", "/>") + "/>";
   if (count(p, "<SelectionToolbar") !== 1) problems.push("the selection buttons are not mounted exactly once");
   if (!bar.includes("onHighlight={highlight}")) problems.push("the toolbar is not handed the highlight action");
-  if (!bar.includes("canHighlight={canHighlight(explainTarget)}")) problems.push("the toolbar is not told whether the selection can be highlighted (the paper's body only)");
+  if (!bar.includes("canHighlight={canHighlight(explainTarget)}")) problems.push("the toolbar is not told whether the selection can be highlighted (`canHighlight`'s gate: the paper's body, a Summary block, an answer)");
   // Tier 0: Highlight is not a model's act. It is never gated by the explain check.
   const gate = between(bar, "canHighlight={", "}");
   if (/canExplain|canAsk|explainCanAsk|selectionCanExplain|profile|key/i.test(gate)) problems.push("Highlight is gated by the page's ability to explain: it needs no key");

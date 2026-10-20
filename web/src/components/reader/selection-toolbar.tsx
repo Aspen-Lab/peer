@@ -261,7 +261,7 @@ export function SelectionToolbar({
   onTakeNote: (target: ExplainSelection) => void;
   /** P11-13: the page's highlight (C P11-07's `useHighlight`). Until the page passes it there is no Highlight button. */
   onHighlight?: (target: ExplainSelection) => void;
-  /** P11-13: the page can highlight this selection (`canHighlight(target)`: paper-body selections only). */
+  /** P11-13: the page can highlight this selection (`canHighlight(target)`: a paragraph, a heading or a caption of the paper's body, a Summary block or an answer). */
   canHighlight?: boolean;
 }) {
   const [frame, setFrame] = useState<Frame | null>(null);
