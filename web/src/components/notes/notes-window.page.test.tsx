@@ -7,7 +7,8 @@ import type { ReactElement, ReactNode } from "react";
 import { tabId } from "@/components/reader/reader-tabs";
 import { READER_TABS } from "@/components/reader/use-reader-tab";
 import { RETURN_KEY, backTarget, decideRestore, peekPlace, rememberPlace, restoreStep, type PlaceDoc } from "@/lib/notes/return-to-paper";
-import * as windowModule from "./notes-window";
+import { MARGIN_DEFAULT_PX, MARGIN_MIN_PX } from "@/components/reader/pane-layout";
+import { NotesWindowView, PAGE_LABEL_MIN_CARD_PX, openAsPage, pageLabelFits, type PagePress } from "./notes-window";
 
 // P11-25 (the owner's item 3, ruling §1h.121 (c)): from 768 px "Open your notes" opens the floating window, so the
 // notes page, and its "← Back to paper", were reachable only from the phone's row, the upload-fallback band and Saved.
@@ -16,18 +17,12 @@ import * as windowModule from "./notes-window";
 // opens. The window cannot mount in this runtime (no DOM), so its header is rendered, the press is a pure function
 // over handed-in steps (run here against P11-06's fake document and storage), and the wiring is read from the source.
 //
-// Written red on the base, which has none of it. The names this change adds are read loosely below so that this file
-// type-checks there too; the change that adds them types them.
+// Written red on the base, which has none of it (the file then read the names this change adds loosely, so that it
+// type-checked there too; they are typed now).
 
-type ViewProps = Parameters<typeof windowModule.NotesWindowView>[0];
+type ViewProps = Parameters<typeof NotesWindowView>[0];
 type El = ReactElement<Record<string, unknown> & { children?: ReactNode }>;
-type Click = { button: number; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean };
-type Ids = { paperId: string; noteId: string };
-type Steps = { remember: (ids: Ids) => boolean | void; close: () => void };
-const added = windowModule as unknown as { openAsPage?: (ids: Ids, click: Click, steps: Steps) => boolean };
-const openAsPage = (ids: Ids, click: Click, steps: Steps): boolean => added.openAsPage!(ids, click, steps);
-
-const { NotesWindowView } = windowModule;
+type Click = PagePress;
 
 const PAPER = "openalex:W9";
 const NOTE = "n1";
@@ -36,8 +31,7 @@ const PAGE = "/notes/n1";
 const plain: Click = { button: 0, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false };
 
 const base: ViewProps = { top: 220, maxHeight: 700, menuOpen: false, notice: null, onClose: () => {}, onMenu: () => {}, onExport: () => {}, onRaise: () => {} };
-const withPage = (props: Partial<ViewProps> = {}, extra: Record<string, unknown> = { pageHref: PAGE, onOpenPage: () => {} }) =>
-  ({ ...base, ...props, ...extra }) as ViewProps;
+const withPage = (props: Partial<ViewProps> = {}, page: Partial<ViewProps> = { pageHref: PAGE, onOpenPage: () => {} }): ViewProps => ({ ...base, ...props, ...page });
 const html = (props: ViewProps) => renderToStaticMarkup(createElement(NotesWindowView, props, createElement("p", null, "THE NOTE")));
 
 function walk(node: ReactNode): El[] {
@@ -91,12 +85,42 @@ describe("the window's header carries Open as page", () => {
   it("hands the press to the window, and does not stop the link's own navigation", () => {
     const seen: unknown[] = [];
     const press = { ...plain, preventDefault: () => seen.push("prevented") };
-    const tree = NotesWindowView(withPage({}, { pageHref: PAGE, onOpenPage: (event: unknown) => seen.push(event) }));
-    const link = walk(tree as ReactNode).find((el) => el.props.href === PAGE)!;
+    const tree = NotesWindowView(withPage({}, { pageHref: PAGE, onOpenPage: (event) => void seen.push(event) }));
+    const link = walk(tree).find((el) => el.props.href === PAGE)!;
 
     (link.props.onClick as (event: unknown) => void)(press);
 
     expect(seen).toEqual([press]);
+  });
+});
+
+// The header is 358 px at the margin's default 360 and has the title 86 (its words need 76) beside the link's words, Export and the X; at the
+// margin's least, 280, the same words would leave the title 6 px (measured, 1024 px wide). So below `PAGE_LABEL_MIN_CARD_PX` — and while an
+// export notice stands in the header — the link is an icon the width of the X, named and titled "Open as page".
+describe("in a narrow card, or beside a notice, the link is an icon and keeps its name", () => {
+  it("says its words in the default margin, and not in the narrowest", () => {
+    expect(pageLabelFits(MARGIN_DEFAULT_PX)).toBe(true);
+    expect(pageLabelFits(PAGE_LABEL_MIN_CARD_PX)).toBe(true);
+    expect(pageLabelFits(PAGE_LABEL_MIN_CARD_PX - 1)).toBe(false);
+    expect(pageLabelFits(MARGIN_MIN_PX)).toBe(false);
+  });
+
+  it("is an icon with the same href, the same accessible name and a tooltip, and draws no words", () => {
+    for (const out of [html(withPage({ narrow: true })), html(withPage({ notice: "Copied" }))]) {
+      expect(out).toMatch(/<a [^>]*href="\/notes\/n1"/);
+      expect(/<a [^>]*aria-label="([^"]*)"/.exec(out)?.[1]).toMatch(/^Open as page/);
+      expect(out).toMatch(/<a [^>]*title="Open as page"/);
+      expect(out).toMatch(/<a [^>]*><svg [^>]*aria-hidden="true"/);
+      expect(out).not.toContain(">Open as page<");
+    }
+  });
+
+  it("says its words again when the card is wide and nothing is noticed", () => {
+    const out = html(withPage({ narrow: false, notice: null }));
+
+    expect(out).toContain(">Open as page<");
+    expect(out).not.toMatch(/<a [^>]*title=/);
+    expect(out).not.toContain("<svg");
   });
 });
 
@@ -213,6 +237,11 @@ describe("the window is wired to it (read from the source: the window needs the 
     expect(win).toMatch(/import \{[^}]*\brememberPlace\b[^}]*\} from "@\/lib\/notes\/return-to-paper"/);
     expect(win).toMatch(/pageHref=\{`\/notes\/\$\{note\.id\}`\}/);
     expect(win).toMatch(/onOpenPage=\{\(event\)\s*=>\s*openAsPage\(\{\s*paperId:\s*paper\.id,\s*noteId:\s*note\.id\s*\},\s*event,\s*\{\s*remember:\s*rememberPlace,\s*close:\s*onClose\s*\}\)\}/);
+  });
+
+  it("tells the view whether the card is narrow from the margin's width (360 where no margin stands), as the cards place themselves", () => {
+    expect(win).toMatch(/const margin = useMarginRect\(\);/);
+    expect(win).toMatch(/narrow=\{!pageLabelFits\(margin \? margin\.width : 360\)\}/);
   });
 
   it("is one record and one press: rememberPlace is called once, inside openAsPage, and the window never calls the router itself", () => {

@@ -18,17 +18,27 @@
 // in the block editor with the formatting toolbar: the sticky notes' "Note N" headings and their text in order,
 // and whatever is typed here. There is no character limit anywhere in the path — blocks are strings in the store.
 //
+// P11-25 (the owner's item 3, ruling §1h.121 (c)): from 768 px "Open your notes" opens this window, so the notes page — and its
+// "← Back to paper" (P11-06) — was reachable only from the phone's row, the upload-fallback band and Saved. The header now carries
+// "Open as page": a link to the paper's note on its page `/notes/<id>` that first records the paper's tab and the place the reader
+// is at (`rememberPlace`, the phone row's own record) and closes the window as the page opens, so the notes page reads "Back to
+// paper" and the paper comes back on the tab and at the place the reader left, at every width.
+//
 // Not done: dragging the window by its header (the column is where it stands), and a phone (the row there still
 // navigates to the page).
 
+import Link from "next/link";
+import type { Route } from "next";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { useFrontEscape } from "@/components/reader/front-escape";
 import { MarginCard } from "@/components/reader/margin-card";
 import type { Paper } from "@/types";
 import type { Block, Note, Source } from "@/lib/notes/types";
 import { fileName, toMarkdown, toPlainText, toPrintHtml, toWordHtml } from "@/lib/notes/export";
 import { downloadFile, printHtml } from "@/lib/notes/print";
+import { rememberPlace } from "@/lib/notes/return-to-paper";
+import { useMarginRect } from "@/lib/reader/margin";
 import { NOTES_WINDOW_ID, STACK_Z_BASE, stackRows, useColumn, useWindows } from "@/lib/reader/windows";
 import { mergeText, readingNoteFor, useNotesStore } from "@/store/notes";
 import { NoteEditor } from "./note-editor";
@@ -44,6 +54,37 @@ export const EXPORT_ITEMS: readonly { id: ExportKind; label: string; detail: str
   { id: "pdf", label: "PDF (print)", detail: "choose Save as PDF" },
 ];
 
+/** What a press on a link carries that decides whether the app takes it or the browser keeps it (a new tab, a new window, a download). */
+export type PagePress = Pick<MouseEvent, "button" | "metaKey" | "ctrlKey" | "shiftKey" | "altKey">;
+
+/**
+ * P11-25: the press on "Open as page". A plain press records where the reader is on the paper (`remember`: the phone row's own record,
+ * `rememberPlace`) and then closes the window — the link's own navigation follows, so the record is made before the page leaves
+ * and the window is not left behind the page. A press the browser keeps for itself (a modifier key, a middle button) records nothing
+ * and leaves the window standing: the paper has not been left. Where nothing could be kept (storage blocked) the press goes on, and the
+ * notes page's button stays "Saved". True when the app took the press.
+ */
+export function openAsPage(
+  ids: { paperId: string; noteId: string },
+  press: PagePress,
+  steps: { remember: (ids: { paperId: string; noteId: string }) => boolean | void; close: () => void },
+): boolean {
+  if (press.button !== 0 || press.metaKey || press.ctrlKey || press.shiftKey || press.altKey) return false;
+  steps.remember(ids);
+  steps.close();
+  return true;
+}
+
+/**
+ * The narrowest card (the margin's width, 360 by default, 280 at its least) in which "Open as page" can say its words beside the title and
+ * Export: measured, the header (the card less its two 1 px borders) has the title 86 px at 360 where the title's own words need 76, so
+ * 352 leaves it 80. In a narrower card the link is an icon the width of the X (the title keeps its room, 81 px at 280); the words stay as
+ * its name and its tooltip.
+ */
+export const PAGE_LABEL_MIN_CARD_PX = 352;
+
+export const pageLabelFits = (cardWidth: number): boolean => cardWidth >= PAGE_LABEL_MIN_CARD_PX;
+
 export function NotesWindowView({
   top,
   maxHeight,
@@ -56,6 +97,9 @@ export function NotesWindowView({
   onMenu,
   onExport,
   onRaise,
+  pageHref,
+  onOpenPage,
+  narrow = false,
   children,
 }: {
   top: number;
@@ -75,8 +119,15 @@ export function NotesWindowView({
   onExport: (kind: ExportKind) => void;
   /** A press on the header: raise the window to the front. */
   onRaise?: () => void;
+  /** P11-25: the paper's note on its own page. Handed in, the header carries "Open as page" (in front only, as Export is). */
+  pageHref?: string;
+  /** P11-25: told of a press on "Open as page" before the link navigates; it must not stop it. */
+  onOpenPage?: (event: MouseEvent<HTMLAnchorElement>) => void;
+  /** P11-25: the card is too narrow for "Open as page" to say its words (`pageLabelFits`): the link is an icon. It is an icon too while an export notice stands beside it. */
+  narrow?: boolean;
   children?: ReactNode;
 }) {
+  const iconOnly = narrow || notice !== null;
   return (
     <MarginCard
       id={NOTES_WINDOW_ID}
@@ -113,6 +164,28 @@ export function NotesWindowView({
             </button>
           </h2>
           <div className="relative flex items-center gap-2">
+            {front && pageHref && (
+              <Link
+                href={pageHref as Route}
+                aria-label="Open as page: your notes on this paper"
+                title={iconOnly ? "Open as page" : undefined}
+                onClick={onOpenPage}
+                className={
+                  iconOnly
+                    ? "grid h-8 w-8 shrink-0 place-items-center text-text-muted transition-colors hover:bg-bg-secondary hover:text-heading"
+                    : "eyebrow shrink-0 px-2 py-1 text-text-muted transition-colors hover:bg-bg-secondary hover:text-heading"
+                }
+              >
+                {iconOnly ? (
+                  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7z" />
+                    <path d="M14 3v4h4" />
+                  </svg>
+                ) : (
+                  "Open as page"
+                )}
+              </Link>
+            )}
             {front && (
               <span className="annotation text-text-faint" aria-live="polite">
                 {notice}
@@ -259,6 +332,8 @@ export function NotesWindow({ paper, onClose }: { paper: Paper; onClose: () => v
     return () => useWindows.getState().close(NOTES_WINDOW_ID);
   }, []);
   const column = useColumn(true);
+  // The card's width across the page: the margin's, else the 360 it keeps at the right edge (where no shell registered a margin).
+  const margin = useMarginRect();
   const row = note
     ? stackRows(windows, note.blocks, column).find((r) => r.id === NOTES_WINDOW_ID)
     : undefined;
@@ -335,6 +410,9 @@ export function NotesWindow({ paper, onClose }: { paper: Paper; onClose: () => v
       onMenu={() => setMenuOpen((o) => !o)}
       onExport={runExport}
       onRaise={() => raise(NOTES_WINDOW_ID)}
+      pageHref={`/notes/${note.id}`}
+      narrow={!pageLabelFits(margin ? margin.width : 360)}
+      onOpenPage={(event) => openAsPage({ paperId: paper.id, noteId: note.id }, event, { remember: rememberPlace, close: onClose })}
     >
       <NoteEditor
         key={`${note.id}:${fresh.rev}`}
