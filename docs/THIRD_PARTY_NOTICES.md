@@ -95,9 +95,19 @@ DBLP, PubMed) is shown to readers but not stored in this repository.
 | Files | Origin | License |
 |---|---|---|
 | `web/public/next.svg`, `vercel.svg`, `file.svg`, `globe.svg`, `window.svg` | The `create-next-app` starter template | MIT (Vercel) |
-| `web/public/persona/*.png` (four portraits) | Not recorded yet | To be confirmed by the owners |
-| `web/public/logo.png`, `logo-mark.png`, `icon.svg`, `icon-papers.svg`, `favicon.ico`, `assets/logo.png` | Not recorded yet | To be confirmed by the owners |
-| `template for web design/Peer-design-spec-original.pdf` | Not recorded yet | To be confirmed by the owners |
+
+## Made by the owners (not third-party)
+
+Listed so the record is complete. These were designed by the owners themselves
+(confirmed by Baichuan Wang on 2026-10-20), are part of Peer, and are covered by
+its license like the rest of the repository.
+
+| Files | Designed by |
+|---|---|
+| `web/public/logo.png` and `assets/logo.png` (the pear between two hands; the composition echoes Michelangelo's public-domain *The Creation of Adam*), `web/public/logo-mark.png` (the pear) | Baichuan Wang |
+| `template for web design/Peer-design-spec-original.pdf` (the summary and report design spec) | Baichuan Wang |
+| `web/public/persona/*.png` (the four portraits) | Xiaoyang Wang |
+| `web/public/icon.svg`, `web/public/favicon.ico` (Peer's mark) and `web/public/icon-papers.svg` (not used by the app) | Xiaoyang Wang |
 
 ## Python packages (`python/pyproject.toml`)
 
