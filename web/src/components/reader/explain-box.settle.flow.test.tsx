@@ -20,7 +20,7 @@ import { hookRuntime } from "@/test-support/hook-runtime";
 import type { ExplainAnswer } from "@/lib/papers/explain";
 import type { PaperReading } from "@/lib/papers/reading";
 import { ExplainBox, ExplainCard, type AskResult } from "./explain-box";
-import { columnBottomPx } from "./explain-dock";
+import { DOCK_STACK_FLOOR_PX, columnBottomPx } from "./explain-dock";
 import type { ExplainSelection } from "./paper-body";
 
 const ANSWER: ExplainAnswer = { meaning: "A share of a sample turned to plates.", here: { text: "It compares alloys.", peer: true } };
@@ -141,9 +141,11 @@ describe("ExplainBox — the after-every-commit layout effect cannot run away (P
     // Not one write per commit for ever (the head: a write on each of the runtime's 150 rounds); the burst is capped.
     expect(out.reads).toBeLessThanOrEqual(14);
     expect(out.renders).toBeLessThanOrEqual(16);
-    // The taller height, which never hides content: the band's foot (P11-14: the legend's top less a margin, `columnBottomPx`) - 500 is where
-    // the window stands at the end (re-aimed, P11-14: was 900 - 28 - 500 = 372).
-    expect(out.tops[out.tops.length - 1]).toBe(columnBottomPx(900, 28) - 500);
+    // Re-aimed (§1c), P11-26 rule 1: the window no longer follows the card's height, so the alternating read cannot move it at all — it stands at the
+    // floor's top, the band's foot (P11-14: the legend's top less a margin, `columnBottomPx`) less 250, whatever height the layout answers. It was
+    // the band's foot - 500, the taller height (P11-14; 900 - 28 - 500 = 372 before that): the oscillation moved the window by 20 px.
+    expect(out.tops[out.tops.length - 1]).toBe(columnBottomPx(900, 28) - DOCK_STACK_FLOOR_PX);
+    expect(new Set(out.tops.filter((top) => top !== undefined)).size).toBe(1);
   });
 
   it("a card that grows by 10 px each time it is read (a height that follows its own size): the burst is capped and the box goes quiet", async () => {
@@ -154,14 +156,14 @@ describe("ExplainBox — the after-every-commit layout effect cannot run away (P
     expect(out.renders).toBeLessThanOrEqual(16);
   });
 
-  it("a card of a steady height settles at once: one write, one more read to see nothing changed", async () => {
+  it("a card of a steady height settles at once: one write, one more read to see nothing changed (re-aimed, P11-26 rule 1: the window stands at the floor's top and does not rise to the 520; it went from the band's foot - 360 to - 520)", async () => {
     const out = await run(() => 520);
 
-    expect(out.tops.filter((top, i, all) => top !== all[i - 1])).toEqual([columnBottomPx(900, 28) - 360, columnBottomPx(900, 28) - 520]);
+    expect(out.tops.filter((top, i, all) => top !== all[i - 1])).toEqual([columnBottomPx(900, 28) - DOCK_STACK_FLOOR_PX]);
     expect(out.reads).toBeLessThanOrEqual(4);
   });
 
-  it("a frame later the budget is fresh: a taller card the browser really made is followed, and the window rises with it", async () => {
+  it("a frame later the budget is fresh: a taller card the browser really made is read again, and the window does not rise with it (re-aimed, P11-26 rule 1: it rose from the band's foot - 360 to - 520 to - 700)", async () => {
     let height = 520;
     const out = await run(
       () => height,
@@ -171,7 +173,7 @@ describe("ExplainBox — the after-every-commit layout effect cannot run away (P
       },
     );
 
-    expect(out.tops.filter((top, i, all) => top !== all[i - 1])).toEqual([columnBottomPx(900, 28) - 360, columnBottomPx(900, 28) - 520, columnBottomPx(900, 28) - 700]);
+    expect(out.tops.filter((top, i, all) => top !== all[i - 1])).toEqual([columnBottomPx(900, 28) - DOCK_STACK_FLOOR_PX]);
   });
 
   it("the viewport is read when the reader or the window changes it, not after every commit: twenty idle commits ask the page's zoom no more than none", async () => {

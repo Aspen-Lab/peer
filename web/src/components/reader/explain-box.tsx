@@ -53,9 +53,11 @@
 // again as the page scrolls — P9-50: held between the masthead's foot and the foot legend's top as the dock is, so a grown thread scrolls
 // inside it and never covers either; a bottom sheet on a phone. P8-02 (the owner: "level with the first line of the selected
 // paragraph"): the dock's TOP is level with the first line of the PARAGRAPH of the passage it stands at, held between the masthead's foot
-// and the room its whole height needs above the legend (P9-17, rulings §1h.56 and §1h.57: its measured height, at least 360 px once it
-// holds a passage — lifted until its bottom stands on the screen's bottom when the paragraph is too low for all of it) and measured
-// again as the page scrolls; its height is its content. The selections measured again as the page scrolls are the open window's
+// and the room its floor needs above the legend (P11-26, ruling §1h.122, over P9-17's §1h.56 and §1h.57, which held the band for its
+// whole measured height — at least 360 px once it holds a passage — and so lifted the card as the answer grew: now the top stays level
+// with the paragraph before and after the answer lands, and only a room under the floor, `DOCK_STACK_FLOOR_PX`, lifts it, by just what
+// the floor needs) and measured again as the page scrolls; its height is its content, at most the room from its top to the band's foot,
+// and the answer scrolls inside. The selections measured again as the page scrolls are the open window's
 // passage and the one the window stands level with (`stand`).
 //
 // P10-08 (review 1.1, B P10-01, ruling §1h.80): the after-every-commit layout effect that reads the card's height cannot run away
@@ -87,6 +89,7 @@ import {
   DOCK_BOTTOM_PX,
   DOCK_MIN_VIEWPORT_PX,
   DOCK_MIN_VISIBLE_PX,
+  DOCK_STACK_FLOOR_PX,
   DOCK_THREAD_FLOOR_PX,
   DOCK_TOP_PX,
   DOCK_WIDTH_PX,
@@ -1160,11 +1163,14 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   const levelWith = levelSelection === null ? null : whereOf(levelSelection);
   // P10-08: a selection in the Summary or an answer has no paragraph of the paper; the card then stands at the masthead's foot.
   const paragraphTop = levelSelection !== null && levelWith !== null ? levelTopOf(levelSelection, levelWith) : undefined;
-  // R-open (O-6): level with the paragraph, held in the margin's band for the whole of what the card needs — its measured height, and at
-  // least what a card that holds a passage needs to show its header, its controls and two lines of the answer (P9-17, rulings §1h.56,
-  // §1h.57). `placeInMargin` is the margin's own clamp.
+  // R-open (O-6), P11-26 rule 1 (A P11-22 B3; ruling §1h.122): level with the paragraph's first line, held in the margin's band for the card's FLOOR
+  // (`DOCK_STACK_FLOOR_PX`: its header, its follow-up field and a few lines of the answer) and no more. It was held for the card's whole measured
+  // height — 632 px once the answer landed — so the top gave way to the answer: 107 / 227 px above the selection at 1440 x 900, at the margin's
+  // top at 1280 x 720 and 1093 x 614, and the card moved as the answer arrived. The card is now the room from its top to the band's foot and the
+  // answer scrolls inside it, whatever it holds; the top rises only where that room is under the floor, and by just what the floor needs.
+  // `placeInMargin` is the margin's own clamp.
   const band = bandOf(stack.rect, viewport);
-  const levelTop = docked && levelWith !== null ? placeInMargin(band, paragraphTop ?? levelWith.bounds.top, Math.max(cardHeight ?? 0, DOCK_THREAD_FLOOR_PX)) : null;
+  const levelTop = docked && levelWith !== null ? placeInMargin(band, paragraphTop ?? levelWith.bounds.top, DOCK_STACK_FLOOR_PX) : null;
 
   // The card joins the stack while it stands at the margin (from 1024 px) and leaves when it closes; opening it raises it (`start`,
   // `openBox`). Registered after the first commit — until then the render below lays it out as the front of the stack as it is.

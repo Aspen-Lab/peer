@@ -14,7 +14,7 @@ vi.mock("react", async (importOriginal) => {
 import { useEffect, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 import { hookRuntime } from "@/test-support/hook-runtime";
-import { DOCK_BOTTOM_PX, DOCK_STACK_FLOOR_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, columnBottomPx } from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_STACK_FLOOR_PX, DOCK_TOP_PX, columnBottomPx } from "./explain-dock";
 import { EXPLAIN_WINDOW_ID, WINDOW_HEADER_PX, useWindows } from "@/lib/reader/windows";
 import { placeInMargin, useMarginStore, type MarginRect } from "@/lib/reader/margin";
 import type { ExplainAnswer } from "@/lib/papers/explain";
@@ -199,18 +199,21 @@ describe("ExplainBox — one card of the margin's stack (P11-14 rule 4; O-8, BAC
     run.mounted.unmount();
   });
 
-  it("stands alone level with its paragraph, held in the margin's band for its whole height, and is the whole room beyond that", async () => {
+  // RE-AIMED (§1c), P11-26 rule 1 (ruling §1h.122): was "held in the margin's band for its whole height", and the low paragraph "lifted until the
+  // thread's floor (360) stands above the band's foot". The card is now held for the explain card's floor, `DOCK_STACK_FLOOR_PX` (250), and no more
+  // (the new block at the foot of this file holds the answer's height out of it): a low paragraph lifts it by just what that floor needs.
+  it("stands alone level with its paragraph, held in the margin's band for its floor, and is the whole room beyond that", async () => {
     // The paragraph's first line is at 300: the card opens there.
     const level = await scenario(base(selection(380, 300)), [() => open()]);
     await wait();
     expect(styleOf(level.last())!.top).toBe(300);
     expect(useWindows.getState().origin).toBe(300);
     level.mounted.unmount();
-    // A paragraph low on the screen: lifted until its least height (the thread's floor) stands above the band's foot.
+    // A paragraph low on the screen: lifted until its floor (250, not the thread's 360) stands above the band's foot.
     const low = await scenario(base(selection(780, 760)), [() => open()]);
     await wait();
-    expect(styleOf(low.last())!.top).toBe(placeInMargin(MARGIN, 760, DOCK_THREAD_FLOOR_PX));
-    expect(styleOf(low.last())!.top).toBe(MARGIN.bottom - DOCK_THREAD_FLOOR_PX);
+    expect(styleOf(low.last())!.top).toBe(placeInMargin(MARGIN, 760, DOCK_STACK_FLOOR_PX));
+    expect(styleOf(low.last())!.top).toBe(MARGIN.bottom - DOCK_STACK_FLOOR_PX);
     // Above the masthead: no higher than the band's top.
     low.mounted.unmount();
     const high = await scenario(base(selection(20, 10)), [() => open()]);

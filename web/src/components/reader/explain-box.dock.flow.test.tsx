@@ -26,7 +26,7 @@ import type { ExplainTurn } from "@/store/explain-threads";
 import { EXPLAIN } from "./copy";
 import { ExplainBox, ExplainCard, placeCard, type AskResult, type ThreadView } from "./explain-box";
 import { explainOffered } from "@/lib/reader/explain-offer";
-import { columnBottomPx, legendHeightPx } from "./explain-dock";
+import { DOCK_STACK_FLOOR_PX, columnBottomPx, legendHeightPx } from "./explain-dock";
 import type { ReplyResult } from "./explain-thread";
 import type { ExplainSelection } from "./paper-body";
 
@@ -571,7 +571,7 @@ describe("ExplainBox — the window stands level with the explained paragraph's 
     run.mounted.unmount();
   });
 
-  it("stays under the masthead while the paragraph is scrolled above it, and 360 px above the legend while it is far below (re-aimed, P9-17: a window that holds a passage keeps its header, its controls and two lines; was 160)", async () => {
+  it("stays under the masthead while the paragraph is scrolled above it, and 250 px above the legend while it is far below (re-aimed, P11-26 rule 1: the explain card's floor, 250; was the thread's 360, P9-17, and 160 before)", async () => {
     const above = await scenario(base({ target: inParagraph(first, -700) }), [(tree) => click(tree)]);
     await wait();
     expect(above.last().style).toMatchObject({ top: 48, maxHeight: FOOT(900) - 48 });
@@ -579,7 +579,7 @@ describe("ExplainBox — the window stands level with the explained paragraph's 
 
     const below = await scenario(base({ target: inParagraph(first, 4000) }), [(tree) => click(tree)]);
     await wait();
-    expect(below.last().style).toMatchObject({ top: FOOT(900) - 360, maxHeight: 360 });
+    expect(below.last().style).toMatchObject({ top: FOOT(900) - DOCK_STACK_FLOOR_PX, maxHeight: DOCK_STACK_FLOOR_PX });
     below.mounted.unmount();
   });
 
@@ -603,7 +603,7 @@ describe("ExplainBox — the window stands level with the explained paragraph's 
     run.mounted.unmount();
   });
 
-  it("follows the paragraph as the page scrolls, and holds the clamp (re-aimed, P9-17: the lowest top is 512, was 712; the last stop 480, was 520)", async () => {
+  it("follows the paragraph as the page scrolls, and holds the clamp (re-aimed, P11-26 rule 1: the lowest top is 610, the card's floor above the band's foot; was 512, P9-17, and 712 before)", async () => {
     let paragraphTop = 400;
     const moving: ExplainSelection = {
       ...inParagraph(first, 400),
@@ -629,13 +629,13 @@ describe("ExplainBox — the window stands level with the explained paragraph's 
     ]);
     await wait();
 
-    // Opened where the paragraph was read; then wherever the page puts it, held between 48 and 512 (900 − 28 − 360; re-aimed,
-    // P9-17: it was 712, 900 − 28 − 160, the floor of a window with nothing in it).
-    expect(tops).toEqual([400, 300, 48, FOOT(900) - 360, 480]);
+    // Opened where the paragraph was read; then wherever the page puts it, held between 48 and 610 (860 − 250; re-aimed, P11-26 rule 1: it was
+    // 512, 860 − 360, the thread's floor, and 712 before that).
+    expect(tops).toEqual([400, 300, 48, FOOT(900) - DOCK_STACK_FLOOR_PX, 480]);
     run.mounted.unmount();
   });
 
-  it("follows the window as it is resized: the limit above the legend moves with its height (re-aimed, P9-17: 212 and 360, were 412 and 160)", async () => {
+  it("follows the window as it is resized: the limit above the legend moves with its height (re-aimed, P11-26 rule 1: 310 and 250, were 200 and 360, P9-17, and 412 and 160)", async () => {
     const paragraphTop = 500;
     const moving: ExplainSelection = {
       ...inParagraph(first, 500),
@@ -652,9 +652,9 @@ describe("ExplainBox — the window stands level with the explained paragraph's 
     ]);
     await wait();
 
-    // The band ends at 600 − 40 = 560, so 560 − 360 = 200 is as low as it may stand; the paragraph at 500 is lower; the height is what is left of it
-    // (re-aimed, P9-17: it was 412 and 160, the floor of a window with nothing in it).
-    expect(styles).toEqual([{ right: 0, width: 360, top: FOOT(600) - 360, maxHeight: 360, zIndex: 60 }]);
+    // The band ends at 600 − 40 = 560, so 560 − 250 = 310 is as low as it may stand; the paragraph at 500 is lower; the height is what is left of it
+    // (re-aimed, P11-26 rule 1: it was 200 and 360, the thread's floor, and 412 and 160 before that).
+    expect(styles).toEqual([{ right: 0, width: 360, top: FOOT(600) - DOCK_STACK_FLOOR_PX, maxHeight: DOCK_STACK_FLOOR_PX, zIndex: 60 }]);
     run.mounted.unmount();
   });
 
@@ -747,7 +747,7 @@ describe("ExplainBox — the window follows the selected paragraph's first line 
     run.mounted.unmount();
   });
 
-  it("is held between the masthead and 360 px above the legend, as the explained paragraph's is (re-aimed, P9-17: was 160)", async () => {
+  it("is held between the masthead and 250 px above the legend, as the explained paragraph's is (re-aimed, P11-26 rule 1: was 360, P9-17, and 160)", async () => {
     const tops: Array<number | undefined> = [];
     const note: Step = (tree) => tops.push(look(tree).style?.top);
     const run = await scenario(base({ target: paraA() }), [
@@ -759,7 +759,7 @@ describe("ExplainBox — the window follows the selected paragraph's first line 
     ]);
     await wait();
 
-    expect(tops).toEqual([FOOT(900) - 360, 48]);
+    expect(tops).toEqual([FOOT(900) - DOCK_STACK_FLOOR_PX, 48]);
     run.mounted.unmount();
   });
 
@@ -858,9 +858,9 @@ describe("ExplainBox — the window follows the selected paragraph's first line 
     ]);
     await wait();
 
-    // The third paragraph lies at 700: the window holds a passage, so it stops at 512 (re-aimed, P9-17: it followed to 700; the
-    // second paragraph is at 440, was 560, inside the band).
-    expect(tops).toEqual([330, 440, FOOT(900) - 360]);
+    // The third paragraph lies at 700: the card stops at 610, its floor above the band's foot (re-aimed, P11-26 rule 1: was 512, the thread's floor,
+    // P9-17; it followed to 700 before; the second paragraph is at 440, was 560, inside the band).
+    expect(tops).toEqual([330, 440, FOOT(900) - DOCK_STACK_FLOOR_PX]);
     expect(removeProperty).not.toHaveBeenCalled();
     run.mounted.unmount();
   });
@@ -934,6 +934,13 @@ describe("ExplainBox — the offered selection is taken into the open window by 
 // card's own height after each commit (`scrollHeight` plus its border, whatever `max-height` clips) and the window needs at
 // least that, and at least the thread's floor with a passage; it is level with its paragraph when all of it fits below, else
 // lifted until its bottom stands on the legend's reserve. No DOM here: a stand-in for the card says how tall the browser made it.
+//
+// RE-AIMED (§1c), P11-26 rule 1 (A P11-22 B3; ruling §1h.122), the six tests below: the card's measured height no longer moves its top. The
+// whole window was kept in view by lifting it, so an answer that landed (632 px) pushed the top 107 to 227 px above the selection; the ruling
+// has the top stay level with the selection before and after the answer lands, the card the room from there to the band's foot and the answer
+// scrolling inside. What survives of the owner's sentence is its second half — the window always inside the screen, its bottom on the band's foot
+// when it holds more than the room — and what changes is how: by scrolling, not by lifting. The only lift left is the floor's (250, not the
+// thread's 360): where the room under the paragraph is under it, the top rises by just what the floor needs.
 
 /** The card as the browser sized it: `height` from border to border (2 px of border), what `max-height` clips included. */
 const sized = (height: number) => ({ scrollHeight: height - 2, offsetHeight: height, clientHeight: height - 2, scrollTop: 0, getBoundingClientRect: () => ({ height }) });
@@ -945,22 +952,22 @@ const giveCard =
   };
 
 describe("ExplainBox — the window's bottom stands on the screen's bottom when its paragraph is too low for the whole window (P9-17, ruling §1h.57)", () => {
-  it("is lifted to its real height when that is taller than the thread's floor: its bottom edge on the screen's bottom, above the legend", async () => {
+  it("is not lifted to its real height any more (re-aimed, P11-26 rule 1: was lifted to 520): its top stays at the floor's, its bottom edge on the band's foot, and the 520 px scroll inside", async () => {
     const card = sized(520);
     const run = await scenario(base({ target: inParagraph(first, 4000) }), [(tree) => click(tree), giveCard(card)]);
     await wait();
 
-    // Unmeasured it stood at the thread's floor (900 − 28 − 360 = 512); measured 520 px tall, 900 − 28 − 520 = 352.
-    expect(topsOf(fromOpen(run.looks))).toEqual([FOOT(900) - 360, FOOT(900) - 520]);
-    expect(run.last().style).toEqual({ right: 0, width: 360, top: FOOT(900) - 520, maxHeight: 520, zIndex: 60 });
-    expect(run.last().style!.top! + 520).toBe(FOOT(900));
+    // Unmeasured and measured 520 px tall it stands at the floor's top (860 − 250 = 610); it was 500, then 340.
+    expect(topsOf(fromOpen(run.looks))).toEqual([FOOT(900) - DOCK_STACK_FLOOR_PX]);
+    expect(run.last().style).toEqual({ right: 0, width: 360, top: FOOT(900) - DOCK_STACK_FLOOR_PX, maxHeight: DOCK_STACK_FLOOR_PX, zIndex: 60 });
+    expect(run.last().style!.top! + run.last().style!.maxHeight!).toBe(FOOT(900));
     run.mounted.unmount();
   });
 
-  it("keeps the thread's floor when what it holds is shorter than that, and is level with the paragraph wherever the whole window fits below it", async () => {
+  it("keeps its floor when what it holds is shorter than that, and is level with the paragraph wherever the room below it holds the floor (re-aimed, P11-26 rule 1: the floor is 250, was the thread's 360)", async () => {
     const short = await scenario(base({ target: inParagraph(first, 4000) }), [(tree) => click(tree), giveCard(sized(200))]);
     await wait();
-    expect(short.last().style?.top).toBe(FOOT(900) - 360);
+    expect(short.last().style?.top).toBe(FOOT(900) - DOCK_STACK_FLOOR_PX);
     short.mounted.unmount();
 
     // 300 + 520 = 820 ≤ 872: all of it fits below the first line.
@@ -969,37 +976,42 @@ describe("ExplainBox — the window's bottom stands on the screen's bottom when 
     expect(fits.last().style).toEqual({ right: 0, width: 360, top: 300, maxHeight: FOOT(900) - 300, zIndex: 60 });
     fits.mounted.unmount();
 
-    // 360 + 520 = 880 > 872: lifted by the 8 px that do not fit, to 352.
+    // 360 + 520 = 880 > 872: it was lifted by the 8 px that do not fit, to 352. Re-aimed (P11-26 rule 1): it stays level at 360, 500 px tall, and
+    // the 20 px that do not fit scroll inside.
     const barely = await scenario(base({ target: inParagraph(first, 360) }), [(tree) => click(tree), giveCard(sized(520))]);
     await wait();
-    expect(barely.last().style?.top).toBe(FOOT(900) - 520);
+    expect(barely.last().style).toEqual({ right: 0, width: 360, top: 360, maxHeight: FOOT(900) - 360, zIndex: 60 });
     barely.mounted.unmount();
   });
 
-  it("is never above the masthead's foot, nor off the screen: a window as tall as the room between the masthead and the legend stands at 48", async () => {
-    const run = await scenario(base({ target: inParagraph(first, 4000) }), [(tree) => click(tree), giveCard(sized(2000))]);
+  it("is never above the masthead's foot, nor off the screen: a window taller than the whole band stands at its floor for a low paragraph, at 48 for one scrolled above (re-aimed, P11-26 rule 1: it stood at 48 for both)", async () => {
+    const low = await scenario(base({ target: inParagraph(first, 4000) }), [(tree) => click(tree), giveCard(sized(2000))]);
     await wait();
+    expect(low.last().style).toEqual({ right: 0, width: 360, top: FOOT(900) - DOCK_STACK_FLOOR_PX, maxHeight: DOCK_STACK_FLOOR_PX, zIndex: 60 });
+    low.mounted.unmount();
 
-    expect(run.last().style).toEqual({ right: 0, width: 360, top: 48, maxHeight: FOOT(900) - 48, zIndex: 60 });
-    run.mounted.unmount();
+    const above = await scenario(base({ target: inParagraph(first, -700) }), [(tree) => click(tree), giveCard(sized(2000))]);
+    await wait();
+    expect(above.last().style).toEqual({ right: 0, width: 360, top: 48, maxHeight: FOOT(900) - 48, zIndex: 60 });
+    above.mounted.unmount();
   });
 
-  it("holds at every window height from 600 to 1080: the bottom on the screen's bottom, the top at or below the masthead's foot", async () => {
+  it("holds at every window height from 600 to 1080: the bottom on the band's foot, the top at or below the masthead's foot (re-aimed, P11-26 rule 1: the top is the floor's, 250 above the foot; was the card's 520)", async () => {
     for (const height of [600, 660, 720, 780, 840, 900, 960, 1020, 1080]) {
       stubWindow(1440, height);
       const run = await scenario(base({ target: inParagraph(first, 5000) }), [(tree) => click(tree), giveCard(sized(520))]);
       await wait();
 
       const style = run.last().style!;
-      // (At 600 px the band is 512 px high, under the card's 520: it stands at the masthead's foot.)
-      expect(style.top, `${height} px`).toBe(Math.max(48, FOOT(height) - 520));
+      // (At 600 px the band is 512 px high: 560 − 250 = 310, no longer the masthead's foot, which the card's 520 reached.)
+      expect(style.top, `${height} px`).toBe(Math.max(48, FOOT(height) - DOCK_STACK_FLOOR_PX));
       expect(style.top!, `${height} px`).toBeGreaterThanOrEqual(48);
       expect(style.top! + Math.min(520, style.maxHeight!), `${height} px`).toBeLessThanOrEqual(FOOT(height));
       run.mounted.unmount();
     }
   });
 
-  it("moves up as the thread grows, its bottom staying on the screen's bottom (a reply arrives, the reader types a longer draft)", async () => {
+  it("does not move as the thread grows, its bottom staying on the band's foot, the thread scrolling inside (a reply arrives, the reader types a longer draft; re-aimed, P11-26 rule 1: it moved up with each)", async () => {
     const card = sized(520);
     const run = await scenario(base({ target: inParagraph(first, 4000) }), [
       (tree) => click(tree),
@@ -1011,14 +1023,14 @@ describe("ExplainBox — the window's bottom stands on the screen's bottom when 
     ]);
     await wait();
 
-    expect(topsOf(fromOpen(run.looks))).toEqual([FOOT(900) - 360, FOOT(900) - 520, FOOT(900) - 700]);
+    expect(topsOf(fromOpen(run.looks))).toEqual([FOOT(900) - DOCK_STACK_FLOOR_PX]);
     run.mounted.unmount();
   });
 
-  it("does not move for a card it cannot measure (no height yet, or a card and a sheet): the thread's floor, as before", async () => {
+  it("does not move for a card it cannot measure (no height yet, or a card and a sheet): the floor's top, as a card it can measure (re-aimed, P11-26 rule 1: 250, was the thread's 360)", async () => {
     const run = await scenario(base({ target: inParagraph(first, 4000) }), [(tree) => click(tree), giveCard({ scrollTop: 0, scrollHeight: 520 })]);
     await wait();
-    expect(run.last().style?.top).toBe(FOOT(900) - 360);
+    expect(run.last().style?.top).toBe(FOOT(900) - DOCK_STACK_FLOOR_PX);
     run.mounted.unmount();
 
     stubWindow(800, 900);
@@ -1063,14 +1075,14 @@ describe("ExplainBox — the window's bottom stands on the legend's top as Fit s
     }
   });
 
-  it("the lowest top it stands at leaves the thread's floor above the legend, not above a flat 28", async () => {
+  it("the lowest top it stands at leaves the card's floor above the legend, not above a flat 28 (re-aimed, P11-26 rule 1: 250, was the thread's 360)", async () => {
     stubWindow(1440, 1000);
     stubZoom();
     zoom = "1.142";
     const run = await scenario(base({ target: inParagraph(first, 4000) }), [(tree) => click(tree)]);
     await wait();
 
-    expect(run.last().style?.top).toBeCloseTo(FOOT(1000, legendHeightPx(1.142)) - 360, 6);
+    expect(run.last().style?.top).toBeCloseTo(FOOT(1000, legendHeightPx(1.142)) - DOCK_STACK_FLOOR_PX, 6);
     run.mounted.unmount();
   });
 
