@@ -65,7 +65,7 @@
 // `ROUTE.mentions` always was, plain spaces and all — the spans carry the "cannot break", not the characters, so a selection copied from the line, a screen reader
 // and the string itself are one and the same. Nothing else reads that string: no export, feed or JSON carries it (`reading-map.fact.test.tsx` pins the one caller).
 // The same rule, checked at every other place of the map that draws a count beside a word: the rows' meta ("1,041 words", "6 min") is whole parts already (P11-23) and
-// the summary line is whole parts in the pane; in the one column the summary line let a count part from its word ("about 24" / "min", at some widths from 419 to
+// the summary line is whole parts in the pane; in the one column the summary line let a count part from its word ("about 24" / "min", at some widths from 343 to
 // 485 px), and `CountedPart` keeps each closing count and its word in one `nowrap` run.
 //
 // P10-04 (review 3.3; A10): the paper's own hierarchy. A row has its `level` (1 for "2.", 2 for "2.1", 3 for
