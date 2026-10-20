@@ -115,6 +115,8 @@ export function TitleBlock({
       <h1
         className={`paper-line text-heading text-display-sm measure-title mt-2${long || pane ? "" : " sm:text-display xl:text-display-sm"}${pane ? " line-clamp-4" : ""}`}
         title={pane ? paper.title : undefined}
+        // The short-window rule of the pane's fixed zone reads this (`globals.css`, P11-17c rule 2): three lines, not four, under 700 css px high.
+        {...(pane ? { "data-pane-title": "" } : {})}
       >
         {paper.title}
       </h1>

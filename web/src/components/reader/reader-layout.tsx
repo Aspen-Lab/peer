@@ -244,13 +244,14 @@ export function ReaderLayout(p: ReaderLayoutProps) {
   // zone is the title, the commands, the report's progress while one stands, and the strip. With nothing to float — no strip, no map — the pane scrolls as one.
   // The pane is a window high at most and the fixed zone must leave the map room, so the blocks' own gaps — made for a page — are
   // tightened here, by the wrapper, and not in the blocks (they keep their gaps in one column): the commands 20 -> 12px under the title, the
-  // strip 32 -> 16px under the commands, the map 24 -> 16px under the strip.
+  // strip 32 -> 16px under the commands, the map 24 -> 16px under the strip. P11-17c rule 2: the first two read `--pane-gap` (12 px, the
+  // strip's 4 px more), which a window under 700 css px high sets to 8 px (`globals.css`), so the zone fits its cap there.
   const head = (
     <>
       {p.title}
-      <div className="[&>*>:first-child]:mt-3">{p.decision}</div>
+      <div className="[&>*>:first-child]:mt-[var(--pane-gap,0.75rem)]">{p.decision}</div>
       {p.progress}
-      {p.tabs ? <div className="[&>:first-child]:mt-4">{p.tabs}</div> : null}
+      {p.tabs ? <div className="[&>:first-child]:mt-[calc(var(--pane-gap,0.75rem)_+_0.25rem)]">{p.tabs}</div> : null}
     </>
   );
   const rest = (

@@ -625,6 +625,20 @@ html[data-mode="dark"] {
   overscroll-behavior: contain;
   scrollbar-width: thin;
 }
+/* P11-17c rule 2 (BACKLOG-99): the fixed zone never scrolls inside itself. On a window shorter than 700 css px (the owner's laptop at 125 % is
+   1093 x 614) the zone — the title, the commands, the report's progress, the strip — was up to 337 px in a zone capped at 62 % of the pane's body
+   (314 at 614, 305 at 600): it scrolled inside itself by 11-32 px and its foot was cut off until the report arrived. Here the title is clamped to
+   three lines, not four (`title-block.tsx`: `data-pane-title`), and the gaps between the zone's blocks are 8 px, not 12 (`--pane-gap`, read with
+   the 12 px fallback by the layout's wrappers and the progress part: the one column has no pane to set it). The progress is never hidden and
+   the map is never pushed off: the zone gets smaller, the cap above is not raised. From 700 css px the zone fits its cap with the full title. */
+@media (max-height: 699px) {
+  .reader-left {
+    --pane-gap: 0.5rem;
+  }
+  .reader-left [data-pane-title] {
+    -webkit-line-clamp: 3;
+  }
+}
 
 /* The rail: one button's column. The pane is out of sight and `inert` (the shell sets the attribute). The peek: the same node drawn
    over the centre — fixed, from the masthead's foot to the legend, on the surface token with the strong hairline and a shadow, below

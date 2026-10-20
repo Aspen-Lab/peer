@@ -185,6 +185,8 @@ function Progress({ stage }: ProgressProps) {
         // P10-45: the bar is drawn once a stage has said how far along it is (`pct`); a request that has
         // just started (the first one, or a queued one behind an earlier one that ended) shows its
         // words alone, so the bar never returns to 0.
+        // P11-17c rule 2: its gaps (12 px above, 6 px under a bar) read `--pane-gap` with those as the fallback: the left pane sets 8 px on a
+        // window under 700 css px high so its fixed zone does not scroll inside itself; in one column nothing sets it and nothing changes.
         <>
           {stage.pct !== null && (
             <div
@@ -193,7 +195,7 @@ function Progress({ stage }: ProgressProps) {
               aria-valuemin={0}
               aria-valuemax={100}
               aria-label={stage.label}
-              className="h-[6px] mt-3 overflow-hidden rounded-full bg-bg-secondary"
+              className="h-[6px] mt-[var(--pane-gap,0.75rem)] overflow-hidden rounded-full bg-bg-secondary"
             >
               <div
                 className="h-full rounded-full bg-accent transition-[width] duration-300 ease-snap motion-reduce:transition-none"
@@ -201,7 +203,7 @@ function Progress({ stage }: ProgressProps) {
               />
             </div>
           )}
-          <p aria-live="polite" className={cn("font-mono text-meta text-text-muted", stage.pct === null ? "mt-3" : "mt-1.5")}>
+          <p aria-live="polite" className={cn("font-mono text-meta text-text-muted", stage.pct === null ? "mt-[var(--pane-gap,0.75rem)]" : "mt-[calc(var(--pane-gap,0.75rem)_/_2)]")}>
             {stage.label}…
           </p>
         </>
