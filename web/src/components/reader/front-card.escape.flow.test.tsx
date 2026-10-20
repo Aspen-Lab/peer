@@ -115,7 +115,13 @@ function press(): KeyEvent {
     for (const fn of [...onDocument]) fn(event);
     if (!event.stopped) for (const fn of [...onWindow]) fn(event);
   });
+  settle();
   return event;
+}
+
+/** A render and a layout effect's update each render again before the paint; the staged runtime renders once per event. */
+function settle() {
+  for (let i = 0; i < 4; i += 1) stagedRuntime.event(() => {});
 }
 
 function stubPage() {
@@ -201,7 +207,7 @@ function open(kind: Kind) {
       openFigure({ key: "Figure 1:1", src: "/api/figure/p1/1", label: "Figure 1", caption: "Invented caption.", natural: { width: 600, height: 400 }, origin: null });
   });
   stagedRuntime.flush();
-  stagedRuntime.event(() => {});
+  settle();
 }
 
 beforeEach(() => {
@@ -215,7 +221,7 @@ beforeEach(() => {
   useNotesStore.getState().ensureReadingNote(citableFromPaper(PAPER));
   mounted = stagedRuntime.mount(Page);
   stagedRuntime.flush();
-  stagedRuntime.event(() => {});
+  settle();
 });
 afterEach(() => {
   mounted.unmount();
@@ -288,6 +294,7 @@ describe("one Escape closes exactly one card — the front one — wherever the 
       stagedRuntime.event(() => {
         for (const fn of [...onDocument]) fn(handled);
       });
+      settle();
       expect(standing(), `${front} in front, a handled key`).toEqual(before);
       // Clear the page for the next kind.
       for (let i = 0; i < 8 && standing().length > 0; i += 1) press();
