@@ -681,8 +681,9 @@ function Reader({
   // The sections' own figure claims, for the page's life; keyed by paper
   // inside, so j/k to the next paper starts its claims fresh.
   const [figureRegistry] = useState(() => new FigureRegistry());
-  // ≥ xl: the spread. Owned here so the decided-read observer can follow the
-  // DecisionBlock when the structure switches and it remounts.
+  // From 1024 css px (`SPREAD_QUERY`, 64rem): the three panes (`ReaderShell`);
+  // below it, one column. Owned here so the decided-read observer can follow
+  // the DecisionBlock's commands when the structure switches and they remount.
   const spread = useSpread();
   // S20/S21: the page-zoom multiplier, set on the one `<PageContainer>`
   // below so its `max-w` (page-container.tsx's `spread` variant) and

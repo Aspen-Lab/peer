@@ -3,13 +3,13 @@
 // column and the spread — asks for that width. Below it the page is today's one column, byte for byte.
 //
 // What is left in this file below `SPREAD_QUERY` is the OLD two-column spread (the plate, title and decision in a panel on the left, the
-// words in a column on the right, from xl = 80rem), kept only where it is still read:
-//   - `SPREAD_GRID`, `PAGE_CLASS` and the caps (`XL_CAP_PX` ...) lay out the loading mat and the error states (`loading.tsx`, `page.tsx`'s
-//     `PageContainer width="spread"` sites), which are two columns from xl and have no shell;
-//   - `PANEL_CLASS`, `PANEL_STICKY_CLASS`, `PANEL_TAIL_CLASS` and `COLUMN_CLASS` are what `reader-layout.tsx` still imports until the blocks
-//     move into the shell (P11-16 retires them with it). They carry `xl:` still, and the sticky rule they name (`reader-panel`) is gone from
-//     globals.css — the pane rule (`.reader-left`) replaced it — so until then the spread side of `ReaderLayout` is a plate-first stack of
-//     plain blocks below 1280 and an unpinned two-column grid above it.
+// words in a column on the right, from xl = 80rem), kept only where it is still read: `SPREAD_GRID`, `PAGE_CLASS` and the caps
+// (`XL_CAP_PX` ...) lay out the loading mat and the error states (`loading.tsx`, `page.tsx`'s `PageContainer width="spread"` sites), which
+// are two columns from xl and have no shell. `SPREAD_GRID` stays while they use it.
+//
+// Retired (P11-16 follow-up, ruling §1h.115 item 5): `PANEL_CLASS`, `PANEL_STICKY_CLASS`, `PANEL_TAIL_CLASS` and `COLUMN_CLASS`, the old
+// spread's panel, its sticky part and its reading column. `ReaderLayout` places its blocks in the shell's panes now (P11-16), and nothing
+// imported them; `spread.test.ts` pins their absence.
 //
 // Plain module, no directive, so `loading.tsx` (a Server Component) can import the strings and lay its mat in the panel column with no JS.
 //
@@ -65,42 +65,3 @@ export const TWO_XL_COLUMN_PX = 680;
  *  2xl; the A/A step grows the column, never the panel. */
 export const SPREAD_GRID =
   "xl:grid xl:grid-cols-[minmax(0,320px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,360px)_minmax(0,1fr)] xl:gap-x-16 2xl:gap-x-24 xl:items-start";
-
-/** The left panel (P10-04b): no longer the sticky element itself. It stretches over the row (`self-stretch`),
- *  so the sticky part inside it (`PANEL_STICKY_CLASS`) has the whole column's height to travel in, and stacks
- *  its head — the plate, the title, the decision — as a flex column, as the old sticky panel did. The head is
- *  in normal flow and scrolls away with the page.
- *
- *  `xl:flex-col xl:flex`, in that order, on purpose: `reader-layout.order.test.tsx` finds the reading column
- *  by the first `xl:flex xl:flex-col` in the markup, and the panel comes first. */
-export const PANEL_CLASS = "xl:min-w-0 xl:self-stretch xl:flex-col xl:flex";
-
-/** The panel's sticky part (P10-04b, A8): pinned under the masthead while the reader scrolls the column,
- *  window-bounded, scrolling inside only when it is taller than the room (`reader-panel` in `globals.css`).
- *  It is the tab strip and the map; for a paper with no body, the head. */
-export const PANEL_STICKY_CLASS = "xl:reader-panel";
-
-/** The sticky part when it holds the strip and the map: the strip's own 32px top gap is the holder's
- *  (`reader-layout.tsx`), so a stuck strip stands at the masthead's foot with no gap above it.
- *
- *  P10-21 (A P10-14 §8 item 7): `xl:-mb-3`. At the very foot of the page the sticky part stops where its holder ends,
- *  and the holder ends 64 px above the window's bottom at 1280 x 720, so the part (612 px tall there) stopped with its
- *  top at 43.9 px — 4 px under the masthead's bottom (48 px), the strip's top edge hidden. A sticky element stops
- *  when its margin box meets the holder's end; a bottom margin of -12 px lets it end 12 px below the holder, in the
- *  page's own bottom room, so its top is 55.9 px there and the strip is never under the masthead. */
-export const PANEL_TAIL_CLASS = `${PANEL_STICKY_CLASS} xl:-mb-3 xl:[&>:first-child]:mt-0`;
-
-/** The reading column: a flex column so the Next row can take the free space
- *  on a page shorter than the panel.
- *
- *  The column is the measure on the spread — it is sized for the text, about
- *  90 characters of Newsreader at the lead size, and it grows with the A/A
- *  step — so the prose measures inside it (`measure`, `measure-paper`) are
- *  lifted: kept, each line would stop short of the column's edge and leave a
- *  gutter inside the column. `!` because `.measure-paper` is unlayered CSS in
- *  globals.css, which outranks any utility. Below xl every measure holds.
- *
- *  The first block's own top gap is dropped, so whatever opens the column —
- *  the claim's band, the skim deck, a TL;DR — starts level with the plate. */
-export const COLUMN_CLASS =
-  "xl:flex xl:flex-col xl:min-w-0 xl:self-stretch xl:[&_.measure]:max-w-none! xl:[&_.measure-paper]:max-w-none! xl:[&>:first-child>:first-child]:mt-0 xl:[&>:first-child>:first-child>:first-child]:mt-0";
