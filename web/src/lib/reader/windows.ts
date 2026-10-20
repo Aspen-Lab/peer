@@ -97,12 +97,20 @@ export interface StackRow {
   height: number;
   /** In front, and whole. */
   front: boolean;
-  /** Stacking, from `STACK_Z_BASE`: behind to front. */
+  /** Stacking, from `STACK_Z_BASE` to `STACK_Z_MAX`: behind to front. */
   z: number;
 }
 
 /** Over the masthead (`z-50`) and under the selection's actions (`z-[70]`): the cards of the stack stand from here, one z each. */
 export const STACK_Z_BASE = 60;
+
+/**
+ * P11-26 rule 5 (§1h.127): the highest z a card of the stack takes, one under the margin's actions (the selection's three buttons and the
+ * highlight strip, `z-[70]`). Each card stood at `STACK_Z_BASE` plus its place, so an eleventh open window tied with the buttons and a twelfth covered
+ * them. Past the tenth the cards tie at this z and the DOM orders them: the cascade's cards do not overlap one another (a header each, 40 px
+ * apart, the front below them), so the tie shows nothing.
+ */
+export const STACK_Z_MAX = 69;
 
 /** What the front window keeps at least, when the column is lifted to make room for it. */
 export const MIN_FRONT_PX = 160;
@@ -203,7 +211,7 @@ export function stackLayout(windows: readonly FloatingWindow[], frame: StackFram
     const top = top0 + i * WINDOW_HEADER_PX;
     const front = i === ordered.length - 1;
     const height = front ? Math.max(WINDOW_HEADER_PX, Math.min(frontHeight, bottom - top)) : WINDOW_HEADER_PX;
-    return { id: w.id, top, height, front, z: STACK_Z_BASE + i };
+    return { id: w.id, top, height, front, z: Math.min(STACK_Z_BASE + i, STACK_Z_MAX) };
   });
 }
 

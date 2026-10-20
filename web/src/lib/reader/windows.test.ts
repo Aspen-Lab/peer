@@ -1,9 +1,11 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { DOCK_BOTTOM_PX, DOCK_STACK_FLOOR_PX, DOCK_TOP_PX, columnBottomPx, legendHeightPx } from "@/components/reader/explain-dock";
 import { block } from "@/lib/notes/blocks";
 import { FIGURE_ZOOM_ROW_PX } from "@/components/reader/figure-card";
 
-import { EXPLAIN_WINDOW_ID, MIN_FRONT_PX, NOTES_MIN_FRONT_PX, NOTES_WINDOW_ID, WINDOW_HEADER_PX, FIGURE_CHROME_PX, figureStackedFloorPx, stackFrameIn, stackLayout, stackRows, useWindows, type FloatingWindow } from "./windows";
+import { EXPLAIN_WINDOW_ID, MIN_FRONT_PX, NOTES_MIN_FRONT_PX, NOTES_WINDOW_ID, STACK_Z_BASE, WINDOW_HEADER_PX, FIGURE_CHROME_PX, figureStackedFloorPx, stackFrameIn, stackLayout, stackRows, useWindows, type FloatingWindow } from "./windows";
 
 // P10-09a (review 7.1a; ruling §1h.78): the windows at the right stand like cascaded cards — only the headers of
 // the ones behind show (each later window offset by a header's height), the raised one in front and full; a header
@@ -636,5 +638,79 @@ describe("stackLayout — a figure in front of other cards is never a thumbnail 
     const rows = stackLayout([win("s", "sticky", 1), win("figure", "figure", 2)], stackFrameIn(band, 100));
     expect(rows.map((r) => r.top)).toEqual([100, 140]);
     expect(rows[1].height).toBe(band.bottom - 140);
+  });
+});
+
+// ── P11-26 rule 5 (§1h.127; C P11-27's report): no card ever stands over the selection's buttons ─────────────────────────────────────────
+//
+// The margin's three buttons (selection-toolbar.tsx) and the highlight strip (highlight-strip.tsx) are `z-[70]`; the stack's cards were
+// `STACK_Z_BASE` (60) plus their place in the stack, so an eleventh open window tied with the buttons and a twelfth covered them. Every card's z is
+// now capped under the actions', however many windows are open; the cascade's cards do not overlap one another (a header each, 40 px apart, the
+// front below them), so the order among the cards past the tenth is a tie that shows nothing and is the DOM's.
+describe("the stack never stands over the selection's buttons (P11-26 rule 5; §1h.127)", () => {
+  const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+  const ACTIONS_Z = 70;
+  const win = (n: number, kind: FloatingWindow["kind"] = "sticky"): FloatingWindow => ({ id: `w${n}`, kind, title: `w${n}`, order: n });
+  const band = { top: DOCK_TOP_PX, bottom: columnBottomPx(900, DOCK_BOTTOM_PX), minTop: DOCK_TOP_PX };
+  /** Twelve windows of every kind the stack holds: nine stickies, the notes window, the explain card, a figure. */
+  const twelve = (): FloatingWindow[] => [
+    ...Array.from({ length: 9 }, (_, i) => win(i + 1)),
+    { id: NOTES_WINDOW_ID, kind: "notes", title: "Your notes", order: 10 },
+    { id: EXPLAIN_WINDOW_ID, kind: "explain", title: "Explain this", order: 11 },
+    { id: "figure", kind: "figure", title: "Figure 1", order: 12 },
+  ];
+
+  it("the actions stand at z 70 in their own sources: the selection's three buttons and the highlight strip", () => {
+    expect(read("src/components/reader/selection-toolbar.tsx")).toMatch(/fixed z-\[70\] flex/);
+    expect(read("src/components/notes/highlight-strip.tsx")).toMatch(/fixed z-\[70\] flex/);
+    expect(STACK_Z_BASE).toBeLessThan(ACTIONS_Z);
+  });
+
+  it("twelve windows: every card is under the actions, the order up to the tenth is the stack's own, the rest tie at 69", () => {
+    const rows = stackLayout(twelve(), band);
+    expect(rows).toHaveLength(12);
+    expect(Math.max(...rows.map((r) => r.z))).toBeLessThan(ACTIONS_Z);
+    expect(rows.slice(0, 10).map((r) => r.z)).toEqual([60, 61, 62, 63, 64, 65, 66, 67, 68, 69]);
+    expect(rows.slice(10).map((r) => r.z)).toEqual([69, 69]);
+    // Never under the card behind it, and the front is as high as any.
+    rows.forEach((row, i) => i > 0 && expect(row.z).toBeGreaterThanOrEqual(rows[i - 1].z));
+    expect(rows[11].front).toBe(true);
+    expect(rows[11].z).toBe(Math.max(...rows.map((r) => r.z)));
+  });
+
+  it("holds for the eleventh and the twelfth, the two that tied with and covered the buttons, and for every count from one to twenty", () => {
+    for (let count = 1; count <= 20; count += 1) {
+      const rows = stackLayout(Array.from({ length: count }, (_, i) => win(i + 1)), band);
+      expect(rows, `${count}`).toHaveLength(count);
+      for (const row of rows) {
+        expect(row.z, `${count}`).toBeLessThan(ACTIONS_Z);
+        expect(row.z, `${count}`).toBeGreaterThanOrEqual(STACK_Z_BASE);
+      }
+    }
+  });
+
+  it("holds through the store and a raise: twelve opened, the first raised, every row under the actions and the raised one in front", () => {
+    useWindows.setState({ windows: [], clock: 0, origin: null });
+    const { open, raise } = useWindows.getState();
+    for (let i = 1; i <= 12; i += 1) open({ id: `w${i}`, kind: "sticky", title: `Note ${i}` });
+    raise("w1");
+    const rows = stackLayout(useWindows.getState().windows, band);
+    expect(rows[rows.length - 1]).toMatchObject({ id: "w1", front: true });
+    expect(Math.max(...rows.map((r) => r.z))).toBeLessThan(ACTIONS_Z);
+    expect(rows[rows.length - 1].z).toBe(Math.max(...rows.map((r) => r.z)));
+    useWindows.setState({ windows: [], clock: 0, origin: null });
+  });
+
+  it("holds for stackRows, which the stickies' and the notes window's views lay out through", () => {
+    const heads = Array.from({ length: 9 }, (_, i) => block("h3", `Note ${i + 1}`, { anchor: { paperId: "p", paragraphId: `paper-section-0-p${i + 1}`, quote: "q", n: i + 1 } }));
+    const windows: FloatingWindow[] = [
+      ...heads.map((h, i) => ({ id: h.id, kind: "sticky" as const, title: h.id, order: i + 1 })),
+      { id: NOTES_WINDOW_ID, kind: "notes", title: "Your notes", order: 10 },
+      { id: EXPLAIN_WINDOW_ID, kind: "explain", title: "Explain this", order: 11 },
+      { id: "figure", kind: "figure", title: "Figure 1", order: 12 },
+    ];
+    const rows = stackRows(windows, heads, band);
+    expect(rows).toHaveLength(12);
+    expect(Math.max(...rows.map((r) => r.z))).toBeLessThan(ACTIONS_Z);
   });
 });
