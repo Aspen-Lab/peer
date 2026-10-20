@@ -54,10 +54,6 @@ export const DIVIDER_PX = 12;
 export const KEY_STEP_PX = 16;
 export const KEY_STEP_SHIFT_PX = 64;
 
-/** What all three panes pinned need at the defaults: 320 + 440 + 360 + 2 × 12 = 1144. Below this a pinned left pane — the reader's
- *  pin, or a first visit's (ruling §1h.115 item 4) — stays pinned by shrinking the panes (`fitPanes`), the margin first. */
-export const PINNED_DEFAULTS_MIN_VIEWPORT_PX = LEFT_DEFAULT_PX + CENTRE_MIN_PX + MARGIN_DEFAULT_PX + 2 * DIVIDER_PX;
-
 /** The two panes a reader can resize. */
 export type PaneName = "left" | "margin";
 
