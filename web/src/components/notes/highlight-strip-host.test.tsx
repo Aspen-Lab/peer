@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // P11-17b rule 2 (owner item 8; B P11-04 §5; ruling §1h.112 D3): the margin's host of the highlight's colour strip. While `useHighlightStrip` names a
 // highlight and the page has a margin it stands the strip at the mark's first line NOW (re-read on scroll and on resize, one animation frame
-// each, so the strip is level with its mark), goes when the mark is more than a screen away or gone, stands clear of an open card the way the
-// selection's three actions do (O-2), takes the Escape that hides it (the page's own Escape is "back to the briefing"), and goes with the paper.
+// each, so the strip is level with its mark), goes the moment no part of its mark is in the window (P11-27 rule 3) or the mark is gone, stands in the margin
+// over an open card the way the selection's three actions do (P11-27 rule 1; it stood clear of one above the mark, O-2), takes the Escape that hides it (the page's own Escape is "back to the briefing"), and goes with the paper.
 // The host runs on the staged hook runtime (no DOM in this suite); `document` and `window` are recorders, the mark is a box the test moves.
 // The strip itself is tested where it stands (`highlight-strip.test.tsx`). Every text is invented.
 vi.mock("react", async (importOriginal) => {
@@ -35,7 +35,6 @@ import { MARGIN_INSET_PX } from "@/components/reader/selection-toolbar";
 import type { Paper } from "@/types";
 import { HighlightStrip, useHighlightStrip } from "./highlight-strip";
 import {
-  AWAY_SCREENS,
   HighlightStripHost,
   STRIP_ONE_ROW_WIDTH_PX,
   STRIP_ROW_PX,
@@ -71,7 +70,9 @@ describe("stripStanding — where the strip stands, and whether it stays", () =>
 
   it("holds inside the band: never above the masthead's foot, nor with its foot below the legend's strip", () => {
     expect(STRIP_ROW_PX).toBe(34);
-    expect(stripStanding({ mark: line(10), viewport: VIEW, margin: MARGIN })?.top).toBe(48);
+    // P11-27 rule 3, RE-AIMED (§1c): the mark was `line(10)`, wholly under the masthead — the strip is not held for a mark that is out of the window now
+    // (it goes); the clamp is pinned with a mark that still has a pixel in the window (`line(31)` ends at 49, the band's top is 48).
+    expect(stripStanding({ mark: line(31), viewport: VIEW, margin: MARGIN })?.top).toBe(48);
     expect(stripStanding({ mark: line(850), viewport: VIEW, margin: MARGIN })?.top).toBe(860 - STRIP_ROW_PX);
   });
 
@@ -85,14 +86,14 @@ describe("stripStanding — where the strip stands, and whether it stays", () =>
     expect(stripStanding({ mark: line(850), viewport: VIEW, margin: { ...wide, width: wide.width - 1 } })?.top).toBe(860 - STRIP_TWO_ROWS_PX);
   });
 
-  it("goes when the mark is more than a screen away, above or below, and stays up to that distance (held at the band's edge)", () => {
-    expect(AWAY_SCREENS).toBe(1);
-    // Wholly above the window by more than its height: gone. By less: held at the band's top.
+  // P11-27 rule 3, RE-AIMED (§1c) (ruling §1h.123): was "goes when the mark is more than a screen away, above or below, and stays up to that distance (held at
+  // the band's edge)", with `AWAY_SCREENS` = 1. The same marks, the same distances; the answer is now that the strip goes as soon as the mark is out of the
+  // window, a screen away or a pixel (the margin of a window's height is retired with `AWAY_SCREENS`; the pixel edges are pinned in the P11-27 rule 3 block).
+  it("goes when the mark is out of the window, above or below, however far: a screen away, or less (it was held at the band's edge up to a screen)", () => {
     expect(stripStanding({ mark: { left: 400, top: -1000, right: 700, bottom: -982 }, viewport: VIEW, margin: MARGIN })).toBeNull();
-    expect(stripStanding({ mark: { left: 400, top: -917, right: 700, bottom: -899 }, viewport: VIEW, margin: MARGIN })).toMatchObject({ mode: "margin", top: 48 });
-    // Below the window by more than its height: gone. By less: held at the band's foot.
+    expect(stripStanding({ mark: { left: 400, top: -917, right: 700, bottom: -899 }, viewport: VIEW, margin: MARGIN })).toBeNull();
     expect(stripStanding({ mark: line(1801), viewport: VIEW, margin: MARGIN })).toBeNull();
-    expect(stripStanding({ mark: line(1799), viewport: VIEW, margin: MARGIN })).toMatchObject({ mode: "margin", top: 860 - STRIP_ROW_PX });
+    expect(stripStanding({ mark: line(1799), viewport: VIEW, margin: MARGIN })).toBeNull();
   });
 
   // P11-27 rule 1, RE-AIMED (§1c) — ruling §1h.122 amends §1h.113 (b) O-2: the strip follows the rule the selection's actions follow, and that rule is now that
@@ -116,9 +117,11 @@ describe("stripStanding — where the strip stands, and whether it stays", () =>
       for (const mode of ["above", "margin"]) for (const gap of [4, 16, 40]) expect(standing([card(bottom + gap, 800)], line(300), { mode })?.mode, `${mode} ${gap}`).toBe("margin");
     });
 
-    it("holds a mark that is above the window by less than a screen at the band's top, over a card as without one (it had nowhere to stand above it: it went)", () => {
+    // Rule 3 flips this one back (RE-AIMED again, §1c): it stood above the mark where a card covered the place and went where there was no room above a mark
+    // that had left the window (O-2); rule 1 held it at the band's top; the mark out of the window now takes it away, card or no card (ruling §1h.123).
+    it("has nowhere to stand for a mark that has left the window, over a card as without one: it goes", () => {
       const gone = standing([card(40, 200)], { left: 400, top: -60, right: 700, bottom: -42 });
-      expect(gone).toMatchObject({ mode: "margin", top: 48 });
+      expect(gone).toBeNull();
     });
   });
 });
@@ -376,13 +379,17 @@ describe("HighlightStripHost — level with its mark, a frame at a time", () => 
     expect(askedFrames - before).toBe(2);
   });
 
-  it("holds at the band's top while the mark is above the window by less than a screen, and goes when it is more than a screen away", () => {
+  // P11-27 rule 3, RE-AIMED (§1c) (ruling §1h.123): was "holds at the band's top while the mark is above the window by less than a screen, and goes when it is
+  // more than a screen away". The mark goes to the same places; the strip is held at the band's top only while a pixel of the mark is under the masthead's foot
+  // (the first scroll, 40 px above the top of its line, leaves the last line at 49), and goes the moment it is out — a screen away or less. Kept: it is gone for
+  // good (the store forgets it), scrolling back does not bring it up, a click on the mark does.
+  it("holds at the band's top while a pixel of the mark is in the window, and goes the moment it is out, however near: it is gone for good", () => {
     const host = raised();
-    mark = { left: 400, top: -500, right: 700, bottom: -482 };
+    mark = { left: 400, top: 31, right: 700, bottom: 49 };
     host.act(() => fire(winListeners, "scroll"));
     frame();
     expect(host.props.top).toBe(48);
-    mark = { left: 400, top: -1200, right: 700, bottom: -1182 };
+    mark = { left: 400, top: -500, right: 700, bottom: -482 };
     host.act(() => fire(winListeners, "scroll"));
     frame();
     expect(host.tree).toBeNull();

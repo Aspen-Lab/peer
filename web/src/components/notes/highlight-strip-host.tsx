@@ -12,8 +12,11 @@
 //   - `top` is the mark's first line NOW, not the height the click or the selection reported: the host reads `mark[data-highlight="<id>"]`'s first
 //     client rect after each commit and again on scroll and on resize, one animation frame each (`requestAnimationFrame`, one pending at a time),
 //     and repaints inside that frame (`flushSync`), so the strip stays level with its mark while the page moves under it;
-//   - it goes — the store is cleared, so scrolling back does not bring it up; a click on the mark does — when the mark is more than a screen away
-//     (B P11-04 §5: `AWAY_SCREENS` windows beyond the window's top or foot; held at the band's edge up to that) or is gone from the page;
+//   - it goes — the store is cleared, so scrolling back does not bring it up; a click on the mark does — as soon as no part of its mark is inside the
+//     window (P11-27 rule 3; ruling §1h.123: it was held at the band's edge for a window's height beyond, a strip hovering with nothing beside it, which two
+//     readers of round 1 costed) or when the mark is gone from the page. "Inside the window" is what the selection's actions use: below the masthead's foot
+//     (the margin band's top) and above the window's foot; the whole mark counts (`markBox`), so a mark whose first line has scrolled out but whose later
+//     line has not keeps its strip, held at the band's top;
 //   - it stands where the selection's three actions stand: 8 px in from the margin's left edge, `placeInMargin` of the mark's first line — in the margin,
 //     level with the mark, whatever card stands at that height (P11-27 rule 1; ruling §1h.122, which amends §1h.113 (b) O-2: the strip once stood above the
 //     mark over the line above it, where a card covered that place). It stands over the card — `z-[70]`, over the stack's cards, on its own surface —
@@ -36,8 +39,6 @@ import { readingNoteFor, useNotesStore } from "@/store/notes";
 import { HighlightStrip, STRIP_MIN_WIDTH_PX, SWATCH_HIT_PX, useHighlightStrip } from "./highlight-strip";
 import { highlightMarks } from "./note-tags";
 
-/** How far from the window the mark may be, in windows, before the strip goes (B P11-04 §5: "more than a screen away"). */
-export const AWAY_SCREENS = 1;
 /** The strip's height on one row: its colours' hit area, its padding (4 + 4) and its border (1 + 1). */
 export const STRIP_ROW_PX = SWATCH_HIT_PX + 10;
 /** On two rows, which it wraps to in a narrow margin. */
@@ -57,14 +58,17 @@ export interface StripStanding {
 }
 
 /**
- * Where the strip stands for a mark whose first line is `mark`, in the window's pixels — or null: the mark is more than `AWAY_SCREENS` windows
- * from the window (the strip goes). In the margin, level with the mark's first line, 8 px in from the margin's left edge, whatever card stands at that height
- * (P11-27 rule 1); the mark is held inside the margin's band. Pure.
+ * Where the strip stands for a mark whose first line is `mark` (and whose whole box is `box`, the first line's when not given), in the window's pixels — or
+ * null: no part of the mark is inside the window (P11-27 rule 3; ruling §1h.123) — its box ends at or above the masthead's foot (the margin band's top) or
+ * starts at or below the window's foot, the bounds the selection's actions are hidden by. Otherwise in the margin, level with the mark's first line, 8 px in from
+ * the margin's left edge, whatever card stands at that height (P11-27 rule 1); held inside the margin's band while the first line is out of it and a later one
+ * is not. Pure.
  */
-export function stripStanding(input: { mark: ViewRect; viewport: { width: number; height: number }; margin: MarginRect }): StripStanding | null {
+export function stripStanding(input: { mark: ViewRect; box?: ViewRect; viewport: { width: number; height: number }; margin: MarginRect }): StripStanding | null {
   const { mark, viewport, margin } = input;
-  const reach = viewport.height * AWAY_SCREENS;
-  if (mark.bottom < -reach || mark.top > viewport.height + reach) return null;
+  const box = input.box ?? mark;
+  // The mark's extent: the box, and the first line too (the box is the whole of the mark, so it holds it, but a caller's box may be the first line's alone).
+  if (Math.max(box.bottom, mark.bottom) <= margin.top || Math.min(box.top, mark.top) >= viewport.height) return null;
   const inner = Math.max(0, margin.width - 2 * MARGIN_INSET_PX);
   const room = Math.max(STRIP_MIN_WIDTH_PX, inner);
   const oneRow = room >= STRIP_ONE_ROW_WIDTH_PX;
@@ -78,6 +82,25 @@ export function markLine(doc: Pick<Document, "querySelector">, id: string): View
   if (!mark) return null;
   const box = mark.getClientRects()[0] ?? mark.getBoundingClientRect();
   return { left: box.left, top: box.top, right: box.right, bottom: box.bottom };
+}
+
+/**
+ * The whole of the highlight's mark on the page now: from the top of its first piece's first line (a nested part comes before the mark's own words) to the bottom
+ * of the last line of its own mark, or null when it is not drawn. P11-27 rule 3: the strip stays while any of it is in the window. The numbers are copied.
+ */
+export function markBox(doc: Pick<Document, "querySelector">, id: string): ViewRect | null {
+  const first = doc.querySelector(highlightMarks(id));
+  if (!first) return null;
+  const own = doc.querySelector(`mark[data-highlight="${id.replace(/["\\]/g, "\\$&")}"]`) ?? first;
+  const head = first.getClientRects()[0] ?? first.getBoundingClientRect();
+  const lines = own.getClientRects();
+  const tail = lines[lines.length - 1] ?? own.getBoundingClientRect();
+  return {
+    left: Math.min(head.left, tail.left),
+    top: Math.min(head.top, tail.top),
+    right: Math.max(head.right, tail.right),
+    bottom: Math.max(head.bottom, tail.bottom),
+  };
 }
 
 /**
@@ -140,7 +163,9 @@ export function HighlightStripHost({ paperId }: { paperId: string }): ReactEleme
     const current = useHighlightStrip.getState().id;
     if (current === null || margin === null) return;
     const line = markLine(document, current);
-    const next = line === null ? null : stripStanding({ mark: line, viewport: { width: window.innerWidth, height: window.innerHeight }, margin });
+    const box = line === null ? null : markBox(document, current);
+    const next =
+      line === null ? null : stripStanding({ mark: line, ...(box ? { box } : {}), viewport: { width: window.innerWidth, height: window.innerHeight }, margin });
     if (next === null) {
       useHighlightStrip.getState().hide();
       putPlace(null);
