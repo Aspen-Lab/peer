@@ -289,23 +289,130 @@ export function blockFromHash(hash: string): string | null {
   return hashTarget(hash) === ANSWERS_BLOCK_ID ? ANSWERS_BLOCK_ID : null;
 }
 
+/** The part of an image the arrival waits on: whether it has loaded or failed, and to be told when it does. */
+export interface ArrivalImage {
+  complete: boolean;
+  addEventListener(type: "load" | "error", run: () => void): void;
+  removeEventListener(type: "load" | "error", run: () => void): void;
+}
+
+/** The part of the page the arrival reads: the block by its id, and the images on the page. */
+export interface ArrivalDoc {
+  getElementById(id: string): HTMLElement | null;
+  images?: ArrayLike<ArrivalImage>;
+}
+
+/** The window the arrival is landed again in: the animation frame, the scroll, and the reader's own moves of the page. */
+export interface ArrivalEnv {
+  /** Runs `run` at the next animation frame; returns how to cancel it. */
+  frame(run: () => void): () => void;
+  scrollY(): number;
+  /** Told when the reader moves the page themselves (wheel, touch, a key, a press); returns how to stop being told. */
+  onUserMove(told: () => void): () => void;
+}
+
+export const browserArrival: ArrivalEnv = {
+  frame: (run) => {
+    const id = requestAnimationFrame(run);
+    return () => cancelAnimationFrame(id);
+  },
+  scrollY: () => window.scrollY,
+  onUserMove: (told) => {
+    const events = ["wheel", "touchmove", "keydown", "mousedown"] as const;
+    for (const type of events) window.addEventListener(type, told, { passive: true });
+    return () => {
+      for (const type of events) window.removeEventListener(type, told);
+    };
+  },
+};
+
+/** A block lands this far below the top of the window (`scroll-mt-20`, 5rem), and is not landed again if it is within `LAND_SLACK_PX` of it. */
+export const LAND_TOP_PX = 80;
+export const LAND_SLACK_PX = 2;
+/** The one extra landing comes no later than this long after the first scroll, settled or not. */
+export const RELAND_WITHIN_MS = 2000;
+
+/**
+ * P11-20 follow-up (item 3b): land a Summary block or the answers' block again once the page has settled. The page settles late — on a phone the one
+ * column's figure card, 197 px at the top for an upload with no picture, is taken out of the page about a second after the Summary shows, in the middle of
+ * the arrival's smooth scroll, which keeps its first target and ends 186 px past the block. So, after the images on the page have loaded or failed (the
+ * card goes when its picture fails) and two frames in which the scroll has not moved, the block is scrolled to once more, at once, if it is not where it
+ * should be: at most one extra correction, no later than `RELAND_WITHIN_MS` after the first scroll, and none if the reader has moved the page themselves.
+ * Returns how to stop.
+ */
+export function landAgain(id: string, doc: ArrivalDoc, env: ArrivalEnv): () => void {
+  let finished = false;
+  let cancelFrame = () => {};
+  const cleanups: (() => void)[] = [() => cancelFrame()];
+  const finish = (land: boolean) => {
+    if (finished) return;
+    finished = true;
+    for (const cleanup of cleanups.splice(0)) cleanup();
+    if (!land) return;
+    const block = doc.getElementById(id);
+    if (block && Math.abs(block.getBoundingClientRect().top - LAND_TOP_PX) > LAND_SLACK_PX) block.scrollIntoView({ block: "start", behavior: "instant" });
+  };
+  cleanups.push(env.onUserMove(() => finish(false)));
+  const deadline = setTimeout(() => finish(true), RELAND_WITHIN_MS);
+  cleanups.push(() => clearTimeout(deadline));
+
+  const twoStillFrames = () => {
+    let last = env.scrollY();
+    let still = 0;
+    const next = () => {
+      const y = env.scrollY();
+      still = y === last ? still + 1 : 0;
+      last = y;
+      if (still >= 2) finish(true);
+      else cancelFrame = env.frame(next);
+    };
+    cancelFrame = env.frame(next);
+  };
+  const waiting = Array.from(doc.images ?? []).filter((image) => !image.complete);
+  let left = waiting.length;
+  if (left === 0) twoStillFrames();
+  for (const image of waiting) {
+    const settled = () => {
+      image.removeEventListener("load", settled);
+      image.removeEventListener("error", settled);
+      left -= 1;
+      if (left === 0 && !finished) twoStillFrames();
+    };
+    image.addEventListener("load", settled);
+    image.addEventListener("error", settled);
+    cleanups.push(() => {
+      image.removeEventListener("load", settled);
+      image.removeEventListener("error", settled);
+    });
+  }
+  return () => finish(false);
+}
+
 /**
  * The arrival of the notes page's blue square: the address names a paragraph of the paper, a Summary block or the answers' block. Waits for it to be on
  * the page — a quarter second at a time, forty times (the body, the report and the answers come after the page does; for a Summary block the tab was
- * chosen by `use-reader-tab.ts`) — and then goes to it once with `go`. Returns how to stop waiting, or undefined where the address names nothing.
+ * chosen by `use-reader-tab.ts`) — and then goes to it once with `go`. A paragraph's arrival ends there; a Summary block or the answers' block is landed
+ * again once the page has settled (`landAgain`, item 3b). Returns how to stop waiting, or undefined where the address names nothing.
  */
-export function followHash(hash: string, doc: Pick<Document, "getElementById">, go: (id: string) => void): (() => void) | undefined {
-  const id = passageFromHash(hash) ?? blockFromHash(hash);
+export function followHash(hash: string, doc: ArrivalDoc, go: (id: string) => void, env: ArrivalEnv = browserArrival): (() => void) | undefined {
+  const paragraph = passageFromHash(hash);
+  const id = paragraph ?? blockFromHash(hash);
   if (!id) return undefined;
   let tries = 0;
+  let again: (() => void) | undefined;
   const timer = setInterval(() => {
     tries += 1;
     const found = doc.getElementById(id) !== null;
     if (!found && tries < 40) return;
     clearInterval(timer);
-    if (found) go(id);
+    if (!found) return;
+    go(id);
+    if (paragraph === null) again = landAgain(id, doc, env);
   }, 250);
-  return () => clearInterval(timer);
+  return () => {
+    clearInterval(timer);
+    again?.();
+  };
 }
 
 /** The open stickies as rows of the stack: each with its number and quote from its "Note N" heading in the paper's

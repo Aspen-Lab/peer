@@ -268,17 +268,21 @@ describe("followHash — the arrival waits for its block, then goes there once (
   afterEach(() => {
     vi.useRealTimers();
   });
-  /** A page that holds the ids put in `present` — and none before. */
+  /** A page that holds the ids put in `present` — and none before. A block it holds is where it should be (top 80). */
   const pageHolding = () => {
     const present = new Set<string>();
-    return { present, doc: { getElementById: (asked: string) => (present.has(asked) ? ({} as HTMLElement) : null) } };
+    const block = { getBoundingClientRect: () => ({ top: 80 }), scrollIntoView: () => {} } as unknown as HTMLElement;
+    return { present, doc: { getElementById: (asked: string) => (present.has(asked) ? block : null) } };
   };
+  /** A window that never runs a frame and is never moved: the arrival of a block is landed again in it only by its two-second limit (item 3b). */
+  const stillWindow = { frame: () => () => {}, scrollY: () => 0, onUserMove: () => () => {} };
 
   for (const id of ["summary-proposal", "answers-block", "paper-section-0-p2"]) {
     it(`#${id}: goes to it once the page holds it — not before, and not twice`, () => {
       const seen: string[] = [];
       const { present, doc } = pageHolding();
-      followHash(`#${id}`, doc, (target) => seen.push(target));
+      // Re-aimed (P11-20 item 3b, §1c): a block's arrival now also starts its landing again, so it is given a window (`stillWindow`); what it asserts is as it was.
+      followHash(`#${id}`, doc, (target) => seen.push(target), stillWindow);
       vi.advanceTimersByTime(250 * 3);
       expect(seen).toEqual([]);
       present.add(id);
@@ -357,12 +361,18 @@ describe("followHash — a Summary block or the answers' block is landed again o
     const env = {
       frame: (run: () => void) => {
         frames.push(run);
-        return () => void frames.splice(frames.indexOf(run), 1);
+        return () => {
+          const at = frames.indexOf(run);
+          if (at >= 0) frames.splice(at, 1);
+        };
       },
       scrollY: () => state.y,
       onUserMove: (told: () => void) => {
         moves.push(told);
-        return () => void moves.splice(moves.indexOf(told), 1);
+        return () => {
+          const at = moves.indexOf(told);
+          if (at >= 0) moves.splice(at, 1);
+        };
       },
     };
     const doc = { getElementById: (asked: string) => (asked === id ? element : null), images: imgs };
