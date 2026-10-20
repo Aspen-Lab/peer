@@ -887,7 +887,12 @@ html[data-mode="dark"] {
 .reading-scaled [class~="text-body"] { font-size: calc(var(--text-body) * var(--reading-scale, 1)); }
 .reading-scaled [class~="text-body-lg"] { font-size: calc(var(--text-body-lg) * var(--reading-scale, 1)); }
 
-html[data-scroll-behavior="smooth"] { scroll-behavior: smooth; }
+/* P11-29: smooth root scrolling only where the reader has not asked for less motion (the same query as the panes' transitions above). A
+   focus scroll to the far end of a long paper, or an anchor jump from the map, was an animation of 18,000px whatever the setting said
+   (WCAG 2.3.3); under `reduce` the computed value is `auto` and either one is a single step. Default motion is unchanged. */
+@media (prefers-reduced-motion: no-preference) {
+  html[data-scroll-behavior="smooth"] { scroll-behavior: smooth; }
+}
 
 
 body {
