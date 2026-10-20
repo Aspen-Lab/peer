@@ -235,7 +235,7 @@ describe("sanitizePaperReport", () => {
 
 describe("sanitizePaperReport — the restored sections", () => {
   // These existed before the 2026-09 reader rewrite dropped them, and were
-  // brought back on the founder's call. None carries an evidence sentence:
+  // brought back on the owner's call. None carries an evidence sentence:
   // they are Peer's reading, and the page labels them so. S6 (2026-09-15)
   // merged the proposal's "novelty" into `newHere` and deleted the fit
   // block from every *new* report — sanitizePaperReport still accepts an

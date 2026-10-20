@@ -62,7 +62,7 @@ describe("the centre cell", () => {
   it("is empty on the briefing — the page carries the day", () => {
     // The dateline and the deck are the page's own front (BriefingHead);
     // stating the day again in 13.5px above them was the small print the
-    // founder objected to.
+    // owner objected to.
     expect(mastheadCentre("briefing", { pathname: "/", papers })).toEqual({ kind: "empty" });
   });
 

@@ -2797,7 +2797,7 @@ the per-result `novelty` field B's guide explicitly keeps.
 
 Tests: `report.test.ts`'s two S6-touching `describe` blocks rewritten, not deleted. The
 "whitelists the report fields" test's `whyItFitsYou` assertion (previously commented "restored on
-the founder's call") kept passing (sanitizer branch untouched) with an updated comment explaining
+the owner's call") kept passing (sanitizer branch untouched) with an updated comment explaining
 it's now legacy-only. The "restored sections" describe: renamed its three tests' fixtures from
 `novelty` to `newHere`, added one new test for the v5→v6 fallback (proved above) and one new test
 proving the sanitizer still bounds a legacy `whyItFitsYou` blob's caps (renamed from the old combined

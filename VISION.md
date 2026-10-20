@@ -55,7 +55,7 @@ Before merging any change, ask:
 
 ---
 
-## Original vision (founder's words)
+## Original vision (owner's words)
 
 The original Chinese-language statement of these principles is preserved here as the source of truth. The English above is a working translation; if there is ever a conflict, this is canon:
 
