@@ -29,7 +29,9 @@ import {
   registerReaderActions,
   resolvePaperKey,
   selectionActions,
+  undoLabel,
 } from "./reader-keys";
+import { PLAIN_REWRITE_ENABLED } from "@/lib/papers/plain-levels";
 
 describe("resolvePaperKey", () => {
   it("maps every key in the table to its action", () => {
@@ -72,19 +74,22 @@ describe("resolvePaperKey", () => {
 // undoable act), and only when none shows does what it did before — undo a dismiss, else mark
 // unread / read. It is still ONE row: the help sheet and the foot legend read this table, so the
 // label says both and nothing else moves.
+// P11-17a rule 3 re-aims the first two cases: "Say it plainly" is switched off (`PLAIN_REWRITE_ENABLED`
+// false, the owner's 2026-10-19 switch), so `u` takes no rewrite back and its row says only what it does.
+// The P4-01 label comes back, byte-identical, with the switch (pinned in "u's words follow the plain switch").
 describe("the u row (P4-01)", () => {
   const row = PAPER_KEYS.filter((entry) => entry.keys.includes("u"));
 
-  it("is one row, still the undoOrToggleRead action, and says the plain rewrite comes first", () => {
+  it("is one row, still the undoOrToggleRead action, and says what u does while Say it plainly is off", () => {
     expect(row).toHaveLength(1);
     expect(row[0].action).toBe("undoOrToggleRead");
-    expect(row[0].label).toBe("Undo a plain rewrite or a dismiss, else mark unread / read");
+    expect(row[0].label).toBe("Undo a dismiss, else mark unread / read");
     expect(row[0].short).toBe("undo");
     expect(resolvePaperKey("u")).toBe("undoOrToggleRead");
   });
 
   it("is the sheet's row and the legend's, from the same table", () => {
-    expect(readerHelpItems().find((item) => item.keys === "u")?.label).toBe("Undo a plain rewrite or a dismiss, else mark unread / read");
+    expect(readerHelpItems().find((item) => item.keys === "u")?.label).toBe("Undo a dismiss, else mark unread / read");
     expect(paperKeysFor({ upload: true }).find((entry) => entry.keys.includes("u"))?.label).toBe(row[0].label);
     expect(paperKeysFor({ upload: false }).find((entry) => entry.keys.includes("u"))?.label).toBe(row[0].label);
   });
@@ -524,5 +529,48 @@ describe("the keyboard layer and the selection's keys (P11-13)", () => {
     press("h", new FakeElement("DIV"));
     expect(highlight).toHaveBeenCalledTimes(1);
     mounted.unmount();
+  });
+});
+
+// ── P11-17a rule 3: `u`'s words follow the plain switch ───────────────────────────────────────────────────────────────
+// "Say it plainly" is switched off (`PLAIN_REWRITE_ENABLED = false`, c0f97114), and `u` no longer takes a rewrite back
+// (page.tsx reads the same switch), so the help sheet must not say it does. The words are chosen where the table is
+// built: the keyboard layer, the help sheet and the legend still read one table. `plain-levels.ts` is not edited here:
+// the switch is passed in, or the module is mocked.
+describe("u's words follow the plain switch (P11-17a rule 3)", () => {
+  const P4_01 = "Undo a plain rewrite or a dismiss, else mark unread / read";
+  const OFF = "Undo a dismiss, else mark unread / read";
+  const uRow = (keys: readonly { keys: readonly string[]; label: string }[]) => keys.find((entry) => entry.keys.includes("u"))?.label;
+
+  it("says undo a dismiss, else mark unread / read, with the switch off", () => {
+    expect(undoLabel(false)).toBe(OFF);
+  });
+
+  it("is P4-01's label, byte-identical, with the switch on", () => {
+    expect(undoLabel(true)).toBe(P4_01);
+  });
+
+  it("reads the switch as the owner left it: off, so the table, the sheet and every page's legend say the short words", () => {
+    expect(PLAIN_REWRITE_ENABLED).toBe(false);
+    expect(uRow(PAPER_KEYS)).toBe(OFF);
+    expect(readerHelpItems().find((item) => item.keys === "u")?.label).toBe(OFF);
+    for (const upload of [true, false]) expect(uRow(paperKeysFor({ upload }))).toBe(OFF);
+  });
+
+  it("with the switch mocked on, the one table says P4-01's words again, in the sheet as in the table", async () => {
+    vi.resetModules();
+    vi.doMock("@/lib/papers/plain-levels", async (importOriginal) => ({
+      ...(await importOriginal<typeof import("@/lib/papers/plain-levels")>()),
+      PLAIN_REWRITE_ENABLED: true,
+    }));
+    try {
+      const on = await import("./reader-keys");
+      expect(uRow(on.PAPER_KEYS)).toBe(P4_01);
+      expect(on.readerHelpItems().find((item) => item.keys === "u")?.label).toBe(P4_01);
+      expect(on.PAPER_KEYS.filter((entry) => entry.keys.includes("u"))).toHaveLength(1);
+    } finally {
+      vi.doUnmock("@/lib/papers/plain-levels");
+      vi.resetModules();
+    }
   });
 });
