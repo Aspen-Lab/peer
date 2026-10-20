@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { DIVIDER_PX, fitPanes } from "@/components/reader/pane-layout";
-import { NotesButtonView } from "./notes-button";
+import { EDGE_TAB_BESIDE_PX, EDGE_TAB_HIT_PX, NotesButtonView } from "./notes-button";
 
 // P11-34 (BACKLOG-102; round 2, Theme A readers r1, r2, r3): the right-edge tab ("Open your notes") stood flush against the centre
 // column's text whenever a card stood in the margin. With a card standing the tab is placed at the margin's left edge, beside the cards,
@@ -128,7 +128,13 @@ describe("the tab beside a card is clear of the text (P11-34, BACKLOG-102)", () 
       expect(hit).toBeGreaterThanOrEqual(HIT_PX);
       // the hit area is never wider than the gutter: it does not reach into the text (the card side is under the card, so the strip is on the text's side only)
       expect(hit).toBeLessThanOrEqual(gutterAt(1));
-      if (ext(html) > 0) expect(html).toMatch(/before:right-full/);
+      if (ext(html) > 0) {
+        // Re-aimed in the fix (P11-34): the strip is placed from the button's padding edge, which is the border's width inside its outer edge, so it ends at the
+        // face's outer edge when its left offset is its width plus that border (`-left-[10px]` for a 9 px strip); `right-full` would have put it a pixel short.
+        const offset = Number(/before:-left-\[(\d+(?:\.\d+)?)px\]/.exec(html)?.[1]);
+        expect(offset, "the strip stands on the text's side").toBe(ext(html) + BORDER_PX);
+        expect(html).toMatch(/before:absolute/);
+      }
     }
   });
 
@@ -140,6 +146,27 @@ describe("the tab beside a card is clear of the text (P11-34, BACKLOG-102)", () 
     expect(html).toContain("[writing-mode:vertical-rl]");
     expect(html).toContain(">Open your notes<");
     expect(html).toContain("z-40");
+  });
+});
+
+describe("the two numbers the tab names (added with the fix)", () => {
+  it("the face is what the narrowest gutter leaves after 8 px of clear and the 1 px frame, and it is the width the markup declares", () => {
+    expect(EDGE_TAB_BESIDE_PX).toBe(gutterAt(1) - CLEAR_PX - FRAME_PX);
+    expect(px(view({ beside: true, marginLeft: 744 }), "width")).toBe(EDGE_TAB_BESIDE_PX);
+  });
+
+  it("the hit area is 24 px across: the face and a strip of the difference, 9 px, on the text's side", () => {
+    expect(EDGE_TAB_HIT_PX).toBe(HIT_PX);
+    expect(ext(view({ beside: true, marginLeft: 744 }))).toBe(EDGE_TAB_HIT_PX - EDGE_TAB_BESIDE_PX);
+  });
+
+  it("the label's line is set solid, as tall as the type, so it fits the face: 11.5 px of type in the face less its border", () => {
+    const html = view({ beside: true, marginLeft: 744 });
+
+    expect(html).toMatch(/[;"]line-height:1[;"]/);
+    expect(EDGE_TAB_BESIDE_PX - BORDER_PX).toBeGreaterThanOrEqual(CAPTION_PX);
+    // and the face has no side padding of its own to push the label out of it
+    expect((/class="([^"]*)"/.exec(html)?.[1] ?? "").split(" ")).toContain("py-0");
   });
 });
 
