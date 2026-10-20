@@ -17,9 +17,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { stagedRuntime } from "@/test-support/staged-runtime";
 import type { FigureRef } from "@/lib/reader/figure-viewer";
 import { clampFigureSize, FIGURE_ZOOM_STEPS } from "./figure-zoom";
+import * as figureCardModule from "./figure-card";
 import {
   FIGURE_CAPTION_SHARE,
-  FIGURE_MAT_PAD_PX,
   FIGURE_WINDOW_ID,
   FIGURE_ZOOM_ROW_PX,
   FigureCard,
@@ -233,12 +233,26 @@ describe("the picture: the zoom core's surface on the plate mat", () => {
     expect(String(dragging.props.className)).toMatch(/\bcursor-grabbing\b/);
   });
 
-  it("is fitted into the mat's box less its padding", () => {
-    expect(FIGURE_MAT_PAD_PX).toBe(8);
+  // P11-17c rule 3 (the owner: "enlarged into the whole right margin"; C P11-15 "For the manager" 5), RE-AIMED (§1c) from "is fitted into the
+  // mat's box less its padding": the 8-px mat around the surface is dropped, so the picture is the zoom core's fit of the box WHOLE — the card's
+  // whole inner width. At Fit it was 366.7 px in a 400-px margin (398 inside the border, less 16, times the core's 0.96); now 382.1.
+  it("is fitted into the box whole: the card's whole inner width, no mat around the picture", () => {
+    expect("FIGURE_MAT_PAD_PX" in figureCardModule).toBe(false);
     expect(figureViewport(null)).toEqual({ width: 0, height: 0 });
-    expect(figureViewport({ width: 344, height: 500 })).toEqual({ width: 328, height: 484 });
-    expect(figureViewport({ width: 10, height: 12 })).toEqual({ width: 0, height: 0 });
-    expect(markup()).toContain("padding:8px");
+    expect(figureViewport({ width: 344, height: 500 })).toEqual({ width: 344, height: 500 });
+    expect(figureViewport({ width: 10, height: 12 })).toEqual({ width: 10, height: 12 });
+    expect(markup()).not.toContain("padding:");
+  });
+
+  it("fills a 400-px margin at Fit: a wide figure is at least 380 px wide (it was 366.7)", () => {
+    // 400 px across, less the card's 1-px border on each side: the box the card measures.
+    const fit = clampFigureSize({ width: 1200, height: 950 }, figureViewport({ width: 398, height: 640 }));
+    expect(fit.width).toBeGreaterThanOrEqual(380);
+    expect(fit.width).toBeCloseTo(398 * 0.96, 6);
+    // A tall figure is held by the box's height, the other way: whole in the box, never past it.
+    const tall = clampFigureSize({ width: 465, height: 1556 }, figureViewport({ width: 398, height: 640 }));
+    expect(tall.height).toBeCloseTo(640 * 0.96, 6);
+    expect(tall.width).toBeLessThanOrEqual(398);
   });
 });
 

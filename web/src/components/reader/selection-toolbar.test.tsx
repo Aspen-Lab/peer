@@ -327,11 +327,14 @@ describe("openCardRects — the cards that stand open (P11-13, rule 2)", () => {
     getBoundingClientRect: () => ({ ...box, width: box.right - box.left, height: box.bottom - box.top }),
   });
 
-  it("asks for the margin's cards, the explain dock and the sticky and notes windows, until they all carry the margin's attribute", () => {
-    expect(OPEN_CARD_SELECTOR).toContain(MARGIN_CARD_SELECTOR);
-    expect(OPEN_CARD_SELECTOR).toContain("[data-explain-dock]");
-    expect(OPEN_CARD_SELECTOR).toContain("[data-sticky]");
-    expect(OPEN_CARD_SELECTOR).toContain("[data-notes-window]");
+  // P11-17c rule 4, RE-AIMED (§1c) from "asks for the margin's cards, the explain dock and the sticky and notes windows, until they all carry the
+  // margin's attribute": every card of the margin carries `data-margin-card` now (`margin-card.markers.test.tsx` pins each, in the markup), so
+  // the legacy list — `[data-explain-dock]`, `[data-sticky]`, `[data-notes-window]` — is retired and the selector is the margin's alone.
+  it("asks for the margin's cards by their one marker, and for no legacy marker", () => {
+    expect(OPEN_CARD_SELECTOR).toBe(MARGIN_CARD_SELECTOR);
+    expect(OPEN_CARD_SELECTOR).not.toContain("[data-explain-dock]");
+    expect(OPEN_CARD_SELECTOR).not.toContain("[data-sticky]");
+    expect(OPEN_CARD_SELECTOR).not.toContain("[data-notes-window]");
   });
 
   it("reads each one's rect, and leaves out a card with no box (hidden)", () => {
