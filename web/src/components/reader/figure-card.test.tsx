@@ -31,6 +31,7 @@ import {
   type FigureCardZoom,
 } from "./figure-card";
 import { MarginCardShell } from "./margin-card";
+import { FIGURE_CHROME_PX, FIGURE_STACKED_CAPTION_SHARE } from "@/lib/reader/windows";
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 const CARD = read("src/components/reader/figure-card.tsx");
@@ -541,6 +542,20 @@ describe("the caption while stacked: at most 20 % of the card, whole and scrolli
     expect((stackedCaption.props.style as { maxHeight: number }).maxHeight).toBe(89);
     const aloneCaption = withAttr(FigureCardView(view({ height: 446 })), "data-figure-caption")!;
     expect((aloneCaption.props.style as { maxHeight: number }).maxHeight).toBe(133);
+  });
+
+  it("is a fifth in the pure rule too: captionMaxHeight asks whether the card is stacked, and the zoom row is the stack's own number", () => {
+    expect(FIGURE_STACKED_CAPTION_SHARE).toBe(0.2);
+    expect(captionMaxHeight(446, true)).toBe(89);
+    expect(captionMaxHeight(592, true)).toBe(118);
+    expect(captionMaxHeight(0, true)).toBe(0);
+    expect(captionMaxHeight(-5, true)).toBe(0);
+    // Alone, or with the flag false: three tenths, as ever.
+    expect(captionMaxHeight(446)).toBe(133);
+    expect(captionMaxHeight(446, false)).toBe(133);
+    // The stack counts the card's furniture to keep the picture box at half the band: its zoom row is this card's.
+    expect(FIGURE_ZOOM_ROW_PX).toBe(36);
+    expect(FIGURE_CHROME_PX).toBe(2 + 40 + FIGURE_ZOOM_ROW_PX);
   });
 
   it("keeps the caption whole, in the reading face, reached by Tab and scrolling inside, when stacked", () => {

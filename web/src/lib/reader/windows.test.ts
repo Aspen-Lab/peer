@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { DOCK_BOTTOM_PX, DOCK_STACK_FLOOR_PX, DOCK_TOP_PX, columnBottomPx, legendHeightPx } from "@/components/reader/explain-dock";
 import { block } from "@/lib/notes/blocks";
 import { FIGURE_ZOOM_ROW_PX } from "@/components/reader/figure-card";
-import { EXPLAIN_WINDOW_ID, MIN_FRONT_PX, NOTES_MIN_FRONT_PX, NOTES_WINDOW_ID, WINDOW_HEADER_PX, stackFrameIn, stackLayout, stackRows, useWindows, type FloatingWindow } from "./windows";
+
+import { EXPLAIN_WINDOW_ID, MIN_FRONT_PX, NOTES_MIN_FRONT_PX, NOTES_WINDOW_ID, WINDOW_HEADER_PX, FIGURE_CHROME_PX, figureStackedFloorPx, stackFrameIn, stackLayout, stackRows, useWindows, type FloatingWindow } from "./windows";
 
 // P10-09a (review 7.1a; ruling §1h.78): the windows at the right stand like cascaded cards — only the headers of
 // the ones behind show (each later window offset by a header's height), the raised one in front and full; a header
@@ -415,13 +416,23 @@ describe("stackLayout — one front height per kind (P11-14, rule 2)", () => {
     expect(rows[2]).toMatchObject({ id: "a", front: true, top: 180, height: 260 });
   });
 
-  it("lifts the column to keep the front its least height — the explain card 250, the figure 240 — never above the band's top", () => {
+  // RE-AIMED (§1c), P11-26 rule 2: the figure card's 240 is the floor of a figure that stands ALONE; in front of another card its floor is the height
+  // that keeps its picture box at half the band (`figureStackedFloorPx`) — 630 px in the 852-px band below, where the sticky behind took the
+  // column up to 230 — and the "never above the band's top" half of the sentence is held by the second figure case.
+  it("lifts the column to keep the front its least height — the explain card 250, a lone figure 240, a figure in front of a card its picture's half band — never above the band's top", () => {
     const rows = stackLayout([card("a", "sticky", 1), card("b", "sticky", 2), card("e", "explain", 3)], { top: 700, bottom: 900, minTop: 48, frontHeights: { explain: 400 } });
     expect(rows.map((r) => r.top)).toEqual([570, 610, 650]);
     expect(rows[2].height).toBe(250);
+    const lone = stackLayout([card("f", "figure", 1)], { top: 880, bottom: 900, minTop: 48 });
+    expect(lone[0]).toMatchObject({ top: 900 - 240, height: 240 });
     const figure = stackLayout([card("a", "sticky", 1), card("f", "figure", 2)], { top: 800, bottom: 900, minTop: 48 });
-    expect(figure[0].top).toBe(900 - 40 - 240);
-    expect(figure[1].height).toBe(240);
+    expect(figureStackedFloorPx(900 - 48)).toBe(630);
+    expect(figure[0].top).toBe(900 - 40 - 630);
+    expect(figure[1].height).toBe(630);
+    // Never above the band's top: where the cards behind leave no more room than that, the figure takes all there is.
+    expect(figureStackedFloorPx(300 - 48)).toBe(255);
+    const tight = stackLayout([card("a", "sticky", 1), card("f", "figure", 2)], { top: 200, bottom: 300, minTop: 48 });
+    expect(tight.map((r) => [r.top, r.height])).toEqual([[48, 40], [88, 212]]);
   });
 });
 
@@ -606,6 +617,19 @@ describe("stackLayout — a figure in front of other cards is never a thumbnail 
       expect(stackLayout([win("figure", "figure", 1)], stackFrameIn(band, null))[0]).toMatchObject({ top: band.top, height: band.bottom - band.top, front: true });
     });
   }
+
+  it("figureStackedFloorPx is the card whose picture box is half the band even with the caption at its 20 % cap", () => {
+    expect(FIGURE_CHROME_PX).toBe(CHROME);
+    for (const band of [412, 488, 526, 632, 812, 1000]) {
+      const floor = figureStackedFloorPx(band);
+      expect(boxWorstCase(floor), `${band}`).toBeGreaterThanOrEqual(band / 2);
+      // …and it is the least such card, give or take the pixel the caption's cap is floored to: two pixels less has a box under half the band.
+      expect(boxWorstCase(floor - 2), `${band}`).toBeLessThan(band / 2);
+    }
+    expect([526, 632, 812].map(figureStackedFloorPx)).toEqual([427, 493, 605]);
+    expect(figureStackedFloorPx(0)).toBe(Math.ceil(CHROME / 0.8));
+    expect(figureStackedFloorPx(-10)).toBe(figureStackedFloorPx(0));
+  });
 
   it("the cascade is lifted only as far as the picture needs: a cascade that started high enough stays where it is", () => {
     const band = { top: DOCK_TOP_PX, bottom: columnBottomPx(900, DOCK_BOTTOM_PX) };

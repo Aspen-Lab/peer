@@ -22,6 +22,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Ref, ty
 import { cn } from "@/lib/cn";
 import { quoteHead } from "@/lib/notes/blocks";
 import type { FigureRef } from "@/lib/reader/figure-viewer";
+import { FIGURE_STACKED_CAPTION_SHARE, FIGURE_ZOOM_ROW_PX } from "@/lib/reader/windows";
 import type { Size } from "./figure-zoom";
 import { MarginCardShell, type MarginFrame } from "./margin-card";
 import { useFigureZoom, type FigureZoom } from "./use-figure-zoom";
@@ -29,15 +30,15 @@ import { useFigureZoom, type FigureZoom } from "./use-figure-zoom";
 /** The figure card's id in the stack (there is one: a second figure replaces the first, D2). */
 export const FIGURE_WINDOW_ID = "figure";
 
-/** The zoom row's height. */
-export const FIGURE_ZOOM_ROW_PX = 36;
+/** The zoom row's height (the stack's own number: it counts the card's furniture to keep the picture box at half the band). */
+export { FIGURE_ZOOM_ROW_PX };
 
-/** The caption takes at most this share of the card's height (D3) and scrolls inside. */
+/** The caption takes at most this share of the card's height (D3) and scrolls inside. In front of other cards, a fifth (P11-26 rule 2). */
 export const FIGURE_CAPTION_SHARE = 0.3;
 
-/** The caption's tallest, in pixels, for a card `height` tall. */
-export function captionMaxHeight(height: number): number {
-  return Math.max(0, Math.floor(height * FIGURE_CAPTION_SHARE));
+/** The caption's tallest, in pixels, for a card `height` tall: three tenths alone, a fifth while it is stacked in front of other cards. */
+export function captionMaxHeight(height: number, stacked = false): number {
+  return Math.max(0, Math.floor(height * (stacked ? FIGURE_STACKED_CAPTION_SHARE : FIGURE_CAPTION_SHARE)));
 }
 
 /**
@@ -67,6 +68,8 @@ export interface FigureCardViewProps {
   top: number;
   height: number;
   z: number;
+  /** Another card stands with this one (P11-26 rule 2): the caption then takes at most a fifth of the card, not three tenths. */
+  stacked?: boolean;
   /** The margin's left and width; null where there is none. */
   frame: MarginFrame | null;
   zoom: FigureCardZoom;
@@ -115,7 +118,7 @@ function FigureCardHeader({ label, caption, onClose, onRaise }: Pick<FigureCardV
   );
 }
 
-export function FigureCardView({ label, caption, src, front, top, height, z, frame, zoom, boxRef, surfaceRef, onPictureLoad, onClose, onRaise }: FigureCardViewProps) {
+export function FigureCardView({ label, caption, src, front, top, height, z, stacked, frame, zoom, boxRef, surfaceRef, onPictureLoad, onClose, onRaise }: FigureCardViewProps) {
   const percent = Math.round(zoom.scale * 100);
   return (
     <MarginCardShell
@@ -198,7 +201,7 @@ export function FigureCardView({ label, caption, src, front, top, height, z, fra
           aria-label={`${label} caption`}
           tabIndex={0}
           className="shrink-0 overflow-y-auto overscroll-contain px-3 py-2 font-reading text-body-sm leading-[1.6] text-text [overflow-wrap:anywhere]"
-          style={{ maxHeight: captionMaxHeight(height) }}
+          style={{ maxHeight: captionMaxHeight(height, stacked) }}
         >
           {caption}
         </div>
@@ -215,6 +218,8 @@ export interface FigureCardProps {
   top: number;
   height: number;
   z: number;
+  /** Another card stands with this one (the host says so): see `FigureCardViewProps.stacked`. */
+  stacked?: boolean;
   onClose: () => void;
   onRaise: () => void;
 }
@@ -224,7 +229,7 @@ export interface FigureCardProps {
  * brought forward again is as it was left. The mat's box is measured here (a divider drag, the window, the caption's height all resize
  * it); the last size is kept while the box is not on the page, so the first frame after a raise has its picture.
  */
-export function FigureCard({ figure, frame, front, top, height, z, onClose, onRaise }: FigureCardProps) {
+export function FigureCard({ figure, frame, front, top, height, z, stacked, onClose, onRaise }: FigureCardProps) {
   const [boxEl, setBoxEl] = useState<HTMLDivElement | null>(null);
   const [box, setBox] = useState<Size | null>(null);
   // The picture's own size, read from it when it arrived and the figure's record had none.
@@ -272,6 +277,7 @@ export function FigureCard({ figure, frame, front, top, height, z, onClose, onRa
       top={top}
       height={height}
       z={z}
+      stacked={stacked}
       frame={frame}
       zoom={zoom}
       boxRef={setBoxEl}

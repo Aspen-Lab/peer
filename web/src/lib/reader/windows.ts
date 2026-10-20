@@ -121,7 +121,8 @@ export const STICKY_FRONT_PX = 260;
 const FRONT_PX: Readonly<Partial<Record<WindowKind, number>>> = { sticky: STICKY_FRONT_PX, highlight: HIGHLIGHT_FRONT_PX };
 
 /** What each kind keeps at least in front when the column is lifted to make room for it: a sticky 160, the notes window and a figure
- *  240 (written in, looked into), the explain card its floor (header, follow-up field and Send, with a few lines of answer). */
+ *  240 (written in, looked into), the explain card its floor (header, follow-up field and Send, with a few lines of answer). A figure in
+ *  front of other cards keeps more: its picture box is at least half the band (`figureStackedFloorPx`, below). */
 export const LEAST_FRONT_PX: Readonly<Record<WindowKind, number>> = {
   sticky: MIN_FRONT_PX,
   highlight: HIGHLIGHT_FRONT_PX,
@@ -129,6 +130,35 @@ export const LEAST_FRONT_PX: Readonly<Record<WindowKind, number>> = {
   figure: NOTES_MIN_FRONT_PX,
   explain: DOCK_STACK_FLOOR_PX,
 };
+
+// ── The figure in front of other cards (P11-26 rule 2; A P11-22 X-3; ruling §1h.122) ──────────────────────────────────────────────────────
+//
+// With a sticky and the explain card behind it, the figure card in front had the room under two 40-px headers, and its caption took up to
+// 30 % of that: its picture box was 97 px high at 1093 x 614 (the picture 71 x 91) and 171 at 1280 x 720 — a thumbnail that could not be read at
+// Fit. In front of other cards the figure's PICTURE BOX is at least half the band's height; the caption takes at most a fifth of the card
+// while it is stacked (whole, scrolling inside); the cards behind keep their headers. Alone, the figure fills the margin as it always did.
+
+/** The zoom row of the figure card (minus, the readout, plus, Fit). */
+export const FIGURE_ZOOM_ROW_PX = 36;
+
+/** The figure card's own furniture: its border (1 px a side), its header and its zoom row. The picture box is what is left of the card less this
+ *  and the caption. */
+export const FIGURE_CHROME_PX = 2 + WINDOW_HEADER_PX + FIGURE_ZOOM_ROW_PX;
+
+/** In front of other cards the picture box is at least this share of the band's height… */
+export const FIGURE_PICTURE_SHARE = 0.5;
+
+/** …and the caption takes at most this share of the card while the card is stacked (alone it keeps its 30 %, `figure-card.tsx`). */
+export const FIGURE_STACKED_CAPTION_SHARE = 0.2;
+
+/**
+ * The least height a figure card keeps in front of other cards, for a band `bandHeight` tall: the card in which, with the caption taking its
+ * whole 20 %, the picture box is still half the band — `H - chrome - 0.2 H >= 0.5 B`. The stack is lifted to give it that (never above the
+ * band's top: where the cards behind leave no more room, the figure takes all there is).
+ */
+export function figureStackedFloorPx(bandHeight: number): number {
+  return Math.ceil((Math.max(0, bandHeight) * FIGURE_PICTURE_SHARE + FIGURE_CHROME_PX) / (1 - FIGURE_STACKED_CAPTION_SHARE));
+}
 
 export interface StackFrame {
   top: number;
@@ -163,8 +193,10 @@ export function stackLayout(windows: readonly FloatingWindow[], frame: StackFram
   // The front keeps its kind's height: a pad to write on or a figure to look into takes all the height the screen leaves (it scrolls
   // inside), a sticky its own, the explain card its content; and is lifted, not squeezed, below its least height.
   const frontHeight = frontKind ? frontHeightOf(frontKind, frame) : 0;
-  const want = frontKind ? Math.min(frontHeight, LEAST_FRONT_PX[frontKind]) : 0;
   const bottom = frame.bottom;
+  // A figure in front of other cards keeps its picture box at half the band (P11-26 rule 2); the others, their kind's least height.
+  const least = frontKind === undefined ? 0 : frontKind === "figure" && ordered.length > 1 ? Math.max(LEAST_FRONT_PX.figure, figureStackedFloorPx(bottom - (frame.minTop ?? frame.top))) : LEAST_FRONT_PX[frontKind];
+  const want = frontKind ? Math.min(frontHeight, least) : 0;
   let top0 = frame.top;
   if (frame.minTop !== undefined && top0 + behind + want > bottom) top0 = Math.max(frame.minTop, bottom - behind - want);
   return ordered.map((w, i) => {

@@ -128,8 +128,9 @@ export function FigureHost() {
 }
 
 /** The card element for the open figure at its row. Keyed by the figure's own key: a press of the same figure again is the same card (its
- *  zoom and pan are kept), a different figure is a new one (zoom reset to fit). Pure. */
-export function figureCardElement(figure: FigureRef, frame: MarginRect, row: StackRow): ReactElement {
+ *  zoom and pan are kept), a different figure is a new one (zoom reset to fit). `stacked`: another card stands with it, so its caption takes a
+ *  fifth of it, not three tenths (P11-26 rule 2). Pure. */
+export function figureCardElement(figure: FigureRef, frame: MarginRect, row: StackRow, stacked = false): ReactElement {
   return (
     <FigureCard
       key={figure.key}
@@ -139,6 +140,7 @@ export function figureCardElement(figure: FigureRef, frame: MarginRect, row: Sta
       top={row.top}
       height={row.height}
       z={row.z}
+      stacked={stacked}
       onClose={dismissFigure}
       onRaise={raiseFigure}
     />
@@ -151,7 +153,7 @@ export function FigureStack({ figure, frame }: { figure: FigureRef; frame: Margi
   const column = useColumn(true);
   const row = figureRowOf(windows, column);
   // Not in the stack for the one frame before the host's layout effect has opened it: nothing to draw.
-  return row ? figureCardElement(figure, frame, row) : null;
+  return row ? figureCardElement(figure, frame, row, windows.length > 1) : null;
 }
 
 /** Today's lightbox, for a page with no margin: the viewer the Summary opens, in a portal, closed by `closeFigure`. */
