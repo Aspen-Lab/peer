@@ -101,6 +101,7 @@ import {
   settleHeight,
 } from "./explain-dock";
 import { EvidenceQuote } from "./evidence-quote";
+import { isFrontCard } from "./front-escape";
 import { MarginCardHeader } from "./margin-card";
 import { asItems, firstAnswerMessage, keyToSend, postExplain, moreReply, replyPair, sayMoreOf, type ReplyResult } from "./explain-thread";
 import type { ExplainSelection, ExplainSource, SelectionTarget, ViewRect, ViewRects } from "./paper-body";
@@ -941,6 +942,11 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
       if (typeof document.querySelector === "function" && document.querySelector(MODAL_OVER_PAGE)) return;
+      // P11-17c rule 1: in the margin's stack the card answers only while it is the front one. Behind another card it is a header and the key is
+      // the front card's (`front-escape.ts`: a sticky, the notes window, the figure); one Escape closes one card. Outside the stack (below
+      // 1024 px: the card under the selection, the sheet) it answers as it always did.
+      const { windows } = useWindows.getState();
+      if (windows.some((w) => w.id === EXPLAIN_WINDOW_ID) && !isFrontCard(windows, EXPLAIN_WINDOW_ID)) return;
       event.preventDefault();
       event.stopPropagation();
       setSession(null);

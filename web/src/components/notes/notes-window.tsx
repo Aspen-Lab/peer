@@ -21,8 +21,9 @@
 // Not done: dragging the window by its header (the column is where it stands), and a phone (the row there still
 // navigates to the page).
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { useFrontEscape } from "@/components/reader/front-escape";
 import { MarginCard } from "@/components/reader/margin-card";
 import type { Paper } from "@/types";
 import type { Block, Note, Source } from "@/lib/notes/types";
@@ -83,7 +84,8 @@ export function NotesWindowView({
       aria-label="Your notes"
       data-notes-window=""
       onKeyDown={(event) => {
-        if (event.key !== "Escape") return;
+        // Only the front card answers (P11-17c rule 1): behind another, with only its header showing, it lets the key go on to the document.
+        if (event.key !== "Escape" || !front) return;
         event.stopPropagation();
         event.preventDefault();
         // An open export menu closes first; the window next.
@@ -260,6 +262,11 @@ export function NotesWindow({ paper, onClose }: { paper: Paper; onClose: () => v
   const row = note
     ? stackRows(windows, note.blocks, column).find((r) => r.id === NOTES_WINDOW_ID)
     : undefined;
+
+  // P11-17c rule 1: Escape closes the window when it is the front card of the stack, wherever the focus is — an open export menu first, as
+  // when the key is pressed inside it. Behind another card it answers nothing: one Escape, one card.
+  const takeEscape = useCallback(() => (menuOpen ? setMenuOpen(false) : onClose()), [menuOpen, onClose]);
+  useFrontEscape(NOTES_WINDOW_ID, !!note, takeEscape);
 
   useEffect(() => {
     if (!note) return;

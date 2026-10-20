@@ -24,6 +24,7 @@ import { citableFromPaper } from "@/lib/notes/cite";
 import type { ReadingNoteExtras } from "@/lib/notes/templates";
 import type { Citable, NoteAnchor } from "@/lib/notes/types";
 import { paragraphAnchor, type ExplainSelection } from "@/components/reader/paper-body";
+import { useFrontEscape } from "@/components/reader/front-escape";
 import { MarginCard } from "@/components/reader/margin-card";
 import { stackRows, useColumn, useWindows, type FloatingWindow, type StackFrame } from "@/lib/reader/windows";
 import { readingNoteFor, stripTagText, useLostPassages, useNotesStore, withoutSticky } from "@/store/notes";
@@ -74,7 +75,9 @@ export function StickyWindowView({
       aria-label={stickyTitle(n)}
       data-sticky={n}
       onKeyDown={(event) => {
-        if (event.key !== "Escape") return;
+        // Only the front card answers (P11-17c rule 1): one with only its header showing, behind another, lets the key go on to the document,
+        // where the front card takes it.
+        if (event.key !== "Escape" || !front) return;
         event.stopPropagation();
         event.preventDefault();
         onClose();
@@ -395,6 +398,20 @@ export function StickyNotes({ paper, reveal }: { paper: Paper; reveal: (run: () 
       if (w.kind === "sticky" && !note.blocks.some((b) => b.id === w.id && b.type === "h3" && b.anchor)) useWindows.getState().close(w.id);
     }
   }, [windows, note]);
+
+  // P11-17c rule 1: Escape closes the sticky that is the front card of the stack, wherever the focus is (the card's own key handler, above,
+  // answers only a key pressed inside it). The card behind it answers nothing: one Escape, one card. Which sticky is in front is asked when
+  // the key comes (`front-escape.ts`), so the listener stands for as long as any sticky does.
+  const noteId = note?.id;
+  const closeFront = useCallback(
+    (id: string) => {
+      if (!noteId) return;
+      openWriters.get(id)?.flush();
+      closeSticky(noteId, id);
+    },
+    [noteId],
+  );
+  useFrontEscape({ kind: "sticky" }, noteId !== undefined && windows.some((w: FloatingWindow) => w.kind === "sticky"), closeFront);
 
   const column = useColumn(windows.some((w: FloatingWindow) => w.kind === "sticky"));
   if (!note) return null;

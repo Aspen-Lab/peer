@@ -17,6 +17,8 @@
 // that was handled (`defaultPrevented`) and a modal dialog over the page (`MODAL_OVER_PAGE`: the lightbox, the shortcuts sheet). It is also
 // gated on being the front card — one Escape closes one card — and it stands from the moment the host mounts, so it is the first of the
 // document's Escape listeners when the explain card is open as well: the explain card's, which opened later, then finds the key handled.
+// P11-17c rule 1: that order no longer carries the rule. The explain card, a sticky and the notes window take the key only while they are the
+// front card too (`front-escape.ts`), so whichever listener runs first, exactly one card closes: the one in front.
 //
 // The store's key (`label:ordinal`) repeats across papers ("Figure 1:1"): the page mounts the host with `key={paper.id}` and the host closes
 // the figure when it unmounts, so a card never follows the reader to the next paper.
@@ -28,6 +30,7 @@ import { useMarginRect, type MarginRect } from "@/lib/reader/margin";
 import { stackLayout, useColumn, useWindows, type FloatingWindow, type StackFrame, type StackRow } from "@/lib/reader/windows";
 import { MODAL_OVER_PAGE } from "./explain-dock";
 import { FigureCard, FIGURE_WINDOW_ID } from "./figure-card";
+import { isFrontCard } from "./front-escape";
 import { FigureViewer } from "./figure-lightbox";
 import type { Size } from "./figure-zoom";
 
@@ -38,9 +41,7 @@ export function figureRowOf(windows: readonly FloatingWindow[], frame: StackFram
 
 /** Whether the figure card is the card in front — the window raised last. Pure. */
 export function figureIsFront(windows: readonly FloatingWindow[]): boolean {
-  let front: FloatingWindow | undefined;
-  for (const w of windows) if (!front || w.order > front.order) front = w;
-  return front?.id === FIGURE_WINDOW_ID;
+  return isFrontCard(windows, FIGURE_WINDOW_ID);
 }
 
 /** The X and Escape: the figure leaves the store and its window leaves the stack. A module-level function: the overlay's effects depend on its identity. */
