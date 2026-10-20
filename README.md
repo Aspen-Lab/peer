@@ -561,6 +561,12 @@ From [`AGENTS.md`](AGENTS.md):
 - **State the current branch** at the start of any session.
 - Open an issue first for anything larger than a bugfix so we can align on fit — especially
   new source adapters and anything touching the pipeline.
+- **Every commit names the person behind it**, including commits written by an AI agent
+  (see "Commit Attribution" in `AGENTS.md`).
+- **Outside contributions need the Contributor License Agreement.** A pull request from
+  anyone other than the two owners can be merged only after its author agrees to
+  [`docs/CLA.md`](docs/CLA.md). That agreement is still a draft, so outside pull requests
+  cannot be merged yet.
 
 ## License
 
@@ -580,7 +586,6 @@ General Public License for more details.
   [`docs/THIRD_PARTY_NOTICES.md`](docs/THIRD_PARTY_NOTICES.md).
 - The iOS prototype in the early history of this repository (the `Hermes` / `Peer` Xcode
   folders) is not part of Peer and is not covered by this license.
-
 
 ---
 
