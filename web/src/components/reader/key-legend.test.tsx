@@ -101,7 +101,8 @@ function spacing(classes: string[], prefix: string): number {
   throw new Error(`no ${prefix}-* class on the legend`);
 }
 
-/** From what window width an entry is shown: always, or from its `min-[Npx]:inline`. */
+/** From what window width an entry is shown: always, or from the width its min-width variant names. (Not spelled out
+ *  here: Tailwind reads test files too, and would make a class of it.) */
 function shownFrom(entry: Entry): number {
   if (!entry.classes.includes("hidden")) return 0;
   const from = entry.classes.map((c) => /^min-\[(\d+)px\]:inline$/.exec(c)?.[1]).find((n) => n !== undefined);

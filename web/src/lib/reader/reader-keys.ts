@@ -67,11 +67,13 @@ export const PAPER_KEYS: readonly PaperKey[] = [
   // P3-02b (§1h.3): open "Explain this?" on the selected passage, as its button
   // does. Typed into the box's own input, `e` is a letter.
   { keys: ["e"], action: "explain", label: "Explain the selected passage", short: "explain" },
+  // P11-17a (BACKLOG-98): `back`, not `briefing` — four characters the foot legend needs at 768 px; the label
+  // still says where back goes.
   {
     keys: ["Escape", "Backspace"],
     action: "back",
     label: "Back to the briefing",
-    short: "briefing",
+    short: "back",
   },
 ];
 
