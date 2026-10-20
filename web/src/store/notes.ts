@@ -13,7 +13,7 @@ import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Block, Citable, HighlightColourId, Note } from "@/lib/notes/types";
-import { anchorBlocks, anchorTextOnShow, blockAt, parseAnchorId, type AnchorSection } from "@/lib/notes/anchor-blocks";
+import { anchorBlocks, anchorTextOnShow, blockAt, isPageBlockId, parseAnchorId, type AnchorSection } from "@/lib/notes/anchor-blocks";
 import {
   HIGHLIGHT_QUOTE_MAX,
   citedKeys,
@@ -123,6 +123,9 @@ export interface AnchorFix {
  * paragraphs) has nothing to check and stays at its paragraph. Pure; the body is only read.
  * P11-27 (rule 2): a section's blocks are its paragraphs, then its heading, then its captions (`lib/notes/anchor-blocks.ts`): an
  * anchor on a heading or a caption is checked and searched like a paragraph's, among all of them.
+ * P11-28 (ruling §1h.123 (c)): an anchor on a block of the page — a Summary block or the answers (`isPageBlockId`) — is none of the paper's: the body does not
+ * hold its words, so it is kept as it is, with no search, never moved into a paragraph that happens to quote the same words, never called lost. The
+ * page block's own marks find it again by its quote (`findInBlock`) when the block is drawn.
  */
 export function resolveAnchors(
   body: readonly AnchorSection[],
@@ -133,6 +136,10 @@ export function resolveAnchors(
   const lost: string[] = [];
   const put = (paragraphId: string, spot: NoteAnchorMap[string][number]) => (map[paragraphId] ??= []).push(spot);
   for (const [paragraphId, spots] of Object.entries(anchors)) {
+    if (isPageBlockId(paragraphId)) {
+      for (const spot of spots) put(paragraphId, spot);
+      continue;
+    }
     const at = parseAnchorId(paragraphId);
     const [si, pj] = at ? [at.section, at.index] : [-1, -1];
     const text = at ? blockAt(body[si], pj)?.text : undefined;
@@ -157,6 +164,23 @@ export function resolveAnchors(
     }
   }
   return { map, fixes, lost };
+}
+
+/**
+ * P11-28 (ruling §1h.123 (c)): where a highlight's words stand in the words of a page block now (`readBlockText`) — the stored range while the block still holds
+ * its quote there (no search), else the quote's occurrence nearest the old place, else null: the block no longer holds them, and the mark is drawn nowhere, never
+ * on other words. The range ends at its last word, as a selection's does. Pure.
+ */
+export function findInBlock(text: string, spot: { start: number; end: number; quote: string }): { start: number; end: number } | null {
+  const { start, quote } = spot;
+  const held = anchorRange(text, spot);
+  if (held) return held;
+  let best: { start: number; end: number } | null = null;
+  for (let place = locatePassage(text, quote); place; place = locatePassage(text, quote, place.start + 1)) {
+    const range = anchorRange(text, { ...place, quote });
+    if (range && (!best || Math.abs(range.start - start) < Math.abs(best.start - start))) best = range;
+  }
+  return best;
 }
 
 function paragraphAnchorId(section: number, paragraph: number): string {

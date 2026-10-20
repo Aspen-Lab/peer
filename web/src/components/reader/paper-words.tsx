@@ -11,6 +11,7 @@ import type { Claim, PaperReportBasis } from "@/lib/papers/report";
 import type { PaperReading } from "@/lib/papers/reading";
 import { pickClaimMark } from "@/lib/papers/skim";
 import { ScrambleText } from "@/components/scramble-text";
+import { BlockMarks } from "@/components/notes/block-marks";
 import { AbstractToggle } from "./abstract-toggle";
 import { SECTION_GAP } from "@/components/ui/band";
 import { SectionAttribution } from "./evidence-quote";
@@ -54,11 +55,13 @@ export const SUMMARY_ID = {
  * centre column drops the top gap of the first block it opens with (`reader-layout.tsx`: `[&>:first-child>:first-child>:first-child]:mt-0`), which is
  * the block's own element, and with this around it is this element. A block that can open the column (the lead claim, the abstract's toggle: a paper
  * with no body) therefore hands its top gap to this element (`className`), so the column's rule drops it as it did.
+ * P11-28 (ruling §1h.123 (c)): the block draws the marks of the highlights anchored to it (`BlockMarks`, which renders nothing: the markup is what it was).
  */
 export function SummaryBlock({ id, className, children }: { id: string; className?: string; children?: ReactNode }) {
   return children ? (
     <div id={id} className={className ? `${className} ${SCROLL_GAP}` : SCROLL_GAP}>
       {children}
+      <BlockMarks id={id} />
     </div>
   ) : null;
 }
@@ -144,6 +147,7 @@ function Deck({
         </p>
       ))}
       <p className={FOOTER_CLASS}>{skimFooter(basis)}</p>
+      <BlockMarks id={SUMMARY_ID.skim} />
     </div>
   );
 }
@@ -191,6 +195,7 @@ export function PaperWords({
         <p ref={endRef} className={FOOTER_CLASS}>
           {TLDR_LINE}
         </p>
+        <BlockMarks id={SUMMARY_ID.tldr} />
       </div>
     );
   }

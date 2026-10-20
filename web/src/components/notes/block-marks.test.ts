@@ -2,12 +2,13 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readBlockText } from "@/lib/notes/anchor-blocks";
 import { readHighlight } from "@/lib/notes/blocks";
 import { contrast, highlightPaint } from "@/lib/notes/highlight-colours";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
 import { TextDomNode, el, show, textNodesOf } from "@/test-support/fake-text-dom";
-import { BLOCK_MARK_ATTRIBUTE, BlockMarks, markClickOf, paintBlock, spotsForBlock, unpaintBlock, watchBlock, type MarkSpot, type PaintEnv } from "./block-marks";
+import { BLOCK_MARK_ATTRIBUTE, BlockMarks, domTextEnv, markClickOf, paintBlock, spotsForBlock, unpaintBlock, watchBlock, type MarkSpot, type PaintEnv } from "./block-marks";
 
 // P11-28 (owner item 8; round 1 Theme B readers r1, r2; ruling §1h.123 (c)): the marks of a highlight on a Summary block or an answer. The page draws their
 // words from many components, so the marks cannot be drawn by each of them: a painter reads the block's words (`anchor-blocks.ts`), finds each highlight's
@@ -34,7 +35,7 @@ describe("paintBlock — the words wrapped in a mark", () => {
     const out = paintBlock(root as never, [spot("h1", "held more water")], env);
     expect(show(root)).toBe("<div>The deeper layers <mark h=h1>held more water</mark>, and the shallow ones less.</div>");
     expect(root.textContent).toBe(TEXT);
-    expect(out).toEqual({ drawn: ["h1"], fixes: [] });
+    expect(out).toEqual({ drawn: ["h1"], fixes: [], text: TEXT });
     const [mark] = marks(root);
     expect(mark.attrs).toMatchObject({ "data-highlight": "h1", [BLOCK_MARK_ATTRIBUTE]: "" });
     expect(mark.styles).toEqual({ "background-color": "#ffe600", color: "#000000" });
@@ -134,7 +135,7 @@ describe("paintBlock — the words wrapped in a mark", () => {
     const root = block("Nothing alike is said here.");
     const before = TextDomNode.splits;
     const out = paintBlock(root as never, [spot("h1", "held more water", { start: 4, end: 19 })], env);
-    expect(out).toEqual({ drawn: [], fixes: [] });
+    expect(out).toEqual({ drawn: [], fixes: [], text: "Nothing alike is said here." });
     expect(show(root)).toBe("<div>Nothing alike is said here.</div>");
     expect(TextDomNode.splits).toBe(before);
   });
@@ -150,7 +151,7 @@ describe("paintBlock — the words wrapped in a mark", () => {
     const root = block();
     const isBlock = vi.fn(() => false);
     const before = TextDomNode.splits;
-    expect(paintBlock(root as never, [], { ...env, isBlock })).toEqual({ drawn: [], fixes: [] });
+    expect(paintBlock(root as never, [], { ...env, isBlock })).toEqual({ drawn: [], fixes: [], text: null });
     expect(isBlock).not.toHaveBeenCalled();
     expect(TextDomNode.splits).toBe(before);
     expect(show(root)).toBe("<div>" + TEXT + "</div>");
@@ -198,11 +199,17 @@ describe("watchBlock — the marks follow the note and the block", () => {
     const noteId = useNotesStore.getState().ensureReadingNote(PAPER);
     return useNotesStore.getState().addHighlight(noteId, { paperId: "p1", paragraphId, passage, paragraphText })!;
   };
+  // A watcher follows the one store: each test stops what it started, or the next test's note would be repaired for this test's block.
+  const started: Array<() => void> = [];
+  afterEach(() => {
+    while (started.length > 0) started.pop()!();
+  });
   function watched(root: TextDomNode) {
     let told: () => void = () => {};
     const stop = vi.fn();
     const forget = vi.fn();
     const stopWatching = watchBlock(root as never, { paperId: "p1", blockId: ID }, { ...env, observe: (_root, cb) => ((told = cb), { stop, forget }) });
+    started.push(stopWatching);
     return { stopWatching, changed: () => told(), stop, forget };
   }
 
@@ -275,12 +282,57 @@ describe("watchBlock — the marks follow the note and the block", () => {
     expect(highlightOf(made.id).quote).toBe("held more water");
   });
 
+  it("leaves the marks as they are when the block changes and its words do not (the square's flash puts a class on a mark): drawing again would take away what it flashed", () => {
+    make("held more water");
+    const root = block();
+    const watching = watched(root);
+    const [mark] = marks(root);
+    const before = TextDomNode.splits;
+    mark.setAttribute("class", "outline outline-2 outline-accent");
+    root.setAttribute("class", "bg-accent-dim");
+    watching.changed();
+    expect(marks(root)).toEqual([mark]);
+    expect(mark.attrs.class).toBe("outline outline-2 outline-accent");
+    expect(TextDomNode.splits).toBe(before);
+  });
+
+  it("draws again, whole, when React put a fresh node of the same words where its node was: the pieces the painter left would double the words", () => {
+    make("held more water");
+    const root = block();
+    const watching = watched(root);
+    const [original] = textNodesOf(root);
+    root.removeChild(original);
+    root.insertBefore(new TextDomNode(3, "#text", TEXT), root.childNodes[0]);
+    expect(root.textContent.length).toBeGreaterThan(TEXT.length);
+    watching.changed();
+    expect(root.textContent).toBe(TEXT);
+    expect(marks(root)).toHaveLength(1);
+    expect(show(root)).toMatch(/^<div>The deeper layers <mark h=[^>]+>held more water<\/mark>, and the shallow ones less\.<\/div>$/);
+  });
+
   it("repairs the note's range when it found the words elsewhere, so the next load needs no search", async () => {
     const made = make("held more water");
     const root = block(`A new opening sentence. ${TEXT}`);
     watched(root);
     await Promise.resolve();
     expect(highlightOf(made.id)).toMatchObject({ paragraphId: ID, start: 42, end: 57, quote: "held more water" });
+  });
+
+  it("watches the block only while it has a highlight to draw: no observer for a block with none, one from the first, taken off again with the last", () => {
+    const observe = vi.fn(() => ({ stop: vi.fn(), forget: vi.fn() }));
+    const root = block();
+    started.push(watchBlock(root as never, { paperId: "p1", blockId: ID }, { ...env, observe }));
+    expect(observe).not.toHaveBeenCalled();
+    const made = make("held more water");
+    expect(observe).toHaveBeenCalledTimes(1);
+    const watch = observe.mock.results[0].value as { stop: ReturnType<typeof vi.fn> };
+    make("shallow ones");
+    expect(observe).toHaveBeenCalledTimes(1);
+    useNotesStore.getState().removeHighlight(noteOf().id, made.id);
+    expect(watch.stop).not.toHaveBeenCalled();
+    for (const b of noteOf().blocks.filter((x) => x.type === "highlight")) useNotesStore.getState().removeHighlight(noteOf().id, b.id);
+    expect(watch.stop).toHaveBeenCalledTimes(1);
+    expect(marks(root)).toHaveLength(0);
   });
 
   it("stops: the marks are taken away, the observer is stopped, and the note's changes are no longer followed", () => {
@@ -315,6 +367,38 @@ describe("markClickOf — a click on a drawn highlight", () => {
     expect(markClickOf(inner, { isCollapsed: false })).toBeNull();
     expect(markClickOf(null, collapsed)).toBeNull();
     expect(markClickOf({}, collapsed)).toBeNull();
+  });
+});
+
+describe("domTextEnv — the page's answers to the text model", () => {
+  const styled = (styles: (node: TextDomNode) => Record<string, string>) => vi.stubGlobal("getComputedStyle", (node: TextDomNode) => ({ display: "inline", textTransform: "none", ...styles(node) }));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("has the model's defaults where there is no browser's style", () => {
+    expect(domTextEnv()).toEqual({});
+  });
+
+  it("reads a text node as its style draws it: capitals, lower case, a capital to each word — and as it is for none", () => {
+    const data = "How it's a-b.\nÉcole";
+    const drawn = { uppercase: "HOW IT'S A-B.\nÉCOLE", lowercase: "how it's a-b.\nécole", capitalize: "How It's A-B.\nÉcole", none: data };
+    for (const [transform, expected] of Object.entries(drawn)) {
+      styled(() => ({ textTransform: transform }));
+      const parent = el("span", {}, data);
+      expect(domTextEnv().textOf!(parent.childNodes[0] as never), transform).toBe(expected);
+    }
+  });
+
+  it("reads a block by the display its style gives: a line of its own unless inline, a hidden element and a formula as such", () => {
+    styled((node) => (node.nodeName === "SPAN" ? { display: "inline" } : node.nodeName === "ASIDE" ? { display: "none" } : { display: "block" }));
+    const root = el("div", {}, el("p", {}, "one"), el("span", {}, "two"), el("aside", {}, "gone"), el("p", { class: "katex" }, "x"), el("p", {}, "three"));
+    const env = domTextEnv();
+    expect(env.isBlock!(root.childNodes[0] as never)).toBe(true);
+    expect(env.isBlock!(root.childNodes[1] as never)).toBe(false);
+    expect(env.isHidden!(root.childNodes[2] as never)).toBe(true);
+    expect(env.isHidden!(root.childNodes[0] as never)).toBe(false);
+    expect(env.isFormula!(root.childNodes[3] as never)).toBe(true);
+    expect(env.isFormula!(root.childNodes[4] as never)).toBe(false);
+    expect(readBlockText(root as never, env).text).toBe("one two \u0000 three");
   });
 });
 

@@ -23,6 +23,9 @@ export class TextDomNode {
   get id(): string {
     return this.attrs.id ?? "";
   }
+  get parentElement(): TextDomNode | null {
+    return this.parentNode && this.parentNode.nodeType === 1 ? this.parentNode : null;
+  }
   get firstChild(): TextDomNode | null {
     return this.childNodes[0] ?? null;
   }
@@ -84,8 +87,8 @@ export class TextDomNode {
     return matchesAttr(this, selector);
   }
   closest(selector: string): TextDomNode | null {
-    for (let at: TextDomNode | null = this; at; at = at.parentNode) if (at.nodeType === 1 && matchesAttr(at, selector)) return at;
-    return null;
+    if (this.nodeType === 1 && matchesAttr(this, selector)) return this;
+    return this.parentNode ? this.parentNode.closest(selector) : null;
   }
   querySelectorAll(selector: string): TextDomNode[] {
     const out: TextDomNode[] = [];

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as anchorBlocks from "@/lib/notes/anchor-blocks";
 import { highlightIsLost } from "./highlight-row";
 import * as tags from "./note-tags";
@@ -63,5 +63,54 @@ describe("the Summary's host tells the painter which paper is on show", () => {
     expect(tags.useBlockPaper.getState().paperId).toBe("p2");
     next();
     expect(tags.useBlockPaper.getState().paperId).toBeNull();
+  });
+});
+
+describe("going to a highlight on a page block", () => {
+  /** An element with a scroll and a class list, answering `querySelectorAll` with the marks it is given. */
+  interface Box {
+    scrollIntoView: ReturnType<typeof vi.fn>;
+    classes: Set<string>;
+    classList: { add: (...c: string[]) => void; remove: (...c: string[]) => void };
+    querySelectorAll: () => Box[];
+  }
+  function box(marks: Box[] = []): Box {
+    const classes = new Set<string>();
+    return {
+      scrollIntoView: vi.fn(),
+      classes,
+      classList: { add: (...c: string[]) => c.forEach((x) => classes.add(x)), remove: (...c: string[]) => c.forEach((x) => classes.delete(x)) },
+      querySelectorAll: () => marks,
+    };
+  }
+  const goal = (paragraphId: string) => ({ paperId: "p1", paragraphId, highlightId: "h1" });
+  const go = (target: Box | null, paragraphId: string) =>
+    tags.goToPassage(goal(paragraphId), { doc: { getElementById: () => target } as unknown as Document, navigate: () => {} });
+
+  it("scrolls to the first of its marks, centred — a tall block (the answers) can hold the words far below its top — and flashes the marks, not the block", () => {
+    const [one, two] = [box(), box()];
+    const block = box([one, two]);
+    go(block, "answers-block");
+    expect(one.scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "center" });
+    expect(block.scrollIntoView).not.toHaveBeenCalled();
+    expect([...one.classes]).toContain("outline-accent");
+    expect([...two.classes]).toContain("outline-accent");
+    expect(block.classes.size).toBe(0);
+  });
+
+  it("scrolls to the block's top and flashes the block when none of its marks is drawn (the words are not in the block now), as it did", () => {
+    const block = box();
+    go(block, "summary-method");
+    expect(block.scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+    expect([...block.classes]).toContain("bg-accent-dim");
+  });
+
+  it("scrolls a paragraph's highlight to the paragraph's top, as it did", () => {
+    const [mark, paragraph] = [box(), box()];
+    paragraph.querySelectorAll = () => [mark];
+    go(paragraph, "paper-section-1-p2");
+    expect(paragraph.scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+    expect(mark.scrollIntoView).not.toHaveBeenCalled();
+    expect([...mark.classes]).toContain("outline-accent");
   });
 });

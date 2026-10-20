@@ -19,8 +19,9 @@
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { useCallback, useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { create } from "zustand";
 import type { PaperReading } from "@/lib/papers/reading";
-import type { AnchorSection } from "@/lib/notes/anchor-blocks";
+import { ANSWERS_BLOCK_ID, SUMMARY_ID_PREFIX, isPageBlockId, type AnchorSection } from "@/lib/notes/anchor-blocks";
 import { stickyTitle } from "@/lib/notes/blocks";
 import type { HighlightColourId, NoteAnchor } from "@/lib/notes/types";
 import { useWindows } from "@/lib/reader/windows";
@@ -186,20 +187,30 @@ export function registerPassageHost(next: PassageHost): () => void {
 // ── The Summary's blocks and the answers' block (P11-17b, rule 3) ─────────
 
 /**
- * The ids of the Summary's blocks begin with this (`paper-words.tsx`'s `SUMMARY_ID`). They stand only under the "Summary" tab, where the paper's
- * paragraphs (`paper-section-N-pM`) stand only under "Paper digestion": `goToPassage` asks the right host to bring the right tab back.
+ * The ids of the Summary's blocks begin with `SUMMARY_ID_PREFIX` (`paper-words.tsx`'s `SUMMARY_ID`). They stand only under the "Summary" tab, where the paper's
+ * paragraphs (`paper-section-N-pM`) stand only under "Paper digestion": `goToPassage` asks the right host to bring the right tab back. The answers under the
+ * question are one block, `ANSWERS_BLOCK_ID`, `for-your-questions.tsx`'s section; it stands under both tabs (the common slot), so no tab is brought back.
+ * P11-28: the two are defined with the page-block text model (`lib/notes/anchor-blocks.ts`), which the notes store shares, and re-exported here as they were.
  */
-export const SUMMARY_ID_PREFIX = "summary-";
-/** The answers under the question: one block, `for-your-questions.tsx`'s section. It stands under both tabs (the common slot), so no tab is brought back. */
-export const ANSWERS_BLOCK_ID = "answers-block";
+export { ANSWERS_BLOCK_ID, SUMMARY_ID_PREFIX };
 
 let summaryHost: PassageHost | null = null;
+
+/**
+ * P11-28: the paper whose reading page is on show, told by the Summary's host. A Summary block and the answers draw the marks of the paper's highlights
+ * (`block-marks.ts`), and a block does not know which paper it belongs to: the page registers the host with the paper's id, so the host says it. Null with no
+ * reading page. Not persisted, not per-user data.
+ */
+export const useBlockPaper = create<{ paperId: string | null }>()(() => ({ paperId: null }));
 
 /** The reading page registers how to bring the Summary tab back (`useSummaryHost`); the returned function takes it off again (identity-guarded). */
 export function registerSummaryHost(next: PassageHost): () => void {
   summaryHost = next;
+  useBlockPaper.setState({ paperId: next.paperId });
   return () => {
-    if (summaryHost === next) summaryHost = null;
+    if (summaryHost !== next) return;
+    summaryHost = null;
+    useBlockPaper.setState({ paperId: null });
   };
 }
 
@@ -259,7 +270,6 @@ export function goToPassage(
   const run = (): boolean => {
     const el = env.doc.getElementById(anchor.paragraphId);
     if (!el) return false;
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
     // P10-09f (rule 3): the paragraph is scrolled to as before (it holds every mark of the note, so its top is at or
     // before the first of them in reading order); the flash lands on the marked words when the paragraph draws a mark
     // for this note, else on the whole paragraph. P10-46: a note's words can stand in more than one mark — the first
@@ -273,6 +283,11 @@ export function goToPassage(
         : anchor.start !== undefined
           ? Array.from(el.querySelectorAll(`mark[data-note="${anchor.n}"], mark[data-note-part="${anchor.n}"]`))
           : [];
+    // P11-28: a highlight on a page block — a Summary block, the answers — can stand far down a tall block (the answers are one): the first of its marks is scrolled
+    // to, centred; the block's top is scrolled to for everything else, as it always was.
+    const inPageBlock = "highlightId" in anchor && isPageBlockId(anchor.paragraphId) ? marks[0] : undefined;
+    if (inPageBlock) inPageBlock.scrollIntoView({ behavior: "smooth", block: "center" });
+    else el.scrollIntoView({ behavior: "smooth", block: "start" });
     if (marks.length > 0) for (const mark of marks) flash(mark, MARK_FLASH_CLASSES);
     else flash(el);
     return true;
@@ -362,6 +377,8 @@ export function storedBodyOf(paperId: string, storage?: Pick<Storage, "getItem">
  * show). The same search the paper's body makes (`resolveAnchors`). A note with no range has nothing to check.
  */
 export function passageIsLost(anchor: NoteAnchor, id: string, lost: Readonly<Record<string, true>>, body: Body | null): boolean {
+  // P11-28: a Summary block's or the answers' words are the page's, not the paper's body, which never holds them: nothing off the page can say they are gone.
+  if (isPageBlockId(anchor.paragraphId)) return false;
   if (lost[id] === true) return true;
   if (!body || anchor.start === undefined || anchor.end === undefined) return false;
   const { start, end, quote, n, paragraphId } = anchor;

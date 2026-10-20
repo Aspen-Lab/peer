@@ -51,6 +51,23 @@ describe("readBlockText — the words of a block", () => {
     expect(read.text).toBe("left right \u0000");
   });
 
+  it("reads a line break as a line of its own: the words either side of it are a space apart, as a selection reads them", () => {
+    expect(readBlockText(el("p", {}, "First", el("br"), "second")).text).toBe("First second");
+    expect(readBlockText(el("p", {}, "First ", el("br"), " second")).text).toBe("First second");
+  });
+
+  it("reads a text node as the page draws it when the environment says so (a label set in capitals is read as capitals by a selection), by the same characters", () => {
+    const label = text("How it was done");
+    const root = el("div", {}, el("span", {}, label), el("span", {}, " and more"));
+    const read = readBlockText(root, { textOf: (node) => (node === label ? node.data.toUpperCase() : node.data) });
+    expect(read.text).toBe("HOW IT WAS DONE and more");
+    expect(read.runs[0].node).toBe(label);
+    expect(rawSpanOf(read.runs[0], 0, 10)).toEqual({ start: 0, end: 10 });
+    // a drawing that changes the number of characters would put every later character out of place: the node's own data stands
+    expect(readBlockText(el("div", {}, "Straße"), { textOf: () => "STRASSE" }).text).toBe("Straße");
+    expect(readBlockText(el("div", {}, "plain"), { textOf: () => undefined as never }).text).toBe("plain");
+  });
+
   it("leaves out what the selection reader leaves out: scripts, styles, hidden elements and a superscript's words", () => {
     const root = el("div", {}, "a", el("script", {}, "var x"), el("style", {}, ".y{}"), el("span", { hidden: "" }, "hid"), el("sup", {}, "[3]"), "b");
     expect(readBlockText(root).text).toBe("ab");
