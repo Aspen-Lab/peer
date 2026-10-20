@@ -38,6 +38,15 @@
 // space; the meta may wrap under the heading rather than squeeze it. And where there is no hover the
 // map's toggles — "show map" / "hide map" and each row's fold — are 44 px tall (the P9-23 rule).
 //
+// P11-23 rule 2 (A P11-21 X-A2; ruling §1h.120): in the left pane (a 284-px text column at its 320-px default, 236 at the 280 a first visit has
+// at 1024, 192 at 240) the meta broke between two parts and the line below it opened with "· 11 min". The separator now belongs to the part BEFORE
+// it ("setup ·", "p.1 ·"): each part ends with its own, in a slot of fixed width (2ch — the meta is monospace), and the meta sits in a box that
+// clips the slot's width off its right edge, which is where a right-aligned line's last part ends: so a separator between two parts on one line
+// shows, and the one that would end a line is dropped. The text a reader or a copy gets is the same words, separators and spaces as before.
+// The break has two places, not three: the role and page ("setup · p.1") and the words and minutes ("1,234 words · 6 min") stay whole, so a
+// narrow pane gets those two lines and not "6 min" alone. The one column draws the same markup; where nothing breaks it is pixel for pixel
+// what it was.
+//
 // P10-04 (review 3.3; A10): the paper's own hierarchy. A row has its `level` (1 for "2.", 2 for "2.1", 3 for
 // "2.1.1") and is indented one step per level, in the one list (an inline padding, not a nested table, so the
 // keyboard walks the rows in order). A row with no paragraphs of its own that has rows under it is a group
@@ -176,6 +185,47 @@ function metaParts(row: ReadingMapSection, role: string | null) {
     { name: "words", text: MAP.words(row.words) },
     ...(row.minutes > 0 ? [{ name: "minutes", text: MAP.minutes(row.minutes) }] : []),
   ];
+}
+
+/**
+ * P11-23 rule 2: the meta's parts in the two runs that stay whole — where the section is ("setup · p.1") and how long it is ("1,234 words ·
+ * 6 min") — the only place a line may break being the space between the two. A run with no part (no role and no page) is left out.
+ */
+function metaRuns(parts: ReturnType<typeof metaParts>) {
+  const runs = [
+    { name: "place", parts: parts.filter((part) => part.name === "role" || part.name === "page") },
+    { name: "size", parts: parts.filter((part) => part.name === "words" || part.name === "minutes") },
+  ];
+  return runs.filter((run) => run.parts.length > 0);
+}
+
+/** P11-23 rule 2: the row's meta, drawn so that a break never leaves a separator at the start of a line (see the box's comment in the row). */
+function MetaLine({ parts }: { parts: ReturnType<typeof metaParts> }) {
+  const last = parts[parts.length - 1];
+  return (
+    <span className="annotation ml-auto min-w-0 max-w-full overflow-x-clip text-right text-text-faint">
+      <span className="block -mr-[2ch]">
+        {metaRuns(parts).map((run, runIndex) => (
+          <Fragment key={run.name}>
+            {runIndex > 0 ? " " : null}
+            <span data-meta-run={run.name} className="whitespace-nowrap">
+              {run.parts.map((part, index) => (
+                <Fragment key={part.name}>
+                  {index > 0 ? " " : null}
+                  <span data-meta-part={part.name} className="whitespace-nowrap">
+                    {part.text}
+                  </span>
+                  <span data-meta-slot="" className="inline-block w-[2ch] whitespace-pre">
+                    {part === last ? null : " ·"}
+                  </span>
+                </Fragment>
+              ))}
+            </span>
+          </Fragment>
+        ))}
+      </span>
+    </span>
+  );
 }
 
 export function ReadingMapView({
@@ -350,20 +400,13 @@ export function ReadingMapView({
                     >
                       <MathText text={row.heading} />
                     </a>
-                    {/* P9-51 (F08): role · page · words · minutes. Each part keeps itself whole and owns the
-                        separator that introduces it; the one plain space between two parts is the only place
-                        the line may break, so no line ends on "·". The group drops under the heading, right
-                        aligned as it was beside it, when the heading would be left too little room. */}
-                    <span className="annotation ml-auto min-w-0 max-w-full text-right text-text-faint">
-                      {metaParts(shown, role).map((part, index) => (
-                        <Fragment key={part.name}>
-                          {index > 0 ? " " : null}
-                          <span data-meta-part={part.name} className="whitespace-nowrap">
-                            {index > 0 ? `· ${part.text}` : part.text}
-                          </span>
-                        </Fragment>
-                      ))}
-                    </span>
+                    {/* P9-51 (F08): role · page · words · minutes. P11-23 rule 2: each part owns the separator that FOLLOWS it
+                        (a slot 2ch wide, the last part's empty), the two runs (place, size) are whole, and the one plain space
+                        between them is the only place a line may break. The box clips what hangs 2ch past its right edge — the
+                        slot of the part that ends a line, for the lines are right-aligned — so no line opens with "·" and none
+                        ends with one. The meta drops under the heading, right aligned as it was beside it, when the heading
+                        would be left too little room. */}
+                    <MetaLine parts={metaParts(shown, role)} />
                   </div>
                 </div>
                 {/* Peer's words: the tier and the counts behind it. */}
