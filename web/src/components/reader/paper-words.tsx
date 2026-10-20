@@ -19,6 +19,9 @@ import { ABSTRACT_FOOTER, TLDR_LINE, attribution, skimFooter } from "./copy";
 
 const FOOTER_CLASS = "annotation text-text-faint mt-2";
 
+/** The room kept above a block the notes' blue square scrolls to: the masthead is 48 px and sticky, and a body paragraph keeps 80 (`scroll-mt-20`). No layout. */
+const SCROLL_GAP = "scroll-mt-20";
+
 /**
  * P11-17b (rule 3; C P11-14's defect (c), second half): the Summary's blocks have stable, unique ids. A note taken on a Summary selection is
  * anchored by the id the selection reports for its block (`block.id || container.id || kind`, `paper-body.tsx`), and the notes' blue square scrolls
@@ -54,7 +57,7 @@ export const SUMMARY_ID = {
  */
 export function SummaryBlock({ id, className, children }: { id: string; className?: string; children?: ReactNode }) {
   return children ? (
-    <div id={id} className={className}>
+    <div id={id} className={className ? `${className} ${SCROLL_GAP}` : SCROLL_GAP}>
       {children}
     </div>
   ) : null;
@@ -112,7 +115,7 @@ function Deck({
   return (
     <div
       id={SUMMARY_ID.skim}
-      className="animate-fade-in-up"
+      className={`${SCROLL_GAP} animate-fade-in-up`}
       style={{ "--i": 0 } as React.CSSProperties}
     >
       {scramble ? (
@@ -181,7 +184,7 @@ export function PaperWords({
     const tldr = reading.provenance.tldr;
     if (!tldr) return null;
     return (
-      <div id={SUMMARY_ID.tldr}>
+      <div id={SUMMARY_ID.tldr} className={SCROLL_GAP}>
         <p className="font-reading text-lead leading-[1.6] text-text-muted measure-paper mt-10 reading-justify">
           {tldr}
         </p>

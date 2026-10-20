@@ -52,12 +52,20 @@ const words = (props: Partial<Parameters<typeof PaperWords>[0]> & { reading: Pap
 describe("SummaryBlock", () => {
   it("is the block's own element, under its id, around whatever the block draws", () => {
     const html = renderToStaticMarkup(createElement(SummaryBlock, { id: "summary-x" }, createElement("section", null, "Words")));
-    expect(html).toBe('<div id="summary-x"><section>Words</section></div>');
+    expect(html).toBe('<div id="summary-x" class="scroll-mt-20"><section>Words</section></div>');
   });
 
-  it("carries the class it is given, and none when it is given none", () => {
-    expect(renderToStaticMarkup(createElement(SummaryBlock, { id: "summary-x", className: "mt-12" }, createElement("section", null, "Words")))).toBe('<div id="summary-x" class="mt-12"><section>Words</section></div>');
-    expect(renderToStaticMarkup(createElement(SummaryBlock, { id: "summary-x" }, createElement("section", null, "Words")))).not.toContain("class=");
+  it("carries the class it is given, and always the room the notes' blue square keeps above the block it scrolls to (the sticky masthead's 80 px, as a body paragraph has)", () => {
+    expect(renderToStaticMarkup(createElement(SummaryBlock, { id: "summary-x", className: "mt-12" }, createElement("section", null, "Words")))).toBe('<div id="summary-x" class="mt-12 scroll-mt-20"><section>Words</section></div>');
+  });
+
+  it("every block of the Summary and the answers keeps that room above it: the words' own roots, the wrappers, the answers' section", () => {
+    const withSkim = words({ reading: reading(), skim: SKIM, basis: "model-fulltext", quotedSkim: [] });
+    const tldr = words({ reading: reading({ sentences: [], introCount: 0 }, "An invented one-line summary of the paper.") });
+    const claim = words({ reading: reading() });
+    for (const html of [withSkim, tldr, claim]) for (const found of html.matchAll(/<div id="(summary-[a-z-]+)"([^>]*)>/g)) expect(found[2], found[1]).toContain("scroll-mt-20");
+    const report: Pick<PaperReport, "forYourQuestions"> = { forYourQuestions: [{ question: "Does the layer hold water?", verdict: "answered", answers: [], readNext: [] }] };
+    expect(renderToStaticMarkup(createElement(ForYourQuestions, { report, map: undefined }))).toMatch(/<section id="answers-block" class="[^"]*scroll-mt-20/);
   });
 
   it("draws nothing around nothing: a block that is not there leaves no empty element behind", () => {

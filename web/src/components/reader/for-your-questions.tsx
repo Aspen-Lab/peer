@@ -93,7 +93,7 @@ export function ForYourQuestions({
 
   return (
     // P11-17b (rule 3): the answers are one block of the answers' explain container, under a stable id the selection reports and the notes' blue square goes to.
-    <section id={ANSWERS_BLOCK_ID} className="mt-4 animate-fade-in-up" style={{ "--i": 0 } as React.CSSProperties}>
+    <section id={ANSWERS_BLOCK_ID} className="mt-4 scroll-mt-20 animate-fade-in-up" style={{ "--i": 0 } as React.CSSProperties}>
       <button
         type="button"
         aria-expanded={open}
