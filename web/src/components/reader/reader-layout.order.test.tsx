@@ -169,10 +169,29 @@ describe("ReaderLayout, the three panes, a paper with a body (R10; P11-16)", () 
   const html = tabbed(true, { ...PANES, map: mark("MAP") });
   const { fixed, scroll, column, left, centre, margin } = panes(html);
 
-  it("the fixed zone: the reading controls, the title, the commands, the tab strip — in that order, and nothing else", () => {
-    expect(fixed.indexOf('aria-label="Reading controls"')).toBeGreaterThan(-1);
-    expect(ascending([fixed.indexOf('aria-label="Reading controls"'), ...order(fixed, ["TITLE", "DECISION", "TABS"])])).toBe(true);
+  // P11-16 follow-up (ruling §1h.115 item 2), RE-AIMED from "the fixed zone: the reading controls, the title, the commands, the tab strip": the
+  // shell has a header slot now, and the reading controls stand in the pane's header row beside the pin button — in the DOM order the reader
+  // sees, the pin first — so the fixed zone is the title, the commands and the strip.
+  it("the fixed zone: the title, the commands, the tab strip — in that order, and nothing else", () => {
+    expect(fixed).not.toContain('aria-label="Reading controls"');
+    expect(ascending(order(fixed, ["TITLE", "DECISION", "TABS"]))).toBe(true);
     for (const name of ["MAP", "PLATE", "DETAILS", "COMMON", "WORDS", "ADDITIONS", "NEXT"]) expect(fixed).not.toContain(`data-mark="${name}"`);
+  });
+
+  it("the pane's header row holds the pin and collapse button and then the reading controls, once, before the fixed zone", () => {
+    const row = html.slice(html.indexOf("data-reader-left-header"), html.indexOf("data-reader-left-fixed"));
+
+    expect(ascending([row.indexOf("reader-pin-button"), row.indexOf('aria-label="Reading controls"')])).toBe(true);
+    expect(html.split('aria-label="Reading controls"').length - 1).toBe(1);
+    // Nothing of the paper's blocks in the header.
+    for (const name of ["TITLE", "DECISION", "TABS", "MAP", "PLATE", "DETAILS"]) expect(row).not.toContain(`data-mark="${name}"`);
+  });
+
+  it("a paper with no strip and no map has the same header row: the controls beside the pin, then the title", () => {
+    const bare = render(true, PANES);
+    const row = bare.slice(bare.indexOf("data-reader-left-header"), bare.indexOf('data-mark="TITLE"'));
+
+    expect(ascending([row.indexOf("reader-pin-button"), row.indexOf('aria-label="Reading controls"')])).toBe(true);
   });
 
   it("the scroll zone: the map first, then the plate, then the details — and none of the fixed zone's or the column's blocks", () => {
@@ -372,7 +391,9 @@ describe("reader-layout.tsx source (P7-14)", () => {
     // Nothing stands between the title and the commands but the opening of the wrapper that tightens their gap.
     expect(fixed.slice(fixed.indexOf("{p.title}") + "{p.title}".length, fixed.indexOf("{p.decision}")).replace(/<div className="[^"]*">/g, "").trim()).toBe("");
     expect(fixed.indexOf("{p.tabs}")).toBeGreaterThan(fixed.indexOf("{p.decision}"));
-    expect(fixed.indexOf("<ReadingControls")).toBeLessThan(fixed.indexOf("{p.title}"));
+    // The reading controls are the shell's `header`, beside the pin — not a block of either zone.
+    expect(fixed).not.toContain("<ReadingControls");
+    expect(spread).toContain("header={<ReadingControls spread />}");
     expect(fixed).not.toContain("{p.map}");
     expect(scroll.indexOf("{p.plate}")).toBeGreaterThan(scroll.indexOf("{p.map}"));
     expect(scroll.indexOf("{p.details}")).toBeGreaterThan(scroll.indexOf("{p.plate}"));

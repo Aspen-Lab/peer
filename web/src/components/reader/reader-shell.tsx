@@ -15,7 +15,7 @@ import { fitPanes } from "./pane-layout";
 //
 // The shell places blocks; it renders none of them. `left` is either `{ fixed, scroll }` — a zone that never scrolls (the title, the
 // commands, the tabs) and a zone that is the only scroller of the pane (the map) — or `{ whole }`, a pane that scrolls as one;
-// `centre` is the paper's text. Below 1024 css px the page is today's one column and this component is not mounted (`useSpread`,
+// `centre` is the paper's text; `header` is what shares the pane's top row with the pin button (the reading controls). Below 1024 css px the page is today's one column and this component is not mounted (`useSpread`,
 // `spread.ts`).
 //
 // The left pane has three states, `data-state` on one DOM node — nothing unmounts, so the map's open rows, the decision block's observer
@@ -54,6 +54,9 @@ export type ReaderShellLeft = { fixed: ReactNode; scroll: ReactNode } | { whole:
 export interface ReaderShellProps {
   left: ReaderShellLeft;
   centre: ReactNode;
+  /** What stands in the left pane's header row after the pin and collapse button — the reading controls (P11-16 follow-up, ruling §1h.115
+   *  item 2). The row wraps if the pane is too narrow for both, and the button keeps the left edge. Absent: the button alone, at the right. */
+  header?: ReactNode;
 }
 
 export type LeftState = "pinned" | "rail" | "peek";
@@ -83,7 +86,7 @@ function SidebarGlyph() {
   );
 }
 
-export function ReaderShell({ left, centre }: ReaderShellProps) {
+export function ReaderShell({ left, centre, header }: ReaderShellProps) {
   const grid = useRef<HTMLDivElement | null>(null);
   const cell = useRef<HTMLDivElement | null>(null);
   const pane = useRef<HTMLDivElement | null>(null);
@@ -255,11 +258,11 @@ export function ReaderShell({ left, centre }: ReaderShellProps) {
             if (state === "peek") scheduleClose();
           }}
         >
-          <div className="reader-left-header" data-reader-left-header="">
+          <div className={header ? "reader-left-header flex-wrap items-center gap-x-2 px-1.5" : "reader-left-header"} data-reader-left-header="">
             <button
               ref={pinButton}
               type="button"
-              className="reader-pin-button"
+              className={header ? "reader-pin-button mr-auto" : "reader-pin-button"}
               aria-label={fit.pinned ? "Collapse sidebar" : "Pin sidebar"}
               aria-expanded={fit.pinned}
               aria-controls={LEFT_PANE_ID}
@@ -268,6 +271,7 @@ export function ReaderShell({ left, centre }: ReaderShellProps) {
             >
               <SidebarGlyph />
             </button>
+            {header}
           </div>
           {"whole" in left ? (
             left.whole

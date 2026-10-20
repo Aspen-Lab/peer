@@ -137,6 +137,49 @@ describe("ReaderShell — the left pane", () => {
   });
 });
 
+// P11-16 follow-up (ruling §1h.115 item 2): the left pane's header row takes what stands beside the pin and collapse button — the reading
+// controls. DOM order is the visual order: the button, then the header's content.
+describe("ReaderShell — the header slot", () => {
+  const withHeader = (left: ReaderShellLeft = SPLIT) =>
+    renderToStaticMarkup(createElement(ReaderShell, { left, centre: mark("CENTRE"), header: mark("HEADER") }));
+  const row = (html: string) => html.slice(html.indexOf("data-reader-left-header"), html.indexOf("data-reader-left-fixed") > 0 ? html.indexOf("data-reader-left-fixed") : html.indexOf("data-mark=\"WHOLE\""));
+
+  it("renders after the pin button, in the header row, once — in every state", () => {
+    for (const pinned of [undefined, true, false]) {
+      choose({ leftPinned: pinned });
+      for (const left of [SPLIT, WHOLE]) {
+        const html = withHeader(left);
+        const header = row(html);
+        expect(count(html, 'data-mark="HEADER"')).toBe(1);
+        expect(header.indexOf("reader-pin-button")).toBeGreaterThan(-1);
+        expect(header.indexOf('data-mark="HEADER"')).toBeGreaterThan(header.indexOf("reader-pin-button"));
+      }
+    }
+  });
+
+  it("is in the pane before its zones, and the zones are untouched", () => {
+    const html = withHeader();
+    expect(html.indexOf('data-mark="HEADER"')).toBeLessThan(html.indexOf("data-reader-left-fixed"));
+    expect(html.indexOf('data-mark="HEADER"')).toBeGreaterThan(html.indexOf('id="' + LEFT_PANE_ID + '"'));
+    expect(count(html, 'data-mark="FIXED"')).toBe(1);
+    expect(count(html, 'data-mark="SCROLL"')).toBe(1);
+  });
+
+  it("keeps the button at the left edge and lets the row wrap when the pane is too narrow for both", () => {
+    const html = withHeader();
+    const header = tagWith(html, "data-reader-left-header");
+    expect(header).toContain("reader-left-header");
+    expect(header.split(/\s+/)).toEqual(expect.arrayContaining(["flex-wrap", "items-center"]));
+    expect(tagWith(html, "reader-pin-button")).toMatch(/class="[^"]*\bmr-auto\b/);
+  });
+
+  it("without one the row is what it was: the button alone, at the right", () => {
+    const html = render();
+    expect(tagWith(html, "data-reader-left-header")).toContain('class="reader-left-header"');
+    expect(tagWith(html, "reader-pin-button")).toContain('class="reader-pin-button"');
+  });
+});
+
 describe("ReaderShell — the centre", () => {
   it("holds the paper's text inside a capped, centred inner box", () => {
     const html = render();

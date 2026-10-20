@@ -1,14 +1,14 @@
 "use client";
 
 // Arranges the reader's blocks — it renders none of them. Below 1024 css px the children come back as a fragment, in one column; from it
-// they are placed in the three-pane shell (`reader-shell.tsx`, P11-10): the left pane (the reading controls, the title, the commands and the
-// Summary / Paper digestion strip in its fixed zone; the map, then the plate and the details in its scroll zone), the centre (the common
+// they are placed in the three-pane shell (`reader-shell.tsx`, P11-10): the left pane (the reading controls in its header row beside the pin
+// button; the title, the commands and the Summary / Paper digestion strip in its fixed zone; the map, then the plate and the details in its scroll zone), the centre (the common
 // blocks, the active tab's blocks and the Next row), and the margin, which the shell draws and keeps empty. The block order, strings and
 // type are untouched; only the place. The rail is not a block any more: position and the way back live in the shell.
 //
 // P11-16 (B P11-01 §2.3, §2.4, §3.2; ruling §1h.113 (a)), the owner's items 2 and 6: the owner's paper has a plate and a six-line title, which
 // filled the old spread's first 845 px, so the map stood at y 915 and was never on screen on arrival (and under 1280 css px there was no panel
-// at all). The left pane is split: what the reader needs in view while reading — the controls, the title, the commands, the strip — is a
+// at all). The left pane is split: what the reader needs in view while reading — the title, the commands, the strip — is a
 // fixed zone that never scrolls, and the map is the first thing of the pane's one scroller, so its first rows are on screen at 1280 x 720.
 // The decision block is two slots for it: `decision` (the commands) and `details` (the sentence, the private-PDF line, the DOI, the progress).
 // The map stays outside the tabpanel, under both tabs, and no block remounts on a tab switch, a pin, a rail or peek change, or a drag: each
@@ -235,15 +235,13 @@ export function ReaderLayout(p: ReaderLayoutProps) {
     blocks
   );
 
-  // The left pane. The shell's header row holds the pin and the collapse button and has no slot of its own, so the reading controls open the
-  // fixed zone directly under it, then the title, the commands and the strip. (A `header` slot on the shell would put the controls in the
-  // header row itself and give the map another 44px.) With nothing to float — no strip, no map — the pane scrolls as one.
+  // The left pane. The shell's header row holds the pin and the collapse button, and the reading controls beside it (`header`); the fixed
+  // zone is the title, the commands and the strip. With nothing to float — no strip, no map — the pane scrolls as one.
   // The pane is a window high at most and the fixed zone must leave the map room, so the blocks' own gaps — made for a page — are
   // tightened here, by the wrapper, and not in the blocks (they keep their gaps in one column): the commands 20 -> 12px under the title, the
   // strip 32 -> 16px under the commands, the map 24 -> 16px under the strip.
   const head = (
     <>
-      <ReadingControls spread />
       {p.title}
       <div className="[&>*>:first-child]:mt-3">{p.decision}</div>
       {p.tabs ? <div className="[&>:first-child]:mt-4">{p.tabs}</div> : null}
@@ -259,6 +257,7 @@ export function ReaderLayout(p: ReaderLayoutProps) {
 
   return (
     <ReaderShell
+      header={<ReadingControls spread />}
       left={
         tail
           ? {
