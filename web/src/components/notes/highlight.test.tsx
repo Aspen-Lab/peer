@@ -12,7 +12,7 @@ import { useHighlightStrip } from "./highlight-strip";
 
 // P11-07 (owner item 8; B P11-04 §5; ruling §1h.112 D4, D5, D8): "Highlight" on a selection — the paper's note made if needed,
 // `addHighlight` at the occurrence the reader selected (Yellow), the browser's selection cleared, the colour strip raised at the
-// selection's first line. Only for the paper's body. Every text is invented.
+// selection's first line. For the paper's body here; for a Summary block or an answer (P11-28), `highlight.blocks.test.ts`. Every text is invented.
 
 const PAPER = { id: "p1", title: "A Paper", authors: ["Ann Lee"], publishedDate: "2024" } as unknown as Paper;
 const TEXT = "See the tide pools at dawn. Later the tide pools were bare, and the snails were gone.";
@@ -51,7 +51,11 @@ describe("canHighlight", () => {
     expect(canHighlight(target({ source: undefined }))).toBe(true);
   });
 
-  it("is not offered for the Summary or an answer (D8), a selection with no paragraph of the body, an empty one, or none", () => {
+  // P11-28 RE-AIM (ruling §1h.123 (c), which amends D8): this test said a Summary and an answer are not offered Highlight. They are now, when the selection names
+  // a block of the page (`highlight.blocks.test.ts` holds that, and the ids). What stays true, and is kept here: a Summary or an answer selection that names NO
+  // block of the page — the id of a paragraph of the paper under a "summary" source, as this file's `target()` carries — is not offered it, nor is a selection with
+  // no paragraph of the body, an empty one, or none.
+  it("is not offered for a Summary or an answer selection that names no block of the page, a selection with no paragraph of the body, an empty one, or none", () => {
     expect(canHighlight(target({ source: "summary", sectionIndex: -1, paragraphIndex: -1 }))).toBe(false);
     expect(canHighlight(target({ source: "answer", sectionIndex: -1, paragraphIndex: -1 }))).toBe(false);
     expect(canHighlight(target({ source: "summary" }))).toBe(false);
@@ -151,7 +155,9 @@ describe("highlightSelection — nothing is made", () => {
     expect(useHighlightStrip.getState().id).toBeNull();
   };
 
-  it("for a Summary or an answer selection: no note, the selection left, no strip (D8)", () => {
+  // P11-28 RE-AIM (ruling §1h.123 (c)): was "for a Summary or an answer selection: no note, the selection left, no strip (D8)". A Summary or an answer selection that
+  // names a block of the page is highlighted now (`highlight.blocks.test.ts`); one that names none still makes nothing, which is what this keeps.
+  it("for a Summary or an answer selection that names no block of the page: no note, the selection left, no strip", () => {
     for (const source of ["summary", "answer"]) {
       expect(highlightSelection(target({ source, sectionIndex: -1, paragraphIndex: -1 }), { paper: PAPER, body: BODY })).toBeNull();
     }
@@ -202,7 +208,8 @@ describe("useHighlight — the page's onHighlight", () => {
     expect(useHighlightStrip.getState().id).toBe(highlights()[0].id);
   });
 
-  it("does nothing for a selection that is not the paper's", () => {
+  // P11-28 RE-AIM (ruling §1h.123 (c)): was "does nothing for a selection that is not the paper's". It does nothing for a Summary or an answer selection that names no block.
+  it("does nothing for a Summary or an answer selection that names no block of the page", () => {
     hook({ paper: PAPER, body: BODY })(target({ source: "answer", sectionIndex: -1, paragraphIndex: -1 }));
     expect(highlights()).toEqual([]);
     expect(log).toEqual([]);
