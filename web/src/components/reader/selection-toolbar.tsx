@@ -28,6 +28,15 @@
 // is today's pill above the selection, in a row. Under 768 px nothing is drawn. The margin is empty with no selection and the
 // toolbar reserves nothing: it draws only while a settled selection stands, and measures again as the page scrolls and resizes,
 // when the margin is resized, whenever the window stack changes and when the page reflows (the dock's reserve; defect (b)).
+//
+// P11-27 rule 1 (owner item 5; round 1's walk X-1, BACKLOG-96; ruling §1h.122, which amends §1h.113 (b) O-2): the group never leaves the margin. With a margin
+// registered it stands there, level with the selection's first line, whatever card stands at that height — over the card, above it in z-order (`z-[70]`, over the
+// stack's cards), on its own surface (the theme's surface, a border, a shadow), its buttons whole — and never over the centre column's words. The pill above the
+// selection (and its slack to a card and its hysteresis between two modes) is gone where a margin stands; it is the group of a window with no margin (under 1024 px)
+// and nothing else. `data-over-card` says when the group stands over a card, so the page and a measurement can tell.
+//
+// P11-27 rule 2 (X-4): a selection in a figure's caption or a section's heading is offered Take notes and Highlight like a paragraph's. Explain this is not offered
+// for it: the explain route finds a passage in the paper's paragraphs only (`lib/papers/explain.ts`, `locatePassage`), so it would answer "not in the paper".
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PaperTerm } from "@/lib/papers/report";
@@ -101,10 +110,6 @@ export interface ActionsPlace extends ToolbarPlace {
 
 /** The group's left edge sits this far in from the margin's. */
 export const MARGIN_INSET_PX = 8;
-/** An open card within this many px of the group covers it. */
-export const CARD_SLACK_PX = 4;
-/** After the group has gone above a card, it needs this much more room before it returns to the margin. */
-export const MODE_HYSTERESIS_PX = 12;
 
 /**
  * The open cards: those the margin carries, by their one marker, `data-margin-card`. P11-17c rule 4: every card of the margin carries it —
@@ -134,35 +139,24 @@ export function clearanceFrom(group: ViewRect, cards: readonly ViewRect[]): numb
 }
 
 /**
- * Where the group stands, and in which mode. In the margin when a margin is registered and no open card covers the place the
- * group would have there — the left edge 8 px in from the margin's, the top `placeInMargin` of the selection's first line, the
- * three buttons one under the other. Otherwise above the selection, today's pill (`toolbarPlace`), in a row. A card covers the
- * place when it comes within 4 px of it; once the group has gone above a card (`mode` is what it was drawn as last) it returns to
- * the margin only when the card is 12 px further clear, so a selection scrolling past a card's edge does not flicker. Null where
- * nothing is drawn — a window under 768 px, or a selection wholly out of view. Pure.
+ * Where the group stands, and in which mode. With a margin registered — always in the margin, whatever stands there: the left edge 8 px in from the margin's,
+ * the top `placeInMargin` of the selection's first line, the three buttons one under the other. An open card at that height does not move it (P11-27 rule 1;
+ * ruling §1h.122): the group stands over the card. With no margin (a window under 1024 px, a page without the shell) it is today's pill above the selection
+ * (`toolbarPlace`), in a row. Null where nothing is drawn — a window under 768 px, or a selection wholly out of view. Pure.
  */
 export function actionsPlace(input: {
   bounds: ViewRect;
   viewport: { width: number; height: number };
   /** The margin `useMarginRect()` gives; null where there is none. */
   margin: MarginRect | null;
-  /** The open cards' rects (`openCardRects`). */
-  cards: readonly ViewRect[];
   /** The group's own size in each mode (it is a column in the margin and a row above). */
   sizes: { margin: { width: number; height: number }; above: { width: number; height: number } };
-  /** The mode the group is drawn in now, for the hysteresis. */
-  mode?: ActionsMode | null;
 }): ActionsPlace | null {
-  const { bounds, viewport, margin, cards, sizes, mode } = input;
+  const { bounds, viewport, margin, sizes } = input;
   const pill = toolbarPlace({ bounds, viewport, size: sizes.above });
   if (pill === null) return null;
   if (margin === null) return { mode: "above", ...pill };
-  const { width, height } = sizes.margin;
-  const left = margin.left + MARGIN_INSET_PX;
-  const top = placeInMargin(margin, bounds.top, height);
-  const room = clearanceFrom({ left, top, right: left + width, bottom: top + height }, cards);
-  if (room >= (mode === "above" ? CARD_SLACK_PX + MODE_HYSTERESIS_PX : CARD_SLACK_PX)) return { mode: "margin", left, top, below: false };
-  return { mode: "above", ...pill };
+  return { mode: "margin", left: margin.left + MARGIN_INSET_PX, top: placeInMargin(margin, bounds.top, sizes.margin.height), below: false };
 }
 
 const BUTTON =
@@ -174,6 +168,7 @@ export function SelectionToolbarView({
   onExplain,
   onTakeNote,
   onHighlight,
+  overCard = false,
   innerRef,
 }: {
   /** Where it stands; a `mode` of "margin" draws a column, anything else (a place without one is the old pill) a row. */
@@ -184,6 +179,8 @@ export function SelectionToolbarView({
   onTakeNote: () => void;
   /** P11-13: the third action. Absent, there is no Highlight button (the page has none to hand, or it cannot highlight this selection). */
   onHighlight?: () => void;
+  /** P11-27: the group stands over an open card of the margin (it is above it in z-order, on its own surface). */
+  overCard?: boolean;
   innerRef?: (el: HTMLDivElement | null) => void;
 }) {
   // A press must not move the selection: the words stay highlighted while the pill is used.
@@ -201,6 +198,7 @@ export function SelectionToolbarView({
       {...(column ? { "aria-orientation": "vertical" as const } : {})}
       data-selection-toolbar=""
       data-mode={column ? "margin" : "above"}
+      {...(overCard ? { "data-over-card": "" } : {})}
       style={{ left: place.left, top: place.top }}
       className={`fixed z-[70] flex ${column ? "flex-col" : ""} items-stretch whitespace-nowrap border border-border-strong bg-surface font-mono text-caption shadow-card-hover`}
     >
@@ -269,8 +267,6 @@ export function SelectionToolbar({
   const [frame, setFrame] = useState<Frame | null>(null);
   // The group's measured size, by mode and number of buttons; until it has been drawn once the estimate stands.
   const [sizes, setSizes] = useState<Record<string, Size>>({});
-  // The mode it is drawn in now: the hysteresis needs to know which way it is switching.
-  const [mode, setMode] = useState<ActionsMode | null>(null);
   const box = useRef<HTMLDivElement | null>(null);
   const margin = useMarginRect();
   const actions = offeredActions({ canExplain, onHighlight, canHighlight });
@@ -315,12 +311,16 @@ export function SelectionToolbar({
   const sizeOf = (which: ActionsMode): Size => sizes[`${which}:${buttons}`] ?? estimate(which, buttons);
   const place =
     target && frame && frame.of === target
-      ? actionsPlace({ bounds: frame.bounds, viewport: frame.viewport, margin, cards: frame.cards, sizes: { margin: sizeOf("margin"), above: sizeOf("above") }, mode })
+      ? actionsPlace({ bounds: frame.bounds, viewport: frame.viewport, margin, sizes: { margin: sizeOf("margin"), above: sizeOf("above") } })
       : null;
-
-  // The mode it is drawn in, kept for the next measure; a new selection starts fresh.
   const drawnMode = place?.mode ?? null;
-  if (!target ? mode !== null : drawnMode !== null && drawnMode !== mode) setMode(target ? drawnMode : null);
+
+  // P11-27 rule 1: whether the group stands over an open card of the margin — it does not stand clear of one, it stands over it.
+  const group = place?.mode === "margin" ? sizeOf("margin") : null;
+  const overCard =
+    place !== null && group !== null && frame !== null
+      ? clearanceFrom({ left: place.left, top: place.top, right: place.left + group.width, bottom: place.top + group.height }, frame.cards) < 0
+      : false;
 
   // Its own size, once it is drawn, so the clamp at the right edge and the cards' test are exact.
   useLayoutEffect(() => {
@@ -345,6 +345,6 @@ export function SelectionToolbar({
   if (!target || !place) return null;
   const highlight = actions.includes("highlight") ? () => onHighlight?.(target) : undefined;
   return (
-    <SelectionToolbarView place={place} canExplain={canExplain} onExplain={onExplain} onTakeNote={() => onTakeNote(target)} onHighlight={highlight} innerRef={(el) => (box.current = el)} />
+    <SelectionToolbarView place={place} canExplain={canExplain} onExplain={onExplain} onTakeNote={() => onTakeNote(target)} onHighlight={highlight} overCard={overCard} innerRef={(el) => (box.current = el)} />
   );
 }

@@ -224,7 +224,9 @@ describe("SelectionToolbar — the place (P11-13, rule 2)", () => {
     away.mounted.unmount();
   });
 
-  it("asks the page for the open cards through the margin's selector, and goes above when one covers it, back to the margin when it goes", async () => {
+  // P11-27 rule 1, RE-AIMED (§1c): was "…and goes above when one covers it, back to the margin when it goes". Same cards, same scrolls, same selector: the group
+  // stays in the margin all three times (ruling §1h.122); the cards are still asked for, through the margin's selector, to say when it stands over one.
+  it("asks the page for the open cards through the margin's selector, and stays in the margin when one covers it, and when it goes", async () => {
     stub.margin = MARGIN;
     const seen: Look[] = [];
     const run = await scenario(base(), [
@@ -241,7 +243,7 @@ describe("SelectionToolbar — the place (P11-13, rule 2)", () => {
       },
       read(seen),
     ]);
-    expect(seen.map((look) => look.place?.mode)).toEqual(["margin", "above", "margin"]);
+    expect(seen.map((look) => look.place?.mode)).toEqual(["margin", "margin", "margin"]);
     expect(asked.length).toBeGreaterThan(0);
     for (const selector of asked) expect(selector).toContain(MARGIN_CARD_SELECTOR);
     run.mounted.unmount();

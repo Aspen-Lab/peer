@@ -5,8 +5,6 @@ import type { ReactElement, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import {
-  CARD_SLACK_PX,
-  MODE_HYSTERESIS_PX,
   OPEN_CARD_SELECTOR,
   SELECTION_LABELS,
   SelectionToolbar,
@@ -202,8 +200,11 @@ describe("the page's hand-off (P10-08b, rule 3)", () => {
 
 const MARGIN: MarginRect = { left: 1080, width: 360, top: 48, bottom: 960 };
 const SIZES = { margin: { width: 112, height: 90 }, above: { width: 285, height: 32 } };
-const place = (over: Partial<Parameters<typeof actionsPlace>[0]> = {}) =>
-  actionsPlace({ bounds, viewport: VIEW, margin: MARGIN, cards: [], sizes: SIZES, ...over });
+// P11-27 (§1c): `actionsPlace` takes no cards and no mode any more (the group stands in the margin over whatever card is there); the helper still lets a
+// test list a card, or the mode the group was drawn in, to show they change nothing.
+type Box = { left: number; top: number; right: number; bottom: number };
+type PlaceOver = Partial<Parameters<typeof actionsPlace>[0]> & { cards?: readonly Box[]; mode?: ActionsMode | null };
+const place = (over: PlaceOver = {}) => actionsPlace({ bounds, viewport: VIEW, margin: MARGIN, sizes: SIZES, ...over } as Parameters<typeof actionsPlace>[0]);
 /** A card rect `gap` px under the group that a selection at `top` gets in the margin (the group's foot is `top + 90`). */
 const cardUnder = (top: number, gap: number) => ({ left: MARGIN.left, top: top + SIZES.margin.height + gap, right: MARGIN.left + MARGIN.width, bottom: top + SIZES.margin.height + gap + 200 });
 
@@ -257,25 +258,22 @@ describe("actionsPlace — the group in the margin at the selection's height (P1
     }
   });
 
-  describe("an open card that covers the group (4 px of slack)", () => {
+  // P11-27 rule 1, RE-AIMED (§1c) — ruling §1h.122 amends §1h.113 (b) O-2: the group no longer goes above the selection when a card covers its place; it stands
+  // in the margin over the card. The fixtures are the ones that sent it above (the card over the group, 3 px and 4 px under it, over it, every card), the
+  // expectation is the group where it would have stood with no card at all. The four tests keep their cards and flip their answers.
+  describe("an open card that covers the group (re-aimed: the group stays in the margin, over it)", () => {
     const covering = { left: MARGIN.left, top: 380, right: MARGIN.left + MARGIN.width, bottom: 700 };
+    const LEVEL = { mode: "margin", left: MARGIN.left + 8, top: 400, below: false };
 
-    it("sends the group above the selection, the pill, until the card is gone", () => {
-      const got = place({ cards: [covering] })!;
-      expect(got.mode).toBe("above");
-      expect(got).toEqual({ mode: "above", ...toolbarPlace({ bounds, viewport: VIEW, size: SIZES.above })! });
-      expect(place({ cards: [] })!.mode).toBe("margin");
+    it("stays in the margin, the same place as with no card (it was the pill above the selection, until the card was gone)", () => {
+      expect(place({ cards: [covering] })).toEqual(LEVEL);
+      expect(place({ cards: [covering] })).toEqual(place({ cards: [] }));
     });
 
-    it("counts a card within 4 px as covering, and one 4 px or more clear as not", () => {
-      expect(CARD_SLACK_PX).toBe(4);
-      // The group is 400–490 high; a card whose top is 3 px under its foot is covering, 4 px under is clear.
-      expect(place({ cards: [cardUnder(400, 3)] })!.mode).toBe("above");
-      expect(place({ cards: [cardUnder(400, 4)] })!.mode).toBe("margin");
-      // The same above it: a card whose bottom is 3 px over the group's top covers, 4 px over does not.
+    it("is not moved by a card 3 px or 4 px under it, or 3 px or 4 px over it (it used to count a card within 4 px as covering)", () => {
+      for (const gap of [3, 4]) expect(place({ cards: [cardUnder(400, gap)] })).toEqual(LEVEL);
       const over = (gap: number) => ({ left: MARGIN.left, top: 100, right: MARGIN.left + MARGIN.width, bottom: 400 - gap });
-      expect(place({ cards: [over(3)] })!.mode).toBe("above");
-      expect(place({ cards: [over(4)] })!.mode).toBe("margin");
+      for (const gap of [3, 4]) expect(place({ cards: [over(gap)] })).toEqual(LEVEL);
     });
 
     it("is not troubled by a card at the other side of the window, or one nowhere near", () => {
@@ -283,42 +281,27 @@ describe("actionsPlace — the group in the margin at the selection's height (P1
       expect(place({ cards: [{ left: MARGIN.left, top: 600, right: MARGIN.left + MARGIN.width, bottom: 900 }] })!.mode).toBe("margin");
     });
 
-    it("looks at every card, not only the first", () => {
-      expect(place({ cards: [{ left: 20, top: 380, right: 300, bottom: 700 }, covering] })!.mode).toBe("above");
+    it("is not moved by any card of several, not only the first", () => {
+      expect(place({ cards: [{ left: 20, top: 380, right: 300, bottom: 700 }, covering] })).toEqual(LEVEL);
     });
   });
 
-  describe("12 px of hysteresis when it switches (a selection scrolling past a card's edge does not flicker)", () => {
-    it("is 12 px", () => {
-      expect(MODE_HYSTERESIS_PX).toBe(12);
-    });
-
-    it("goes above at once when covered, and comes back to the margin only after 12 px more of room", () => {
+  // RE-AIMED (§1c): the tests that pinned the 12 px of hysteresis between the margin and the pill ("goes above at once when covered, and comes back to the margin
+  // only after 12 px more of room", "keeps one mode through a scroll past the card's edge, and changes twice at most") now pin that with one mode there is nothing to switch
+  // between: the mode the group was drawn in before (`mode`, no longer an input) changes nothing, and a selection scrolling past a card's edge never changes mode.
+  // "is 12 px" (the constant's value) is retired with the constant: its absence is pinned in the P11-27 block below.
+  describe("no hysteresis: one mode with a margin, whatever mode it was drawn in before (re-aimed)", () => {
+    it("does not depend on the mode it was drawn in: with a card 3, 10, 15 or 16 px from it, from the margin, from above, or fresh", () => {
       const at = (mode: ActionsMode | null, gap: number) => place({ mode, cards: [cardUnder(400, gap)] })!.mode;
-      // Standing in the margin (or fresh): the nominal rule, 4 px.
-      expect(at("margin", 3)).toBe("above");
-      expect(at("margin", 4)).toBe("margin");
-      expect(at(null, 3)).toBe("above");
-      expect(at(null, 4)).toBe("margin");
-      // Standing above: it stays until the card is 4 + 12 = 16 px clear.
-      expect(at("above", 3)).toBe("above");
-      expect(at("above", 10)).toBe("above");
-      expect(at("above", 15)).toBe("above");
-      expect(at("above", 16)).toBe("margin");
+      for (const mode of ["margin", "above", null] as const) for (const gap of [3, 4, 10, 15, 16]) expect(at(mode, gap), `${mode} ${gap}`).toBe("margin");
     });
 
-    it("keeps one mode through a scroll past the card's edge, and changes twice at most", () => {
+    it("keeps one mode through a scroll past the card's edge: it never changes", () => {
       // A card at the top of the margin ends at y 500; the selection's first line scrolls from 520 up to 503 and back to 516.
       const card = { left: MARGIN.left, top: 48, right: MARGIN.left + MARGIN.width, bottom: 500 };
       const path = [520, 510, 505, 503, 506, 512, 515, 516, 520, 505, 503];
-      let mode: ActionsMode | null = null;
-      const seen: ActionsMode[] = [];
-      for (const top of path) {
-        const got: NonNullable<ReturnType<typeof actionsPlace>> = place({ mode, cards: [card], bounds: { left: 300, top, right: 520, bottom: top + 22 } })!;
-        mode = got.mode;
-        seen.push(got.mode);
-      }
-      expect(seen).toEqual(["margin", "margin", "margin", "above", "above", "above", "above", "margin", "margin", "margin", "above"]);
+      const seen = path.map((top) => place({ cards: [card], bounds: { left: 300, top, right: 520, bottom: top + 22 } })!.mode);
+      expect(seen).toEqual(path.map(() => "margin"));
     });
   });
 });

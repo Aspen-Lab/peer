@@ -31,7 +31,7 @@ import { useWindows } from "@/lib/reader/windows";
 import { citableFromPaper } from "@/lib/notes/cite";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
 import type { ViewRect } from "@/components/reader/paper-body";
-import { CARD_SLACK_PX, MARGIN_INSET_PX, MODE_HYSTERESIS_PX } from "@/components/reader/selection-toolbar";
+import { MARGIN_INSET_PX } from "@/components/reader/selection-toolbar";
 import type { Paper } from "@/types";
 import { HighlightStrip, useHighlightStrip } from "./highlight-strip";
 import {
@@ -66,61 +66,59 @@ const card = (top: number, bottom: number, left = 1000, right = 1280): ViewRect 
 describe("stripStanding — where the strip stands, and whether it stays", () => {
   it("stands in the margin 8 px in from its left edge, level with the mark's first line, as wide as the margin less its insets", () => {
     expect(MARGIN_INSET_PX).toBe(8);
-    expect(stripStanding({ mark: line(300), viewport: VIEW, margin: MARGIN, cards: [] })).toEqual({ mode: "margin", left: 1008, top: 300, width: 264 });
+    expect(stripStanding({ mark: line(300), viewport: VIEW, margin: MARGIN })).toEqual({ mode: "margin", left: 1008, top: 300, width: 264 });
   });
 
   it("holds inside the band: never above the masthead's foot, nor with its foot below the legend's strip", () => {
     expect(STRIP_ROW_PX).toBe(34);
-    expect(stripStanding({ mark: line(10), viewport: VIEW, margin: MARGIN, cards: [] })?.top).toBe(48);
-    expect(stripStanding({ mark: line(850), viewport: VIEW, margin: MARGIN, cards: [] })?.top).toBe(860 - STRIP_ROW_PX);
+    expect(stripStanding({ mark: line(10), viewport: VIEW, margin: MARGIN })?.top).toBe(48);
+    expect(stripStanding({ mark: line(850), viewport: VIEW, margin: MARGIN })?.top).toBe(860 - STRIP_ROW_PX);
   });
 
   it("wraps to two rows in a narrow margin, and holds those two rows inside the band", () => {
     expect(STRIP_TWO_ROWS_PX).toBe(58);
     const narrow: MarginRect = { ...MARGIN, width: 160 };
-    expect(stripStanding({ mark: line(850), viewport: VIEW, margin: narrow, cards: [] })).toMatchObject({ mode: "margin", left: 1008, top: 860 - STRIP_TWO_ROWS_PX, width: 144 });
+    expect(stripStanding({ mark: line(850), viewport: VIEW, margin: narrow })).toMatchObject({ mode: "margin", left: 1008, top: 860 - STRIP_TWO_ROWS_PX, width: 144 });
     // One row from the width that holds the six colours and the remove button on one line.
     const wide: MarginRect = { ...MARGIN, width: STRIP_ONE_ROW_WIDTH_PX + 2 * MARGIN_INSET_PX };
-    expect(stripStanding({ mark: line(850), viewport: VIEW, margin: wide, cards: [] })?.top).toBe(860 - STRIP_ROW_PX);
-    expect(stripStanding({ mark: line(850), viewport: VIEW, margin: { ...wide, width: wide.width - 1 }, cards: [] })?.top).toBe(860 - STRIP_TWO_ROWS_PX);
+    expect(stripStanding({ mark: line(850), viewport: VIEW, margin: wide })?.top).toBe(860 - STRIP_ROW_PX);
+    expect(stripStanding({ mark: line(850), viewport: VIEW, margin: { ...wide, width: wide.width - 1 } })?.top).toBe(860 - STRIP_TWO_ROWS_PX);
   });
 
   it("goes when the mark is more than a screen away, above or below, and stays up to that distance (held at the band's edge)", () => {
     expect(AWAY_SCREENS).toBe(1);
     // Wholly above the window by more than its height: gone. By less: held at the band's top.
-    expect(stripStanding({ mark: { left: 400, top: -1000, right: 700, bottom: -982 }, viewport: VIEW, margin: MARGIN, cards: [] })).toBeNull();
-    expect(stripStanding({ mark: { left: 400, top: -917, right: 700, bottom: -899 }, viewport: VIEW, margin: MARGIN, cards: [] })).toMatchObject({ mode: "margin", top: 48 });
+    expect(stripStanding({ mark: { left: 400, top: -1000, right: 700, bottom: -982 }, viewport: VIEW, margin: MARGIN })).toBeNull();
+    expect(stripStanding({ mark: { left: 400, top: -917, right: 700, bottom: -899 }, viewport: VIEW, margin: MARGIN })).toMatchObject({ mode: "margin", top: 48 });
     // Below the window by more than its height: gone. By less: held at the band's foot.
-    expect(stripStanding({ mark: line(1801), viewport: VIEW, margin: MARGIN, cards: [] })).toBeNull();
-    expect(stripStanding({ mark: line(1799), viewport: VIEW, margin: MARGIN, cards: [] })).toMatchObject({ mode: "margin", top: 860 - STRIP_ROW_PX });
+    expect(stripStanding({ mark: line(1801), viewport: VIEW, margin: MARGIN })).toBeNull();
+    expect(stripStanding({ mark: line(1799), viewport: VIEW, margin: MARGIN })).toMatchObject({ mode: "margin", top: 860 - STRIP_ROW_PX });
   });
 
-  describe("an open card covers the place (O-2: the rule the selection's actions follow)", () => {
-    it("stands above the mark's first line, as the pill did, left-aligned with it", () => {
-      const placed = stripStanding({ mark: line(300), viewport: VIEW, margin: MARGIN, cards: [card(280, 600)] });
-      expect(placed).toMatchObject({ mode: "above", left: 400, top: 300 - STRIP_ROW_PX - 6 });
+  // P11-27 rule 1, RE-AIMED (§1c) — ruling §1h.122 amends §1h.113 (b) O-2: the strip follows the rule the selection's actions follow, and that rule is now that
+  // the group stays in the margin, over the card. The four tests keep their cards and flip their answers (they stood the strip above the mark, as the pill
+  // did, and pinned the 4 px of slack and the 12 px of hysteresis); the cards go in as `cards`, which `stripStanding` no longer takes and so ignores.
+  describe("an open card covers the place (re-aimed: the strip stays in the margin, over it)", () => {
+    const standing = (cards: ViewRect[], mark: ViewRect = line(300), more: Record<string, unknown> = {}) =>
+      stripStanding({ mark, viewport: VIEW, margin: MARGIN, cards, ...more } as Parameters<typeof stripStanding>[0]);
+
+    it("stands in the margin, level with the mark's first line, over the card (it stood above the mark, left-aligned with it, as the pill did)", () => {
+      expect(standing([card(280, 600)])).toEqual({ mode: "margin", left: 1008, top: 300, width: 264 });
     });
 
-    it("keeps the margin when the card stands 4 px or more clear of the strip, and leaves it when it comes closer", () => {
-      expect(CARD_SLACK_PX).toBe(4);
+    it("keeps the margin whatever the card's distance from the strip: 4 px clear, 3 px clear, covering (it left it when the card came within 4 px)", () => {
       const bottom = 300 + STRIP_ROW_PX;
-      expect(stripStanding({ mark: line(300), viewport: VIEW, margin: MARGIN, cards: [card(bottom + CARD_SLACK_PX, 800)] })?.mode).toBe("margin");
-      expect(stripStanding({ mark: line(300), viewport: VIEW, margin: MARGIN, cards: [card(bottom + CARD_SLACK_PX - 1, 800)] })?.mode).toBe("above");
+      for (const gap of [4, 3, 0, -20]) expect(standing([card(bottom + gap, 800)])?.mode, String(gap)).toBe("margin");
     });
 
-    it("returns to the margin only when the card is 12 px further clear (no flicker at a card's edge)", () => {
-      expect(MODE_HYSTERESIS_PX).toBe(12);
+    it("has one mode: a strip drawn above before (the `mode` it was drawn in) changes nothing (it returned to the margin only 12 px further clear)", () => {
       const bottom = 300 + STRIP_ROW_PX;
-      const edge = card(bottom + CARD_SLACK_PX, 800);
-      expect(stripStanding({ mark: line(300), viewport: VIEW, margin: MARGIN, cards: [edge], mode: "above" })?.mode).toBe("above");
-      const clear = card(bottom + CARD_SLACK_PX + MODE_HYSTERESIS_PX, 800);
-      expect(stripStanding({ mark: line(300), viewport: VIEW, margin: MARGIN, cards: [clear], mode: "above" })?.mode).toBe("margin");
-      expect(stripStanding({ mark: line(300), viewport: VIEW, margin: MARGIN, cards: [clear], mode: "margin" })?.mode).toBe("margin");
+      for (const mode of ["above", "margin"]) for (const gap of [4, 16, 40]) expect(standing([card(bottom + gap, 800)], line(300), { mode })?.mode, `${mode} ${gap}`).toBe("margin");
     });
 
-    it("has nowhere to stand above a mark that has left the window: it goes", () => {
-      const gone = stripStanding({ mark: { left: 400, top: -60, right: 700, bottom: -42 }, viewport: VIEW, margin: MARGIN, cards: [card(40, 200)] });
-      expect(gone).toBeNull();
+    it("holds a mark that is above the window by less than a screen at the band's top, over a card as without one (it had nowhere to stand above it: it went)", () => {
+      const gone = standing([card(40, 200)], { left: 400, top: -60, right: 700, bottom: -42 });
+      expect(gone).toMatchObject({ mode: "margin", top: 48 });
     });
   });
 });
@@ -407,13 +405,15 @@ describe("HighlightStripHost — level with its mark, a frame at a time", () => 
     expect(useHighlightStrip.getState().id).toBeNull();
   });
 
-  it("re-reads the mark when the window stack changes (a card opens in the margin) and stands above the mark when the card covers its place", () => {
+  // P11-27 rule 1, RE-AIMED (§1c): was "re-reads the mark when the window stack changes (a card opens in the margin) and stands above the mark when the card
+  // covers its place". The same card opens and closes; the strip stays at the margin's left, level with the mark, all the time (ruling §1h.122).
+  it("stays in the margin, level with the mark, when a card opens in the margin at its height, and when it closes", () => {
     const host = raised();
     expect(host.props).toMatchObject({ left: 1008, top: 300 });
     cards = [card(280, 600)];
     host.act(() => useWindows.getState().open({ id: "sticky-1", kind: "sticky", title: "Note 1" }));
     frame();
-    expect(host.props).toMatchObject({ left: 400, top: 300 - STRIP_ROW_PX - 6 });
+    expect(host.props).toMatchObject({ left: 1008, top: 300 });
     cards = [];
     host.act(() => useWindows.getState().close("sticky-1"));
     frame();

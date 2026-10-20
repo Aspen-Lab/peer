@@ -14,9 +14,10 @@
 //     and repaints inside that frame (`flushSync`), so the strip stays level with its mark while the page moves under it;
 //   - it goes — the store is cleared, so scrolling back does not bring it up; a click on the mark does — when the mark is more than a screen away
 //     (B P11-04 §5: `AWAY_SCREENS` windows beyond the window's top or foot; held at the band's edge up to that) or is gone from the page;
-//   - it stands where the selection's three actions stood: 8 px in from the margin's left edge, `placeInMargin` of the mark's first line. Where an
-//     open card covers that place it follows the rule the actions follow (O-2, D4): above the mark's first line, left-aligned with it, as the pill
-//     was — and returns to the margin only when the card is 12 px further clear. The test and its constants are the toolbar's own;
+//   - it stands where the selection's three actions stand: 8 px in from the margin's left edge, `placeInMargin` of the mark's first line — in the margin,
+//     level with the mark, whatever card stands at that height (P11-27 rule 1; ruling §1h.122, which amends §1h.113 (b) O-2: the strip once stood above the
+//     mark over the line above it, where a card covered that place). It stands over the card — `z-[70]`, over the stack's cards, on its own surface —
+//     and never over the centre column's words;
 //   - Escape: the strip's own listener hides it but does not take the key, and on a paper page Escape is "back to the briefing" (the keyboard layer, on
 //     `window`). The host takes the key while a strip stands (`takeStripEscape`), as the figure card does for its own: on the document, in the bubble
 //     phase, from the moment the host mounts, leaving a key that was handled already and a modal dialog over the page;
@@ -24,14 +25,13 @@
 //
 // It opens no window, reserves no column, stores nothing and sends nothing.
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useSyncExternalStore, type ReactElement } from "react";
+import { useCallback, useEffect, useLayoutEffect, useSyncExternalStore, type ReactElement } from "react";
 import { flushSync } from "react-dom";
 import { create } from "zustand";
 import { MODAL_OVER_PAGE } from "@/components/reader/explain-dock";
 import type { ViewRect } from "@/components/reader/paper-body";
-import { CARD_SLACK_PX, MARGIN_INSET_PX, MODE_HYSTERESIS_PX, clearanceFrom, openCardRects, toolbarPlace } from "@/components/reader/selection-toolbar";
+import { MARGIN_INSET_PX } from "@/components/reader/selection-toolbar";
 import { placeInMargin, useMarginRect, type MarginRect } from "@/lib/reader/margin";
-import { useWindows } from "@/lib/reader/windows";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
 import { HighlightStrip, STRIP_MIN_WIDTH_PX, SWATCH_HIT_PX, useHighlightStrip } from "./highlight-strip";
 import { highlightMarks } from "./note-tags";
@@ -44,11 +44,9 @@ export const STRIP_ROW_PX = SWATCH_HIT_PX + 10;
 export const STRIP_TWO_ROWS_PX = 2 * SWATCH_HIT_PX + 10;
 /** The width that holds the six colours and the remove button on one row (measured on the real page). */
 export const STRIP_ONE_ROW_WIDTH_PX = 216;
-/** The widest the strip may be above a mark (one row, with room to spare). */
-export const STRIP_ABOVE_WIDTH_PX = 240;
 
-/** Where the strip stands: in the margin, level with the mark's first line, or above it where a card covers that place. */
-export type StripMode = "margin" | "above";
+/** Where the strip stands: in the margin, level with the mark's first line (P11-27 rule 1: it is never above the mark any more). */
+export type StripMode = "margin";
 
 export interface StripStanding {
   mode: StripMode;
@@ -60,31 +58,18 @@ export interface StripStanding {
 
 /**
  * Where the strip stands for a mark whose first line is `mark`, in the window's pixels — or null: the mark is more than `AWAY_SCREENS` windows
- * from the window (the strip goes), or there is no room above it where a card has taken the margin's place. In the margin when no open card comes
- * within `CARD_SLACK_PX` of the place the strip would have there (`MODE_HYSTERESIS_PX` more once it has gone above a card: `mode` is what it was
- * drawn as last); the mark is held inside the margin's band. Pure.
+ * from the window (the strip goes). In the margin, level with the mark's first line, 8 px in from the margin's left edge, whatever card stands at that height
+ * (P11-27 rule 1); the mark is held inside the margin's band. Pure.
  */
-export function stripStanding(input: {
-  mark: ViewRect;
-  viewport: { width: number; height: number };
-  margin: MarginRect;
-  /** The open cards' rects (`openCardRects`). */
-  cards: readonly ViewRect[];
-  mode?: StripMode | null;
-}): StripStanding | null {
-  const { mark, viewport, margin, cards, mode } = input;
+export function stripStanding(input: { mark: ViewRect; viewport: { width: number; height: number }; margin: MarginRect }): StripStanding | null {
+  const { mark, viewport, margin } = input;
   const reach = viewport.height * AWAY_SCREENS;
   if (mark.bottom < -reach || mark.top > viewport.height + reach) return null;
   const inner = Math.max(0, margin.width - 2 * MARGIN_INSET_PX);
   const room = Math.max(STRIP_MIN_WIDTH_PX, inner);
   const oneRow = room >= STRIP_ONE_ROW_WIDTH_PX;
-  const size = { width: Math.min(room, STRIP_ONE_ROW_WIDTH_PX), height: oneRow ? STRIP_ROW_PX : STRIP_TWO_ROWS_PX };
-  const left = margin.left + MARGIN_INSET_PX;
-  const top = placeInMargin(margin, mark.top, size.height);
-  const clear = clearanceFrom({ left, top, right: left + size.width, bottom: top + size.height }, cards);
-  if (clear >= (mode === "above" ? CARD_SLACK_PX + MODE_HYSTERESIS_PX : CARD_SLACK_PX)) return { mode: "margin", left, top, width: inner };
-  const pill = toolbarPlace({ bounds: mark, viewport, size: { width: STRIP_ABOVE_WIDTH_PX, height: STRIP_ROW_PX } });
-  return pill === null ? null : { mode: "above", left: pill.left, top: pill.top, width: STRIP_ABOVE_WIDTH_PX };
+  const height = oneRow ? STRIP_ROW_PX : STRIP_TWO_ROWS_PX;
+  return { mode: "margin", left: margin.left + MARGIN_INSET_PX, top: placeInMargin(margin, mark.top, height), width: inner };
 }
 
 /** The first line of the highlight's mark on the page now (its own mark and the nested parts of it, in reading order), or null when it is not drawn. */
@@ -149,25 +134,18 @@ export function HighlightStripHost({ paperId }: { paperId: string }): ReactEleme
     () => usePlace.getState().placed,
     () => null,
   );
-  // The mode it is drawn in now: the hysteresis needs to know which way it is switching.
-  const mode = useRef<StripMode | null>(null);
 
   // Where the mark is now, and so where the strip stands (or that it goes). Reads the store, not the render's id: it runs from a frame.
   const place = useCallback((): void => {
     const current = useHighlightStrip.getState().id;
     if (current === null || margin === null) return;
     const line = markLine(document, current);
-    const next =
-      line === null
-        ? null
-        : stripStanding({ mark: line, viewport: { width: window.innerWidth, height: window.innerHeight }, margin, cards: openCardRects(document), mode: mode.current });
+    const next = line === null ? null : stripStanding({ mark: line, viewport: { width: window.innerWidth, height: window.innerHeight }, margin });
     if (next === null) {
-      mode.current = null;
       useHighlightStrip.getState().hide();
       putPlace(null);
       return;
     }
-    mode.current = next.mode;
     putPlace({ ...next, id: current });
   }, [margin]);
 
@@ -176,8 +154,8 @@ export function HighlightStripHost({ paperId }: { paperId: string }): ReactEleme
     place();
   });
 
-  // While a strip stands: the page's scroll (in the capture phase, so a scrolled pane counts), the window's resize and each change of the window
-  // stack (a card opened or closed) ask for a measure in the next frame — one at a time — and the frame repaints before it is drawn.
+  // While a strip stands: the page's scroll (in the capture phase, so a scrolled pane counts) and the window's resize ask for a measure in the next
+  // frame — one at a time — and the frame repaints before it is drawn. A card opening or closing at the mark's height moves nothing (P11-27 rule 1).
   useEffect(() => {
     if (id === null || margin === null) return;
     let pending: number | null = null;
@@ -190,11 +168,9 @@ export function HighlightStripHost({ paperId }: { paperId: string }): ReactEleme
     };
     window.addEventListener("scroll", schedule, true);
     window.addEventListener("resize", schedule);
-    const stopStack = useWindows.subscribe(schedule);
     return () => {
       window.removeEventListener("scroll", schedule, true);
       window.removeEventListener("resize", schedule);
-      stopStack();
       if (pending !== null) window.cancelAnimationFrame(pending);
     };
   }, [id, margin, place]);
