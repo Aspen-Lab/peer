@@ -328,6 +328,156 @@ describe("followHash — the arrival waits for its block, then goes there once (
   });
 });
 
+// P11-20 follow-up (ruling §1h.119, item 3b): on a phone the page settles late — the one column's figure card, 197 px at the top for an upload with no
+// picture, is taken out of the page about a second after the Summary shows, in the middle of the arrival's smooth scroll, which keeps its first target
+// and ends 186 px past the block (top −106 at 390 × 844). For the new arrivals only — a Summary block, the answers' block — `followHash` lands the block
+// again once the page has settled: after the images on the page have loaded or failed, and two frames in which the scroll has not moved, at most one
+// extra correction, within two seconds of the first scroll, and none if the reader has moved the page themselves. A paragraph's arrival is what it was.
+describe("followHash — a Summary block or the answers' block is landed again once the page has settled (item 3b)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** A page and a window to watch: the block's top and its scroll calls, the images, the frames asked for and the scroll position, by hand. */
+  const rig = (id: string, top: number, images: { complete: boolean }[] = []) => {
+    const state = { top, y: 0 };
+    const scrolls: unknown[] = [];
+    const element = { getBoundingClientRect: () => ({ top: state.top }), scrollIntoView: (options: unknown) => scrolls.push(options) } as unknown as HTMLElement;
+    const handlers = images.map(() => new Map<string, () => void>());
+    const imgs = images.map((image, i) => ({
+      complete: image.complete,
+      addEventListener: (type: string, run: () => void) => void handlers[i].set(type, run),
+      removeEventListener: (type: string) => void handlers[i].delete(type),
+    }));
+    const frames: (() => void)[] = [];
+    const moves: (() => void)[] = [];
+    const env = {
+      frame: (run: () => void) => {
+        frames.push(run);
+        return () => void frames.splice(frames.indexOf(run), 1);
+      },
+      scrollY: () => state.y,
+      onUserMove: (told: () => void) => {
+        moves.push(told);
+        return () => void moves.splice(moves.indexOf(told), 1);
+      },
+    };
+    const doc = { getElementById: (asked: string) => (asked === id ? element : null), images: imgs };
+    const gone: string[] = [];
+    return { state, scrolls, handlers, imgs, frames, moves, env, doc, gone, frame: () => frames.shift()?.() };
+  };
+  const arrive = (hash: string, r: ReturnType<typeof rig>) => {
+    const stop = followHash(hash, r.doc, (id) => r.gone.push(id), r.env);
+    vi.advanceTimersByTime(250);
+    return stop;
+  };
+
+  it("a block the page left 186 px past its place is landed again after two frames with the scroll still: once, at the top of the window, at once", () => {
+    const r = rig("summary-proposal", -106.2);
+    arrive("#summary-proposal", r);
+    expect(r.gone).toEqual(["summary-proposal"]);
+    expect(r.scrolls).toEqual([]);
+    r.frame();
+    expect(r.scrolls).toEqual([]);
+    r.frame();
+    expect(r.scrolls).toEqual([{ block: "start", behavior: "instant" }]);
+    expect(r.frames).toEqual([]);
+    vi.advanceTimersByTime(5000);
+    expect(r.scrolls).toHaveLength(1);
+  });
+
+  it("the answers' block is a new arrival too", () => {
+    const r = rig("answers-block", 300);
+    arrive("#answers-block", r);
+    r.frame();
+    r.frame();
+    expect(r.scrolls).toHaveLength(1);
+  });
+
+  it("a block already within two pixels of 80 is left where it is", () => {
+    for (const top of [80, 79.4, 81.9]) {
+      const r = rig("summary-proposal", top);
+      arrive("#summary-proposal", r);
+      r.frame();
+      r.frame();
+      expect(r.scrolls, String(top)).toEqual([]);
+    }
+  });
+
+  it("waits for the images on the page to load or fail, then two frames", () => {
+    const r = rig("summary-proposal", -106, [{ complete: true }, { complete: false }, { complete: false }]);
+    arrive("#summary-proposal", r);
+    expect(r.frames).toHaveLength(0);
+    r.handlers[1].get("load")?.();
+    expect(r.frames).toHaveLength(0);
+    r.handlers[2].get("error")?.();
+    expect(r.frames).toHaveLength(1);
+    r.frame();
+    r.frame();
+    expect(r.scrolls).toHaveLength(1);
+  });
+
+  it("while the scroll is still moving the two frames are not yet: the correction comes after two that agree", () => {
+    const r = rig("summary-proposal", -106);
+    arrive("#summary-proposal", r);
+    r.state.y = 100;
+    r.frame();
+    r.state.y = 400;
+    r.frame();
+    r.frame();
+    expect(r.scrolls).toEqual([]);
+    r.frame();
+    expect(r.scrolls).toHaveLength(1);
+  });
+
+  it("an image that never settles does not keep it waiting: at two seconds from the first scroll it lands the block, once", () => {
+    const r = rig("summary-proposal", -106, [{ complete: false }]);
+    arrive("#summary-proposal", r);
+    vi.advanceTimersByTime(1999);
+    expect(r.scrolls).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(r.scrolls).toHaveLength(1);
+    vi.advanceTimersByTime(5000);
+    expect(r.scrolls).toHaveLength(1);
+    expect(r.moves).toEqual([]);
+  });
+
+  it("a reader who has moved the page themselves is not pulled back", () => {
+    const r = rig("summary-proposal", -106);
+    arrive("#summary-proposal", r);
+    r.moves[0]?.();
+    r.frame();
+    r.frame();
+    vi.advanceTimersByTime(5000);
+    expect(r.scrolls).toEqual([]);
+    expect(r.frames).toEqual([]);
+  });
+
+  it("leaving the page stops it: no frame, no listener, no correction", () => {
+    const r = rig("summary-proposal", -106);
+    const stop = arrive("#summary-proposal", r);
+    stop?.();
+    expect(r.frames).toEqual([]);
+    expect(r.moves).toEqual([]);
+    vi.advanceTimersByTime(5000);
+    expect(r.scrolls).toEqual([]);
+  });
+
+  it("a paragraph's arrival is what it was: no look at the images, no frame, no listener, no correction", () => {
+    const r = rig("paper-section-0-p2", -106, [{ complete: false }]);
+    arrive("#paper-section-0-p2", r);
+    expect(r.gone).toEqual(["paper-section-0-p2"]);
+    expect(r.frames).toEqual([]);
+    expect(r.moves).toEqual([]);
+    expect(r.handlers[0].size).toBe(0);
+    vi.advanceTimersByTime(5000);
+    expect(r.scrolls).toEqual([]);
+  });
+});
+
 // ── P10-09c ───────────────────────────────────────────────────────────────
 
 describe("stickyRows — with the notes window in the stack (P10-09c, B9)", () => {

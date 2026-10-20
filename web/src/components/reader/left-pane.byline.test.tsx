@@ -5,20 +5,24 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { Paper } from "@/types";
 
-// P11-20 rule 2 (BACKLOG-100; C P11-17c "For the manager" 2; ruling §1h.118): C P11-17c's rule 2 holds on an uploaded paper, but a paper from the
-// briefing has a venue line, a byline (three names and "and N more") and the first author's affiliation in the title block, about 117 px more in
-// the left pane's fixed zone, which then scrolled inside itself again. On a window under 700 css px high — the one the zone's other short-window rules
-// are for — the byline and the affiliation are each one line with an ellipsis; the whole of each stays in its `title=` and in the pane's details (the
-// scroll zone: the full author list and the affiliation, shown on those windows only). The venue line stays whole; the title, the commands and the
-// progress are never hidden; the cap is not raised. The heights themselves are measured in a browser (the P11-20 checkpoint); a unit test cannot lay
-// a line out, so this file pins the SHAPE: the hooks, the titles, where the rules are, what they touch, and that one column is what it was.
-// Every name and affiliation is invented.
+// P11-20 follow-up (ruling §1h.119, item 2a; BACKLOG-100): a briefing paper's venue line, byline and affiliation took 117 px of the left pane's fixed
+// zone, and clamping them to one line on a window under 700 css px high (the first answer, retired below) recovered 22 to 176 px of a zone that
+// overflowed by more. In the three panes the fixed zone now holds only what must stay in view while reading — the title, the commands, the strip, the
+// report's progress — and the paper's bibliographic lines (the venue and its age, the byline with its "and N more", the affiliation, and the line
+// saying why a briefing paper is here) are the head of the details, in the scroll zone after the map, whole at every height. In one column nothing
+// changes, byte for byte. The heights are measured in a browser (the P11-20 checkpoint); this file pins the SHAPE: what stands where, in which
+// order, that nothing is clamped or hidden, and that one column is what it was. Every name and affiliation is invented.
+//
+// Retired with their function (§1c): this file's cases for the one-line clamp — "carries the hooks the short-window rule reads, and the whole of
+// each line in its title=", "puts the comma and the control that opens the rest in one element…", "with three names or fewer there is no control, and
+// so no element for it…", "make the byline and the affiliation one line each, cut with an ellipsis…", "take the control that opens the rest away
+// there…", "show the details' copy of the byline there, and only there", and the three cases of "the details in the pane" for the hidden copy.
 
 let spread = true;
 vi.mock("./reader-layout", () => ({ useSpread: () => spread }));
 
 import { DecisionBlock } from "./decision-block";
-import { TitleBlock } from "./title-block";
+import { Bibliography, TitleBlock } from "./title-block";
 
 const NOW = Date.UTC(2026, 9, 3);
 const AUTHORS = ["A. Writer", "B. Reader", "C. Author", "D. Fourth", "E. Fifth"];
@@ -27,70 +31,32 @@ const paper = (extra: Partial<Paper> = {}): Paper =>
   ({ id: "p1", title: "A Survey of Shore Ecology", authors: AUTHORS, leadAffiliation: AFFILIATION, relevanceReason: "", venue: "Nature Communications", publishedDate: "2026-10-01T00:00:00Z", summaryIntro: "", summaryExperimentKeywords: [], summaryResultDiscussion: "", source: "arxiv", isSaved: false, ...extra }) as unknown as Paper;
 const title = (p: Paper, pane?: boolean, recommendation: string | null = null) =>
   renderToStaticMarkup(createElement(TitleBlock, { paper: p, recommendation, now: NOW, ...(pane === undefined ? {} : { pane }) }));
-const tagOf = (html: string, pattern: RegExp) => pattern.exec(html)?.[0] ?? "";
+const biblio = (p: Paper, recommendation: string | null = null) => renderToStaticMarkup(createElement(Bibliography, { paper: p, recommendation, now: NOW }));
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 const CSS = read("src/app/globals.css");
-const SHORT = "@media (max-height: 699px)";
-const shortBlock = () => {
-  const start = CSS.indexOf(SHORT);
-  expect(start, `${SHORT} is in globals.css`).toBeGreaterThanOrEqual(0);
-  return CSS.slice(start, CSS.indexOf("\n}", start) + 2);
-};
-/** The declarations of the rule in `block` whose selector list names `hook`. */
-const declarationsFor = (block: string, hook: string): string => {
-  for (const chunk of block.split("}")) {
-    const open = chunk.indexOf("{");
-    if (open >= 0 && chunk.slice(0, open).includes(hook)) return chunk.slice(open + 1);
-  }
-  return "";
-};
+const noComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
 
-describe("the byline in the pane (title-block.tsx)", () => {
-  it("carries the hooks the short-window rule reads, and the whole of each line in its title=: every author, not the first three", () => {
-    const html = title(paper(), true);
-    const byline = tagOf(html, /<p\b[^>]*data-pane-byline[^>]*>/);
-    const affiliation = tagOf(html, /<p\b[^>]*data-pane-affiliation[^>]*>/);
-
-    expect(byline).toContain(`title="${AUTHORS.join(", ")}"`);
-    expect(affiliation).toContain(`title="${AFFILIATION}"`);
-    // The three names stay the words of the line; the others are named by the control.
-    expect(html).toContain("A. Writer, B. Reader, C. Author, ");
-    expect(html).toContain(AFFILIATION);
-  });
-
-  it("puts the comma and the control that opens the rest in one element the short-window rule can take away", () => {
-    const html = title(paper(), true);
-    const more = /<span\b[^>]*data-pane-more[^>]*>(.*?)<\/span>/.exec(html)?.[1] ?? "";
-
-    expect(more).toMatch(/^, <button\b[^>]*>and 2 more<\/button>$/);
-    // The three names are outside it: they are what the line is.
-    expect(html.indexOf("C. Author")).toBeLessThan(html.indexOf("data-pane-more"));
-  });
-
-  it("with three names or fewer there is no control, and so no element for it; the title is still the whole line", () => {
-    const html = title(paper({ authors: ["A. Writer", "B. Reader"] }), true);
-
-    expect(html).not.toContain("data-pane-more");
-    expect(tagOf(html, /<p\b[^>]*data-pane-byline[^>]*>/)).toContain('title="A. Writer, B. Reader"');
-  });
-
-  it("leaves the venue line whole: no hook, no title, the markup it had", () => {
-    const html = title(paper(), true);
-
-    expect(html).toContain('<p class="annotation text-meta text-text-muted mt-1">Nature Communications · 2d ago</p>');
-    expect(tagOf(html, /<p\b[^>]*>Nature Communications/)).not.toMatch(/data-|title=/);
-  });
-
-  it("an upload has no byline, no affiliation and no venue: the block is the title alone, hooks or no hooks", () => {
-    const upload = paper({ authors: [], leadAffiliation: undefined, venue: "", publishedDate: undefined });
-    const html = title(upload, true);
+describe("the title in the pane stands alone (title-block.tsx)", () => {
+  it("is the title and nothing else: no venue line, no byline, no affiliation, no recommendation", () => {
+    const html = title(paper(), true, "Why it is here.");
 
     expect(html).toMatch(/^<header><h1\b[^>]*>A Survey of Shore Ecology<\/h1><\/header>$/);
-    expect(html).not.toMatch(/data-pane-(byline|affiliation|more)/);
+    for (const gone of ["Nature Communications", "A. Writer", AFFILIATION, "Why it is here.", "<button", "annotation"]) expect(html, gone).not.toContain(gone);
   });
 
-  it("one column is what it was, byte for byte: no hook, no title=, no wrapper around the control", () => {
+  it("keeps what the pane's title had: four lines, the whole of it in title=, the hook the short-window rule reads, the pane's size", () => {
+    const html = title(paper(), true);
+    const h1 = /<h1\b[^>]*>/.exec(html)?.[0] ?? "";
+
+    expect(h1).toMatch(/class="[^"]*\bline-clamp-4\b/);
+    expect(h1).toContain('title="A Survey of Shore Ecology"');
+    expect(h1).toContain("data-pane-title");
+    expect(h1).toMatch(/class="[^"]*\btext-display-sm\b/);
+    expect(h1).not.toMatch(/\bsm:text-display\b/);
+  });
+
+  it("one column is what it was, byte for byte: the venue line, the title, the byline, the recommendation", () => {
     const html = title(paper(), undefined, "Why it is here.");
 
     expect(html).toBe(
@@ -100,74 +66,89 @@ describe("the byline in the pane (title-block.tsx)", () => {
   });
 });
 
-describe("the short-window rules for the byline (globals.css)", () => {
-  it("make the byline and the affiliation one line each, cut with an ellipsis, on a window under 700 css px high", () => {
-    for (const hook of ["[data-pane-byline]", "[data-pane-affiliation]"]) {
-      const declarations = declarationsFor(shortBlock(), `.reader-left ${hook}`);
+describe("the bibliography heads the pane's details (title-block.tsx, decision-block.tsx)", () => {
+  it("is the venue and its age, the byline with its control for the rest, the affiliation and the recommendation, in the order the title block had them", () => {
+    const html = biblio(paper(), "Why it is here.");
+    const at = (needle: string) => html.indexOf(needle);
 
-      expect(declarations, hook).toMatch(/white-space:\s*nowrap;/);
-      expect(declarations, hook).toMatch(/overflow:\s*hidden;/);
-      expect(declarations, hook).toMatch(/text-overflow:\s*ellipsis;/);
-    }
+    expect(html).toContain("Nature Communications · 2d ago");
+    expect(html).toContain("A. Writer, B. Reader, C. Author, ");
+    expect(html).toMatch(/<button\b[^>]*aria-expanded="false"[^>]*>and 2 more<\/button>/);
+    expect(html).toContain(AFFILIATION);
+    expect(html).toContain("Why it is here.");
+    expect(at("Nature Communications")).toBeLessThan(at("A. Writer"));
+    expect(at("A. Writer")).toBeLessThan(at(AFFILIATION));
+    expect(at(AFFILIATION)).toBeLessThan(at("Why it is here."));
   });
 
-  it("take the control that opens the rest away there (it would sit past the ellipsis, out of reach): the details hold the list", () => {
-    expect(declarationsFor(shortBlock(), ".reader-left [data-pane-more]")).toMatch(/display:\s*none;/);
+  it("is whole at every height: nothing clamped, hidden, cut with an ellipsis or taken away on a short window, and no title= repeating a line", () => {
+    const html = biblio(paper());
+
+    expect(html).not.toMatch(/title=|\bhidden\b|truncate|line-clamp|nowrap|data-pane-(byline|affiliation|more)/);
+    expect(html).toContain('data-pane-bibliography=""');
   });
 
-  it("show the details' copy of the byline there, and only there", () => {
-    expect(declarationsFor(shortBlock(), ".reader-left [data-pane-byline-full]")).toMatch(/display:\s*block;/);
-    // The rest of the stylesheet, comments aside (the one above the block explains the rules and names the hooks).
-    expect(CSS.replace(shortBlock(), "").replace(/\/\*[\s\S]*?\*\//g, "")).not.toMatch(/data-pane-(byline|affiliation|more)/);
+  it("the venue line takes the details' rhythm, not the one column's 24 px top gap", () => {
+    const meta = /<p class="([^"]*)">Nature Communications/.exec(biblio(paper()))?.[1] ?? "";
+
+    expect(meta).toContain("annotation");
+    expect(meta.split(/\s+/)).not.toContain("mt-6");
   });
 
-  it("leave the venue line, the title's other rule, the commands, the progress and the map alone: no rule of the block names them", () => {
-    const block = shortBlock();
+  it("says only what the record knows: no venue, no date, no authors, no recommendation — an upload — draws nothing at all", () => {
+    expect(biblio(paper({ authors: [], leadAffiliation: undefined, venue: "", publishedDate: undefined }))).toBe("");
+    expect(biblio(paper({ authors: [], leadAffiliation: undefined }))).toContain("Nature Communications");
+    expect(biblio(paper({ authors: [], leadAffiliation: undefined }))).not.toContain("<button");
+    expect(biblio(paper({ venue: "", publishedDate: undefined }))).not.toContain("annotation text-meta");
+  });
 
-    expect(block).not.toMatch(/data-pane-meta|\.annotation|progress|reader-left-scroll|reader-left-fixed|<h1|\bh1\b/);
+  const base = { sentences: ["SENTENCE-MARK."], stage: null, source: null, doi: undefined, isSaved: false, showAddKey: false, onSave: () => {}, onCopy: () => {}, onOpen: () => {} };
+  const details = (props: Record<string, unknown>) => renderToStaticMarkup(createElement(DecisionBlock, { ...base, part: "details", ...props } as never));
+
+  it("in the panes the details open with it, before the sentence", () => {
+    spread = true;
+    const html = details({ paper: paper(), now: NOW, recommendation: "Why it is here." });
+
+    expect(html.indexOf("data-pane-bibliography")).toBeGreaterThanOrEqual(0);
+    expect(html.indexOf("data-pane-bibliography")).toBeLessThan(html.indexOf("SENTENCE-MARK."));
+    expect(html).toContain("A. Writer, B. Reader, C. Author, ");
+    expect(html).toContain("Why it is here.");
+  });
+
+  it("in one column the title block has the lines: the details do not say them twice", () => {
+    spread = false;
+    const html = details({ paper: paper(), now: NOW, recommendation: "Why it is here." });
+
+    expect(html).not.toContain("data-pane-bibliography");
+    expect(html).not.toContain("A. Writer");
+    expect(html).toContain("SENTENCE-MARK.");
+    spread = true;
+  });
+
+  it("without a paper (the other callers of the details) there is nothing to draw", () => {
+    spread = true;
+
+    expect(details({})).not.toContain("data-pane-bibliography");
+  });
+
+  it("the page hands the details the paper, the clock and the recommendation — the title block's own", () => {
+    const page = read("src/app/papers/[id]/page.tsx");
+    const block = /<DecisionBlock\s+part="details"[\s\S]*?\/>/.exec(page)?.[0] ?? "";
+
+    expect(block).toMatch(/\bpaper=\{paper\}/);
+    expect(block).toMatch(/\brecommendation=\{recommendation\}/);
+    expect(block).toMatch(/\bnow=\{now\}/);
+    expect(page).toMatch(/<TitleBlock paper=\{paper\} recommendation=\{recommendation\} now=\{now\} pane=\{spread\} \/>/);
   });
 });
 
-describe("the details in the pane (decision-block.tsx)", () => {
-  const base = { sentences: ["SENTENCE-MARK."], stage: null, source: null, doi: undefined, isSaved: false, showAddKey: false, onSave: () => {}, onCopy: () => {}, onOpen: () => {} };
-  const many = Array.from({ length: 63 }, (_, i) => `Coauthor Number${i + 1}`);
-  const details = (props: Record<string, unknown>) => renderToStaticMarkup(createElement(DecisionBlock, { ...base, part: "details", ...props } as never));
-
-  it("holds the whole list of authors and the affiliation, in a block the short-window rule shows and a taller window leaves hidden", () => {
-    spread = true;
-    const html = details({ authors: many, affiliation: AFFILIATION });
-    const block = tagOf(html, /<div\b[^>]*data-pane-byline-full[^>]*>/);
-
-    expect(block).toMatch(/class="[^"]*\bhidden\b/);
-    expect(html).toContain(many.join(", "));
-    expect(html).toContain(AFFILIATION);
+describe("the stylesheet no longer clamps the byline (globals.css)", () => {
+  it("has no rule for the byline, the affiliation, the control that opens the rest or a hidden copy: the first answer is retired", () => {
+    expect(noComments(CSS)).not.toMatch(/data-pane-(byline|affiliation|more)/);
   });
 
-  it("puts it before the sentence: it is the first thing the scroll zone says about the paper", () => {
-    spread = true;
-    const html = details({ authors: AUTHORS, affiliation: AFFILIATION });
-
-    expect(html.indexOf("data-pane-byline-full")).toBeGreaterThanOrEqual(0);
-    expect(html.indexOf("data-pane-byline-full")).toBeLessThan(html.indexOf("SENTENCE-MARK."));
-  });
-
-  it("says only what the record knows: authors without an affiliation, an affiliation without authors, neither (an upload) — nothing drawn", () => {
-    spread = true;
-
-    expect(details({ authors: AUTHORS })).not.toContain(AFFILIATION);
-    expect(details({ authors: AUTHORS })).toContain(AUTHORS.join(", "));
-    expect(details({ authors: [], affiliation: AFFILIATION })).toContain(AFFILIATION);
-    expect(details({ authors: [], affiliation: AFFILIATION })).not.toMatch(/<p\b[^>]*>\s*<\/p>/);
-    expect(details({})).not.toContain("data-pane-byline-full");
-    expect(details({ authors: [] })).not.toContain("data-pane-byline-full");
-  });
-
-  it("in one column the title block shows the byline whole: the details do not say it twice", () => {
-    spread = false;
-    const html = details({ authors: AUTHORS, affiliation: AFFILIATION });
-
-    expect(html).not.toContain("data-pane-byline-full");
-    expect(html).not.toContain(AFFILIATION);
-    spread = true;
+  it("keeps the title's short-window rule and the gaps (C P11-17c)", () => {
+    expect(noComments(CSS)).toMatch(/\[data-pane-title\]\s*\{\s*-webkit-line-clamp:\s*3;/);
+    expect(noComments(CSS)).toMatch(/--pane-gap:\s*0\.5rem;/);
   });
 });

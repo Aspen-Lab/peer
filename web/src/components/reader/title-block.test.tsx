@@ -42,11 +42,15 @@ describe("TitleBlock in the left pane (P11-16)", () => {
     expect(long.filter((c) => /display/.test(c) && c !== "text-display-sm")).toEqual([]);
   });
 
-  it("takes the pane's tighter top: the meta line does not carry the one column's 24px gap", () => {
-    const meta = /<p class="([^"]*)">[^<]*·/.exec(renderToStaticMarkup(createElement(TitleBlock, { paper: { ...paper("T"), venue: "arXiv", publishedDate: "2026-10-01T00:00:00Z" }, recommendation: null, now: Date.UTC(2026, 9, 3), pane: true })))?.[1] ?? "";
+  // Re-aimed (P11-20 follow-up, item 2a, §1c): was "takes the pane's tighter top: the meta line does not carry the one column's 24px gap". The meta
+  // line is not in the pane's fixed zone any more (it heads the details: `left-pane.byline.test.tsx`, where its top gap is pinned); what the pane's
+  // tighter top is now is the title's alone, with nothing above it.
+  it("takes the pane's tighter top: the title is first, with no meta line above it carrying the one column's 24px gap", () => {
+    const html = renderToStaticMarkup(createElement(TitleBlock, { paper: { ...paper("T"), venue: "arXiv", publishedDate: "2026-10-01T00:00:00Z" }, recommendation: null, now: Date.UTC(2026, 9, 3), pane: true }));
 
-    expect(meta).toContain("annotation");
-    expect(meta.split(/\s+/)).not.toContain("mt-6");
+    expect(html).toMatch(/^<header><h1\b/);
+    expect(html).not.toContain("arXiv");
+    expect(html).not.toContain("mt-6");
   });
 });
 
