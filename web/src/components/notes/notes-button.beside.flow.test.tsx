@@ -64,18 +64,17 @@ const markupOf = (tree: ReactNode) => renderToStaticMarkup(createElement(NotesBu
 
 /** Mount `NotesButton`; the reader then presses the tab `presses` times, each on the render the last press made. Returns the last render's tree. */
 async function mountButton(variant: "edge" | "row", presses = 0): Promise<ReactNode> {
-  let last: ReactNode = null;
+  const latest = { tree: null as ReactNode };
   await hookRuntime.mount(() => {
     const [step, setStep] = useState(0);
-    const tree = NotesButton({ variant, paper });
-    last = tree;
+    latest.tree = NotesButton({ variant, paper });
     useEffect(() => {
-      if (step < presses) (viewOf(tree).props.onOpen as () => void)();
+      if (step < presses) (viewOf(latest.tree).props.onOpen as () => void)();
       setStep(step + 1);
     }, [step]);
-    return tree;
+    return latest.tree;
   });
-  return last;
+  return latest.tree;
 }
 
 beforeEach(() => {
