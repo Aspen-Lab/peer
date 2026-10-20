@@ -11,7 +11,14 @@
 // `spread`): Fit has a layout to balance and is enabled, and there is no gap above it — the pane's header row above has its own. In one column
 // the decision block's details draw it, without `spread`, as ever. It is the caller that knows the layout, so the strip no longer asks
 // `useSpread` (and `reader-layout.tsx` can import it without a cycle).
+//
+// P11-23 rule 3 (round 1's three blind readers, 0.25 each; ruling §1h.121): the sun means "system" (S16: the default, which follows the OS), and it was
+// labelled "Day reading mode" and drawn pressed on a dark page — a control claiming a mode the reader does not see. No control is drawn pressed while it
+// names a mode the page is not in: the sun's name and tooltip say what it does — "Follow the system" — and, read live from the media query, what that is
+// now ("(now dark)" / "(now light)"); and its icon is the sun only while the system is light. While the system is dark it is a half-lit disc, the
+// "system" mark, never a sun on a dark page. What a press does is as it was: the sun sets "system", the moon "dark".
 
+import { useSyncExternalStore } from "react";
 import { IconButton } from "@/components/ui/button";
 import { IconExpand, IconMoon, IconSun } from "@/components/icons";
 import { withThemeTransition, withZoomTransition } from "@/lib/theme";
@@ -25,6 +32,47 @@ import type { ColorTheme, ThemeMode } from "@/types";
 // neighbours (`gap-2` on the strip). With a mouse they are the 28 px they
 // were; the floor sits behind the media query so it cannot grow them.
 const TOUCH = "[@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11";
+
+const DARK_SCHEME = "(prefers-color-scheme: dark)";
+
+function subscribeSystemScheme(onChange: () => void): () => void {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return () => {};
+  const query = window.matchMedia(DARK_SCHEME);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+/** Whether the system (the OS, through the browser) is dark now; `null` where it cannot be asked (a server render, a browser with no media queries). */
+function systemIsDark(): boolean | null {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia(DARK_SCHEME).matches : null;
+}
+
+/** P11-23 rule 3: the sun's name and tooltip — what the press does, and, when it is known, what that is now. */
+export function systemModeLabel(dark: boolean | null): string {
+  return dark === null ? "Follow the system" : `Follow the system (now ${dark ? "dark" : "light"})`;
+}
+
+/** P11-23 rule 3: the "system" mark, a disc half lit — the sun's place in the strip while the system is dark (the shared set has no such glyph, and the
+ *  strip is the only place that needs it). Drawn as the shared icons are: 24 × 24, the stroke and the round caps of the strip's other glyphs. */
+function SystemGlyph({ size = 14 }: { size?: number }) {
+  return (
+    <svg
+      data-glyph="system"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" />
+    </svg>
+  );
+}
 
 function Divider() {
   return <span aria-hidden className="mx-1 h-4 w-px bg-border-strong" />;
@@ -41,12 +89,15 @@ export function ReadingControls({ spread = false }: { spread?: boolean }) {
   const fit = useReadingPrefsStore((s) => s.fit);
   const setFit = useReadingPrefsStore((s) => s.setFit);
 
-  // S16: sun = system (the existing default), moon = night — the same
+  // S16: sun = system (the existing default; P11-23: named for what it does, and a sun only while the system is light), moon = night — the same
   // `mode:accent` plumbing the Profile page's own picker already drives, so
   // the two stay in sync through one source of truth (`profile.colorTheme`).
   const colorTheme = useProfileStore((s) => s.profile.colorTheme);
   const updateColorTheme = useProfileStore((s) => s.updateColorTheme);
   const [mode, accent] = colorTheme.split(":") as [ThemeMode, string];
+  // P11-23 rule 3: what the system is now, live, for the sun's name and glyph (unknown on the server and before the first client render).
+  const systemDark = useSyncExternalStore(subscribeSystemScheme, systemIsDark, () => null);
+  const systemLabel = systemModeLabel(systemDark);
   const setMode = (nextMode: "system" | "dark") => {
     // S17: a click fades the palette over ~1s; hydration and background
     // profile syncs never go through this wrapper, so they stay instant.
@@ -80,13 +131,14 @@ export function ReadingControls({ spread = false }: { spread?: boolean }) {
       </IconButton>
       <Divider />
       <IconButton
-        aria-label="Day reading mode"
+        aria-label={systemLabel}
+        title={systemLabel}
         aria-pressed={mode === "system"}
         tone={mode === "system" ? "soft" : "ghost"}
         className={TOUCH}
         onClick={() => setMode("system")}
       >
-        <IconSun size={14} />
+        {systemDark ? <SystemGlyph /> : <IconSun size={14} />}
       </IconButton>
       <IconButton
         aria-label="Night reading mode"
