@@ -736,6 +736,12 @@ html[data-mode="dark"] {
 .reader-divider {
   cursor: col-resize;
   touch-action: none;
+  /* The separator is as tall as the row, so the browser's keyboard focus-scroll aligns its top edge with the window's; at scroll 0 that
+     edge sits 4rem down (the masthead plus the article's padding) and the page jumped 64px the first time focus reached it. Counting that
+     4rem — the pane's own sticky `top` — as part of the separator leaves nothing to align. Top only: `scroll-margin-block` throws Tab
+     from the paper's last link to the margin's separator back to the top, and `scroll-padding` on `html` would move every `scroll-mt-20`
+     landing (P11-29; B P11-24). */
+  scroll-margin-top: calc(4rem / var(--page-zoom, 1));
 }
 .reader-divider:focus-visible {
   outline: none;
