@@ -13,7 +13,7 @@ import { readingNoteFor, useNotesStore } from "@/store/notes";
 import { reconcileWindow } from "./notes-window";
 import { SUMMARY_ID } from "@/components/reader/paper-words";
 import { ANSWERS_BLOCK_ID, SUMMARY_ID_PREFIX } from "./note-tags";
-import { STICKY_SAVE_MS, StickyWindowView, blockFromHash, closeSticky, followHash, makeStickyWriter, passageFromHash, stickyFollowText, stickyRows, takeStickyNote, withoutSticky } from "./sticky-note";
+import { STICKY_SAVE_MS, StickyWindowView, blockFromHash, browserArrival, closeSticky, followHash, makeStickyWriter, passageFromHash, stickyFollowText, stickyRows, takeStickyNote, withoutSticky } from "./sticky-note";
 
 // P10-09a (review 7.1; rubric B7–B10; ruling §1h.78): "Take notes" opens a numbered sticky at the right, its
 // header "Note N" with the passage's first words quoted and a Close (×), a text area focused at once; typing writes
@@ -485,6 +485,117 @@ describe("followHash — a Summary block or the answers' block is landed again o
     expect(r.handlers[0].size).toBe(0);
     vi.advanceTimersByTime(5000);
     expect(r.scrolls).toEqual([]);
+  });
+});
+
+// P11-20 follow-up (ruling §1h.123, rule 1b): on `/notes/<id>` the blue square for a body note reached its paragraph only after about 9 s. The arrival's poll —
+// a look every 250 ms, forty looks — is a timer, and on a long page it is queued behind the work of drawing it: the paragraph was in the page long before the next
+// look ran. An arrival now lands as soon as its target is drawn — a paragraph, a Summary block or the answers' block: it is told when the page's tree changes
+// (`onTreeChange`, a MutationObserver in the browser) and looks then, and once as the page is mounted; the poll stays as the outer bound.
+describe("followHash — an arrival lands as soon as its target is drawn (rule 1b)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** A page that draws `id` when `draw()` is called, and tells whoever watches its tree, as the browser's observer does. */
+  const rig = (id: string) => {
+    const state = { drawn: false, watchers: 0, stopped: 0, told: undefined as (() => void) | undefined };
+    const element = { getBoundingClientRect: () => ({ top: 80 }), scrollIntoView: () => {} } as unknown as HTMLElement;
+    const doc = { getElementById: (asked: string) => (state.drawn && asked === id ? element : null) };
+    const env = {
+      frame: () => () => {},
+      scrollY: () => 0,
+      onUserMove: () => () => {},
+      onTreeChange: (told: () => void) => {
+        state.watchers += 1;
+        state.told = told;
+        return () => {
+          state.stopped += 1;
+          state.told = undefined;
+        };
+      },
+    };
+    const gone: string[] = [];
+    return { state, doc, env, gone, draw: () => { state.drawn = true; state.told?.(); } };
+  };
+
+  for (const id of ["paper-section-0-p2", "summary-proposal", "answers-block"]) {
+    it(`#${id}: lands at the moment the page's tree changes to hold it — not at the next look, and not twice`, () => {
+      const r = rig(id);
+      followHash(`#${id}`, r.doc, (target) => r.gone.push(target), r.env);
+      expect(r.state.watchers).toBe(1);
+      vi.advanceTimersByTime(250 * 5);
+      expect(r.gone).toEqual([]);
+      // drawn between two looks of the poll: the observer's call, with no timer advanced, lands it
+      r.draw();
+      expect(r.gone).toEqual([id]);
+      expect(r.state.stopped).toBe(1);
+      vi.advanceTimersByTime(250 * 10);
+      expect(r.gone).toEqual([id]);
+      r.state.told?.();
+      expect(r.gone).toEqual([id]);
+    });
+  }
+
+  it("a target the page already holds when it is mounted is landed once the page's own effects have run, with no timer advanced", async () => {
+    const r = rig("paper-section-0-p2");
+    r.state.drawn = true;
+    followHash("#paper-section-0-p2", r.doc, (target) => r.gone.push(target), r.env);
+    expect(r.gone).toEqual([]);
+    await Promise.resolve();
+    expect(r.gone).toEqual(["paper-section-0-p2"]);
+    expect(r.state.stopped).toBe(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("the paragraph's arrival ends at the landing: no timer left, no listener of the moves of the page", () => {
+    const r = rig("paper-section-0-p2");
+    followHash("#paper-section-0-p2", r.doc, (target) => r.gone.push(target), r.env);
+    r.draw();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("leaving the page stops the watching: no landing from a later change of the tree", () => {
+    const r = rig("summary-proposal");
+    const stop = followHash("#summary-proposal", r.doc, (target) => r.gone.push(target), r.env);
+    stop?.();
+    expect(r.state.stopped).toBe(1);
+    r.draw();
+    expect(r.gone).toEqual([]);
+  });
+
+  it("the poll is still the outer bound: after forty looks it gives up, and the watching with it", () => {
+    const r = rig("summary-proposal");
+    followHash("#summary-proposal", r.doc, (target) => r.gone.push(target), r.env);
+    vi.advanceTimersByTime(250 * 40);
+    expect(r.state.stopped).toBe(1);
+    expect(vi.getTimerCount()).toBe(0);
+    r.draw();
+    expect(r.gone).toEqual([]);
+  });
+
+  it("where there is no page to watch (no observer) the poll lands it, as it always did", () => {
+    const r = rig("paper-section-0-p2");
+    const { onTreeChange: _unused, ...quiet } = r.env;
+    void _unused;
+    followHash("#paper-section-0-p2", r.doc, (target) => r.gone.push(target), quiet);
+    r.state.drawn = true;
+    vi.advanceTimersByTime(250);
+    expect(r.gone).toEqual(["paper-section-0-p2"]);
+  });
+
+  it("the browser's own environment watches the tree where there is an observer, and is quiet where there is none", () => {
+    expect(typeof browserArrival.onTreeChange).toBe("function");
+    expect(() => browserArrival.onTreeChange?.(() => {})()).not.toThrow();
+  });
+
+  it("StickyNotes asks for it with the browser's environment: it passes no environment of its own", () => {
+    const src = readFileSync(resolve(process.cwd(), "src/components/notes/sticky-note.tsx"), "utf8");
+    expect(src).toMatch(/followHash\(window\.location\.hash,\s*document,\s*\(id\) =>/);
+    expect(src).toMatch(/onTreeChange: \(told\) => \{[\s\S]*?new MutationObserver\(told\)[\s\S]*?observe\(document\.documentElement, \{ childList: true, subtree: true \}\)/);
   });
 });
 
