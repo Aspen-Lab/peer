@@ -36,7 +36,7 @@ const rulesOf = (block: string): [string, string][] => [...block.matchAll(/([^{}
 const px = (value: string): number => (value.endsWith("rem") ? parseFloat(value) * 16 : parseFloat(value));
 
 const UPLOAD = createElement("i", { "data-upload-row": "" }, "UPLOAD-ROW");
-const base = { sentences: ["SENTENCE-MARK."], stage: null, source: { url: "https://example.org/p.pdf", label: "Open the PDF" }, doi: undefined, isSaved: false, showAddKey: false, onSave: () => {}, onCopy: () => {}, onOpen: () => {}, onRead: () => {}, uploadAction: UPLOAD };
+const base = { sentences: ["SENTENCE-MARK."], stage: null, source: { url: "https://example.org/p.pdf", label: "Open the PDF" }, doi: undefined, isSaved: false, showAddKey: false, onSave: () => {}, onSkip: () => {}, onCopy: () => {}, onOpen: () => {}, onRead: () => {}, uploadAction: UPLOAD };
 const html = (props: Record<string, unknown>) => renderToStaticMarkup(createElement(DecisionBlock, { ...base, ...props } as never));
 const paper = { venue: "Nature Communications", publishedDate: "2026-10-01T00:00:00Z", authors: ["A. Writer", "B. Reader"], leadAffiliation: "University of Invented Studies" } as unknown as Paper;
 

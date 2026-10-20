@@ -270,10 +270,12 @@ function paneProblems(source: string): string[] {
   }
   if (details) {
     if (!details.includes('<DecisionBlock part="details"')) problems.push("the `details` slot is not the details part");
-    for (const prop of ["sentences={sentences}", "doi={paper.doi}", "showAddKey={showAddKey}", "uploadStatus="]) {
+    // Re-aimed (P11-20 follow-up, ruling §1h.120, §1c): the details carry the page's one `uploadAction` element too — in the panes the upload row heads the
+    // details, in one column the commands draw it — so it is no longer forbidden there, and is required. Every other prop is as it was.
+    for (const prop of ["sentences={sentences}", "doi={paper.doi}", "showAddKey={showAddKey}", "uploadStatus=", "uploadAction={uploadAction}"]) {
       if (!details.includes(prop)) problems.push(`the details lost \`${prop}\``);
     }
-    for (const prop of ["ref=", "onSave=", "onCopy=", "onOpen=", "source=", "uploadAction=", "stage="]) {
+    for (const prop of ["ref=", "onSave=", "onCopy=", "onOpen=", "source=", "stage="]) {
       if (details.includes(prop)) problems.push(`the details carry the commands' or the progress' \`${prop}\``);
     }
   }

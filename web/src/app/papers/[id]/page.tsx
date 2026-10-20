@@ -1382,6 +1382,10 @@ function Reader({
   const related = pickRelated(paper, feedPapers);
   const reviewSections = report?.reviewContents?.sections ?? [];
 
+  // P11-20 follow-up (ruling §1h.120): one element, two places — the commands' last row in one column, the details' head in the three panes
+  // (`decision-block.tsx` draws it where the window says).
+  const uploadAction = !paper.id.startsWith("upload:") && uploadsAvailable ? <UploadButton targetPaper={paper} onUploaded={setUpload} /> : undefined;
+
   return (
     // `tabIndex={-1}`: Next's layout router focuses the segment's first
     // element after a client navigation, and an article that cannot take
@@ -1470,7 +1474,7 @@ function Reader({
             notesAction={<NotesButton variant="row" paper={paper} questions={settledQuestions(asked)} forYourQuestions={report?.forYourQuestions} />}
             onRead={hasBody ? readHere : undefined}
             readLabel={BODY.open}
-            uploadAction={!paper.id.startsWith("upload:") && uploadsAvailable ? <UploadButton targetPaper={paper} onUploaded={setUpload} /> : undefined}
+            uploadAction={uploadAction}
           />
         }
         details={
@@ -1481,6 +1485,7 @@ function Reader({
             paper={paper}
             recommendation={recommendation}
             now={now}
+            uploadAction={uploadAction}
             doi={paper.doi}
             showAddKey={showAddKey}
             uploadStatus={upload ? <PrivatePdfStatus upload={upload}

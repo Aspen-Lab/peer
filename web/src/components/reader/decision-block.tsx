@@ -79,6 +79,9 @@ interface CommandsProps {
 /** What the details need. */
 interface DetailsProps {
   sentences: string[];
+  /** P11-20 follow-up (ruling §1h.120): in the panes "Upload full article PDF" is an occasional act, not a reading control: it leaves the commands
+   *  (`CommandsProps.uploadAction`, the same element) and stands in the details, beside the bibliographic lines. In one column it stays in the commands. */
+  uploadAction?: ReactNode;
   /** P11-20 follow-up (item 2a): in the panes the paper's venue and age, byline, affiliation and recommendation head the details (`Bibliography`,
    *  `title-block.tsx`) — the fixed zone holds the title alone. In one column, and without a `paper`, this draws nothing: the title block has them. */
   paper?: Pick<Paper, "venue" | "publishedDate" | "authors" | "leadAffiliation">;
@@ -104,6 +107,8 @@ export type DecisionBlockProps =
   | (Pick<CommandsProps, "ref"> & ProgressProps & { part: "progress" });
 
 function Commands({ onRead, readLabel, source, isSaved, onSave, onSkip, onCopy, onOpen, notesAction, uploadAction }: CommandsProps) {
+  // In the panes the upload row is the details' (`Details`): the fixed zone holds only what must stay in view while reading.
+  const spread = useSpread();
   return (
     <ReaderCommands
       onRead={onRead}
@@ -115,12 +120,12 @@ function Commands({ onRead, readLabel, source, isSaved, onSave, onSkip, onCopy, 
       onCopy={onCopy}
       onOpen={onOpen}
       notesAction={notesAction}
-      uploadAction={uploadAction}
+      uploadAction={spread ? undefined : uploadAction}
     />
   );
 }
 
-function Details({ sentences, paper, recommendation, now = 0, doi, showAddKey, uploadStatus }: DetailsProps) {
+function Details({ sentences, paper, recommendation, now = 0, uploadAction, doi, showAddKey, uploadStatus }: DetailsProps) {
   // From 1024 css px the sentence is a note in the left pane, set at the pane's size with a rule beside it, and the reading controls are
   // at the top of that pane. Below it the sentence is prose in the reading column, and the controls follow the private-PDF line. Either
   // way it follows the commands (P7-14, R2), at the same distance.
@@ -129,6 +134,7 @@ function Details({ sentences, paper, recommendation, now = 0, doi, showAddKey, u
   return (
     <>
       {spread && paper && <Bibliography paper={paper} recommendation={recommendation} now={now} />}
+      {spread && uploadAction && <div data-pane-upload="" className="mt-6">{uploadAction}</div>}
       <p
         className={
           spread

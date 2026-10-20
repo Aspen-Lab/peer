@@ -440,13 +440,18 @@ describe("UploadRetryEmpty (§1bi.8b)", () => {
 // already uses for its "ReadingStrip call site keeps its width classes"
 // check, since this repo has no harness to render the whole effectful page.
 describe("page.tsx source — uploadAction call site stays gated on uploadsAvailable (§1bi.2)", () => {
+  // Re-aimed (P11-20 follow-up, ruling §1h.120, §1c): the element is made once (`const uploadAction = …`), gated on `uploadsAvailable` where it is made, and
+  // handed to the two places that draw it (the commands in one column, the details in the panes); so the gate is checked at the one place it stands, and
+  // both call sites are checked to hand over that element and not their own ungated one.
   it("passes uploadsAvailable at the uploadAction call site", async () => {
     const { readFileSync } = await import("node:fs");
     const source = readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
-    const start = source.indexOf("uploadAction={");
+    const start = source.indexOf("const uploadAction =");
     expect(start).toBeGreaterThan(-1);
-    const callSite = source.slice(start, source.indexOf("\n", start));
-    expect(callSite).toContain("uploadsAvailable");
+    const madeAt = source.slice(start, source.indexOf("\n", start));
+    expect(madeAt).toContain("uploadsAvailable");
+    expect(source.match(/uploadAction=\{uploadAction\}/g)).toHaveLength(2);
+    expect(source.match(/uploadAction=\{/g)).toHaveLength(2);
   });
 });
 
