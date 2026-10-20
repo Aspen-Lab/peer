@@ -32,6 +32,16 @@ const map: ReadingMap = {
 const render = (props: Partial<Parameters<typeof ReadingMapView>[0]> = {}) =>
   renderToStaticMarkup(createElement(ReadingMapView, { map, ...props }));
 
+// P11-23 rule 4 (BACKLOG-104; ruling §1h.126), RE-AIMED: the summary line is drawn in parts (`SummaryLine`: each separator in a slot of its own, a clipped box),
+// so its words are no longer one contiguous string of the markup. What a reader or a copy gets is the same string (`MAP.summary`'s own): these read it as the
+// text of its box, the tags removed, and where a test looked the string up in the markup it looks the box up (`data-map-summary`).
+const summaryText = (html: string): string => {
+  const at = html.indexOf("data-map-summary");
+  return at < 0 ? "" : html.slice(html.indexOf(">", at) + 1, html.indexOf("<button", at)).replace(/<[^>]*>/g, "");
+};
+/** The whole markup as text: the tags removed. */
+const textOf = (html: string): string => html.replace(/<[^>]*>/g, "");
+
 describe("ReadingMapView", () => {
   it("heads the table with the summary line", () => {
     const html = render();
@@ -41,8 +51,8 @@ describe("ReadingMapView", () => {
     expect(MAP.summary(1, 1)).toBe("1 section · about 1 min");
     expect(html).toContain(MAP.heading);
     // P7-14 (R5): the rendered line also carries the words the map's rows add up to (400 + 150 + 90).
-    expect(html).toContain(MAP.summary(3, 4, 640));
-    expect(html.indexOf(MAP.summary(3, 4, 640))).toBeLessThan(html.indexOf("1 Introduction"));
+    expect(summaryText(html)).toBe(MAP.summary(3, 4, 640));
+    expect(html.indexOf("data-map-summary")).toBeLessThan(html.indexOf("1 Introduction"));
   });
 
   // P7-14 (R5, the owner's review): the contents rail and the count line under "The paper" are gone,
@@ -53,9 +63,9 @@ describe("ReadingMapView", () => {
     expect(MAP.summary(2, 3, 1000)).toBe("2 sections · 1,000 words · about 3 min");
 
     const html = render({ source: "PDF" });
-    expect(html).toContain("Read from PDF · 3 sections · 640 words · about 4 min");
-    expect(html.split("Read from").length - 1).toBe(1);
-    expect(render()).not.toContain("Read from");
+    expect(summaryText(html)).toBe("Read from PDF · 3 sections · 640 words · about 4 min");
+    expect(textOf(html).split("Read from").length - 1).toBe(1);
+    expect(textOf(render())).not.toContain("Read from");
   });
 
   it("is handed the reading's source label by the page, so 'Read from …' is said", async () => {
@@ -141,10 +151,12 @@ describe("ReadingMapView", () => {
       expect(classes).toContain("shrink-0");
       // Still the phone-only control it was.
       expect(classes).toContain("sm:hidden");
-      // The summary sentence beside it is not the nowrap one: it is the part that wraps.
-      const summary = /<span([^>]*)>(?:Read from [^<]*|\d+ sections?[^<]*)<\/span><button/.exec(html);
-      expect(summary, "the summary span").not.toBeNull();
+      // The summary sentence beside it is not the nowrap one: it is the part that wraps (its box and its lines; only a separator's slot and the
+      // first word after it, which must not part, are nowrap pieces).
+      const summary = /<span data-map-summary=""([^>]*)><span([^>]*)>/.exec(html);
+      expect(summary, "the summary box and its lines").not.toBeNull();
       expect(summary?.[1] ?? "").not.toContain("whitespace-nowrap");
+      expect(summary?.[2] ?? "").not.toContain("whitespace-nowrap");
     }
   });
 
@@ -386,7 +398,7 @@ describe("ReadingMapView — each row says its words (P9-51, F08)", () => {
       words: 137 * (i + 1) + (i === 5 ? 1 : 0), minutes: Math.max(1, Math.ceil((137 * (i + 1)) / 230)), paragraphs: [],
     }));
     const html = renderToStaticMarkup(createElement(ReadingMapView, { map: { sections: rows, totalMinutes: 40 }, source: "PDF" }));
-    const stated = Number(/([\d,]+) words · about/.exec(html)?.[1].replace(/,/g, ""));
+    const stated = Number(/([\d,]+) words · about/.exec(summaryText(html))?.[1].replace(/,/g, ""));
     const said = rows.map((row) => Number(/([\d,]+) words?/.exec(metaText(html, row.heading))?.[1].replace(/,/g, "")));
 
     expect(said).toHaveLength(12);
@@ -635,7 +647,7 @@ describe("ReadingMapView — the paper's hierarchy (P10-04, A10)", () => {
     const html = renderTree({ source: "PDF" });
     const leaves = 400 + 500 + 290 + 100 + 60 + 900 + 662;
 
-    expect(html).toContain(MAP.summary(9, 17, leaves, "PDF"));
+    expect(summaryText(html)).toBe(MAP.summary(9, 17, leaves, "PDF"));
     // The group rows' summed words are not in the line: 890 + 1,562 more would double count.
     expect(MAP.summary(9, 17, leaves, "PDF")).toContain("2,912 words");
   });

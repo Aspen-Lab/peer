@@ -62,6 +62,14 @@ const map = reading.map!;
 const over = partitionedMap(map, reading.body, FOUR);
 
 const escaped = (text: string) => text.replace(/&/g, "&amp;").replace(/'/g, "&#x27;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+// P11-23 rule 4 (BACKLOG-104; ruling §1h.126), RE-AIMED: the summary line is drawn in parts (`SummaryLine`: each separator in a slot of its own, a clipped box),
+// so its words are no longer one contiguous string of the markup. What a reader or a copy gets is the same string (`MAP.summary`'s own): these read it as the
+// text of its box, the tags removed, and where a test looked the string up in the markup it looks the box up (`data-map-summary`).
+const summaryText = (html: string): string => {
+  const at = html.indexOf("data-map-summary");
+  return at < 0 ? "" : html.slice(html.indexOf(">", at) + 1, html.indexOf("<button", at)).replace(/<[^>]*>/g, "");
+};
 const render = (props: Partial<Parameters<typeof ReadingMapView>[0]> = {}) => renderToStaticMarkup(createElement(ReadingMapView, { map, ...props }));
 const hrefs = (html: string): string[] => [...html.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]);
 /** The paragraph lines' anchors in a row (or a whole map): every link to a paragraph but a group row's own, the first in its row. */
@@ -168,9 +176,9 @@ describe("ReadingMapView — a partition's group rows (B P10-05 §3.1)", () => {
     const totalWords = map.sections.reduce((sum, row) => sum + row.words, 0);
 
     expect(over.sections).toHaveLength(5);
-    expect(render({ map: over, source: "PDF" })).toContain(escaped(MAP.summary(5, map.totalMinutes, totalWords, "PDF")));
-    expect(render({ map: over, source: "PDF" })).toContain("5 sections");
-    expect(render({ map, source: "PDF" })).toContain(escaped(MAP.summary(2, map.totalMinutes, totalWords, "PDF")));
+    expect(summaryText(render({ map: over, source: "PDF" }))).toBe(MAP.summary(5, map.totalMinutes, totalWords, "PDF"));
+    expect(summaryText(render({ map: over, source: "PDF" }))).toContain("5 sections");
+    expect(summaryText(render({ map, source: "PDF" }))).toBe(MAP.summary(2, map.totalMinutes, totalWords, "PDF"));
   });
 
   it("the keyed unheaded map: four \"Peer's reading\" rows under \"4 sections\"; the no-key single row says \"1 section\"", () => {
@@ -180,9 +188,9 @@ describe("ReadingMapView — a partition's group rows (B P10-05 §3.1)", () => {
 
     expect(four.sections).toHaveLength(4);
     expect(keyed.split(`>${escaped(MAP.parts.tag)}<`).length - 1).toBe(4);
-    expect(keyed).toContain("Read from PDF · 4 sections ·");
+    expect(summaryText(keyed)).toContain("Read from PDF · 4 sections ·");
     expect(keyed).not.toContain("1 section");
-    expect(render({ map: trunkOnly, source: "PDF" })).toContain("Read from PDF · 1 section ·");
+    expect(summaryText(render({ map: trunkOnly, source: "PDF" }))).toContain("Read from PDF · 1 section ·");
   });
 
   it("indents a group row as a level-1 row and marks no row a group of the paper's hierarchy", () => {
