@@ -24,7 +24,7 @@ function explainProblems(source: string): string[] {
 
   // P4-01 (§1h.12 (h)): the line also carries `plain={plainForBody}` ("Say it plainly"), before the
   // selection. P10-02: the term's mark is gone from it with the strip that set it — the line as it now reads.
-  has("<PaperBody reading={reading} route={route} plain={plainForBody} onSelect={selectExplain} noteAnchors={noteAnchors} />", "the body no longer reports the reader's selection to the page");
+  has("<PaperBody reading={reading} route={route} plain={plainForBody} onSelect={selectExplain} noteAnchors={noteAnchors} onHighlightClick={(id, rect) => useHighlightStrip.getState().show(id, rect.top)} />", "the body no longer reports the reader's selection to the page");
   has("const [explainTarget, setExplainTarget] = useState<ExplainSelection | null>(null);", "the page no longer holds the selection as state");
   has("sameSelection(current, next) ? current : next", "a repeated selection no longer bails out of a re-render");
 
@@ -116,7 +116,7 @@ describe("the page's Explain this? wiring (P3-02)", () => {
   });
 
   it("would notice the body no longer reporting the selection", () => {
-    expect(explainProblems(source.replace(" onSelect={selectExplain} noteAnchors={noteAnchors} />", " noteAnchors={noteAnchors} />"))).toEqual([
+    expect(explainProblems(source.replace(" onSelect={selectExplain} noteAnchors={noteAnchors}", " noteAnchors={noteAnchors}"))).toEqual([
       "the body no longer reports the reader's selection to the page",
     ]);
   });
