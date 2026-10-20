@@ -6,7 +6,7 @@
 // as a deck and the ink moves to the sentences that are its evidence, so the
 // abstract is never repeated under a claim.
 
-import type { Ref } from "react";
+import type { ReactNode, Ref } from "react";
 import type { Claim, PaperReportBasis } from "@/lib/papers/report";
 import type { PaperReading } from "@/lib/papers/reading";
 import { pickClaimMark } from "@/lib/papers/skim";
@@ -17,6 +17,40 @@ import { LeadClaim } from "./lead-claim";
 import { ABSTRACT_FOOTER, TLDR_LINE, attribution, skimFooter } from "./copy";
 
 const FOOTER_CLASS = "annotation text-text-faint mt-2";
+
+/**
+ * P11-17b (rule 3; C P11-14's defect (c), second half): the Summary's blocks have stable, unique ids. A note taken on a Summary selection is
+ * anchored by the id the selection reports for its block (`block.id || container.id || kind`, `paper-body.tsx`), and the notes' blue square scrolls
+ * to the element with that id and flashes it. The page's Summary containers (`data-explain-source="summary"`) have no id of their own and no box
+ * (`contents`), so each block carries its own. Constants, never positions: the Summary is regenerated, and an id built from a count would name another
+ * block next time. They all begin with `summary-` (`SUMMARY_ID_PREFIX` in `note-tags.tsx`), which is how the square knows to bring the Summary tab back.
+ * The first four are this file's own blocks; the rest are the report's, which the page wraps (`SummaryBlock`).
+ */
+export const SUMMARY_ID = {
+  skim: "summary-skim",
+  claim: "summary-claim",
+  abstract: "summary-abstract",
+  tldr: "summary-tldr",
+  newHere: "summary-new-here",
+  proposal: "summary-proposal",
+  method: "summary-method",
+  results: "summary-results",
+  forYou: "summary-for-you",
+  glance: "summary-glance",
+  related: "summary-related",
+  caveats: "summary-caveats",
+  nextStep: "summary-next-step",
+  record: "summary-record",
+  library: "summary-library",
+} as const;
+
+/**
+ * A block of the Summary under its id: a plain element around what the block draws, and nothing at all around nothing (a block the page does not
+ * draw leaves no empty element). A block's own margins collapse through it, so the page lays out as it did.
+ */
+export function SummaryBlock({ id, children }: { id: string; children?: ReactNode }) {
+  return children ? <div id={id}>{children}</div> : null;
+}
 
 function Paragraph({
   sentences,
@@ -69,6 +103,7 @@ function Deck({
   const skimLine = skim.map((claim) => claim.text).join(" ");
   return (
     <div
+      id={SUMMARY_ID.skim}
       className="animate-fade-in-up"
       style={{ "--i": 0 } as React.CSSProperties}
     >
@@ -138,7 +173,7 @@ export function PaperWords({
     const tldr = reading.provenance.tldr;
     if (!tldr) return null;
     return (
-      <div>
+      <div id={SUMMARY_ID.tldr}>
         <p className="font-reading text-lead leading-[1.6] text-text-muted measure-paper mt-10 reading-justify">
           {tldr}
         </p>
@@ -155,19 +190,23 @@ export function PaperWords({
         <Deck skim={skim} basis={basis} quoted={quotedSkim} scramble={scramble} />
       )}
       {lead !== null && (
-        <LeadClaim sentence={sentences[lead]} />
+        <SummaryBlock id={SUMMARY_ID.claim}>
+          <LeadClaim sentence={sentences[lead]} />
+        </SummaryBlock>
       )}
-      <AbstractToggle className="mt-12">
-        <div className="font-reading text-lead leading-[1.6] text-text-muted measure-paper mt-4 space-y-4 reading-justify">
-          {split > 0 && <Paragraph sentences={sentences.slice(0, split)} from={0} inked={inked} />}
-          {split < sentences.length && (
-            <Paragraph sentences={sentences.slice(split)} from={split} inked={inked} />
-          )}
-        </div>
-        <p ref={endRef} className={FOOTER_CLASS}>
-          {ABSTRACT_FOOTER}
-        </p>
-      </AbstractToggle>
+      <SummaryBlock id={SUMMARY_ID.abstract}>
+        <AbstractToggle className="mt-12">
+          <div className="font-reading text-lead leading-[1.6] text-text-muted measure-paper mt-4 space-y-4 reading-justify">
+            {split > 0 && <Paragraph sentences={sentences.slice(0, split)} from={0} inked={inked} />}
+            {split < sentences.length && (
+              <Paragraph sentences={sentences.slice(split)} from={split} inked={inked} />
+            )}
+          </div>
+          <p ref={endRef} className={FOOTER_CLASS}>
+            {ABSTRACT_FOOTER}
+          </p>
+        </AbstractToggle>
+      </SummaryBlock>
     </>
   );
 }

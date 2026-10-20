@@ -18,7 +18,7 @@
 
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
-import { useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import type { PaperReading } from "@/lib/papers/reading";
 import { stickyTitle } from "@/lib/notes/blocks";
 import type { HighlightColourId, NoteAnchor } from "@/lib/notes/types";
@@ -182,6 +182,53 @@ export function registerPassageHost(next: PassageHost): () => void {
   };
 }
 
+// ── The Summary's blocks and the answers' block (P11-17b, rule 3) ─────────
+
+/**
+ * The ids of the Summary's blocks begin with this (`paper-words.tsx`'s `SUMMARY_ID`). They stand only under the "Summary" tab, where the paper's
+ * paragraphs (`paper-section-N-pM`) stand only under "Paper digestion": `goToPassage` asks the right host to bring the right tab back.
+ */
+export const SUMMARY_ID_PREFIX = "summary-";
+/** The answers under the question: one block, `for-your-questions.tsx`'s section. It stands under both tabs (the common slot), so no tab is brought back. */
+export const ANSWERS_BLOCK_ID = "answers-block";
+
+let summaryHost: PassageHost | null = null;
+
+/** The reading page registers how to bring the Summary tab back (`useSummaryHost`); the returned function takes it off again (identity-guarded). */
+export function registerSummaryHost(next: PassageHost): () => void {
+  summaryHost = next;
+  return () => {
+    if (summaryHost === next) summaryHost = null;
+  };
+}
+
+/**
+ * The page's side of the Summary's host: registers, for its paper, a `reveal` that runs the jump at once when the Summary is on show (and for a
+ * paper with no body, which has no tabs) and otherwise asks the page to show it (`showSummary`) and runs the jump once, after the render that put
+ * the Summary on the page. A Summary that comes on show by the reader's own pick runs nothing: no jump is waiting.
+ */
+export function useSummaryHost({ paperId, onSummary, showSummary }: { paperId: string; onSummary: boolean; showSummary: () => void }): void {
+  const job = useRef<(() => void) | null>(null);
+  const reveal = useCallback(
+    (run: () => void) => {
+      if (onSummary) {
+        run();
+        return;
+      }
+      job.current = run;
+      showSummary();
+    },
+    [onSummary, showSummary],
+  );
+  useEffect(() => registerSummaryHost({ paperId, reveal }), [paperId, reveal]);
+  useEffect(() => {
+    if (!onSummary) return;
+    const run = job.current;
+    job.current = null;
+    run?.();
+  }, [onSummary]);
+}
+
 function flash(el: Element, classes: readonly string[] = FLASH_CLASSES): void {
   el.classList.add(...classes);
   setTimeout(() => el.classList.remove(...classes), FLASH_MS);
@@ -229,10 +276,19 @@ export function goToPassage(
     else flash(el);
     return true;
   };
-  if (host && host.paperId === anchor.paperId) {
-    host.reveal(() => {
+  // P11-17b (rule 3): which tab the target stands under decides who brings it back. A Summary block: the page's Summary host. The answers' block
+  // stands under both tabs: nothing to bring back, and on the paper's own page nowhere else to go. Anything else is a paragraph of the paper (as it was).
+  const inSummary = anchor.paragraphId.startsWith(SUMMARY_ID_PREFIX);
+  const inAnswers = anchor.paragraphId === ANSWERS_BLOCK_ID;
+  const revealer = inSummary ? summaryHost : inAnswers ? null : host;
+  if (revealer && revealer.paperId === anchor.paperId) {
+    revealer.reveal(() => {
       run();
     });
+    return;
+  }
+  if (inAnswers && host && host.paperId === anchor.paperId) {
+    run();
     return;
   }
   if (!run()) env.navigate(`/papers/${anchor.paperId}#${anchor.paragraphId}`);

@@ -14,6 +14,7 @@
 import { Fragment, useState } from "react";
 import type { PaperReport, QuestionAnswers } from "@/lib/papers/report";
 import { groupTotals, type ReadingMap, type ReadingMapSection } from "@/lib/papers/reading-map";
+import { ANSWERS_BLOCK_ID } from "@/components/notes/note-tags";
 import { EvidenceQuote } from "./evidence-quote";
 import { FOR_YOUR_QUESTIONS } from "./copy";
 
@@ -91,7 +92,8 @@ export function ForYourQuestions({
   const groups = map ? groupTotals(map) : new Map<string, { words: number; minutes: number }>();
 
   return (
-    <section className="mt-4 animate-fade-in-up" style={{ "--i": 0 } as React.CSSProperties}>
+    // P11-17b (rule 3): the answers are one block of the answers' explain container, under a stable id the selection reports and the notes' blue square goes to.
+    <section id={ANSWERS_BLOCK_ID} className="mt-4 animate-fade-in-up" style={{ "--i": 0 } as React.CSSProperties}>
       <button
         type="button"
         aria-expanded={open}

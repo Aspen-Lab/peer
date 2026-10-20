@@ -55,7 +55,7 @@ import { PaperPlate, isSameFigure, leadCaption, leadFigurePending } from "@/comp
 import { SwipeableCard } from "@/components/cards/swipe-card";
 import { useResolvedFigure } from "@/components/paper-figure";
 import { TitleBlock } from "@/components/reader/title-block";
-import { PaperWords } from "@/components/reader/paper-words";
+import { PaperWords, SUMMARY_ID, SummaryBlock } from "@/components/reader/paper-words";
 import {
   PaperBody,
   mergeQuestionRoute,
@@ -122,6 +122,7 @@ import { StickyNotes, useTakeNote } from "@/components/notes/sticky-note";
 import { canHighlight, useHighlight } from "@/components/notes/highlight";
 import { useHighlightStrip } from "@/components/notes/highlight-strip";
 import { HighlightStripHost } from "@/components/notes/highlight-strip-host";
+import { useSummaryHost } from "@/components/notes/note-tags";
 import { FigureHost } from "@/components/reader/figure-host";
 import { anchorMap } from "@/lib/notes/blocks";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
@@ -952,6 +953,11 @@ function Reader({
   const clearExplain = useCallback(() => selectExplain(null), [selectExplain]);
   const startOfTab = useCallback(() => scrollToTabStart(spread, document), [spread]);
   const { tab, select: selectTab, reveal } = useReaderTab({ hasBody, onChange: clearExplain, atStart: startOfTab });
+  // P11-17b (rule 3; C P11-14's defect (c)): the notes' blue square for a note taken on a Summary block goes to that block, which stands only under the
+  // "Summary" tab. The sticky notes register `reveal` for a paper's paragraphs (Paper digestion); this is the same for the Summary — the square asks the
+  // page to show the Summary tab, and the jump follows once its blocks are on the page. A paper with no body has no tabs and is on its Summary always.
+  const showSummaryTab = useCallback(() => selectTab("summary"), [selectTab]);
+  useSummaryHost({ paperId: paper.id, onSummary: !hasBody || tab === "summary", showSummary: showSummaryTab });
   // P11-06 (the owner's item 3): back from the notes page by "Back to paper", the tab and the place the reader left, once.
   useRestoreReaderPlace({ paperId: paper.id, ready: fromServer, hasBody, tab, select: selectTab });
   // P10-08 (review 8.4): a selection in the Summary or an answer is an explain target too. The body listens for the whole document while
@@ -1537,128 +1543,150 @@ function Reader({
                 blocks, directly after the words that open it (the claim over the
                 closed abstract), as a block of its own and nowhere else on the page.
                 Drawn only where there is a report; inside, only with a line to show. */}
-            {report && (
-              <NewHereBlock
-                report={report}
-                stagger={stagger++}
-                scramble={shouldScrambleReport}
-              />
-            )}
+            <SummaryBlock id={SUMMARY_ID.newHere}>
+              {report && (
+                <NewHereBlock
+                  report={report}
+                  stagger={stagger++}
+                  scramble={shouldScrambleReport}
+                />
+              )}
+            </SummaryBlock>
 
             {/* ── The report as it read before the rewrite, in its order ── */}
 
             {/* S6: "What is new" merged into "What it proposes" — one block, one
                 figure slot. P9-27: the "new here" lines are the block above's now. */}
-            {report && (
-              <ProposalBlock
-                report={report}
-                paper={paper}
-                figure={proposalFigure}
-                registry={figureRegistry}
-                bound={boundShown}
-                stagger={stagger++}
-                scramble={shouldScrambleReport}
-              />
-            )}
+            <SummaryBlock id={SUMMARY_ID.proposal}>
+              {report && (
+                <ProposalBlock
+                  report={report}
+                  paper={paper}
+                  figure={proposalFigure}
+                  registry={figureRegistry}
+                  bound={boundShown}
+                  stagger={stagger++}
+                  scramble={shouldScrambleReport}
+                />
+              )}
+            </SummaryBlock>
 
-            {methods.length > 0 ? (
-              <ClaimList
-                block="method"
-                claims={methods}
-                abstractSentences={abstractSentences}
-                scramble={shouldScrambleReport}
-              />
-            ) : (
-              fromServer && (
-                <QuoteList block="method" quotes={reading.method} />
-              )
-            )}
+            <SummaryBlock id={SUMMARY_ID.method}>
+              {methods.length > 0 ? (
+                <ClaimList
+                  block="method"
+                  claims={methods}
+                  abstractSentences={abstractSentences}
+                  scramble={shouldScrambleReport}
+                />
+              ) : (
+                fromServer && (
+                  <QuoteList block="method" quotes={reading.method} />
+                )
+              )}
+            </SummaryBlock>
 
             {/* A review's contents stand where its results would; a research
                 paper's results carry the headline, each result's novelty
                 and its figure. Without a report, the paper's own sentences. */}
-            {reviewSections.length > 0 ? (
-              <ReviewContentsBlock
-                sections={reviewSections}
-                stagger={stagger++}
-                scramble={shouldScrambleReport}
-              />
-            ) : report && (keyResults.length > 0 || report.resultsAndSignificance.summary) ? (
-              <ResultsBlock
-                report={report}
-                paper={paper}
-                abstractSentences={abstractSentences}
-                figures={resultFigures}
-                registry={figureRegistry}
-                bound={boundShown}
-                stagger={stagger++}
-                scramble={shouldScrambleReport}
-              />
-            ) : (
-              fromServer && (
-                <QuoteList block="findings" quotes={reading.findings} />
-              )
-            )}
+            <SummaryBlock id={SUMMARY_ID.results}>
+              {reviewSections.length > 0 ? (
+                <ReviewContentsBlock
+                  sections={reviewSections}
+                  stagger={stagger++}
+                  scramble={shouldScrambleReport}
+                />
+              ) : report && (keyResults.length > 0 || report.resultsAndSignificance.summary) ? (
+                <ResultsBlock
+                  report={report}
+                  paper={paper}
+                  abstractSentences={abstractSentences}
+                  figures={resultFigures}
+                  registry={figureRegistry}
+                  bound={boundShown}
+                  stagger={stagger++}
+                  scramble={shouldScrambleReport}
+                />
+              ) : (
+                fromServer && (
+                  <QuoteList block="findings" quotes={reading.findings} />
+                )
+              )}
+            </SummaryBlock>
 
             {/* S6 deleted "Why it fits you"; the rewrite's project relation,
                 then the shared terms line, stand in its place, as before. */}
-            {relation && relation.items.length > 0 ? (
-              <ClaimList
-                block="forYou"
-                claims={relation.items}
-                abstractSentences={abstractSentences}
-                anchor={relation.basedOn}
-                scramble={shouldScrambleReport}
-              />
-            ) : (
-              shared.length > 0 && (
-                <section>
-                  <p className="font-reading text-lead leading-[1.6] text-text mt-12 reading-justify">
-                    {sharedTermsLine(shared)}
-                  </p>
-                </section>
-              )
-            )}
+            <SummaryBlock id={SUMMARY_ID.forYou}>
+              {relation && relation.items.length > 0 ? (
+                <ClaimList
+                  block="forYou"
+                  claims={relation.items}
+                  abstractSentences={abstractSentences}
+                  anchor={relation.basedOn}
+                  scramble={shouldScrambleReport}
+                />
+              ) : (
+                shared.length > 0 && (
+                  <section>
+                    <p className="font-reading text-lead leading-[1.6] text-text mt-12 reading-justify">
+                      {sharedTermsLine(shared)}
+                    </p>
+                  </section>
+                )
+              )}
+            </SummaryBlock>
 
-            <GlanceBlock paper={paper} now={now} stagger={stagger++} />
+            <SummaryBlock id={SUMMARY_ID.glance}>
+              <GlanceBlock paper={paper} now={now} stagger={stagger++} />
+            </SummaryBlock>
 
-            <RelatedBlock related={related} now={now} stagger={stagger++} />
+            <SummaryBlock id={SUMMARY_ID.related}>
+              <RelatedBlock related={related} now={now} stagger={stagger++} />
+            </SummaryBlock>
 
             {/* ── The blocks the rewrite added, kept under the old report ── */}
 
-            {limitations.length > 0 ? (
-              <ClaimList
-                block="caveats"
-                claims={limitations}
-                abstractSentences={abstractSentences}
-                scramble={shouldScrambleReport}
-              />
-            ) : (
-              fromServer && (
-                <QuoteList block="caveats" quotes={reading.caveats} />
-              )
-            )}
+            <SummaryBlock id={SUMMARY_ID.caveats}>
+              {limitations.length > 0 ? (
+                <ClaimList
+                  block="caveats"
+                  claims={limitations}
+                  abstractSentences={abstractSentences}
+                  scramble={shouldScrambleReport}
+                />
+              ) : (
+                fromServer && (
+                  <QuoteList block="caveats" quotes={reading.caveats} />
+                )
+              )}
+            </SummaryBlock>
 
-            {nextStep?.text && (
-              <ClaimList
-                block="nextStep"
-                claims={[nextStep]}
-                abstractSentences={abstractSentences}
-                scramble={shouldScrambleReport}
-              />
-            )}
+            <SummaryBlock id={SUMMARY_ID.nextStep}>
+              {nextStep?.text && (
+                <ClaimList
+                  block="nextStep"
+                  claims={[nextStep]}
+                  abstractSentences={abstractSentences}
+                  scramble={shouldScrambleReport}
+                />
+              )}
+            </SummaryBlock>
 
             {/* Last, and always there: the facts that need no key. On a page with no model
                 page it is the only block under the abstract, which is the
                 point — the column used to end at the abstract's footer with
                 half the page under it. */}
-            <RecordBlock paper={paper} primaryUrl={reading.source?.url ?? null} />
+            <SummaryBlock id={SUMMARY_ID.record}>
+              <RecordBlock paper={paper} primaryUrl={reading.source?.url ?? null} />
+            </SummaryBlock>
 
             {/* And last, the reader's own context: what they read or kept
                 under the same topics, and the topics as searches. On a paper
                 with no full text this stands where the column used to end
                 in air. */}
-            <InYourLibrary paper={paper} />
+            <SummaryBlock id={SUMMARY_ID.library}>
+              <InYourLibrary paper={paper} />
+            </SummaryBlock>
           </div>
         )}
         next={<NextRow nav={nav} next={nextPaper} />}
