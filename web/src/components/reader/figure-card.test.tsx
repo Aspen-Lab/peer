@@ -527,3 +527,141 @@ describe("the card's source", () => {
     expect(c).not.toMatch(/useMarginRect|useWindows|holdInPlace|localStorage|sessionStorage|fetch\(/);
   });
 });
+
+// ── P11-26 rule 2 (A P11-22 X-3; ruling §1h.122): the caption while the card stands in front of other cards ──────────────────────────
+//
+// Alone, the caption keeps the 30 % of the card it always had (the test above). In front of other cards the picture box must be at least half
+// the band's height (`windows.test.ts`), so the caption takes at most 20 % of the card — still whole, still scrolling inside.
+describe("the caption while stacked: at most 20 % of the card, whole and scrolling (P11-26 rule 2; X-3)", () => {
+  // `stacked` is the card's one new property: handed in through a variable, so the view is asked what the card will be asked.
+  const stackedView = (over: Partial<FigureCardViewProps> = {}) => ({ ...view(over), stacked: true });
+
+  it("caps the caption at a fifth of the card in front of other cards, and at three tenths alone", () => {
+    const stackedCaption = withAttr(FigureCardView(stackedView({ height: 446 })), "data-figure-caption")!;
+    expect((stackedCaption.props.style as { maxHeight: number }).maxHeight).toBe(89);
+    const aloneCaption = withAttr(FigureCardView(view({ height: 446 })), "data-figure-caption")!;
+    expect((aloneCaption.props.style as { maxHeight: number }).maxHeight).toBe(133);
+  });
+
+  it("keeps the caption whole, in the reading face, reached by Tab and scrolling inside, when stacked", () => {
+    const caption = withAttr(FigureCardView(stackedView({ height: 446 })), "data-figure-caption")!;
+    expect(textOf(caption)).toBe(CAPTION);
+    expect(caption.props.tabIndex).toBe(0);
+    expect(String(caption.props.className)).toMatch(/\boverflow-y-auto\b/);
+    expect(String(caption.props.className)).toMatch(/\bfont-reading\b/);
+  });
+
+  it("draws the same card otherwise: the zoom row, the box, the picture and the X", () => {
+    const html = renderToStaticMarkup(<FigureCardView {...stackedView({ height: 446 })} />);
+    for (const part of ["data-figure-zoom-row", "data-figure-box", "data-figure-caption", 'aria-label="Close Figure 3"']) expect(html).toContain(part);
+  });
+});
+
+// ── P11-26 rule 3 (§1h.123; round 1's readers): the card never shows an empty box ────────────────────────────────────────────────────
+//
+// For 0.2 to 1.9 s after the card opened or was raised the picture area was a blank grey box: the card asked for its image again even when the
+// body's `<img>` had loaded it (the figure route answers a private upload `no-store`, so a second `<img>` of the same address is a second
+// request and a second render of the page on the server — a clone of the loaded element asks again too). The card now draws the picture the
+// body (or the card itself, earlier) already loaded — a canvas, no request — and, while a picture that is not loaded arrives, shows the
+// figure's own label and a quiet "Loading the figure…", never an empty box.
+describe("the picture the card draws is the one already loaded; until one is, it says so (P11-26 rule 3; §1h.123)", () => {
+  /** A loaded picture, as the browser holds one (the card draws it into a canvas; it never asks for its address again). */
+  const loadedPicture = (src: string) => ({ src, complete: true, naturalWidth: 600, naturalHeight: 400 });
+  const pictureProps = (picture: unknown) => ({ picture, pictureRef: vi.fn() }) as unknown as Partial<FigureCardViewProps>;
+  const withKey = (tree: ReactNode, tag: string) => elements(tree).filter((el) => el.type === tag);
+
+  it("draws a loaded picture into a canvas, and requests nothing: no <img> with an address", () => {
+    const html = markup(pictureProps(loadedPicture("/api/figure/p1/3")));
+    expect(html).toContain("<canvas");
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain('src="/api/figure/p1/3"');
+    // It is still the zoom core's surface: the same button, the same style.
+    const surface = withLabel(FigureCardView(view(pictureProps(loadedPicture("/api/figure/p1/3")))), "Zoom in on figure")!;
+    expect(withKey(surface, "canvas")).toHaveLength(1);
+    expect(withKey(surface, "img")).toHaveLength(0);
+  });
+
+  it("hands the picture to the canvas's ref, which draws it once per picture (the ref is the card's, stable across renders)", () => {
+    const props = view(pictureProps(loadedPicture("/api/figure/p1/3")));
+    const canvases = withKey(FigureCardView(props), "canvas");
+    expect(canvases).toHaveLength(1);
+    expect(canvases[0].props.ref).toBe((props as unknown as { pictureRef: unknown }).pictureRef);
+  });
+
+  it("asks for the picture itself, under a quiet loading line with the figure's label, while none is loaded", () => {
+    const html = markup();
+    expect(html).toContain('src="/api/figure/p1/3"');
+    const loading = withAttr(tree(), "data-figure-loading")!;
+    expect(loading).toBeDefined();
+    expect(textOf(loading)).toContain("Figure 3");
+    expect(textOf(loading)).toContain("Loading the figure…");
+    expect(loading.props.role).toBe("status");
+    // Quiet: the faint annotation face, no spinner.
+    expect(String(loading.props.className)).toMatch(/text-text-faint/);
+  });
+
+  it("shows no loading line once a picture is drawn, and none behind another card (a header alone)", () => {
+    expect(markup(pictureProps(loadedPicture("/api/figure/p1/3")))).not.toContain("data-figure-loading");
+    expect(markup({ front: false, height: 40 })).not.toContain("data-figure-loading");
+  });
+
+  describe("the stateful card", () => {
+    const FIGURE = (name: string) => REF({ key: `Figure 3:${name}`, src: `/api/figure/p1/${name}` });
+    const drawnPicture = (card: Run) => (card.view as unknown as { picture?: unknown }).picture;
+    const bodyDocument = (images: unknown[]) => vi.stubGlobal("document", { images });
+    const bodyImage = (src: string, over: Record<string, unknown> = {}) => ({
+      getAttribute: (name: string) => (name === "src" ? src : null),
+      closest: () => null,
+      complete: true,
+      naturalWidth: 813,
+      naturalHeight: 1043,
+      ...over,
+    });
+
+    it("has no picture to draw until one has loaded, then draws the one its own <img> loaded", () => {
+      const card = mount({ figure: FIGURE("own-load") });
+      expect(drawnPicture(card)).toBeUndefined();
+      const loaded = { naturalWidth: 600, naturalHeight: 400 };
+      card.act(() => card.view.onPictureLoad!({ currentTarget: loaded } as never));
+      expect(drawnPicture(card)).toBe(loaded);
+    });
+
+    it("keeps the picture it drew while it is behind another card: the raise shows it at once, with no second request", () => {
+      const card = mount({ figure: FIGURE("raise") });
+      const loaded = { naturalWidth: 600, naturalHeight: 400 };
+      card.act(() => card.view.onPictureLoad!({ currentTarget: loaded } as never));
+      card.update({ front: false, height: 40 });
+      card.update({ front: true, height: 812 });
+      expect(drawnPicture(card)).toBe(loaded);
+    });
+
+    it("draws the same picture when the same figure is opened again after it was closed (a new card, the same address)", () => {
+      const first = mount({ figure: FIGURE("reopen") });
+      const loaded = { naturalWidth: 600, naturalHeight: 400 };
+      first.act(() => first.view.onPictureLoad!({ currentTarget: loaded } as never));
+      first.unmount();
+      const again = mount({ figure: FIGURE("reopen") });
+      expect(drawnPicture(again)).toBe(loaded);
+    });
+
+    it("draws the picture the body already loaded, at the first render, with nothing requested", () => {
+      const body = bodyImage("/api/figure/p1/from-body");
+      bodyDocument([body]);
+      const card = mount({ figure: FIGURE("from-body") });
+      expect(drawnPicture(card)).toBe(body);
+    });
+
+    it("does not take a body picture that is not loaded yet, nor another figure's, nor one standing in a margin card", () => {
+      bodyDocument([
+        bodyImage("/api/figure/p1/not-yet", { complete: false, naturalWidth: 0 }),
+        bodyImage("/api/figure/p1/other-figure"),
+        bodyImage("/api/figure/p1/in-card", { closest: () => ({}) }),
+      ]);
+      for (const name of ["not-yet", "in-card"]) {
+        const card = mount({ figure: FIGURE(name) });
+        expect(drawnPicture(card), name).toBeUndefined();
+        card.unmount();
+      }
+    });
+  });
+});

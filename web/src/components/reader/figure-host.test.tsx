@@ -485,3 +485,22 @@ describe("the host's source", () => {
     expect(c).toContain("onClose={closeFigure}");
   });
 });
+
+// P11-26 rule 2 (A P11-22 X-3; ruling §1h.122): the card in front of other cards is told so, and gives its caption a fifth of itself, not three tenths.
+describe("the stack tells the card that it is stacked (P11-26 rule 2; X-3)", () => {
+  // `FigureStack` reads the windows through the store's own hook (zustand's, which this suite's React stand-in does not reach), so the flag it
+  // hands the card is pinned in its source, and the element it builds is built by the pure `figureCardElement` below.
+  it("hands the card whether any other card stands with it: more than one window in the stack", () => {
+    const source = code(HOST);
+    const stack = source.slice(source.indexOf("export function FigureStack"), source.indexOf("export function FigureOverlay"));
+    expect(stack).toContain("figureCardElement(figure, frame, row, windows.length > 1)");
+  });
+
+  it("builds its element with the flag, the same figure's card keeping its key", () => {
+    const row = { id: "figure", top: 88, height: 600, front: true, z: STACK_Z_BASE + 1 };
+    const stacked = (figureCardElement as unknown as (...args: unknown[]) => ReactElement)(ref("Figure 3"), MARGIN, row, true);
+    expect((stacked.props as Record<string, unknown>).stacked).toBe(true);
+    expect(stacked.key).toBe(figureCardElement(ref("Figure 3"), MARGIN, row).key);
+    expect((figureCardElement(ref("Figure 3"), MARGIN, row).props as Record<string, unknown>).stacked).toBeFalsy();
+  });
+});

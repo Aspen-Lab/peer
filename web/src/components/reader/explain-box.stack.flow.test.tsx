@@ -14,7 +14,7 @@ vi.mock("react", async (importOriginal) => {
 import { useEffect, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 import { hookRuntime } from "@/test-support/hook-runtime";
-import { DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX } from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_STACK_FLOOR_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, columnBottomPx } from "./explain-dock";
 import { EXPLAIN_WINDOW_ID, WINDOW_HEADER_PX, useWindows } from "@/lib/reader/windows";
 import { placeInMargin, useMarginStore, type MarginRect } from "@/lib/reader/margin";
 import type { ExplainAnswer } from "@/lib/papers/explain";
@@ -302,5 +302,101 @@ describe("ExplainBox — below 1024 px it is the card and the sheet, outside the
       expect(styleOf(run.last())!.zIndex, `${width}`).toBeUndefined();
       run.mounted.unmount();
     }
+  });
+});
+
+// ── P11-26 rule 1 (A P11-22 B3; ruling §1h.122): the card keeps its top at the selection ──────────────────────────────────────────────
+//
+// Round 1 measured the explain card level with the selection only while it said "Peer is reading this passage…" (188 px tall). Once the
+// answer landed (632 px with the stub's three parts and a table) the box asked the margin for a place for its WHOLE height, so the top gave
+// way: 107 / 227 px above the selection at 1440 × 900, at the margin's top at 1280 × 720 and 1093 × 614. The ruling: the top stays level with
+// the selection's first line before and after the answer lands, the card is the room from there to the band's foot and the answer scrolls
+// inside it; only where that room is under the card's floor (250 px) does the top rise, by just what the floor needs.
+//
+// No DOM here: a stand-in for the card says how tall the browser made it (`scrollHeight` plus its 2 px of border), as the dock's flow tests do.
+describe("ExplainBox — the card keeps its top at the selection when the answer lands (P11-26 rule 1; ruling §1h.122, B3)", () => {
+  const sized = (height: number) => ({ scrollHeight: height - 2, offsetHeight: height, clientHeight: height - 2, scrollTop: 0, getBoundingClientRect: () => ({ height }) });
+  const giveCard =
+    (card: unknown): Step =>
+    (tree) => {
+      (cardOf(tree)!.props.cardRef as { current: unknown }).current = card;
+    };
+  const bandFor = (height: number): MarginRect => ({ left: 1000, width: 400, top: DOCK_TOP_PX, bottom: columnBottomPx(height, DOCK_BOTTOM_PX) });
+  /** What the ruling asks of the top: level with the first line, or lifted by just what the floor needs. */
+  const expectedTop = (band: MarginRect, y: number) => Math.max(band.top, Math.min(y, band.bottom - DOCK_STACK_FLOOR_PX));
+  const ANSWER_HEIGHT = 632;
+
+  const WINDOWS = [[1440, 900], [1366, 768], [1280, 720], [1093, 614]] as const;
+  for (const [width, height] of WINDOWS) {
+    for (const y of [200, 335, 455, 600]) {
+      it(`${width} x ${height}, a paragraph at y ${y}: the top is the same loading and answered, level with it or lifted by just the floor, and the card is the room to the band's foot`, async () => {
+        stubWindow(width, height);
+        const band = bandFor(height);
+        useMarginStore.setState({ rect: band });
+        const loading = await scenario(base(selection(y + 20, y)), [() => open()]);
+        await wait();
+        const loadingStyle = styleOf(loading.last())!;
+        loading.mounted.unmount();
+        useWindows.setState({ windows: [], clock: 0, origin: null });
+
+        const answered = await scenario(base(selection(y + 20, y)), [() => open(), giveCard(sized(ANSWER_HEIGHT))]);
+        await wait();
+        const answeredStyle = styleOf(answered.last())!;
+        const want = expectedTop(band, y);
+
+        expect(loadingStyle.top, "loading").toBe(want);
+        expect(answeredStyle.top, "answered").toBe(want);
+        // Level with the first line (8 px either way) wherever the room under it holds the floor.
+        if (band.bottom - y >= DOCK_STACK_FLOOR_PX) expect(Math.abs((answeredStyle.top as number) - y)).toBeLessThanOrEqual(8);
+        // The card is the room from its top to the band's foot (it is as tall as its content up to that, and scrolls inside).
+        expect(answeredStyle.maxHeight, "answered").toBe(band.bottom - want);
+        expect(answeredStyle.maxHeight as number).toBeGreaterThanOrEqual(DOCK_STACK_FLOOR_PX);
+        // The cascade starts where the card stands, so a second card joins level with the selection, not where the answer pushed it.
+        expect(useWindows.getState().origin).toBe(want);
+        answered.mounted.unmount();
+      });
+    }
+  }
+
+  it("does not move when the answer grows into a thread: a reply of 700 px, then 2000 px, leaves the top where the paragraph is", async () => {
+    stubWindow(1440, 900);
+    useMarginStore.setState({ rect: MARGIN });
+    const card = sized(188);
+    const run = await scenario(base(selection(340, 320)), [
+      () => open(),
+      giveCard(card),
+      (_tree, ctx) => {
+        Object.assign(card, sized(ANSWER_HEIGHT));
+        ctx.rerender();
+      },
+      (_tree, ctx) => {
+        Object.assign(card, sized(700));
+        ctx.rerender();
+      },
+      (_tree, ctx) => {
+        Object.assign(card, sized(2000));
+        ctx.rerender();
+      },
+    ]);
+    await wait();
+    const tops = run.trees.map((tree) => styleOf(tree)?.top).filter((top) => top !== undefined);
+    expect(new Set(tops)).toEqual(new Set([320]));
+    expect(styleOf(run.last())).toMatchObject({ top: 320, maxHeight: MARGIN.bottom - 320 });
+    run.mounted.unmount();
+  });
+
+  it("a card behind another one keeps today's rules: a header tall, at the cascade's frozen origin", async () => {
+    stubWindow(1440, 900);
+    useMarginStore.setState({ rect: MARGIN });
+    const run = await scenario(base(selection(380, 300)), [
+      () => open(),
+      giveCard(sized(ANSWER_HEIGHT)),
+      () => useWindows.getState().open({ id: "s1", kind: "sticky", title: "Note 1" }),
+    ]);
+    await wait();
+    expect(cardOf(run.last())!.props.behind).toBe(true);
+    expect(styleOf(run.last())).toMatchObject({ top: 300, maxHeight: WINDOW_HEADER_PX, height: WINDOW_HEADER_PX });
+    expect(useWindows.getState().origin).toBe(300);
+    run.mounted.unmount();
   });
 });

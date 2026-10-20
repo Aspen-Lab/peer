@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { DOCK_BOTTOM_PX, DOCK_STACK_FLOOR_PX, DOCK_TOP_PX, columnBottomPx, legendHeightPx } from "@/components/reader/explain-dock";
 import { block } from "@/lib/notes/blocks";
+import { FIGURE_ZOOM_ROW_PX } from "@/components/reader/figure-card";
 import { EXPLAIN_WINDOW_ID, MIN_FRONT_PX, NOTES_MIN_FRONT_PX, NOTES_WINDOW_ID, WINDOW_HEADER_PX, stackFrameIn, stackLayout, stackRows, useWindows, type FloatingWindow } from "./windows";
 
 // P10-09a (review 7.1a; ruling §1h.78): the windows at the right stand like cascaded cards — only the headers of
@@ -543,5 +544,73 @@ describe("stackRows — the explain card is one of the stack (P11-14, rule 4; O-
         expect(front.height, label).toBeGreaterThanOrEqual(WINDOW_HEADER_PX);
       }
     }
+  });
+});
+
+// ── P11-26 rule 2 (A P11-22 X-3; ruling §1h.122): a figure in front of the stack is never a thumbnail ────────────────────────────────
+//
+// With a sticky and the explain card behind it, the figure card in front had the room under two 40-px headers and its caption took up to 30 %
+// of it, so its picture box was 97 px high at 1093 x 614 (the picture 71 x 91) and 171 at 1280 x 720. The ruling: in front of other cards
+// the picture BOX is at least half the band's height (and as large as the room allows), the caption at most 20 % of the card while stacked
+// (whole and scrolling), the other cards' headers still visible and pressable; alone the figure fills the margin exactly as before.
+describe("stackLayout — a figure in front of other cards is never a thumbnail (P11-26 rule 2; X-3)", () => {
+  /** The card's own furniture: its 2 px of border, its 40 px header and its 36 px zoom row; the picture box is what is left of the card less the caption. */
+  const CHROME = 2 + WINDOW_HEADER_PX + FIGURE_ZOOM_ROW_PX;
+  const STACKED_CAPTION_SHARE = 0.2;
+  const win = (id: string, kind: FloatingWindow["kind"], order: number): FloatingWindow => ({ id, kind, title: id, order });
+  /** The tallest the box can be shorter than: a card `height` tall whose caption has taken its whole 20 % cap. */
+  const boxWorstCase = (height: number) => height - CHROME - Math.floor(height * STACKED_CAPTION_SHARE);
+
+  const SIZES = [[1093, 614], [1280, 720], [1440, 900]] as const;
+  // The figure raised over the others, in every order the others were opened in (the six orders of F, S and E come to these, the figure last),
+  // and with the notes window and a highlight in the stack too.
+  const BEHIND: Array<[string, FloatingWindow["kind"][]]> = [
+    ["a sticky", ["sticky"]],
+    ["the explain card", ["explain"]],
+    ["a sticky, then the explain card", ["sticky", "explain"]],
+    ["the explain card, then a sticky", ["explain", "sticky"]],
+    ["the notes window", ["notes"]],
+    ["a highlight, a sticky and the explain card", ["highlight", "sticky", "explain"]],
+  ];
+
+  for (const [width, height] of SIZES) {
+    for (const [name, kinds] of BEHIND) {
+      it(`${width} x ${height}, in front of ${name}: the picture box is at least half the band, whatever the caption takes, wherever the cascade started`, () => {
+        const band = { top: DOCK_TOP_PX, bottom: columnBottomPx(height, DOCK_BOTTOM_PX) };
+        const bandHeight = band.bottom - band.top;
+        const windows = [...kinds.map((kind, i) => win(`${kind}:${i}`, kind, i + 1)), win("figure", "figure", kinds.length + 1)];
+        for (const origin of [null, 48, 200, 335, 455, 600, 700]) {
+          const rows = stackLayout(windows, stackFrameIn(band, origin));
+          const front = rows[rows.length - 1];
+          const label = `${name}, origin ${origin}`;
+          expect(front.id, label).toBe("figure");
+          // Half the band for the box, wherever the cards behind leave room for it; where they do not (three headers on a 526-px band), the figure
+          // takes everything under them — as large as the room allows.
+          const needed = Math.ceil((bandHeight / 2 + CHROME) / (1 - STACKED_CAPTION_SHARE));
+          if ((kinds.length * WINDOW_HEADER_PX) + needed <= bandHeight) expect(boxWorstCase(front.height), label).toBeGreaterThanOrEqual(bandHeight / 2);
+          else expect(front.top, label).toBe(band.top + kinds.length * WINDOW_HEADER_PX);
+          // …and the room is used: the figure stands on the band's foot, not above it.
+          expect(front.top + front.height, label).toBe(band.bottom);
+          // The cards behind keep their headers: 40 px apart from the cascade's top, inside the band, one X each.
+          rows.forEach((row, i) => {
+            expect(row.top, label).toBeGreaterThanOrEqual(band.top);
+            if (i > 0) expect(row.top - rows[i - 1].top, label).toBe(WINDOW_HEADER_PX);
+            if (i < rows.length - 1) expect(row.height, label).toBe(WINDOW_HEADER_PX);
+          });
+        }
+      });
+    }
+
+    it(`${width} x ${height}, alone: the figure fills the margin exactly as before, from the band's top to its foot`, () => {
+      const band = { top: DOCK_TOP_PX, bottom: columnBottomPx(height, DOCK_BOTTOM_PX) };
+      expect(stackLayout([win("figure", "figure", 1)], stackFrameIn(band, null))[0]).toMatchObject({ top: band.top, height: band.bottom - band.top, front: true });
+    });
+  }
+
+  it("the cascade is lifted only as far as the picture needs: a cascade that started high enough stays where it is", () => {
+    const band = { top: DOCK_TOP_PX, bottom: columnBottomPx(900, DOCK_BOTTOM_PX) };
+    const rows = stackLayout([win("s", "sticky", 1), win("figure", "figure", 2)], stackFrameIn(band, 100));
+    expect(rows.map((r) => r.top)).toEqual([100, 140]);
+    expect(rows[1].height).toBe(band.bottom - 140);
   });
 });
