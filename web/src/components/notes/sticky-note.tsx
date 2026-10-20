@@ -13,7 +13,7 @@
 // `takeStickyNote` is what the toolbar's "Take notes" does; `StickyNotes` renders the open stickies; the view
 // (`StickyWindowView`) has no state, so it is tested as markup and as an element tree.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import type { Paper } from "@/types";
@@ -309,6 +309,9 @@ export interface ArrivalEnv {
   scrollY(): number;
   /** Told when the reader moves the page themselves (wheel, touch, a key, a press); returns how to stop being told. */
   onUserMove(told: () => void): () => void;
+  /** P11-20 follow-up (rule 1b): told when nodes are added to or removed from the page, so an arrival lands as soon as its target is drawn instead of at
+   *  the poll's next look; returns how to stop being told. Absent where there is no page to watch (a test, a server). */
+  onTreeChange?(told: () => void): () => void;
 }
 
 export const browserArrival: ArrivalEnv = {
@@ -324,6 +327,12 @@ export const browserArrival: ArrivalEnv = {
       for (const type of events) window.removeEventListener(type, told);
     };
   },
+  onTreeChange: (told) => {
+    if (typeof MutationObserver === "undefined") return () => {};
+    const watching = new MutationObserver(told);
+    watching.observe(document.documentElement, { childList: true, subtree: true });
+    return () => watching.disconnect();
+  },
 };
 
 /** A block lands this far below the top of the window (`scroll-mt-20`, 5rem), and is not landed again if it is within `LAND_SLACK_PX` of it. */
@@ -336,7 +345,7 @@ export const RELAND_WITHIN_MS = 2000;
  * P11-20 follow-up (item 3b): land a Summary block or the answers' block again once the page has settled. The page settles late — on a phone the one
  * column's figure card, 197 px at the top for an upload with no picture, is taken out of the page about a second after the Summary shows, in the middle of
  * the arrival's smooth scroll, which keeps its first target and ends 186 px past the block. So, after the images on the page have loaded or failed (the
- * card goes when its picture fails) and two frames in which the scroll has not moved, the block is scrolled to once more, at once, if it is not where it
+ * card goes when its picture fails) and two frames in which the scroll has not moved (after it has moved at all), the block is scrolled to once more, at once, if it is not where it
  * should be: at most one extra correction, no later than `RELAND_WITHIN_MS` after the first scroll, and none if the reader has moved the page themselves.
  * Returns how to stop.
  */
@@ -356,14 +365,23 @@ export function landAgain(id: string, doc: ArrivalDoc, env: ArrivalEnv): () => v
   const deadline = setTimeout(() => finish(true), RELAND_WITHIN_MS);
   cleanups.push(() => clearTimeout(deadline));
 
+  // Two frames with the scroll where it is — once it has moved: a smooth scroll starts a frame or more late (the first paint of a long page is slow), and
+  // a scroll that has not started is not one that has stopped. A block that is already in place needs no movement; one that is not waits for it, or for the limit.
   const twoStillFrames = () => {
-    let last = env.scrollY();
+    const startY = env.scrollY();
+    let last = startY;
     let still = 0;
+    let moved = false;
+    const inPlace = () => {
+      const block = doc.getElementById(id);
+      return block !== null && Math.abs(block.getBoundingClientRect().top - LAND_TOP_PX) <= LAND_SLACK_PX;
+    };
     const next = () => {
       const y = env.scrollY();
+      if (y !== startY) moved = true;
       still = y === last ? still + 1 : 0;
       last = y;
-      if (still >= 2) finish(true);
+      if (still >= 2 && (moved || inPlace())) finish(true);
       else cancelFrame = env.frame(next);
     };
     cancelFrame = env.frame(next);
@@ -389,28 +407,44 @@ export function landAgain(id: string, doc: ArrivalDoc, env: ArrivalEnv): () => v
 }
 
 /**
- * The arrival of the notes page's blue square: the address names a paragraph of the paper, a Summary block or the answers' block. Waits for it to be on
- * the page — a quarter second at a time, forty times (the body, the report and the answers come after the page does; for a Summary block the tab was
- * chosen by `use-reader-tab.ts`) — and then goes to it once with `go`. A paragraph's arrival ends there; a Summary block or the answers' block is landed
- * again once the page has settled (`landAgain`, item 3b). Returns how to stop waiting, or undefined where the address names nothing.
+ * The arrival of the notes page's blue square: the address names a paragraph of the paper, a Summary block or the answers' block. Lands on it as soon as
+ * it is on the page — P11-20 follow-up (rule 1b): when the page's tree changes (`onTreeChange`: the commit that draws the target, which a timer queued behind
+ * a long page's work does not wait for), and once more as the page is mounted, with the poll of old, a look every quarter second for forty looks, as the outer
+ * bound (the body, the report and the answers come after the page does; for a Summary block the tab was chosen by `use-reader-tab.ts`) — and goes to it
+ * once with `go`, and lands it again once the page has settled (`landAgain`, item 3b: for a Summary block and the answers' block from the first, for a paragraph
+ * since rule 1b — landing as soon as it is drawn exposes the page's late settling to a paragraph too: on a phone it overshot by 197 px).
+ * Returns how to stop waiting, or undefined where the address names nothing.
  */
 export function followHash(hash: string, doc: ArrivalDoc, go: (id: string) => void, env: ArrivalEnv = browserArrival): (() => void) | undefined {
   const paragraph = passageFromHash(hash);
   const id = paragraph ?? blockFromHash(hash);
   if (!id) return undefined;
   let tries = 0;
+  let over = false;
   let again: (() => void) | undefined;
+  let unwatch: (() => void) | undefined;
   const timer = setInterval(() => {
     tries += 1;
-    const found = doc.getElementById(id) !== null;
-    if (!found && tries < 40) return;
-    clearInterval(timer);
-    if (!found) return;
-    go(id);
-    if (paragraph === null) again = landAgain(id, doc, env);
+    look();
+    if (tries >= 40) stopWaiting();
   }, 250);
-  return () => {
+  const stopWaiting = () => {
+    over = true;
     clearInterval(timer);
+    unwatch?.();
+    unwatch = undefined;
+  };
+  const look = () => {
+    if (over || doc.getElementById(id) === null) return;
+    stopWaiting();
+    go(id);
+    again = landAgain(id, doc, env);
+  };
+  unwatch = env.onTreeChange?.(look);
+  // Already drawn? Asked once the page's own effects have all run (a Summary block's host is registered by the page, after this effect).
+  queueMicrotask(look);
+  return () => {
+    stopWaiting();
     again?.();
   };
 }
@@ -494,8 +528,9 @@ export function StickyNotes({ paper, reveal }: { paper: Paper; reveal: (run: () 
 
   // The blue square asks this page to show the paper's text before it scrolls there.
   useEffect(() => registerPassageHost({ paperId: paper.id, reveal }), [paper.id, reveal]);
-  // The notes page's blue square comes here with `#paper-section-1-p2`, `#summary-proposal` or `#answers-block`: once it is on the page, scroll to it.
-  useEffect(
+  // The notes page's blue square comes here with `#paper-section-1-p2`, `#summary-proposal` or `#answers-block`: once it is on the page, scroll to it. A layout
+  // effect (P11-20, rule 1b), so the watch stands in the commit that draws the body, and lands it before the paint, not after the passive effects that follow it.
+  useLayoutEffect(
     () =>
       followHash(window.location.hash, document, (id) =>
         goToPassage({ paperId: paper.id, paragraphId: id, quote: "", n: 0 }, { doc: document, navigate: () => {} }),

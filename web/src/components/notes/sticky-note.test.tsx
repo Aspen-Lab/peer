@@ -390,6 +390,9 @@ describe("followHash — a Summary block or the answers' block is landed again o
     arrive("#summary-proposal", r);
     expect(r.gone).toEqual(["summary-proposal"]);
     expect(r.scrolls).toEqual([]);
+    // Re-aimed (P11-20 rule 1b, §1c): the smooth scroll has run and stopped at the page's end (it moved, then two frames agree); a scroll that has not started is not "still".
+    r.state.y = 1132;
+    r.frame();
     r.frame();
     expect(r.scrolls).toEqual([]);
     r.frame();
@@ -402,6 +405,8 @@ describe("followHash — a Summary block or the answers' block is landed again o
   it("the answers' block is a new arrival too", () => {
     const r = rig("answers-block", 300);
     arrive("#answers-block", r);
+    r.state.y = 220;
+    r.frame();
     r.frame();
     r.frame();
     expect(r.scrolls).toHaveLength(1);
@@ -425,6 +430,8 @@ describe("followHash — a Summary block or the answers' block is landed again o
     expect(r.frames).toHaveLength(0);
     r.handlers[2].get("error")?.();
     expect(r.frames).toHaveLength(1);
+    r.state.y = 946;
+    r.frame();
     r.frame();
     r.frame();
     expect(r.scrolls).toHaveLength(1);
@@ -441,6 +448,19 @@ describe("followHash — a Summary block or the answers' block is landed again o
     expect(r.scrolls).toEqual([]);
     r.frame();
     expect(r.scrolls).toHaveLength(1);
+  });
+
+  it("a scroll that has not started is not one that has stopped: the frames wait for it to move, and the two-second limit lands the block if it never does", () => {
+    const r = rig("summary-proposal", -106);
+    arrive("#summary-proposal", r);
+    for (let i = 0; i < 6; i++) r.frame();
+    expect(r.scrolls).toEqual([]);
+    expect(r.frames).toHaveLength(1);
+    vi.advanceTimersByTime(1999);
+    expect(r.scrolls).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(r.scrolls).toHaveLength(1);
+    expect(r.frames).toEqual([]);
   });
 
   it("an image that never settles does not keep it waiting: at two seconds from the first scroll it lands the block, once", () => {
@@ -476,15 +496,22 @@ describe("followHash — a Summary block or the answers' block is landed again o
     expect(r.scrolls).toEqual([]);
   });
 
-  it("a paragraph's arrival is what it was: no look at the images, no frame, no listener, no correction", () => {
-    const r = rig("paper-section-0-p2", -106, [{ complete: false }]);
+  // Re-aimed (P11-20 rule 1b, §1c): was "a paragraph's arrival is what it was: no look at the images, no frame, no listener, no correction". Rule 1b lands every
+  // arrival as soon as its target is drawn; a paragraph landed that early is exposed to the page's late settling as a block is (measured at 390 x 844: top -117,
+  // where it had landed at 80.0 when it came a quarter second later), so it is landed again once, the same way.
+  it("a paragraph is landed again too, the same way: once, after its images, once the scroll has moved and stopped, if it is not in place", () => {
+    const r = rig("paper-section-0-p2", -117, [{ complete: false }]);
     arrive("#paper-section-0-p2", r);
     expect(r.gone).toEqual(["paper-section-0-p2"]);
     expect(r.frames).toEqual([]);
-    expect(r.moves).toEqual([]);
-    expect(r.handlers[0].size).toBe(0);
+    r.handlers[0].get("error")?.();
+    r.state.y = 1087;
+    r.frame();
+    r.frame();
+    r.frame();
+    expect(r.scrolls).toEqual([{ block: "start", behavior: "instant" }]);
     vi.advanceTimersByTime(5000);
-    expect(r.scrolls).toEqual([]);
+    expect(r.scrolls).toHaveLength(1);
   });
 });
 
@@ -548,13 +575,19 @@ describe("followHash — an arrival lands as soon as its target is drawn (rule 1
     await Promise.resolve();
     expect(r.gone).toEqual(["paper-section-0-p2"]);
     expect(r.state.stopped).toBe(1);
+    // the poll is over; the landing again's two-second limit (rule 1b: a paragraph too) is what stands, and it ends
+    expect(vi.getTimerCount()).toBe(1);
+    vi.advanceTimersByTime(2000);
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it("the paragraph's arrival ends at the landing: no timer left, no listener of the moves of the page", () => {
+  // Re-aimed (P11-20 rule 1b, §1c): was "the paragraph's arrival ends at the landing: no timer left…"; it is landed again too, so its two-second limit stands.
+  it("the poll ends at the landing: what stands after it is the landing again's two-second limit, and that ends too", () => {
     const r = rig("paper-section-0-p2");
     followHash("#paper-section-0-p2", r.doc, (target) => r.gone.push(target), r.env);
     r.draw();
+    expect(vi.getTimerCount()).toBe(1);
+    vi.advanceTimersByTime(2000);
     expect(vi.getTimerCount()).toBe(0);
   });
 
@@ -590,6 +623,14 @@ describe("followHash — an arrival lands as soon as its target is drawn (rule 1
   it("the browser's own environment watches the tree where there is an observer, and is quiet where there is none", () => {
     expect(typeof browserArrival.onTreeChange).toBe("function");
     expect(() => browserArrival.onTreeChange?.(() => {})()).not.toThrow();
+  });
+
+  it("StickyNotes installs the arrival in a layout effect: in the commit that draws the body, before the paint, not a passive effect after it", () => {
+    // Measured (P11-20 rule 1b): in a passive effect the answers' block and a paragraph were landed 250 to 450 ms after they were in the page, the time the
+    // browser took to lay out and paint the commit that drew them before its passive effects ran.
+    const src = readFileSync(resolve(process.cwd(), "src/components/notes/sticky-note.tsx"), "utf8");
+    expect(src).toMatch(/useLayoutEffect\(\s*\(\) =>\s*followHash\(window\.location\.hash,\s*document,/);
+    expect(src).toMatch(/import \{[^}]*\buseLayoutEffect\b[^}]*\} from "react"/);
   });
 
   it("StickyNotes asks for it with the browser's environment: it passes no environment of its own", () => {
