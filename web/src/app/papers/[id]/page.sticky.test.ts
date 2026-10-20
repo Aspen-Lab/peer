@@ -12,15 +12,15 @@ function wiringProblems(page: string, body: string, editor: string): string[] {
   const has = (text: string, needle: string, why: string) => {
     if (!text.includes(needle)) problems.push(why);
   };
-  has(p, "<SelectionToolbar target={explainTarget} canExplain={selectionCanExplain({ canAsk: explainCanAsk, terms, passage: explainTarget?.passage ?? null })} onExplain={openExplain} onTakeNote={takeNote} />", "the selection buttons are not mounted with the selection, whether the page can explain it, the explain action and the take-note action");
+  has(p, "<SelectionToolbar target={explainTarget} canExplain={selectionCanExplain({ canAsk: explainCanAsk, terms, passage: explainTarget?.passage ?? null })} onExplain={openExplain} onTakeNote={takeNote} onHighlight={highlight} canHighlight={canHighlight(explainTarget)} />", "the selection buttons are not mounted with the selection, whether the page can explain it, the explain action, the take-note action, the highlight action and whether the selection can be highlighted");
   has(p, "<StickyNotes key={paper.id} paper={paper} reveal={reveal} />", "the sticky notes are not mounted for the paper with the tab reveal");
   has(p, "noteAnchors={noteAnchors}", "the body is not handed the paper's note anchors");
   has(p, "useTakeNote(", "the page has no take-note action");
   // P10-09f: the take-note action is handed the body, so the anchor records where in the paragraph the words stand.
   has(p, "body: reading?.body", "the take-note action is not handed the body (the anchor would record no range)");
   if (p.split("<SelectionToolbar").length - 1 !== 1) problems.push("the selection buttons are not mounted exactly once");
-  // P11-13 (rule 3): the `n` key takes notes on the selection the page holds, as `e` explains it.
-  has(p, "...(hasBody ? selectionActions(() => explainTarget, { note: takeNote }) : {}),", "the n key is not registered with the selection's take-note action");
+  // P11-13 (rule 3): the `n` key takes notes on the selection the page holds, as `e` explains it; P11-17b (rule 1, re-aimed): `h` highlights it.
+  has(p, "...(hasBody ? selectionActions(() => explainTarget, { note: takeNote, highlight }) : {}),", "the n and h keys are not registered with the selection's take-note and highlight actions");
   has(p, "selectionActions, ", "the page does not import the selection's key actions");
   const b = body.replace(/\s+/g, " ");
   has(b, "noteAnchors", "the paper body does not take noteAnchors");
@@ -44,7 +44,8 @@ describe("the page's wiring of the selection buttons and the sticky notes", () =
   it("notices each join taken out", () => {
     const cases: [string, () => string[]][] = [
       ["toolbar", () => wiringProblems(page.replace("<SelectionToolbar", "<Nothing"), body, editor)],
-      ["note key", () => wiringProblems(page.replace("selectionActions(() => explainTarget, { note: takeNote })", "{}"), body, editor)],
+      ["note key", () => wiringProblems(page.replace("selectionActions(() => explainTarget, { note: takeNote, highlight })", "{}"), body, editor)],
+      ["highlight key", () => wiringProblems(page.replace("{ note: takeNote, highlight }", "{ note: takeNote }"), body, editor)],
       ["stickies", () => wiringProblems(page.replace("<StickyNotes", "<Nothing"), body, editor)],
       ["anchors", () => wiringProblems(page.replace("noteAnchors={noteAnchors}", ""), body, editor)],
       ["tag", () => wiringProblems(page, body.replaceAll("<NoteTag", "<Nothing"), editor)],
