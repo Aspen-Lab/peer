@@ -197,13 +197,36 @@ describe("fitPanes — what gives way when the window is too narrow for the reme
     expect([fit.left, fit.margin, fit.pinned, fit.centre]).toEqual([400, 500, true, 1920 - 400 - 500 - 24]);
   });
 
-  it("a first visit narrower than 1144 starts with the left pane as the rail; from 1144 it starts pinned", () => {
-    const narrow = fitPanes({ viewport: 1143 });
-    expect([narrow.pinned, narrow.forced, narrow.leftTrack]).toEqual([false, false, 48]);
-    expect(narrow.margin).toBe(360);
-    expect(narrow.centre).toBe(1143 - 48 - 360 - 24);
-    expect(fitPanes({ viewport: 1144 }).pinned).toBe(true);
-    expect(fitPanes({ viewport: 1024 }).pinned).toBe(false);
+  // Re-aimed (ruling §1h.115 item 4, amending D6): was "a first visit narrower than 1144 starts with the left pane as the rail; from 1144
+  // it starts pinned". The owner's laptop at 125 % is 1093 css px, where the rail hid the map on arrival; the panes fit there, pinned.
+  it("a first visit is pinned at every width from 1024: 280 · 440 · 280 at 1024, 320 · 440 · 309 at 1093, the defaults from 1144", () => {
+    const at1024 = fitPanes({ viewport: 1024 });
+    expect([at1024.left, at1024.centre, at1024.margin, at1024.pinned, at1024.forced, at1024.leftTrack]).toEqual([280, 440, 280, true, false, 280]);
+    const at1093 = fitPanes({ viewport: 1093 });
+    expect([at1093.left, at1093.centre, at1093.margin, at1093.pinned, at1093.forced, at1093.leftTrack]).toEqual([320, 440, 309, true, false, 320]);
+    const at1143 = fitPanes({ viewport: 1143 });
+    expect([at1143.left, at1143.centre, at1143.margin, at1143.pinned]).toEqual([320, 440, 359, true]);
+    expect(fitPanes({ viewport: 1144 })).toMatchObject({ left: 320, centre: 440, margin: 360, pinned: true, forced: false });
+    for (let viewport = SHELL_MIN_VIEWPORT_PX; viewport <= 2600; viewport += 1) {
+      const fit = fitPanes({ viewport });
+      expect(fit.pinned).toBe(true);
+      expect(fit.forced).toBe(false);
+      expect(fit.leftTrack).toBe(fit.left);
+    }
+  });
+
+  it("a first visit is the same as a reader who pinned the pane, at every width from 1024 (no choice yet means pinned)", () => {
+    for (let viewport = SHELL_MIN_VIEWPORT_PX; viewport <= 2600; viewport += 7) {
+      expect(fitPanes({ viewport })).toEqual(fitPanes({ viewport, leftPinned: true }));
+    }
+  });
+
+  it("a reader's remembered fold still wins at the narrow widths a first visit is pinned at", () => {
+    for (const viewport of [1024, 1093, 1143]) {
+      const fit = fitPanes({ viewport, leftPinned: false });
+      expect([fit.pinned, fit.forced, fit.leftTrack]).toEqual([false, false, 48]);
+      expect(fit.centre).toBe(viewport - 48 - fit.margin - 24);
+    }
   });
 
   it("the reader's choice beats the first-visit rule either way", () => {
@@ -267,7 +290,10 @@ describe("fitPanes — what gives way when the window is too narrow for the reme
     }
   });
 
+  // Re-aimed (ruling §1h.115 item 4): the shell's minimum is now pinned on a first visit, so the centre there is its 440 (it was the
+  // rail's 1024 - 48 - 360 - 24).
   it("a window that is not a number is read as the shell's minimum", () => {
-    expect(fitPanes({ viewport: Number.NaN }).centre).toBe(SHELL_MIN_VIEWPORT_PX - 48 - 360 - 24);
+    expect(fitPanes({ viewport: Number.NaN })).toEqual(fitPanes({ viewport: SHELL_MIN_VIEWPORT_PX }));
+    expect(fitPanes({ viewport: Number.NaN }).centre).toBe(CENTRE_MIN_PX);
   });
 });

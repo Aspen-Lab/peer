@@ -13,7 +13,7 @@ import { clampPane } from "@/components/reader/pane-layout";
 // Written when a drag is released, a key is pressed on a divider, or the pin is pressed — never while a drag is under way (the divider
 // writes a CSS custom property on the shell per frame and commits once, on release).
 //
-// Every field is optional: absent is "no choice yet" (the left pane starts pinned where the default widths fit, else as the rail;
+// Every field is optional: absent is "no choice yet" (the left pane starts pinned at every width the shell exists in, ruling §1h.115 item 4;
 // the widths are the defaults). A blob that is corrupt, hand-edited or from a build that kept something else reads as that — the
 // fields that are not what they should be are dropped one by one, a number is clamped into its pane's range, nothing throws.
 //

@@ -171,19 +171,51 @@ afterEach(() => {
   useMarginStore.setState({ rect: null });
 });
 
-describe("the first visit (D6): pinned where the defaults fit, else the rail", () => {
+// Re-aimed (ruling §1h.115 item 4, amending D6): this describe was "the first visit (D6): pinned where the defaults fit, else the rail".
+describe("the first visit (D6, amended by ruling §1h.115 item 4): pinned at every width from 1024", () => {
   it("is pinned at 1440, and at exactly 1144", () => {
     expect(open().look().state).toBe("pinned");
     env.win.innerWidth = 1144;
     expect(open().look().state).toBe("pinned");
   });
 
-  it("is the rail below 1144, with the margin and the centre keeping their widths", () => {
-    env.win.innerWidth = 1143;
-    const page = open().look();
-    expect(page.state).toBe("rail");
-    expect(page.vars["--margin-w"]).toBe("360px");
-    expect(page.dividers.map((d) => d.props.pane)).toEqual(["margin"]);
+  // Re-aimed: was "is the rail below 1144, with the margin and the centre keeping their widths". The owner's laptop at 125 % is 1093
+  // css px, where the rail hid the title, the commands and the map on arrival.
+  it("is pinned below 1144 too, the margin and then the pane giving way: 320 · 309 at 1093, 280 · 280 at 1024; both dividers stand", () => {
+    env.win.innerWidth = 1093;
+    const at1093 = open().look();
+    expect(at1093.state).toBe("pinned");
+    expect(at1093.pane.props.inert).toBe(false);
+    expect(at1093.rail.props.hidden).toBe(true);
+    expect(at1093.vars).toMatchObject({ "--left-pane-w": "320px", "--margin-w": "309px" });
+    expect(at1093.dividers.map((d) => d.props.pane)).toEqual(["left", "margin"]);
+
+    env.win.innerWidth = 1024;
+    const at1024 = open().look();
+    expect(at1024.state).toBe("pinned");
+    expect(at1024.vars).toMatchObject({ "--left-pane-w": "280px", "--margin-w": "280px" });
+    expect(at1024.dividers.map((d) => d.props.pane)).toEqual(["left", "margin"]);
+    // Nothing is written: the first visit's pin is the shell's answer, not a choice the reader made.
+    expect(useReaderPanesStore.getState()).toMatchObject({ leftPinned: undefined, leftWidth: undefined, marginWidth: undefined });
+  });
+
+  it("a reader's remembered fold still wins at 1024 and 1093: the rail, with the margin back at its width", () => {
+    useReaderPanesStore.setState({ leftPinned: false });
+    for (const width of [1024, 1093]) {
+      env.win.innerWidth = width;
+      const page = open().look();
+      expect(page.state).toBe("rail");
+      expect(page.vars["--margin-w"]).toBe("360px");
+      expect(page.dividers.map((d) => d.props.pane)).toEqual(["margin"]);
+    }
+  });
+
+  it("a first visit that resizes from 1440 down to 1024 stays pinned all the way", () => {
+    const page = open();
+    for (const width of [1280, 1143, 1093, 1024]) {
+      env.resizeTo(width);
+      expect(page.look().state).toBe("pinned");
+    }
   });
 
   it("is the reader's choice once they have made one: a pin below 1144 keeps the pane, a fold above it keeps the rail", () => {

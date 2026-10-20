@@ -26,7 +26,8 @@ import { fitPanes } from "./pane-layout";
 //           pressed on a touch screen. It closes 250 ms after the pointer leaves it, or on Escape (which goes no further: the page's own
 //           Escape, "back to the briefing", does not run); focus inside keeps it open. A press
 //           on the rail pins it; so does the pin button at the pane's top, which in a pinned pane collapses it again.
-// First visit: pinned where the default widths fit (1144 css px), else the rail. The choice and the widths are kept per browser
+// First visit: pinned, at every width the shell exists in (1024 up; the margin, then the pane, give way as the window narrows — ruling §1h.115
+// item 4, amending D6). The choice and the widths are kept per browser
 // (`store/reader-panes.ts`); what the window forces (`fitPanes`) is never written back.
 //
 // The margin is an empty `<aside data-reader-margin aria-label="Margin">`, never collapsible (ruling §1h.113: D7). Every card stands

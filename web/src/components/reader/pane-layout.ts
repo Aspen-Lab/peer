@@ -16,6 +16,10 @@
 // Widths are remembered per browser (`store/reader-panes.ts`) and never overwritten by what the window forces: `fitPanes` is the
 // WINDOW's answer to the remembered widths, recomputed on every resize, so a bigger window gives the remembered widths back.
 //
+// A first visit is pinned at every width the shell exists in (ruling §1h.115 item 4, amending D6): the narrowest panes pinned need 984 px, so
+// the panes fit from 1024, the margin and then the left pane giving way as the window narrows (320 · 440 · 309 at 1093, 280 · 440 · 280 at 1024).
+// The rail is the reader's choice, and the window's only below the shell.
+//
 // The margin is never collapsible (ruling §1h.113: D7) — a margin that came and went would re-wrap the paper under the reader's pointer
 // at the moment they select — so there is no collapsed flag for it anywhere; only the left pane has a rail.
 
@@ -50,8 +54,8 @@ export const DIVIDER_PX = 12;
 export const KEY_STEP_PX = 16;
 export const KEY_STEP_SHIFT_PX = 64;
 
-/** What all three panes pinned need at the defaults: 320 + 440 + 360 + 2 × 12 = 1144. A first visit narrower than this starts with
- *  the left pane as the rail; a reader who pinned it keeps it pinned below this by shrinking the panes (`fitPanes`). */
+/** What all three panes pinned need at the defaults: 320 + 440 + 360 + 2 × 12 = 1144. Below this a pinned left pane — the reader's
+ *  pin, or a first visit's (ruling §1h.115 item 4) — stays pinned by shrinking the panes (`fitPanes`), the margin first. */
 export const PINNED_DEFAULTS_MIN_VIEWPORT_PX = LEFT_DEFAULT_PX + CENTRE_MIN_PX + MARGIN_DEFAULT_PX + 2 * DIVIDER_PX;
 
 /** The two panes a reader can resize. */
@@ -128,7 +132,7 @@ export interface PaneRequest {
   left?: number;
   /** The margin's remembered width. */
   margin?: number;
-  /** Whether the reader pinned the left pane. Absent on a first visit: pinned where the defaults fit. */
+  /** Whether the reader pinned the left pane. Absent on a first visit: pinned (ruling §1h.115 item 4). */
   leftPinned?: boolean;
 }
 
@@ -142,11 +146,12 @@ export interface PaneFit {
   centre: number;
   /** The left pane is a column; false is the rail. */
   pinned: boolean;
-  /** The rail is the window's doing: the reader pinned the pane and even the narrowest panes do not fit. */
+  /** The rail is the window's doing: the pane is wanted pinned (the reader's pin, or a first visit) and even the narrowest panes do not
+   *  fit — which happens only below the shell. */
   forced: boolean;
 }
 
-/** Whether all three panes pinned at the defaults fit this window. */
+/** Whether all three panes pinned at the defaults fit this window — where nothing has to give way. (It no longer decides a first visit.) */
 export function defaultsFit(viewport: number): boolean {
   return finite(viewport) && viewport >= defaultPanePx("left", viewport) + MARGIN_DEFAULT_PX + CENTRE_MIN_PX + 2 * DIVIDER_PX;
 }
@@ -157,7 +162,9 @@ export function defaultsFit(viewport: number): boolean {
  *   1. each width is clamped to its own range;
  *   2. where the left pane pinned, the margin, the centre's minimum and the dividers do not fit the window, the margin gives way
  *      toward its minimum, then the left pane toward its;
- *   3. if even that is not enough, the left pane is the rail — the reader's pin is kept (`forced`) — and the margin gives way again.
+ *   3. if even that is not enough, the left pane is the rail — the pin is kept (`forced`) — and the margin gives way again.
+ *
+ * A first visit (no choice yet) wants the pane pinned, so inside the shell it is pinned at every width; only the reader's own fold is the rail.
  *
  * Inside the shell (1024 up) step 2 always answers: 240 + 280 + 440 + 24 = 984. The centre is never below `CENTRE_MIN_PX` there.
  */
@@ -166,7 +173,7 @@ export function fitPanes(request: PaneRequest): PaneFit {
   const gutters = 2 * DIVIDER_PX;
   const wantLeft = clampPane("left", finite(request.left) ? request.left : defaultPanePx("left", viewport));
   const wantMargin = clampPane("margin", finite(request.margin) ? request.margin : MARGIN_DEFAULT_PX);
-  const wantPinned = request.leftPinned ?? defaultsFit(viewport);
+  const wantPinned = request.leftPinned ?? true;
 
   if (wantPinned) {
     let over = wantLeft + wantMargin + CENTRE_MIN_PX + gutters - viewport;
