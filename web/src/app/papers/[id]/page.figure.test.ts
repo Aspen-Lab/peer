@@ -6,9 +6,11 @@ import { describe, expect, it } from "vitest";
 // suite, so — like `page.sticky.test.ts` and `page.explain.test.ts` — this reads the source and holds the join to its shape, and runs the checker
 // on mutated copies so it proves it would notice what it guards. The host stands right after the sticky notes (which it is stacked with), outside
 // the zoom container (the card is placed in the window's pixels; a `zoom` ancestor would scale it), keyed by the paper (the figure store's key
-// `label:ordinal` repeats across papers, and a card must not follow the reader to the next one).
+// `label:ordinal` repeats across papers, and a card must not follow the reader to the next one). The key is `figure:<paper id>`, not the paper's id
+// alone: the sticky notes beside it are keyed by the id, and two siblings with one key are what React warns about ("Encountered two children with
+// the same key") and says is unsupported.
 
-const HOST = "<FigureHost key={paper.id} />";
+const HOST = "<FigureHost key={`figure:${paper.id}`} />";
 const STICKIES = "<StickyNotes key={paper.id} paper={paper} reveal={reveal} />";
 
 function wiringProblems(page: string): string[] {
@@ -16,7 +18,8 @@ function wiringProblems(page: string): string[] {
   const problems: string[] = [];
   const count = p.split("<FigureHost").length - 1;
   if (count !== 1) problems.push(`the figure host is mounted ${count} times, not once`);
-  if (!p.includes(HOST)) problems.push("the figure host is not keyed by the paper");
+  if (!p.includes(HOST)) problems.push("the figure host is not keyed by the paper (as figure:<paper id>)");
+  if (p.includes("<FigureHost key={paper.id}")) problems.push("the figure host has the sticky notes' key: two siblings with one key");
   if (!p.includes('import { FigureHost } from "@/components/reader/figure-host";')) problems.push("the page does not import the figure host from the reader's folder");
   // Right after the stickies (a JSX comment may stand between them).
   if (!new RegExp(`${STICKIES.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}( \\{/\\*.*?\\*/\\})? ${HOST.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).test(p)) {
@@ -44,6 +47,8 @@ describe("the page's wiring of the figure host", () => {
     expect(p.split("<FigureHost").length - 1).toBe(1);
     expect(p).toContain(`${STICKIES}`);
     expect(p.indexOf(HOST)).toBeGreaterThan(p.indexOf(STICKIES));
+    // Not the sticky notes' key: two siblings keyed by the paper's id alone.
+    expect(p.includes("<FigureHost key={paper.id}")).toBe(false);
     expect(p.indexOf(HOST) - (p.indexOf(STICKIES) + STICKIES.length)).toBeLessThan(400);
   });
 
@@ -58,6 +63,7 @@ describe("the page's wiring of the figure host", () => {
     const cases: [string, () => string[]][] = [
       ["unmounted", () => wiringProblems(page.replace(HOST, ""))],
       ["not keyed", () => wiringProblems(page.replace(HOST, "<FigureHost />"))],
+      ["the stickies' key", () => wiringProblems(page.replace(HOST, "<FigureHost key={paper.id} />"))],
       ["mounted twice", () => wiringProblems(page.replace(HOST, `${HOST} ${HOST}`))],
       ["not imported", () => wiringProblems(page.replace('import { FigureHost } from "@/components/reader/figure-host";', ""))],
       ["before the stickies", () => wiringProblems(page.replace(STICKIES, "@@S@@").replace(HOST, STICKIES).replace("@@S@@", HOST))],
