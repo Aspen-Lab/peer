@@ -20,7 +20,6 @@ import {
   SHELL_MIN_VIEWPORT_PX,
   clampPane,
   defaultPanePx,
-  defaultsFit,
   fitPanes,
   paneRange,
   stepPane,
@@ -161,16 +160,6 @@ describe("stepPane", () => {
       expect(stepPane("left", 320, key, false)).toBeNull();
       expect(stepPane("margin", 360, key, true)).toBeNull();
     }
-  });
-});
-
-describe("defaultsFit", () => {
-  it("is true from 1144 css px and false below it", () => {
-    expect(defaultsFit(1143)).toBe(false);
-    expect(defaultsFit(1144)).toBe(true);
-    expect(defaultsFit(1440)).toBe(true);
-    expect(defaultsFit(1024)).toBe(false);
-    expect(defaultsFit(Number.NaN)).toBe(false);
   });
 });
 

@@ -151,11 +151,6 @@ export interface PaneFit {
   forced: boolean;
 }
 
-/** Whether all three panes pinned at the defaults fit this window — where nothing has to give way. (It no longer decides a first visit.) */
-export function defaultsFit(viewport: number): boolean {
-  return finite(viewport) && viewport >= defaultPanePx("left", viewport) + MARGIN_DEFAULT_PX + CENTRE_MIN_PX + 2 * DIVIDER_PX;
-}
-
 /**
  * The window's answer to the remembered widths. Pure; the remembered values are never touched, so a bigger window restores them.
  *
