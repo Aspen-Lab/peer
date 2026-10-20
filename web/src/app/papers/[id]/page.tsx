@@ -36,6 +36,7 @@ import { NONE } from "@/lib/navigation/card-focus";
 import { paperNav } from "@/lib/reader/paper-nav";
 import { paperKeysFor, registerReaderActions, selectionActions, type ReaderActions } from "@/lib/reader/reader-keys";
 import { recommendationLine } from "@/lib/reader/recommendation";
+import { scrollBehavior } from "@/lib/reader/scroll-motion";
 import { allocatePlateTerms } from "@/lib/papers/plate-terms";
 import { mergeTerms, paperDefinedTermsInReading, routeTermScope, termScopeKey, termScopeOfKey } from "@/lib/papers/terms";
 import { placeEvidence } from "@/lib/papers/evidence";
@@ -970,7 +971,8 @@ function Reader({
     // Only where it is not already on the screen — scrolling to a block the
     // reader is looking at throws the page for nothing.
     if (top < 0 || top > window.innerHeight * 0.6) {
-      block.scrollIntoView({ behavior: "smooth", block: "start" });
+      // P11-32 (BACKLOG-107): smooth only for a reader who has not asked for reduced motion.
+      block.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
     }
   }, []);
   // Where Peer has read the paper, the text is already on the page — "Read it here" is a way down

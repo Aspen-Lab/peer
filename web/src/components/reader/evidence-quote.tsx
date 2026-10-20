@@ -11,6 +11,7 @@
 // `SectionLinks`, so the lists that render quotes need no new prop.
 
 import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { scrollBehavior } from "@/lib/reader/scroll-motion";
 import { MAP, attribution } from "./copy";
 import { sectionAnchor } from "./paper-body";
 
@@ -241,7 +242,8 @@ export function followSectionLink(
   if (!reveal) return;
   event.preventDefault();
   reveal(() => {
-    find(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    // P11-32 (BACKLOG-107): smooth only for a reader who has not asked for reduced motion.
+    find(id)?.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
     settle(() => find(id) as SettleTarget | null);
   });
 }

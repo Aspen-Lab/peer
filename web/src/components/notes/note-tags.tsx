@@ -24,6 +24,7 @@ import type { PaperReading } from "@/lib/papers/reading";
 import { ANSWERS_BLOCK_ID, SUMMARY_ID_PREFIX, isPageBlockId, type AnchorSection } from "@/lib/notes/anchor-blocks";
 import { stickyTitle } from "@/lib/notes/blocks";
 import type { HighlightColourId, NoteAnchor } from "@/lib/notes/types";
+import { scrollBehavior } from "@/lib/reader/scroll-motion";
 import { useWindows } from "@/lib/reader/windows";
 import { anchorRange, readingNoteFor, resolveAnchors, useLostPassages, useNotesStore } from "@/store/notes";
 
@@ -286,8 +287,10 @@ export function goToPassage(
     // P11-28: a highlight on a page block — a Summary block, the answers — can stand far down a tall block (the answers are one): the first of its marks is scrolled
     // to, centred; the block's top is scrolled to for everything else, as it always was.
     const inPageBlock = "highlightId" in anchor && isPageBlockId(anchor.paragraphId) ? marks[0] : undefined;
-    if (inPageBlock) inPageBlock.scrollIntoView({ behavior: "smooth", block: "center" });
-    else el.scrollIntoView({ behavior: "smooth", block: "start" });
+    // P11-32 (BACKLOG-107): smooth only for a reader who has not asked for reduced motion.
+    const behavior = scrollBehavior();
+    if (inPageBlock) inPageBlock.scrollIntoView({ behavior, block: "center" });
+    else el.scrollIntoView({ behavior, block: "start" });
     if (marks.length > 0) for (const mark of marks) flash(mark, MARK_FLASH_CLASSES);
     else flash(el);
     return true;
