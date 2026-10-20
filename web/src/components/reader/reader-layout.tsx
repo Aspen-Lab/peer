@@ -249,7 +249,7 @@ export function ReaderLayout(p: ReaderLayoutProps) {
   const head = (
     <>
       {p.title}
-      <div className="[&>*>:first-child]:mt-[var(--pane-gap,0.75rem)]">{p.decision}</div>
+      <div data-pane-commands="" className="[&>*>:first-child]:mt-[var(--pane-gap,0.75rem)]">{p.decision}</div>
       {p.progress}
       {p.tabs ? <div className="[&>:first-child]:mt-[calc(var(--pane-gap,0.75rem)_+_0.25rem)]">{p.tabs}</div> : null}
     </>

@@ -638,6 +638,23 @@ html[data-mode="dark"] {
   .reader-left [data-pane-title] {
     -webkit-line-clamp: 3;
   }
+  .reader-left:has([data-pane-commands] > * > .grid > a) {
+    --pane-gap: 0.25rem;
+  }
+}
+/* P11-20 follow-up (rulings §1h.119, §1h.120, item 2b; BACKLOG-100): a briefing paper's fixed zone held four command rows (184 px) and, with a four-line title and
+   the strip, overflowed its cap at 1280 x 720 and below. With the bibliographic lines and the Upload row in the details (items 2a and 2b), the rows are compact on a
+   window under 800 css px high: 32 px high (every hit area stays at least 32 px) and 4 px apart, not 40 and 8. Only the stack of a paper with an Open row
+   (`:has(> a)`: a briefing paper's) is taken: an upload's page fits and keeps its rows and the y of its first map row. Under 700 css px high that stack's zone gaps (the
+   commands', the progress's, the strip's: they read `--pane-gap`) are 4 px, not 8 (the block above). Every command stays, the strip and the progress stay, and the
+   cap above is not raised. */
+@media (max-height: 799px) {
+  .reader-left [data-pane-commands] > * > .grid:has(> a) {
+    row-gap: 0.25rem;
+  }
+  .reader-left [data-pane-commands] > * > .grid:has(> a) :is(button, a) {
+    height: 2rem;
+  }
 }
 
 /* The rail: one button's column. The pane is out of sight and `inert` (the shell sets the attribute). The peek: the same node drawn

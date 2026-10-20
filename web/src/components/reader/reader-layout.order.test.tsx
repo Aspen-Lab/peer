@@ -398,7 +398,9 @@ describe("reader-layout.tsx source (P7-14)", () => {
     const scroll = zones.slice(zones.indexOf("const rest = ("));
 
     // Nothing stands between the title and the commands but the opening of the wrapper that tightens their gap.
-    expect(fixed.slice(fixed.indexOf("{p.title}") + "{p.title}".length, fixed.indexOf("{p.decision}")).replace(/<div className="[^"]*">/g, "").trim()).toBe("");
+    // Re-aimed (P11-20 follow-up, item 2b, §1c): the wrapper around {p.decision} carries `data-pane-commands` (the hook the compact rows read), which the strip of
+    // wrapper tags this line takes out must now allow; it still asserts that nothing but wrappers stands between the title and the commands.
+    expect(fixed.slice(fixed.indexOf("{p.title}") + "{p.title}".length, fixed.indexOf("{p.decision}")).replace(/<div (?:data-pane-commands="" )?className="[^"]*">/g, "").trim()).toBe("");
     expect(fixed.indexOf("{p.tabs}")).toBeGreaterThan(fixed.indexOf("{p.decision}"));
     // P11-16 follow-up: the progress stands between the commands and the strip, in the fixed zone.
     expect(fixed.indexOf("{p.progress}")).toBeGreaterThan(fixed.indexOf("{p.decision}"));
