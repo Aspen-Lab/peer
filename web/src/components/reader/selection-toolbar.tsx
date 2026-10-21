@@ -37,6 +37,14 @@
 //
 // P11-27 rule 2 (X-4): a selection in a figure's caption or a section's heading is offered Take notes and Highlight like a paragraph's. Explain this is not offered
 // for it: the explain route finds a passage in the paper's paragraphs only (`lib/papers/explain.ts`, `locatePassage`), so it would answer "not in the paper".
+//
+// P11-38 rule 1 (owner item 5, "一旦点击其中一个，就会显示其中一个的功能"; round 2's walk X-5; ruling §1h.138 (a)): a press of Explain this ends the group's job, as Take notes and
+// Highlight already do (they clear the selection, so the group goes with it). Once pressed — by the button, or by `e`, which the toolbar sees as the Explain card
+// now holding the selection's passage — the group is gone until the reader makes a NEW selection. The selection itself is left drawn: it is the card's quote, the
+// box follows it, and clearing it would be the page's to do; so what goes is the group, not the words. A new selection object from the page, a drag that selects the same
+// words again (the press changed the selection and one stands when it ends), a double click and a click elsewhere (which collapses it) end the wait; a press that changes
+// no selection — a button, a tab — does not. In a window with no margin (under 1024 px) nothing changes: the pill stands.
+//
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PaperTerm } from "@/lib/papers/report";
@@ -44,7 +52,7 @@ import { setHighlightOffer } from "@/lib/reader/explain-offer";
 import { MARGIN_CARD_SELECTOR, placeInMargin, useMarginRect, type MarginRect } from "@/lib/reader/margin";
 import { useWindows } from "@/lib/reader/windows";
 import type { ExplainSelection, ViewRect } from "./paper-body";
-import { definingTerm } from "./explain-box";
+import { definingTerm, previewOf } from "./explain-box";
 import { DOCK_TOP_PX, MASTHEAD_MIN_VIEWPORT_PX } from "./explain-dock";
 
 /**
@@ -119,14 +127,52 @@ export const MARGIN_INSET_PX = 8;
  */
 export const OPEN_CARD_SELECTOR = MARGIN_CARD_SELECTOR;
 
+interface BoxLike {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  width: number;
+  height: number;
+}
+interface CardLike {
+  firstElementChild?: { textContent?: string | null } | null;
+  getAttribute?(name: string): string | null;
+  getBoundingClientRect(): BoxLike;
+}
+
+export interface OpenCards {
+  /** The cards' rects, in the window's pixels; a card with no box (hidden) is left out. */
+  rects: ViewRect[];
+  /** What the Explain card's header says (its title and the opening words of the passage it explains), for the card that stands. */
+  explainHeads: string[];
+}
+
+/** The cards of the margin that stand open — through their one marker, in one query — with their rects and, for the Explain card, what its header says. */
+export function openCards(root: Pick<ParentNode, "querySelectorAll">): OpenCards {
+  const open: OpenCards = { rects: [], explainHeads: [] };
+  for (const node of Array.from(root.querySelectorAll(OPEN_CARD_SELECTOR))) {
+    const card = node as unknown as CardLike;
+    const box = card.getBoundingClientRect();
+    if (!(box.width > 0 && box.height > 0)) continue;
+    open.rects.push({ left: box.left, top: box.top, right: box.right, bottom: box.bottom });
+    const first = card.firstElementChild ?? null;
+    if (first && card.getAttribute?.("data-margin-card") === "explain") open.explainHeads.push(first.textContent ?? "");
+  }
+  return open;
+}
+
 /** The rects of the cards that stand open, in the window's pixels; a card with no box (hidden) is left out. */
 export function openCardRects(root: Pick<ParentNode, "querySelectorAll">): ViewRect[] {
-  const rects: ViewRect[] = [];
-  for (const card of Array.from(root.querySelectorAll(OPEN_CARD_SELECTOR))) {
-    const box = card.getBoundingClientRect();
-    if (box.width > 0 && box.height > 0) rects.push({ left: box.left, top: box.top, right: box.right, bottom: box.bottom });
-  }
-  return rects;
+  return openCards(root).rects;
+}
+
+const squash = (text: string) => text.replace(/\s+/g, " ").trim();
+
+/** Whether the Explain card that stands (the words of its header) is explaining `passage`: its opening words are in the header. */
+export function explainHeadHolds(heads: readonly string[], passage: string): boolean {
+  const wanted = squash(previewOf(passage));
+  return wanted !== "" && heads.some((head) => squash(head).includes(wanted));
 }
 
 /** How far `group` stands from the nearest of `cards`, in px: negative where they overlap, `Infinity` with no card. Pure. */
@@ -226,6 +272,8 @@ interface Frame {
   viewport: { width: number; height: number };
   /** The open cards' rects at the same moment. */
   cards: ViewRect[];
+  /** P11-38: whether the Explain card that stands holds the selection's passage. */
+  explained: boolean;
 }
 
 const sameRect = (a: ViewRect, b: ViewRect) => a.left === b.left && a.top === b.top && a.right === b.right && a.bottom === b.bottom;
@@ -239,7 +287,8 @@ const sameFrame = (a: Frame | null, b: Frame | null) =>
     a.viewport.height === b.viewport.height &&
     sameRect(a.bounds, b.bounds) &&
     a.cards.length === b.cards.length &&
-    a.cards.every((card, index) => sameRect(card, b.cards[index])));
+    a.cards.every((card, index) => sameRect(card, b.cards[index])) &&
+    a.explained === b.explained);
 
 type Size = { width: number; height: number };
 
@@ -267,6 +316,10 @@ export function SelectionToolbar({
   const [frame, setFrame] = useState<Frame | null>(null);
   // The group's measured size, by mode and number of buttons; until it has been drawn once the estimate stands.
   const [sizes, setSizes] = useState<Record<string, Size>>({});
+  // P11-38 rule 1: the selection Explain this was pressed for. While it is the selection that stands the group is put away; any other selection is a new one.
+  const [pressed, setPressed] = useState<ExplainSelection | null>(null);
+  // …and, for a press the button did not see (`e`), whether the Explain card held the selection's passage the last time the page was read.
+  const explainedWas = useRef<{ of: ExplainSelection; explained: boolean } | null>(null);
   const box = useRef<HTMLDivElement | null>(null);
   const margin = useMarginRect();
   // P11-42 (rule 2; ruling §1h.139 (b)): Explain this is offered for a selection in a heading or a caption as for a paragraph's — the page's word stands. The route finds
@@ -284,9 +337,25 @@ export function SelectionToolbar({
     if (!target) return;
     const measure = () => {
       const where = target.measure ? target.measure() : target;
-      const next: Frame | null = where
-        ? { of: target, bounds: where.bounds, viewport: { width: window.innerWidth, height: window.innerHeight }, cards: openCardRects(document) }
-        : null;
+      const open = where ? openCards(document) : null;
+      const next: Frame | null =
+        where && open
+          ? {
+              of: target,
+              bounds: where.bounds,
+              viewport: { width: window.innerWidth, height: window.innerHeight },
+              cards: open.rects,
+              explained: explainHeadHolds(open.explainHeads, target.passage),
+            }
+          : null;
+      // P11-38 rule 1, `e`: the key (and the thumb bar's cell) call the page's explain action, not the button. What the toolbar sees of it is the Explain card now holding
+      // the selection's passage where it did not the last time the page was read — whenever the stack changes. A card that held the passage when the selection came (the same
+      // words selected again) is not a press.
+      if (next) {
+        const was = explainedWas.current;
+        explainedWas.current = { of: target, explained: next.explained };
+        if (was !== null && was.of === target && next.explained && !was.explained) setPressed(target);
+      }
       setFrame((current) => (sameFrame(current, next) ? current : next));
     };
     measure();
@@ -312,10 +381,12 @@ export function SelectionToolbar({
   }, [target, margin]);
 
   const sizeOf = (which: ActionsMode): Size => sizes[`${which}:${buttons}`] ?? estimate(which, buttons);
-  const place =
+  const placed =
     target && frame && frame.of === target
       ? actionsPlace({ bounds: frame.bounds, viewport: frame.viewport, margin, sizes: { margin: sizeOf("margin"), above: sizeOf("above") } })
       : null;
+  // P11-38 rule 1: in the margin the group is gone once Explain this has been pressed for the selection that stands; the pill above the selection (a window with no margin) is as it was.
+  const place = placed !== null && placed.mode === "margin" && target !== null && pressed === target ? null : placed;
   const drawnMode = place?.mode ?? null;
 
   // P11-27 rule 1: whether the group stands over an open card of the margin — it does not stand clear of one, it stands over it.
@@ -335,6 +406,45 @@ export function SelectionToolbar({
     setSizes((current) => (current[key]?.width === next.width && current[key]?.height === next.height ? current : { ...current, [key]: next }));
   }, [drawnMode, buttons]);
 
+  // P11-38 rule 1, a new drag: the page keeps the same selection object when the words selected are the same, so a drag over the words Explain this was pressed for would
+  // never be news. A press that changed the selection (a `selectionchange` between the press and its release) and left one standing is a new selection: the wait ends — in a
+  // timer, queued after the page's own read of the release, so a different selection arrives first. A click that collapses it, a press inside a card and one that
+  // changes nothing (a button, a tab) do not end it. Listening only while the group is put away.
+  useEffect(() => {
+    if (pressed === null || pressed !== target) return;
+    let armed = false;
+    let changed = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const outside = (node: unknown) => (node as Element | null)?.closest?.(`[data-selection-toolbar], [data-highlight-strip], ${OPEN_CARD_SELECTOR}`) == null;
+    const onDown = (event: Event) => {
+      const press = event as PointerEvent;
+      armed = press.button === 0 && press.isPrimary !== false && outside(press.target);
+      changed = false;
+    };
+    const onChange = () => {
+      if (armed) changed = true;
+    };
+    const onUp = () => {
+      const made = armed && changed;
+      armed = false;
+      changed = false;
+      if (!made) return;
+      timer = setTimeout(() => {
+        const standing = typeof window.getSelection === "function" ? window.getSelection() : null;
+        if (standing !== null && !standing.isCollapsed) setPressed(null);
+      }, 0);
+    };
+    document.addEventListener("pointerdown", onDown, true);
+    document.addEventListener("selectionchange", onChange);
+    document.addEventListener("pointerup", onUp, true);
+    return () => {
+      document.removeEventListener("pointerdown", onDown, true);
+      document.removeEventListener("selectionchange", onChange);
+      document.removeEventListener("pointerup", onUp, true);
+      if (timer !== undefined) clearTimeout(timer);
+    };
+  }, [pressed, target]);
+
   // P11-13 (rule 3): under 768 px the group is not drawn; the thumb bar's Highlight cell stands for it (`explain-offer.ts`) while a
   // settled selection on the screen has a highlight on offer — the explain box says the same of its own cell. Taken back when any of
   // that stops being true and when the page is left.
@@ -347,7 +457,12 @@ export function SelectionToolbar({
 
   if (!target || !place) return null;
   const highlight = actions.includes("highlight") ? () => onHighlight?.(target) : undefined;
+  // P11-38 rule 1: the press explains, and ends the group's job; the selection is left as it is.
+  const explain = () => {
+    onExplain();
+    setPressed(target);
+  };
   return (
-    <SelectionToolbarView place={place} canExplain={explainable} onExplain={onExplain} onTakeNote={() => onTakeNote(target)} onHighlight={highlight} overCard={overCard} innerRef={(el) => (box.current = el)} />
+    <SelectionToolbarView place={place} canExplain={explainable} onExplain={explain} onTakeNote={() => onTakeNote(target)} onHighlight={highlight} overCard={overCard} innerRef={(el) => (box.current = el)} />
   );
 }

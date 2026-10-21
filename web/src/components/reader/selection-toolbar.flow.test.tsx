@@ -635,7 +635,8 @@ describe("SelectionToolbar — a press of Explain this puts the group away (P11-
   it("comes back with a new selection: another selection object from the page, or the same words again after none", async () => {
     stub.margin = MARGIN;
     const shown: boolean[] = [];
-    const run = await scenario(base(), [wait, press, drawn(shown), newSelection({ passage: "Another passage of the paper." }), drawn(shown), press, drawn(shown), none, drawn(shown), newSelection(), drawn(shown)]);
+    // A new selection object is measured before it is drawn: the step after it only waits for that measure.
+    const run = await scenario(base(), [wait, press, drawn(shown), newSelection({ passage: "Another passage of the paper." }), wait, drawn(shown), press, drawn(shown), none, drawn(shown), newSelection(), wait, drawn(shown)]);
     run.mounted.unmount();
     expect(shown).toEqual([false, true, false, false, true]);
   });
