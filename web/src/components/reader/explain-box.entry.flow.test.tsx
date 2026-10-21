@@ -485,7 +485,11 @@ describe("ExplainBox — a selection of the Summary or an answer is explained li
   };
   const answer: ExplainSelection = { ...summary, passage: "The ratio is the share of plates.", source: "answer", paragraphId: "answers" };
 
-  it("opens it in the dock, at the masthead's foot — there is no paragraph of the paper to be level with — and asks with where it is from", async () => {
+  // RE-AIMED (§1c), P11-39 (ruling §1h.138 (b)): was "…at the masthead's foot — there is no paragraph of the paper to be level with…" (top 48). These two selections
+  // are reported under the bare kind (`paragraphId` "summary" / "answers": a block with no id of its own, so no element to read a first line from), so the card is
+  // level with the selection's own first line — 620, lifted to 510 where the band's room under it is under the card's 250-px floor (760 − 250). A selection in a
+  // block of the page that has an id is level with the block's first line (`explain-box.block.flow.test.tsx`).
+  it("opens it in the dock, level with the selection's own first line where its block cannot be measured — there is no paragraph of the paper to be level with — and asks with where it is from", async () => {
     for (const target of [summary, answer]) {
       stubRoot();
       const onAsk = vi.fn(async (): Promise<AskResult> => FIRST_ANSWER);
@@ -494,7 +498,7 @@ describe("ExplainBox — a selection of the Summary or an answer is explained li
 
       expect(run.last().dock, target.source).toBe(true);
       expect(run.last().passage, target.source).toBe(target.passage);
-      expect(run.last().style, target.source).toEqual({ right: 0, width: 360, top: 48, maxHeight: columnBottomPx(800, 28) - 48, zIndex: 60 });
+      expect(run.last().style, target.source).toEqual({ right: 0, width: 360, top: 510, maxHeight: columnBottomPx(800, 28) - 510, zIndex: 60 });
       expect(run.last().card?.props.source, target.source).toBe(target.source);
       expect(onAsk, target.source).toHaveBeenCalledWith(expect.objectContaining({ passage: target.passage, source: target.source, paragraphId: target.paragraphId, sectionIndex: -1 }));
       expect(Object.fromEntries(root), target.source).toEqual(NOTHING_RESERVED);
@@ -502,7 +506,9 @@ describe("ExplainBox — a selection of the Summary or an answer is explained li
     }
   });
 
-  it("while a window is open, a selection in the Summary moves it to the masthead's foot, and one in the body moves it to the paragraph again", async () => {
+  // RE-AIMED (§1c), P11-39 (ruling §1h.138 (b)): was "…moves it to the masthead's foot…" ([400, 48, 300]); the Summary selection here is the bare kind, so it moves to the
+  // selection's own line, held for the card's floor (510).
+  it("while a window is open, a selection in the Summary moves it to the selection's own line (no block to measure), and one in the body moves it to the paragraph again", async () => {
     const tops: Array<number | undefined> = [];
     const run = await scenario(base({ target: inParagraph(first, 400) }), [
       () => open(),
@@ -514,7 +520,7 @@ describe("ExplainBox — a selection of the Summary or an answer is explained li
     await wait();
     tops.push(run.last().style?.top);
 
-    expect(tops).toEqual([400, 48, 300]);
+    expect(tops).toEqual([400, 510, 300]);
     expect(run.last().passage).toBe(first.passage);
     run.mounted.unmount();
   });
