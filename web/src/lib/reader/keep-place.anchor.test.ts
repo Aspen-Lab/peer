@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PLACE_LINE_PX, SETTLE_MS, domEnv, keepPlace, type KeepPlaceEnv as Base, type View } from "./keep-place";
+import { CARET_LINE_PX, PLACE_LINE_PX, READER_SCROLL_MS, SETTLE_MS, domEnv, keepPlace, type KeepPlaceEnv as Base, type View } from "./keep-place";
 
 // P11-54 (round 4's Theme-A walk, E2; ruling §1h.159): the reader's place is kept to the LINE, not only to the paragraph.
 //
@@ -444,7 +444,7 @@ function envOf(p: Page, withChar = true): Env {
   return {
     ...base,
     char: (id) => {
-      const c = (p.doc.caretPositionFromPoint as (x: number, y: number) => { offsetNode: SimNode; offset: number } | null)(COLUMN_LEFT + p.columnPx / 2, PLACE_LINE_PX);
+      const c = (p.doc.caretPositionFromPoint as (x: number, y: number) => { offsetNode: SimNode; offset: number } | null)(COLUMN_LEFT + p.columnPx / 2, CARET_LINE_PX);
       if (!c || c.offsetNode.paragraph !== id || c.offsetNode.formula) return null;
       const r = rect(c.offsetNode, Math.min(c.offset, c.offsetNode.length - 1));
       return { id, node: c.offsetNode, offset: Math.min(c.offset, c.offsetNode.length - 1), top: r.top, height: r.height };
@@ -518,7 +518,7 @@ describe("a character anchor: the word under the line stays under it, to within 
       for (const [id, f] of [["paper-section-1-p0", 0.5], ["paper-section-2-p1", 0.37], ["paper-section-3-p0", 0.8]] as Array<[string, number]>) {
         const p = createTextPage(PARAS());
         p.readAt(id, f);
-        const m = p.mark(PLACE_LINE_PX)!;
+        const m = p.mark(CARET_LINE_PX)!;
         keep(envOf(p));
         p.reflow(w);
         expect(Math.abs(p.moved(m) * p.lineH)).toBeLessThanOrEqual(1);
@@ -553,7 +553,7 @@ describe("a character anchor: the word under the line stays under it, to within 
   it("makes the correction by one instant scrollBy, in the frame of the re-flow and before the scroll event", () => {
     const p = createTextPage(PARAS());
     p.readAt("paper-section-2-p0", 0.5);
-    const m = p.mark(PLACE_LINE_PX)!;
+    const m = p.mark(CARET_LINE_PX)!;
     keep(envOf(p));
     p.reflow(492);
     expect(p.calls.length).toBe(1);
@@ -564,7 +564,7 @@ describe("a character anchor: the word under the line stays under it, to within 
   it("holds through a drag of 60 frames: one scrollBy a frame at most, the word never a pixel from where it began, and it ends where it began", () => {
     const p = createTextPage(PARAS());
     p.readAt("paper-section-3-p0", 0.5);
-    const m = p.mark(PLACE_LINE_PX)!;
+    const m = p.mark(CARET_LINE_PX)!;
     keep(envOf(p));
     let farthest = 0;
     let step = 0;
@@ -591,7 +591,7 @@ describe("a character anchor: the word under the line stays under it, to within 
   it("holds the word through the page's settling: a height that goes on changing for 300 ms is put right, frame by frame", () => {
     const p = createTextPage(PARAS());
     p.readAt("paper-section-2-p1", 0.5);
-    const m = p.mark(PLACE_LINE_PX)!;
+    const m = p.mark(CARET_LINE_PX)!;
     keep(envOf(p));
     p.setScale(1.1);
     p.frame();
@@ -599,7 +599,8 @@ describe("a character anchor: the word under the line stays under it, to within 
       p.clock.now += 50;
       p.growAbove(9);
       p.frame();
-      expect(Math.abs(p.moved(m) * p.lineH)).toBeLessThan(1);
+      // A text step scales the character's own box about the line (up to a tenth of its 20 px), so "to the pixel" is "to 2 px" here.
+      expect(Math.abs(p.moved(m) * p.lineH)).toBeLessThan(2);
     }
   });
 
@@ -720,7 +721,7 @@ describe("domEnv — the caret at the line, as the browser has it", () => {
 
   it("keeps the word under the line through a re-flow, with the standard caret function", () => {
     const p = open();
-    const m = p.mark(PLACE_LINE_PX)!;
+    const m = p.mark(CARET_LINE_PX)!;
     keepPlace(domEnv(p.column as unknown as Element));
     p.reflow(416);
     expect(Math.abs(p.moved(m) * p.lineH)).toBeLessThanOrEqual(1);
@@ -728,7 +729,7 @@ describe("domEnv — the caret at the line, as the browser has it", () => {
 
   it("keeps it with the older function where that is what the browser has (caretRangeFromPoint)", () => {
     const p = open("range");
-    const m = p.mark(PLACE_LINE_PX)!;
+    const m = p.mark(CARET_LINE_PX)!;
     keepPlace(domEnv(p.column as unknown as Element));
     p.reflow(416);
     expect(Math.abs(p.moved(m) * p.lineH)).toBeLessThanOrEqual(1);
@@ -749,7 +750,7 @@ describe("domEnv — the caret at the line, as the browser has it", () => {
     const p = open();
     p.log.caret.length = 0;
     keepPlace(domEnv(p.column as unknown as Element));
-    expect(p.log.caret[0]).toEqual([COLUMN_LEFT + 552 / 2, PLACE_LINE_PX]);
+    expect(p.log.caret[0]).toEqual([COLUMN_LEFT + 552 / 2, CARET_LINE_PX]);
   });
 
   it("reads it at the middle once, not at three places: a hit on text needs no second try", () => {
@@ -765,16 +766,16 @@ describe("domEnv — the caret at the line, as the browser has it", () => {
     const p = createTextPage([first, ...PARAS()]);
     p.stub();
     p.readAt(first.id, 0.02);
-    expect(p.mark(PLACE_LINE_PX, 0.5)).not.toBeNull();
-    expect(p.mark(PLACE_LINE_PX, 0.5)!.node.formula).toBe(true);
-    expect(p.mark(PLACE_LINE_PX, 0.7)!.node.formula).toBe(false);
-    const m = p.mark(PLACE_LINE_PX, 0.7)!;
+    expect(p.mark(CARET_LINE_PX, 0.5)).not.toBeNull();
+    expect(p.mark(CARET_LINE_PX, 0.5)!.node.formula).toBe(true);
+    expect(p.mark(CARET_LINE_PX, 0.7)!.node.formula).toBe(false);
+    const m = p.mark(CARET_LINE_PX, 0.7)!;
     p.log.caret.length = 0;
     keepPlace(domEnv(p.column as unknown as Element));
     const xs = p.log.caret.map(([x]) => (x - COLUMN_LEFT) / 552);
     expect(xs[0]).toBeCloseTo(0.5, 6);
     expect(xs.length).toBeGreaterThanOrEqual(2);
-    for (const [, y] of p.log.caret) expect(y).toBe(PLACE_LINE_PX);
+    for (const [, y] of p.log.caret) expect(y).toBe(CARET_LINE_PX);
     p.reflow(416);
     expect(Math.abs(p.moved(m) * p.lineH)).toBeLessThanOrEqual(1);
   });
@@ -834,7 +835,7 @@ describe("the reader's scroll during the settling re-anchors; it does not end th
 
   it("keeps correcting the heights that go on changing after the reader's scroll: the word at the reader's new place stays under the line (the reader going down, the heights above growing)", () => {
     const p = settling(+600);
-    const m = p.mark(PLACE_LINE_PX)!;
+    const m = p.mark(CARET_LINE_PX)!;
     const made = p.calls.length;
     for (let frame = 0; frame < 6; frame++) {
       p.clock.now += 30;
@@ -855,34 +856,58 @@ describe("the reader's scroll during the settling re-anchors; it does not end th
     expect(p.scrollY).toBeCloseTo(at + 20, 0);
   });
 
-  it("never moves the page against the reader's direction: going down, a height that shrinks above is not put back by scrolling up", () => {
+  it("never moves the page against the reader's direction while they scroll: going down, a height that shrinks above is not put back by scrolling up", () => {
     const p = settling(+600);
     const made = p.calls.length;
     for (let frame = 0; frame < 5; frame++) {
-      p.clock.now += 30;
+      p.clock.now += 20;
       p.growAbove(-20);
       p.frame();
     }
     expect(p.calls.slice(made).filter((c) => c.top < 0)).toEqual([]);
   });
 
-  it("never moves the page against the reader's direction: going up, a height that grows above is not put back by scrolling down", () => {
+  it("never moves the page against the reader's direction while they scroll: going up, a height that grows above is not put back by scrolling down", () => {
     const p = settling(-600);
     const made = p.calls.length;
     for (let frame = 0; frame < 5; frame++) {
-      p.clock.now += 30;
+      p.clock.now += 20;
       p.growAbove(20);
       p.frame();
     }
     expect(p.calls.slice(made).filter((c) => c.top > 0)).toEqual([]);
   });
 
+  it("holds that for a text step too, whose frames are each a change of layout key (the column's width goes on changing): smaller text, the reader going down, is not put back", () => {
+    const p = settling(+600);
+    const made = p.calls.length;
+    for (const scale of [1.08, 1.06, 1.04, 1.02, 1]) {
+      p.clock.now += 20;
+      p.setScale(scale);
+      p.frame();
+    }
+    expect(p.calls.slice(made).filter((c) => c.top < 0)).toEqual([]);
+  });
+
+  it("and larger text, the reader going down, is put right (with their direction), the word kept to two pixels at the end of each frame", () => {
+    const p = settling(+600);
+    const m = p.mark(CARET_LINE_PX)!;
+    const made = p.calls.length;
+    for (const scale of [1.12, 1.14, 1.16, 1.18, 1.2]) {
+      p.clock.now += 20;
+      p.setScale(scale);
+      expect(Math.abs(p.moved(m) * p.lineH)).toBeLessThan(2.5 * (scale / 1.1));
+      p.frame();
+    }
+    expect(p.calls.length).toBeGreaterThan(made);
+  });
+
   it("takes the place as it stands where it has let a change go, so the next change is put right from there, with no jump back later", () => {
     const p = settling(+600);
     p.clock.now += 30;
-    p.growAbove(-60); // shrinks above: let go, the place is read again
+    p.growAbove(-60); // shrinks above, against the reader: let go, the place is read again
     p.frame();
-    const m = p.mark(PLACE_LINE_PX)!;
+    const m = p.mark(CARET_LINE_PX)!;
     const made = p.calls.length;
     p.clock.now += 30;
     p.growAbove(25); // grows above, with the reader's direction: put right, by 25 and not by 85
@@ -892,7 +917,20 @@ describe("the reader's scroll during the settling re-anchors; it does not end th
     expect(Math.abs(p.moved(m) * p.lineH)).toBeLessThan(1);
   });
 
-  it("makes a new re-flow's own correction in full, either way: the direction of an earlier scroll does not stop the keeping of the next change", () => {
+  it("goes on both ways once the reader has stopped (READER_SCROLL_MS after their last scroll): the rest of the settling is put right, shrinking or growing", () => {
+    expect(READER_SCROLL_MS).toBeGreaterThanOrEqual(100);
+    const p = settling(+600);
+    p.clock.now += READER_SCROLL_MS + 10;
+    const m = p.mark(CARET_LINE_PX)!;
+    const made = p.calls.length;
+    p.growAbove(-20);
+    p.frame();
+    expect(p.calls.length).toBe(made + 1);
+    expect(p.calls[made].top).toBeCloseTo(-20, 0);
+    expect(Math.abs(p.moved(m) * p.lineH)).toBeLessThan(1);
+  });
+
+  it("makes a new re-flow's own correction in full, either way, when the reader is not scrolling: the direction of an earlier scroll does not stop the keeping of the next change", () => {
     for (const dy of [+600, -600]) {
       for (const [id, f] of [["paper-section-1-p0", 0.5], ["paper-section-3-p0", 0.5], ["paper-section-2-p1", 0.5]] as Array<[string, number]>) {
         const p = createTextPage(PARAS());
@@ -903,8 +941,8 @@ describe("the reader's scroll during the settling re-anchors; it does not end th
         p.clock.now += 30;
         p.scroll(p.scrollY + dy);
         p.frame();
-        const m = p.mark(PLACE_LINE_PX)!;
-        p.clock.now += 30;
+        const m = p.mark(CARET_LINE_PX)!;
+        p.clock.now += READER_SCROLL_MS + 10;
         p.reflow(380); // a new change of column: the word must be kept, whichever way its correction goes
         p.frame();
         expect(Math.abs(p.moved(m) * p.lineH)).toBeLessThanOrEqual(1);
@@ -919,6 +957,42 @@ describe("the reader's scroll during the settling re-anchors; it does not end th
     p.growAbove(300);
     p.frame();
     expect(p.calls.length).toBe(made);
+  });
+
+  it("does not put the page back against a scroll of the reader's whose event has not come yet (the observer is told before the scroll event): a shrink is let go", () => {
+    const p = createTextPage(PARAS());
+    p.readAt("paper-section-2-p1", 0.5);
+    keep(envOf(p));
+    p.setScale(1.1);
+    p.frame();
+    p.clock.now += 30;
+    p.scroll(p.scrollY + 300); // the window has moved; its scroll event comes at the next frame
+    const made = p.calls.length;
+    p.growAbove(-20); // the heights change in the same frame, and the observer is told first
+    expect(p.calls.slice(made)).toEqual([]);
+    p.frame(); // the event: the place is read where the reader is
+    p.clock.now += 30;
+    p.growAbove(20); // and the next change, with their direction, is put right from there
+    expect(p.calls.length).toBe(made + 1);
+    expect(p.calls[made].top).toBeCloseTo(20, 0);
+  });
+
+  it("and a growth is put right without undoing their scroll: by the growth, not by the growth less the 300 px they scrolled", () => {
+    const p = createTextPage(PARAS());
+    p.readAt("paper-section-2-p1", 0.5);
+    keep(envOf(p));
+    p.setScale(1.1);
+    p.frame();
+    p.clock.now += 30;
+    const at = p.scrollY;
+    p.scroll(at + 300);
+    const made = p.calls.length;
+    const m = p.mark(CARET_LINE_PX)!;
+    p.growAbove(50);
+    expect(p.calls.length).toBe(made + 1);
+    expect(p.calls[made].top).toBeCloseTo(50, 0);
+    expect(p.scrollY).toBeCloseTo(at + 350, 0);
+    expect(Math.abs(p.moved(m) * p.lineH)).toBeLessThan(1);
   });
 
   it("is not a correction of its own at the reader's scroll: the reader's scroll is read, nothing is scrolled for it", () => {

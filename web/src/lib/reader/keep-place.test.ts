@@ -304,8 +304,10 @@ describe("keepPlace — the paragraph at the top stays at the top", () => {
     keepPlace(envOf(p));
     p.reflow(492);
     p.frame();
-    // The reader scrolls on, a screenful and a bit, and the column changes again.
+    // The reader scrolls on, a screenful and a bit, and the column changes again. P11-54 (rule 4): a change within READER_SCROLL_MS of a scroll of theirs made
+    // during the settling is not put back against them, so the column changes a moment after (a press, a grab of the separator takes longer than that).
     readAt(p, "paper-section-5-p2", 0.3);
+    p.clock.now += 200;
     const before = p.top()!;
     const f = (LINE - before.top) / before.height;
     p.reflow(612);
