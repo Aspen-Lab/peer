@@ -739,13 +739,17 @@ describe("stripStanding — never over a card's header (P11-38 rule 2; ruling §
     expect(got.top - 300).toBeLessThanOrEqual(40);
   });
 
-  it("stands just below the explain card's header block — the X, the title and the quote — at any height of the mark inside it", () => {
-    const block: Zone = { box: sq(1001, 291, 1280, 413), parts: [sq(1017, 307, 1053, 343), sq(1065, 317, 1264, 333), sq(1017, 355, 1264, 400)] };
-    for (const top of [291, 300, 340, 380, 410]) {
-      const got = withHeaders({ mark: line(top), viewport: VIEW, margin: MARGIN, headers: [block] })!;
-      expect(got.top, String(top)).toBe(413);
-      expect(got.clear, String(top)).toBe("below");
-    }
+  // P11-38 follow-up, RE-AIMED (§1c): was "stands just below the explain card's header block — the X, the title and the quote — at any height of the mark inside it" (a block 122 px
+  // tall, the strip at its foot, 413, from every height). The header is the card's top row now (the quote is the card's content) and the strip takes the nearest clear place:
+  // above the row for a mark in its top 17 px (a 34-px strip), below it otherwise, level over the quote.
+  it("stands in the nearest clear place beside the explain card's top row — the X and the title: just above it from its top, just below it from lower, level over the quote under it", () => {
+    const row: Zone = { box: sq(1000, 291, 1280, 343), parts: [sq(1017, 307, 1053, 343), sq(1065, 317, 1264, 333)] };
+    const at = (top: number) => withHeaders({ mark: line(top), viewport: VIEW, margin: MARGIN, headers: [row] })!;
+    expect(at(291)).toMatchObject({ top: 291 - STRIP_ROW_PX, clear: "above" });
+    for (const top of [300, 320, 340]) expect(at(top), String(top)).toMatchObject({ top: 343, clear: "below" });
+    expect(at(343).top).toBe(343);
+    expect(at(343).clear).toBeUndefined();
+    expect(at(380)).toEqual({ mode: "margin", left: 1008, top: 380, width: 264 });
   });
 
   it("stands on the header's free part, level with the mark, when it fits whole beside the title and the X (a wide margin, a short quote head)", () => {
@@ -755,9 +759,12 @@ describe("stripStanding — never over a card's header (P11-38 rule 2; ruling §
     expect(got.left + STRIP_ONE_ROW_WIDTH_PX).toBeLessThanOrEqual(1316);
   });
 
-  it("clears a stack of headers, one under the other, and stands below the last of them", () => {
+  // P11-38 follow-up, RE-AIMED (§1c): was "clears a stack of headers, one under the other, and stands below the last of them" (the mark at 300: top 360, a move of 60). Above the stack's
+  // first header is 54 px from that mark, so the strip stands there now; a mark nearer the stack's foot still goes below the last header.
+  it("clears a stack of headers, one under the other, in the nearest clear place: above the first header from near the top of the stack, below the last from near its foot", () => {
     const stack: Zone[] = [stickyZone(), { ...stickyZone(), box: sq(1000, 320, 1280, 360), parts: [sq(1012, 332, 1060, 348), sq(1068, 332, 1230, 348), sq(1240, 320, 1280, 360)] }];
-    expect(withHeaders({ mark: line(300), viewport: VIEW, margin: MARGIN, headers: stack })?.top).toBe(360);
+    expect(withHeaders({ mark: line(300), viewport: VIEW, margin: MARGIN, headers: stack })).toMatchObject({ top: 280 - STRIP_ROW_PX, clear: "above" });
+    expect(withHeaders({ mark: line(340), viewport: VIEW, margin: MARGIN, headers: stack })).toMatchObject({ top: 360, clear: "below" });
   });
 
   it("stands just above the header when there is no room below it in the band", () => {

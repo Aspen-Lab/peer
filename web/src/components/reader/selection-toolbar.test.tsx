@@ -567,8 +567,10 @@ describe("actionsPlace — never over a card's header (P11-38 rule 2; ruling §1
     box: sq(1080, 380, 1440, 420),
     parts: [sq(1092, 392, 1140, 408), headline, sq(1400, 380, 1440, 420)],
   });
-  // The explain card's header block: the big X and the title on a row, and the quoted passage under them, 122 px in all.
-  const explain: Zone = { box: sq(1081, 391, 1440, 513), parts: [sq(1097, 407, 1133, 443), sq(1145, 417, 1424, 433), sq(1097, 455, 1424, 500)] };
+  // The explain card's header (P11-38, follow-up): its top row only — the big X and the title, from the card's top (390) to the row's foot (443). The quoted passage under
+  // the row is the card's content, like a sticky's text. `title` is what the title's words cover: the element is as wide as the row, the words are not.
+  const explainRow = (title: Box = sq(1145, 417, 1424, 433)): Zone => ({ box: sq(1080, 390, 1440, 443), parts: [sq(1097, 407, 1133, 443), title] });
+  const explain: Zone = explainRow();
 
   it("stands where it stood when no header is under it: level with the first line, the keys of the place as they were", () => {
     const LEVEL = { mode: "margin", left: MARGIN.left + 8, top: 400, below: false };
@@ -587,12 +589,27 @@ describe("actionsPlace — never over a card's header (P11-38 rule 2; ruling §1
     expect(got.top - 400).toBeLessThanOrEqual(40);
   });
 
-  it("stands just below the explain card's header block — its X, its title and the quote — whatever height of it the line is at", () => {
-    for (const line of [391, 400, 430, 470, 500]) {
+  // P11-38 follow-up, RE-AIMED (§1c): was "stands just below the explain card's header block — its X, its title and the quote — whatever height of it the line is at" (a
+  // block 122 px tall: the group moved up to 118 px). The header is the top row only now (the quote is the card's content), 53 px from the card's top to the row's foot.
+  it("stands just below the explain card's top row — its X and its title — whatever height of it the line is at: it moves less than the row is tall", () => {
+    // (From a line at the row's foot only the X's last pixel is in the group's reach: the group stands to the right of it, on the row's free part.)
+    for (const line of [391, 400, 430]) {
       const got = placeWith([explain], { bounds: { left: 300, top: line, right: 520, bottom: line + 22 } })!;
-      expect(got.top, String(line)).toBe(513);
+      expect(got.top, String(line)).toBe(443);
       expect(got.clear, String(line)).toBe("below");
       expect(got.top - line, String(line)).toBeLessThanOrEqual(explain.box.bottom - explain.box.top);
+    }
+  });
+
+  it("leaves the quote under the row to the group: a line at the quote's height stands level over it", () => {
+    for (const line of [443, 455, 480]) expect(placeWith([explain], { bounds: { left: 300, top: line, right: 520, bottom: line + 22 } })?.top, String(line)).toBe(line);
+  });
+
+  it("stands level with the line, beside the title's words, when they leave room: the explain card's row has a free part, and the move is nothing", () => {
+    const short = explainRow(sq(1145, 417, 1226, 433));
+    for (const line of [391, 400, 430]) {
+      const got = placeWith([short], { bounds: { left: 300, top: line, right: 520, bottom: line + 22 } })!;
+      expect(got, String(line)).toEqual({ mode: "margin", left: 1230, top: line, below: false, clear: "free" });
     }
   });
 
@@ -611,22 +628,60 @@ describe("actionsPlace — never over a card's header (P11-38 rule 2; ruling §1
     expect(got.top).toBe(420);
   });
 
-  it("clears a whole stack of headers, one under the other: below the last of them, the front card's zoom row included", () => {
-    const stack: Zone[] = [
-      sticky(),
-      { box: sq(1080, 420, 1440, 460), parts: [sq(1092, 432, 1140, 448), sq(1148, 432, 1330, 448), sq(1400, 420, 1440, 460)] },
-      { box: sq(1080, 460, 1440, 500), parts: [sq(1092, 472, 1140, 488), sq(1148, 472, 1330, 488), sq(1400, 460, 1440, 500)] },
-      { box: sq(1080, 500, 1440, 536), parts: [sq(1090, 506, 1120, 530), sq(1130, 506, 1200, 530)] },
-    ];
-    const got = placeWith(stack)!;
-    expect(got.top).toBe(536);
-    expect(got.clear).toBe("below");
+  const stack: Zone[] = [
+    sticky(),
+    { box: sq(1080, 420, 1440, 460), parts: [sq(1092, 432, 1140, 448), sq(1148, 432, 1330, 448), sq(1400, 420, 1440, 460)] },
+    { box: sq(1080, 460, 1440, 500), parts: [sq(1092, 472, 1140, 488), sq(1148, 472, 1330, 488), sq(1400, 460, 1440, 500)] },
+    { box: sq(1080, 500, 1440, 536), parts: [sq(1090, 506, 1120, 530), sq(1130, 506, 1200, 530)] },
+  ];
+
+  // P11-38 follow-up, RE-AIMED (§1c): was "clears a whole stack of headers, one under the other: below the last of them, the front card's zoom row included" with the line at 400 and
+  // `top` 536 (a move of 136 px). The group takes the nearest clear place now: above the stack's first header is 110 px from the line, below its last is 136, so it stands above.
+  it("clears a whole stack of headers, one under the other, in the nearest clear place: above the first header at the top of the stack, below the last, the front card's zoom row included, lower in it", () => {
+    const high = placeWith(stack)!;
+    expect(high.clear).toBe("above");
+    expect(high.top).toBe(380 - SIZES.margin.height);
+    for (const line of [480, 500, 520]) {
+      const low = placeWith(stack, { bounds: { left: 300, top: line, right: 520, bottom: line + 22 } })!;
+      expect(low.clear, String(line)).toBe("below");
+      expect(low.top, String(line)).toBe(536);
+    }
   });
 
-  it("moves down just far enough when the line is above the header and the group's foot would reach into it", () => {
-    const got = placeWith([{ box: sq(1080, 440, 1440, 480), parts: [sq(1092, 452, 1140, 468), sq(1148, 452, 1330, 468), sq(1400, 440, 1440, 480)] }])!;
-    expect(got.top).toBe(480);
-    expect(got.clear).toBe("below");
+  // P11-38 follow-up, RE-AIMED (§1c): was "moves down just far enough when the line is above the header and the group's foot would reach into it" (the header at 440, the line at 400:
+  // below, 80 px). Above the header is 50 px from that line, so the group stands there; a line nearer the header's foot still goes below.
+  it("moves just far enough when the line is above the header and the group's foot would reach into it: up when that is the shorter move, down when it is not", () => {
+    const header: Zone = { box: sq(1080, 440, 1440, 480), parts: [sq(1092, 452, 1140, 468), sq(1148, 452, 1330, 468), sq(1400, 440, 1440, 480)] };
+    const up = placeWith([header])!;
+    expect(up.clear).toBe("above");
+    expect(up.top).toBe(440 - SIZES.margin.height);
+    const down = placeWith([header], { bounds: { left: 300, top: 430, right: 520, bottom: 452 } })!;
+    expect(down.clear).toBe("below");
+    expect(down.top).toBe(480);
+  });
+
+  it("takes the nearest clear place, and below when above and below are the same distance from the line", () => {
+    const header: Zone = { box: sq(1080, 440, 1440, 480), parts: [sq(1092, 452, 1140, 468), sq(1148, 452, 1330, 468), sq(1400, 440, 1440, 480)] };
+    // above is `440 − 90 = 350`, below is `480`: equally far from a line at 415.
+    const tie = placeWith([header], { bounds: { left: 300, top: 415, right: 520, bottom: 437 } })!;
+    expect(tie.clear).toBe("below");
+    expect(tie.top).toBe(480);
+    // …and for every line where the group's reach holds the header's title the move is the shorter of the two (a line higher or lower reaches only the X at the far end: the
+    // group stands level, to the left of it).
+    for (let line = 365; line <= 465; line += 5) {
+      const got = placeWith([header], { bounds: { left: 300, top: line, right: 520, bottom: line + 22 } })!;
+      const nearest = Math.min(Math.abs(480 - line), Math.abs(440 - SIZES.margin.height - line));
+      expect(Math.abs(got.top - line), String(line)).toBe(nearest);
+      expect(got.clear === "below" || got.clear === "above", String(line)).toBe(true);
+    }
+  });
+
+  it("prefers the header's free part to either: the move is nothing, whatever the distance to the header's edges", () => {
+    for (const line of [380, 390, 400, 410]) {
+      const got = placeWith([sticky(sq(1148, 392, 1190, 408))], { bounds: { left: 300, top: line, right: 520, bottom: line + 22 } })!;
+      expect(got.clear, String(line)).toBe("free");
+      expect(got.top, String(line)).toBe(line);
+    }
   });
 
   it("stands just above the header when there is no room below it in the band", () => {
@@ -717,6 +772,54 @@ describe("readHeaders — a card's header and what it holds, read from the page 
     const zones = read(card("figure", sq(1080, 48, 1440, 860), { tag: "div", box: sq(1080, 48, 1440, 88), kids: [{ tag: "span", box: sq(1092, 60, 1140, 76), text: "Figure 3" }] }, { tag: "div", box: sq(1080, 88, 1440, 124), kids: [{ tag: "button", box: sq(1090, 94, 1118, 118), text: "−" }, { tag: "button", box: sq(1200, 94, 1228, 118), text: "+" }] }));
     expect(zones.map((zone) => zone.box)).toEqual([sq(1080, 48, 1440, 88), sq(1080, 88, 1440, 124)]);
     expect(zones[1].parts).toEqual([sq(1090, 94, 1118, 118), sq(1200, 94, 1228, 118)]);
+  });
+
+  // P11-38 follow-up: the explain card's header is its top row (the one that holds the big X: `[data-explain-close]`'s parent), from the card's top to the row's foot; the quoted
+  // passage under it is the card's content. The card that is behind another shows that row alone, as its first element. A card whose X is not found keeps its first element.
+  const explainCard = (behind: boolean) => {
+    const x = { tagName: "BUTTON", childNodes: [], children: [{ tagName: "svg", childNodes: [], children: [], getBoundingClientRect: () => sized(sq(1105, 415, 1125, 435)) }], parentElement: null as unknown, getBoundingClientRect: () => sized(sq(1097, 407, 1133, 443)) };
+    const title = { tagName: "P", childNodes: [{ nodeType: 3, nodeValue: "Explain this" }], children: [], getBoundingClientRect: () => sized(sq(1145, 417, 1424, 433)) };
+    const quote = { tagName: "P", childNodes: [{ nodeType: 3, nodeValue: "the quoted words" }], children: [], getBoundingClientRect: () => sized(sq(1097, 455, 1424, 500)) };
+    const row = { tagName: "DIV", childNodes: [], children: [x, title], getBoundingClientRect: () => sized(sq(1097, 407, 1424, 443)) };
+    x.parentElement = row;
+    const block = { tagName: "DIV", childNodes: [], children: [row, quote], getBoundingClientRect: () => sized(sq(1081, 391, 1440, 513)) };
+    return {
+      getAttribute: (name: string) => (name === "data-margin-card" ? "explain" : null),
+      getBoundingClientRect: () => sized(sq(1080, 390, 1440, 920)),
+      firstElementChild: behind ? row : block,
+      querySelector: (selector: string) => (selector === "[data-explain-close]" ? x : null),
+    };
+  };
+
+  it("takes the explain card's top row as its header — from the card's top to the row's foot — and the X and the title as what it holds: the quote under it is the card's content", () => {
+    for (const behind of [false, true]) {
+      const [zone] = read(explainCard(behind));
+      expect(zone.box, String(behind)).toEqual(sq(1080, 390, 1440, 443));
+      expect(zone.parts, String(behind)).toEqual(expect.arrayContaining([sq(1097, 407, 1133, 443), sq(1145, 417, 1424, 433)]));
+      expect(zone.parts, String(behind)).not.toContainEqual(sq(1097, 455, 1424, 500));
+      expect(zone.parts.every((part) => part.bottom <= 443), String(behind)).toBe(true);
+    }
+  });
+
+  it("measures a title by its words, not by its box: the element is as wide as the row, the words are as wide as they are (the free part is what the words leave)", () => {
+    const title: Record<string, unknown> = { tagName: "P", childNodes: [{ nodeType: 3, nodeValue: "Explain this" }], children: [], getBoundingClientRect: () => sized(sq(1145, 417, 1424, 433)) };
+    title.ownerDocument = {
+      createRange: () => {
+        let of: unknown = null;
+        return { selectNodeContents: (node: unknown) => void (of = node), getBoundingClientRect: () => (of === title ? sized(sq(1145, 417, 1226, 433)) : sized(sq(0, 0, 0, 0))) };
+      },
+    };
+    const head = { tagName: "DIV", childNodes: [], children: [title], getBoundingClientRect: () => sized(sq(1080, 380, 1440, 440)) };
+    const [zone] = read({ getAttribute: () => "sticky", getBoundingClientRect: () => sized(sq(1080, 380, 1440, 640)), firstElementChild: head, querySelector: () => null });
+    expect(zone.parts).toEqual([sq(1145, 417, 1226, 433)]);
+  });
+
+  it("keeps a control's own box, whatever its words cover: a press anywhere on a button is the button's", () => {
+    const control: Record<string, unknown> = { tagName: "BUTTON", childNodes: [{ nodeType: 3, nodeValue: "×" }], children: [], getBoundingClientRect: () => sized(sq(1400, 380, 1440, 420)) };
+    control.ownerDocument = { createRange: () => ({ selectNodeContents: () => {}, getBoundingClientRect: () => sized(sq(1415, 392, 1425, 408)) }) };
+    const head = { tagName: "DIV", childNodes: [], children: [control], getBoundingClientRect: () => sized(sq(1080, 380, 1440, 420)) };
+    const [zone] = read({ getAttribute: () => "sticky", getBoundingClientRect: () => sized(sq(1080, 380, 1440, 640)), firstElementChild: head, querySelector: () => null });
+    expect(zone.parts).toEqual([sq(1400, 380, 1440, 420)]);
   });
 
   it("reads every card of the margin, and leaves out a card with no header, a header with no box, and a part with no box", () => {

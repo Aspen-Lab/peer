@@ -577,15 +577,21 @@ const fakeCard = (kind: string, box: Box, head: Part) => ({
   firstElementChild: fakeNode(head),
   querySelector: () => null,
 });
-const explainCard = (passage: string) =>
-  fakeCard("explain", { left: 1080, top: 380, right: 1440, bottom: 860 }, {
-    tag: "div",
-    box: { left: 1081, top: 381, right: 1440, bottom: 503 },
-    kids: [
-      { tag: "div", box: { left: 1097, top: 397, right: 1424, bottom: 433 }, kids: [{ tag: "button", box: { left: 1097, top: 397, right: 1133, bottom: 433 }, kids: [{ tag: "svg", box: { left: 1105, top: 405, right: 1125, bottom: 425 } }] }, { tag: "p", box: { left: 1145, top: 407, right: 1424, bottom: 423 }, text: "Explain this" }] },
-      { tag: "p", box: { left: 1097, top: 445, right: 1424, bottom: 490 }, text: passage },
-    ],
-  });
+const explainCard = (passage: string, title: Box = { left: 1145, top: 407, right: 1424, bottom: 423 }) => {
+  const x = fakeNode({ tag: "button", box: { left: 1097, top: 397, right: 1133, bottom: 433 }, kids: [{ tag: "svg", box: { left: 1105, top: 405, right: 1125, bottom: 425 } }] });
+  const row = fakeNode({ tag: "div", box: { left: 1097, top: 397, right: 1424, bottom: 433 }, kids: [{ tag: "p", box: title, text: "Explain this" }] });
+  (row.children as unknown[]).unshift(x);
+  x.parentElement = row;
+  const block = fakeNode({ tag: "div", box: { left: 1081, top: 381, right: 1440, bottom: 503 }, kids: [{ tag: "p", box: { left: 1097, top: 445, right: 1424, bottom: 490 }, text: passage }] });
+  (block.children as unknown[]).unshift(row);
+  block.textContent = `Explain this${passage}`;
+  return {
+    getAttribute: (name: string) => (name === "data-margin-card" ? "explain" : null),
+    getBoundingClientRect: () => fakeBox({ left: 1080, top: 380, right: 1440, bottom: 860 }),
+    firstElementChild: block,
+    querySelector: (selector: string) => (selector === "[data-explain-close]" ? x : null),
+  };
+};
 const stickyCard = () =>
   fakeCard("sticky", { left: 1080, top: 380, right: 1440, bottom: 640 }, {
     tag: "div",
@@ -831,13 +837,15 @@ describe("SelectionToolbar — never over a card's header (P11-38 rule 2)", () =
     expect(seen[2].place).toEqual({ mode: "margin", left: MARGIN.left + 8, top: 400, below: false });
   });
 
-  it("stands below the explain card's header block, whose X the level place would have covered, from the first frame", async () => {
+  // P11-38 follow-up, RE-AIMED (§1c): was "stands below the explain card's header block, whose X the level place would have covered, from the first frame" (top 503, the block's foot).
+  // The header is the card's top row now: its foot is 433.
+  it("stands below the explain card's top row, whose X the level place would have covered, from the first frame", async () => {
     stub.margin = MARGIN;
     richCards = [explainCard("Some other passage of the paper.")];
     const run = await scenario(base());
     const got = run.last().place as ActionsPlace & { clear?: string };
     run.mounted.unmount();
-    expect(got.top).toBe(503);
+    expect(got.top).toBe(433);
     expect(got.clear).toBe("below");
     expect(got.left).toBe(MARGIN.left + 8);
   });
