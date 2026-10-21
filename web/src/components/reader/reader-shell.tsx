@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { useKeepPlace } from "@/lib/reader/keep-place";
+import { useKeepSelection } from "@/lib/reader/keep-selection";
 import { registerMargin } from "@/lib/reader/margin";
 import { useReaderPanesStore } from "@/store/reader-panes";
 import { PaneDivider } from "./pane-divider";
@@ -121,6 +122,10 @@ export function ReaderShell({ left, centre, header }: ReaderShellProps) {
   // The reader's place survives a re-flow (P11-45, ruling §1h.146): the paragraph at the top stays at the top when the centre column changes width
   // (a divider dragged, a collapse or a pin, Fit, the window) — `lib/reader/keep-place.ts`.
   useKeepPlace(grid);
+
+  // A drag-select that began in the paper's text ends at the column's edge wherever it is released - over the margin, a card, the left pane, a separator, beyond the
+  // window (P11-45b) - `lib/reader/keep-selection.ts`.
+  useKeepSelection(grid);
 
   // A timer that is waiting when the shell goes must not fire into it.
   useEffect(() => {

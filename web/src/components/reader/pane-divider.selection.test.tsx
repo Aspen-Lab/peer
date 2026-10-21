@@ -12,29 +12,20 @@ vi.mock("react", async (importOriginal) => {
 
 import type { ReactElement } from "react";
 import { hookRuntime } from "@/test-support/hook-runtime";
-import { PaneDivider, endSelectionInColumn, type PaneDividerProps } from "./pane-divider";
+import { PaneDivider, type PaneDividerProps } from "./pane-divider";
 
-// P11-45, the manager's addition (C P11-46's measurement; ruling §1h.148's aim): a drag-select that starts in the paper's text and is released over a
-// separator ends the selection where the pointer is, at the line's end, not at the separator's place in the document.
-//
-// Measured at 1280 x 720 on the invented paper (the column is 552 px, the centre's padding 12 px, the separator 12 px): a release 12, 16 and 23 px past a line's end
-// is over the margin's separator and the selection ended at the end of the paper (36,977 characters, no buttons offered: far over the cap); a release the same
-// distance before a line's start is over the left separator and it ended at the end of the left pane (19,467). At 1440 the column is capped and the gutter
-// blank: the release is over the centre's own box and the selection was right. The notes tab's cure (`pointer-events: none` while a pointer is held and the
-// element is not the one pressed) was tried on the separators and measured: the pointer then falls through to the shell's grid, which holds no text there, and
-// the selection ended at the same place. So the separator keeps the pointer and puts the selection's end right: while a press made elsewhere is held over it,
-// and at its release, the selection that began in the column ends at the column's nearest edge at the pointer's height, once per animation frame.
-//
-// Held here: the decision (`endSelectionInColumn`), the separator's handlers (a held press over it, its release, the frame they wait for), and what must not
-// change - the separator's own drag, its keys, its hit area (the markup states no pointer-events rule).
+// P11-45 gave the separators their own handlers for a drag-select released over them (a clamp of the selection's end to the column's edge, in a frame). P11-45b
+// generalised the rule to the whole document - a release over the margin, a card, the left pane, beyond the window, a separator - and FOLDED the separators' handlers into
+// it: `lib/reader/keep-selection.ts` is the one owner (`keep-selection.test.ts`, `reader-shell.keep-selection.flow.test.tsx`), and `pane-divider.tsx` is what it was before
+// P11-45's addition, byte for byte. The 17 tests of the separators' handlers that stood here were re-aimed there (the checkpoint lists where each went); what stays here is
+// what must not change on the separator: its own drag, its keys, its hit area - with the selection a press elsewhere left standing, which its drag still never touches.
 
 type Handler = (event: unknown) => void;
 type Props = Record<string, unknown> & { ref: { current: unknown } };
 
 const COLUMN = { left: 100, right: 652 };
-/** The paper's text column, the node a selection began in, and a node of the left pane. */
+/** A node of the paper's text column: where a selection began. */
 const inColumn = { inColumn: true, name: "text in the paper" };
-const inPane = { inColumn: false, name: "text in the left pane" };
 
 interface SelectionStub {
   rangeCount: number;
@@ -119,137 +110,6 @@ beforeEach(() => {
   });
 });
 afterEach(() => vi.unstubAllGlobals());
-
-describe("a selection that began in the text, released over a separator", () => {
-  it.each([12, 16, 23])("the margin's: a release %i px past the line's end ends the selection at the line's end", async (past) => {
-    const s = await stand();
-    s.on("onPointerUp")(mouse("pointerup", { clientX: COLUMN.right + past }));
-    expect(selection.extend).not.toHaveBeenCalled(); // not before the frame: the browser's own move of the end comes first
-    runFrames();
-    expect(caret).toHaveBeenCalledWith(COLUMN.right - 1, 300);
-    expect(selection.extend).toHaveBeenCalledTimes(1);
-    expect(selection.extend).toHaveBeenCalledWith(expect.objectContaining({ inColumn: true }), 7);
-  });
-
-  it.each([12, 16, 23])("the left one's: a release %i px before the line's start ends the selection at the line's start", async (before) => {
-    const s = await stand({ pane: "left", variable: "--left-pane-w", label: "Resize left panel", controls: "reader-left-pane", value: 320, room: { viewport: 1280, other: 360 } });
-    s.on("onPointerUp")(mouse("pointerup", { clientX: COLUMN.left - before, clientY: 412 }));
-    runFrames();
-    expect(caret).toHaveBeenCalledWith(COLUMN.left + 1, 412);
-    expect(selection.extend).toHaveBeenCalledTimes(1);
-  });
-
-  it("follows the pointer while the button is held over it: three moves in a frame make one correction, one per frame after", async () => {
-    const s = await stand();
-    for (const x of [670, 672, 674]) s.on("onPointerMove")(mouse("pointermove", { clientX: x }));
-    runFrames();
-    expect(selection.extend).toHaveBeenCalledTimes(1);
-    expect(caret).toHaveBeenLastCalledWith(COLUMN.right - 1, 300);
-    s.on("onPointerMove")(mouse("pointermove", { clientX: 668, clientY: 340 }));
-    runFrames();
-    expect(selection.extend).toHaveBeenCalledTimes(2);
-    expect(caret).toHaveBeenLastCalledWith(COLUMN.right - 1, 340);
-  });
-
-  it("a move and the release in one frame make one correction, at the release's place", async () => {
-    const s = await stand();
-    s.on("onPointerMove")(mouse("pointermove", { clientX: 664, clientY: 300 }));
-    s.on("onPointerUp")(mouse("pointerup", { clientX: 668, clientY: 310 }));
-    runFrames();
-    expect(selection.extend).toHaveBeenCalledTimes(1);
-    expect(caret).toHaveBeenCalledWith(COLUMN.right - 1, 310);
-  });
-
-  it("falls back to caretRangeFromPoint where the standard call is not there", async () => {
-    vi.stubGlobal("document", {
-      body: { style: { userSelect: "", cursor: "" } },
-      caretRangeFromPoint: vi.fn(() => ({ startContainer: { inColumn: true }, startOffset: 3 })),
-    });
-    const s = await stand();
-    s.on("onPointerUp")(mouse("pointerup"));
-    runFrames();
-    expect(selection.extend).toHaveBeenCalledWith(expect.objectContaining({ inColumn: true }), 3);
-  });
-});
-
-describe("what leaves the selection to the browser", () => {
-  const released = async (over: Record<string, unknown> = {}) => {
-    const s = await stand();
-    s.on("onPointerUp")(mouse("pointerup", over));
-    runFrames();
-    return s;
-  };
-
-  it("a hover: no button held, no correction", async () => {
-    const s = await stand();
-    s.on("onPointerMove")(mouse("pointermove", { buttons: 0 }));
-    expect(frames).toHaveLength(0);
-    runFrames();
-    expect(selection.extend).not.toHaveBeenCalled();
-  });
-
-  it("a pointer over the text: the browser is right there", async () => {
-    await released({ clientX: COLUMN.left + 200 });
-    expect(selection.extend).not.toHaveBeenCalled();
-  });
-
-  it("a collapsed selection, no selection, and a selection that began outside the paper's column (the left pane's text)", async () => {
-    selection.isCollapsed = true;
-    await released();
-    selection.isCollapsed = false;
-    selection.rangeCount = 0;
-    await released();
-    selection.rangeCount = 1;
-    selection.anchorNode = inPane;
-    await released();
-    selection.anchorNode = null;
-    await released();
-    expect(selection.extend).not.toHaveBeenCalled();
-  });
-
-  it("a touch, a pen, a secondary button and a cancelled pointer", async () => {
-    await released({ pointerType: "touch" });
-    await released({ pointerType: "pen" });
-    await released({ button: 2 });
-    const s = await stand();
-    s.on("onPointerCancel")(mouse("pointercancel"));
-    s.on("onLostPointerCapture")(mouse("lostpointercapture"));
-    runFrames();
-    expect(selection.extend).not.toHaveBeenCalled();
-  });
-
-  it("a caret that is not in the column (no text at that height), and no caret call at all", async () => {
-    caret.mockReturnValue({ offsetNode: inPane, offset: 0 });
-    await released();
-    caret.mockReturnValue(null);
-    await released();
-    vi.stubGlobal("document", { body: { style: { userSelect: "", cursor: "" } } });
-    await released();
-    expect(selection.extend).not.toHaveBeenCalled();
-  });
-
-  it("a shell with no column (below 1024 px), or no grid yet", async () => {
-    expect(endSelectionInColumn(null, 700, 300)).toBe(false);
-    expect(endSelectionInColumn({ querySelector: () => null }, 700, 300)).toBe(false);
-    expect(selection.extend).not.toHaveBeenCalled();
-  });
-
-  it("does not wait for a frame where there is none to wait for", async () => {
-    vi.stubGlobal("requestAnimationFrame", undefined);
-    const s = await stand();
-    s.on("onPointerUp")(mouse("pointerup"));
-    expect(selection.extend).not.toHaveBeenCalled();
-  });
-
-  it("goes with the separator: a frame that is waiting when it unmounts is cancelled", async () => {
-    const s = await stand();
-    s.on("onPointerUp")(mouse("pointerup"));
-    expect(frames).toHaveLength(1);
-    s.mounted.unmount();
-    runFrames();
-    expect(selection.extend).not.toHaveBeenCalled();
-  });
-});
 
 describe("what does not change: the separator's own drag, its keys, its hit area", () => {
   it("a press on the separator is its own drag: captured, nothing is done to the selection while it moves (out beside the column) or at the release, and the width is committed", async () => {
