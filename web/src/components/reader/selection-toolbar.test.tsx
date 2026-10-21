@@ -605,21 +605,24 @@ describe("actionsPlace — never over a card's header (P11-38 rule 2; ruling §1
     for (const line of [443, 455, 480]) expect(placeWith([explain], { bounds: { left: 300, top: line, right: 520, bottom: line + 22 } })?.top, String(line)).toBe(line);
   });
 
-  it("stands level with the line, beside the title's words, when they leave room: the explain card's row has a free part, and the move is nothing", () => {
+  // P11-49 rule 2, RE-AIMED (ruling §1h.149): was "stands level with the line, beside the title's words, when they leave room: the explain card's row has a free part, and the move
+  // is nothing" (the group 90 px tall level with a line inside a 53-px row, its foot over the quote under it). The header's free part is a place only if the whole group fits
+  // inside the row; the row is 53 px, the group 90, so a short title leaves no place and the group stands just below the row, as it does for a long one.
+  it("stands just below the explain card's row, not level beside the title's words, though they leave room: the row (53 px) is shorter than the group (90), so its free part is no place", () => {
     const short = explainRow(sq(1145, 417, 1226, 433));
     for (const line of [391, 400, 430]) {
       const got = placeWith([short], { bounds: { left: 300, top: line, right: 520, bottom: line + 22 } })!;
-      expect(got, String(line)).toEqual({ mode: "margin", left: 1230, top: line, below: false, clear: "free" });
+      expect(got, String(line)).toEqual({ mode: "margin", left: 1088, top: 443, below: false, clear: "below" });
     }
   });
 
-  it("stands on the header's free part, level with the line, when it fits whole beside the title and the X (a short quote head leaves room)", () => {
+  // P11-49 rule 2, RE-AIMED (ruling §1h.149): was "stands on the header's free part, level with the line, when it fits whole beside the title and the X (a short quote head leaves
+  // room)" — the group 90 px tall level with a line inside a 40-px header, running 70 px below the row over the card's body. The free part is a place only if the whole group fits inside
+  // the header row: a 40-px row does not hold a 90-px group, however much room it leaves beside the title, so the group stands just below the header.
+  it("stands just below the header, not on its free part, when the title and the X leave room beside them: the header (40 px) is shorter than the group (90)", () => {
     const got = placeWith([sticky(sq(1148, 392, 1190, 408))])!;
-    expect(got).toEqual({ mode: "margin", left: 1194, top: 400, below: false, clear: "free" });
-    // …whole: clear of the title, the head and the X, and inside the margin.
-    const right = got.left + SIZES.margin.width;
-    expect(got.left).toBeGreaterThanOrEqual(1190 + 4);
-    expect(right).toBeLessThanOrEqual(1400 - 4);
+    expect(got).toEqual({ mode: "margin", left: 1088, top: 420, below: false, clear: "below" });
+    expect(got.top).toBeGreaterThanOrEqual(420);
   });
 
   it("stands below it, not on the free part, when the free part is narrower than the group", () => {
@@ -676,11 +679,14 @@ describe("actionsPlace — never over a card's header (P11-38 rule 2; ruling §1
     }
   });
 
-  it("prefers the header's free part to either: the move is nothing, whatever the distance to the header's edges", () => {
+  // P11-49 rule 2, RE-AIMED (ruling §1h.149): was "prefers the header's free part to either: the move is nothing, whatever the distance to the header's edges" (the group 90 tall on a
+  // 40-px header's free part, `clear: "free"`, `top` the line). A group taller than the row has no free part to stand on: of just above and just below the nearer wins — here below,
+  // 40 px from a line at the header's top, 10 px from one at its foot.
+  it("has no free part to prefer for a group taller than the row: the move is to the header's foot, the nearer of just above and just below, whatever the line inside the header", () => {
     for (const line of [380, 390, 400, 410]) {
       const got = placeWith([sticky(sq(1148, 392, 1190, 408))], { bounds: { left: 300, top: line, right: 520, bottom: line + 22 } })!;
-      expect(got.clear, String(line)).toBe("free");
-      expect(got.top, String(line)).toBe(line);
+      expect(got.clear, String(line)).toBe("below");
+      expect(got.top, String(line)).toBe(420);
     }
   });
 

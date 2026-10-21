@@ -752,11 +752,15 @@ describe("stripStanding — never over a card's header (P11-38 rule 2; ruling §
     expect(at(380)).toEqual({ mode: "margin", left: 1008, top: 380, width: 264 });
   });
 
-  it("stands on the header's free part, level with the mark, when it fits whole beside the title and the X (a wide margin, a short quote head)", () => {
+  // P11-49 rule 2, RE-AIMED (ruling §1h.149): was "stands on the header's free part, level with the mark, when it fits whole beside the title and the X (a wide margin, a short quote
+  // head)" — `top: 300`, the strip's 34 px running to 334 under a header whose row ends at 320. The free part is a place only if the whole strip fits inside the header row: it does
+  // (34 in 40), so it stands in the row, as near the mark as the row allows — the row's foot less its own height, 286: a move of 14 px, nearer than just below the row (20).
+  it("stands on the header's free part, wholly inside the row, as near the mark as the row allows, when it fits whole beside the title and the X (a wide margin, a short quote head)", () => {
     const wide: MarginRect = { ...MARGIN, width: 360 };
     const got = withHeaders({ mark: line(300), viewport: VIEW, margin: wide, headers: [stickyZone(sq(1068, 292, 1090, 308), 1360)] })!;
-    expect(got).toEqual({ mode: "margin", left: 1094, top: 300, width: 344, clear: "free" });
+    expect(got).toEqual({ mode: "margin", left: 1094, top: 286, width: 344, clear: "free" });
     expect(got.left + STRIP_ONE_ROW_WIDTH_PX).toBeLessThanOrEqual(1316);
+    expect(got.top + STRIP_ROW_PX).toBeLessThanOrEqual(320);
   });
 
   // P11-38 follow-up, RE-AIMED (§1c): was "clears a stack of headers, one under the other, and stands below the last of them" (the mark at 300: top 360, a move of 60). Above the stack's
@@ -867,5 +871,46 @@ describe("HighlightStripHost — never over a card's header (P11-38 rule 2)", ()
       fire(winListeners, "scroll");
     });
     expect(askedFrames - before).toBe(1);
+  });
+});
+
+// ── P11-49 rule 1 (round 3, Theme B readers r1 and r2; ruling §1h.149): the strip covers no control of a card, read from the page ───────────────────────────────────────────────────
+// The host reads each open card's controls and words with its headers (`readCardObstacles`: one query by the margin's marker, one per card for what the card holds) when it places the
+// strip and again when the stack changes, and stands off a control wherever it stands. Every number is invented.
+describe("HighlightStripHost — never over a card's control (P11-49 rule 1)", () => {
+  /** A card as the page draws it: a body holding a toolbar's button at (1010, 290)–(1270, 330) — the notes window's formatting row, say. */
+  const toolbarCard = () => {
+    const box = { left: 1000, top: 100, right: 1280, bottom: 600, width: 280, height: 500 };
+    const card: Record<string, unknown> = {
+      getAttribute: (name: string) => (name === "data-margin-card" ? "notes" : null),
+      getBoundingClientRect: () => box,
+      querySelector: () => null,
+      firstElementChild: null,
+    };
+    const row = { tagName: "DIV", parentElement: card, textContent: "B I U", getBoundingClientRect: () => ({ left: 1010, top: 290, right: 1270, bottom: 330, width: 260, height: 40 }) };
+    card.querySelectorAll = () => [row];
+    return card;
+  };
+
+  it("stands just below a card's control the level place would cover, and level with the mark again when the card goes", () => {
+    headerCards = [toolbarCard()];
+    const host = mountHost();
+    mark = line(300);
+    host.act(() => useHighlightStrip.getState().show("h1", 300));
+    expect(host.props).toMatchObject({ left: 1008, top: 330, width: 264 });
+    headerCards = [];
+    host.act(() => useWindows.getState().open({ id: "sticky-1", kind: "sticky", title: "Note 1" }));
+    frame();
+    expect(host.props).toMatchObject({ left: 1008, top: 300 });
+  });
+
+  it("asks the page for the cards only through the margin's selector, controls and all: the card is asked for what it holds, the page is not", () => {
+    headerCards = [toolbarCard()];
+    const host = mountHost();
+    mark = line(300);
+    host.act(() => useHighlightStrip.getState().show("h1", 300));
+    expect(host.props.top).toBe(330);
+    expect(askedSelectors.length).toBeGreaterThan(0);
+    for (const selector of askedSelectors) expect(selector).toBe("[data-margin-card]");
   });
 });
