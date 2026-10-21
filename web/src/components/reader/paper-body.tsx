@@ -417,6 +417,8 @@ export function sameSelection(a: ExplainSelection | null, b: ExplainSelection | 
 interface ElementLike {
   id: string;
   parentElement: ElementLike | null;
+  /** P11-56: the block's children, so a range can be ended at the block's end (`ownContents`); absent from a stand-in that has none. */
+  childNodes?: ArrayLike<unknown>;
   closest(selector: string): ElementLike | null;
   getBoundingClientRect?(): ViewRect;
   getAttribute?(name: string): string | null;
@@ -591,12 +593,33 @@ function wordsBefore(range: RangeLike, paragraph: ElementLike | undefined): numb
   }
 }
 
+/**
+ * P11-56 (round 4, Theme B walk E-2; ruling §1h.165 rule 1): the contents of a range that the browser ended at the start of the NEXT block (a triple click), read as its own block's — the range from
+ * its start to the end of the `block` that start is in. `range.cloneContents()` carries the range's words and also a clone of every ancestor its end sits in, empty (the end is at offset 0: none of
+ * the next block's words are in it). A displayed equation's `code` (a PDF's line as printed) and its `.katex` (a paper drawn from HTML) are such ancestors, and the formula rule (`FORMULA_SELECTOR`)
+ * read the paragraph before an equation as a selection with a formula in it: it was offered nothing. The block's own part holds the paragraph's words and any formula drawn in it, and nothing
+ * of what comes next, whatever that is. Null where it cannot be had (the block cannot say how long it is, the range cannot move its end, or it throws): the range's own contents, as they were.
+ */
+function ownContents(range: RangeLike, block: ElementLike | undefined): ReturnType<RangeLike["cloneContents"]> | null {
+  if (!block?.childNodes) return null;
+  try {
+    const own = range.cloneRange();
+    if (!own.setEnd) return null;
+    own.setEnd(block, block.childNodes.length);
+    return own.cloneContents();
+  } catch {
+    return null;
+  }
+}
+
 /** What the page's selection is, as an `ExplainSelection`, or null: nothing
  *  selected, a selection across paragraphs or outside the body, one with a
  *  formula in it, one over 1,200 characters across two blocks of a Summary or an
  *  answer (P11-47), or not on screen. A selection of up to 1,200 characters across
  *  two blocks of a Summary or an answer is a target that says so (`spansBlocks`,
- *  P11-50): it is not offered Highlight. */
+ *  P11-50): it is not offered Highlight. A triple click on a paragraph is the paragraph's
+ *  whatever the browser ends it at the start of — a paragraph, a heading, a caption, a
+ *  displayed equation, a figure, a rule (P11-56). */
 export function readSelection(selection: SelectionLike | null): ExplainSelection | null {
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
   // The selection's own range changes as the selection does; this one is ours.
@@ -605,12 +628,18 @@ export function readSelection(selection: SelectionLike | null): ExplainSelection
   const start = placeOf(range.startContainer);
   let end = placeOf(range.endContainer);
   // A triple click selects a paragraph, and the browser ends it at offset 0 of
-  // the NEXT one: the words are all the first paragraph's. A drag that really
-  // runs on into another paragraph carries a break inside its words.
+  // the NEXT block — a paragraph, a heading, a caption, a displayed equation's
+  // `code`, a figure, a rule: the words are all the first paragraph's. A drag that
+  // really runs on into another paragraph carries a break inside its words.
   const endsAtNextStart = range.endOffset === 0 && !/\n/.test(spoken.trim());
-  if (!samePlace(start, end) && endsAtNextStart) end = start;
+  let rolledBack = false;
+  if (!samePlace(start, end) && endsAtNextStart) {
+    end = start;
+    rolledBack = true;
+  }
   if (!samePlace(start, end)) return null;
-  const contents = range.cloneContents();
+  // P11-56: a selection rolled back to its own block holds that block's contents, not a clone of the next block's empty ancestors (an equation's `code`, its `.katex`) as well.
+  const contents = (rolledBack ? ownContents(range, start.text) : null) ?? range.cloneContents();
   // P10-24: the passage is the paragraph's words, never a note tag's text (a break the selection carries was read from `spoken`).
   const text = wordsWithoutTags(contents) ?? spoken;
   // The two ends share a place (a paragraph, or one marked container whose blocks may differ): the start's id names the target.
