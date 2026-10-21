@@ -73,16 +73,16 @@ The full skill texts are in Appendix A (reviewing-cycle) and Appendix B (abc). T
 | 2 | 508f0efc / 8f7e051f | 95.83 (100) | 85.42 (85.42) |
 | 3 | cab04c0c | 97.92 (100) | 93.75 (95.83) |
 | 4 | dd366d8d (A) / a7a58224 (B) | 91.67 (93.75) | 95.83 (95.83) |
+| 5 | 9e23d63a | **97.92 (95.83) — PASS 1** | pending (walk running) |
 
 ---
 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-21 20:48Z
+AS OF        2026-10-21 20:55Z
 BRANCH HEAD  b8e2a685 (reader-three-pane-p11, pushed)   PR Aspen-Lab/peer#35 draft, CI green on 4de16f6f (older heads green)
-LAST RULING  §1h.171   NEXT RULING NUMBER §1h.172   NEXT ITEM ID P11-62   NEXT FREE PORT 4165
-RUNNING      3 blind readers, round 5 Theme A → scratchpad/p11/r5a/readers/r{1,2,3}.md (pack head 9e23d63a; rubric at 88ed5f83)
+LAST RULING  §1h.172   NEXT RULING NUMBER §1h.173   NEXT ITEM ID P11-62   NEXT FREE PORT 4165
              C P11-61 (the question bar refits after a text step / separator drag; worktree scratchpad/p11c61/wt, base c84c9a0a, port 4164)
              A P11-60 (round 5, Theme B; head 9e23d63a; worktree scratchpad/p11a60/wt; port 4163; pack scratchpad/p11/r5b/)
 THEN         when each walk returns: pick its deliverable, spawn 3 blind readers on its pack (briefs/P11-R1-reader.md; rubric and owner file at the walk's head), director check, record the score (rubric Scores row 5, a ruling); a theme ≥ 97.9 in rounds 5 and 6 ends its walking round 5 walks A (P11-59, port 4162, pack r5a) and B (P11-60, port 4163, pack r5b) — briefs already written; before spawning, re-check their "Landed since" lines and the checkpoint lists against what actually landed, give each the head hash; 3 readers each; director; score; repeat.
@@ -129,6 +129,7 @@ OPEN FOR THE OWNER  BACKLOG-108 (two identical quotes in one Summary block — k
 - 2026-10-21 19:03Z | d5b36956 | manager (Fable 5.1) | C P11-54 verified and landed (character anchor + rule 4; drift median 0.20 → 0.01 lines, worst 1.01; wheel undone 19/24 → 0/24; top paragraph 366/366 unchanged; own mutation 18 red; gates 10,587); ruling §1h.170; BACKLOG-113; worktree p11c54 removed. **Every round-4 item is now on the branch.** | evidence: P11-54-C-20261021T1853Z.md, p504/final-p1154.log | next: spawn the round-5 walks P11-59 (A, port 4162) and P11-60 (B, port 4163) on this head
 - 2026-10-21 19:05Z | 9e23d63a | manager (Fable 5.1) | Round 5's walks spawned (Sonnet): A P11-59 Theme A (port 4162, pack r5a) and A P11-60 Theme B (port 4163, pack r5b), both on 9e23d63a; dashboard: P11-54 已合入, P11-59/60 进行中, phase 第五轮 | evidence: briefs/P11-59.md, P11-60.md | next: wait for the walks; then readers ×3 per theme
 - 2026-10-21 20:48Z | 71cd9ae3 | manager (Fable 5.1) | Round 5 Theme A walked (A P11-59 picked as d99625e7): 12/12, every round-4 extra GONE, one new extra E-N1 (the question bar not refitting after a text step / separator drag, 0.5; pre-existing since P7-13), walk's own 95.83; ruling §1h.171; 3 blind readers spawned on pack r5a; brief P11-61 written (c84c9a0a) and C spawned on it | evidence: P11-59-A-20261021T2045Z.md; briefs/P11-61.md | next: readers → score Theme A round 5; verify/land P11-61; Theme B walk P11-60 still running
+- 2026-10-21 20:55Z | (this commit) | manager (Fable 5.1) | **Round 5 Theme A scored 97.92** (readers 97.92 / 97.92 / 97.92; one 0.25 extra: the question bar not refitting — C P11-61 running); **Theme A's first pass under the 97.9 line, consecutive count 1**; rubric Scores row 5 (A); ruling §1h.172 | evidence: scratchpad/p11/r5a/readers/r{1,2,3}.md | next: land P11-61; Theme B walk P11-60 → readers → score; then round 6 walks both themes on the landed head (Theme A's second pass would end its walking)
 <!-- APPEND NEW ENTRIES BELOW THIS LINE, ONE PER COMPLETED UNIT OF WORK -->
 
 ---
