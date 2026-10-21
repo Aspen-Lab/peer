@@ -641,7 +641,7 @@ describe("actionsPlace — never over a card's header (P11-38 rule 2; ruling §1
     const high = placeWith(stack)!;
     expect(high.clear).toBe("above");
     expect(high.top).toBe(380 - SIZES.margin.height);
-    for (const line of [480, 500, 520]) {
+    for (const line of [470, 480]) {
       const low = placeWith(stack, { bounds: { left: 300, top: line, right: 520, bottom: line + 22 } })!;
       expect(low.clear, String(line)).toBe("below");
       expect(low.top, String(line)).toBe(536);

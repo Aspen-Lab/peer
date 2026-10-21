@@ -51,8 +51,9 @@
 // P11-38 rule 2 (same ruling): the group still stands in the margin level with the first line, over a card's body where it must, but never over a card's header — its
 // X, its title, its controls (Open as page, Export, zoom). The headers are read from the page, with the card rects (`openCards`: a card's first element is its header, the figure
 // card's zoom row a second one; what a header holds is its text and its controls). Where the level place would cover one the group stands on the header's free part, level
-// with the line, if it fits whole there (`clearOfHeaders`); else just below the header — below the last of a stack of them; else, with no room below it in the band,
-// just above. `data-header-clear` says which. It never leaves the margin sideways, so the centre column's words stay uncovered (X-1 stays gone).
+// with the line, if it fits whole there (`clearOfHeaders`); else in the nearest clear place — just above the header or just below it (below the last of a stack of them), whichever
+// moves it less from the line. The explain card's header is its top row (the X and the title), not the quote under it. `data-header-clear` says which. It never leaves the
+// margin sideways, so the centre column's words stay uncovered (X-1 stays gone).
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PaperTerm } from "@/lib/papers/report";
@@ -147,6 +148,8 @@ export interface HeaderZone {
 
 /** The figure card's second row of controls, under its 40-px header: a header too (zoom is one of the controls the group must not cover). */
 const ZOOM_ROW_SELECTOR = "[data-figure-zoom-row]";
+/** The explain card's X: its parent is the card's top row. */
+const EXPLAIN_CLOSE_SELECTOR = "[data-explain-close]";
 /** The elements that are a control, though they hold no text: the X is an icon. */
 const CONTROLS = new Set(["button", "a", "input", "select", "textarea", "svg"]);
 
@@ -158,10 +161,16 @@ interface BoxLike {
   width: number;
   height: number;
 }
+interface RangeLike {
+  selectNodeContents(node: unknown): void;
+  getBoundingClientRect(): BoxLike;
+}
 interface ElementLike {
   tagName?: string;
   childNodes?: ArrayLike<{ nodeType: number; nodeValue: string | null }>;
   children?: ArrayLike<ElementLike>;
+  parentElement?: ElementLike | null;
+  ownerDocument?: { createRange?(): RangeLike } | null;
   textContent?: string | null;
   getBoundingClientRect(): BoxLike;
 }
@@ -186,35 +195,47 @@ function clipped(rect: ViewRect, bound: ViewRect): ViewRect | null {
 const meets = (a: ViewRect, b: ViewRect) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 
 /**
- * What a header holds, as rects inside its `zone`: every element with text of its own (a title, a quote head, a quote, a link) and every control with none (the
- * big X, an icon). An element that only holds others — the header's row, the button that raises the card over its title — holds nothing itself: the empty width of the
- * raise button is the header's free part.
+ * What a header holds, as rects inside its `zone`: every element with text of its own (a title, a quote head, a link) and every control with none (the big X, an icon).
+ * A control is measured by its box (a press anywhere on a button is the button's); a text by its words — the title of the explain card's row is an element as wide as the row,
+ * its words are not, and what they leave is the row's free part. An element that only holds others — the header's row, the button that raises the card over its title —
+ * holds nothing itself: the empty width of the raise button is the header's free part.
  */
 function partsOf(header: ElementLike, zone: ViewRect): ViewRect[] {
   const parts: ViewRect[] = [];
-  const add = (element: ElementLike) => {
-    const part = clipped(toRect(element.getBoundingClientRect()), zone);
+  const add = (element: ElementLike, words: boolean) => {
+    const box = toRect(element.getBoundingClientRect());
+    const range = words ? element.ownerDocument?.createRange?.() : undefined;
+    let ink: ViewRect | null = null;
+    if (range) {
+      range.selectNodeContents(element);
+      ink = clipped(toRect(range.getBoundingClientRect()), box);
+    }
+    const part = clipped(ink ?? box, zone);
     if (part) parts.push(part);
   };
   const visit = (element: ElementLike): boolean => {
     const own = Array.from(element.childNodes ?? []).some((child) => child.nodeType === 3 && (child.nodeValue ?? "").trim() !== "");
+    const control = CONTROLS.has((element.tagName ?? "").toLowerCase());
     let inside = false;
     for (const child of Array.from(element.children ?? [])) if (visit(child)) inside = true;
     if (own) {
-      add(element);
+      add(element, !control);
       return true;
     }
     if (inside) return true;
-    if (CONTROLS.has((element.tagName ?? "").toLowerCase())) add(element);
+    if (control) add(element, false);
     return false;
   };
   visit(header);
   return parts;
 }
 
-function zoneOf(row: ElementLike, card: ViewRect): HeaderZone | null {
-  const box = clipped(toRect(row.getBoundingClientRect()), card);
-  return box ? { box, parts: partsOf(row, box) } : null;
+/** A header's zone: its row's box inside the card — from the card's top and across its width when `fromTop` (the explain card's row stands in the card's padding), else the row's own — and what the row holds. */
+function zoneOf(row: ElementLike, card: ViewRect, fromTop = false): HeaderZone | null {
+  const rowBox = toRect(row.getBoundingClientRect());
+  const box = clipped(fromTop ? { left: card.left, top: card.top, right: card.right, bottom: rowBox.bottom } : rowBox, card);
+  const parts = box ? partsOf(row, box) : [];
+  return box ? { box, parts } : null;
 }
 
 export interface OpenCards {
@@ -236,11 +257,15 @@ export function openCards(root: Pick<ParentNode, "querySelectorAll">): OpenCards
     const rect = toRect(box);
     open.rects.push(rect);
     const first = card.firstElementChild ?? null;
-    for (const row of [first, card.querySelector?.(ZOOM_ROW_SELECTOR) ?? null]) {
-      const zone = row ? zoneOf(row, rect) : null;
+    const explain = card.getAttribute?.("data-margin-card") === "explain";
+    // The explain card's header is its top row — the one that holds the big X — not the block it stands in, which holds the quoted passage too: the quote is the card's content,
+    // like a sticky's text. A card behind another shows that row alone, as its first element.
+    const topRow = explain ? card.querySelector?.(EXPLAIN_CLOSE_SELECTOR)?.parentElement ?? null : null;
+    for (const [row, fromTop] of [[topRow ?? first, topRow !== null], [card.querySelector?.(ZOOM_ROW_SELECTOR) ?? null, false]] as const) {
+      const zone = row ? zoneOf(row, rect, fromTop) : null;
       if (zone) open.headers.push(zone);
     }
-    if (first && card.getAttribute?.("data-margin-card") === "explain") open.explainHeads.push(first.textContent ?? "");
+    if (first && explain) open.explainHeads.push(first.textContent ?? "");
   }
   return open;
 }
@@ -280,15 +305,15 @@ export function clearanceFrom(group: ViewRect, cards: readonly ViewRect[]): numb
 /** The room kept between the group and a part of a header when it stands on the header's free part. */
 export const HEADER_GAP_PX = 4;
 
-/** How a place was made clear of the headers: `level` — it did not need to be; `free` — on a header's free part, level with the line; `below` / `above` — just under or over the header; `held` — nowhere was clear, so it stays level. */
+/** How a place was made clear of the headers: `level` — it did not need to be; `free` — on a header's free part, level with the line; `below` / `above` — just under or over the header, whichever is nearer the line; `held` — nowhere was clear, so it stays level. */
 export type Clearance = "level" | "free" | "below" | "above" | "held";
 
 /**
  * P11-38 rule 2: the place for a box of `size` that would stand at (`left`, `top`) — the margin's left edge and the first line's height — made clear of the headers.
  * Level (`top` and `left` as given) when the box is over no header. Otherwise on a header's free part: the same top, the left moved along the margin to the nearest place where
- * the box fits whole between what the headers hold at that height (`parts`: the X, the title, the controls — and a few pixels from each). Otherwise just below the header: the nearest
- * top under `top` where the box is over no header at all — under the last of a stack of them — and wholly inside the band. Otherwise, with no room below in the band, just above
- * one. Otherwise held where it was: nothing is clear. It never leaves the margin sideways. Pure.
+ * the box fits whole between what the headers hold at that height (`parts`: the X, the title's words, the controls — and a few pixels from each): a move of nothing. Otherwise the
+ * nearest clear place above or below: just above a header or just below one — below the last of a stack of them, above the first — wholly inside the band; the nearer to `top`
+ * wins, and just below when they are as near. Otherwise held where it was: nothing is clear. It never leaves the margin sideways. Pure.
  */
 export function clearOfHeaders(input: {
   margin: MarginRect;
@@ -329,20 +354,15 @@ export function clearOfHeaders(input: {
     if (free !== null) return { left: free, top, how: "free" };
   }
 
-  // Just below the header (a stack: below the last of them), else just above one; wholly inside the band either way.
+  // Otherwise the nearest clear place: just above a header or just below one (below the last of a stack: the places are the edges of the headers, and a place is clear when
+  // the box is over no header there), wholly inside the band; the nearer to `top` wins, and just below when they are as near.
   const inBand = (y: number) => y >= margin.top && y + size.height <= margin.bottom;
-  const below = headers
-    .map((zone) => zone.box.bottom)
-    .filter((y) => y >= top && inBand(y))
-    .sort((a, b) => a - b)
-    .find((y) => !onHeader(at(left, y)));
-  if (below !== undefined) return { left, top: below, how: "below" };
-  const above = headers
-    .map((zone) => zone.box.top - size.height)
-    .filter((y) => y <= top && inBand(y))
-    .sort((a, b) => b - a)
-    .find((y) => !onHeader(at(left, y)));
-  if (above !== undefined) return { left, top: above, how: "above" };
+  let best: number | null = null;
+  for (const y of headers.flatMap((zone) => [zone.box.bottom, zone.box.top - size.height])) {
+    if (!inBand(y) || onHeader(at(left, y))) continue;
+    if (best === null || Math.abs(y - top) < Math.abs(best - top) || (Math.abs(y - top) === Math.abs(best - top) && y > best)) best = y;
+  }
+  if (best !== null) return { left, top: best, how: best > top ? "below" : "above" };
   return { left, top, how: "held" };
 }
 
