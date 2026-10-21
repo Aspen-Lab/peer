@@ -633,6 +633,32 @@ describe("selectionKeeper — a Shift+press outside the column, with a selection
     expect(calls).toEqual([]);
   });
 
+  it("a press that replaces a held Shift press (no release between) carries none of its anchor", () => {
+    const k = selectionKeeper(shiftEnv());
+    k.down(press());
+    k.down(press({ shiftKey: false, target: inColumn() }));
+    k.up(press({ shiftKey: false, target: inColumn(), buttons: 0, clientX: 1100 }));
+    runFrames();
+    expect(calls).toEqual([[1100, 300]]);
+  });
+
+  it("a press in the text is the text's press whatever the page says of it: its anchor is never read, even with Shift held", () => {
+    let reads = 0;
+    const k = selectionKeeper({
+      ...shiftEnv(),
+      startsOutside: () => true,
+      standing: () => {
+        reads += 1;
+        return held;
+      },
+    });
+    k.down(press({ target: inColumn() }));
+    k.up(press({ target: inColumn(), buttons: 0, clientX: 1100 }));
+    runFrames();
+    expect(reads).toBe(0);
+    expect(calls).toEqual([[1100, 300]]);
+  });
+
   it("the anchor is the press's own: a later press in the text carries none", () => {
     const k = selectionKeeper(shiftEnv());
     k.down(press());
