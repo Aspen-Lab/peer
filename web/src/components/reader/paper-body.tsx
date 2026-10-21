@@ -354,8 +354,14 @@ export interface ViewRects {
   paragraph?: ViewRect;
 }
 
-/** A target with where it is on screen, and how to look again after a scroll. */
-export type ExplainSelection = SelectionTarget & ViewRects & { measure?: () => ViewRects | null };
+/**
+ * A target with where it is on screen, and how to look again after a scroll.
+ *
+ * `spansBlocks` (P11-50; ruling §1h.155 rule 1) is set, and only ever to `true`, when the selection's two ends are in two blocks of the one Summary or answer container
+ * (`readSelection`'s `oneBlock: false`): it is a target, and Explain this and Take notes work on it, but a highlight is one block's words (D5) and there is nothing to mark
+ * across two. `canHighlight` is the one reader of it: Highlight is offered only where it makes a mark. Absent for every other selection.
+ */
+export type ExplainSelection = SelectionTarget & ViewRects & { measure?: () => ViewRects | null; spansBlocks?: true };
 
 /**
  * A selection is a target when both its ends sit in the same paragraph (the
@@ -588,7 +594,9 @@ function wordsBefore(range: RangeLike, paragraph: ElementLike | undefined): numb
 /** What the page's selection is, as an `ExplainSelection`, or null: nothing
  *  selected, a selection across paragraphs or outside the body, one with a
  *  formula in it, one over 1,200 characters across two blocks of a Summary or an
- *  answer (P11-47), or not on screen. */
+ *  answer (P11-47), or not on screen. A selection of up to 1,200 characters across
+ *  two blocks of a Summary or an answer is a target that says so (`spansBlocks`,
+ *  P11-50): it is not offered Highlight. */
 export function readSelection(selection: SelectionLike | null): ExplainSelection | null {
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
   // The selection's own range changes as the selection does; this one is ours.
@@ -608,14 +616,23 @@ export function readSelection(selection: SelectionLike | null): ExplainSelection
   // The two ends share a place (a paragraph, or one marked container whose blocks may differ): the start's id names the target.
   // P11-47: both ends in one block. A Summary or answer container is one place whatever its blocks, so a triple click on a block of it, which the browser ends at the start of the
   // next block (above), has its end in that next block: its words are the first block's all the same.
-  const target = selectionTarget({ anchorParagraphId: start.id, focusParagraphId: start.id, text, source: start.source, oneBlock: endsAtNextStart || start.id === end?.id });
+  const oneBlock = endsAtNextStart || start.id === end?.id;
+  const target = selectionTarget({ anchorParagraphId: start.id, focusParagraphId: start.id, text, source: start.source, oneBlock });
   if (!target) return null;
   if (contents.querySelector(FORMULA_SELECTOR)) return null;
   const where = measureRange(range, start?.text);
   if (!where) return null;
   // P11-09: where in its paragraph the passage starts, for the paper's body (the Summary and the answers have no paragraph to anchor to).
   const offset = start.source === "paper" ? wordsBefore(range, start.text) : undefined;
-  return { ...target, ...(start.block ? { block: start.block } : {}), ...(offset !== undefined ? { offset } : {}), ...where, measure: () => measureRange(range, start?.text) };
+  // P11-50 (ruling §1h.155 rule 1): across two blocks of the one container it is still a target (Explain this and Take notes), but a highlight is one block's words: say so, and only then.
+  return {
+    ...target,
+    ...(start.block ? { block: start.block } : {}),
+    ...(offset !== undefined ? { offset } : {}),
+    ...(oneBlock ? {} : { spansBlocks: true as const }),
+    ...where,
+    measure: () => measureRange(range, start?.text),
+  };
 }
 
 // ── A click on a highlight (P11-09; B P11-04 §3.3) ────────────────────────

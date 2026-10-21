@@ -33,12 +33,18 @@ export type HighlightTarget = ExplainSelection & { offset?: number };
 /**
  * Whether Highlight is offered for this selection. In the paper's body: it has a paragraph (or, P11-27, a heading or a caption). P11-28 (ruling §1h.123 (c)): in a
  * Summary block or an answer too, when the selection names the block of the page it is in (`paragraphId`: a `summary-…` block, or `answers-block`) — a selection
- * reported under the bare kind (a block with no id of its own) has no element to read the words of. Pure.
+ * reported under the bare kind (a block with no id of its own) has no element to read the words of. P11-50 (ruling §1h.155 rule 1): not offered for a selection whose two ends
+ * are in two blocks of one Summary or answer container (`spansBlocks`, set by the selection reader): a highlight is one block's words (D5), so there is nothing to mark across
+ * two, and a button that makes nothing is not offered. Pure.
  */
 export function canHighlight(
-  target: { source?: ExplainSource; sectionIndex: number; paragraphIndex: number; passage: string; paragraphId?: string } | null | undefined,
+  target:
+    | { source?: ExplainSource; sectionIndex: number; paragraphIndex: number; passage: string; paragraphId?: string; spansBlocks?: boolean }
+    | null
+    | undefined,
 ): boolean {
   if (!target) return false;
+  if (target.spansBlocks === true) return false;
   if (target.source !== undefined && target.source !== "paper") return target.passage.trim() !== "" && isPageBlockId(target.paragraphId);
   return (
     Number.isInteger(target.sectionIndex) &&
