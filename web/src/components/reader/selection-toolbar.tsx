@@ -54,6 +54,13 @@
 // with the line, if it fits whole there (`clearOfHeaders`); else in the nearest clear place — just above the header or just below it (below the last of a stack of them), whichever
 // moves it less from the line. The explain card's header is its top row (the X and the title), not the quote under it. `data-header-clear` says which. It never leaves the
 // margin sideways, so the centre column's words stay uncovered (X-1 stays gone).
+//
+// P11-49 rule 1 (round 3, Theme B readers r1 and r2; ruling §1h.149): over a card the group covers no control, wherever the control stands: the header row, the notes window's
+// formatting row, a sticky's buttons, the figure card's zoom row, the explain card's link, input and Send. A card's controls are read from the page by what an element IS —
+// `CONTROL_SELECTOR`: buttons, links, form fields, the roles that stand for them, a toolbar as a row — never from a list of the app's own attributes, which goes stale the day a
+// card gains a button; one drawn (a label, an icon or a painted surface of its own), seen through the card and the scrolling bodies it stands in, not a hit area nor the picture's
+// button (the picture is the card's content). A writing surface is not one: its words are the card's words. The card's words are read too, as the line boxes they stand in
+// (`wordsOf`).
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PaperTerm } from "@/lib/papers/report";
@@ -123,7 +130,7 @@ export type ActionsMode = "margin" | "above";
 
 export interface ActionsPlace extends ToolbarPlace {
   mode: ActionsMode;
-  /** P11-38: set when the group was moved off a card's header (`clearOfHeaders`): on its free part, just below it, just above it, or held where it was with nowhere clear. Absent when it stands level. */
+  /** P11-38, P11-49: set when the group was moved off a card's header or control (`clearOfHeaders`): slid aside along the margin, on a header's free part, just below or just above, or held where it was with nowhere clear. Absent when it stands level. */
   clear?: Exclude<Clearance, "level">;
 }
 
@@ -164,20 +171,34 @@ interface BoxLike {
 interface RangeLike {
   selectNodeContents(node: unknown): void;
   getBoundingClientRect(): BoxLike;
+  getClientRects?(): ArrayLike<BoxLike>;
+}
+/** The part of a computed style the readers ask: whether an element clips what it holds, and whether it paints anything of its own. */
+interface StyleLike {
+  visibility?: string;
+  overflowX?: string;
+  overflowY?: string;
+  backgroundColor?: string;
+  backgroundImage?: string;
+  borderTopWidth?: string;
+  borderTopStyle?: string;
+  borderTopColor?: string;
 }
 interface ElementLike {
   tagName?: string;
   childNodes?: ArrayLike<{ nodeType: number; nodeValue: string | null }>;
   children?: ArrayLike<ElementLike>;
   parentElement?: ElementLike | null;
-  ownerDocument?: { createRange?(): RangeLike } | null;
+  ownerDocument?: { createRange?(): RangeLike; defaultView?: { getComputedStyle?(element: unknown): StyleLike } | null } | null;
   textContent?: string | null;
   getBoundingClientRect(): BoxLike;
+  getClientRects?(): ArrayLike<BoxLike>;
+  querySelector?(selector: string): ElementLike | null;
 }
 interface CardLike extends ElementLike {
   firstElementChild?: ElementLike | null;
   getAttribute?(name: string): string | null;
-  querySelector?(selector: string): ElementLike | null;
+  querySelectorAll?(selector: string): ArrayLike<ElementLike>;
 }
 
 const toRect = (box: BoxLike): ViewRect => ({ left: box.left, top: box.top, right: box.right, bottom: box.bottom });
@@ -191,8 +212,15 @@ function clipped(rect: ViewRect, bound: ViewRect): ViewRect | null {
   return right > left && bottom > top ? { left, top, right, bottom } : null;
 }
 
+/** A hair, in px: rects that overlap by less than this are taken as touching (a foot at `header.top − height + height` is not a sub-pixel inside the header). */
+const HAIR_PX = 1e-3;
+
 /** Whether two rects share some area; rects that touch along an edge do not. */
-const meets = (a: ViewRect, b: ViewRect) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+const meets = (a: ViewRect, b: ViewRect) => a.left < b.right - HAIR_PX && b.left < a.right - HAIR_PX && a.top < b.bottom - HAIR_PX && b.top < a.bottom - HAIR_PX;
+
+/** Whether `inner` lies wholly inside `outer`. */
+const within = (inner: ViewRect, outer: ViewRect) => inner.left >= outer.left - HAIR_PX && inner.right <= outer.right + HAIR_PX && inner.top >= outer.top - HAIR_PX && inner.bottom <= outer.bottom + HAIR_PX;
+
 
 /**
  * What a header holds, as rects inside its `zone`: every element with text of its own (a title, a quote head, a link) and every control with none (the big X, an icon).
@@ -238,6 +266,114 @@ function zoneOf(row: ElementLike, card: ViewRect, fromTop = false): HeaderZone |
   return box ? { box, parts } : null;
 }
 
+// ── What else a card holds: its controls, and its words ──────────────────
+//
+// P11-49 (ruling §1h.149): the group and the strip cover no control of a card, wherever it stands, and as few of the card's words as they can. A card's controls are
+// read from the page by what an element IS, never by where the app put it (a list of data attributes goes stale the day a card gains a button): every element of the card
+// that a person presses, types in or reads a toolbar from. The rest of a card is its words (and its picture).
+
+/**
+ * The elements that are controls: buttons, links, form fields and the roles that stand for them, and a toolbar as a row. A writing surface (`[contenteditable]`, `[role=textbox]`)
+ * is not one: its words are the reader's own words in the card, covered as little as may be like any other (`wordsOf`); its toolbar is a `[role=toolbar]`, which is.
+ */
+export const CONTROL_SELECTOR =
+  "button, [role=button], [role=link], [role=menuitem], [role=tab], [role=switch], [role=checkbox], [role=radio], [role=slider], [role=combobox], [role=toolbar], a[href], input, select, textarea, summary";
+
+/** Tags that clip nothing and hold no words of the card's (an icon's strokes, a script). */
+const NOT_WORDS = new Set(["svg", "style", "script", "textarea", "canvas"]);
+/** The form fields: a control by what they are, whatever is or is not inside them. */
+const FIELDS = new Set(["input", "select", "textarea"]);
+
+const styleOf = (element: ElementLike): StyleLike | null => element.ownerDocument?.defaultView?.getComputedStyle?.(element) ?? null;
+
+/** Whether a computed colour paints nothing: `transparent`, or any notation with an alpha of 0. */
+const colourless = (colour: string | undefined) => colour === undefined || colour === "" || colour === "transparent" || /(?:,|\/)\s*0(?:\.0+)?%?\s*\)$/.test(colour);
+
+/** Whether an element paints a surface of its own: a background colour or image, or a border. */
+const paints = (style: StyleLike) =>
+  !colourless(style.backgroundColor) ||
+  (style.backgroundImage !== undefined && style.backgroundImage !== "" && style.backgroundImage !== "none") ||
+  (Number.parseFloat(style.borderTopWidth ?? "0") > 0 && style.borderTopStyle !== "none" && !colourless(style.borderTopColor));
+
+/** Whether an element is hidden from sight though it keeps its box (`visibility: hidden`, as a closed menu may be). */
+const hiddenFromSight = (style: StyleLike | null) => style !== null && style.visibility === "hidden";
+
+/**
+ * Whether a control is drawn: a form field, or something with a label (text), an icon (an `svg`) or a surface of its own (a painted background, a border). A button that is
+ * only a hit area — the click that writes at the end of a note, the veil behind a menu, the button that holds the figure's picture and paints nothing of its own, the
+ * picture being the card's content — shows nothing a person could press, so the group may stand over it. With no computed style to ask, it is counted.
+ */
+function drawn(element: ElementLike): boolean {
+  if (hiddenFromSight(styleOf(element))) return false;
+  if (FIELDS.has((element.tagName ?? "").toLowerCase())) return true;
+  if ((element.textContent ?? "").trim() !== "") return true;
+  if (element.querySelector?.("svg")) return true;
+  const style = styleOf(element);
+  return style === null || paints(style);
+}
+
+/** The box an element's contents are seen through: the card's own, narrowed by every ancestor between the two that clips (a scrolling body, a truncated line). */
+function seenThrough(element: ElementLike, card: ElementLike, cardBox: ViewRect): ViewRect | null {
+  let bound: ViewRect | null = cardBox;
+  for (let up = element.parentElement ?? null; bound && up && up !== card; up = up.parentElement ?? null) {
+    const style = styleOf(up);
+    const clips = style !== null && ((style.overflowX ?? "visible") !== "visible" || (style.overflowY ?? "visible") !== "visible");
+    if (clips) bound = clipped(toRect(up.getBoundingClientRect()), bound);
+  }
+  return bound;
+}
+
+/**
+ * A card's controls, as rects in the window's pixels: `CONTROL_SELECTOR` asked of the card, each drawn one at the line boxes it has (a link that wraps is two), seen through
+ * the card and the scrolling bodies it stands in (a control scrolled out of sight is not under the group). A control inside one of the card's header rows is left to the
+ * row (`zones`): the row's `parts` are what it holds, and its free part is the row's. Pure of the page but for the card it is given.
+ */
+function controlsOf(card: CardLike, cardBox: ViewRect, zones: readonly HeaderZone[]): ViewRect[] {
+  const found = card.querySelectorAll?.(CONTROL_SELECTOR);
+  const out: ViewRect[] = [];
+  for (const element of Array.from(found ?? [])) {
+    if (!drawn(element)) continue;
+    const bound = seenThrough(element, card, cardBox);
+    if (!bound) continue;
+    const lines = Array.from(element.getClientRects?.() ?? []);
+    for (const box of lines.length > 0 ? lines : [element.getBoundingClientRect()]) {
+      const part = clipped(toRect(box), bound);
+      if (part && !zones.some((zone) => within(part, zone.box))) out.push(part);
+    }
+  }
+  return out;
+}
+
+/**
+ * A card's words, as the line boxes they stand in (a text node that wraps is one rect for each line), in the window's pixels, seen through the card and its scrolling bodies.
+ * A subtree whose box is wholly out of sight is not walked, so a long note costs what is on screen. Needs the page's ranges; without them (a test's stand-in) there are none.
+ */
+function wordsOf(card: CardLike, cardBox: ViewRect): ViewRect[] {
+  const range = card.ownerDocument?.createRange?.();
+  if (!range?.getClientRects) return [];
+  const out: ViewRect[] = [];
+  const visit = (element: ElementLike, bound: ViewRect) => {
+    if (NOT_WORDS.has((element.tagName ?? "").toLowerCase())) return;
+    const box = toRect(element.getBoundingClientRect());
+    let seen: ViewRect | null = bound;
+    const style = styleOf(element);
+    if (style !== null && ((style.overflowX ?? "visible") !== "visible" || (style.overflowY ?? "visible") !== "visible")) seen = clipped(box, bound);
+    else if (box.right > box.left && box.bottom > box.top && !meets(box, bound)) seen = null;
+    if (!seen) return;
+    for (const node of Array.from(element.childNodes ?? [])) {
+      if (hiddenFromSight(style) || node.nodeType !== 3 || (node.nodeValue ?? "").trim() === "") continue;
+      range.selectNodeContents(node);
+      for (const line of Array.from(range.getClientRects?.() ?? [])) {
+        const part = clipped(toRect(line), seen);
+        if (part) out.push(part);
+      }
+    }
+    for (const child of Array.from(element.children ?? [])) visit(child, seen);
+  };
+  visit(card, cardBox);
+  return out;
+}
+
 export interface OpenCards {
   /** The cards' rects, in the window's pixels; a card with no box (hidden) is left out. */
   rects: ViewRect[];
@@ -245,11 +381,18 @@ export interface OpenCards {
   headers: HeaderZone[];
   /** What the Explain card's header says (its title and the opening words of the passage it explains), for the card that stands. */
   explainHeads: string[];
+  /** P11-49: the controls the headers do not hold — a toolbar and its buttons, a sticky's button, the explain card's link, its input and Send (`controlsOf`). Empty when not asked for. */
+  controls: ViewRect[];
+  /** P11-49: the card's words, as the line boxes they stand in (`wordsOf`). Empty when not asked for. */
+  words: ViewRect[];
 }
 
-/** The cards of the margin that stand open — through their one marker, in one query — with their rects and their headers. */
-export function openCards(root: Pick<ParentNode, "querySelectorAll">): OpenCards {
-  const open: OpenCards = { rects: [], headers: [], explainHeads: [] };
+/**
+ * The cards of the margin that stand open — through their one marker, in one query — with their rects and their headers; and, unless `shallow`, the controls and the words
+ * they hold (P11-49), which the group's and the strip's place is made from. A caller that wants the rects or the headers alone asks `shallow`.
+ */
+export function openCards(root: Pick<ParentNode, "querySelectorAll">, shallow = false): OpenCards {
+  const open: OpenCards = { rects: [], headers: [], explainHeads: [], controls: [], words: [] };
   for (const node of Array.from(root.querySelectorAll(OPEN_CARD_SELECTOR))) {
     const card = node as unknown as CardLike;
     const box = card.getBoundingClientRect();
@@ -261,9 +404,15 @@ export function openCards(root: Pick<ParentNode, "querySelectorAll">): OpenCards
     // The explain card's header is its top row — the one that holds the big X — not the block it stands in, which holds the quoted passage too: the quote is the card's content,
     // like a sticky's text. A card behind another shows that row alone, as its first element.
     const topRow = explain ? card.querySelector?.(EXPLAIN_CLOSE_SELECTOR)?.parentElement ?? null : null;
+    const zones: HeaderZone[] = [];
     for (const [row, fromTop] of [[topRow ?? first, topRow !== null], [card.querySelector?.(ZOOM_ROW_SELECTOR) ?? null, false]] as const) {
       const zone = row ? zoneOf(row, rect, fromTop) : null;
-      if (zone) open.headers.push(zone);
+      if (zone) zones.push(zone);
+    }
+    open.headers.push(...zones);
+    if (!shallow) {
+      open.controls.push(...controlsOf(card, rect, zones));
+      open.words.push(...wordsOf(card, rect));
     }
     if (first && explain) open.explainHeads.push(first.textContent ?? "");
   }
@@ -272,12 +421,25 @@ export function openCards(root: Pick<ParentNode, "querySelectorAll">): OpenCards
 
 /** The rects of the cards that stand open, in the window's pixels; a card with no box (hidden) is left out. */
 export function openCardRects(root: Pick<ParentNode, "querySelectorAll">): ViewRect[] {
-  return openCards(root).rects;
+  return openCards(root, true).rects;
 }
 
 /** The headers of the cards that stand open: where the group must not stand. */
 export function readHeaders(root: Pick<ParentNode, "querySelectorAll">): HeaderZone[] {
-  return openCards(root).headers;
+  return openCards(root, true).headers;
+}
+
+/** What the open cards hold that the group and the strip must not cover (their headers' rows and what they hold, their controls) and should cover as little of as they can (their words). */
+export interface CardObstacles {
+  headers: HeaderZone[];
+  controls: ViewRect[];
+  words: ViewRect[];
+}
+
+/** P11-49: the open cards' headers, controls and words, in the window's pixels, read from the page in one query by the margin's marker (and one per card). */
+export function readCardObstacles(root: Pick<ParentNode, "querySelectorAll">): CardObstacles {
+  const { headers, controls, words } = openCards(root);
+  return { headers, controls, words };
 }
 
 /** Ends the selection the way Take notes and Highlight do: the browser's ranges go, and the page's hold on the selection goes after them. */
@@ -302,11 +464,15 @@ export function clearanceFrom(group: ViewRect, cards: readonly ViewRect[]): numb
   return nearest;
 }
 
-/** The room kept between the group and a part of a header when it stands on the header's free part. */
+/** The room kept between the group and a part of a header or a control when it is slid along the margin to clear it. */
 export const HEADER_GAP_PX = 4;
 
-/** How a place was made clear of the headers: `level` — it did not need to be; `free` — on a header's free part, level with the line; `below` / `above` — just under or over the header, whichever is nearer the line; `held` — nowhere was clear, so it stays level. */
-export type Clearance = "level" | "free" | "below" | "above" | "held";
+/**
+ * How a place was made clear of the cards: `level` — it did not need to be; `aside` — level with the line, slid along the margin to clear a control or to cover fewer of a
+ * card's words; `free` — wholly inside a header row, on what the row's text and controls leave; `below` / `above` — just under or over a header or a control, whichever is nearer the
+ * line; `held` — nowhere was clear, so it stays level.
+ */
+export type Clearance = "level" | "aside" | "free" | "below" | "above" | "held";
 
 /**
  * P11-38 rule 2: the place for a box of `size` that would stand at (`left`, `top`) — the margin's left edge and the first line's height — made clear of the headers.
@@ -314,6 +480,10 @@ export type Clearance = "level" | "free" | "below" | "above" | "held";
  * the box fits whole between what the headers hold at that height (`parts`: the X, the title's words, the controls — and a few pixels from each): a move of nothing. Otherwise the
  * nearest clear place above or below: just above a header or just below one — below the last of a stack of them, above the first — wholly inside the band; the nearer to `top`
  * wins, and just below when they are as near. Otherwise held where it was: nothing is clear. It never leaves the margin sideways. Pure.
+ *
+ * P11-49 rule 1 (ruling §1h.149): the same for the cards' `controls` — a toolbar's row and its buttons, a sticky's button, the explain card's link, input and Send. A box is clear
+ * only of a control's whole box, wherever the control stands: the places above are made of what the headers hold and what the controls are, and the edges of the controls are
+ * places too (just above one, just below one). Level with the line, slid along the margin past a control, it is `aside`.
  */
 export function clearOfHeaders(input: {
   margin: MarginRect;
@@ -321,17 +491,20 @@ export function clearOfHeaders(input: {
   left: number;
   top: number;
   headers: readonly HeaderZone[];
+  /** P11-49: the controls of the open cards that no header holds (`readCardObstacles`). */
+  controls?: readonly ViewRect[];
 }): { left: number; top: number; how: Clearance } {
   const { margin, size, left, top, headers } = input;
+  const controls = input.controls ?? [];
   const at = (x: number, y: number): ViewRect => ({ left: x, top: y, right: x + size.width, bottom: y + size.height });
   const onHeader = (box: ViewRect) => headers.some((zone) => meets(box, zone.box));
-  if (!onHeader(at(left, top))) return { left, top, how: "level" };
+  const onControl = (box: ViewRect) => controls.some((control) => meets(box, control));
+  if (!onHeader(at(left, top)) && !onControl(at(left, top))) return { left, top, how: "level" };
 
-  // The free part: where the box would stand on a header, the places along the margin where it fits whole between what the header holds at this height (a few pixels
-  // from each part). A header holding nothing at this height — the box would meet only its padding or its border — has none: the box stands under it.
+  // The free part: where the box would stand on a header or a control, the places along the margin where it fits whole between what the headers hold at this height (a few pixels
+  // from each part) and the controls. A header holding nothing at this height — the box would meet only its padding or its border — has none: the box stands under it.
   const reach = at(left, top);
-  const blocked = headers
-    .flatMap((zone) => zone.parts)
+  const blocked = [...headers.flatMap((zone) => zone.parts), ...controls]
     .filter((part) => part.top < reach.bottom && reach.top < part.bottom)
     .map((part): [number, number] => [part.left - HEADER_GAP_PX, part.right + HEADER_GAP_PX])
     .sort((a, b) => a[0] - b[0]);
@@ -351,15 +524,15 @@ export function clearOfHeaders(input: {
       const x = Math.min(Math.max(left, start), end - size.width);
       if (free === null || Math.abs(x - left) < Math.abs(free - left)) free = x;
     }
-    if (free !== null) return { left: free, top, how: "free" };
+    if (free !== null) return { left: free, top, how: onHeader(at(free, top)) ? "free" : "aside" };
   }
 
-  // Otherwise the nearest clear place: just above a header or just below one (below the last of a stack: the places are the edges of the headers, and a place is clear when
-  // the box is over no header there), wholly inside the band; the nearer to `top` wins, and just below when they are as near.
+  // Otherwise the nearest clear place: just above or just below a header or a control (below the last of a stack: the places are the edges of the headers and the controls, and a
+  // place is clear when the box is over no header and no control there), wholly inside the band; the nearer to `top` wins, and just below when they are as near.
   const inBand = (y: number) => y >= margin.top && y + size.height <= margin.bottom;
   let best: number | null = null;
-  for (const y of headers.flatMap((zone) => [zone.box.bottom, zone.box.top - size.height])) {
-    if (!inBand(y) || onHeader(at(left, y))) continue;
+  for (const y of [...headers.flatMap((zone) => [zone.box.bottom, zone.box.top - size.height]), ...controls.flatMap((control) => [control.bottom, control.top - size.height])]) {
+    if (!inBand(y) || onHeader(at(left, y)) || onControl(at(left, y))) continue;
     if (best === null || Math.abs(y - top) < Math.abs(best - top) || (Math.abs(y - top) === Math.abs(best - top) && y > best)) best = y;
   }
   if (best !== null) return { left, top: best, how: best > top ? "below" : "above" };
@@ -383,13 +556,15 @@ export function actionsPlace(input: {
   sizes: { margin: { width: number; height: number }; above: { width: number; height: number } };
   /** P11-38: the open cards' headers, where the group must not stand (the margin's mode only: the pill above the selection is as it was). */
   headers?: readonly HeaderZone[];
+  controls?: readonly ViewRect[];
+  words?: readonly ViewRect[];
 }): ActionsPlace | null {
   const { bounds, viewport, margin, sizes } = input;
   const pill = toolbarPlace({ bounds, viewport, size: sizes.above });
   if (pill === null) return null;
   if (margin === null) return { mode: "above", ...pill };
   const level = { left: margin.left + MARGIN_INSET_PX, top: placeInMargin(margin, bounds.top, sizes.margin.height) };
-  const spot = clearOfHeaders({ margin, size: sizes.margin, ...level, headers: input.headers ?? [] });
+  const spot = clearOfHeaders({ margin, size: sizes.margin, ...level, headers: input.headers ?? [], controls: input.controls ?? [] });
   return { mode: "margin", left: spot.left, top: spot.top, below: false, ...(spot.how === "level" ? {} : { clear: spot.how }) };
 }
 
@@ -405,7 +580,7 @@ export function SelectionToolbarView({
   overCard = false,
   innerRef,
 }: {
-  /** Where it stands; a `mode` of "margin" draws a column, anything else (a place without one is the old pill) a row. `clear` says it was moved off a card's header (P11-38). */
+  /** Where it stands; a `mode` of "margin" draws a column, anything else (a place without one is the old pill) a row. `clear` says it was moved off a card's header or control (P11-38, P11-49). */
   place: ToolbarPlace & { mode?: ActionsMode; clear?: ActionsPlace["clear"] };
   /** The page can explain this selection (`selectionCanExplain`); when it cannot, "Explain this" is not drawn. */
   canExplain: boolean;
@@ -463,12 +638,16 @@ interface Frame {
   cards: ViewRect[];
   /** P11-38: their headers, and whether the Explain card that stands holds the selection's passage. */
   headers: HeaderZone[];
+  /** P11-49: their controls (outside the headers), which the place is made from. */
+  controls: ViewRect[];
   explained: boolean;
 }
 
 const sameRect = (a: ViewRect, b: ViewRect) => a.left === b.left && a.top === b.top && a.right === b.right && a.bottom === b.bottom;
 
 const sameHeader = (a: HeaderZone, b: HeaderZone) => sameRect(a.box, b.box) && a.parts.length === b.parts.length && a.parts.every((part, index) => sameRect(part, b.parts[index]));
+
+const sameRects = (a: readonly ViewRect[], b: readonly ViewRect[]) => a.length === b.length && a.every((rect, index) => sameRect(rect, b[index]));
 
 const sameFrame = (a: Frame | null, b: Frame | null) =>
   a === b ||
@@ -482,7 +661,8 @@ const sameFrame = (a: Frame | null, b: Frame | null) =>
     a.cards.every((card, index) => sameRect(card, b.cards[index])) &&
     a.explained === b.explained &&
     a.headers.length === b.headers.length &&
-    a.headers.every((header, index) => sameHeader(header, b.headers[index])));
+    a.headers.every((header, index) => sameHeader(header, b.headers[index])) &&
+    sameRects(a.controls, b.controls));
 
 type Size = { width: number; height: number };
 
@@ -540,6 +720,7 @@ export function SelectionToolbar({
               viewport: { width: window.innerWidth, height: window.innerHeight },
               cards: open.rects,
               headers: open.headers,
+              controls: open.controls,
               explained: explainHeadHolds(open.explainHeads, target.passage),
             }
           : null;
@@ -581,7 +762,7 @@ export function SelectionToolbar({
   const sizeOf = (which: ActionsMode): Size => sizes[`${which}:${buttons}`] ?? estimate(which, buttons);
   const placed =
     target && frame && frame.of === target
-      ? actionsPlace({ bounds: frame.bounds, viewport: frame.viewport, margin, sizes: { margin: sizeOf("margin"), above: sizeOf("above") }, headers: frame.headers })
+      ? actionsPlace({ bounds: frame.bounds, viewport: frame.viewport, margin, sizes: { margin: sizeOf("margin"), above: sizeOf("above") }, headers: frame.headers, controls: frame.controls })
       : null;
   // P11-38 rule 1: in the margin the group is gone once Explain this has been pressed for the selection that stands; the pill above the selection (a window with no margin) is as it was.
   const place = placed !== null && placed.mode === "margin" && target !== null && pressed === target ? null : placed;

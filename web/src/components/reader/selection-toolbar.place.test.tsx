@@ -494,6 +494,17 @@ describe("readCardObstacles — a card's controls and words, read from the page 
     expect(got.controls).toEqual([]);
   });
 
+  it("leaves out a control hidden from sight though it keeps its box (a closed menu's items), and its words", () => {
+    const menu = card("notes", sq(1080, 48, 1440, 354), [
+      header(sq(1080, 48, 1440, 89), []),
+      { tag: "div", box: sq(1081, 89, 1439, 320), kids: [{ tag: "button", box: sq(1093, 150, 1200, 180), text: "Export as Markdown", style: { visibility: "hidden" } }, { tag: "button", box: sq(1093, 190, 1200, 220), text: "Shown" }] },
+    ]);
+    const got = read(menu);
+    expect(got.controls).toEqual([sq(1093, 190, 1200, 220)]);
+    expect(got.words).not.toContainEqual(sq(1093, 150, 1200, 180));
+    expect(got.words).toContainEqual(sq(1093, 190, 1200, 220));
+  });
+
   it("asks the card by what an element is — buttons, roles, links, fields, a toolbar — and by no attribute the app made up", () => {
     asked.length = 0;
     read(card("sticky", sq(1080, 245, 1440, 505), [header(sq(1080, 245, 1440, 285), [])]));
