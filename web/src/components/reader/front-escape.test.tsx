@@ -163,3 +163,168 @@ describe("useFrontEscape — the listener", () => {
     expect(source).not.toMatch(/"keydown", onKeyDown, true/);
   });
 });
+
+// ── P11-40 (round 2, Theme B (b); ruling §1h.138 (c)): Escape does one thing at a time, nearest first ──────────────────────────────────────
+// A selection standing with its buttons is put away first (the selection ends and the buttons go, nothing else); only then does Escape close the front card
+// (`takeFrontEscape`, above), and only with neither does it leave the paper (the keyboard layer's "back"). The selection's step is `takeSelectionEscape`; the
+// listener that carries it is `useSelectionEscape`, on the document in the CAPTURE phase — the cards' listeners stand in the bubble phase, and a capture listener
+// is before every one of them, whatever order they were registered in. The three together, with the real cards, are `selection-escape.flow.test.tsx`.
+// These are reached through a typed handle, so the file compiles on the base, where the two exports are not there yet.
+type StandingSelection = { standing: () => boolean; end: () => void };
+const selectionEscape = (await import("./front-escape")) as unknown as {
+  takeSelectionEscape: (event: unknown, doc: unknown, selection: StandingSelection) => boolean;
+  useSelectionEscape: (selection: StandingSelection) => void;
+};
+const { takeSelectionEscape, useSelectionEscape } = selectionEscape;
+
+describe("takeSelectionEscape — the selection first", () => {
+  const doc = { querySelector: () => null, activeElement: null };
+  const standingSelection = () => ({ standing: vi.fn(() => true), end: vi.fn() });
+  const press = (over: Record<string, unknown> = {}) => key({ target: { tagName: "BODY" }, ...over });
+
+  it("takes the key while a selection stands: prevented, stopped, and the selection ended once", () => {
+    const selection = standingSelection();
+    const event = press();
+    expect(takeSelectionEscape(event, doc, selection)).toBe(true);
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    expect(event.stopPropagation).toHaveBeenCalledTimes(1);
+    expect(selection.end).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the key to the cards and to the page's back when no selection stands: nothing prevented, stopped or ended", () => {
+    const selection = { standing: vi.fn(() => false), end: vi.fn() };
+    const event = press();
+    expect(takeSelectionEscape(event, doc, selection)).toBe(false);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(event.stopPropagation).not.toHaveBeenCalled();
+    expect(selection.end).not.toHaveBeenCalled();
+  });
+
+  it("asks whether a selection stands when the key comes, once per key", () => {
+    let standing = false;
+    const selection = { standing: vi.fn(() => standing), end: vi.fn(() => void (standing = false)) };
+    expect(takeSelectionEscape(press(), doc, selection)).toBe(false);
+    standing = true;
+    expect(takeSelectionEscape(press(), doc, selection)).toBe(true);
+    expect(takeSelectionEscape(press(), doc, selection)).toBe(false);
+    expect(selection.end).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves every other key (Backspace is still the page's back), a key something handled already, and a modal dialog over the page", () => {
+    const selection = standingSelection();
+    expect(takeSelectionEscape(press({ key: "Backspace" }), doc, selection)).toBe(false);
+    expect(takeSelectionEscape(press({ key: "Enter" }), doc, selection)).toBe(false);
+    expect(takeSelectionEscape(press({ defaultPrevented: true }), doc, selection)).toBe(false);
+    const modal = { querySelector: (selector: string) => (selector === '[aria-modal="true"]' ? {} : null), activeElement: null };
+    expect(takeSelectionEscape(press(), modal, selection)).toBe(false);
+    expect(selection.end).not.toHaveBeenCalled();
+  });
+
+  it("leaves an Escape typed into a field to the field: an input, a textarea, a select, an editable block — as the key's target or as the focus", () => {
+    const fields = [{ tagName: "INPUT" }, { tagName: "TEXTAREA" }, { tagName: "SELECT" }, { tagName: "DIV", isContentEditable: true }];
+    for (const field of fields) {
+      const selection = standingSelection();
+      const typed = press({ target: field });
+      expect(takeSelectionEscape(typed, doc, selection), `${field.tagName} as the target`).toBe(false);
+      expect(typed.preventDefault).not.toHaveBeenCalled();
+      const focused = press({ target: { tagName: "BODY" } });
+      expect(takeSelectionEscape(focused, { ...doc, activeElement: field }, selection), `${field.tagName} as the focus`).toBe(false);
+      expect(selection.end).not.toHaveBeenCalled();
+    }
+  });
+
+  it("takes it from the paper, a button, the body or the document itself — none is a field", () => {
+    for (const target of [{ tagName: "ARTICLE", isContentEditable: false }, { tagName: "BUTTON" }, { tagName: "BODY" }, {}, null, undefined]) {
+      const selection = standingSelection();
+      expect(takeSelectionEscape(press({ target }), doc, selection), JSON.stringify(target ?? null)).toBe(true);
+      expect(selection.end).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("does not need a document that can query (a page stub): no modal is then known", () => {
+    expect(takeSelectionEscape(press(), {} as never, standingSelection())).toBe(true);
+  });
+});
+
+describe("useSelectionEscape — the listener", () => {
+  interface Added {
+    fn: (event: unknown) => void;
+    capture: boolean;
+  }
+  let listeners: Added[];
+  let added: number;
+  const isCapture = (options: unknown) => options === true || (typeof options === "object" && options !== null && (options as { capture?: boolean }).capture === true);
+  const fire = (event: unknown) => listeners.forEach((one) => one.fn(event));
+
+  beforeEach(() => {
+    listeners = [];
+    added = 0;
+    vi.stubGlobal("document", {
+      addEventListener: (type: string, fn: (event: unknown) => void, options?: unknown) => {
+        if (type !== "keydown") return;
+        listeners.push({ fn, capture: isCapture(options) });
+        added += 1;
+      },
+      removeEventListener: (type: string, fn: (event: unknown) => void, options?: unknown) => {
+        if (type === "keydown") listeners = listeners.filter((one) => !(one.fn === fn && one.capture === isCapture(options)));
+      },
+      querySelector: () => null,
+      activeElement: null,
+    });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function mount(selection: () => StandingSelection) {
+    const mounted = stagedRuntime.mount(() => useSelectionEscape(selection()));
+    stagedRuntime.flush();
+    return mounted;
+  }
+  const press = () => key({ target: { tagName: "BODY" } });
+
+  it("stands on the document in the capture phase — before every card's bubble listener — once, and goes with the page", () => {
+    const mounted = mount(() => ({ standing: () => true, end: vi.fn() }));
+    expect(listeners).toHaveLength(1);
+    expect(listeners[0].capture).toBe(true);
+    mounted.unmount();
+    expect(listeners).toHaveLength(0);
+  });
+
+  it("puts the selection away at the key and takes it", () => {
+    const end = vi.fn();
+    const mounted = mount(() => ({ standing: () => true, end }));
+    const event = press();
+    fire(event);
+    expect(end).toHaveBeenCalledTimes(1);
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    expect(event.stopPropagation).toHaveBeenCalledTimes(1);
+    mounted.unmount();
+  });
+
+  it("answers for the page's selection as it is at the key, with no new registration: the closures of the latest render", () => {
+    let selecting = false;
+    const ended: string[] = [];
+    let name = "first";
+    const mounted = mount(() => {
+      const mine = name;
+      return { standing: () => selecting, end: () => void ended.push(mine) };
+    });
+    const before = press();
+    fire(before);
+    expect(before.preventDefault).not.toHaveBeenCalled();
+    selecting = true;
+    name = "second";
+    stagedRuntime.rerender();
+    stagedRuntime.flush();
+    fire(press());
+    expect(ended).toEqual(["second"]);
+    expect(added).toBe(1);
+    mounted.unmount();
+  });
+
+  it("is the source's: a capture-phase document listener of its own, and the cards' stays a bubble-phase one", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/components/reader/front-escape.ts"), "utf8");
+    expect(source).toContain('document.addEventListener("keydown", onSelectionKey, { capture: true });');
+    expect(source).toContain('document.removeEventListener("keydown", onSelectionKey, { capture: true });');
+    expect(source).toContain('document.addEventListener("keydown", onKeyDown);');
+  });
+});
