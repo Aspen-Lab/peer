@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // P3-02 (ruling §1h.2; user decision §1a.10): the body offers "Explain this?"
-// for a selection of up to one paragraph's worth of the paper's own words —
-// two ends in one paragraph, non-empty, at most 1,200 characters, no drawn
-// formula — and for nothing else. `selectionTarget` is the pure rule;
+// for a selection of the paper's own words inside one paragraph —
+// two ends in one paragraph, non-empty, of any length (P11-47; it was at most 1,200
+// characters), no drawn formula — and for nothing else. `selectionTarget` is the pure rule;
 // `readSelection` reads it off the DOM's selection (a stand-in here: this
 // project's Vitest has no DOM); the listener is `PaperBody`'s own effect, run
 // on the minimal hook runtime. The body's markup is not touched: the existing
@@ -65,10 +65,12 @@ describe("selectionTarget — the pure rule", () => {
     expect(selectionTarget({ anchorParagraphId: id, focusParagraphId: id, text: " \n\t " })).toBeNull();
   });
 
-  it("allows 1,200 characters and nothing longer", () => {
+  // RE-AIMED (§1c), P11-47 (ruling §1h.148 rule 1): this test said 1,200 characters and nothing longer. The selection has no length limit inside one paragraph now; 1,200 is Explain's
+  // cap (`MAX_SELECTION_CHARS`), still 1,200. What stays true, and is kept: 1,200 characters is a target, and the whitespace is collapsed before it is counted.
+  it("allows 1,200 characters and any longer inside one paragraph; 1,200 is Explain's cap, not the selection's", () => {
     expect(MAX_SELECTION_CHARS).toBe(1200);
     expect(selectionTarget({ anchorParagraphId: id, focusParagraphId: id, text: "x".repeat(1200) })).not.toBeNull();
-    expect(selectionTarget({ anchorParagraphId: id, focusParagraphId: id, text: "x".repeat(1201) })).toBeNull();
+    expect(selectionTarget({ anchorParagraphId: id, focusParagraphId: id, text: "x".repeat(1201) })).toMatchObject({ passage: "x".repeat(1201) });
     // Counted after the whitespace is collapsed, as the server counts it.
     expect(selectionTarget({ anchorParagraphId: id, focusParagraphId: id, text: `${"x ".repeat(500)}\n\n\n      ${"y ".repeat(50)}` })).not.toBeNull();
   });
@@ -322,8 +324,10 @@ describe("readSelection — what the page's selection is", () => {
     expect(readSelection(selection({ rects: [{ left: 1, top: 1, right: 50, bottom: 20 }], hasFormula: true }))).toBeNull();
   });
 
-  it("is null for one too long, or off screen", () => {
-    expect(readSelection(selection({ text: "x".repeat(1201) }))).toBeNull();
+  // RE-AIMED (§1c), P11-47 (ruling §1h.148 rule 1): this test said a selection of 1,201 characters is null. Inside one paragraph there is no length limit now: it is a target, with all its
+  // words. What is kept: a selection off screen is null.
+  it("is a target for one over 1,200 characters, and null off screen", () => {
+    expect(readSelection(selection({ text: "x".repeat(1201) }))).toMatchObject({ passage: "x".repeat(1201) });
     expect(readSelection(selection({ rects: [{ left: 0, top: 0, right: 0, bottom: 0 }] }))).toBeNull();
   });
 

@@ -272,7 +272,7 @@ export function markedClass(base: string, mark: SectionMark | null, extra?: stri
 // A reader selects words and the selection buttons offer "Explain this". What counts is one container's worth of text: a selection whose
 // two ends sit in the same paragraph of the paper's body, or (P10-08, review 8.4: "不仅仅是正文，甚至可以是summary或者for your question里的
 // answer，但是不包括最左边的各种功能button") in one element the page marks `data-explain-source` — the Summary's blocks (`"summary"`) and the answers
-// under the question (`"answer"`) — non-empty, at most 1,200 characters, with no drawn formula in it (the text of a formula is not the paper's
+// under the question (`"answer"`) — non-empty, of any length (P11-47, below), with no drawn formula in it (the text of a formula is not the paper's
 // text), and never with an end inside a control (a button, a link, a field). The commands at the left, the map, the question bar and the
 // notes are in no marked container, so they are no target. Anything else is no target. The body's markup is untouched: this reads the DOM's
 // selection and the ids the paragraphs already carry (`paragraphAnchor`) and the attribute the page puts on a container; nothing is added
@@ -283,8 +283,19 @@ export function markedClass(base: string, mark: SectionMark | null, extra?: stri
 // `lib/notes/anchor-blocks.ts`). The heading carries its id and the marker `data-anchor-block="heading"`; the figure carries its id and `data-anchor-block="caption"`,
 // and the words of the caption are its `figcaption`'s (the picture's button is no part of them). The target says which it is (`block`); a selection across two
 // containers is still no target.
+//
+// P11-47 (round 3's Theme B walk, weighed (f); owner items 5 and 8; ruling §1h.148 rule 1): the selection has no length limit of its own. It was 1,200 characters — the Explain
+// route's passage cap — and a triple click on a paragraph of 1,300 to 3,000 characters offered nothing, not Highlight and not Take notes: 10 of 13 paragraphs of the owner's paper.
+// A selection inside one block — a paragraph, a caption, a heading, a Summary block, an answer — is a target whatever its length: a highlight keeps all its words
+// (`lib/notes/blocks.ts`), a sticky is anchored over all of them, and Explain this explains the first 1,200 characters (`explain-box.tsx`, `explainPassage`;
+// `MAX_SELECTION_CHARS` is that cap now). A selection across two blocks is still no target (D5): across two paragraphs by `samePlace`; across two blocks of one Summary
+// or answer container — one container's worth, as ever — only up to that cap, so a longer one must stay in one block (`oneBlock`).
 
-/** The longest passage a selection may be (characters, whitespace collapsed). */
+/**
+ * The longest passage the Explain request carries (characters, whitespace collapsed): the route's own cap (`EXPLAIN_CAPS.passageChars`). P11-47 (ruling §1h.148): it is
+ * no limit on a selection any more — Highlight and Take notes take any length inside one block, and Explain this clips at this. It is still the length up to which a
+ * selection across two blocks of one Summary or answer container is a target, as it always was (`selectionTarget`'s `oneBlock`).
+ */
 export const MAX_SELECTION_CHARS = 1200;
 /**
  * How long a selection holds still before it is read — for a selection made
@@ -348,8 +359,10 @@ export type ExplainSelection = SelectionTarget & ViewRects & { measure?: () => V
 
 /**
  * A selection is a target when both its ends sit in the same paragraph (the
- * paragraph's id, as `paragraphAnchor` writes it), its text is not empty once
- * the whitespace is collapsed, and it is at most 1,200 characters. Pure.
+ * paragraph's id, as `paragraphAnchor` writes it) and its text is not empty once
+ * the whitespace is collapsed. P11-47 (ruling §1h.148 rule 1): whatever its length — it was
+ * at most 1,200 characters. With `oneBlock: false` (a Summary or answer selection whose two ends are in two blocks of the one container) the old cap stays: such a
+ * selection is a target only up to `MAX_SELECTION_CHARS`, so a long one across two blocks is none (D5). Pure.
  */
 export function selectionTarget(input: {
   anchorParagraphId: string | null;
@@ -357,11 +370,14 @@ export function selectionTarget(input: {
   text: string;
   /** P10-08: where the selection is from; the paper's body when absent. For the Summary or an answer the ids are the container's own. */
   source?: ExplainSource;
+  /** P11-47: both ends are in one block (the default). False for a Summary or answer selection that runs from one block into another: it is a target up to `MAX_SELECTION_CHARS` only. */
+  oneBlock?: boolean;
 }): SelectionTarget | null {
   const { anchorParagraphId, focusParagraphId } = input;
   if (!anchorParagraphId || anchorParagraphId !== focusParagraphId) return null;
   const passage = input.text.replace(/\s+/g, " ").trim();
-  if (!passage || passage.length > MAX_SELECTION_CHARS) return null;
+  if (!passage) return null;
+  if (input.oneBlock === false && passage.length > MAX_SELECTION_CHARS) return null;
   const source = input.source ?? "paper";
   // Not the paper's: there is no section and no paragraph of the body to name; the container's own id keys it.
   if (source !== "paper") return { sectionIndex: -1, paragraphIndex: -1, passage, source, paragraphId: anchorParagraphId };
@@ -571,7 +587,8 @@ function wordsBefore(range: RangeLike, paragraph: ElementLike | undefined): numb
 
 /** What the page's selection is, as an `ExplainSelection`, or null: nothing
  *  selected, a selection across paragraphs or outside the body, one with a
- *  formula in it, over-long, or not on screen. */
+ *  formula in it, one over 1,200 characters across two blocks of a Summary or an
+ *  answer (P11-47), or not on screen. */
 export function readSelection(selection: SelectionLike | null): ExplainSelection | null {
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
   // The selection's own range changes as the selection does; this one is ours.
@@ -582,13 +599,16 @@ export function readSelection(selection: SelectionLike | null): ExplainSelection
   // A triple click selects a paragraph, and the browser ends it at offset 0 of
   // the NEXT one: the words are all the first paragraph's. A drag that really
   // runs on into another paragraph carries a break inside its words.
-  if (!samePlace(start, end) && range.endOffset === 0 && !/\n/.test(spoken.trim())) end = start;
+  const endsAtNextStart = range.endOffset === 0 && !/\n/.test(spoken.trim());
+  if (!samePlace(start, end) && endsAtNextStart) end = start;
   if (!samePlace(start, end)) return null;
   const contents = range.cloneContents();
   // P10-24: the passage is the paragraph's words, never a note tag's text (a break the selection carries was read from `spoken`).
   const text = wordsWithoutTags(contents) ?? spoken;
   // The two ends share a place (a paragraph, or one marked container whose blocks may differ): the start's id names the target.
-  const target = selectionTarget({ anchorParagraphId: start.id, focusParagraphId: start.id, text, source: start.source });
+  // P11-47: both ends in one block. A Summary or answer container is one place whatever its blocks, so a triple click on a block of it, which the browser ends at the start of the
+  // next block (above), has its end in that next block: its words are the first block's all the same.
+  const target = selectionTarget({ anchorParagraphId: start.id, focusParagraphId: start.id, text, source: start.source, oneBlock: endsAtNextStart || start.id === end?.id });
   if (!target) return null;
   if (contents.querySelector(FORMULA_SELECTOR)) return null;
   const where = measureRange(range, start?.text);

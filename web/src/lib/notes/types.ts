@@ -54,7 +54,7 @@ export interface HighlightSpot {
   paperId: string;
   /** The paper's paragraph, as `paragraphAnchor` writes it (`paper-section-1-p2`). */
   paragraphId: string;
-  /** The whole selected passage, whitespace collapsed, at most 1,200 characters (the selection's own cap). */
+  /** The whole selected passage, whitespace collapsed, whatever its length (P11-47: it had a limit of 1,200 characters, the selection's own cap). */
   quote: string;
   /** Where the words stand in the paragraph's text as the body renders it: `start` inclusive, `end` exclusive. Always present:
    *  a highlight whose passage was not found whole is not made. */

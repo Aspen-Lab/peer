@@ -139,17 +139,22 @@ describe("addHighlight", () => {
     expect(state().notes[id]).toBe(note);
   });
 
-  it("is not made without the paragraph's text, for a note that is not there, or for a passage over 1,200 characters", () => {
+  // RE-AIMED (§1c), P11-47 (ruling §1h.148 rule 1): this test said a passage over 1,200 characters is not made. It is now, whole (`notes.highlight.long.test.ts`); what is kept is that none is
+  // made without the paragraph's text or for a note that is not there, and that 1,200 characters still is.
+  it("is not made without the paragraph's text or for a note that is not there; a passage over 1,200 characters is, whole", () => {
     const id = noteId();
     const note = state().notes[id];
     expect(state().addHighlight(id, { ...AT, paragraphText: undefined })).toBeNull();
     expect(state().addHighlight("missing", AT)).toBeNull();
     const long = "word ".repeat(300).trim();
     expect(long.length).toBeGreaterThan(1200);
-    expect(state().addHighlight(id, { ...AT, passage: long, paragraphText: long })).toBeNull();
     expect(state().notes[id]).toBe(note);
+    expect(state().addHighlight(id, { ...AT, passage: long, paragraphText: long })).toMatchObject({ created: true });
+    expect(readHighlight(highlights()[0])?.quote).toBe(long);
+    useNotesStore.setState({ notes: {} });
+    const again = noteId();
     const fits = "w".repeat(1200);
-    expect(state().addHighlight(id, { ...AT, passage: fits, paragraphText: `x ${fits} y` })).toMatchObject({ created: true });
+    expect(state().addHighlight(again, { ...AT, passage: fits, paragraphText: `x ${fits} y` })).toMatchObject({ created: true });
   });
 
   it("is not made inside a formula's TeX", () => {

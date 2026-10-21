@@ -68,6 +68,10 @@
 //
 // P11-49 rule 3 (same ruling): the move is the nearest clear place the band allows: every top a place can begin at (the line's, the edges of the headers and the controls, the nearest
 // inside a row that holds it), at every left the margin allows — a few pixels clear of a control, or touching it where the gap is no wider — so no clear place is nearer.
+//
+// P11-47 (round 3's Theme B walk, weighed (f); ruling §1h.148 rules 1 and 2): what the group offers does not depend on how long the selection is. A selection over 1,200 characters
+// in one block — a triple click on a long paragraph — gets the same three: Take notes and Highlight whatever its length, and Explain this under the rule every selection has
+// (`canExplain`; the request clips the passage at the route's cap and the card shows its opening words, `explain-box.tsx`).
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PaperTerm } from "@/lib/papers/report";

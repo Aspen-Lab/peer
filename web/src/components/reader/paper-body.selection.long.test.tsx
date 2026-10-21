@@ -80,13 +80,15 @@ function page() {
   return { p, next, pa, pb, pans };
 }
 
-/** Invented words, at least `n` characters long, with the odd double space and (unless `breaks` is false) the odd line break a selection carries. A triple click on one paragraph carries no break inside it. */
+/** Invented words, at least `n` characters long once the white space is collapsed, with the odd double space and (unless `breaks` is false) the odd line break a selection carries. A triple click on one paragraph carries no break inside it. */
 function words(n: number, breaks = true): string {
   let out = "";
-  for (let i = 0; out.length < n; i += 1) out += `pool${i} counted${i % 7}${i % 3 === 0 ? "  " : breaks && i % 5 === 0 ? "\n" : " "}`;
+  for (let i = 0; collapsed(out).length < n; i += 1) out += `pool${i} counted${i % 7}${i % 3 === 0 ? "  " : breaks && i % 5 === 0 ? "\n" : " "}`;
   return out;
 }
-const collapsed = (value: string) => value.replace(/\s+/g, " ").trim();
+function collapsed(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
 
 describe("selectionTarget — one block, any length (ruling §1h.148 rule 1)", () => {
   const id = paragraphAnchor(2, 3);
@@ -178,8 +180,9 @@ describe("readSelection — a long selection inside one block (ruling §1h.148 r
   it("a Summary selection over 1,200 characters across two blocks is no target (D5), though a short one across two stays as it was: one container's worth", () => {
     const { pa, pb } = page();
     expect(readSelection(selecting(text(pa), text(pb), words(1500), 40))).toBeNull();
+    expect(readSelection(selecting(text(pa), text(pb), "y".repeat(1201), 40))).toBeNull();
     expect(readSelection(selecting(text(pa), text(pb), words(300), 40))).toMatchObject({ source: "summary", paragraphId: "summary-proposal" });
-    expect(readSelection(selecting(text(pa), text(pb), words(1190), 40))).toMatchObject({ source: "summary", paragraphId: "summary-proposal" });
+    expect(readSelection(selecting(text(pa), text(pb), "y".repeat(1200), 40))).toMatchObject({ source: "summary", paragraphId: "summary-proposal" });
   });
 
   it("a long triple click on a Summary block, ending at the start of the next block, is that block's words", () => {

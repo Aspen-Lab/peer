@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  HIGHLIGHT_QUOTE_MAX,
   anchorMap,
   block,
   citedKeys,
@@ -41,8 +40,13 @@ describe("highlightBlock", () => {
     expect(highlightBlock(SPOT).id).not.toBe(highlightBlock(SPOT).id);
   });
 
-  it("keeps a whole passage: the quote's limit is 1,200 characters, the selection's own cap", () => {
-    expect(HIGHLIGHT_QUOTE_MAX).toBe(1200);
+  // RE-AIMED (§1c), P11-47 (ruling §1h.148 rule 1): this test pinned `HIGHLIGHT_QUOTE_MAX` at 1,200 characters, the selection's own cap. A highlight keeps the whole passage whatever its length now:
+  // the constant is gone, and a quote of 1,200, 1,201 and 40,000 characters is read back whole.
+  it("keeps a whole passage: a quote has no limit, whatever its length", () => {
+    for (const n of [1200, 1201, 40000]) {
+      const quote = "w".repeat(n);
+      expect(readHighlight(highlightBlock({ ...SPOT, quote, end: SPOT.start + n }))?.quote.length).toBe(n);
+    }
   });
 });
 

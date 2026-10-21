@@ -15,7 +15,6 @@ import { persist } from "zustand/middleware";
 import type { Block, Citable, HighlightColourId, Note } from "@/lib/notes/types";
 import { anchorBlocks, anchorTextOnShow, blockAt, isPageBlockId, parseAnchorId, type AnchorSection } from "@/lib/notes/anchor-blocks";
 import {
-  HIGHLIGHT_QUOTE_MAX,
   citedKeys,
   highlightBlock,
   type NoteAnchorMap,
@@ -320,9 +319,9 @@ interface NotesState {
   removeEmptySticky: (noteId: string, headerId: string) => void;
   /**
    * P11-07 (owner item 8; B P11-04 §2.2): append a highlight to the note: a block of type `highlight` with the whole passage
-   * (whitespace collapsed, at most `HIGHLIGHT_QUOTE_MAX` characters) and where it stands in the paragraph — the occurrence
+   * (whitespace collapsed, whatever its length: P11-47) and where it stands in the paragraph — the occurrence
    * nearest `hint`, the selection's offset (`locatePassage`). Null when it cannot be made: the note is not there, the paragraph's
-   * text is not given, the passage is empty, too long, or not found whole in the paragraph (a highlight with no range would be
+   * text is not given, the passage is empty or not found whole in the paragraph (a highlight with no range would be
    * invisible). A range the paper's note already highlights, in the same paragraph, makes no second block: `{ id, created: false }`
    * of the existing one, its colour untouched. `colour` defaults to yellow. It never numbers or counts a sticky.
    */
@@ -497,9 +496,9 @@ export const useNotesStore = create<NotesState>()(
         // P11-27: a heading's or a caption's words are read from the body on show when the caller gives no paragraph text.
         const paragraphText = at.paragraphText ?? anchorTextOnShow(at.paragraphId);
         if (!note || paragraphText === undefined) return null;
-        // The passage is the paragraph's words — never a tag's text — whitespace collapsed; it is kept whole, not cut like a sticky's.
+        // The passage is the paragraph's words — never a tag's text — whitespace collapsed; it is kept whole, not cut like a sticky's, whatever its length (P11-47).
         const quote = stripTagText(at.passage).replace(/\s+/g, " ").trim();
-        if (!quote || quote.length > HIGHLIGHT_QUOTE_MAX) return null;
+        if (!quote) return null;
         const place = locatePassage(paragraphText, quote, 0, at.hint);
         if (!place || !anchorHolds(paragraphText, { ...place, quote })) return null;
         const twin = note.blocks.find((b) => {

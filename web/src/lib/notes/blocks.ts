@@ -339,8 +339,9 @@ export function anchorMap(note: Pick<Note, "blocks"> | undefined, paperId: strin
 // It is not a sticky: it has no number and no tag, it is never "empty" (its words are its content), and no sticky routine
 // (`stickySpan`, `withoutSticky`, `removeEmptySticky`) reads it as one. `stickySpan` ends at it, as at any block that is not text.
 
-/** The longest passage a highlight keeps: the whole of what was selected (the selection's own cap, `MAX_SELECTION_CHARS`). */
-export const HIGHLIGHT_QUOTE_MAX = 1200;
+// A highlight keeps the whole of what was selected, whatever its length. P11-47 (round 3's Theme B walk, weighed (f); ruling §1h.148 rule 1) took away the limit its quote had,
+// 1,200 characters (`HIGHLIGHT_QUOTE_MAX`, the selection's own cap): a triple click on a paragraph of 3,000 characters made no highlight. The quote is a block's own words,
+// found whole in one paragraph, caption, heading, Summary block or answer (`addHighlight`), so the block is the bound.
 
 /** A new highlight block for `spot`. */
 export function highlightBlock(spot: HighlightSpot): Block {
