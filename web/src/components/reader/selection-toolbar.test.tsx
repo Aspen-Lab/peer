@@ -850,3 +850,14 @@ describe("SelectionToolbarView — says when it was moved off a header (P11-38 r
     expect(view({ mode: "margin", left: 1088, top: 400, below: false })).not.toContain("data-header-clear");
   });
 });
+
+describe("the group's own size (P11-38 follow-up)", () => {
+  const toolbar = readFileSync(resolve(process.cwd(), "src/components/reader/selection-toolbar.tsx"), "utf8").replace(/\s+/g, " ");
+
+  // `offsetHeight` rounds: a group 88.28 px tall was taken for 88, and standing just above a header (its foot at the header's top) it reached 0.28 px into it.
+  it("reads its size from its rect, not from the rounded `offsetWidth` and `offsetHeight`, so the place just above a header is clear of it to the pixel", () => {
+    expect(toolbar).toContain("getBoundingClientRect()");
+    expect(toolbar).not.toContain("offsetHeight");
+    expect(toolbar).not.toContain("offsetWidth");
+  });
+});

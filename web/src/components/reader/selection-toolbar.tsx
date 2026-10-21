@@ -598,7 +598,8 @@ export function SelectionToolbar({
   useLayoutEffect(() => {
     const el = box.current;
     if (!el || drawnMode === null) return;
-    const next = { width: el.offsetWidth, height: el.offsetHeight };
+    const rect = el.getBoundingClientRect();
+    const next = { width: rect.width, height: rect.height };
     if (next.width <= 0 || next.height <= 0) return;
     const key = `${drawnMode}:${buttons}`;
     setSizes((current) => (current[key]?.width === next.width && current[key]?.height === next.height ? current : { ...current, [key]: next }));
