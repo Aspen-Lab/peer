@@ -380,8 +380,8 @@ const LOOKED_AT = 64;
 /**
  * P11-39 (ruling §1h.138 (b)): the y of the first line of a page block — the top of its first words that draw. The blocks are a Summary block (`summary-…`,
  * `paper-words.tsx`'s `SUMMARY_ID`) and the answers' block (`answers-block`): the ids a selection in them reports (`placeOf`, `paper-body.tsx`) and the ones the
- * notes' squares and the highlights' marks find them by (`anchor-blocks.ts`'s `isPageBlockId`). The block's box is not its first line: the Summary's blocks are
- * items of a flex column, where a first child's margin stands inside the item (56 px for "What they found", 16 for the abstract), so the line is read from the words,
+ * notes' squares and the highlights' marks find them by (`anchor-blocks.ts`'s `isPageBlockId`). The block's box is not its first line: a block's words can stand well
+ * below its box's top (measured on an invented paper: 56 px for "What they found", 16 for the abstract, 8 for "Where it is thin"), so the line is read from the words,
  * as a range's rects give it — the first text node with words that draws; white space, a node in a hidden or empty box and a decoration (`aria-hidden`: the answers'
  * caret) are passed over. Read from the page each time it is asked, so it is where the page has put the block now. Undefined where it cannot be read: no document, an
  * id that is no page block (the bare kind a block with no id of its own is reported under), no such element, no word that draws.
