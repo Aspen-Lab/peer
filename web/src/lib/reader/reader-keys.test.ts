@@ -389,6 +389,14 @@ describe("the note and highlight keys (P11-13)", () => {
     expect(resolvePaperKey("Escape")).toBe("back");
     expect(resolvePaperKey("Backspace")).toBe("back");
   });
+
+  // P11-40 (ruling §1h.138 (c) rule 3): Escape now puts a standing selection away, then closes the front card, before it is "back" (`front-escape.ts`); the
+  // table, the help sheet and the foot legend say what they always said — one row, Esc and Backspace, "Back to the briefing", "back" along the foot.
+  it("keeps the words of Esc and Backspace: one row, the sheet's label and the legend's word", () => {
+    const rows = PAPER_KEYS.filter((entry) => entry.action === "back");
+    expect(rows).toEqual([{ keys: ["Escape", "Backspace"], action: "back", label: "Back to the briefing", short: "back" }]);
+    expect(readerHelpItems().find((item) => item.label === "Back to the briefing")).toEqual({ keys: "Esc", label: "Back to the briefing" });
+  });
 });
 
 describe("selectionActions — the keys that act on the selection the page holds (P11-13)", () => {

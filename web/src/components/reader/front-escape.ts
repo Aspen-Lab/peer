@@ -13,8 +13,15 @@
 //
 // The stack is read at the moment of the key, from the store — not at render — so a card that has just been sent behind or brought forward
 // never answers with the order of the last commit, and nothing re-registers when the order changes.
+//
+// P11-40 (round 2, Theme B weighed (b); ruling §1h.138 (c)): Escape does one thing at a time, nearest first. A selection standing with its buttons is put
+// away before any card closes (`takeSelectionEscape`, `useSelectionEscape` below): the selection ends and the buttons go, nothing else. Then the front card
+// closes, as above, one Escape one card (the highlight's strip, which stands over a mark and takes its own Escape, goes before the cards too). Only with
+// neither is Escape the page's "back to the briefing" (the keyboard layer, as the legend says). A reader who pressed Escape to put the buttons away used to
+// find themselves on the briefing; so did the one who had just closed the Explain card with the selection still standing. Backspace is not Escape: it stays
+// "back", whatever stands. An Escape typed into a field is the field's, as it was.
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { MODAL_OVER_PAGE } from "./explain-dock";
 import { useWindows, type FloatingWindow, type WindowKind } from "@/lib/reader/windows";
 
@@ -69,4 +76,59 @@ export function useFrontEscape(card: FrontCard, enabled: boolean, take: (id: str
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [id, kind, enabled, take]);
+}
+
+// ── The selection's Escape (P11-40) ──────────────────────────────────────────────────────────────────────────────────────
+
+/** The page's selection as the Escape ladder sees it: whether one stands, and how it is put away. */
+export interface StandingSelection {
+  /** Whether a selection stands now. Asked when the key comes, never before. */
+  standing: () => boolean;
+  /** Put it away: the selection ends and the buttons that stand beside it go. Nothing else (no card closes, the page stays). */
+  end: () => void;
+}
+
+/** Whether `element` is somewhere the reader types: an input, a textarea, a select or an editable block. Looked at by its fields, so a stub or a node of another document counts alike. */
+function isField(element: unknown): boolean {
+  if (typeof element !== "object" || element === null) return false;
+  const { tagName, isContentEditable } = element as { tagName?: unknown; isContentEditable?: unknown };
+  return tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT" || isContentEditable === true;
+}
+
+/**
+ * Escape, when a standing selection is the nearest thing to put away: the key is prevented and stopped, and the selection ends. Returns whether it took the key.
+ * It does not take it when the key is not Escape or something has handled it, when it was typed into a field (a field's Escape is the field's: the key's target,
+ * or the element that has the focus), when a modal dialog is over the page, and when no selection stands — the cards and the page's "back" go on from there.
+ */
+export function takeSelectionEscape(
+  event: Key & { target?: unknown },
+  doc: Pick<Document, "querySelector" | "activeElement">,
+  selection: StandingSelection,
+): boolean {
+  if (event.key !== "Escape" || event.defaultPrevented) return false;
+  if (isField(event.target) || isField(doc.activeElement)) return false;
+  if (typeof doc.querySelector === "function" && doc.querySelector(MODAL_OVER_PAGE)) return false;
+  if (!selection.standing()) return false;
+  event.preventDefault();
+  event.stopPropagation();
+  selection.end();
+  return true;
+}
+
+/**
+ * The selection's Escape: a listener on the document, in the CAPTURE phase. The cards' listeners stand in the bubble phase, in the order the cards were
+ * mounted or opened, so only a capture listener is before every one of them whatever that order was; it takes the key (and stops it, so no card and not the
+ * page's "back" sees it) only while a selection stands and the key was not a field's. Whether a selection stands is asked when the key comes, of the closures
+ * of the latest render, so nothing re-registers when the page's selection changes.
+ */
+export function useSelectionEscape(selection: StandingSelection): void {
+  const latest = useRef(selection);
+  useEffect(() => {
+    latest.current = selection;
+  }, [selection]);
+  useEffect(() => {
+    const onSelectionKey = (event: KeyboardEvent) => void takeSelectionEscape(event, document, latest.current);
+    document.addEventListener("keydown", onSelectionKey, { capture: true });
+    return () => document.removeEventListener("keydown", onSelectionKey, { capture: true });
+  }, []);
 }

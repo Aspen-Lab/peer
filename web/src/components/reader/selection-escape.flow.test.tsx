@@ -56,13 +56,8 @@ import type { PaperReading } from "@/lib/papers/reading";
 import type { Paper } from "@/types";
 import { ExplainBox, type AskResult } from "./explain-box";
 import { FigureHost } from "./figure-host";
-import { takeFrontEscape } from "./front-escape";
+import { takeFrontEscape, useSelectionEscape } from "./front-escape";
 import type { ExplainSelection } from "./paper-body";
-
-// Reached through a typed handle, so the file compiles on the base, where `useSelectionEscape` is not there yet; the page without it is a no-op.
-type StandingSelection = { standing: () => boolean; end: () => void };
-const frontEscape = (await import("./front-escape")) as unknown as { useSelectionEscape?: (selection: StandingSelection) => void };
-const useSelectionEscape: (selection: StandingSelection) => void = frontEscape.useSelectionEscape ?? (() => {});
 
 const MARGIN: MarginRect = { left: 1000, width: 400, top: 48, bottom: 860 };
 const PAPER: Paper = {

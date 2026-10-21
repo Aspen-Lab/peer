@@ -125,6 +125,7 @@ import { useHighlightStrip } from "@/components/notes/highlight-strip";
 import { HighlightStripHost } from "@/components/notes/highlight-strip-host";
 import { useSummaryHost } from "@/components/notes/note-tags";
 import { FigureHost } from "@/components/reader/figure-host";
+import { useSelectionEscape } from "@/components/reader/front-escape";
 import { anchorMap } from "@/lib/notes/blocks";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
 import { explanationFor, passageHash, useExplainThreadsStore, type ExplainTurn } from "@/store/explain-threads";
@@ -1261,6 +1262,18 @@ function Reader({
       back,
     };
     return registerReaderActions(actions);
+  });
+
+  // P11-40 (round 2, Theme B weighed (b); ruling §1h.138 (c)): Escape does one thing at a time, nearest first. A selection standing with its buttons is put away
+  // first — the document's selection and the page's hold on it, so the buttons go with it; no card closes and the page stays — then the front card closes
+  // (`front-escape.ts`, one Escape one card), and only then is Escape the page's `back`, as the legend says. `back` is for Backspace as well and still is; an
+  // Escape typed into a field is the field's.
+  useSelectionEscape({
+    standing: () => explainTarget !== null,
+    end: () => {
+      window.getSelection()?.removeAllRanges();
+      selectExplain(null);
+    },
   });
 
   if (!reading) return null;

@@ -14,7 +14,16 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { stagedRuntime } from "@/test-support/staged-runtime";
 import { useWindows, type FloatingWindow } from "@/lib/reader/windows";
-import { frontWindowId, isFrontCard, takeFrontEscape, useFrontEscape, type FrontCard } from "./front-escape";
+import {
+  frontWindowId,
+  isFrontCard,
+  takeFrontEscape,
+  takeSelectionEscape,
+  useFrontEscape,
+  useSelectionEscape,
+  type FrontCard,
+  type StandingSelection,
+} from "./front-escape";
 
 const win = (id: string, kind: FloatingWindow["kind"], order: number): FloatingWindow => ({ id, kind, title: id, order });
 const key = (over: Record<string, unknown> = {}) => ({ key: "Escape", defaultPrevented: false, preventDefault: vi.fn(), stopPropagation: vi.fn(), ...over });
@@ -169,13 +178,6 @@ describe("useFrontEscape — the listener", () => {
 // (`takeFrontEscape`, above), and only with neither does it leave the paper (the keyboard layer's "back"). The selection's step is `takeSelectionEscape`; the
 // listener that carries it is `useSelectionEscape`, on the document in the CAPTURE phase — the cards' listeners stand in the bubble phase, and a capture listener
 // is before every one of them, whatever order they were registered in. The three together, with the real cards, are `selection-escape.flow.test.tsx`.
-// These are reached through a typed handle, so the file compiles on the base, where the two exports are not there yet.
-type StandingSelection = { standing: () => boolean; end: () => void };
-const selectionEscape = (await import("./front-escape")) as unknown as {
-  takeSelectionEscape: (event: unknown, doc: unknown, selection: StandingSelection) => boolean;
-  useSelectionEscape: (selection: StandingSelection) => void;
-};
-const { takeSelectionEscape, useSelectionEscape } = selectionEscape;
 
 describe("takeSelectionEscape — the selection first", () => {
   const doc = { querySelector: () => null, activeElement: null };
@@ -228,7 +230,7 @@ describe("takeSelectionEscape — the selection first", () => {
       expect(takeSelectionEscape(typed, doc, selection), `${field.tagName} as the target`).toBe(false);
       expect(typed.preventDefault).not.toHaveBeenCalled();
       const focused = press({ target: { tagName: "BODY" } });
-      expect(takeSelectionEscape(focused, { ...doc, activeElement: field }, selection), `${field.tagName} as the focus`).toBe(false);
+      expect(takeSelectionEscape(focused, { ...doc, activeElement: field as unknown as Element }, selection), `${field.tagName} as the focus`).toBe(false);
       expect(selection.end).not.toHaveBeenCalled();
     }
   });
