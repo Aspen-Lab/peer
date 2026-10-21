@@ -3,26 +3,20 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useWindows } from "./windows";
-import * as viewer from "./figure-viewer";
 import {
   closeFigure,
   getOpenFigure,
+  getParkedFigure,
   openFigure,
   openFigureKey,
+  parkFigure,
+  resumeFigure,
   subscribeOpenFigure,
   useFigureOpen,
   useOpenFigure,
+  useParkedFigure,
   type FigureRef,
 } from "./figure-viewer";
-
-// P11-41: the parking calls are new. They are reached through the module's namespace, so that this file type-checks on the base commit too, where the
-// tests that use them are red because the calls are not there (and not because the file does not compile).
-const { parkFigure, resumeFigure, getParkedFigure, useParkedFigure } = viewer as unknown as {
-  parkFigure: () => boolean;
-  resumeFigure: () => boolean;
-  getParkedFigure: () => FigureRef | null;
-  useParkedFigure: () => FigureRef | null;
-};
 
 // P11-12 (owner item 1; B P11-05 §2.3; ruling §1h.113): the figure the reader opened from the paper's body, one at a time,
 // in memory only. D2: a second figure replaces the first. D4: the open figure pressed again stays open. No floating window

@@ -40,21 +40,11 @@ vi.mock("zustand", async (importOriginal) => {
 
 import { Activity, type ReactElement } from "react";
 import { stagedRuntime } from "@/test-support/staged-runtime";
-import * as viewer from "@/lib/reader/figure-viewer";
-import { closeFigure, getOpenFigure, openFigure, openFigureKey, type FigureRef } from "@/lib/reader/figure-viewer";
+import { closeFigure, getOpenFigure, getParkedFigure, openFigure, openFigureKey, type FigureRef } from "@/lib/reader/figure-viewer";
 import { useMarginStore, type MarginRect } from "@/lib/reader/margin";
 import { EXPLAIN_WINDOW_ID, NOTES_WINDOW_ID, STACK_Z_BASE, useWindows, type FloatingWindow } from "@/lib/reader/windows";
 import { FIGURE_WINDOW_ID, FigureCard } from "./figure-card";
-import * as hostModule from "./figure-host";
-import { FigureHost, FigureOverlay, FigureStack } from "./figure-host";
-
-// P11-41: what is new is reached through the modules' namespaces, so that this file type-checks on the base commit too, where its tests are red because
-// the calls are not there (and not because the file does not compile).
-const { getParkedFigure } = viewer as unknown as { getParkedFigure: () => FigureRef | null };
-const { figurePlaceOf, stackAfterReturn } = hostModule as unknown as {
-  figurePlaceOf: (wide: readonly FloatingWindow[], left: ReadonlySet<string>) => object | null;
-  stackAfterReturn: (now: readonly FloatingWindow[], place: object) => string[];
-};
+import { FigureHost, FigureOverlay, FigureStack, REJOIN_WAIT_MS, figurePlaceOf, stackAfterReturn, windowsToRejoin } from "./figure-host";
 
 /** The margin a shell would register: 400 px wide at the right, the masthead's foot down to the legend's strip. */
 const MARGIN: MarginRect = { left: 1000, width: 400, top: 48, bottom: 860 };
@@ -136,11 +126,17 @@ function narrow(host: Host, leaving: readonly string[] = [], leavingAfter: reado
   host.act(() => useMarginStore.setState({ rect: null }));
   for (const id of leavingAfter) useWindows.getState().close(id);
 }
-/** The window widens to 1024 or more: the width first (the Explain card docks and joins the stack in front), then the margin is there. */
-function widen(host: Host, joining: ReadonlyArray<Pick<FloatingWindow, "id" | "kind" | "title">> = []) {
+/** The window widens to 1024 or more: the width first (`joining`: the cards that dock at once and join the stack in front), then the margin is there, and
+ *  then `joiningAfter` (the Explain card follows the width a frame later than the margin does, so in the page it joins after). */
+function widen(
+  host: Host,
+  joining: ReadonlyArray<Pick<FloatingWindow, "id" | "kind" | "title">> = [],
+  joiningAfter: ReadonlyArray<Pick<FloatingWindow, "id" | "kind" | "title">> = [],
+) {
   win.innerWidth = 1440;
   for (const one of joining) useWindows.getState().open(one);
   host.act(() => useMarginStore.setState({ rect: MARGIN }));
+  for (const one of joiningAfter) useWindows.getState().open(one);
 }
 
 const windows = () => useWindows.getState().windows;
@@ -375,6 +371,86 @@ describe("it returns in the same stacking order (the stack as it stood while the
     expect(order()).toEqual(["sticky-1", "figure", EXPLAIN_WINDOW_ID]);
   });
 
+  // In the page the Explain card reads the width on the next animation frame, so it leaves the stack after the margin has gone and joins it again, in front,
+  // after the margin is back: the figure comes back first, and the stack is put right when the Explain card joins.
+  it("with the Explain card, which joins only after the margin is back (as in the page) — opened Explain, sticky, figure", () => {
+    const host = mountHost();
+    useWindows.getState().open(EXPLAIN);
+    sticky("sticky-1");
+    host.act(() => openFigure(ref("Figure 3")));
+    narrow(host, [], [EXPLAIN_WINDOW_ID]);
+    expect(order()).toEqual(["sticky-1"]);
+
+    widen(host, [], [EXPLAIN]);
+
+    expect(order()).toEqual([EXPLAIN_WINDOW_ID, "sticky-1", "figure"]);
+  });
+
+  it("with the Explain card, which joins only after the margin is back — opened figure, Explain, sticky", () => {
+    const host = mountHost();
+    host.act(() => openFigure(ref("Figure 3")));
+    useWindows.getState().open(EXPLAIN);
+    sticky("sticky-1");
+    narrow(host, [], [EXPLAIN_WINDOW_ID]);
+    widen(host, [], [EXPLAIN]);
+    expect(order()).toEqual(["figure", EXPLAIN_WINDOW_ID, "sticky-1"]);
+  });
+
+  it("with the Explain card, which joins only after the margin is back — opened sticky, figure, Explain (in front, where it joins)", () => {
+    const host = mountHost();
+    sticky("sticky-1");
+    host.act(() => openFigure(ref("Figure 3")));
+    useWindows.getState().open(EXPLAIN);
+    narrow(host, [], [EXPLAIN_WINDOW_ID]);
+    widen(host, [], [EXPLAIN]);
+    expect(order()).toEqual(["sticky-1", "figure", EXPLAIN_WINDOW_ID]);
+  });
+
+  it("puts the stack right again when the Explain card joins, keeping what the reader did meanwhile: a card raised after the figure came back stays in front of it", () => {
+    const host = mountHost();
+    useWindows.getState().open(EXPLAIN);
+    sticky("sticky-1");
+    host.act(() => openFigure(ref("Figure 3")));
+    narrow(host, [], [EXPLAIN_WINDOW_ID]);
+    widen(host);
+    expect(order()).toEqual(["sticky-1", "figure"]);
+    useWindows.getState().raise("sticky-1");
+    useWindows.getState().open(EXPLAIN);
+    expect(order()).toEqual([EXPLAIN_WINDOW_ID, "figure", "sticky-1"]);
+  });
+
+  it("waits for a card only once and only for a moment: an Explain card opened later is in front, wherever the old one stood", () => {
+    const host = mountHost();
+    useWindows.getState().open(EXPLAIN);
+    sticky("sticky-1");
+    host.act(() => openFigure(ref("Figure 3")));
+    narrow(host, [], [EXPLAIN_WINDOW_ID]);
+    widen(host, [], [EXPLAIN]);
+    expect(order()).toEqual([EXPLAIN_WINDOW_ID, "sticky-1", "figure"]);
+    // The reader closes it and asks again: a new card, in front.
+    useWindows.getState().close(EXPLAIN_WINDOW_ID);
+    useWindows.getState().open(EXPLAIN);
+    expect(order()).toEqual(["sticky-1", "figure", EXPLAIN_WINDOW_ID]);
+  });
+
+  it("stops waiting after a moment for a card that does not come back (the reader closed it while the window was narrow): one that opens later is in front", () => {
+    vi.useFakeTimers();
+    try {
+      const host = mountHost();
+      useWindows.getState().open(EXPLAIN);
+      sticky("sticky-1");
+      host.act(() => openFigure(ref("Figure 3")));
+      narrow(host, [EXPLAIN_WINDOW_ID]);
+      widen(host);
+      expect(order()).toEqual(["sticky-1", "figure"]);
+      vi.advanceTimersByTime(REJOIN_WAIT_MS + 50);
+      useWindows.getState().open(EXPLAIN);
+      expect(order()).toEqual(["sticky-1", "figure", EXPLAIN_WINDOW_ID]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("with the Explain card that leaves only after the margin has gone (the other order of the two): the same stack", () => {
     const host = mountHost();
     useWindows.getState().open(EXPLAIN);
@@ -420,6 +496,56 @@ describe("it returns in the same stacking order (the stack as it stood while the
   });
 });
 
+describe("the cascade stands where it stood (the stack's origin, level with the selection that opened its first card)", () => {
+  const origin = () => useWindows.getState().origin;
+
+  it("when the Explain card and the figure were all that stood: the stack forgets its origin when it is empty below 1024, and the figure's return puts it back", () => {
+    const host = mountHost();
+    useWindows.getState().open({ ...EXPLAIN, anchorTop: 217 });
+    host.act(() => openFigure(ref("Figure 3")));
+    expect(origin()).toBe(217);
+
+    narrow(host, [], [EXPLAIN_WINDOW_ID]);
+    expect(windows()).toEqual([]);
+    expect(origin()).toBeNull();
+    widen(host, [], [EXPLAIN]); // the figure first, the Explain card a frame later
+
+    expect(origin()).toBe(217);
+    expect(order()).toEqual([EXPLAIN_WINDOW_ID, "figure"]);
+  });
+
+  it("keeps what an Explain card that is back before the margin is has made of it: the cascade it follows (the figure joins a stack that has a card)", () => {
+    const host = mountHost();
+    useWindows.getState().open({ ...EXPLAIN, anchorTop: 217 });
+    host.act(() => openFigure(ref("Figure 3")));
+    narrow(host, [EXPLAIN_WINDOW_ID]);
+    win.innerWidth = 1440;
+    useWindows.getState().open({ ...EXPLAIN, anchorTop: 190 }); // alone in the stack it is level with its selection, as it follows it (`follow`)
+    host.act(() => useMarginStore.setState({ rect: MARGIN }));
+    expect(order()).toEqual([EXPLAIN_WINDOW_ID, "figure"]);
+    expect(origin()).toBe(190);
+  });
+
+  it("has nothing to put back for a figure that stood alone (its cascade starts at the margin's top)", () => {
+    const host = mountHost();
+    host.act(() => openFigure(ref("Figure 3")));
+    expect(origin()).toBeNull();
+    narrow(host);
+    widen(host);
+    expect(origin()).toBeNull();
+  });
+
+  it("leaves the origin of a stack that stayed (a sticky stands all the while) as it is", () => {
+    const host = mountHost();
+    useWindows.getState().open({ id: "sticky-1", kind: "sticky", title: "sticky-1", anchorTop: 300 });
+    host.act(() => openFigure(ref("Figure 3")));
+    narrow(host);
+    expect(origin()).toBe(300);
+    widen(host);
+    expect(origin()).toBe(300);
+  });
+});
+
 describe("the pure parts of the return", () => {
   const w = (id: string, order: number): FloatingWindow => ({ id, kind: id === "figure" ? "figure" : "sticky", title: id, order });
 
@@ -428,25 +554,43 @@ describe("the pure parts of the return", () => {
     expect(figurePlaceOf([], new Set())).toBeNull();
   });
 
+  it("keeps the cascade's origin with the place, null when it had none", () => {
+    expect(figurePlaceOf([w("figure", 1)], new Set())).toMatchObject({ origin: null });
+    expect(figurePlaceOf([w("figure", 1)], new Set(), 217)).toMatchObject({ origin: 217 });
+  });
+
   it("puts the windows in the stack's old order, the figure among them, and the ones that came newer after", () => {
     const place = figurePlaceOf([w("a", 1), w("figure", 2), w("b", 3)], new Set());
     // The figure's window is open again (the newest); a and b stand as they did; c was opened meanwhile.
-    expect(stackAfterReturn([w("a", 1), w("b", 3), w("c", 5), w("figure", 6)], place!)).toEqual(["a", "figure", "b", "c"]);
+    expect(stackAfterReturn([w("a", 1), w("b", 3), w("c", 5), w("figure", 6)], place!)).toEqual({ order: ["a", "figure", "b", "c"], kept: ["a", "figure", "b"] });
   });
 
   it("counts a window that stood all the while and has another order now as touched: it goes after, in the order of its touch", () => {
     const place = figurePlaceOf([w("a", 1), w("figure", 2), w("b", 3)], new Set());
-    expect(stackAfterReturn([w("a", 4), w("b", 3), w("figure", 5)], place!)).toEqual(["figure", "b", "a"]);
+    expect(stackAfterReturn([w("a", 4), w("b", 3), w("figure", 5)], place!)).toEqual({ order: ["figure", "b", "a"], kept: ["figure", "b"] });
   });
 
   it("counts a window that left the stack while the window was narrow and is there again as rejoined, not touched (the Explain card)", () => {
     const place = figurePlaceOf([w("x", 1), w("figure", 2), w("b", 3)], new Set(["x"]));
-    expect(stackAfterReturn([w("b", 3), w("x", 7), w("figure", 8)], place!)).toEqual(["x", "figure", "b"]);
+    expect(stackAfterReturn([w("b", 3), w("x", 7), w("figure", 8)], place!)).toEqual({ order: ["x", "figure", "b"], kept: ["x", "figure", "b"] });
+  });
+
+  it("takes the orders the last call left as the ones nobody has touched (`settled`): a window raised since is newer, one that joins is put in its place", () => {
+    const place = figurePlaceOf([w("x", 1), w("a", 2), w("figure", 3)], new Set(["x"]))!;
+    // First call: x has not joined yet. a and figure stand as they did (settled at 8 and 9); the reader then raises a (10) and x joins (11).
+    const settled = new Map([["a", 8], ["figure", 9]]);
+    expect(stackAfterReturn([w("a", 10), w("figure", 9), w("x", 11)], place, settled)).toEqual({ order: ["x", "figure", "a"], kept: ["x", "figure"] });
+  });
+
+  it("names the windows to wait for: those that left while the window was narrow, were in the old stack, and are not in the stack now — never the figure", () => {
+    const place = figurePlaceOf([w("x", 1), w("y", 2), w("figure", 3)], new Set(["x", "y", "figure", "z"]))!;
+    expect(windowsToRejoin([w("y", 5), w("figure", 6)], place)).toEqual(["x"]);
+    expect(windowsToRejoin([w("x", 5), w("y", 6), w("figure", 7)], place)).toEqual([]);
   });
 
   it("leaves out a window that is gone, and the ones in the old stack that are not in the stack now", () => {
     const place = figurePlaceOf([w("a", 1), w("figure", 2), w("b", 3)], new Set());
-    expect(stackAfterReturn([w("b", 3), w("figure", 4)], place!)).toEqual(["figure", "b"]);
+    expect(stackAfterReturn([w("b", 3), w("figure", 4)], place!)).toEqual({ order: ["figure", "b"], kept: ["figure", "b"] });
   });
 });
 
@@ -512,7 +656,7 @@ describe("a figure closed while the window was narrow stays closed", () => {
 describe("FigureStack keeps the card while it is parked", () => {
   const row = (over: Partial<FloatingWindow> = {}): FloatingWindow => ({ id: FIGURE_WINDOW_ID, kind: "figure", title: "Figure 3", order: 1, ...over });
   const stack = (props: { figure: FigureRef; frame: MarginRect | null; parked?: boolean }) => {
-    const mounted = stagedRuntime.mount(() => FigureStack(props as never));
+    const mounted = stagedRuntime.mount(() => FigureStack(props));
     stagedRuntime.flush();
     return mounted.value as unknown as ReactElement<{ mode: "visible" | "hidden"; children: ReactElement<Record<string, unknown>> }> | null;
   };

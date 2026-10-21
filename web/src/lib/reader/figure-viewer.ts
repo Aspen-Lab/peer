@@ -9,6 +9,11 @@
 //     `openFigure` hands out a new ref, so a host that acts on the ref's identity (to bring the card forward) acts on a re-press too.
 //   - In memory only: nothing is written to storage, nothing is logged, and a reload shows no figure open. A private upload's
 //     figure address is cookie-bound and stays in this tab.
+//   - P11-41 (round 2, Theme B (c); ruling §1h.138 (d)): a figure can be PARKED. A card that is open in the margin when the window narrows below
+//     1024 px is not closed: the host takes it out of the margin with `parkFigure` and puts the very same figure back with `resumeFigure` when the
+//     window is wide again. Parked, a figure is not open (the body's button is not pressed, Escape has nothing to close), and it is held here, in this
+//     module's memory, as the open figure is: nothing is stored (the zoom and pan are the kept card's own state, `figure-host.tsx`). Any other
+//     figure opened, and any close, forgets it — a figure closed while the window was narrow stays closed.
 //   - It is not the floating windows' store, and does not reserve the page's width or hold the reader's place: the host
 //     that puts the card in the margin's stack does those, so that the margin stays the one thing that decides them.
 //
@@ -42,6 +47,8 @@ export interface FigureRef {
 }
 
 let open: FigureRef | null = null;
+/** The figure the window's narrowing took out of the margin, to be put back when it widens (P11-41); never while a figure is open. */
+let parked: FigureRef | null = null;
 const listeners = new Set<() => void>();
 
 function set(next: FigureRef | null): void {
@@ -49,8 +56,9 @@ function set(next: FigureRef | null): void {
   for (const listener of [...listeners]) listener();
 }
 
-/** Open a figure, replacing any other that is open. The same figure again stays open, as a new ref. */
+/** Open a figure, replacing any other that is open — or parked. The same figure again stays open, as a new ref. */
 export function openFigure(ref: FigureRef): void {
+  parked = null;
   set({
     key: ref.key,
     src: ref.src,
@@ -61,9 +69,39 @@ export function openFigure(ref: FigureRef): void {
   });
 }
 
-/** Close the open figure. Nothing open: nothing happens, and nobody is told. */
+/** Close the open figure, and forget a parked one (a figure closed while the window was narrow stays closed). Nothing open or parked: nothing happens, and nobody is told. */
 export function closeFigure(): void {
-  if (open !== null) set(null);
+  if (open === null && parked === null) return;
+  parked = null;
+  set(null);
+}
+
+/**
+ * P11-41: take the open figure out of the margin without closing it — the window narrowed below 1024 px. It is no longer open (the body's
+ * button is not pressed) and is held for `resumeFigure`. Returns whether there was a figure to park.
+ */
+export function parkFigure(): boolean {
+  if (open === null) return false;
+  parked = open;
+  set(null);
+  return true;
+}
+
+/**
+ * P11-41: the window is wide again — the parked figure is the open one once more, the very same ref (not a copy: a host that acts on a
+ * new ref, the card's focus, then does not). Returns whether there was one.
+ */
+export function resumeFigure(): boolean {
+  if (parked === null) return false;
+  const back = parked;
+  parked = null;
+  set(back);
+  return true;
+}
+
+/** The parked figure, or null. */
+export function getParkedFigure(): FigureRef | null {
+  return parked;
 }
 
 /** The open figure, or null. */
@@ -87,6 +125,11 @@ export function subscribeOpenFigure(listener: () => void): () => void {
 /** The open figure, or null; the component renders again when a figure opens, opens again, or closes. */
 export function useOpenFigure(): FigureRef | null {
   return useSyncExternalStore(subscribeOpenFigure, getOpenFigure, getOpenFigure);
+}
+
+/** The parked figure, or null; the component renders again when a figure is parked, comes back, or is forgotten. */
+export function useParkedFigure(): FigureRef | null {
+  return useSyncExternalStore(subscribeOpenFigure, getParkedFigure, getParkedFigure);
 }
 
 /** Whether the figure with this key is the open one; the component renders again only when that changes. */
