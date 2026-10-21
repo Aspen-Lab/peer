@@ -73,20 +73,19 @@ The full skill texts are in Appendix A (reviewing-cycle) and Appendix B (abc). T
 | 2 | 508f0efc / 8f7e051f | 95.83 (100) | 85.42 (85.42) |
 | 3 | cab04c0c | 97.92 (100) | 93.75 (95.83) |
 | 4 | dd366d8d (A) / a7a58224 (B) | 91.67 (93.75) | 95.83 (95.83) |
-| 5 | 9e23d63a | **97.92 (95.83) — PASS 1** | pending (walk running) |
+| 5 | 9e23d63a | **97.92 (95.83) — PASS 1** | 95.83 (95.83) — not a pass, count 0 |
 
 ---
 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-21 22:35Z
+AS OF        2026-10-21 22:40Z
 BRANCH HEAD  b6aa9c22 (reader-three-pane-p11, pushed)   PR Aspen-Lab/peer#35 draft, CI green on 4de16f6f (older heads green)
-LAST RULING  §1h.173   NEXT RULING NUMBER §1h.174   NEXT ITEM ID P11-63   NEXT FREE PORT 4166
-RUNNING      3 blind readers, round 5 Theme B → scratchpad/p11/r5b/readers/r{1,2,3}.md (pack head 9e23d63a; rubric at 20ea02ed)
-             C P11-61 (the question bar refits after a text step / separator drag; worktree scratchpad/p11c61/wt, base c84c9a0a, port 4164)
+LAST RULING  §1h.174   NEXT RULING NUMBER §1h.175   NEXT ITEM ID P11-63   NEXT FREE PORT 4166
+RUNNING      C P11-61 (the question bar refits after a text step / separator drag; worktree scratchpad/p11c61/wt, base c84c9a0a, port 4164)
              C P11-62 (a release over the foot legend ends at the last visible line; worktree scratchpad/p11c62/wt, base b6aa9c22, port 4165)
-THEN         readers r5b → median → rubric Scores row 5 (B) + ruling; verify and land C P11-61 and C P11-62 (manager's own mutation, full gates); then round 6: write briefs P11-63 (A, Theme A, port 4166, pack r6a) and P11-64 (A, Theme B, port 4167, pack r6b) from scratchpad/briefgen/r5walks.py's pattern on the landed head, 3 readers each, director, score; Theme A ≥ 97.9 again ends its walking; Theme B needs rounds 6 and 7.
+THEN         verify and land C P11-61 and C P11-62 (manager's own mutation, full gates); then round 6: write briefs P11-63 (A, Theme A, port 4166, pack r6a) and P11-64 (A, Theme B, port 4167, pack r6b) from scratchpad/briefgen/r5walks.py's pattern on the landed head, 3 readers each, director, score; Theme A ≥ 97.9 again ends its walking; Theme B needs rounds 6 and 7.
 OPEN FOR THE OWNER  BACKLOG-108 (two identical quotes in one Summary block — keep both or dedupe); the title clamp at 4 lines (§1h.115); "Open as page" as a glyph at 1024/1093; the left pane's default width 320 vs 360; the edge tab's resting word; the margin's minimum at 1024.
 ```
 
@@ -132,6 +131,7 @@ OPEN FOR THE OWNER  BACKLOG-108 (two identical quotes in one Summary block — k
 - 2026-10-21 20:48Z | 71cd9ae3 | manager (Fable 5.1) | Round 5 Theme A walked (A P11-59 picked as d99625e7): 12/12, every round-4 extra GONE, one new extra E-N1 (the question bar not refitting after a text step / separator drag, 0.5; pre-existing since P7-13), walk's own 95.83; ruling §1h.171; 3 blind readers spawned on pack r5a; brief P11-61 written (c84c9a0a) and C spawned on it | evidence: P11-59-A-20261021T2045Z.md; briefs/P11-61.md | next: readers → score Theme A round 5; verify/land P11-61; Theme B walk P11-60 still running
 - 2026-10-21 20:55Z | a8bf5fe1 | manager (Fable 5.1) | **Round 5 Theme A scored 97.92** (readers 97.92 / 97.92 / 97.92; one 0.25 extra: the question bar not refitting — C P11-61 running); **Theme A's first pass under the 97.9 line, consecutive count 1**; rubric Scores row 5 (A); ruling §1h.172 | evidence: scratchpad/p11/r5a/readers/r{1,2,3}.md | next: land P11-61; Theme B walk P11-60 → readers → score; then round 6 walks both themes on the landed head (Theme A's second pass would end its walking)
 - 2026-10-21 22:35Z | b6aa9c22 | manager (Fable 5.1) | A P11-60 (round 5 Theme B walk) landed as 20ea02ed: 12 PASS, E-2/E-3 GONE, group-over-words STILL 0.25 (the allowance's), new E-4 0.25 (a drag released over the foot legend selects to the paper's end — `keep-selection.ts` `visible().bottom`); walk 95.83; ruling §1h.173; brief C P11-62 written (keep-selection.ts, port 4165); 3 blind readers spawned on pack r5b (rubric at 20ea02ed) | evidence: P11-60-A-20261021T2225Z.md, briefs/P11-62.md, scratchpad p11/r5b/pack | C P11-62 spawned on b6aa9c22 at 22:2xZ (worktree scratchpad/p11c62/wt) | next: readers → median → Scores row 5 (B); land P11-61 and P11-62; round 6 walks
+- 2026-10-21 22:40Z | (this commit) | manager (Fable 5.1) | **Round 5 Theme B scored 95.83** (readers 95.83 / 95.83 / 95.83; the group over words 0.25 = the allowance, E-4 0.25 = one too many) — not a pass, Theme B's count stays 0; rubric Scores row 5 (B); ruling §1h.174 | evidence: scratchpad/p11/r5b/readers/r{1,2,3}.md | next: land P11-61 and P11-62; round 6 briefs P11-63 / P11-64 on the landed head
 <!-- APPEND NEW ENTRIES BELOW THIS LINE, ONE PER COMPLETED UNIT OF WORK -->
 
 ---
