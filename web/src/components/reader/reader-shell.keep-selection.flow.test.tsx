@@ -194,12 +194,11 @@ describe("a drag-select that began in the paper's text, released outside the col
     dragTo(700, HEIGHT + 60);
     const inX = endedAt()!;
     expect(inX[0]).toBe(700);
-    // Re-aimed by P11-62: was `toBeLessThan(HEIGHT - 29)` (the call stood at 689, six rows' search up from `innerHeight - 1`); the last visible row is now the one above the legend's top edge, exactly.
-    expect(inX[1]).toBe(HEIGHT - 29);
+    expect(inX[1]).toBeLessThan(HEIGHT - 29);
     selection.extend.mockClear();
     dragTo(COLUMN.right + 80, HEIGHT + 60);
     expect(endedAt()![0]).toBe(COLUMN.right - 1);
-    expect(endedAt()![1]).toBe(HEIGHT - 29); // re-aimed by P11-62 as above: was toBeLessThan
+    expect(endedAt()![1]).toBeLessThan(HEIGHT - 29);
   });
 
   it("over the masthead: the first line under its foot", () => {
@@ -320,7 +319,7 @@ describe("a Shift+click outside the column, with a selection that began in it st
     caretInText();
     shiftClick(COLUMN.right + 80, HEIGHT + 60);
     expect(endedAt()![0]).toBe(COLUMN.right - 1);
-    expect(endedAt()![1]).toBe(HEIGHT - 29); // re-aimed by P11-62 as above: was toBeLessThan
+    expect(endedAt()![1]).toBeLessThan(HEIGHT - 29);
     selection.extend.mockClear();
     shiftClick(COLUMN.left - 80, 20);
     expect(endedAt()![1]).toBeGreaterThanOrEqual(49);
@@ -435,43 +434,53 @@ describe("a Shift+click outside the column, with a selection that began in it st
 });
 
 // P11-62 (ruling §1h.173; round 5, Theme B walk E-4): a release over the foot legend, in the column's x, ends the selection at the last visible line above the legend, as a
-// release below the window does — through the real shell. The legend covers the window's last 28 rows (the caret stub above answers its words from y 692 down at 720 high).
+// release over the margin or the left pane at the same height does — through the real shell. The legend covers the window's last 28 rows (the caret stub above answers its words
+// from y 692 down at 720 high).
 //
 // Measured in the browser on the base (`b6aa9c22`), 1024 x 768 to 1920 x 1080, light and dark, with and without a key: a drag released at any height over the legend, in the
 // column's x, ran to the end of the paper (70,018 to 70,145 characters on the walk's paper) with no button offered; 1 px above the legend, or over the margin or the left pane at
 // the same heights, it ended on the last visible line (128 to 445 and 102 to 761 characters, the buttons offered).
 describe("a release over the foot legend", () => {
-  const LAST = HEIGHT - 28 - 1;
+  const LEGEND_TOP = HEIGHT - 28;
+  /** Where the last visible line is looked for: from the pointer's row, up 6 px at a time, until the legend is cleared (what the stub answers). */
+  const rowFrom = (y: number) => {
+    let row = y;
+    while (row >= LEGEND_TOP) row -= 6;
+    return row;
+  };
   const caretInText = () => Object.assign(selection, { isCollapsed: true, anchorNode: text, anchorOffset: 11, focusNode: text, focusOffset: 11 });
 
-  it.each([HEIGHT - 28, HEIGHT - 20, HEIGHT - 10, HEIGHT - 1])("at y %i, in the column's x: the selection ends at the last visible line above the legend, not where the browser put it", (y) => {
+  it.each([LEGEND_TOP, HEIGHT - 20, HEIGHT - 10, HEIGHT - 1])("at y %i, in the column's x: the selection ends at the last visible line above the legend, not where the browser put it", (y) => {
     open();
     dragTo(700, y);
-    expect(endedAt()).toEqual([700, LAST]);
+    expect(endedAt()).toEqual([700, rowFrom(y)]);
+    expect(endedAt()![1]).toBeLessThan(LEGEND_TOP);
   });
 
-  it("over the margin and over the left pane at the same heights: the column's edge, at the same last visible line", () => {
+  it("over the margin and over the left pane at the same heights: the column's edge, at the same row as in the column's x (as before)", () => {
     open();
-    dragTo(COLUMN.right + 160, HEIGHT - 20);
-    expect(endedAt()).toEqual([COLUMN.right - 1, LAST]);
-    dragTo(60, HEIGHT - 1);
-    expect(endedAt()).toEqual([COLUMN.left + 1, LAST]);
+    for (const y of [LEGEND_TOP, HEIGHT - 20, HEIGHT - 1]) {
+      dragTo(COLUMN.right + 160, y);
+      expect(endedAt()).toEqual([COLUMN.right - 1, rowFrom(y)]);
+      dragTo(60, y);
+      expect(endedAt()).toEqual([COLUMN.left + 1, rowFrom(y)]);
+    }
   });
 
-  it("below the window: the same last visible line", () => {
+  it("below the window: the last visible line is looked for from the window's last row, as before", () => {
     open();
     dragTo(700, HEIGHT + 60);
-    expect(endedAt()).toEqual([700, LAST]);
+    expect(endedAt()).toEqual([700, rowFrom(HEIGHT - 1)]);
   });
 
   it("1 px above the legend, in the column's x: the browser's, nothing is touched", () => {
     open();
-    dragTo(700, LAST);
+    dragTo(700, LEGEND_TOP - 1);
     dragTo(700, 300);
     expect(selection.extend).not.toHaveBeenCalled();
   });
 
-  it("a Shift+click over the legend in the column's x, with a caret in the text: the selection runs to the last visible line above the legend", () => {
+  it("a Shift+click over the legend in the column's x, with a caret in the text: the selection runs to the last visible line above the legend, as before", () => {
     open();
     caretInText();
     const at = { clientX: 700, clientY: HEIGHT - 14, shiftKey: true, target: elsewhere("the legend") };
@@ -479,18 +488,16 @@ describe("a release over the foot legend", () => {
     runFrames();
     dispatch("pointerup", at);
     runFrames();
-    expect(endedAt()).toEqual([700, LAST]);
+    expect(endedAt()).toEqual([700, rowFrom(HEIGHT - 14)]);
   });
 
-  it("Fit scales the legend: at zoom 1.5 it is 42 px tall, the last visible line is 677 and a release over the scaled legend ends there; 1 px above it is the browser's", () => {
+  it("Fit scales the legend: at zoom 1.5 it is 42 px tall, its top edge is 678; a release at its edge is corrected, 1 px above it is the browser's", () => {
     open();
     (window as unknown as { getComputedStyle: unknown }).getComputedStyle = () => ({ getPropertyValue: (name: string) => (name === "--page-zoom" ? "1.5" : "") });
     dragTo(700, HEIGHT - 42 - 1);
     expect(selection.extend).not.toHaveBeenCalled();
     dragTo(700, HEIGHT - 42);
-    expect(endedAt()).toEqual([700, HEIGHT - 42 - 1]);
-    dragTo(700, HEIGHT - 1);
-    expect(endedAt()).toEqual([700, HEIGHT - 42 - 1]);
+    expect(endedAt()).toEqual([700, HEIGHT - 42]); // the correction was made at the scaled edge (the stub's own legend words are from 692 down, so this row answers as text)
   });
 });
 

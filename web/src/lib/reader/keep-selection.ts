@@ -40,9 +40,12 @@
 // P11-62 (ruling §1h.173): the foot legend is not the column's. The window's last rows (`DOCK_BOTTOM_PX`, 28 px; `legendHeightPx(zoom)` once Fit scales the page) are the legend's,
 // a fixed overlay of the page, and its text is the last in the document. Measured, base `b6aa9c22`, 1024 x 768 to 1920 x 1080, light and dark, with and without a key, Fit on
 // at 1280 and 1440: a drag released at any height over the legend, in the column's x, ran to the end of the paper (70,018 to 70,145 characters on the walk's paper), the legend's
-// words highlighted, no button offered — the visible box said its last row was `innerHeight - 1`, so the pointer was "over the column" and the browser's own end was left alone.
-// Over the margin or the left pane the same release was corrected (the pointer was beside the column). The visible box now ends on the last row above the legend, at the page's
-// own zoom, so a release over the legend (and a Shift+click there) is a release below the window's foot: the last visible line, whatever the x.
+// words highlighted, no button offered — the visible box said the window's last row was the column's, so the pointer was "over the column" and the browser's own end was left
+// alone. Over the margin or the left pane the same release was corrected (the pointer was beside the column). `Visible.legendTop` is the legend's top edge at the page's own
+// zoom: a pointer at or below it is beyond the visible box, and the end goes to the last visible line, whatever the x. Only that decision moved: where the last visible line is
+// looked for (from the pointer's row, or the window's last, up past the legend) is as it was, so a release over the margin, the left pane or below the window ends where it did.
+// (Tried first: the box's `bottom` itself moved above the legend. It put the search at the row above the legend's top edge and every release below the window, and the last pixel
+// over the margin, ended one line lower than today — measured, 1280 x 720: 599 to 668 characters.)
 //
 // Everything that decides something is a pure function, or a small controller over an `env`, so it runs in the Node-only test suite; only `domEnv` and the hook
 // touch the real page.
@@ -66,10 +69,14 @@ export const LEGEND_EDGE_EPSILON_PX = 1e-6;
 export const CARET_STEP_PX = 6;
 export const CARET_TRIES = 12;
 
-/** The visible part of the column, vertically: the first line under the masthead's foot, and the last row above the foot legend (null where the window's height is not known). */
+/**
+ * The visible part of the column, vertically: the first line under the masthead's foot, and the window's last row (null where it is not known); `legendTop` is the foot
+ * legend's top edge (P11-62), the rows from it down being the legend's and not the column's — absent or null where there is none or it is not known.
+ */
 export interface Visible {
   top: number;
   bottom: number | null;
+  legendTop?: number | null;
 }
 
 /** The column, as far as this file reads it: its box and what is inside it. */
@@ -138,7 +145,7 @@ export function endSelectionInColumn(
   const box = column.getBoundingClientRect();
   const bottom = visible.bottom ?? Number.POSITIVE_INFINITY;
   const beside = x < box.left || x > box.right;
-  const beyond = y < visible.top || y > bottom;
+  const beyond = y < visible.top || y > bottom || (typeof visible.legendTop === "number" && y >= visible.legendTop - LEGEND_EDGE_EPSILON_PX);
   if (!press && !beside && !beyond) return false;
   const px = x > box.right ? box.right - 1 : x < box.left ? box.left + 1 : x;
   const py = Math.min(Math.max(y, visible.top), bottom);
@@ -248,13 +255,13 @@ export function selectionKeeper(env: KeeperEnv) {
 /** The real page, for a column. Browser only. */
 export function domEnv(column: Element): KeeperEnv {
   /**
-   * The column's visible rows: below the masthead's foot, above the foot legend (P11-62) — the window's height less the legend's, as the page computes it (`legendHeightPx` at
-   * the page's Fit zoom), less the row the legend's top edge falls in. A fraction of a pixel (Fit's zoom) is rounded to the row above the edge.
+   * The column's visible rows: below the masthead's foot, above the foot legend (P11-62: its top edge is the window's height less the legend's, as the page computes it —
+   * `legendHeightPx` at the page's Fit zoom). The window's last row is still where the last visible line is looked for from, a pointer below the window's foot.
    */
-  const visible = (): Visible => ({
-    top: DOCK_TOP_PX + 1,
-    bottom: typeof window.innerHeight === "number" ? Math.ceil(window.innerHeight - legendHeightPx(readPageZoom(column)) - LEGEND_EDGE_EPSILON_PX) - 1 : null,
-  });
+  const visible = (): Visible => {
+    const height = typeof window.innerHeight === "number" ? window.innerHeight : null;
+    return { top: DOCK_TOP_PX + 1, bottom: height === null ? null : height - 1, legendTop: height === null ? null : height - legendHeightPx(readPageZoom(column)) };
+  };
   /** Does a text field (an input, a textarea, an editable block) have the focus? Then the caret in the document is its own. */
   const fieldHasFocus = (): boolean => {
     const field = document.activeElement;
