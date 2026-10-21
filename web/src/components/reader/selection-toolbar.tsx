@@ -45,6 +45,11 @@
 // words again (the press changed the selection and one stands when it ends), a double click and a click elsewhere (which collapses it) end the wait; a press that changes
 // no selection — a button, a tab — does not. In a window with no margin (under 1024 px) nothing changes: the pill stands.
 //
+// P11-38 rule 2 (same ruling): the group still stands in the margin level with the first line, over a card's body where it must, but never over a card's header — its
+// X, its title, its controls (Open as page, Export, zoom). The headers are read from the page, with the card rects (`openCards`: a card's first element is its header, the figure
+// card's zoom row a second one; what a header holds is its text and its controls). Where the level place would cover one the group stands on the header's free part, level
+// with the line, if it fits whole there (`clearOfHeaders`); else just below the header — below the last of a stack of them; else, with no room below it in the band,
+// just above. `data-header-clear` says which. It never leaves the margin sideways, so the centre column's words stay uncovered (X-1 stays gone).
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PaperTerm } from "@/lib/papers/report";
@@ -114,6 +119,8 @@ export type ActionsMode = "margin" | "above";
 
 export interface ActionsPlace extends ToolbarPlace {
   mode: ActionsMode;
+  /** P11-38: set when the group was moved off a card's header (`clearOfHeaders`): on its free part, just below it, just above it, or held where it was with nowhere clear. Absent when it stands level. */
+  clear?: Exclude<Clearance, "level">;
 }
 
 /** The group's left edge sits this far in from the margin's. */
@@ -127,6 +134,19 @@ export const MARGIN_INSET_PX = 8;
  */
 export const OPEN_CARD_SELECTOR = MARGIN_CARD_SELECTOR;
 
+// ── The open cards, and their headers ────────────────────────────────────
+
+/** A card's header as the page draws it: its whole box, and what it holds that must stay readable and reachable — its text and its controls. In the window's pixels. */
+export interface HeaderZone {
+  box: ViewRect;
+  parts: readonly ViewRect[];
+}
+
+/** The figure card's second row of controls, under its 40-px header: a header too (zoom is one of the controls the group must not cover). */
+const ZOOM_ROW_SELECTOR = "[data-figure-zoom-row]";
+/** The elements that are a control, though they hold no text: the X is an icon. */
+const CONTROLS = new Set(["button", "a", "input", "select", "textarea", "svg"]);
+
 interface BoxLike {
   left: number;
   top: number;
@@ -135,28 +155,88 @@ interface BoxLike {
   width: number;
   height: number;
 }
-interface CardLike {
-  firstElementChild?: { textContent?: string | null } | null;
-  getAttribute?(name: string): string | null;
+interface ElementLike {
+  tagName?: string;
+  childNodes?: ArrayLike<{ nodeType: number; nodeValue: string | null }>;
+  children?: ArrayLike<ElementLike>;
+  textContent?: string | null;
   getBoundingClientRect(): BoxLike;
+}
+interface CardLike extends ElementLike {
+  firstElementChild?: ElementLike | null;
+  getAttribute?(name: string): string | null;
+  querySelector?(selector: string): ElementLike | null;
+}
+
+const toRect = (box: BoxLike): ViewRect => ({ left: box.left, top: box.top, right: box.right, bottom: box.bottom });
+
+/** The part of `rect` inside `bound`, or null when nothing of it is (a box with no size, a part clipped away). */
+function clipped(rect: ViewRect, bound: ViewRect): ViewRect | null {
+  const left = Math.max(rect.left, bound.left);
+  const top = Math.max(rect.top, bound.top);
+  const right = Math.min(rect.right, bound.right);
+  const bottom = Math.min(rect.bottom, bound.bottom);
+  return right > left && bottom > top ? { left, top, right, bottom } : null;
+}
+
+/** Whether two rects share some area; rects that touch along an edge do not. */
+const meets = (a: ViewRect, b: ViewRect) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+/**
+ * What a header holds, as rects inside its `zone`: every element with text of its own (a title, a quote head, a quote, a link) and every control with none (the
+ * big X, an icon). An element that only holds others — the header's row, the button that raises the card over its title — holds nothing itself: the empty width of the
+ * raise button is the header's free part.
+ */
+function partsOf(header: ElementLike, zone: ViewRect): ViewRect[] {
+  const parts: ViewRect[] = [];
+  const add = (element: ElementLike) => {
+    const part = clipped(toRect(element.getBoundingClientRect()), zone);
+    if (part) parts.push(part);
+  };
+  const visit = (element: ElementLike): boolean => {
+    const own = Array.from(element.childNodes ?? []).some((child) => child.nodeType === 3 && (child.nodeValue ?? "").trim() !== "");
+    let inside = false;
+    for (const child of Array.from(element.children ?? [])) if (visit(child)) inside = true;
+    if (own) {
+      add(element);
+      return true;
+    }
+    if (inside) return true;
+    if (CONTROLS.has((element.tagName ?? "").toLowerCase())) add(element);
+    return false;
+  };
+  visit(header);
+  return parts;
+}
+
+function zoneOf(row: ElementLike, card: ViewRect): HeaderZone | null {
+  const box = clipped(toRect(row.getBoundingClientRect()), card);
+  return box ? { box, parts: partsOf(row, box) } : null;
 }
 
 export interface OpenCards {
   /** The cards' rects, in the window's pixels; a card with no box (hidden) is left out. */
   rects: ViewRect[];
+  /** Their headers: each card's first element (the 40-px header of a sticky, the notes window and the figure; the explain card's X, title and quote), and the figure's zoom row. */
+  headers: HeaderZone[];
   /** What the Explain card's header says (its title and the opening words of the passage it explains), for the card that stands. */
   explainHeads: string[];
 }
 
-/** The cards of the margin that stand open — through their one marker, in one query — with their rects and, for the Explain card, what its header says. */
+/** The cards of the margin that stand open — through their one marker, in one query — with their rects and their headers. */
 export function openCards(root: Pick<ParentNode, "querySelectorAll">): OpenCards {
-  const open: OpenCards = { rects: [], explainHeads: [] };
+  const open: OpenCards = { rects: [], headers: [], explainHeads: [] };
   for (const node of Array.from(root.querySelectorAll(OPEN_CARD_SELECTOR))) {
     const card = node as unknown as CardLike;
     const box = card.getBoundingClientRect();
     if (!(box.width > 0 && box.height > 0)) continue;
-    open.rects.push({ left: box.left, top: box.top, right: box.right, bottom: box.bottom });
+    const rect = toRect(box);
+    open.rects.push(rect);
     const first = card.firstElementChild ?? null;
+    for (const row of [first, card.querySelector?.(ZOOM_ROW_SELECTOR) ?? null]) {
+      const zone = row ? zoneOf(row, rect) : null;
+      if (zone) open.headers.push(zone);
+    }
     if (first && card.getAttribute?.("data-margin-card") === "explain") open.explainHeads.push(first.textContent ?? "");
   }
   return open;
@@ -165,6 +245,11 @@ export function openCards(root: Pick<ParentNode, "querySelectorAll">): OpenCards
 /** The rects of the cards that stand open, in the window's pixels; a card with no box (hidden) is left out. */
 export function openCardRects(root: Pick<ParentNode, "querySelectorAll">): ViewRect[] {
   return openCards(root).rects;
+}
+
+/** The headers of the cards that stand open: where the group must not stand. */
+export function readHeaders(root: Pick<ParentNode, "querySelectorAll">): HeaderZone[] {
+  return openCards(root).headers;
 }
 
 const squash = (text: string) => text.replace(/\s+/g, " ").trim();
@@ -184,11 +269,82 @@ export function clearanceFrom(group: ViewRect, cards: readonly ViewRect[]): numb
   return nearest;
 }
 
+/** The room kept between the group and a part of a header when it stands on the header's free part. */
+export const HEADER_GAP_PX = 4;
+
+/** How a place was made clear of the headers: `level` — it did not need to be; `free` — on a header's free part, level with the line; `below` / `above` — just under or over the header; `held` — nowhere was clear, so it stays level. */
+export type Clearance = "level" | "free" | "below" | "above" | "held";
+
+/**
+ * P11-38 rule 2: the place for a box of `size` that would stand at (`left`, `top`) — the margin's left edge and the first line's height — made clear of the headers.
+ * Level (`top` and `left` as given) when the box is over no header. Otherwise on a header's free part: the same top, the left moved along the margin to the nearest place where
+ * the box fits whole between what the headers hold at that height (`parts`: the X, the title, the controls — and a few pixels from each). Otherwise just below the header: the nearest
+ * top under `top` where the box is over no header at all — under the last of a stack of them — and wholly inside the band. Otherwise, with no room below in the band, just above
+ * one. Otherwise held where it was: nothing is clear. It never leaves the margin sideways. Pure.
+ */
+export function clearOfHeaders(input: {
+  margin: MarginRect;
+  size: { width: number; height: number };
+  left: number;
+  top: number;
+  headers: readonly HeaderZone[];
+}): { left: number; top: number; how: Clearance } {
+  const { margin, size, left, top, headers } = input;
+  const at = (x: number, y: number): ViewRect => ({ left: x, top: y, right: x + size.width, bottom: y + size.height });
+  const onHeader = (box: ViewRect) => headers.some((zone) => meets(box, zone.box));
+  if (!onHeader(at(left, top))) return { left, top, how: "level" };
+
+  // The free part: where the box would stand on a header, the places along the margin where it fits whole between what the header holds at this height (a few pixels
+  // from each part). A header holding nothing at this height — the box would meet only its padding or its border — has none: the box stands under it.
+  const reach = at(left, top);
+  const blocked = headers
+    .flatMap((zone) => zone.parts)
+    .filter((part) => part.top < reach.bottom && reach.top < part.bottom)
+    .map((part): [number, number] => [part.left - HEADER_GAP_PX, part.right + HEADER_GAP_PX])
+    .sort((a, b) => a[0] - b[0]);
+  if (blocked.length > 0) {
+    const from = margin.left + MARGIN_INSET_PX;
+    const to = margin.left + margin.width - MARGIN_INSET_PX;
+    const gaps: Array<[number, number]> = [];
+    let cursor = from;
+    for (const [start, end] of blocked) {
+      if (start > cursor) gaps.push([cursor, Math.min(start, to)]);
+      cursor = Math.max(cursor, end);
+    }
+    if (cursor < to) gaps.push([cursor, to]);
+    let free: number | null = null;
+    for (const [start, end] of gaps) {
+      if (end - start < size.width) continue;
+      const x = Math.min(Math.max(left, start), end - size.width);
+      if (free === null || Math.abs(x - left) < Math.abs(free - left)) free = x;
+    }
+    if (free !== null) return { left: free, top, how: "free" };
+  }
+
+  // Just below the header (a stack: below the last of them), else just above one; wholly inside the band either way.
+  const inBand = (y: number) => y >= margin.top && y + size.height <= margin.bottom;
+  const below = headers
+    .map((zone) => zone.box.bottom)
+    .filter((y) => y >= top && inBand(y))
+    .sort((a, b) => a - b)
+    .find((y) => !onHeader(at(left, y)));
+  if (below !== undefined) return { left, top: below, how: "below" };
+  const above = headers
+    .map((zone) => zone.box.top - size.height)
+    .filter((y) => y <= top && inBand(y))
+    .sort((a, b) => b - a)
+    .find((y) => !onHeader(at(left, y)));
+  if (above !== undefined) return { left, top: above, how: "above" };
+  return { left, top, how: "held" };
+}
+
 /**
  * Where the group stands, and in which mode. With a margin registered — always in the margin, whatever stands there: the left edge 8 px in from the margin's,
  * the top `placeInMargin` of the selection's first line, the three buttons one under the other. An open card at that height does not move it (P11-27 rule 1;
  * ruling §1h.122): the group stands over the card. With no margin (a window under 1024 px, a page without the shell) it is today's pill above the selection
  * (`toolbarPlace`), in a row. Null where nothing is drawn — a window under 768 px, or a selection wholly out of view. Pure.
+ *
+ * P11-38 rule 2: with the open cards' `headers` the level place is made clear of them (`clearOfHeaders`): the group never stands over a card's X, title or controls.
  */
 export function actionsPlace(input: {
   bounds: ViewRect;
@@ -197,12 +353,16 @@ export function actionsPlace(input: {
   margin: MarginRect | null;
   /** The group's own size in each mode (it is a column in the margin and a row above). */
   sizes: { margin: { width: number; height: number }; above: { width: number; height: number } };
+  /** P11-38: the open cards' headers, where the group must not stand (the margin's mode only: the pill above the selection is as it was). */
+  headers?: readonly HeaderZone[];
 }): ActionsPlace | null {
   const { bounds, viewport, margin, sizes } = input;
   const pill = toolbarPlace({ bounds, viewport, size: sizes.above });
   if (pill === null) return null;
   if (margin === null) return { mode: "above", ...pill };
-  return { mode: "margin", left: margin.left + MARGIN_INSET_PX, top: placeInMargin(margin, bounds.top, sizes.margin.height), below: false };
+  const level = { left: margin.left + MARGIN_INSET_PX, top: placeInMargin(margin, bounds.top, sizes.margin.height) };
+  const spot = clearOfHeaders({ margin, size: sizes.margin, ...level, headers: input.headers ?? [] });
+  return { mode: "margin", left: spot.left, top: spot.top, below: false, ...(spot.how === "level" ? {} : { clear: spot.how }) };
 }
 
 const BUTTON =
@@ -217,8 +377,8 @@ export function SelectionToolbarView({
   overCard = false,
   innerRef,
 }: {
-  /** Where it stands; a `mode` of "margin" draws a column, anything else (a place without one is the old pill) a row. */
-  place: ToolbarPlace & { mode?: ActionsMode };
+  /** Where it stands; a `mode` of "margin" draws a column, anything else (a place without one is the old pill) a row. `clear` says it was moved off a card's header (P11-38). */
+  place: ToolbarPlace & { mode?: ActionsMode; clear?: ActionsPlace["clear"] };
   /** The page can explain this selection (`selectionCanExplain`); when it cannot, "Explain this" is not drawn. */
   canExplain: boolean;
   onExplain: () => void;
@@ -245,6 +405,7 @@ export function SelectionToolbarView({
       data-selection-toolbar=""
       data-mode={column ? "margin" : "above"}
       {...(overCard ? { "data-over-card": "" } : {})}
+      {...(place.clear ? { "data-header-clear": place.clear } : {})}
       style={{ left: place.left, top: place.top }}
       className={`fixed z-[70] flex ${column ? "flex-col" : ""} items-stretch whitespace-nowrap border border-border-strong bg-surface font-mono text-caption shadow-card-hover`}
     >
@@ -272,11 +433,14 @@ interface Frame {
   viewport: { width: number; height: number };
   /** The open cards' rects at the same moment. */
   cards: ViewRect[];
-  /** P11-38: whether the Explain card that stands holds the selection's passage. */
+  /** P11-38: their headers, and whether the Explain card that stands holds the selection's passage. */
+  headers: HeaderZone[];
   explained: boolean;
 }
 
 const sameRect = (a: ViewRect, b: ViewRect) => a.left === b.left && a.top === b.top && a.right === b.right && a.bottom === b.bottom;
+
+const sameHeader = (a: HeaderZone, b: HeaderZone) => sameRect(a.box, b.box) && a.parts.length === b.parts.length && a.parts.every((part, index) => sameRect(part, b.parts[index]));
 
 const sameFrame = (a: Frame | null, b: Frame | null) =>
   a === b ||
@@ -288,7 +452,9 @@ const sameFrame = (a: Frame | null, b: Frame | null) =>
     sameRect(a.bounds, b.bounds) &&
     a.cards.length === b.cards.length &&
     a.cards.every((card, index) => sameRect(card, b.cards[index])) &&
-    a.explained === b.explained);
+    a.explained === b.explained &&
+    a.headers.length === b.headers.length &&
+    a.headers.every((header, index) => sameHeader(header, b.headers[index])));
 
 type Size = { width: number; height: number };
 
@@ -345,6 +511,7 @@ export function SelectionToolbar({
               bounds: where.bounds,
               viewport: { width: window.innerWidth, height: window.innerHeight },
               cards: open.rects,
+              headers: open.headers,
               explained: explainHeadHolds(open.explainHeads, target.passage),
             }
           : null;
@@ -383,7 +550,7 @@ export function SelectionToolbar({
   const sizeOf = (which: ActionsMode): Size => sizes[`${which}:${buttons}`] ?? estimate(which, buttons);
   const placed =
     target && frame && frame.of === target
-      ? actionsPlace({ bounds: frame.bounds, viewport: frame.viewport, margin, sizes: { margin: sizeOf("margin"), above: sizeOf("above") } })
+      ? actionsPlace({ bounds: frame.bounds, viewport: frame.viewport, margin, sizes: { margin: sizeOf("margin"), above: sizeOf("above") }, headers: frame.headers })
       : null;
   // P11-38 rule 1: in the margin the group is gone once Explain this has been pressed for the selection that stands; the pill above the selection (a window with no margin) is as it was.
   const place = placed !== null && placed.mode === "margin" && target !== null && pressed === target ? null : placed;
