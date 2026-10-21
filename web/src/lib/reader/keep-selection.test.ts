@@ -8,6 +8,7 @@ import {
   endSelectionInColumn,
   selectionKeeper,
   watchSelection,
+  type Held,
   type KeeperEnv as Env,
   type PointerLike as Pointer,
   type Visible,
@@ -172,6 +173,8 @@ describe("selectionKeeper — which presses are followed, and when a correction 
   let ends: Array<[number, number]>;
   const env = (startsInText = (target: unknown) => (target as { inColumn?: boolean })?.inColumn === true): Env => ({
     startsInText,
+    startsOutside: () => false,
+    standing: () => null,
     endAt: (x, y) => ends.push([x, y]),
     frame: (run) => frames.push(run) - 1,
     cancel: (handle) => {
@@ -416,19 +419,14 @@ describe("the module's means", () => {
 // Here: the decision with the anchor read at the press (`endSelectionInColumn`'s last argument), the controller's Shift press, the page's two tests (`startsOutside`,
 // `standing`) and the real wiring. The shell's own call is `reader-shell.keep-selection.flow.test.tsx`.
 
-/** What the press read of the selection that stands: the node and offset of its anchor. */
-interface Held {
-  node: unknown;
-  offset: number;
-}
-type PressedEnd = (column: unknown, x: number, y: number, visible: Visible, doc: unknown, selection: unknown, press: Held | null) => boolean;
-const endWithPress = endSelectionInColumn as unknown as PressedEnd;
+/** A node of the paper's column, typed as the page's `Node` (the tests' stubs are plain objects). */
+const anchorIn = (name: string) => inColumn(name) as unknown as Node;
 
 describe("endSelectionInColumn — the end of a selection that a Shift+press outside the column moved", () => {
-  const held: Held = { node: inColumn("the clicked word"), offset: 5 };
+  const held: Held = { node: anchorIn("the clicked word"), offset: 5 };
   const run = (x: number, y: number, over: { selection?: Partial<SelectionStub>; press?: Held | null; visible?: Visible } = {}) => {
     const sel = { ...selection, ...over.selection };
-    const result = endWithPress(column(), x, y, over.visible ?? VISIBLE, doc, sel, over.press === undefined ? held : over.press);
+    const result = endSelectionInColumn(column(), x, y, over.visible ?? VISIBLE, doc as never, sel as never, over.press === undefined ? held : over.press);
     return { result, sel };
   };
   const extendedAt = (sel: SelectionStub) => (sel.extend.mock.calls[0][0] as { at: number[] }).at;
@@ -484,7 +482,7 @@ describe("endSelectionInColumn — the end of a selection that a Shift+press out
   });
 
   it("an anchor that is no longer in the column (the page re-rendered between the press and the frame): nothing is touched", () => {
-    const { result, sel } = run(COLUMN.right + 40, 300, { press: { node: elsewhere("a node that went"), offset: 1 } });
+    const { result, sel } = run(COLUMN.right + 40, 300, { press: { node: elsewhere("a node that went") as unknown as Node, offset: 1 } });
     expect(result).toBe(false);
     expect(sel.collapse).not.toHaveBeenCalled();
     expect(sel.extend).not.toHaveBeenCalled();
@@ -509,13 +507,12 @@ describe("selectionKeeper — a Shift+press outside the column, with a selection
   let frames: Array<(() => void) | null>;
   let calls: unknown[][];
   let standing: Held | null;
-  const held: Held = { node: inColumn("the clicked word"), offset: 5 };
-  type ShiftEnv = Env & { startsOutside(target: unknown): boolean; standing(): Held | null };
-  const shiftEnv = (): ShiftEnv => ({
+  const held: Held = { node: anchorIn("the clicked word"), offset: 5 };
+  const shiftEnv = (): Env => ({
     startsInText: (target) => (target as { inColumn?: boolean })?.inColumn === true && (target as { control?: boolean }).control !== true,
     startsOutside: (target) => (target as { inColumn?: boolean })?.inColumn === false && (target as { control?: boolean }).control !== true,
     standing: () => standing,
-    endAt: ((x: number, y: number, ...rest: unknown[]) => calls.push([x, y, ...rest])) as Env["endAt"],
+    endAt: (x, y, ...rest: Array<Held | undefined>) => calls.push([x, y, ...rest]),
     frame: (run) => frames.push(run) - 1,
     cancel: (handle) => {
       frames[handle as number] = null;
@@ -652,8 +649,7 @@ describe("selectionKeeper — a Shift+press outside the column, with a selection
 });
 
 describe("domEnv — a Shift+press's tests of a target and of the selection that stands", () => {
-  type Shifted = { startsOutside(target: unknown): boolean; standing(): Held | null; endAt(x: number, y: number, press?: Held): void };
-  const shifted = (col: unknown = column()) => domEnv(col as never) as unknown as Shifted;
+  const shifted = (col: unknown = column()) => domEnv(col as never);
   const target = (inside: boolean, control: unknown = null) => ({ inColumn: inside, closest: (selector: string) => (selector.includes("button") ? control : null) });
 
   it("a press starts outside the column when its target is not in the column and on no control of its own; a control that wraps the column is not one", () => {
@@ -701,6 +697,20 @@ describe("domEnv — a Shift+press's tests of a target and of the selection that
     });
   });
 
+  it("a text field that took the focus in the press (the notes window's text, which turns into its editor on a click) is the field's: the frame after finds it focused and makes no correction", () => {
+    const node = { inColumn: true };
+    const sel = { rangeCount: 1, isCollapsed: false, anchorNode: node, anchorOffset: 1, focusNode: { inColumn: false }, focusOffset: 0, collapse: vi.fn(), extend: vi.fn() };
+    vi.stubGlobal("window", { innerHeight: 720, getSelection: () => sel });
+    const stubDocument = (activeElement: unknown) => vi.stubGlobal("document", { activeElement, caretPositionFromPoint: vi.fn(() => ({ offsetNode: node, offset: 3 })) });
+    stubDocument({ matches: (selector: string) => selector.includes("[contenteditable]") });
+    shifted().endAt(COLUMN.right + 40, 300, { node: node as unknown as Node, offset: 1 });
+    expect(sel.collapse).not.toHaveBeenCalled();
+    expect(sel.extend).not.toHaveBeenCalled();
+    stubDocument({ matches: () => false });
+    shifted().endAt(COLUMN.right + 40, 300, { node: node as unknown as Node, offset: 1 });
+    expect(sel.extend).toHaveBeenCalledTimes(1);
+  });
+
   it("puts the end at the column's edge with the anchor read at the press: restored first where the browser collapsed the selection elsewhere", () => {
     const node = { inColumn: true };
     const order: string[] = [];
@@ -716,7 +726,7 @@ describe("domEnv — a Shift+press's tests of a target and of the selection that
     };
     vi.stubGlobal("window", { innerHeight: 720, getSelection: () => sel });
     vi.stubGlobal("document", { caretPositionFromPoint: vi.fn(() => ({ offsetNode: node, offset: 3 })) });
-    shifted().endAt(COLUMN.right + 12, 300, { node, offset: 5 });
+    shifted().endAt(COLUMN.right + 12, 300, { node: node as unknown as Node, offset: 5 });
     expect(order).toEqual(["collapse", "extend"]);
     expect(sel.collapse).toHaveBeenCalledWith(node, 5);
     expect(sel.extend).toHaveBeenCalledWith(node, 3);

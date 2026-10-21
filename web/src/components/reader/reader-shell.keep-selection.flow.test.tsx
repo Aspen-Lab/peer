@@ -397,6 +397,17 @@ describe("a Shift+click outside the column, with a selection that began in it st
     expect(selection.collapse).not.toHaveBeenCalled();
   });
 
+  it("a press that puts a text field in focus (the notes window's text turns into its editor on a click) is the field's: nothing is touched at the frame after", () => {
+    open();
+    caretInText();
+    dispatch("pointerdown", { clientX: COLUMN.right + 40, clientY: 300, shiftKey: true, target: elsewhere("the notes window's text") });
+    (document as unknown as { activeElement: unknown }).activeElement = { matches: (selector: string) => selector.includes("[contenteditable]") };
+    dispatch("pointerup", { clientX: COLUMN.right + 40, clientY: 300, shiftKey: true, target: elsewhere("the notes window's text") });
+    runFrames();
+    expect(selection.extend).not.toHaveBeenCalled();
+    expect(selection.collapse).not.toHaveBeenCalled();
+  });
+
   it("a press outside the column without Shift is as before: not followed, whatever stands", () => {
     open();
     caretInText();

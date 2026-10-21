@@ -17,6 +17,19 @@
 // over the column (the browser is right there); a selection that did not begin in the column; a collapsed one. A drag that begins on a separator or its keys
 // are the separator's own (`pane-divider.tsx`), and a press on the notes tab keeps its own pass-through (`notes-button.tsx`).
 //
+// P11-57 (ruling §1h.165): the same rule for a Shift+click. A click on a word leaves a caret in the text, and a Shift+click then takes the lines between: the browser
+// extends the standing selection to the place under the pointer on the PRESS (not the release), and that press began outside the column, so it was not followed.
+// Measured, base `6b02956c`, 1280 x 720: 12 to 23 px past a line's end (over the margin's separator, whose own press is taken, so the browser changes nothing) left the
+// caret as it was, 0 characters; 40 px and more past (over the aside) ran to the end of the paper, 39,208 characters, no buttons; 40 and 120 px before a line's start (over
+// the left pane) ran to 17,816 to 17,828. A Shift+press whose target is outside the column and on no control of its own, while a selection whose anchor is in the column
+// stands (a caret counts: it is what a click leaves, and what the Shift+click extends), is followed like a press in the text: the anchor is read at the press, before the
+// browser's own move, and one correction is made at the next frame (the browser has extended by then), then again on each move while the button is held (a click that is
+// not quite still is a drag-extension to the browser) and at the release. Where the browser has moved the anchor out of the column or cleared the selection, it is put back
+// from the anchor read at the press, then ended at the edge. A pointer over the column's box whose press was on something outside it (a fixed overlay over the text) is
+// corrected too: its own caret, found further in where the overlay stands. A Shift+press in the text, on a control, with no column selection standing (a card's text, the
+// notes editor, a text field's own caret), without Shift, by touch or pen: as before. A press that puts a text field in focus (the notes window's text, which becomes its
+// editor on a click) is the field's: the frame after finds it focused and the correction is not made.
+//
 // Why not the notes tab's CSS rule (`pointer-events: none` while a pointer is held and the element is not the one pressed): tried on the separators in P11-45 and
 // measured — the pointer then falls through to the shell's grid, which holds no text there, and the selection ends at the same place. Under a margin, a card
 // or a pane there is no text of the column to fall through to; the position has to be given.
@@ -61,7 +74,16 @@ export interface CaretSource {
 }
 
 /** The members of the document's selection this file reads and moves. */
-export type SelectionLike = Pick<Selection, "rangeCount" | "isCollapsed" | "anchorNode" | "focusNode" | "focusOffset" | "extend">;
+export type SelectionLike = Pick<Selection, "rangeCount" | "isCollapsed" | "anchorNode" | "anchorOffset" | "focusNode" | "focusOffset" | "extend" | "collapse">;
+
+/** The anchor of the selection that stood when a Shift+press went down: the one thing the browser's own move of the end does not lose for us. */
+export interface Held {
+  node: Node;
+  offset: number;
+}
+
+/** What a text field is: where a caret is the field's own and not a selection of the paper. */
+export const TEXT_FIELD_SELECTOR = "input, textarea, [contenteditable]";
 
 /** The caret position under a point: `caretPositionFromPoint` (Chromium 128 up, Firefox) or `caretRangeFromPoint` (Safari, older Chromium). */
 export function caretAt(doc: CaretSource, x: number, y: number): { node: Node; offset: number } | null {
@@ -82,6 +104,10 @@ export function caretAt(doc: CaretSource, x: number, y: number): { node: Node; o
  *
  * The nearest point: x at the column's edge (one pixel in) when the pointer is beside it, else its own; y at its own, clamped to `visible`. A caret that is not
  * the column's (a fixed overlay stands over that row: the legend at the window's foot, the masthead) is looked for further in, `CARET_STEP_PX` at a time.
+ *
+ * `press` is the anchor read at a Shift+press whose target was outside the column (P11-57): the selection may then be a caret (a click's, or the one a separator's own
+ * press leaves) and the pointer may stand over the column's box (an overlay), so neither makes it return; and where the browser has moved the anchor out of the column, or
+ * cleared the selection, the selection is put back at `press` before its end is moved. False, and nothing touched, where `press` is no longer in the column.
  */
 export function endSelectionInColumn(
   column: ColumnLike | null,
@@ -90,14 +116,19 @@ export function endSelectionInColumn(
   visible: Visible,
   doc: CaretSource = document,
   selection: SelectionLike | null = typeof window === "undefined" ? null : window.getSelection(),
+  press: Held | null = null,
 ): boolean {
-  if (!column || !selection || selection.rangeCount === 0 || selection.isCollapsed) return false;
-  if (!selection.anchorNode || !column.contains(selection.anchorNode)) return false;
+  if (press) {
+    if (!column || !selection || !column.contains(press.node)) return false;
+  } else {
+    if (!column || !selection || selection.rangeCount === 0 || selection.isCollapsed) return false;
+    if (!selection.anchorNode || !column.contains(selection.anchorNode)) return false;
+  }
   const box = column.getBoundingClientRect();
   const bottom = visible.bottom ?? Number.POSITIVE_INFINITY;
   const beside = x < box.left || x > box.right;
   const beyond = y < visible.top || y > bottom;
-  if (!beside && !beyond) return false;
+  if (!press && !beside && !beyond) return false;
   const px = x > box.right ? box.right - 1 : x < box.left ? box.left + 1 : x;
   const py = Math.min(Math.max(y, visible.top), bottom);
   // Further in: up from the foot, down from the masthead.
@@ -105,7 +136,9 @@ export function endSelectionInColumn(
   for (let attempt = 0; attempt < CARET_TRIES; attempt++) {
     const spot = caretAt(doc, px, py + inward * attempt * CARET_STEP_PX);
     if (!spot || !column.contains(spot.node)) continue;
-    if (selection.focusNode === spot.node && selection.focusOffset === spot.offset) return false;
+    const kept = selection.rangeCount > 0 && !!selection.anchorNode && column.contains(selection.anchorNode);
+    if (press && !kept) selection.collapse(press.node, press.offset);
+    else if (selection.focusNode === spot.node && selection.focusOffset === spot.offset) return false;
     selection.extend(spot.node, spot.offset);
     return true;
   }
@@ -122,14 +155,19 @@ export interface PointerLike {
   clientX: number;
   clientY: number;
   target: unknown;
+  shiftKey?: boolean;
 }
 
 /** What the controller needs from the page. */
 export interface KeeperEnv {
   /** Does a press on this target begin a drag-select in the paper's text? (In the column, and not on a control.) */
   startsInText(target: unknown): boolean;
-  /** Put the selection's end at the column's nearest visible point to (x, y). */
-  endAt(x: number, y: number): void;
+  /** Does a Shift+press on this target begin outside the column, on no control of its own? */
+  startsOutside(target: unknown): boolean;
+  /** The anchor of the selection that stands, when it began in the column and is not a text field's own caret; null otherwise. Read at the press. */
+  standing(): Held | null;
+  /** Put the selection's end at the column's nearest visible point to (x, y); `press` is the anchor read at a Shift+press (P11-57). */
+  endAt(x: number, y: number, press?: Held): void;
   /** Run `run` at the next animation frame; the result is what `cancel` takes. */
   frame(run: () => void): unknown;
   cancel(handle: unknown): void;
@@ -137,38 +175,59 @@ export interface KeeperEnv {
 
 /**
  * The press, the pointer and the frame. A mouse press that begins in the paper's text is followed until the button is released (or the pointer is cancelled): each
- * move, and the release, asks for one correction at the next frame — three moves in a frame make one. A press that begins anywhere else is not followed at all.
+ * move, and the release, asks for one correction at the next frame — three moves in a frame make one. A press that begins anywhere else is not followed at all —
+ * except a Shift+press outside the column, on no control, with a selection that began in the column standing (P11-57): its anchor is read at the press, one correction is
+ * asked for at the next frame, then as for any press followed, each correction carrying that anchor.
  */
 export function selectionKeeper(env: KeeperEnv) {
   /** The pointer of a press that began in the text, and is held. */
   let pressed: number | null = null;
+  /** The anchor read at a Shift+press outside the column, while that press is held; null for a press that began in the text. */
+  let held: Held | null = null;
   let waiting: unknown = null;
   const ask = (x: number, y: number) => {
     if (waiting !== null) env.cancel(waiting);
+    const press = held;
     waiting = env.frame(() => {
       waiting = null;
-      env.endAt(x, y);
+      if (press) env.endAt(x, y, press);
+      else env.endAt(x, y);
     });
+  };
+  /** The press is over: one last correction at (x, y), carrying the press's own anchor. */
+  const release = (x: number, y: number) => {
+    pressed = null;
+    ask(x, y);
+    held = null;
   };
   return {
     down(event: PointerLike) {
       const mouse = event.pointerType === "mouse" && event.button === 0 && event.isPrimary !== false;
       pressed = mouse && env.startsInText(event.target) ? event.pointerId : null;
+      held = null;
+      if (pressed === null && mouse && event.shiftKey === true && env.startsOutside(event.target)) {
+        const standing = env.standing();
+        if (standing) {
+          pressed = event.pointerId;
+          held = standing;
+          ask(event.clientX, event.clientY);
+        }
+      }
     },
     move(event: PointerLike) {
       if (pressed === null || event.pointerId !== pressed) return;
       // The button came up where the page did not see it (outside the window): that was the release.
-      if ((event.buttons & 1) === 0) pressed = null;
-      ask(event.clientX, event.clientY);
+      if ((event.buttons & 1) === 0) release(event.clientX, event.clientY);
+      else ask(event.clientX, event.clientY);
     },
     up(event: PointerLike) {
       if (pressed === null || event.pointerId !== pressed) return;
-      pressed = null;
-      ask(event.clientX, event.clientY);
+      release(event.clientX, event.clientY);
     },
     /** The pointer was cancelled (a drag of the text itself began; the system took the touch): nothing to correct. */
     cancel() {
       pressed = null;
+      held = null;
       if (waiting !== null) env.cancel(waiting);
       waiting = null;
     },
@@ -177,6 +236,13 @@ export function selectionKeeper(env: KeeperEnv) {
 
 /** The real page, for a column. Browser only. */
 export function domEnv(column: Element): KeeperEnv {
+  /** The column's visible rows: below the masthead's foot, above the window's last row. */
+  const visible = (): Visible => ({ top: DOCK_TOP_PX + 1, bottom: typeof window.innerHeight === "number" ? window.innerHeight - 1 : null });
+  /** Does a text field (an input, a textarea, an editable block) have the focus? Then the caret in the document is its own. */
+  const fieldHasFocus = (): boolean => {
+    const field = document.activeElement;
+    return !!field && typeof field.matches === "function" && field.matches(TEXT_FIELD_SELECTOR);
+  };
   return {
     startsInText(target) {
       const element = target as Element | null;
@@ -184,8 +250,26 @@ export function domEnv(column: Element): KeeperEnv {
       const control = element.closest(CONTROL_SELECTOR);
       return !control || !column.contains(control);
     },
-    endAt(x, y) {
-      endSelectionInColumn(column, x, y, { top: DOCK_TOP_PX + 1, bottom: typeof window.innerHeight === "number" ? window.innerHeight - 1 : null });
+    startsOutside(target) {
+      const element = target as Element | null;
+      if (!element || typeof element.closest !== "function" || column.contains(element)) return false;
+      const control = element.closest(CONTROL_SELECTOR);
+      return !control || (typeof control.contains === "function" && control.contains(column));
+    },
+    standing() {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0 || !selection.anchorNode || !column.contains(selection.anchorNode)) return null;
+      if (fieldHasFocus()) return null;
+      return { node: selection.anchorNode, offset: selection.anchorOffset };
+    },
+    endAt(x, y, press) {
+      if (!press) {
+        endSelectionInColumn(column, x, y, visible());
+        return;
+      }
+      // A text field took the focus in this press (a card's text that turns into its editor on a click): its caret is the selection now, and the field's own.
+      if (fieldHasFocus()) return;
+      endSelectionInColumn(column, x, y, visible(), document, window.getSelection(), press);
     },
     frame: (run) => requestAnimationFrame(run),
     cancel: (handle) => cancelAnimationFrame(handle as number),
@@ -214,8 +298,9 @@ export function watchSelection(column: Element, doc: Document = document): () =>
 }
 
 /**
- * The shell's one call: a drag-select that began in the paper's text ends at the column's edge whatever the pointer is over. `grid` is the shell's grid, which holds
- * the column; where it cannot be found (a shell rendered without a DOM) nothing is watched and nothing fails.
+ * The shell's one call: a drag-select that began in the paper's text, and a Shift+click outside the column with a selection of the paper standing, end at the column's
+ * edge whatever the pointer is over. `grid` is the shell's grid, which holds the column; where it cannot be found (a shell rendered without a DOM) nothing is watched and
+ * nothing fails.
  */
 export function useKeepSelection(grid: RefObject<HTMLElement | null>): void {
   useEffect(() => {
