@@ -124,12 +124,20 @@ afterEach(() => {
 });
 
 describe("POST /api/papers/[id]/explain — a caption's words (P11-42 rule 1)", () => {
-  it("finds the passage in the caption and answers it, the quote placed in the caption's own words", async () => {
+  it("finds the passage in the caption and answers it, the quote placed in the paragraph that names the figure (the sections' text is what a quote is held to)", async () => {
+    provider.generateJsonText.mockResolvedValue(JSON.stringify({ meaning: MEANING, here: { text: HERE, evidence: NAMES_FIGURE } }));
     const response = await call(ask(CAPTION_REQUEST));
 
     expect(response.status).toBe(200);
-    expect(await json(response)).toEqual({ cached: false, answer: { meaning: MEANING, here: { text: HERE, evidence: CAPTION_SENTENCE, evidenceWhere: "Figure 2" } } });
+    expect(await json(response)).toEqual({ cached: false, answer: { meaning: MEANING, here: { text: HERE, evidence: expect.stringContaining(NAMES_FIGURE), evidenceWhere: "3 Results", sectionId: "s3", page: 3 } } });
     expect(provider.generateJsonText).toHaveBeenCalledTimes(1);
+  });
+
+  it("a quote of the caption's own words is not the section's: the answer stands and the prose is labelled Peer's reading", async () => {
+    const response = await call(ask(CAPTION_REQUEST));
+
+    expect(response.status).toBe(200);
+    expect(await json(response)).toEqual({ cached: false, answer: { meaning: MEANING, here: { text: HERE, peer: true } } });
   });
 
   it("gives the model the caption and its section: the caption's words, the figure, the section's heading and the paragraphs the figure stands between", async () => {
@@ -143,7 +151,7 @@ describe("POST /api/papers/[id]/explain — a caption's words (P11-42 rule 1)", 
   });
 
   it("answers a reply in a thread about the caption, with the same context", async () => {
-    provider.generateJsonText.mockResolvedValue(JSON.stringify({ reply: "It shows tungsten rafting slowest.", evidence: CAPTION_SENTENCE }));
+    provider.generateJsonText.mockResolvedValue(JSON.stringify({ reply: "It shows tungsten rafting slowest.", evidence: NAMES_FIGURE }));
     const thread = [
       { role: "peer", text: `${MEANING} ${HERE}` },
       { role: "reader", text: "What does the figure show?" },
@@ -151,7 +159,7 @@ describe("POST /api/papers/[id]/explain — a caption's words (P11-42 rule 1)", 
     const response = await call(ask({ ...CAPTION_REQUEST, thread }));
 
     expect(response.status).toBe(200);
-    expect((await json(response)).turn).toMatchObject({ role: "peer", text: "It shows tungsten rafting slowest.", evidence: CAPTION_SENTENCE });
+    expect((await json(response)).turn).toMatchObject({ role: "peer", text: "It shows tungsten rafting slowest.", evidence: expect.stringContaining(NAMES_FIGURE), sectionId: "s3" });
     expect(contextOf(provider.generateJsonText.mock.calls[0][0])).toMatchObject({ block: "caption", figure: "Figure 2", paragraph: CAPTION });
   });
 

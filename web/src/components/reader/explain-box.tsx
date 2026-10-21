@@ -372,16 +372,6 @@ function levelTopOf(selection: ExplainSelection, where: ViewRects): number | und
   return selection.source === undefined || selection.source === "paper" ? where.paragraph?.top : DOCK_TOP_PX;
 }
 
-/**
- * P11-26 rule 4 (§1h.127): whether a selection is the Explain box's. A selection in a figure's caption or a section's heading carries its `block`
- * kind (its id has a paragraph's shape, so the id cannot tell); the explain route's `locatePassage` searches paragraphs only, so a card opened there
- * could only say "Select text from the paper itself". A paragraph (no kind, or `"paragraph"`), a Summary block and an answer are explainable as ever.
- */
-export function isExplainable(selection: Pick<SelectionTarget, "passage">): boolean {
-  const block = (selection as { block?: unknown }).block;
-  return typeof block !== "string" || block === "paragraph";
-}
-
 /** The same window as far as placing goes: a scroll frame that moved nothing renders nothing. P10-08 (B P10-01's step 2): a legend
  *  within 0.01 px is the same legend, so a differing last bit of the page's zoom cannot count as a change. */
 const sameViewport = (a: Viewport, b: Viewport) =>
@@ -795,10 +785,9 @@ export interface ExplainBoxProps {
 }
 
 export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, reading, cachedTurns, onReply, onSayMore, onResetThread, openRef }: ExplainBoxProps) {
-  // P11-26 rule 4 (§1h.127): a selection in a figure's caption or a section's heading is the notes' and the highlight's, not this box's. The box takes
-  // no notice of it: nothing is offered (the thumb bar's cell, `e`, the selection's button), an open card does not follow it, and `open` does nothing.
-  const blocked = given !== null && !isExplainable(given);
-  const target = blocked ? null : given;
+  // P11-42 rule 2 (ruling §1h.139 (b)): a selection in a figure's caption or a section's heading is this box's as a paragraph's is (P11-26 rule 4 kept it out, because the
+  // explain route could not find such a passage; it can now, `locatePassage` with `blocks`): the thumb bar's cell, `e` and the selection's button are offered for it.
+  const target = given;
   const [session, setSession] = useState<Session | null>(null);
   const [viewport, setViewport] = useState<Viewport>(currentViewport);
   // P11-14 (rule 4; O-8, BACKLOG-66): the card is one card of the margin's stack. What the box reads of it — the cards that stand, where the
@@ -1077,8 +1066,6 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
   };
 
   const openBox = () => {
-    // A caption or a heading selection: nothing (the explain route finds a passage among the paragraphs only).
-    if (blocked) return;
     // A selection the window does not hold yet: explain it (in the window, when one is open).
     if (next) {
       start(next);

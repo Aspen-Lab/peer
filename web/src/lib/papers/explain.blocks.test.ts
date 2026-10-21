@@ -3,17 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { ExtractedDocument } from "./html-text";
 import { buildExplainPrompt, buildExplainReplyPrompt, explainCacheKey, locatePassage, type LocatedPassage } from "./explain";
 
-// The signatures P11-42 gives them, as the tests call them. Typed here by hand so that this file also compiles against the base, where every test of the new
-// behaviour is red (a fourth argument, a block in the result and in a key do not exist there yet).
-type Block = "heading" | "caption";
-type Located = LocatedPassage & { block?: Block; heading?: string; label?: string };
-const locate = locatePassage as unknown as (
-  doc: ExtractedDocument,
-  passage: string,
-  hint?: { sectionId?: string; paragraphIndex?: number },
-  options?: { blocks?: boolean },
-) => Located | null;
-const cacheKey = explainCacheKey as unknown as (docHash: string, passage: string, thread: readonly string[], searched?: boolean, detail?: boolean, peerWords?: undefined, block?: Block) => string;
+type Block = NonNullable<LocatedPassage["block"]>;
 
 // P11-42 (round 2, Theme B readers r1, r2, r3; ruling §1h.139 (b)): the explain route finds a passage that stands in a figure's caption or a section's heading, as it
 // finds a paragraph's. The server's half is here: the locator (`locatePassage` with `blocks`), the context the prompts give the model, and the server memory's key.
@@ -65,7 +55,7 @@ describe("locatePassage with blocks — a caption's words (P11-42 rule 1)", () =
   const results = { sectionId: "s3", paragraphIndex: 4 };
 
   it("finds the caption the selection is in, with the figure's place as the page numbers it and the paragraphs it stands between", () => {
-    expect(locate(doc, "The tungsten alloy rafts the slowest", results, BLOCKS)).toEqual({
+    expect(locatePassage(doc, "The tungsten alloy rafts the slowest", results, BLOCKS)).toEqual({
       sectionId: "s3",
       sectionIndex: 2,
       paragraphIndex: 4,
@@ -80,20 +70,20 @@ describe("locatePassage with blocks — a caption's words (P11-42 rule 1)", () =
 
   it("reads the caption as the page draws it: the label, a middle dot and the words — and the page of the PDF where the picture is not drawn", () => {
     for (const passage of ["Figure 2 · Rafting ratio against creep time", "Figure 2", "rafts the slowest. · p.3 of the PDF", "Figure 2 · " + CAPTION + " · p.3 of the PDF"]) {
-      expect(locate(doc, passage, results, BLOCKS), passage).toMatchObject({ block: "caption", sectionId: "s3", paragraphIndex: 4, paragraph: CAPTION });
+      expect(locatePassage(doc, passage, results, BLOCKS), passage).toMatchObject({ block: "caption", sectionId: "s3", paragraphIndex: 4, paragraph: CAPTION });
     }
   });
 
   it("tries the hinted caption before the paragraphs, so \"Figure 2\" selected in the caption is the caption's, not the paragraph that names it", () => {
-    expect(locate(doc, "Figure 2", results, BLOCKS)).toMatchObject({ block: "caption", paragraphIndex: 4 });
+    expect(locatePassage(doc, "Figure 2", results, BLOCKS)).toMatchObject({ block: "caption", paragraphIndex: 4 });
     // With no hint, or a hint at a paragraph, the paragraph that holds the words is found first, as it always was.
-    expect(locate(doc, "Figure 2", {}, BLOCKS)).toMatchObject({ sectionId: "s3", paragraphIndex: 1, paragraph: NAMES_FIGURE });
-    expect(locate(doc, "Figure 2", { sectionId: "s3", paragraphIndex: 1 }, BLOCKS)).toMatchObject({ paragraphIndex: 1, paragraph: NAMES_FIGURE });
+    expect(locatePassage(doc, "Figure 2", {}, BLOCKS)).toMatchObject({ sectionId: "s3", paragraphIndex: 1, paragraph: NAMES_FIGURE });
+    expect(locatePassage(doc, "Figure 2", { sectionId: "s3", paragraphIndex: 1 }, BLOCKS)).toMatchObject({ paragraphIndex: 1, paragraph: NAMES_FIGURE });
   });
 
   it("finds a figure no paragraph names where it stands: at the end of the section where it sat in the document", () => {
     // Figure 1 stands in the Introduction (body section 0, three paragraphs): block 4 is its caption.
-    expect(locate(doc, "turbine blade after one thousand hours", { sectionId: "s1", paragraphIndex: 4 }, BLOCKS)).toMatchObject({
+    expect(locatePassage(doc, "turbine blade after one thousand hours", { sectionId: "s1", paragraphIndex: 4 }, BLOCKS)).toMatchObject({
       block: "caption",
       sectionId: "s1",
       sectionIndex: 0,
@@ -106,17 +96,17 @@ describe("locatePassage with blocks — a caption's words (P11-42 rule 1)", () =
   });
 
   it("finds it wherever the hint points when the hint is wrong or absent: the hinted section's blocks, then the whole body", () => {
-    expect(locate(doc, "The tungsten alloy rafts the slowest", { sectionId: "s2", paragraphIndex: 4 }, BLOCKS)).toMatchObject({ block: "caption", sectionId: "s3", paragraphIndex: 4 });
-    expect(locate(doc, "The tungsten alloy rafts the slowest", { sectionId: "nope", paragraphIndex: 99 }, BLOCKS)).toMatchObject({ block: "caption", sectionId: "s3" });
-    expect(locate(doc, "The tungsten alloy rafts the slowest", {}, BLOCKS)).toMatchObject({ block: "caption", sectionId: "s3" });
+    expect(locatePassage(doc, "The tungsten alloy rafts the slowest", { sectionId: "s2", paragraphIndex: 4 }, BLOCKS)).toMatchObject({ block: "caption", sectionId: "s3", paragraphIndex: 4 });
+    expect(locatePassage(doc, "The tungsten alloy rafts the slowest", { sectionId: "nope", paragraphIndex: 99 }, BLOCKS)).toMatchObject({ block: "caption", sectionId: "s3" });
+    expect(locatePassage(doc, "The tungsten alloy rafts the slowest", {}, BLOCKS)).toMatchObject({ block: "caption", sectionId: "s3" });
     // A hint that is not a whole number names no block.
-    expect(locate(doc, "The tungsten alloy rafts the slowest", { sectionId: "s3", paragraphIndex: 4.5 }, BLOCKS)).toMatchObject({ block: "caption", sectionId: "s3" });
+    expect(locatePassage(doc, "The tungsten alloy rafts the slowest", { sectionId: "s3", paragraphIndex: 4.5 }, BLOCKS)).toMatchObject({ block: "caption", sectionId: "s3" });
   });
 
   it("a table's caption is not the page's (tables are not placed), and words that stand nowhere are not found: null, as today", () => {
-    expect(locate(doc, "Alloy compositions in weight percent", results, BLOCKS)).toBeNull();
-    expect(locate(doc, "the cooling rate of the quench bath", results, BLOCKS)).toBeNull();
-    expect(locate(doc, "   ", results, BLOCKS)).toBeNull();
+    expect(locatePassage(doc, "Alloy compositions in weight percent", results, BLOCKS)).toBeNull();
+    expect(locatePassage(doc, "the cooling rate of the quench bath", results, BLOCKS)).toBeNull();
+    expect(locatePassage(doc, "   ", results, BLOCKS)).toBeNull();
   });
 });
 
@@ -125,7 +115,7 @@ describe("locatePassage with blocks — a heading's words (P11-42 rule 1)", () =
   const methods = { sectionId: "s2", paragraphIndex: 4 };
 
   it("finds the heading, with how its section opens as the context after it", () => {
-    expect(locate(doc, "2 Methods", methods, BLOCKS)).toEqual({
+    expect(locatePassage(doc, "2 Methods", methods, BLOCKS)).toEqual({
       sectionId: "s2",
       sectionIndex: 1,
       paragraphIndex: 4,
@@ -138,21 +128,21 @@ describe("locatePassage with blocks — a heading's words (P11-42 rule 1)", () =
   });
 
   it("finds part of a heading, and a heading with no hint at all or a hint at another section", () => {
-    expect(locate(doc, "Methods", methods, BLOCKS)).toMatchObject({ block: "heading", sectionId: "s2" });
-    expect(locate(doc, "3 Results", {}, BLOCKS)).toMatchObject({ block: "heading", sectionId: "s3", sectionIndex: 2, paragraphIndex: 3 });
-    expect(locate(doc, "3 Results", { sectionId: "s1", paragraphIndex: 3 }, BLOCKS)).toMatchObject({ block: "heading", sectionId: "s3" });
+    expect(locatePassage(doc, "Methods", methods, BLOCKS)).toMatchObject({ block: "heading", sectionId: "s2" });
+    expect(locatePassage(doc, "3 Results", {}, BLOCKS)).toMatchObject({ block: "heading", sectionId: "s3", sectionIndex: 2, paragraphIndex: 3 });
+    expect(locatePassage(doc, "3 Results", { sectionId: "s1", paragraphIndex: 3 }, BLOCKS)).toMatchObject({ block: "heading", sectionId: "s3" });
   });
 
   it("the abstract's heading is not the body's: it is not found", () => {
-    expect(locate(doc, "Abstract", { sectionId: "s0", paragraphIndex: 0 }, BLOCKS)).toBeNull();
+    expect(locatePassage(doc, "Abstract", { sectionId: "s0", paragraphIndex: 0 }, BLOCKS)).toBeNull();
   });
 });
 
 describe("locatePassage — without blocks it is what it was (the plain route's reading)", () => {
   it("does not find a caption's or a heading's words", () => {
-    expect(locate(doc, "The tungsten alloy rafts the slowest", { sectionId: "s3", paragraphIndex: 4 })).toBeNull();
-    expect(locate(doc, "2 Methods", { sectionId: "s2", paragraphIndex: 4 })).toBeNull();
-    expect(locate(doc, "Figure 2 · Rafting ratio against creep time")).toBeNull();
+    expect(locatePassage(doc, "The tungsten alloy rafts the slowest", { sectionId: "s3", paragraphIndex: 4 })).toBeNull();
+    expect(locatePassage(doc, "2 Methods", { sectionId: "s2", paragraphIndex: 4 })).toBeNull();
+    expect(locatePassage(doc, "Figure 2 · Rafting ratio against creep time")).toBeNull();
   });
 });
 
@@ -172,8 +162,8 @@ describe("locatePassage with blocks — a paragraph's passage is found exactly a
 
   it("returns the same result with blocks on as with them off, and none of it names a block", () => {
     for (const [passage, hint] of cases) {
-      const without = locate(doc, passage, hint);
-      const withBlocks = locate(doc, passage, hint, BLOCKS);
+      const without = locatePassage(doc, passage, hint);
+      const withBlocks = locatePassage(doc, passage, hint, BLOCKS);
       expect(withBlocks, passage).toEqual(without);
       if (withBlocks) expect(Object.keys(withBlocks).sort(), passage).toEqual(["after", "before", "paragraph", "paragraphIndex", "sectionId", "sectionIndex"]);
     }
@@ -183,9 +173,9 @@ describe("locatePassage with blocks — a paragraph's passage is found exactly a
 // ── The context the model is given ─────────────────────────────────────────────────────────────────────────────────────────────
 
 const base = { paper: { title: "Rafting under creep in a nickel alloy", abstract: "An abstract." }, map: [{ heading: "1 Introduction", opening: null }] };
-const caption = locate(doc, "The tungsten alloy rafts the slowest", { sectionId: "s3", paragraphIndex: 4 }, BLOCKS) as Located;
-const heading = locate(doc, "2 Methods", { sectionId: "s2", paragraphIndex: 4 }, BLOCKS) as Located;
-const paragraph = locate(doc, "rafting ratio as the fraction", { sectionId: "s2", paragraphIndex: 1 }, BLOCKS) as Located;
+const caption = locatePassage(doc, "The tungsten alloy rafts the slowest", { sectionId: "s3", paragraphIndex: 4 }, BLOCKS) as LocatedPassage;
+const heading = locatePassage(doc, "2 Methods", { sectionId: "s2", paragraphIndex: 4 }, BLOCKS) as LocatedPassage;
+const paragraph = locatePassage(doc, "rafting ratio as the fraction", { sectionId: "s2", paragraphIndex: 1 }, BLOCKS) as LocatedPassage;
 
 const contextOf = (userPrompt: string) => (JSON.parse(userPrompt) as { context: Record<string, unknown> }).context;
 const rulesOf = (userPrompt: string) => (JSON.parse(userPrompt) as { rules: string[] }).rules;
@@ -236,12 +226,12 @@ describe("the server's memory — a heading's or a caption's words are not a par
 
   it("a paragraph's key is what it was: nothing is added to it", () => {
     const wanted = sha(`h|rafting ratio|${sha(JSON.stringify([]))}`);
-    expect(cacheKey("h", "Rafting  ratio", [])).toBe(wanted);
-    expect(cacheKey("h", "Rafting  ratio", [], false, false, undefined, undefined)).toBe(wanted);
+    expect(explainCacheKey("h", "Rafting  ratio", [])).toBe(wanted);
+    expect(explainCacheKey("h", "Rafting  ratio", [], false, false, undefined, undefined)).toBe(wanted);
   });
 
   it("the same words in a heading, in a caption and in a paragraph are three entries", () => {
-    const keys = [undefined, "heading", "caption"].map((block) => cacheKey("h", "rafting ratio", [], false, false, undefined, block as Block | undefined));
+    const keys = [undefined, "heading", "caption"].map((block) => explainCacheKey("h", "rafting ratio", [], false, false, undefined, block as Block | undefined));
     expect(new Set(keys).size).toBe(3);
   });
 });

@@ -269,9 +269,9 @@ export function SelectionToolbar({
   const [sizes, setSizes] = useState<Record<string, Size>>({});
   const box = useRef<HTMLDivElement | null>(null);
   const margin = useMarginRect();
-  // P11-27 (rule 2): Explain this is not offered for a selection in a heading or a caption, whatever the page says it can explain: the explain route looks for the
-  // passage in the paper's paragraphs and would answer "not in the paper" (`lib/papers/explain.ts`, `locatePassage`).
-  const explainable = canExplain && target?.block === undefined;
+  // P11-42 (rule 2; ruling §1h.139 (b)): Explain this is offered for a selection in a heading or a caption as for a paragraph's — the page's word stands. The route finds
+  // such a passage now (`lib/papers/explain.ts`, `locatePassage` with `blocks`); the header's note on P11-27 rule 2 (not offered for it) is retired by this.
+  const explainable = canExplain;
   const actions = offeredActions({ canExplain: explainable, onHighlight, canHighlight });
   const buttons = actions.length;
 

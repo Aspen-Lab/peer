@@ -25,6 +25,12 @@
 // and the prompt holds it in `context`, so a quote from it verifies as a selection in the body's does; below the floor there is
 // none and the prompt is P10-08b's, the answer Peer's reading as before.
 //
+// P11-42 (round 2 Theme B readers r1, r2, r3; ruling §1h.139 (b)): the passage may also stand in a section's heading or a figure's caption — the page offers Explain this
+// there (with a key) and sends the request it sends for a paragraph: the passage, the section's id and the block's number in it (`paragraphIndex`: the paragraphs, then the
+// heading, then the captions; `lib/notes/anchor-blocks.ts`). `locatePassage` finds it there too (`blocks`) — the block the number names first, the paragraphs as before, then
+// the headings and captions — and the prompt's context is that block and its neighbours as a paragraph's is (`lib/papers/explain.ts`). Nothing new is sent and nothing new
+// is read: a passage found nowhere is still 422 `not_in_paper`, no provider is still `unavailable`, and a paragraph's passage is located, prompted and remembered as it was.
+//
 // Gated like the report route, in the same order: the owner checks on an
 // upload (the claim, the attachment, the revision), the shared sign-in and
 // hourly-limit check, then the provider — only a provider that can write answers.
@@ -266,10 +272,16 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   const peerWords = peerWordsSource(body.source);
   const located = peerWords
     ? null
-    : locatePassage(doc, passage, {
-        sectionId: typeof body.sectionId === "string" ? body.sectionId : undefined,
-        paragraphIndex: typeof body.paragraphIndex === "number" ? body.paragraphIndex : undefined,
-      });
+    : locatePassage(
+        doc,
+        passage,
+        {
+          sectionId: typeof body.sectionId === "string" ? body.sectionId : undefined,
+          paragraphIndex: typeof body.paragraphIndex === "number" ? body.paragraphIndex : undefined,
+        },
+        // P11-42: a heading's or a caption's words are the paper's text too.
+        { blocks: true },
+      );
   // P10-38 (BACKLOG-75): Peer's words carry the body paragraph that best matches them (the Tier 0 route's scoring, a floor; no model
   // call), so a quote from the paper can be verified against it as for a selection in the body; none below the floor.
   const matched = peerWords && passage !== "" ? matchPeerWords(doc, passage) : null;
@@ -290,7 +302,7 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
 
   // The server's memory: the document, the passage, the thread's texts, whether the
   // reply searched and whether it is the long form — never the reader.
-  const key = explainCacheKey(explainDocHash(doc), passage, thread.map((message) => message.text), searched, detail, peerWords ?? undefined);
+  const key = explainCacheKey(explainDocHash(doc), passage, thread.map((message) => message.text), searched, detail, peerWords ?? undefined, located?.block);
   const logTurn = (fields: { promptChars: number; answerChars: number; cached: boolean }) =>
     console.debug("[papers/explain] turn", {
       ...(userId ? { userId: shortHash(userId) } : {}),
