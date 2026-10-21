@@ -376,14 +376,18 @@ describe("below the margin's width", () => {
     expect(host.tree).toBeNull();
   });
 
-  it("closes an open card when the window narrows below the margin's width; it does not jump into an overlay", () => {
+  // P11-41 (ruling §1h.138 (d)) RE-AIMED: this was "closes an open card when the window narrows…" and ended on `host.tree` being null. The card is no longer
+  // closed by the narrowing but PARKED (it comes back when the window widens: `figure-host.narrow.test.tsx`); what stays true, and is asserted as before, is
+  // that nothing is open, the card's window is out of the stack, and it does not jump into an overlay. Nothing is drawn: the stack element is still there, hidden.
+  it("takes an open card out of the margin when the window narrows below the margin's width (parked, not closed); it does not jump into an overlay", () => {
     const host = mountHost();
     host.act(() => openFigure(ref("Figure 3")));
     expect(host.tree?.type).toBe(FigureStack);
     host.act(() => useMarginStore.setState({ rect: null }));
     expect(getOpenFigure()).toBeNull();
     expect(windows()).toEqual([]);
-    expect(host.tree).toBeNull();
+    expect(host.tree?.type).not.toBe(FigureOverlay);
+    expect((host.tree?.props as { parked?: boolean }).parked).toBe(true);
   });
 
   it("leaves an overlay that is open when the window widens", () => {

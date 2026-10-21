@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useWindows } from "./windows";
+import * as viewer from "./figure-viewer";
 import {
   closeFigure,
   getOpenFigure,
@@ -13,6 +14,15 @@ import {
   useOpenFigure,
   type FigureRef,
 } from "./figure-viewer";
+
+// P11-41: the parking calls are new. They are reached through the module's namespace, so that this file type-checks on the base commit too, where the
+// tests that use them are red because the calls are not there (and not because the file does not compile).
+const { parkFigure, resumeFigure, getParkedFigure, useParkedFigure } = viewer as unknown as {
+  parkFigure: () => boolean;
+  resumeFigure: () => boolean;
+  getParkedFigure: () => FigureRef | null;
+  useParkedFigure: () => FigureRef | null;
+};
 
 // P11-12 (owner item 1; B P11-05 §2.3; ruling §1h.113): the figure the reader opened from the paper's body, one at a time,
 // in memory only. D2: a second figure replaces the first. D4: the open figure pressed again stays open. No floating window
@@ -183,5 +193,122 @@ describe("in memory only, and not the floating windows (rule 1)", () => {
 
     for (const spy of spies) expect(spy).not.toHaveBeenCalled();
     expect(useWindows.getState().windows).toEqual([]);
+  });
+});
+
+// P11-41 (round 2, Theme B (c); ruling §1h.138 (d)): a figure card that the window's narrowing takes out of the margin is PARKED, not closed: held in
+// memory (this module's variable; nothing is stored), so that the host brings the very same figure back when the window is wide again. Parked, it is not
+// open — the body's button is not pressed, Escape has nothing to close, the key is not "the open figure's" — and it is gone the moment the reader opens
+// or closes a figure (a figure closed while the window was narrow stays closed).
+describe("a parked figure (P11-41; ruling §1h.138 (d))", () => {
+  it("parks the open figure: nothing is open, the same ref is held, and a subscriber is told once", () => {
+    openFigure(ref(3));
+    const open = getOpenFigure();
+    const heard = vi.fn();
+    const stop = subscribeOpenFigure(heard);
+
+    expect(parkFigure()).toBe(true);
+
+    expect(getOpenFigure()).toBeNull();
+    expect(openFigureKey()).toBeNull();
+    expect(getParkedFigure()).toBe(open);
+    expect(heard).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  it("parks nothing when nothing is open, and nobody hears", () => {
+    const heard = vi.fn();
+    const stop = subscribeOpenFigure(heard);
+
+    expect(parkFigure()).toBe(false);
+
+    expect(getParkedFigure()).toBeNull();
+    expect(heard).not.toHaveBeenCalled();
+    stop();
+  });
+
+  it("resumes the parked figure as the open one: the same ref, not a copy (a host that acts on a new ref — the card's focus — does not act)", () => {
+    openFigure(ref(3));
+    const open = getOpenFigure();
+    parkFigure();
+    const heard = vi.fn();
+    const stop = subscribeOpenFigure(heard);
+
+    expect(resumeFigure()).toBe(true);
+
+    expect(getOpenFigure()).toBe(open);
+    expect(openFigureKey()).toBe("Figure 3:3");
+    expect(getParkedFigure()).toBeNull();
+    expect(heard).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  it("resumes nothing when nothing is parked", () => {
+    expect(resumeFigure()).toBe(false);
+    openFigure(ref(1));
+    expect(resumeFigure()).toBe(false);
+    expect(openFigureKey()).toBe("Figure 1:1");
+  });
+
+  it("is replaced by a figure opened meanwhile (D2: one figure at a time): the parked one is gone, and does not come back", () => {
+    openFigure(ref(1));
+    parkFigure();
+
+    openFigure(ref(2));
+
+    expect(getParkedFigure()).toBeNull();
+    expect(openFigureKey()).toBe("Figure 2:2");
+    expect(resumeFigure()).toBe(false);
+    expect(openFigureKey()).toBe("Figure 2:2");
+  });
+
+  it("the same figure opened again while it is parked is an open figure, and the parked one is gone", () => {
+    openFigure(ref(1));
+    parkFigure();
+
+    openFigure(ref(1));
+    closeFigure();
+
+    expect(getParkedFigure()).toBeNull();
+    expect(getOpenFigure()).toBeNull();
+    expect(resumeFigure()).toBe(false);
+  });
+
+  it("is forgotten by a close: a figure closed while the window was narrow stays closed — and the close is heard once", () => {
+    openFigure(ref(1));
+    parkFigure();
+    const heard = vi.fn();
+    const stop = subscribeOpenFigure(heard);
+
+    closeFigure();
+
+    expect(getParkedFigure()).toBeNull();
+    expect(getOpenFigure()).toBeNull();
+    expect(heard).toHaveBeenCalledTimes(1);
+    expect(resumeFigure()).toBe(false);
+    closeFigure();
+    expect(heard).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  it("is not the open figure for the body's button, and is again when it resumes", () => {
+    const mark = (key: string) => renderToStaticMarkup(createElement(function Mark() { return createElement("p", null, useFigureOpen(key) ? "open" : "shut"); }));
+    openFigure(ref(1));
+    expect(mark("Figure 1:1")).toBe("<p>open</p>");
+    parkFigure();
+    expect(mark("Figure 1:1")).toBe("<p>shut</p>");
+    resumeFigure();
+    expect(mark("Figure 1:1")).toBe("<p>open</p>");
+  });
+
+  it("useParkedFigure reads the parked figure, or null", () => {
+    const Probe = () => createElement("p", null, useParkedFigure()?.key ?? "none");
+    expect(renderToStaticMarkup(createElement(Probe))).toBe("<p>none</p>");
+    openFigure(ref(4));
+    expect(renderToStaticMarkup(createElement(Probe))).toBe("<p>none</p>");
+    parkFigure();
+    expect(renderToStaticMarkup(createElement(Probe))).toBe("<p>Figure 4:4</p>");
+    closeFigure();
+    expect(renderToStaticMarkup(createElement(Probe))).toBe("<p>none</p>");
   });
 });
