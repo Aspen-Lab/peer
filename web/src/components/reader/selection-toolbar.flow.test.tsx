@@ -540,8 +540,9 @@ describe("SelectionToolbar — a selection in a caption or a heading (P11-27 rul
 // ── P11-38 (round 2's Theme-B walk X-5; ruling §1h.138 (a); owner item 5, "一旦点击其中一个，就会显示其中一个的功能") ─────────────────────────────────────────
 // Rule 1: a press of Explain this ends the group's job, as Take notes and Highlight already do (they clear the selection, so the group goes with it): once
 // pressed — by its button, or by `e` / the thumb bar, which the toolbar sees as the Explain card now holding the selection's passage — the group is gone until
-// the reader makes a NEW selection. The selection itself stays drawn (it is the card's quote, and the box follows it); a new object from the page, a drag
-// that selects the same words again and a double click bring the group back; a press that changes no selection does not. Below 1024 px nothing changes.
+// the reader makes a NEW selection, and the selection is ended with it (the card keeps its quote: P11-40's Escape would otherwise spend its first press on it); a new
+// object from the page, a drag that selects the same words again and a double click bring the group back; a press that changes no selection does not. Below 1024 px
+// nothing changes.
 // Rule 2: the group never covers a card's header; the cards' headers are read from the page when the group is placed.
 const viewOf = (tree: ReactNode) => (tree && typeof tree === "object" && "props" in tree ? (tree as ReactElement<{ onExplain: () => void; place: ActionsPlace & { clear?: string } }>).props : null);
 const fireWith = (type: string, event: unknown) => [...(listeners.get(type) ?? [])].forEach((listener) => listener(event));
@@ -688,13 +689,42 @@ describe("SelectionToolbar — a press of Explain this puts the group away (P11-
     expect(shown).toEqual([true, true]);
   });
 
-  it("leaves the selection to the page: it never asks the browser to drop it, so the words stay drawn as the card's quote", async () => {
+  // P11-40 (ruling §1h.138 (c)): Escape puts a standing selection away before it closes a card, and the page counts a selection as standing while it holds one. A quiet
+  // selection left behind the group would take the reader's first Escape, so the press ends the selection as Take notes and Highlight do (the card keeps its quote).
+  it("ends the selection with the press, as Take notes and Highlight do: the browser's ranges are removed, once, so the page lets go of it and Escape's first press is the card's", async () => {
     stub.margin = MARGIN;
-    const target = selection();
     const onExplain = vi.fn();
-    const run = await scenario(base({ target, onExplain }), [wait, press, wait]);
+    const run = await scenario(base({ onExplain }), [wait, press, wait]);
     run.mounted.unmount();
     expect(onExplain).toHaveBeenCalledTimes(1);
+    expect(selectionCleared).toBe(1);
+  });
+
+  it("ends the selection when `e` explains it too: the Explain card now holds the passage", async () => {
+    stub.margin = MARGIN;
+    const run = await scenario(base(), [
+      wait,
+      () => {
+        richCards = [explainCard(PASSAGE)];
+        fire("scroll");
+      },
+      wait,
+    ]);
+    run.mounted.unmount();
+    expect(selectionCleared).toBe(1);
+  });
+
+  it("does not end it for a card that already held the passage when the selection came, nor where there is no margin (the pill: below 1024 px nothing changes)", async () => {
+    stub.margin = MARGIN;
+    richCards = [explainCard(PASSAGE)];
+    const held = await scenario(base(), [wait, () => fire("scroll"), wait]);
+    held.mounted.unmount();
+    expect(selectionCleared).toBe(0);
+
+    richCards = null;
+    stub.margin = null;
+    const pill = await scenario(base(), [wait, press, wait]);
+    pill.mounted.unmount();
     expect(selectionCleared).toBe(0);
   });
 

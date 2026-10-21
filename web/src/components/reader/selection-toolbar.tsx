@@ -40,10 +40,12 @@
 //
 // P11-38 rule 1 (owner item 5, "一旦点击其中一个，就会显示其中一个的功能"; round 2's walk X-5; ruling §1h.138 (a)): a press of Explain this ends the group's job, as Take notes and
 // Highlight already do (they clear the selection, so the group goes with it). Once pressed — by the button, or by `e`, which the toolbar sees as the Explain card
-// now holding the selection's passage — the group is gone until the reader makes a NEW selection. The selection itself is left drawn: it is the card's quote, the
-// box follows it, and clearing it would be the page's to do; so what goes is the group, not the words. A new selection object from the page, a drag that selects the same
-// words again (the press changed the selection and one stands when it ends), a double click and a click elsewhere (which collapses it) end the wait; a press that changes
-// no selection — a button, a tab — does not. In a window with no margin (under 1024 px) nothing changes: the pill stands.
+// now holding the selection's passage — the group is gone until the reader makes a NEW selection. The press also ends the selection, as Take notes and Highlight do
+// (`dropSelection`: the browser's ranges go, and with them the page's hold on it): the card keeps its quote and keeps level with the paragraph (the page's selection
+// measures its own copy of the range), and Escape's first press is the card's — the page counts a selection as standing while it holds one (P11-40, ruling §1h.138 (c)),
+// so a quiet selection left behind the group would take the first Escape. A new selection object from the page, a drag that selects the same words again (the press
+// changed the selection and one stands when it ends) and a double click end the wait; a press that changes no selection — a button, a tab — does not. In a window with
+// no margin (under 1024 px) nothing changes: the pill stands, and the selection with it.
 //
 // P11-38 rule 2 (same ruling): the group still stands in the margin level with the first line, over a card's body where it must, but never over a card's header — its
 // X, its title, its controls (Open as page, Export, zoom). The headers are read from the page, with the card rects (`openCards`: a card's first element is its header, the figure
@@ -250,6 +252,11 @@ export function openCardRects(root: Pick<ParentNode, "querySelectorAll">): ViewR
 /** The headers of the cards that stand open: where the group must not stand. */
 export function readHeaders(root: Pick<ParentNode, "querySelectorAll">): HeaderZone[] {
   return openCards(root).headers;
+}
+
+/** Ends the selection the way Take notes and Highlight do: the browser's ranges go, and the page's hold on the selection goes after them. */
+function dropSelection(): void {
+  if (typeof window !== "undefined") window.getSelection?.()?.removeAllRanges();
 }
 
 const squash = (text: string) => text.replace(/\s+/g, " ").trim();
@@ -521,7 +528,10 @@ export function SelectionToolbar({
       if (next) {
         const was = explainedWas.current;
         explainedWas.current = { of: target, explained: next.explained };
-        if (was !== null && was.of === target && next.explained && !was.explained) setPressed(target);
+        if (was !== null && was.of === target && next.explained && !was.explained) {
+          setPressed(target);
+          if (margin !== null) dropSelection();
+        }
       }
       setFrame((current) => (sameFrame(current, next) ? current : next));
     };
@@ -624,10 +634,11 @@ export function SelectionToolbar({
 
   if (!target || !place) return null;
   const highlight = actions.includes("highlight") ? () => onHighlight?.(target) : undefined;
-  // P11-38 rule 1: the press explains, and ends the group's job; the selection is left as it is.
+  // P11-38 rule 1: the press explains, and ends the group's job and the selection (in the margin; the pill above the selection is as it was).
   const explain = () => {
     onExplain();
     setPressed(target);
+    if (place.mode === "margin") dropSelection();
   };
   return (
     <SelectionToolbarView place={place} canExplain={explainable} onExplain={explain} onTakeNote={() => onTakeNote(target)} onHighlight={highlight} overCard={overCard} innerRef={(el) => (box.current = el)} />
