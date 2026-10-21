@@ -67,6 +67,8 @@ export function oneLine(text: string): string {
 export function fitHeight(el: HTMLTextAreaElement | null | undefined): void {
   if (!el?.style) return;
   // An empty bar is one row, whatever its placeholder: a placeholder that wraps on a narrow screen must not grow it.
+  // P11-55 (§1h.160): and the row shows no part of a second line — the textarea's classes keep the placeholder to that
+  // one row (`placeholder:whitespace-nowrap`), cut at its end with an ellipsis when it is wider than the row.
   if (el.value === "") {
     el.style.height = "";
     return;
@@ -450,6 +452,12 @@ export function QuestionField({
             rows={1}
             value={text}
             maxLength={MAX_QUESTION_CHARS}
+            // P11-55 (§1h.160): the empty bar is one row at every text step (the textarea is `text-body`, which the steps
+            // scale to 1.6), so a placeholder wider than the row is cut with an ellipsis, never wrapped to a second line
+            // that the bar's border would cut through. `::placeholder` is kept to one line (`whitespace-nowrap`, hidden
+            // past its box, `text-ellipsis`); Chromium takes the placeholder's `text-overflow` only while the textarea's
+            // own is not `clip`, so the textarea says `ellipsis` as well — while the placeholder is shown, so a typed
+            // question is laid out and grows exactly as before. The words are `ASK.placeholder` / `ASK.chips.gist`, whole.
             placeholder={gist && text === "" ? ASK.chips.gist : ASK.placeholder}
             onFocus={() => trackLine({ type: "focus", index: 0 })}
             onBlur={() => trackLine({ type: "blur", index: 0 })}
@@ -494,7 +502,7 @@ export function QuestionField({
               if (enterAction(open, active) === "pick") pick(active);
               else submit();
             }}
-            className="min-w-0 flex-1 resize-none self-center overflow-hidden bg-transparent py-2 font-reading text-body text-text placeholder:text-text-muted focus:outline-none"
+            className="min-w-0 flex-1 resize-none self-center overflow-hidden bg-transparent py-2 font-reading text-body text-text placeholder:overflow-hidden placeholder:whitespace-nowrap placeholder:text-ellipsis placeholder:text-text-muted placeholder-shown:text-ellipsis focus:outline-none"
           />
           {text.length > COUNTER_FROM && (
             <span className="annotation shrink-0 text-text-faint">{ASK.counter(text.length)}</span>
