@@ -268,12 +268,12 @@ describe("clearOfHeaders — no clear place is nearer than the one it takes (P11
     return true;
   };
 
-  it("holds for 160 scenes of headers, parts and controls, for the group and for the strip, in two margins", () => {
+  it("holds for 400 scenes of headers, parts and controls, for the group and for the strip, in two margins", () => {
     const rand = seeded(49);
     const int = (low: number, high: number) => low + Math.floor(rand() * (high - low + 1));
     let scenes = 0;
     let held = 0;
-    for (let scene = 0; scene < 160; scene++) {
+    for (let scene = 0; scene < 400; scene++) {
       const margin: MarginRect = scene % 2 === 0 ? MARGIN : { left: 744, width: 280, top: 48, bottom: 700 };
       const size = scene % 3 === 0 ? STRIP : GROUP;
       const headers: Zone[] = [];
@@ -289,10 +289,11 @@ describe("clearOfHeaders — no clear place is nearer than the one it takes (P11
         }
         headers.push({ box, parts });
       }
-      for (let n = int(0, 5); n > 0; n--) {
+      // Mostly a handful of small controls, as a card has; every fourth scene a crowd, which leaves narrow gaps and a nearest place that needs a left found at its own top.
+      for (let n = scene % 4 === 3 ? int(5, 9) : int(0, 4); n > 0; n--) {
         const left = int(margin.left, margin.left + margin.width - 20);
         const top = int(margin.top, margin.bottom - 20);
-        controls.push(sq(left, top, Math.min(margin.left + margin.width, left + int(14, 150)), top + int(14, 60)));
+        controls.push(sq(left, top, Math.min(margin.left + margin.width, left + int(14, scene % 4 === 3 ? 90 : 150)), top + int(14, 60)));
       }
       const top = int(margin.top, margin.bottom - size.height);
       const left = margin.left + 8;
@@ -320,8 +321,8 @@ describe("clearOfHeaders — no clear place is nearer than the one it takes (P11
       expect(got.left, `scene ${scene}`).toBeLessThanOrEqual(highest);
       expect(Math.abs(got.top - top), `scene ${scene}: the move is the nearest (${nearest})`).toBeLessThanOrEqual(nearest);
     }
-    expect(scenes).toBe(160);
-    expect(held).toBeLessThan(40);
+    expect(scenes).toBe(400);
+    expect(held).toBeLessThan(120);
   });
 });
 

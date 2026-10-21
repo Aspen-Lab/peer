@@ -26,8 +26,8 @@
 //     for, as for a scroll). Where the level place would cover one the strip stands on the header's free part if it fits whole, else just below the header
 //     (`clearOfHeaders`, the same function the three actions use);
 //   - and over no control of a card, wherever it stands (P11-49; ruling §1h.149): the host reads each card's controls and words with its headers (`readCardObstacles`) and the strip
-//     takes the place the three actions take (`clearOfHeaders`): clear of every control; on a header's free part only if it fits whole inside the row (34 px in a 40-px row);
-//     covering as few of the card's words as it can;
+//     takes the place the three actions take (`clearOfHeaders`): clear of every control; on a header's free part only if it fits whole inside the row (34 px in a 40-px row), else
+//     the nearest clear place the band allows, at every left the margin allows; covering as few of the card's words as it can;
 //   - Escape: the strip's own listener hides it but does not take the key, and on a paper page Escape is "back to the briefing" (the keyboard layer, on
 //     `window`). The host takes the key while a strip stands (`takeStripEscape`), as the figure card does for its own: on the document, in the bubble
 //     phase, from the moment the host mounts, leaving a key that was handled already and a modal dialog over the page;

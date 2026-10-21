@@ -65,6 +65,9 @@
 // P11-49 rule 2 (same ruling): a header's free part is a place only if the whole group fits inside the header row — an 88-px group does not fit a 40-px row, the 34-px strip does.
 // Otherwise the candidates are just above the header, just below it (below the last of a stack) and level over the card's body where that covers no control: the smallest move from
 // the line wins; over the body the place that covers the fewest of the card's words (slid along the margin, keeping the margin's left edge unless that saves about half a word).
+//
+// P11-49 rule 3 (same ruling): the move is the nearest clear place the band allows: every top a place can begin at (the line's, the edges of the headers and the controls, the nearest
+// inside a row that holds it), at every left the margin allows — a few pixels clear of a control, or touching it where the gap is no wider — so no clear place is nearer.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PaperTerm } from "@/lib/papers/report";
@@ -488,10 +491,10 @@ export type Clearance = "level" | "aside" | "free" | "below" | "above" | "held";
  *   - it covers no control (`controls`: a toolbar and its buttons, a sticky's button, the explain card's link, input and Send — rule 1), and
  *   - it covers no header row (`headers`) — unless it stands wholly inside the row, clear of what the row's text and controls hold (a few pixels from each): the row's free part
  *     is a place only if the whole box fits there (rule 2) — an 88-px group does not fit a 40-px row; the strip does.
- * Of the clear places the nearest to `top` wins: `top` itself first (slid along the margin if a control or a header's text is in the way, and to cover the fewest of the cards'
- * `words`), else the nearest top that is just above or just below a header or a control, or inside a row it fits — a place just above or below is taken at `left`; one inside a row, at
- * the left its free part allows —, wholly inside the band, the one below when two are as near. Where a place covers a card's words the left that covers least of them wins, over
- * the nearer to `left` (it keeps `left` unless a place saves more than about half a word). Otherwise held where it was: nothing is clear. It never leaves the margin sideways. Pure.
+ * Of the clear places the nearest to `top` wins (rule 3): `top` itself first (slid along the margin if a control or a header's text is in the way, and to cover the fewest of the
+ * cards' `words`), else the nearest top that is just above or just below a header, a control or a row it fits inside — evaluated at every left the margin allows —, wholly inside the
+ * band, the one below when two are as near. Where a place covers a card's words the left that covers least of them wins, over the nearer to `left` (it keeps `left` unless a place
+ * saves more than about half a word). Otherwise held where it was: nothing is clear. It never leaves the margin sideways. Pure.
  */
 export function clearOfHeaders(input: {
   margin: MarginRect;
@@ -543,10 +546,9 @@ export function clearOfHeaders(input: {
     }
     return [...xs].map(across).sort((a, b) => Math.abs(a - left) - Math.abs(b - left));
   };
-  /** The left for a top: a few pixels clear of what it slides past; among the clear ones, the one that covers least. A top that is neither the line's nor inside a row stands at `left`. */
+  /** The left for a top: a few pixels clear of what it slides past where that can be, touching it where it cannot; among the clear ones, the one that covers least. */
   const leftFor = (y: number): number | null => {
-    if (y !== top && !rowTops.has(y)) return clear(at(left, y)) ? left : null;
-    for (const room of [HEADER_GAP_PX]) {
+    for (const room of [HEADER_GAP_PX, 0]) {
       let best: number | null = null;
       let least = Infinity;
       for (const x of lefts(y, room)) {
@@ -565,15 +567,10 @@ export function clearOfHeaders(input: {
   // The tops worth trying: the line's own, and every edge where a place can begin — just under a header or a control, just over one, and the nearest top inside a row it fits.
   const inBand = (y: number) => y === top || (y >= margin.top - HAIR_PX && y + size.height <= margin.bottom + HAIR_PX);
   const tops = new Set<number>([top]);
-  const rowTops = new Set<number>();
   for (const zone of headers) {
     tops.add(zone.box.bottom);
     tops.add(zone.box.top - size.height);
-    if (size.height <= zone.box.bottom - zone.box.top) {
-      const inside = Math.min(Math.max(top, zone.box.top), zone.box.bottom - size.height);
-      tops.add(inside);
-      rowTops.add(inside);
-    }
+    if (size.height <= zone.box.bottom - zone.box.top) tops.add(Math.min(Math.max(top, zone.box.top), zone.box.bottom - size.height));
   }
   for (const control of controls) {
     tops.add(control.bottom);
