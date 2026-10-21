@@ -585,8 +585,8 @@ describe("ExplainBox — an answer's card stands level with its own answer (P11-
 
     // A paragraph of another block there.
     page["summary-method"] = [{ data: "How it was done", top: 700 }];
-    paras.other = { block: "summary-method", words: [{ data: "Probes", top: 301 }], box: { top: 300, bottom: 330 } };
-    const other = await scenario(base({ target: inAnswers(302) }), [() => open()]);
+    paras.other = { block: "summary-method", words: [{ data: "Probes", top: 701 }], box: { top: 700, bottom: 730 } };
+    const other = await scenario(base({ target: inAnswers(702) }), [() => open()]);
     await wait();
     expect(other.last().top).toBe(176.8);
     other.mounted.unmount();

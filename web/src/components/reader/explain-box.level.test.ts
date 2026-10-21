@@ -305,8 +305,8 @@ describe("levelTopOf — the paragraph that holds the selection's start (P11-39 
     answersPage();
     expect(levelOf(answer(368))).toBe(176.8);
     page["summary-method"] = [{ data: "How it was done", top: 700 }];
-    paras.other = { block: "summary-method", words: [{ data: "Probes", top: 301 }], box: { top: 300, bottom: 330 } };
-    expect(levelOf(answer(302))).toBe(176.8);
+    paras.other = { block: "summary-method", words: [{ data: "Probes", top: 701 }], box: { top: 700, bottom: 730 } };
+    expect(levelOf(answer(702))).toBe(176.8);
     const kept = answer(382);
     expect(levelOf(kept)).toBe(385);
     (fakes.get("a2") as Fake).isConnected = false;

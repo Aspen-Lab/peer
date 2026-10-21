@@ -45,7 +45,10 @@
 // Theme B weighed (a); ruling §1h.138 (b): the owner's P9 words, "level with the first line of the SELECTED paragraph"): the window is
 // level with the first line of the BLOCK the selection is in, as a paragraph's is — a Summary block's or the answers' block's first
 // line (`pageBlockLineTop`, found from the selection's own anchor), before the answer lands and after, held for the floor as a
-// paragraph's is. Where no block can be read, with the selection's own first line.
+// paragraph's is. Where no block can be read, with the selection's own first line. P11-39 step 2 (the manager's, after round 2's walk): the answers' block is one section
+// holding every answer, so "the block's first line" stood 112 to 117 px above a selection in the first answer and further above a later one's; the window is level with
+// the first line of the PARAGRAPH — the block-level element — that holds the selection's start (`selectedParagraph`: an answer's own paragraph or its evidence quote, a
+// Summary block's line, item or quote), and with the block's first line only where no paragraph is found.
 //
 // P3-02b: under the first answer, the thread — the reader's messages under "You", Peer's replies under "Peer" (a verified quote through
 // `EvidenceQuote`, else Peer's label beside the prose) — and, pinned at the box's foot, a one-line input: Enter sends, Shift+Enter is a
@@ -372,27 +375,22 @@ function currentViewport(): Viewport {
     : { width: window.innerWidth, height: window.innerHeight, legend: legendHeightPx(pageZoom()) };
 }
 
-/** `NodeFilter.SHOW_TEXT`: a walk over a block's text nodes. */
+/** `NodeFilter.SHOW_TEXT`: a walk over an element's text nodes. */
 const SHOW_TEXT = 4;
-/** How many text nodes of a block are looked at for its first line before it is given up as drawing none: a block hidden whole is not walked to its end. */
+/** How many text nodes of an element are looked at for its first line before it is given up as drawing none: an element hidden whole is not walked to its end. */
 const LOOKED_AT = 64;
 
 /**
- * P11-39 (ruling §1h.138 (b)): the y of the first line of a page block — the top of its first words that draw. The blocks are a Summary block (`summary-…`,
- * `paper-words.tsx`'s `SUMMARY_ID`) and the answers' block (`answers-block`): the ids a selection in them reports (`placeOf`, `paper-body.tsx`) and the ones the
- * notes' squares and the highlights' marks find them by (`anchor-blocks.ts`'s `isPageBlockId`). The block's box is not its first line: a block's words can stand well
- * below its box's top (measured on an invented paper: 56 px for "What they found", 16 for the abstract, 8 for "Where it is thin"), so the line is read from the words,
- * as a range's rects give it — the first text node with words that draws; white space and a node in a hidden or empty box are passed over. Words inside an `aria-hidden`
- * element are drawn words like any other (`ScrambleText` draws a fresh report's lines inside one — the Summary's skim line among them — and the answers' caret is part of
- * the first line it stands in), so nothing is skipped for it. Read from the page each time it is asked, so it is where the page has put the block now. Undefined where it
- * cannot be read: no document, an id that is no page block (the bare kind a block with no id of its own is reported under), no such element, no word that draws.
+ * P11-39 (ruling §1h.138 (b)): the y of the first line of an element — the top of its first words that draw. The element's box is not its first line: a block's words can
+ * stand well below its box's top (measured on an invented paper: 56 px for "What they found", 16 for the abstract, 8 for "Where it is thin"), so the line is read from the
+ * words, as a range's rects give it — the first text node with words that draws; white space and a node in a hidden or empty box are passed over. Words inside an
+ * `aria-hidden` element are drawn words like any other (`ScrambleText` draws a fresh report's lines inside one — the Summary's skim line among them — and the answers' caret
+ * is part of the first line it stands in), so nothing is skipped for it. Read from the page each time it is asked, so it is where the page has put the element now.
+ * Undefined where no word draws (or the page cannot be walked).
  */
-export function pageBlockLineTop(id: unknown): number | undefined {
-  if (!isPageBlockId(id) || typeof document === "undefined") return undefined;
-  if (typeof document.getElementById !== "function" || typeof document.createTreeWalker !== "function" || typeof document.createRange !== "function") return undefined;
-  const block = document.getElementById(id);
-  if (!block) return undefined;
-  const walker = document.createTreeWalker(block, SHOW_TEXT);
+function firstLineTopIn(element: Element): number | undefined {
+  if (typeof document.createTreeWalker !== "function" || typeof document.createRange !== "function") return undefined;
+  const walker = document.createTreeWalker(element, SHOW_TEXT);
   const range = document.createRange();
   for (let looked = 0; looked < LOOKED_AT; looked += 1) {
     const words = walker.nextNode() as Text | null;
@@ -406,13 +404,65 @@ export function pageBlockLineTop(id: unknown): number | undefined {
 }
 
 /**
- * The y the dock's top is level with: the first line of the block the selection is in. The paper's body (P9-03b): the selected paragraph's first line, the top of the box
- * of its `<p>` (`where.paragraph`; P11-27: of a heading's or a caption's own element). P11-39 (ruling §1h.138 (b)): a selection in a Summary block or an answer — which has
- * no paragraph of the paper — the first line of that block (`pageBlockLineTop`, by the selection's anchor). It stood at the masthead's foot (P10-08, `DOCK_TOP_PX`).
+ * The element a page block's id names: a Summary block (`summary-…`, `paper-words.tsx`'s `SUMMARY_ID`) or the answers' block (`answers-block`) — the ids a selection in them
+ * reports (`placeOf`, `paper-body.tsx`) and the ones the notes' squares and the highlights' marks find them by (`anchor-blocks.ts`'s `isPageBlockId`). Null for any other id
+ * (the bare kind a block with no id of its own is reported under, a paragraph's anchor), for a block that is not on the page, and where there is no document.
+ */
+function pageBlockElement(id: unknown): Element | null {
+  if (!isPageBlockId(id) || typeof document === "undefined" || typeof document.getElementById !== "function") return null;
+  return document.getElementById(id);
+}
+
+/** The first line of a page block (`pageBlockElement`, `firstLineTopIn`): its first drawn words. Undefined where it cannot be read. */
+export function pageBlockLineTop(id: unknown): number | undefined {
+  const block = pageBlockElement(id);
+  return block ? firstLineTopIn(block) : undefined;
+}
+
+/** What is not a line of its own: an inline element, `display: contents` (a wrapper that draws no box), `none`, ruby. Every other display is block-level — `anchor-blocks.ts`'s text model and `block-marks.ts`'s `domTextEnv` count it the same way. */
+const NOT_A_LINE = /^(inline|contents|none|ruby)/;
+
+/** The paragraph of a page block that `from` (the element at a selection's first line) is in: its nearest block-level ancestor inside `block`, `from` itself included; null for none. */
+function paragraphIn(block: Element, from: Element | null): Element | null {
+  for (let element = from; element !== null && element !== block; element = element.parentElement) {
+    if (!NOT_A_LINE.test(getComputedStyle(element).display)) return block.contains(element) ? element : null;
+  }
+  return null;
+}
+
+/** The paragraph each selection started in, found once (below) and kept: the selection's range is not at hand, a click in the card collapses it, and the page scrolls under it. */
+const paragraphOfSelection = new WeakMap<object, Element>();
+
+/**
+ * P11-39 step 2 (the manager's, after round 2; the owner's "level with the first line of the SELECTED paragraph", §1h.49 (a)): the paragraph of `block` that holds the
+ * selection's START — the block-level element at the first line of the selection, found by the page's own hit test at the left edge of the selection's box, a pixel or two
+ * under the top of its first line (`where.bounds`: where the selection stands now, as the box measures it again on every scroll frame). Found the first time it is asked for a
+ * selection and kept for it (`paragraphOfSelection`): the card then follows that paragraph, not whatever comes under the point as the page scrolls. A paragraph kept that has left
+ * the page, a point with nothing of the block at it, and a page that cannot hit-test or read a style are no paragraph: the caller takes the block's first line.
+ */
+function selectedParagraph(selection: ExplainSelection, where: ViewRects, block: Element): Element | null {
+  const kept = paragraphOfSelection.get(selection);
+  if (kept) return kept.isConnected && block.contains(kept) ? kept : null;
+  if (typeof document.elementFromPoint !== "function" || typeof getComputedStyle !== "function") return null;
+  const paragraph = paragraphIn(block, document.elementFromPoint(where.bounds.left + 1, where.bounds.top + 2));
+  if (paragraph) paragraphOfSelection.set(selection, paragraph);
+  return paragraph;
+}
+
+/**
+ * The y the dock's top is level with: the first line of the paragraph the selection starts in. The paper's body (P9-03b): the selected paragraph's first line, the top of the box
+ * of its `<p>` (`where.paragraph`; P11-27: of a heading's or a caption's own element). P11-39 (ruling §1h.138 (b)): a selection in a Summary block or an answer — which has no
+ * paragraph of the paper — the first line of the block's paragraph that holds its start (`selectedParagraph`: an answer's own paragraph or its evidence quote, a Summary block's
+ * line, item or quote; found from the selection's anchor and the page), else of the block itself (`pageBlockLineTop`), as the first step of P11-39 had it. It stood at the masthead's
+ * foot (P10-08, `DOCK_TOP_PX`) and, for the answers, at the one section's first line, 112 to 117 px above a selection in the first answer and further above a later one's.
  * Undefined where there is none to read: the dock is then level with the selection's own first line (`placePanel`, `levelTop` below).
  */
 export function levelTopOf(selection: ExplainSelection, where: ViewRects): number | undefined {
-  return selection.source === undefined || selection.source === "paper" ? where.paragraph?.top : pageBlockLineTop(selection.paragraphId);
+  if (selection.source === undefined || selection.source === "paper") return where.paragraph?.top;
+  const block = pageBlockElement(selection.paragraphId);
+  if (!block) return undefined;
+  const paragraph = selectedParagraph(selection, where, block);
+  return (paragraph ? firstLineTopIn(paragraph) : undefined) ?? firstLineTopIn(block);
 }
 
 /** The same window as far as placing goes: a scroll frame that moved nothing renders nothing. P10-08 (B P10-01's step 2): a legend
