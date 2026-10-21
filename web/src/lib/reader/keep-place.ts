@@ -3,8 +3,9 @@
 // The paper's text re-wraps when its column changes width: a separator dragged (by the mouse or by its keys), the left pane collapsed or
 // pinned, Fit turned on or off, the window resized. The browser keeps the scroll OFFSET through that, and the paragraphs above the reader
 // grow or shrink, so the words under the eye change: measured at 1280 x 720, scrolled to 8,000, a left drag of +60 moved the top
-// paragraph by one and a margin drag of -80 by two. Chromium's own scroll anchoring does not help: it stands down when the width of the
-// anchor's ancestors changes, which is exactly this change.
+// paragraph by one and a margin drag of -80 by two. The browser's own scroll anchoring does not hold the place on this page: measured in
+// Chromium, it kept it neither through the width change (the point under the line 822 px off at 552 to 492 px) nor through a 300 px block
+// put above the reader (300 px off), so nothing here leans on it.
 //
 // What this file does, in one rule: **the point of the paper that is under the masthead's foot stays under it.**
 //
@@ -13,7 +14,7 @@
 //                  FRACTION into it is the same line to within a line — a long paragraph keeps the line nearest the top, not its first line.
 //                  A paragraph that starts below the line (the gap between two) keeps its gap in px.
 //   When           Whenever the text column's layout key changes: its width, the reading scale and Fit's zoom. A change of height alone (the
-//                  reading arriving, a block opening) is not a re-flow, and is left to the browser, as it was. For `SETTLE_MS` after a
+//                  reading arriving, a block opening) is not a re-flow, and is left as it was. For `SETTLE_MS` after a
 //                  re-flow the place is held through the page's own settling: Fit and the text steps are a 0.3 s transition of the
 //                  zoom, the widths and the font sizes (`.zoom-transition`, `globals.css`), so the heights go on changing for some
 //                  frames after the key has changed once. The reader's own scroll ends the hold at once.
@@ -166,8 +167,8 @@ export function keepPlace(env: KeepPlaceEnv): () => void {
       key = next;
       settleUntil = at + SETTLE_MS;
     } else if (at >= settleUntil) {
-      // Taller or shorter, not re-wrapped (the reading arrived, a block opened): the browser keeps the place through that, as it did;
-      // take it as it stands.
+      // Taller or shorter, not re-wrapped (the reading arrived, a block opened): not a re-flow, so nothing is put back, as it was;
+      // take the place as it stands.
       read();
       return;
     }
