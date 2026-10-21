@@ -78,12 +78,13 @@ The full skill texts are in Appendix A (reviewing-cycle) and Appendix B (abc). T
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-21 16:12Z
+AS OF        2026-10-21 16:16Z
 BRANCH HEAD  93701497 (reader-three-pane-p11, pushed)   PR Aspen-Lab/peer#35 draft, CI green on 4de16f6f (older heads green)
 LAST RULING  §1h.165   NEXT RULING NUMBER §1h.166   NEXT ITEM ID P11-58   NEXT FREE PORT 4161
 RUNNING      C P11-54 (keep-place character anchor + rule 4 wheel-during-settle; worktree scratchpad/p11c54/wt, base 62b35aed, port 4155)
-             3 blind readers, round 4 Theme B → scratchpad/p11/r4b/readers/r{1,2,3}.md (pack scratchpad/p11/r4b/pack, head a7a58224)
-TO SPAWN     C P11-56 (briefs/P11-56.md, port 4159, paper-body.tsx) and C P11-57 (briefs/P11-57.md, port 4160, keep-selection.ts) on the head that holds their briefs — then they are RUNNING
+             C P11-56 (triple click before an equation; worktree scratchpad/p11c56/wt, base 6b02956c, port 4159)
+             C P11-57 (Shift+click outside the column; worktree scratchpad/p11c57/wt, base 6b02956c, port 4160)
+             blind readers r1, r2, round 4 Theme B → scratchpad/p11/r4b/readers/r{1,2}.md (r3 returned: 95.83 — E-2 as the walk's, plus 0.25 for the group over a card's words; pack head a7a58224)
 THEN         land P11-54 / 56 / 57 (manager verification each); round 5 walks A (P11-58, port 4157, pack r5a) and B (P11-59, port 4158, pack r5b) on the new head, from the P11-51 / P11-52 pattern; 3 readers each; director; score; repeat.
 OPEN FOR THE OWNER  BACKLOG-108 (two identical quotes in one Summary block — keep both or dedupe); the title clamp at 4 lines (§1h.115); "Open as page" as a glyph at 1024/1093; the left pane's default width 320 vs 360; the edge tab's resting word; the margin's minimum at 1024.
 ```
@@ -115,7 +116,8 @@ OPEN FOR THE OWNER  BACKLOG-108 (two identical quotes in one Summary block — k
 - 2026-10-21 16:00Z–16:03Z | 93701497 | A P11-52, manager | Round 4 Theme B walked at a7a58224 (12/12 PASS, pass requirements hold, P10 guard B1–B16 PASS, F13 PASS on LCO with 0 route requests; walk's own 95.83 with E-2 triple click before an equation 0.25 and E-3 Shift+click past a line's end 0.25; B10 flagged: Figure 1 at Fit is 0.70–0.83 of the margin at 1093/1242/1280/1366 — PASS by the rubric's sentence, the "≥ 380 px" bar was a C brief's target, not a unit); deliverable picked as 93701497, worktree removed; 3 blind readers spawned on the pack | evidence: P11-52-A-20261021T1600Z.md, scratchpad/p11/r4b/pack | next: brief C P11-56 / P11-57; score Theme B when the readers return
 - 2026-10-21 16:05Z | 93701497 | manager (Fable 5.1; the session's model switched again) | **This handoff written at the owner's request** ("写一个别 ChatGPT 可以阅读并继续工作的 handoff… 每完成一个工作就记录一笔"); §5 current state and this history filled in; the two skills, the templates and the gates script appended verbatim | next: commit + push this file; brief and spawn C P11-56 and C P11-57; log each
 
-- 2026-10-21 16:12Z | (this commit) | manager (Fable 5.1) | Briefs P11-56 (triple click before an equation; paper-body.tsx) and P11-57 (Shift+click outside the column; keep-selection.ts) written; ruling §1h.165 (Theme B walked, B10 PASS by the rubric's sentence with the Fit widths recorded for the owner, E-2/E-3 → items); ledger P11-52 DONE, P11-56/57 RUNNING | evidence: briefs/P11-56.md, briefs/P11-57.md, state file §1h.165 | next: spawn both Cs on this commit's hash; log the spawn
+- 2026-10-21 16:12Z | 6b02956c | manager (Fable 5.1) | Briefs P11-56 (triple click before an equation; paper-body.tsx) and P11-57 (Shift+click outside the column; keep-selection.ts) written; ruling §1h.165 (Theme B walked, B10 PASS by the rubric's sentence with the Fit widths recorded for the owner, E-2/E-3 → items); ledger P11-52 DONE, P11-56/57 RUNNING | evidence: briefs/P11-56.md, briefs/P11-57.md, state file §1h.165 | next: spawn both Cs on this commit's hash; log the spawn
+- 2026-10-21 16:16Z | 6b02956c | manager (Fable 5.1) | C P11-56 and C P11-57 spawned (Sonnet) on 6b02956c, ports 4159 / 4160, worktrees scratchpad/p11c56/wt, p11c57/wt; reader r3 of round 4 Theme B returned 95.83 (r1, r2 pending); dashboard rows added | evidence: briefs/P11-56.md, P11-57.md; scratchpad/p11/r4b/readers/r3.md | next: wait for r1/r2 → director check → score Theme B round 4 (rubric Scores row 4 B, ruling §1h.166); land P11-54 / 56 / 57 as they return
 <!-- APPEND NEW ENTRIES BELOW THIS LINE, ONE PER COMPLETED UNIT OF WORK -->
 
 ---
