@@ -184,11 +184,12 @@ describe("the page's hand-off (P10-08b, rule 3)", () => {
     expect(page).toContain("<ExplainBox key={paper.id} target={explainTarget} terms={terms} canAsk={explainCanAsk}");
   });
 
-  // P11-27 rule 2, RE-AIMED (§1c): the view is handed the page's boolean less a heading's or a caption's selection (`explainable`: `canExplain && target?.block ===
-  // undefined`); for a paragraph's selection it is the page's boolean, as it was (the flow test pins both).
+  // P11-27 rule 2, RE-AIMED (§1c) twice: the view was handed the page's boolean less a heading's or a caption's selection (`explainable`: `canExplain && target?.block ===
+  // undefined`); P11-42 rule 2 (ruling §1h.139 (b)) hands it the page's boolean whole, for a heading's and a caption's selection as for a paragraph's (the flow test pins all three).
   it("hands the boolean on to the pill it draws, and keeps the explain check the box's own", () => {
     const toolbar = readFileSync(resolve(process.cwd(), "src/components/reader/selection-toolbar.tsx"), "utf8").replace(/\s+/g, " ");
-    expect(toolbar).toContain("const explainable = canExplain && target?.block === undefined;");
+    expect(toolbar).toContain("const explainable = canExplain;");
+    expect(toolbar).not.toContain("target?.block");
     expect(toolbar).toContain("<SelectionToolbarView place={place} canExplain={explainable}");
     expect(toolbar).toContain("definingTerm(input.terms, input.passage)");
   });

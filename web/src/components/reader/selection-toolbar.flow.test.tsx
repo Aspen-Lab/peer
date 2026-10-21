@@ -387,8 +387,8 @@ describe("SelectionToolbar — the third action and the phone's cell (P11-13, ru
 
 // ── P11-27 (ruling §1h.122) ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 // Rule 1: a card standing at the selection's height does not take the group out of the margin: it stands there, level, over the card, and says so
-// (`data-over-card`). Rule 2: a selection in a caption or a heading is offered Take notes and Highlight in the margin; Explain this is not offered for it
-// (the explain route finds a passage in the paper's paragraphs only, so it would answer "not in the paper": see `lib/papers/explain.ts`, `locatePassage`).
+// (`data-over-card`). Rule 2: a selection in a caption or a heading is offered Take notes and Highlight in the margin. Explain this was not offered for it (the explain route found a
+// passage in the paper's paragraphs only); since P11-42 (rule 2) it is, when the page can explain, as a paragraph's is.
 type Peek = { place: ActionsPlace | null; canExplain: unknown; overCard: unknown; onHighlight: unknown };
 const peek = (tree: ReactNode): Peek => {
   const element = tree as ReactElement<{ place: ActionsPlace; canExplain: unknown; overCard: unknown; onHighlight: unknown }> | null;
@@ -480,13 +480,21 @@ describe("SelectionToolbar — a selection in a caption or a heading (P11-27 rul
     }
   });
 
-  it("is not offered Explain this, whatever the page says it can explain: the route would not find the passage", async () => {
+  // RE-AIMED (§1c), P11-42 rule 2 (round 2 Theme B readers r1, r2, r3; ruling §1h.139 (b)): was "is not offered Explain this, whatever the page says it can explain: the route
+  // would not find the passage". The route finds a caption's and a heading's words now (`locatePassage` with `blocks`), so the page's word stands, as a paragraph's does.
+  it("is offered Explain this when the page can explain, beside Take notes and Highlight, and not when it cannot — as a paragraph's is (P11-42 rule 2)", async () => {
     stub.margin = MARGIN;
     for (const kind of ["heading", "caption"] as const) {
-      const run = await scenario(base({ target: block(kind), canExplain: true, onHighlight: vi.fn(), canHighlight: true }));
-      const got = peek(run.trees[run.trees.length - 1]);
-      run.mounted.unmount();
-      expect(got.canExplain, kind).toBe(false);
+      const can = await scenario(base({ target: block(kind), canExplain: true, onHighlight: vi.fn(), canHighlight: true }));
+      const yes = peek(can.trees[can.trees.length - 1]);
+      can.mounted.unmount();
+      const cannot = await scenario(base({ target: block(kind), canExplain: false, onHighlight: vi.fn(), canHighlight: true }));
+      const no = peek(cannot.trees[cannot.trees.length - 1]);
+      cannot.mounted.unmount();
+      expect(yes.canExplain, kind).toBe(true);
+      expect(typeof yes.onHighlight, kind).toBe("function");
+      expect(yes.place?.mode, kind).toBe("margin");
+      expect(no.canExplain, kind).toBe(false);
     }
   });
 

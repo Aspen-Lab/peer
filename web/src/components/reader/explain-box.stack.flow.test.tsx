@@ -23,7 +23,7 @@ import type { PaperReading } from "@/lib/papers/reading";
 import { explainOffered } from "@/lib/reader/explain-offer";
 import { ExplainBox, ExplainCard, type AskResult } from "./explain-box";
 import type { ReplyResult } from "./explain-thread";
-import type { ExplainSelection } from "./paper-body";
+import type { ExplainSelection, SelectionTarget } from "./paper-body";
 
 const REPLY: ExplainTurn = { role: "peer", text: "A bigger share of plates changes how the metal carries load.", peer: true };
 const ANSWER: ExplainAnswer = { meaning: "A share of a sample turned to plates.", here: { text: "It compares alloys.", peer: true } };
@@ -405,46 +405,56 @@ describe("ExplainBox — the card keeps its top at the selection when the answer
   });
 });
 
-// ── P11-26 rule 4 (§1h.127; C P11-27's report): a selection in a caption or a heading is not the Explain box's ───────────────────────────
+// ── P11-42 rule 2 (round 2 Theme B readers r1, r2, r3; ruling §1h.139 (b)): a selection in a caption or a heading is the Explain box's ──────────────────────
 //
-// Take notes and Highlight are offered on a selection in a figure's caption or a section's heading (their ids have a paragraph's shape; the
-// target carries its `block` kind). The explain route finds a passage among the paragraphs only, so a card opened there said "Select text from the
-// paper itself". `e`, the thumb bar's cell and the selection's button open the box through the same `open`: it does nothing for such a selection, and
-// the box takes no notice of it at all — an open card stays where it stands, behind or in front. A paragraph, a Summary block and an answer are as before.
-describe("ExplainBox — nothing opens for a caption or a heading (P11-26 rule 4; §1h.127)", () => {
+// RE-AIMED (§1c) from P11-26 rule 4 (§1h.127), whose describe ("nothing opens for a caption or a heading") pinned the opposite, test for test. Take notes and Highlight
+// are offered on a selection in a figure's caption or a section's heading (their ids have a paragraph's shape; the target carries its `block` kind), and since the explain
+// route finds such a passage (`locatePassage` with `blocks`) so is Explain this: `e`, the thumb bar's cell and the selection's button open the box through the same `open`,
+// and it takes the selection as a paragraph's — a card opens, the passage is asked for with its block's number, an open card follows the new selection. Tier 0 is as it was.
+describe("ExplainBox — a caption or a heading is explained as a paragraph is (P11-42 rule 2; ruling §1h.139 (b))", () => {
   const as = (block: string | undefined, over: Partial<ExplainSelection> = {}): ExplainSelection => ({ ...selection(380, 300), ...(block !== undefined ? { block } : {}), ...over }) as ExplainSelection;
+  /** Where the page says a heading (block 2) and a caption (block 3) of the Methods are: after its two paragraphs. */
+  const BLOCK_AT: Record<string, number> = { heading: 2, caption: 3 };
 
   for (const block of ["caption", "heading"]) {
-    it(`\`e\` on a ${block} selection opens no card, registers no window and asks for nothing`, async () => {
-      const onAsk = vi.fn(async (): Promise<AskResult> => ANSWER);
-      const run = await scenario(base(as(block), { onAsk }), [() => open()]);
+    it(`\`e\` on a ${block} selection opens the card, registers the window and asks for the passage with its block's number (re-aimed: it opened no card and asked for nothing)`, async () => {
+      const asked: SelectionTarget[] = [];
+      const onAsk = vi.fn(async (target: SelectionTarget): Promise<AskResult> => (asked.push(target), ANSWER));
+      const target = as(block, { passage: "A block of the Methods.", paragraphIndex: BLOCK_AT[block] });
+      const run = await scenario(base(target, { onAsk, cached: undefined }), [() => open()]);
       await wait();
-      expect(cardOf(run.last())).toBeUndefined();
-      expect(explainRegistered()).toBeUndefined();
-      expect(onAsk).not.toHaveBeenCalled();
-      run.mounted.unmount();
-    });
-
-    it(`with a card open, a ${block} selection and \`e\` change nothing: the card keeps its passage, its place and its place in the stack`, async () => {
-      const onAsk = vi.fn(async (): Promise<AskResult> => ANSWER);
-      const run = await scenario(base(selection(380, 300), { onAsk, cached: undefined }), [
-        () => open(),
-        () => useWindows.getState().open({ id: "s1", kind: "sticky", title: "Note 1" }),
-        selectNext(as(block, { ...selection(700, 640), passage: "A figure's caption, selected.", paragraphIndex: 0 }), { cached: undefined }),
-        () => open(),
-      ]);
-      await wait();
-      // Still the first passage's card, a header behind the sticky; `e` neither raised it nor asked for the caption.
-      expect(cardOf(run.last())!.props.passage).toBe("The rafting ratio rose from 0.2 to 0.7.");
-      expect(cardOf(run.last())!.props.behind).toBe(true);
-      expect(styleOf(run.last())).toMatchObject({ top: 300, maxHeight: WINDOW_HEADER_PX });
+      expect(cardOf(run.last())).toBeDefined();
+      expect(explainRegistered()).toMatchObject({ id: EXPLAIN_WINDOW_ID });
       expect(onAsk).toHaveBeenCalledTimes(1);
-      const order = (id: string) => useWindows.getState().windows.find((w) => w.id === id)!.order;
-      expect(order(EXPLAIN_WINDOW_ID)).toBeLessThan(order("s1"));
+      expect(asked[0]).toMatchObject({ sectionIndex: 1, paragraphIndex: BLOCK_AT[block], passage: "A block of the Methods." });
       run.mounted.unmount();
     });
 
-    it(`the thumb bar's cell is not offered for a ${block} selection (under 768 px), and is for a paragraph's`, async () => {
+    it(`with a card open, a ${block} selection and \`e\` take the card to the new passage and raise it, exactly as a paragraph's selection does (re-aimed: they changed nothing)`, async () => {
+      const walk = async (target: ExplainSelection) => {
+        stubRoot();
+        useWindows.setState({ windows: [], clock: 0, origin: null });
+        const onAsk = vi.fn(async (): Promise<AskResult> => ANSWER);
+        const run = await scenario(base(selection(380, 300), { onAsk, cached: undefined }), [
+          () => open(),
+          () => useWindows.getState().open({ id: "s1", kind: "sticky", title: "Note 1" }),
+          selectNext(target, { cached: undefined }),
+          () => open(),
+        ]);
+        await wait();
+        const order = (id: string) => useWindows.getState().windows.find((w) => w.id === id)!.order;
+        const got = { passage: cardOf(run.last())!.props.passage, behind: cardOf(run.last())!.props.behind, top: styleOf(run.last())?.top, asks: onAsk.mock.calls.length, raised: order(EXPLAIN_WINDOW_ID) > order("s1") };
+        run.mounted.unmount();
+        return got;
+      };
+      const moved = { ...selection(700, 640), passage: "A figure's caption, selected.", paragraphIndex: 0 };
+      const blocked = await walk(as(block, moved));
+      const control = await walk(as(undefined, moved));
+      expect(blocked).toEqual(control);
+      expect(blocked).toMatchObject({ passage: "A figure's caption, selected.", behind: false, asks: 2, raised: true });
+    });
+
+    it(`the thumb bar's cell is offered for a ${block} selection (under 768 px), as for a paragraph's (re-aimed: it was not)`, async () => {
       stubWindow(600, 800);
       const paragraph = await scenario(base(as(undefined)), []);
       await wait();
@@ -452,13 +462,29 @@ describe("ExplainBox — nothing opens for a caption or a heading (P11-26 rule 4
       paragraph.mounted.unmount();
       const captioned = await scenario(base(as(block)), []);
       await wait();
-      expect(explainOffered()).toBe(false);
+      expect(explainOffered()).toBe(true);
       captioned.mounted.unmount();
+    });
+
+    it(`Tier 0 is as it was: with no key and no term of the paper's inside a ${block} selection there is nothing to open and nothing is asked; with a defined term the paper's own definition opens`, async () => {
+      const onAsk = vi.fn(async (): Promise<AskResult> => ANSWER);
+      const none = await scenario(base(as(block), { canAsk: false, onAsk }), [() => open()]);
+      await wait();
+      expect(cardOf(none.last())).toBeUndefined();
+      expect(explainRegistered()).toBeUndefined();
+      none.mounted.unmount();
+
+      const term = { term: "rafting ratio", definition: "We define the rafting ratio.", evidence: "We define the rafting ratio.", evidenceWhere: "2 Methods", sectionId: "s2", page: 2 };
+      const defined = await scenario(base(as(block, { passage: "The rafting ratio, plotted." }), { canAsk: false, terms: [term], onAsk }), [() => open()]);
+      await wait();
+      expect(cardOf(defined.last())).toBeDefined();
+      defined.mounted.unmount();
+      expect(onAsk).not.toHaveBeenCalled();
     });
   }
 
-  it("a paragraph, a Summary block and an answer open as they always did, whatever else the target carries", async () => {
-    for (const over of [as(undefined), as("paragraph"), as(undefined, { source: "summary" }), as(undefined, { source: "answer" })]) {
+  it("a paragraph, a Summary block, an answer, a heading and a caption open as they always did, whatever else the target carries", async () => {
+    for (const over of [as(undefined), as("paragraph"), as(undefined, { source: "summary" }), as(undefined, { source: "answer" }), as("heading"), as("caption")]) {
       const run = await scenario(base(over), [() => open()]);
       await wait();
       expect(cardOf(run.last()), JSON.stringify({ block: (over as { block?: string }).block, source: over.source })).toBeDefined();
