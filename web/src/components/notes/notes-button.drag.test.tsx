@@ -48,7 +48,8 @@ import { EDGE_TAB_BESIDE_PX, EDGE_TAB_HIT_PX, NotesButton, NotesButtonView } fro
 // the checkpoint (real drags 1, 3, 6 and 9 px past a line's end at four windows, both themes, and real and touch presses on the tab).
 
 const view = (props: Record<string, unknown>) => renderToStaticMarkup(createElement(NotesButtonView, { variant: "edge", has: true, onOpen: () => {}, ...props } as never));
-const classesOf = (html: string) => (/class="([^"]*)"/.exec(html)?.[1] ?? "").split(" ").filter(Boolean);
+/** The element's classes as the browser reads them: the markup writes `&` in an attribute as `&amp;`, and the tab's variant has one. */
+const classesOf = (html: string) => (/class="([^"]*)"/.exec(html)?.[1] ?? "").replace(/&amp;/g, "&").split(" ").filter(Boolean);
 
 /** The arbitrary variant the tab's pass-through is written with, `[<selector>]:pointer-events-none`, as the selector with its spaces back (`_`). */
 const PASS = /^\[(.+)\]:pointer-events-none$/;
