@@ -83,6 +83,86 @@ export function fitHeight(el: HTMLTextAreaElement | null | undefined): void {
   el.style.height = `${content + (el.offsetHeight - el.clientHeight)}px`;
 }
 
+/**
+ * How long after the reading scale changes the bar is refitted on every frame: the text steps are a 0.3 s transition of the font
+ * size, the column's width and its track (`.zoom-transition`, `globals.css`), so what the bar must hold goes on changing for that
+ * long. A little over it, so the last frame is the settled one (the margin `withZoomTransition` keeps for the class itself).
+ */
+export const FOLLOW_MS = 400;
+
+/** The wrapper the reading scale is set on (`reader-layout.tsx`: `--reading-scale` in its inline style); the bar is inside one. */
+const SCALED = ".reading-scaled";
+
+/**
+ * P11-61 (round 5, Theme A walk E-N1; ruling §1h.171): the bar always shows its whole question. `fitHeight` ran on a change of the
+ * text and on a window resize only, so a question of two lines or more was cut at the bar's foot after a text step (the bar is
+ * `text-body`, which the steps scale) or a separator drag (the column's width, so the bar's): 77 to 140 px hidden at step 1.6, 23 px
+ * after an 80-px drag. Whenever the textarea's content WIDTH changes, or the reading SCALE changes, a non-empty bar is fitted again
+ * (`fitHeight`: an empty bar is one row, as P11-55 has it).
+ *
+ *  - Width: a `ResizeObserver` on the textarea, which sees every way the column moves (a drag, a key, a pane collapsed or pinned, the
+ *    window, the page's own 0.3 s width transition) and nothing that does not move it. A change of height alone (the refit's own) is not
+ *    a width and refits nothing, so it cannot loop. The refit runs on the next animation frame, not inside the observer's callback:
+ *    a height written there is a size change the page's other observers (the reader's keep-place) would have to be told of in
+ *    the same frame, which a browser reports as a loop error. Many widths in a frame (a drag's) ask for one refit.
+ *  - Scale: a `MutationObserver` on the style of the `.reading-scaled` wrapper the bar is in (where `--reading-scale` is set). The
+ *    font size then moves over `FOLLOW_MS` without a width changing (the narrow windows, where the column is a fixed width), so the
+ *    bar is refitted on the spot and on EVERY frame of the transition and once more at its end: it follows the text line by line, and
+ *    never stands cut under it or leaps at the end. Under reduced motion the change is at once, and so is the one refit.
+ *
+ * Returns what takes it all down.
+ */
+export function refitOnReflow(el: HTMLTextAreaElement | null | undefined): () => void {
+  if (!el || typeof requestAnimationFrame === "undefined") return () => {};
+  let frame = 0;
+  let followUntil = 0;
+  const tick = () => {
+    frame = 0;
+    fitHeight(el);
+    if (performance.now() < followUntil) frame = requestAnimationFrame(tick);
+  };
+  const schedule = () => {
+    if (!frame) frame = requestAnimationFrame(tick);
+  };
+
+  let width: number | null = null;
+  const resize =
+    typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver((entries) => {
+          const next = entries[entries.length - 1]?.contentRect.width;
+          if (next === undefined) return;
+          const was = width;
+          width = next;
+          // The first report is the size the bar starts from (the text effect has fitted it); only a change after it refits.
+          if (was !== null && next !== was) schedule();
+        });
+  resize?.observe(el);
+
+  const scaled = el.closest?.(SCALED) as HTMLElement | null | undefined;
+  const scale = () => scaled?.style.getPropertyValue("--reading-scale") ?? "";
+  let lastScale = scale();
+  const watch =
+    scaled && typeof MutationObserver !== "undefined"
+      ? new MutationObserver(() => {
+          const next = scale();
+          if (next === lastScale) return;
+          lastScale = next;
+          followUntil = performance.now() + FOLLOW_MS;
+          fitHeight(el);
+          schedule();
+        })
+      : null;
+  if (scaled) watch?.observe(scaled, { attributes: true, attributeFilter: ["style"] });
+
+  return () => {
+    resize?.disconnect();
+    watch?.disconnect();
+    if (frame) cancelAnimationFrame(frame);
+    frame = 0;
+  };
+}
+
 /** An example in the dropdown: picking it puts `text` in the bar. */
 export interface Chip {
   label: string;
@@ -363,6 +443,8 @@ export function QuestionField({
     window.addEventListener("resize", refit);
     return () => window.removeEventListener("resize", refit);
   }, []);
+  // P11-61 (§1h.171): and when the bar's width changes without the window (a separator, a pane) or the reading scale changes (a text step).
+  useEffect(() => refitOnReflow(input.current), []);
 
   const standingChips = standingGroup(standing, [text]);
   // P5-04 (N5): a question under one group only.
