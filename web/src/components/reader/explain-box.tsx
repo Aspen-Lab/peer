@@ -40,7 +40,12 @@
 // window moves to that paragraph's first line (`placePanel`'s clamp, as for the explained one), with no close and no reflow, its
 // content unchanged; the window stays level with the last selection it followed when that selection goes away (a click in the window
 // collapses it — it must not jump from under the pointer). P10-08: a selection in the Summary or an answer has no paragraph of the
-// paper to be level with, so the window stands at the masthead's foot (`DOCK_TOP_PX`).
+// paper to be level with, so the window stood at the masthead's foot (`DOCK_TOP_PX`): 206 px (the Summary) and 245 px (an answer)
+// above the selection at 1440 x 900, and for a block lower in the Summary a card that no longer spanned the selection. P11-39 (round 2
+// Theme B weighed (a); ruling §1h.138 (b): the owner's P9 words, "level with the first line of the SELECTED paragraph"): the window is
+// level with the first line of the BLOCK the selection is in, as a paragraph's is — a Summary block's or the answers' block's first
+// line (`pageBlockLineTop`, found from the selection's own anchor), before the answer lands and after, held for the floor as a
+// paragraph's is. Where no block can be read, with the selection's own first line.
 //
 // P3-02b: under the first answer, the thread — the reader's messages under "You", Peer's replies under "Peer" (a verified quote through
 // `EvidenceQuote`, else Peer's label beside the prose) — and, pinned at the box's foot, a one-line input: Enter sends, Shift+Enter is a
@@ -77,6 +82,7 @@ import { hasUserLlmOverride } from "@/lib/feed/ai-tier";
 import { setExplainOffer } from "@/lib/reader/explain-offer";
 import { EXPLAIN_WINDOW_ID, WINDOW_HEADER_PX, stackFrameIn, stackLayout, useWindows, type FloatingWindow } from "@/lib/reader/windows";
 import { placeInMargin, useMarginStore, type MarginRect } from "@/lib/reader/margin";
+import { isPageBlockId } from "@/lib/notes/anchor-blocks";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import type { ExplainAnswer, ExplainItem } from "@/lib/papers/explain";
 import type { PaperReading } from "@/lib/papers/reading";
@@ -366,10 +372,47 @@ function currentViewport(): Viewport {
     : { width: window.innerWidth, height: window.innerHeight, legend: legendHeightPx(pageZoom()) };
 }
 
-/** P10-08: the y the dock's top is level with — the first line of the selected paragraph of the paper (P9-03b); a selection in the
- *  Summary or an answer has no paragraph of the paper, so the window stands at the masthead's foot. */
-function levelTopOf(selection: ExplainSelection, where: ViewRects): number | undefined {
-  return selection.source === undefined || selection.source === "paper" ? where.paragraph?.top : DOCK_TOP_PX;
+/** `NodeFilter.SHOW_TEXT`: a walk over a block's text nodes. */
+const SHOW_TEXT = 4;
+/** How many text nodes of a block are looked at for its first line before it is given up as drawing none: a block hidden whole is not walked to its end. */
+const LOOKED_AT = 64;
+
+/**
+ * P11-39 (ruling §1h.138 (b)): the y of the first line of a page block — the top of its first words that draw. The blocks are a Summary block (`summary-…`,
+ * `paper-words.tsx`'s `SUMMARY_ID`) and the answers' block (`answers-block`): the ids a selection in them reports (`placeOf`, `paper-body.tsx`) and the ones the
+ * notes' squares and the highlights' marks find them by (`anchor-blocks.ts`'s `isPageBlockId`). The block's box is not its first line: the Summary's blocks are
+ * items of a flex column, where a first child's margin stands inside the item (56 px for "What they found", 16 for the abstract), so the line is read from the words,
+ * as a range's rects give it — the first text node with words that draws; white space, a node in a hidden or empty box and a decoration (`aria-hidden`: the answers'
+ * caret) are passed over. Read from the page each time it is asked, so it is where the page has put the block now. Undefined where it cannot be read: no document, an
+ * id that is no page block (the bare kind a block with no id of its own is reported under), no such element, no word that draws.
+ */
+export function pageBlockLineTop(id: unknown): number | undefined {
+  if (!isPageBlockId(id) || typeof document === "undefined") return undefined;
+  if (typeof document.getElementById !== "function" || typeof document.createTreeWalker !== "function" || typeof document.createRange !== "function") return undefined;
+  const block = document.getElementById(id);
+  if (!block) return undefined;
+  const walker = document.createTreeWalker(block, SHOW_TEXT);
+  const range = document.createRange();
+  for (let looked = 0; looked < LOOKED_AT; looked += 1) {
+    const words = walker.nextNode() as Text | null;
+    if (words === null) break;
+    if (!/\S/.test(words.data)) continue;
+    if (words.parentElement?.closest("[aria-hidden='true']")) continue;
+    range.selectNodeContents(words);
+    const line = Array.from(range.getClientRects()).find((rect) => rect.right - rect.left > 0);
+    if (line) return line.top;
+  }
+  return undefined;
+}
+
+/**
+ * The y the dock's top is level with: the first line of the block the selection is in. The paper's body (P9-03b): the selected paragraph's first line, the top of the box
+ * of its `<p>` (`where.paragraph`; P11-27: of a heading's or a caption's own element). P11-39 (ruling §1h.138 (b)): a selection in a Summary block or an answer — which has
+ * no paragraph of the paper — the first line of that block (`pageBlockLineTop`, by the selection's anchor). It stood at the masthead's foot (P10-08, `DOCK_TOP_PX`).
+ * Undefined where there is none to read: the dock is then level with the selection's own first line (`placePanel`, `levelTop` below).
+ */
+export function levelTopOf(selection: ExplainSelection, where: ViewRects): number | undefined {
+  return selection.source === undefined || selection.source === "paper" ? where.paragraph?.top : pageBlockLineTop(selection.paragraphId);
 }
 
 /** The same window as far as placing goes: a scroll frame that moved nothing renders nothing. P10-08 (B P10-01's step 2): a legend
@@ -1164,7 +1207,7 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
   // explains otherwise (P9-03b). Read before the early return below, because the stack's origin is pushed from an effect.
   const levelSelection = open === null ? null : docked && stand ? stand : open.selection;
   const levelWith = levelSelection === null ? null : whereOf(levelSelection);
-  // P10-08: a selection in the Summary or an answer has no paragraph of the paper; the card then stands at the masthead's foot.
+  // P10-08, P11-39: a selection in the Summary or an answer has no paragraph of the paper; the card is then level with the first line of its block (`levelTopOf`).
   const paragraphTop = levelSelection !== null && levelWith !== null ? levelTopOf(levelSelection, levelWith) : undefined;
   // R-open (O-6), P11-26 rule 1 (A P11-22 B3; ruling §1h.122): level with the paragraph's first line, held in the margin's band for the card's FLOOR
   // (`DOCK_STACK_FLOOR_PX`: its header, its follow-up field and a few lines of the answer) and no more. It was held for the card's whole measured
