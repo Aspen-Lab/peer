@@ -433,6 +433,66 @@ describe("a Shift+click outside the column, with a selection that began in it st
   });
 });
 
+// P11-62 (ruling §1h.173; round 5, Theme B walk E-4): a release over the foot legend, in the column's x, ends the selection at the last visible line above the legend, as a
+// release below the window does — through the real shell. The legend covers the window's last 28 rows (the caret stub above answers its words from y 692 down at 720 high).
+//
+// Measured in the browser on the base (`b6aa9c22`), 1024 x 768 to 1920 x 1080, light and dark, with and without a key: a drag released at any height over the legend, in the
+// column's x, ran to the end of the paper (70,018 to 70,145 characters on the walk's paper) with no button offered; 1 px above the legend, or over the margin or the left pane at
+// the same heights, it ended on the last visible line (128 to 445 and 102 to 761 characters, the buttons offered).
+describe("a release over the foot legend", () => {
+  const LAST = HEIGHT - 28 - 1;
+  const caretInText = () => Object.assign(selection, { isCollapsed: true, anchorNode: text, anchorOffset: 11, focusNode: text, focusOffset: 11 });
+
+  it.each([HEIGHT - 28, HEIGHT - 20, HEIGHT - 10, HEIGHT - 1])("at y %i, in the column's x: the selection ends at the last visible line above the legend, not where the browser put it", (y) => {
+    open();
+    dragTo(700, y);
+    expect(endedAt()).toEqual([700, LAST]);
+  });
+
+  it("over the margin and over the left pane at the same heights: the column's edge, at the same last visible line", () => {
+    open();
+    dragTo(COLUMN.right + 160, HEIGHT - 20);
+    expect(endedAt()).toEqual([COLUMN.right - 1, LAST]);
+    dragTo(60, HEIGHT - 1);
+    expect(endedAt()).toEqual([COLUMN.left + 1, LAST]);
+  });
+
+  it("below the window: the same last visible line", () => {
+    open();
+    dragTo(700, HEIGHT + 60);
+    expect(endedAt()).toEqual([700, LAST]);
+  });
+
+  it("1 px above the legend, in the column's x: the browser's, nothing is touched", () => {
+    open();
+    dragTo(700, LAST);
+    dragTo(700, 300);
+    expect(selection.extend).not.toHaveBeenCalled();
+  });
+
+  it("a Shift+click over the legend in the column's x, with a caret in the text: the selection runs to the last visible line above the legend", () => {
+    open();
+    caretInText();
+    const at = { clientX: 700, clientY: HEIGHT - 14, shiftKey: true, target: elsewhere("the legend") };
+    dispatch("pointerdown", at);
+    runFrames();
+    dispatch("pointerup", at);
+    runFrames();
+    expect(endedAt()).toEqual([700, LAST]);
+  });
+
+  it("Fit scales the legend: at zoom 1.5 it is 42 px tall, the last visible line is 677 and a release over the scaled legend ends there; 1 px above it is the browser's", () => {
+    open();
+    (window as unknown as { getComputedStyle: unknown }).getComputedStyle = () => ({ getPropertyValue: (name: string) => (name === "--page-zoom" ? "1.5" : "") });
+    dragTo(700, HEIGHT - 42 - 1);
+    expect(selection.extend).not.toHaveBeenCalled();
+    dragTo(700, HEIGHT - 42);
+    expect(endedAt()).toEqual([700, HEIGHT - 42 - 1]);
+    dragTo(700, HEIGHT - 1);
+    expect(endedAt()).toEqual([700, HEIGHT - 42 - 1]);
+  });
+});
+
 describe("the shell's hold on the document", () => {
   it("puts four capture listeners on the document and lets go of them when the shell goes", () => {
     const mounted = open();

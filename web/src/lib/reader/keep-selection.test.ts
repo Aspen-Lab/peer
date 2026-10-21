@@ -321,14 +321,16 @@ describe("domEnv — the real page's tests of a target and a point", () => {
     }
   });
 
-  it("asks for the correction at the window's visible rows: below the masthead's foot, above the window's last row", () => {
+  // Re-aimed by P11-62 (ruling §1h.173): the title said "above the window's last row" and the call 719 (`innerHeight - 1`); the window's last 28 rows are the foot legend's, so
+  // the last visible row is 691 (`innerHeight - legendHeightPx(1) - 1`). The masthead's side (49) is as it was.
+  it("asks for the correction at the window's visible rows: below the masthead's foot, above the foot legend that covers the window's last rows", () => {
     const node = { inColumn: true };
     const extend = vi.fn();
     vi.stubGlobal("window", { innerHeight: 720, getSelection: () => ({ rangeCount: 1, isCollapsed: false, anchorNode: node, focusNode: null, focusOffset: 0, extend }) });
     vi.stubGlobal("document", { caretPositionFromPoint: vi.fn((x: number, y: number) => ({ offsetNode: node, offset: y })) });
     domEnv(column() as never).endAt(1000, 2000);
     expect(extend).toHaveBeenCalledTimes(1);
-    expect((document as unknown as { caretPositionFromPoint: ReturnType<typeof vi.fn> }).caretPositionFromPoint).toHaveBeenCalledWith(COLUMN.right - 1, 719);
+    expect((document as unknown as { caretPositionFromPoint: ReturnType<typeof vi.fn> }).caretPositionFromPoint).toHaveBeenCalledWith(COLUMN.right - 1, 691);
     extend.mockClear();
     domEnv(column() as never).endAt(1000, -300);
     expect((document as unknown as { caretPositionFromPoint: ReturnType<typeof vi.fn> }).caretPositionFromPoint).toHaveBeenLastCalledWith(COLUMN.right - 1, 49);
