@@ -14,6 +14,7 @@ Working language of every artifact in this loop is English (briefs, rubric, stat
 4. Read the rubric `docs/reading-helper-abc/P11-RUBRIC.md` (the units, the prices, the Stop line — amended 2026-10-21 by the owner to ≥ 97.9) and the spec `docs/reading-helper-abc/P11-OWNER-2026-10-19.md` (the owner's own words; never re-derive them).
 5. Check what is still running on the machine (if it is the same container): `git -C /home/user/peer worktree list`; `ps -o pid,pgid,cmd -e | grep -E 'next dev|node' | grep -v grep`; the scratchpad `/tmp/claude-0/-home-user-peer/9602921a-6ac5-5952-88ce-8364fcd8f733/scratchpad/` (ephemeral — it holds evidence packs and worktrees; if it is gone, the deliverables in the repo are what remain). A fresh container has none of it: start from the repo.
 6. Append a log entry (§6 protocol) saying you took over, with the head hash and the UTC time, commit and push. Then work.
+7. **If you are a Claude session with the artifact tools:** before anything else, read §6 from the dashboard's last `by: Claude` update downward and **backfill every entry another agent wrote** into the dashboard (`scratchpad/progress/*.json` → upload → `datasets/*` update, as §3 says): one `work.json` row per completed unit with `by` set to that agent's name (e.g. `ChatGPT`), the scores rows, the status block, any owner decision. The owner's page shows a 谁做的 column; another agent's work must appear there under its own name, never as Claude's. Then log the backfill as one entry.
 
 If the usage limit refuses a command: write what you have, append a log entry marked `PARTIAL — stopped because: <verbatim error>`, commit, push, stop. The next agent picks up at the first unstarted step, never restarts a finished one.
 
@@ -54,7 +55,7 @@ The full skill texts are in Appendix A (reviewing-cycle) and Appendix B (abc). T
 
 **Scratchpad layout (ephemeral):** `scratchpad/p11/r{N}{a,b}/{pack,readers,h}`; worktrees `scratchpad/p11a<id>/wt` (A), `scratchpad/p11c<id>/wt` (C); the manager's free copy `scratchpad/p504/wt`; gates logs `scratchpad/p504/final-*.log`; brief generators `scratchpad/briefgen/`. Repo-side, permanent: `docs/reading-helper-abc/` (briefs/, the walks `*-A-*.md`, the checkpoints `*-C-*.md`, the B reports `*-B-*.md`, `P11-RUBRIC.md`, `P11-OWNER-2026-10-19.md`, `harness/model-stub.cjs`), the state file, this handoff.
 
-**The owner's dashboard** (https://claude.ai/artifact/5gNX3PGGjRfJYziRzyVda4) is a Claude artifact updated by the Claude session through its artifact tools (data JSON in `scratchpad/progress/`). A non-Claude agent cannot update it: say so to the owner once, and keep §6 of this file as the progress record instead.
+**The owner's dashboard** (https://claude.ai/artifact/5gNX3PGGjRfJYziRzyVda4) is a Claude artifact updated by the Claude session through its artifact tools (data JSON in `scratchpad/progress/`). A non-Claude agent cannot update it: say so to the owner once, and keep §6 of this file as the progress record instead. Write each §6 entry so a later Claude session can backfill it one-to-one (one entry per completed unit, the item id, a one-line Chinese `what` for the owner, the state 进行中 / 已交回 / 已合入 / 不做, the score numbers): the `work.json` row shape is `{id, kind, what, state, started, by}` and `by` is your name.
 
 ---
 
