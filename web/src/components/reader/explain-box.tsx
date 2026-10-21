@@ -79,6 +79,12 @@
 // thread before that message and the message, no copy of it, so the reader count does not grow; the reply is appended as Peer's next
 // turn and replaces nothing. It waits while a request is in flight and at the full thread, as a send does; what the reader was typing
 // stays.
+//
+// P11-47 (round 3's Theme B walk, weighed (f); ruling §1h.148 rule 2, option (a)): a selection over the route's passage cap — 1,200 characters, a triple click on a long paragraph —
+// is offered Explain this like any other, and the first 1,200 characters are explained: the first request carries the passage clipped at the cap on a word boundary
+// (`explainPassage`; the route clips the same way, `clipPassage`, and its cap is unchanged), and the paragraph still rides in the prompt as its context. The card's quote is the
+// passage's opening words with an ellipsis (`previewOf`), as for any passage over 80 characters, so it shows the same words clipped or not. The kept answer, the thread and the
+// window's key stay the whole passage's: only the request is clipped. A reply's request carries the whole passage and the route clips it to the same words.
 
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type Ref } from "react";
 import { hasUserLlmOverride } from "@/lib/feed/ai-tier";
@@ -502,10 +508,24 @@ function asAnswer(value: unknown): ExplainAnswer | null {
   };
 }
 
+/** P11-47: the longest passage the Explain request carries — the route's own cap (`EXPLAIN_CAPS.passageChars`, which is server-side and not imported here; `explain-box.long.test.tsx` pins the two equal). */
+export const EXPLAIN_PASSAGE_CHARS = 1200;
+
+/**
+ * P11-47 (ruling §1h.148 rule 2, option (a)): the passage as the explain request carries it — white space collapsed and trimmed, at most `EXPLAIN_PASSAGE_CHARS` characters,
+ * cut at a word boundary (an unbroken run is cut at the cap): exactly what the route makes of it (`clipPassage` in `lib/papers/explain.ts`). Pure.
+ */
+export function explainPassage(passage: string): string {
+  const text = passage.replace(/\s+/g, " ").trim();
+  if (text.length <= EXPLAIN_PASSAGE_CHARS) return text;
+  const space = text.lastIndexOf(" ", EXPLAIN_PASSAGE_CHARS);
+  return (space > 0 ? text.slice(0, space) : text.slice(0, EXPLAIN_PASSAGE_CHARS)).trimEnd();
+}
+
 /**
  * The one request "Explain this?" makes, when the reader clicks: the paper, the
  * passage and where it sits (the first message has no thread, and never asks to
- * search), and the reader's own key only when they have one. An answer,
+ * search), and the reader's own key only when they have one. A passage over the route's cap goes clipped at it (P11-47, `explainPassage`); one within it goes as it is. An answer,
  * "not_in_paper" when the server says the words are not the paper's (422), and
  * "unavailable" for everything else — an outage, a refusal, a gone upload, a reply
  * that is not what was promised.
@@ -520,7 +540,7 @@ export async function requestExplanation(args: {
   try {
     const response = await postExplain(paper.id, {
       paper,
-      passage: selection.passage,
+      passage: selection.passage.length > EXPLAIN_PASSAGE_CHARS ? explainPassage(selection.passage) : selection.passage,
       sectionId,
       paragraphIndex: selection.paragraphIndex,
       thread: [],

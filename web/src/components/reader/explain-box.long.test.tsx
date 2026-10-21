@@ -4,8 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { EXPLAIN_CAPS, buildExplainPrompt, clipPassage, explainMapLines, locatePassage } from "@/lib/papers/explain";
 import type { ExtractedDocument } from "@/lib/papers/html-text";
 import type { Paper } from "@/types";
-import * as box from "./explain-box";
-import { ExplainCard, previewOf, requestExplanation } from "./explain-box";
+import { EXPLAIN_PASSAGE_CHARS, ExplainCard, explainPassage, previewOf, requestExplanation } from "./explain-box";
 import { MAX_SELECTION_CHARS } from "./paper-body";
 
 // P11-47 (round 3, Theme B walk, weighed (f); ruling §1h.148 rule 2, option (a)): Explain this is offered for a selection over the route's passage cap (1,200
@@ -15,10 +14,6 @@ import { MAX_SELECTION_CHARS } from "./paper-body";
 // character paragraph are explained with the whole paragraph (to its own 2,000-character cap) around them. Up to 1,200 characters nothing changes (rule 3).
 // Every text is invented.
 
-// `explainPassage` and `EXPLAIN_PASSAGE_CHARS` are the fix's own exports: read through the namespace, this file compiles on the base, where its tests are red because they are not there.
-const explainPassage = (passage: string): string => (box as unknown as { explainPassage: (passage: string) => string }).explainPassage(passage);
-const passageChars = (): unknown => (box as unknown as { EXPLAIN_PASSAGE_CHARS?: number }).EXPLAIN_PASSAGE_CHARS;
-
 function sentences(n: number, seed = 0): string {
   let out = "";
   for (let k = seed; out.length < n; k += 1) out += `${out ? " " : ""}In plot ${k} the crew counted the invented tide pools twice.`;
@@ -27,7 +22,7 @@ function sentences(n: number, seed = 0): string {
 
 describe("explainPassage — the passage as the request carries it", () => {
   it("is the cap the route has, the selection's old cap, and nothing else: 1,200", () => {
-    expect(passageChars()).toBe(1200);
+    expect(EXPLAIN_PASSAGE_CHARS).toBe(1200);
     expect(EXPLAIN_CAPS.passageChars).toBe(1200);
     expect(MAX_SELECTION_CHARS).toBe(1200);
   });
@@ -109,6 +104,13 @@ describe("requestExplanation — a long selection (rule 2 (a))", () => {
     await requestExplanation({ paper, selection: { sectionIndex: -1, paragraphIndex: -1, passage, source: "answer", paragraphId: "answers-block" }, sectionId: "" });
     expect(bodyOf(fetchMock, 0)).toMatchObject({ passage: clipPassage(passage), source: "summary", sectionId: "" });
     expect(bodyOf(fetchMock, 1)).toMatchObject({ passage: clipPassage(passage), source: "answer" });
+  });
+
+  it("posts a passage within the cap exactly as it was given — not collapsed, not trimmed (rule 3)", async () => {
+    const fetchMock = stubFetch();
+    const raw = "  A passage   with  odd\nwhite space.  ";
+    await requestExplanation({ paper, selection: { sectionIndex: 1, paragraphIndex: 1, passage: raw }, sectionId: "s2" });
+    expect(bodyOf(fetchMock).passage).toBe(raw);
   });
 
   it("posts a selection of up to 1,200 characters byte for byte as it did (rule 3)", async () => {
