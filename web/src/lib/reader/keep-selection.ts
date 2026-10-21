@@ -37,12 +37,20 @@
 // Why a file of its own, not `keep-place.ts`: that one keeps the SCROLL place through a re-flow; this one keeps the SELECTION's end through a drag. They share the
 // column (`COLUMN_SELECTOR`) and nothing else, and each is one call in the shell.
 //
+// P11-62 (ruling §1h.173): the foot legend is not the column's. The window's last rows (`DOCK_BOTTOM_PX`, 28 px; `legendHeightPx(zoom)` once Fit scales the page) are the legend's,
+// a fixed overlay of the page, and its text is the last in the document. Measured, base `b6aa9c22`, 1024 x 768 to 1920 x 1080, light and dark, with and without a key, Fit on
+// at 1280 and 1440: a drag released at any height over the legend, in the column's x, ran to the end of the paper (70,018 to 70,145 characters on the walk's paper), the legend's
+// words highlighted, no button offered — the visible box said its last row was `innerHeight - 1`, so the pointer was "over the column" and the browser's own end was left alone.
+// Over the margin or the left pane the same release was corrected (the pointer was beside the column). The visible box now ends on the last row above the legend, at the page's
+// own zoom, so a release over the legend (and a Shift+click there) is a release below the window's foot: the last visible line, whatever the x.
+//
 // Everything that decides something is a pure function, or a small controller over an `env`, so it runs in the Node-only test suite; only `domEnv` and the hook
 // touch the real page.
 
 import { useEffect, type RefObject } from "react";
-import { DOCK_TOP_PX } from "@/components/reader/explain-dock";
+import { DOCK_TOP_PX, legendHeightPx } from "@/components/reader/explain-dock";
 import { COLUMN_SELECTOR } from "@/lib/reader/keep-place";
+import { readPageZoom } from "@/lib/reader/margin";
 
 /**
  * A press on one of these is the control's own, not the start of a drag-select in the text: a link, a button, a field, a disclosure, a label, an editable
@@ -51,11 +59,14 @@ import { COLUMN_SELECTOR } from "@/lib/reader/keep-place";
 export const CONTROL_SELECTOR =
   'a, button, input, textarea, select, summary, label, [contenteditable], [draggable="true"], [role="button"], [role="link"], [role="tab"], [role="switch"], [role="checkbox"], [role="menuitem"]';
 
+/** A legend's top edge that is a whole number of pixels to within this is that number (the product of 28 and Fit's zoom carries rounding noise): its row is the legend's. */
+export const LEGEND_EDGE_EPSILON_PX = 1e-6;
+
 /** How far (px) and how many times the caret is looked for further in when the nearest point is a fixed overlay's (the legend, the masthead). */
 export const CARET_STEP_PX = 6;
 export const CARET_TRIES = 12;
 
-/** The visible part of the column, vertically: the first line under the masthead's foot, and the window's last row (null where it is not known). */
+/** The visible part of the column, vertically: the first line under the masthead's foot, and the last row above the foot legend (null where the window's height is not known). */
 export interface Visible {
   top: number;
   bottom: number | null;
@@ -236,8 +247,14 @@ export function selectionKeeper(env: KeeperEnv) {
 
 /** The real page, for a column. Browser only. */
 export function domEnv(column: Element): KeeperEnv {
-  /** The column's visible rows: below the masthead's foot, above the window's last row. */
-  const visible = (): Visible => ({ top: DOCK_TOP_PX + 1, bottom: typeof window.innerHeight === "number" ? window.innerHeight - 1 : null });
+  /**
+   * The column's visible rows: below the masthead's foot, above the foot legend (P11-62) — the window's height less the legend's, as the page computes it (`legendHeightPx` at
+   * the page's Fit zoom), less the row the legend's top edge falls in. A fraction of a pixel (Fit's zoom) is rounded to the row above the edge.
+   */
+  const visible = (): Visible => ({
+    top: DOCK_TOP_PX + 1,
+    bottom: typeof window.innerHeight === "number" ? Math.ceil(window.innerHeight - legendHeightPx(readPageZoom(column)) - LEGEND_EDGE_EPSILON_PX) - 1 : null,
+  });
   /** Does a text field (an input, a textarea, an editable block) have the focus? Then the caret in the document is its own. */
   const fieldHasFocus = (): boolean => {
     const field = document.activeElement;

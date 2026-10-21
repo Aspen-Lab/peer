@@ -194,11 +194,12 @@ describe("a drag-select that began in the paper's text, released outside the col
     dragTo(700, HEIGHT + 60);
     const inX = endedAt()!;
     expect(inX[0]).toBe(700);
-    expect(inX[1]).toBeLessThan(HEIGHT - 29);
+    // Re-aimed by P11-62: was `toBeLessThan(HEIGHT - 29)` (the call stood at 689, six rows' search up from `innerHeight - 1`); the last visible row is now the one above the legend's top edge, exactly.
+    expect(inX[1]).toBe(HEIGHT - 29);
     selection.extend.mockClear();
     dragTo(COLUMN.right + 80, HEIGHT + 60);
     expect(endedAt()![0]).toBe(COLUMN.right - 1);
-    expect(endedAt()![1]).toBeLessThan(HEIGHT - 29);
+    expect(endedAt()![1]).toBe(HEIGHT - 29); // re-aimed by P11-62 as above: was toBeLessThan
   });
 
   it("over the masthead: the first line under its foot", () => {
@@ -319,7 +320,7 @@ describe("a Shift+click outside the column, with a selection that began in it st
     caretInText();
     shiftClick(COLUMN.right + 80, HEIGHT + 60);
     expect(endedAt()![0]).toBe(COLUMN.right - 1);
-    expect(endedAt()![1]).toBeLessThan(HEIGHT - 29);
+    expect(endedAt()![1]).toBe(HEIGHT - 29); // re-aimed by P11-62 as above: was toBeLessThan
     selection.extend.mockClear();
     shiftClick(COLUMN.left - 80, 20);
     expect(endedAt()![1]).toBeGreaterThanOrEqual(49);
