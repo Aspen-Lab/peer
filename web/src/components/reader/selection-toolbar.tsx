@@ -61,6 +61,10 @@
 // card gains a button; one drawn (a label, an icon or a painted surface of its own), seen through the card and the scrolling bodies it stands in, not a hit area nor the picture's
 // button (the picture is the card's content). A writing surface is not one: its words are the card's words. The card's words are read too, as the line boxes they stand in
 // (`wordsOf`).
+//
+// P11-49 rule 2 (same ruling): a header's free part is a place only if the whole group fits inside the header row — an 88-px group does not fit a 40-px row, the 34-px strip does.
+// Otherwise the candidates are just above the header, just below it (below the last of a stack) and level over the card's body where that covers no control: the smallest move from
+// the line wins; over the body the place that covers the fewest of the card's words (slid along the margin, keeping the margin's left edge unless that saves about half a word).
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PaperTerm } from "@/lib/papers/report";
@@ -221,6 +225,8 @@ const meets = (a: ViewRect, b: ViewRect) => a.left < b.right - HAIR_PX && b.left
 /** Whether `inner` lies wholly inside `outer`. */
 const within = (inner: ViewRect, outer: ViewRect) => inner.left >= outer.left - HAIR_PX && inner.right <= outer.right + HAIR_PX && inner.top >= outer.top - HAIR_PX && inner.bottom <= outer.bottom + HAIR_PX;
 
+/** The area `a` and `b` share, in px². */
+const shared = (a: ViewRect, b: ViewRect) => Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
 
 /**
  * What a header holds, as rects inside its `zone`: every element with text of its own (a title, a quote head, a link) and every control with none (the big X, an icon).
@@ -283,6 +289,8 @@ export const CONTROL_SELECTOR =
 const NOT_WORDS = new Set(["svg", "style", "script", "textarea", "canvas"]);
 /** The form fields: a control by what they are, whatever is or is not inside them. */
 const FIELDS = new Set(["input", "select", "textarea"]);
+/** Room a word's rect gives away before a place that covers less of the card's words wins over one nearer the margin's left: about half a word. */
+const WORD_TIE_PX2 = 400;
 
 const styleOf = (element: ElementLike): StyleLike | null => element.ownerDocument?.defaultView?.getComputedStyle?.(element) ?? null;
 
@@ -475,15 +483,15 @@ export const HEADER_GAP_PX = 4;
 export type Clearance = "level" | "aside" | "free" | "below" | "above" | "held";
 
 /**
- * P11-38 rule 2: the place for a box of `size` that would stand at (`left`, `top`) — the margin's left edge and the first line's height — made clear of the headers.
- * Level (`top` and `left` as given) when the box is over no header. Otherwise on a header's free part: the same top, the left moved along the margin to the nearest place where
- * the box fits whole between what the headers hold at that height (`parts`: the X, the title's words, the controls — and a few pixels from each): a move of nothing. Otherwise the
- * nearest clear place above or below: just above a header or just below one — below the last of a stack of them, above the first — wholly inside the band; the nearer to `top`
- * wins, and just below when they are as near. Otherwise held where it was: nothing is clear. It never leaves the margin sideways. Pure.
- *
- * P11-49 rule 1 (ruling §1h.149): the same for the cards' `controls` — a toolbar's row and its buttons, a sticky's button, the explain card's link, input and Send. A box is clear
- * only of a control's whole box, wherever the control stands: the places above are made of what the headers hold and what the controls are, and the edges of the controls are
- * places too (just above one, just below one). Level with the line, slid along the margin past a control, it is `aside`.
+ * P11-38 rule 2, as P11-49 (ruling §1h.149) amends it: the place for a box of `size` that would stand at (`left`, `top`) — the margin's left edge and the first line's height —
+ * made clear of the cards it would stand over. A place is clear when:
+ *   - it covers no control (`controls`: a toolbar and its buttons, a sticky's button, the explain card's link, input and Send — rule 1), and
+ *   - it covers no header row (`headers`) — unless it stands wholly inside the row, clear of what the row's text and controls hold (a few pixels from each): the row's free part
+ *     is a place only if the whole box fits there (rule 2) — an 88-px group does not fit a 40-px row; the strip does.
+ * Of the clear places the nearest to `top` wins: `top` itself first (slid along the margin if a control or a header's text is in the way, and to cover the fewest of the cards'
+ * `words`), else the nearest top that is just above or just below a header or a control, or inside a row it fits — a place just above or below is taken at `left`; one inside a row, at
+ * the left its free part allows —, wholly inside the band, the one below when two are as near. Where a place covers a card's words the left that covers least of them wins, over
+ * the nearer to `left` (it keeps `left` unless a place saves more than about half a word). Otherwise held where it was: nothing is clear. It never leaves the margin sideways. Pure.
  */
 export function clearOfHeaders(input: {
   margin: MarginRect;
@@ -493,49 +501,92 @@ export function clearOfHeaders(input: {
   headers: readonly HeaderZone[];
   /** P11-49: the controls of the open cards that no header holds (`readCardObstacles`). */
   controls?: readonly ViewRect[];
+  /** P11-49: the open cards' words, as the line boxes they stand in (`readCardObstacles`). */
+  words?: readonly ViewRect[];
 }): { left: number; top: number; how: Clearance } {
   const { margin, size, left, top, headers } = input;
   const controls = input.controls ?? [];
+  const words = input.words ?? [];
+  const lowest = margin.left + MARGIN_INSET_PX;
+  const highest = Math.max(lowest, margin.left + margin.width - MARGIN_INSET_PX - size.width);
   const at = (x: number, y: number): ViewRect => ({ left: x, top: y, right: x + size.width, bottom: y + size.height });
-  const onHeader = (box: ViewRect) => headers.some((zone) => meets(box, zone.box));
-  const onControl = (box: ViewRect) => controls.some((control) => meets(box, control));
-  if (!onHeader(at(left, top)) && !onControl(at(left, top))) return { left, top, how: "level" };
+  const across = (x: number) => Math.min(Math.max(x, lowest), highest);
+  const parts = headers.flatMap((zone) => zone.parts);
 
-  // The free part: where the box would stand on a header or a control, the places along the margin where it fits whole between what the headers hold at this height (a few pixels
-  // from each part) and the controls. A header holding nothing at this height — the box would meet only its padding or its border — has none: the box stands under it.
-  const reach = at(left, top);
-  const blocked = [...headers.flatMap((zone) => zone.parts), ...controls]
-    .filter((part) => part.top < reach.bottom && reach.top < part.bottom)
-    .map((part): [number, number] => [part.left - HEADER_GAP_PX, part.right + HEADER_GAP_PX])
-    .sort((a, b) => a[0] - b[0]);
-  if (blocked.length > 0) {
-    const from = margin.left + MARGIN_INSET_PX;
-    const to = margin.left + margin.width - MARGIN_INSET_PX;
-    const gaps: Array<[number, number]> = [];
-    let cursor = from;
-    for (const [start, end] of blocked) {
-      if (start > cursor) gaps.push([cursor, Math.min(start, to)]);
-      cursor = Math.max(cursor, end);
-    }
-    if (cursor < to) gaps.push([cursor, to]);
-    let free: number | null = null;
-    for (const [start, end] of gaps) {
-      if (end - start < size.width) continue;
-      const x = Math.min(Math.max(left, start), end - size.width);
-      if (free === null || Math.abs(x - left) < Math.abs(free - left)) free = x;
-    }
-    if (free !== null) return { left: free, top, how: onHeader(at(free, top)) ? "free" : "aside" };
-  }
+  // A place is clear when it covers no control and no header row, but for one whole inside a row and clear of what the row holds.
+  const clear = (box: ViewRect): boolean => {
+    if (controls.some((control) => meets(box, control))) return false;
+    return headers.every((zone) => !meets(box, zone.box) || (within(box, zone.box) && !zone.parts.some((part) => meets(box, { ...part, left: part.left - HEADER_GAP_PX, right: part.right + HEADER_GAP_PX }))));
+  };
+  const covered = (box: ViewRect) => words.reduce((sum, word) => sum + shared(box, word), 0);
 
-  // Otherwise the nearest clear place: just above or just below a header or a control (below the last of a stack: the places are the edges of the headers and the controls, and a
-  // place is clear when the box is over no header and no control there), wholly inside the band; the nearer to `top` wins, and just below when they are as near.
-  const inBand = (y: number) => y >= margin.top && y + size.height <= margin.bottom;
-  let best: number | null = null;
-  for (const y of [...headers.flatMap((zone) => [zone.box.bottom, zone.box.top - size.height]), ...controls.flatMap((control) => [control.bottom, control.top - size.height])]) {
-    if (!inBand(y) || onHeader(at(left, y)) || onControl(at(left, y))) continue;
-    if (best === null || Math.abs(y - top) < Math.abs(best - top) || (Math.abs(y - top) === Math.abs(best - top) && y > best)) best = y;
+  // The lefts worth trying at a top, nearest `left` first: the margin's ends, where it was, and the sides of whatever stands in its reach — a control (touching it, or a few
+  // pixels from it), what a header holds, a header row it must stand inside, a line of words. A clear stretch of the margin has an end among them.
+  const lefts = (y: number, room: number): number[] => {
+    const reaches = (rect: ViewRect) => rect.top < y + size.height && y < rect.bottom;
+    const xs = new Set<number>([left, lowest, highest]);
+    for (const control of controls.filter(reaches)) {
+      xs.add(control.right + room);
+      xs.add(control.left - room - size.width);
+    }
+    for (const part of parts.filter(reaches)) {
+      xs.add(part.right + HEADER_GAP_PX);
+      xs.add(part.left - HEADER_GAP_PX - size.width);
+    }
+    for (const zone of headers.filter((one) => reaches(one.box))) {
+      xs.add(zone.box.left);
+      xs.add(zone.box.right - size.width);
+    }
+    for (const word of words.filter(reaches)) {
+      xs.add(word.right + room);
+      xs.add(word.left - room - size.width);
+    }
+    return [...xs].map(across).sort((a, b) => Math.abs(a - left) - Math.abs(b - left));
+  };
+  /** The left for a top: a few pixels clear of what it slides past; among the clear ones, the one that covers least. A top that is neither the line's nor inside a row stands at `left`. */
+  const leftFor = (y: number): number | null => {
+    if (y !== top && !rowTops.has(y)) return clear(at(left, y)) ? left : null;
+    for (const room of [HEADER_GAP_PX]) {
+      let best: number | null = null;
+      let least = Infinity;
+      for (const x of lefts(y, room)) {
+        if (!clear(at(x, y))) continue;
+        const under = covered(at(x, y));
+        if (best === null || under < least - WORD_TIE_PX2) {
+          best = x;
+          least = under;
+        }
+      }
+      if (best !== null) return best;
+    }
+    return null;
+  };
+
+  // The tops worth trying: the line's own, and every edge where a place can begin — just under a header or a control, just over one, and the nearest top inside a row it fits.
+  const inBand = (y: number) => y === top || (y >= margin.top - HAIR_PX && y + size.height <= margin.bottom + HAIR_PX);
+  const tops = new Set<number>([top]);
+  const rowTops = new Set<number>();
+  for (const zone of headers) {
+    tops.add(zone.box.bottom);
+    tops.add(zone.box.top - size.height);
+    if (size.height <= zone.box.bottom - zone.box.top) {
+      const inside = Math.min(Math.max(top, zone.box.top), zone.box.bottom - size.height);
+      tops.add(inside);
+      rowTops.add(inside);
+    }
   }
-  if (best !== null) return { left, top: best, how: best > top ? "below" : "above" };
+  for (const control of controls) {
+    tops.add(control.bottom);
+    tops.add(control.top - size.height);
+  }
+  const nearestFirst = [...tops].filter(inBand).sort((a, b) => Math.abs(a - top) - Math.abs(b - top) || b - a);
+  for (const y of nearestFirst) {
+    const x = leftFor(y);
+    if (x === null) continue;
+    const box = at(x, y);
+    const how: Clearance = headers.some((zone) => meets(box, zone.box)) ? "free" : y === top ? (x === left ? "level" : "aside") : y > top ? "below" : "above";
+    return { left: x, top: y, how };
+  }
   return { left, top, how: "held" };
 }
 
@@ -556,6 +607,7 @@ export function actionsPlace(input: {
   sizes: { margin: { width: number; height: number }; above: { width: number; height: number } };
   /** P11-38: the open cards' headers, where the group must not stand (the margin's mode only: the pill above the selection is as it was). */
   headers?: readonly HeaderZone[];
+  /** P11-49: the open cards' controls the headers do not hold, which the group never covers, and their words, which it covers as few of as it can. */
   controls?: readonly ViewRect[];
   words?: readonly ViewRect[];
 }): ActionsPlace | null {
@@ -564,7 +616,7 @@ export function actionsPlace(input: {
   if (pill === null) return null;
   if (margin === null) return { mode: "above", ...pill };
   const level = { left: margin.left + MARGIN_INSET_PX, top: placeInMargin(margin, bounds.top, sizes.margin.height) };
-  const spot = clearOfHeaders({ margin, size: sizes.margin, ...level, headers: input.headers ?? [], controls: input.controls ?? [] });
+  const spot = clearOfHeaders({ margin, size: sizes.margin, ...level, headers: input.headers ?? [], controls: input.controls ?? [], words: input.words ?? [] });
   return { mode: "margin", left: spot.left, top: spot.top, below: false, ...(spot.how === "level" ? {} : { clear: spot.how }) };
 }
 
@@ -638,8 +690,9 @@ interface Frame {
   cards: ViewRect[];
   /** P11-38: their headers, and whether the Explain card that stands holds the selection's passage. */
   headers: HeaderZone[];
-  /** P11-49: their controls (outside the headers), which the place is made from. */
+  /** P11-49: their controls (outside the headers) and their words, which the place is made from. */
   controls: ViewRect[];
+  words: ViewRect[];
   explained: boolean;
 }
 
@@ -662,7 +715,8 @@ const sameFrame = (a: Frame | null, b: Frame | null) =>
     a.explained === b.explained &&
     a.headers.length === b.headers.length &&
     a.headers.every((header, index) => sameHeader(header, b.headers[index])) &&
-    sameRects(a.controls, b.controls));
+    sameRects(a.controls, b.controls) &&
+    sameRects(a.words, b.words));
 
 type Size = { width: number; height: number };
 
@@ -721,6 +775,7 @@ export function SelectionToolbar({
               cards: open.rects,
               headers: open.headers,
               controls: open.controls,
+              words: open.words,
               explained: explainHeadHolds(open.explainHeads, target.passage),
             }
           : null;
@@ -762,7 +817,7 @@ export function SelectionToolbar({
   const sizeOf = (which: ActionsMode): Size => sizes[`${which}:${buttons}`] ?? estimate(which, buttons);
   const placed =
     target && frame && frame.of === target
-      ? actionsPlace({ bounds: frame.bounds, viewport: frame.viewport, margin, sizes: { margin: sizeOf("margin"), above: sizeOf("above") }, headers: frame.headers, controls: frame.controls })
+      ? actionsPlace({ bounds: frame.bounds, viewport: frame.viewport, margin, sizes: { margin: sizeOf("margin"), above: sizeOf("above") }, headers: frame.headers, controls: frame.controls, words: frame.words })
       : null;
   // P11-38 rule 1: in the margin the group is gone once Explain this has been pressed for the selection that stands; the pill above the selection (a window with no margin) is as it was.
   const place = placed !== null && placed.mode === "margin" && target !== null && pressed === target ? null : placed;

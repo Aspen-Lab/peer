@@ -25,8 +25,9 @@
 //     strip is placed (`readHeaders`, the selection toolbar's reader) and again when the stack of cards changes (a card opened, raised or closed: a frame is asked
 //     for, as for a scroll). Where the level place would cover one the strip stands on the header's free part if it fits whole, else just below the header
 //     (`clearOfHeaders`, the same function the three actions use);
-//   - and over no control of a card, wherever it stands (P11-49 rule 1; ruling §1h.149): the host reads each card's controls with its headers (`readCardObstacles`) and the strip
-//     takes the place the three actions take (`clearOfHeaders`): clear of every control, slid along the margin past one, or just above or below it;
+//   - and over no control of a card, wherever it stands (P11-49; ruling §1h.149): the host reads each card's controls and words with its headers (`readCardObstacles`) and the strip
+//     takes the place the three actions take (`clearOfHeaders`): clear of every control; on a header's free part only if it fits whole inside the row (34 px in a 40-px row);
+//     covering as few of the card's words as it can;
 //   - Escape: the strip's own listener hides it but does not take the key, and on a paper page Escape is "back to the briefing" (the keyboard layer, on
 //     `window`). The host takes the key while a strip stands (`takeStripEscape`), as the figure card does for its own: on the document, in the bubble
 //     phase, from the moment the host mounts, leaving a key that was handled already and a modal dialog over the page;
@@ -71,7 +72,7 @@ export interface StripStanding {
  * null: no part of the mark is inside the window (P11-27 rule 3; ruling §1h.123) — its box ends at or above the masthead's foot (the margin band's top) or
  * starts at or below the window's foot, the bounds the selection's actions are hidden by. Otherwise in the margin, level with the mark's first line, 8 px in from
  * the margin's left edge, whatever card stands at that height (P11-27 rule 1); held inside the margin's band while the first line is out of it and a later one
- * is not. P11-38 rule 2, P11-49 rule 1 (ruling §1h.149): made clear of the open cards' `headers` and `controls` (`clearOfHeaders`): on a header's free part, else the nearest clear place, never over an X, a title or a control. Pure.
+ * is not. P11-38 rule 2, P11-49 (ruling §1h.149): made clear of the open cards' `headers` and `controls` (`clearOfHeaders`): never over an X, a title or a control; on a header's free part only if the whole strip fits inside the row, else the nearest clear place; covering as few of the card's `words` as it can. Pure.
  */
 export function stripStanding(input: {
   mark: ViewRect;
@@ -80,8 +81,9 @@ export function stripStanding(input: {
   margin: MarginRect;
   /** P11-38: the open cards' headers (`readCardObstacles`), where the strip must not stand but whole inside a row's free part. */
   headers?: CardObstacles["headers"];
-  /** P11-49: their controls, which the strip never covers. */
+  /** P11-49: their controls, which the strip never covers, and their words, which it covers as few of as it can. */
   controls?: CardObstacles["controls"];
+  words?: CardObstacles["words"];
 }): StripStanding | null {
   const { mark, viewport, margin } = input;
   const box = input.box ?? mark;
@@ -92,7 +94,7 @@ export function stripStanding(input: {
   const oneRow = room >= STRIP_ONE_ROW_WIDTH_PX;
   const height = oneRow ? STRIP_ROW_PX : STRIP_TWO_ROWS_PX;
   const level = { left: margin.left + MARGIN_INSET_PX, top: placeInMargin(margin, mark.top, height) };
-  const spot = clearOfHeaders({ margin, size: { width: oneRow ? STRIP_ONE_ROW_WIDTH_PX : room, height }, ...level, headers: input.headers ?? [], controls: input.controls ?? [] });
+  const spot = clearOfHeaders({ margin, size: { width: oneRow ? STRIP_ONE_ROW_WIDTH_PX : room, height }, ...level, headers: input.headers ?? [], controls: input.controls ?? [], words: input.words ?? [] });
   return { mode: "margin", left: spot.left, top: spot.top, width: inner, ...(spot.how === "level" ? {} : { clear: spot.how }) };
 }
 
@@ -184,9 +186,9 @@ export function HighlightStripHost({ paperId }: { paperId: string }): ReactEleme
     if (current === null || margin === null) return;
     const line = markLine(document, current);
     const box = line === null ? null : markBox(document, current);
-    const cards = line === null || typeof document.querySelectorAll !== "function" ? { headers: [], controls: [] } : readCardObstacles(document);
+    const cards: CardObstacles = line === null || typeof document.querySelectorAll !== "function" ? { headers: [], controls: [], words: [] } : readCardObstacles(document);
     const next =
-      line === null ? null : stripStanding({ mark: line, ...(box ? { box } : {}), viewport: { width: window.innerWidth, height: window.innerHeight }, margin, headers: cards.headers, controls: cards.controls });
+      line === null ? null : stripStanding({ mark: line, ...(box ? { box } : {}), viewport: { width: window.innerWidth, height: window.innerHeight }, margin, ...cards });
     if (next === null) {
       useHighlightStrip.getState().hide();
       putPlace(null);
