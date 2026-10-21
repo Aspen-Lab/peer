@@ -53,7 +53,8 @@ describe("the fixed zone on a short window (globals.css)", () => {
   });
 
   it("keeps the cap, a safety valve at 62 % of the pane's body: the zone is made smaller, the cap is not raised", () => {
-    expect(ruleIn(CSS, ".reader-left-fixed")).toMatch(/max-height:\s*calc\(0\.62\s*\*\s*\(100vh\s*-\s*4rem\s*-\s*var\(--legend-h\)\s*-\s*1rem\)\s*\/\s*var\(--page-zoom,\s*1\)\);/);
+    // P11-37 re-aim (B P11-36 §3.5): 62 % of the pane's body, which is now `(100vh - 4rem) / zoom - legend - 1rem` (the legend is inside Fit's zoom, so it is not divided by it).
+    expect(ruleIn(CSS, ".reader-left-fixed")).toMatch(/max-height:\s*calc\(0\.62\s*\*\s*\(\(100vh\s*-\s*4rem\)\s*\/\s*var\(--page-zoom,\s*1\)\s*-\s*var\(--legend-h\)\s*-\s*1rem\)\);/);
   });
 
   it("changes nothing else on a short window: no display, no visibility, no overflow rule for the progress or the map", () => {

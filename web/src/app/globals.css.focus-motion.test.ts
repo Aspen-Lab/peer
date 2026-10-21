@@ -11,6 +11,11 @@
 //    rule that makes it smooth is inside `@media (prefers-reduced-motion: no-preference)`, as the pane's transitions already are, so a
 //    reader who asked for less motion gets a focus scroll or an anchor jump in one step.
 //
+// P11-37 (B P11-36 §3.5; BACKLOG-105) RE-AIM, `pinned` and the two titles that name it, no assertion weakened: the pane's sticky `top` is the first-paint
+// position, the masthead (48 px, outside Fit's zoom) plus the article's 1rem (inside it): `calc(3rem / zoom + 1rem)`. `4rem / zoom` was that number only at
+// zoom 1; under Fit it stood 16 x (zoom - 1) px short and the window still moved 3 px (1920 x 1080), 6, 10 and 23 px (2133, 2560 and 3840 wide) when focus
+// reached a separator at scroll 0. The separators still carry the pane's own `top`, whatever it is (the second test), and only the top margin.
+//
 // jsdom computes neither `scroll-margin` nor `prefers-reduced-motion`, so these are source-text assertions on the stylesheet (the file's
 // own pattern, see globals.css.test.ts); the browser measure is in the checkpoint P11-29-C.
 import { readFileSync } from "node:fs";
@@ -60,9 +65,9 @@ const ruleOf = (selector: string) => {
 };
 
 describe("globals.css — the separator takes focus without moving the page (P11-29, rule 1)", () => {
-  const pinned = /^calc\(\s*4rem\s*\/\s*var\(\s*--page-zoom\s*,\s*1\s*\)\s*\)$/;
+  const pinned = /^calc\(\s*3rem\s*\/\s*var\(\s*--page-zoom\s*,\s*1\s*\)\s*\+\s*1rem\s*\)$/;
 
-  it("the separators carry a scroll-margin-top of 4rem over the page zoom, so their top edge is already on the window's at scroll 0", () => {
+  it("the separators carry a scroll-margin-top of the pane's first-paint position (3rem over the page zoom, plus 1rem), so their top edge is already on the window's at scroll 0", () => {
     const margins = declarations("scroll-margin-top", /./).filter((d) => d.preludes.at(-1) === ".reader-divider");
     expect(margins, ".reader-divider declares scroll-margin-top once").toHaveLength(1);
     expect(margins[0].preludes).toEqual([".reader-divider"]);

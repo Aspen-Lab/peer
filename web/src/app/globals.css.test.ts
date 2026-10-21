@@ -318,6 +318,11 @@ describe("globals.css — the highlighter token (P10-09f)", () => {
 //   "is a window-high flex column ..."           same assertions on `.reader-left` (the max-height calc is verbatim)
 //   "keeps the focus ring inside the scroll port"  was `margin-inline: -6px; padding-inline: 6px`; the pane is a full-bleed column
 //                                                with its own side padding, `padding-inline: 16px 8px`, no negative margin
+// P11-37 (B P11-36 §3.5; BACKLOG-105) RE-AIM, two tests, no assertion weakened: under Fit the masthead (48 px) is outside the page's CSS zoom and the
+// article's 1rem of top padding and the key legend are inside it, so the pane's `top` is `calc(3rem / zoom + 1rem)` (the first-paint position; 4rem at zoom
+// 1) and its `max-height` is `(100vh - 4rem) / zoom - legend - 1rem` (the same lengths at zoom 1). The claims are the ones they were: "is sticky, with a top
+// that is the first-paint position" and "is a window-high flex column ... that keeps the legend and a rem clear"; the painted numbers, at every Fit
+// zoom, are pinned in `components/reader/left-pane.fit-top.test.ts`.
 //   "keeps --legend-h ..."                       unchanged
 // and the rule's new parts have tests of their own below.
 describe("globals.css — the reader's left pane pins by its top (P7-14, R2; re-aimed by P11-10)", () => {
@@ -332,9 +337,9 @@ describe("globals.css — the reader's left pane pins by its top (P7-14, R2; re-
     expect(css).not.toContain("@utility reader-panel");
   });
 
-  it("is sticky, with a top of 4rem divided by the page zoom", () => {
+  it("is sticky, with a top of the masthead's 3rem divided by the page zoom plus the article's 1rem (4rem at zoom 1)", () => {
     expect(rule).toMatch(/position:\s*sticky;/);
-    expect(rule).toMatch(/top:\s*calc\(\s*4rem\s*\/\s*var\(--page-zoom,\s*1\)\s*\);/);
+    expect(rule).toMatch(/top:\s*calc\(\s*3rem\s*\/\s*var\(--page-zoom,\s*1\)\s*\+\s*1rem\s*\);/);
   });
 
   it("has no bottom-pin arithmetic: the top is not a min() of the window and the panel's height, and nothing reads --panel-h", () => {
@@ -349,8 +354,9 @@ describe("globals.css — the reader's left pane pins by its top (P7-14, R2; re-
   it("is a window-high flex column that scrolls only when its blocks are taller than the window", () => {
     expect(rule).toMatch(/display:\s*flex;/);
     expect(rule).toMatch(/flex-direction:\s*column;/);
-    // 100vh less the top (4rem), the key legend and a rem of air — each divided by the page zoom, as `top` is.
-    expect(rule).toMatch(/max-height:\s*calc\(\(100vh\s*-\s*4rem\s*-\s*var\(--legend-h\)\s*-\s*1rem\)\s*\/\s*var\(--page-zoom,\s*1\)\);/);
+    // 100vh less the 4rem above the grid, divided by the page zoom (the window is not zoomed), less the key legend and a rem of air (both inside the zoom,
+    // so they stay local lengths).
+    expect(rule).toMatch(/max-height:\s*calc\(\(100vh\s*-\s*4rem\)\s*\/\s*var\(--page-zoom,\s*1\)\s*-\s*var\(--legend-h\)\s*-\s*1rem\);/);
     expect(rule).toMatch(/overflow-y:\s*auto;/);
   });
 

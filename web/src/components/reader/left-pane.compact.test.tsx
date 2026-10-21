@@ -172,7 +172,8 @@ describe("the compact command rows (globals.css)", () => {
   });
 
   it("does not touch the cap: the zone is made smaller, the cap is not raised", () => {
-    expect(CSS).toMatch(/\.reader-left-fixed\s*\{[^}]*max-height:\s*calc\(0\.62\s*\*\s*\(100vh\s*-\s*4rem\s*-\s*var\(--legend-h\)\s*-\s*1rem\)\s*\/\s*var\(--page-zoom,\s*1\)\);/);
+    // P11-37 re-aim (B P11-36 §3.5): the same cap, 62 % of the pane's body, with the legend taken as the zoomed length it is.
+    expect(CSS).toMatch(/\.reader-left-fixed\s*\{[^}]*max-height:\s*calc\(0\.62\s*\*\s*\(\(100vh\s*-\s*4rem\)\s*\/\s*var\(--page-zoom,\s*1\)\s*-\s*var\(--legend-h\)\s*-\s*1rem\)\);/);
     expect(atRule(COMPACT)).not.toMatch(/reader-left-fixed|reader-left-scroll|progress|role=/);
   });
 });
