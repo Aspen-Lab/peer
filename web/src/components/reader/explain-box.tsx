@@ -382,9 +382,10 @@ const LOOKED_AT = 64;
  * `paper-words.tsx`'s `SUMMARY_ID`) and the answers' block (`answers-block`): the ids a selection in them reports (`placeOf`, `paper-body.tsx`) and the ones the
  * notes' squares and the highlights' marks find them by (`anchor-blocks.ts`'s `isPageBlockId`). The block's box is not its first line: a block's words can stand well
  * below its box's top (measured on an invented paper: 56 px for "What they found", 16 for the abstract, 8 for "Where it is thin"), so the line is read from the words,
- * as a range's rects give it — the first text node with words that draws; white space, a node in a hidden or empty box and a decoration (`aria-hidden`: the answers'
- * caret) are passed over. Read from the page each time it is asked, so it is where the page has put the block now. Undefined where it cannot be read: no document, an
- * id that is no page block (the bare kind a block with no id of its own is reported under), no such element, no word that draws.
+ * as a range's rects give it — the first text node with words that draws; white space and a node in a hidden or empty box are passed over. Words inside an `aria-hidden`
+ * element are drawn words like any other (`ScrambleText` draws a fresh report's lines inside one — the Summary's skim line among them — and the answers' caret is part of
+ * the first line it stands in), so nothing is skipped for it. Read from the page each time it is asked, so it is where the page has put the block now. Undefined where it
+ * cannot be read: no document, an id that is no page block (the bare kind a block with no id of its own is reported under), no such element, no word that draws.
  */
 export function pageBlockLineTop(id: unknown): number | undefined {
   if (!isPageBlockId(id) || typeof document === "undefined") return undefined;
@@ -397,7 +398,6 @@ export function pageBlockLineTop(id: unknown): number | undefined {
     const words = walker.nextNode() as Text | null;
     if (words === null) break;
     if (!/\S/.test(words.data)) continue;
-    if (words.parentElement?.closest("[aria-hidden='true']")) continue;
     range.selectNodeContents(words);
     const line = Array.from(range.getClientRects()).find((rect) => rect.right - rect.left > 0);
     if (line) return line.top;
