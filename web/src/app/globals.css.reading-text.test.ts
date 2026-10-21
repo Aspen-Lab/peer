@@ -143,3 +143,51 @@ describe("globals.css — the text steps scale the reading text inside the wrapp
     expect(read("../components/reader/paper-body.tsx")).toMatch(/<figcaption className="annotation mt-2 leading-\[1\.6\] text-text-faint measure-mono">/);
   });
 });
+
+// P11-53 (ruling §1h.159): no word of the reading text passes its column, at any text step.
+//
+// The paper's paragraphs wrap only at spaces and hyphens (`overflow-wrap: normal`), and `hyphens: auto` breaks nothing where the
+// browser has no dictionary for the paper's language. Since P11-48 scales the paper's own text, a run with no break opportunity (a
+// chemical name joined by slashes, a URL) grows with the step: at 1.32 / 1.45 / 1.6 it passed a 416-px column by 30 / 74 / 125 px, over
+// the column's padding, the separator and the margin's cards, and on a phone it made the page wider than the window.
+//
+// The rule is one declaration on the wrapper, `.reading-scaled { overflow-wrap: break-word }`, and it is inherited, so it reaches the
+// paper's body, its headings and captions, the Summary's blocks and the answers, which all stand inside the three wrappers. `break-word`
+// (not `anywhere`, not `word-break: break-all`) breaks a word only when it cannot fit on a line of its own: a line that fits today wraps
+// exactly as it does today, and the hyphens, the justification and the column's width are left as they are. What that does to the
+// layout (the run's right edge against the column's, the page's scrollWidth, the line count of every paragraph at scale 1) is in the
+// P11-53 checkpoint, measured in Chromium; jsdom lays nothing out, so this file holds the source the measurement stands on.
+describe("globals.css — a run wider than its line breaks inside the reading text (P11-53, §1h.159)", () => {
+  // Every rule block of the sheet, comments gone: [selector, declarations]. An `@media` block's own rules are in it, its header is not.
+  const blocks = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match) => [match[1].trim(), match[2].trim()] as const);
+  const declarationsOf = (body: string) => body.split(";").map((declaration) => declaration.trim().replace(/\s+/g, " ")).filter(Boolean);
+
+  it("sets `overflow-wrap: break-word` once, on the wrapper, which the words inside inherit", () => {
+    const onWrapper = blocks.filter(([selector]) => selector === ".reading-scaled");
+    expect(onWrapper, "one rule, on `.reading-scaled` itself").toHaveLength(1);
+    expect(declarationsOf(onWrapper[0][1])).toEqual(["overflow-wrap: break-word"]);
+  });
+
+  it("changes nothing else about how a line breaks: every rule under `.reading-scaled` is a size, bar the one wrapper rule", () => {
+    for (const [selector, body] of blocks.filter(([selector]) => selector.startsWith(".reading-scaled"))) {
+      if (selector === ".reading-scaled") continue;
+      expect(declarationsOf(body).map((declaration) => declaration.split(":")[0]), `${selector} sets more than a size`).toEqual(["font-size"]);
+    }
+  });
+
+  it("leaves the hyphenation and the justification of `reading-justify` as they are", () => {
+    const utility = css.match(/@utility reading-justify\s*\{([^{}]*)\}/);
+    expect(utility, "`reading-justify` is gone").not.toBeNull();
+    const declarations = declarationsOf(utility![1]);
+    expect(declarations).toContain("text-align: justify");
+    expect(declarations).toContain("hyphens: auto");
+    expect(declarations.filter((declaration) => /^(overflow-wrap|word-break)\b/.test(declaration))).toEqual([]);
+  });
+
+  it("is not taken back by any component the wrappers hold: none sets `break-normal`, `wrap-normal` or a `word-break`", () => {
+    const TAKEN_BACK = /(?<![\w-])(?:[\w[\]@():>&-]+:)*(?:break-normal|break-keep|break-all|wrap-normal|\[overflow-wrap:normal\]|\[word-break:[^\]]*\])(?![\w-])/g;
+    for (const file of WRAPPED_FILES) {
+      expect(stripComments(read(file)).match(TAKEN_BACK) ?? [], `${file} resets how a word breaks`).toEqual([]);
+    }
+  });
+});
