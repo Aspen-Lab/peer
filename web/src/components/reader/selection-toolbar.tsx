@@ -35,8 +35,9 @@
 // selection (and its slack to a card and its hysteresis between two modes) is gone where a margin stands; it is the group of a window with no margin (under 1024 px)
 // and nothing else. `data-over-card` says when the group stands over a card, so the page and a measurement can tell.
 //
-// P11-27 rule 2 (X-4): a selection in a figure's caption or a section's heading is offered Take notes and Highlight like a paragraph's. Explain this is not offered
-// for it: the explain route finds a passage in the paper's paragraphs only (`lib/papers/explain.ts`, `locatePassage`), so it would answer "not in the paper".
+// P11-27 rule 2 (X-4): a selection in a figure's caption or a section's heading is offered Take notes and Highlight like a paragraph's. Explain this was not offered
+// for it then: the explain route found a passage in the paper's paragraphs only (`lib/papers/explain.ts`, `locatePassage`), so it answered "not in the paper".
+// P11-42 (ruling §1h.139 (b)) offers it there too: the three actions stand for a caption's or a heading's selection as for a paragraph's.
 //
 // P11-38 rule 1 (owner item 5, "一旦点击其中一个，就会显示其中一个的功能"; round 2's walk X-5; ruling §1h.138 (a)): a press of Explain this ends the group's job, as Take notes and
 // Highlight already do (they clear the selection, so the group goes with it). Once pressed — by the button, or by `e`, which the toolbar sees as the Explain card
