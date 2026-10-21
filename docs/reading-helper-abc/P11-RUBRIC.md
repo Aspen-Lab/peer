@@ -54,7 +54,7 @@ Widths: the three panes are scored at **1280 × 720, 1366 × 768, 1440 × 900** 
 4. Defects clustered by mechanism → B where the cause is unknown → C items in parallel → the manager verifies (gates, the touched tests ×3, one own mutation restored byte-identical) and lands.
 5. Both scores recorded here and in the state file with the head; the owner gets the numbers, what changed, what is left, and the decisions only they can make.
 
-Stop: every theme ≥ **99** in two consecutive rounds (§1h.111 (b)); a theme that reaches it twice stops being walked, and a later item that touches its files gets A's re-check of the lines it could move (as P10's §1h.100). The loop's end is the manager's measure; the owner's own look at the surface is the acceptance above it.
+Stop: every theme ≥ **97.9** in two consecutive rounds — **the owner's ruling of 2026-10-21 (§1h.163): one 0.25 extra is allowed per theme.** It was ≥ **99** (§1h.111 (b)), which at N = 12 allowed none. 97.9 is 100 × (12 − 0.25) / 12 = 97.92: a theme with no extra, or with one extra priced 0.25, meets it; one extra priced 0.5 or more, a FAIL unit, or a pass requirement that does not hold, does not. The scores on record do not change. Under the new line Theme A's round 3 (97.92) would have been a pass and its round 4 (91.67) is not, and Theme B has none, so each theme's run of consecutive passes starts again at round 5. A theme that reaches it twice stops being walked, and a later item that touches its files gets A's re-check of the lines it could move (as P10's §1h.100). The loop's end is the manager's measure; the owner's own look at the surface is the acceptance above it.
 
 ## Scores
 
