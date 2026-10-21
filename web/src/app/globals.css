@@ -921,6 +921,18 @@ html[data-mode="dark"] {
 .reading-scaled [class~="reading-prose"] { font-size: calc(var(--text-lead) * var(--reading-scale, 1)); }
 .reading-scaled figcaption[class~="annotation"] { font-size: calc(var(--text-caption) * var(--reading-scale, 1)); }
 
+/* P11-53 (ruling §1h.159): no word of the reading text passes its column, at any text step. The paper's paragraphs wrap only at spaces
+   and hyphens (`overflow-wrap: normal`), and `hyphens: auto` breaks nothing where the browser has no dictionary, so a run with no break
+   opportunity (a name joined by slashes, a URL) is as wide as it is. Since P11-48 scales the paper's own text, such a run grew with
+   the step: it stood over the column's padding, the separator and the margin's cards, and on a phone it made the page wider than the
+   window. One declaration on the wrapper does it, and it is inherited, so it reaches everything the three wrappers hold (the paper's
+   body, its headings and captions, the Summary's blocks, the answers): a run too wide for a line of its own breaks inside itself.
+   `break-word`, not `anywhere`: it moves a break only inside a word that cannot fit its line, so a line that fits wraps exactly as it
+   did, and the hyphenation, the justification (`reading-justify`) and the column's width are as they were. `anywhere` would also
+   take the word out of a flex or grid item's min-content width, and nothing here needs that: measured in Chromium, the page's
+   scrollWidth equals its clientWidth at every step from 390 to 1440 wide. globals.css.reading-text.test.ts pins the rule. */
+.reading-scaled { overflow-wrap: break-word; }
+
 /* P11-29: smooth root scrolling only where the reader has not asked for less motion (the same query as the panes' transitions above). A
    focus scroll to the far end of a long paper, or an anchor jump from the map, was an animation of 18,000px whatever the setting said
    (WCAG 2.3.3); under `reduce` the computed value is `auto` and either one is a single step. Default motion is unchanged. */
