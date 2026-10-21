@@ -41,9 +41,11 @@ interface SelectionStub {
   rangeCount: number;
   isCollapsed: boolean;
   anchorNode: unknown;
+  anchorOffset: number;
   focusNode: unknown;
   focusOffset: number;
   extend: ReturnType<typeof vi.fn>;
+  collapse: ReturnType<typeof vi.fn>;
 }
 let selection: SelectionStub;
 /** The caret under a point: the paper's text anywhere inside the column's box; the legend's over the window's last 28 rows; the masthead's over the first 48. */
@@ -51,7 +53,7 @@ let caret: ReturnType<typeof vi.fn>;
 let doc: { caretPositionFromPoint: typeof caret };
 
 beforeEach(() => {
-  selection = { rangeCount: 1, isCollapsed: false, anchorNode: inColumn(), focusNode: null, focusOffset: 0, extend: vi.fn() };
+  selection = { rangeCount: 1, isCollapsed: false, anchorNode: inColumn(), anchorOffset: 0, focusNode: null, focusOffset: 0, extend: vi.fn(), collapse: vi.fn() };
   caret = vi.fn((x: number, y: number) => {
     if (y < 48) return { offsetNode: elsewhere("masthead"), offset: 0 };
     if (y > 719 - 28) return { offsetNode: elsewhere("legend"), offset: 0 };
@@ -402,5 +404,352 @@ describe("the module's means", () => {
       .replace(/\/\/.*$/gm, "");
     expect(source).not.toMatch(/pointer-events|pointerEvents|preventDefault|stopPropagation/);
     expect(source).not.toMatch(/mousemove|mouseup|selectionchange|scrollBy|scrollTo/);
+  });
+});
+
+// ── P11-57 (ruling §1h.165): a Shift+click outside the column ends the selection at the column's edge, as a drag's release does ──
+//
+// Measured on the base (`6b02956c`, which follows a mouse press that began in the paper's text and no other), 1280 x 720 on the invented paper, a click on a word 60 px
+// into a full line (the browser leaves a collapsed selection in the text: a caret) and then a Shift+click: 12, 20 and 23 px past the line's end (over the margin's
+// separator, whose own press is taken: the browser changes nothing) left the caret as it was, 0 characters; 40, 100 and 300 px past (over the margin's aside) 39,208 and no
+// buttons; 40 and 120 px before the line's start (over the left pane) 17,816 to 17,828; within 9 px past the end (over the centre's own box) 65 and the buttons.
+// Here: the decision with the anchor read at the press (`endSelectionInColumn`'s last argument), the controller's Shift press, the page's two tests (`startsOutside`,
+// `standing`) and the real wiring. The shell's own call is `reader-shell.keep-selection.flow.test.tsx`.
+
+/** What the press read of the selection that stands: the node and offset of its anchor. */
+interface Held {
+  node: unknown;
+  offset: number;
+}
+type PressedEnd = (column: unknown, x: number, y: number, visible: Visible, doc: unknown, selection: unknown, press: Held | null) => boolean;
+const endWithPress = endSelectionInColumn as unknown as PressedEnd;
+
+describe("endSelectionInColumn — the end of a selection that a Shift+press outside the column moved", () => {
+  const held: Held = { node: inColumn("the clicked word"), offset: 5 };
+  const run = (x: number, y: number, over: { selection?: Partial<SelectionStub>; press?: Held | null; visible?: Visible } = {}) => {
+    const sel = { ...selection, ...over.selection };
+    const result = endWithPress(column(), x, y, over.visible ?? VISIBLE, doc, sel, over.press === undefined ? held : over.press);
+    return { result, sel };
+  };
+  const extendedAt = (sel: SelectionStub) => (sel.extend.mock.calls[0][0] as { at: number[] }).at;
+
+  it.each([12, 23, 40, 100, 300])("the browser ran the selection out into the margin, a card or a separator (%i px past the line's end): its end goes to the column's right edge, at the pointer's height, the anchor kept", (past) => {
+    const { result, sel } = run(COLUMN.right + past, 300, { selection: { focusNode: elsewhere("aside"), focusOffset: 0 } });
+    expect(result).toBe(true);
+    expect(extendedAt(sel)).toEqual([COLUMN.right - 1, 300]);
+    expect(sel.collapse).not.toHaveBeenCalled();
+  });
+
+  it.each([12, 40, 120])("the browser ran it into the left pane (%i px before the line's start): the column's left edge", (before) => {
+    const { result, sel } = run(COLUMN.left - before, 412, { selection: { focusNode: elsewhere("the left pane"), focusOffset: 0 } });
+    expect(result).toBe(true);
+    expect(extendedAt(sel)).toEqual([COLUMN.left + 1, 412]);
+  });
+
+  it.each([12, 20, 23])("a separator's press (%i px past the line's end) is taken by the separator and the browser keeps the caret where it was: the caret is the start, the end goes to the edge", (past) => {
+    const { result, sel } = run(COLUMN.right + past, 300, { selection: { isCollapsed: true, anchorNode: held.node, anchorOffset: held.offset, focusNode: held.node, focusOffset: held.offset } });
+    expect(result).toBe(true);
+    expect(extendedAt(sel)).toEqual([COLUMN.right - 1, 300]);
+    expect(sel.collapse).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["it was collapsed into the margin: its anchor is outside the column", { isCollapsed: true, anchorNode: elsewhere("margin"), focusNode: elsewhere("margin") }],
+    ["it was cleared: no range", { rangeCount: 0, isCollapsed: true, anchorNode: null, focusNode: null }],
+    ["it has no anchor", { isCollapsed: true, anchorNode: null }],
+  ])("the browser collapsed the selection elsewhere (%s): it is restored from the anchor read at the press, then its end goes to the edge, in that order", (_name, over) => {
+    const { result, sel } = run(COLUMN.right + 12, 300, { selection: over as Partial<SelectionStub> });
+    expect(result).toBe(true);
+    expect(sel.collapse).toHaveBeenCalledTimes(1);
+    expect(sel.collapse).toHaveBeenCalledWith(held.node, held.offset);
+    expect(sel.extend).toHaveBeenCalledTimes(1);
+    expect(extendedAt(sel)).toEqual([COLUMN.right - 1, 300]);
+    expect(sel.collapse.mock.invocationCallOrder[0]).toBeLessThan(sel.extend.mock.invocationCallOrder[0]);
+  });
+
+  it("a pointer over the column's box whose press was on something outside it (a fixed overlay stands over the text): the end goes to the pointer's own caret, it is not left to the browser", () => {
+    const { result, sel } = run(600, 300, { selection: { isCollapsed: true, anchorNode: held.node, focusNode: held.node } });
+    expect(result).toBe(true);
+    expect(extendedAt(sel)).toEqual([600, 300]);
+  });
+
+  it("below the window's foot and above the masthead: the same last and first visible lines as a drag's release", () => {
+    const below = run(COLUMN.right + 80, 760, { selection: { isCollapsed: true, anchorNode: held.node } });
+    expect(below.result).toBe(true);
+    expect(extendedAt(below.sel)[0]).toBe(COLUMN.right - 1);
+    expect(extendedAt(below.sel)[1]).toBeLessThan(719 - 28);
+    const above = run(COLUMN.left - 60, 20, { selection: { isCollapsed: true, anchorNode: held.node } });
+    expect(above.result).toBe(true);
+    expect(extendedAt(above.sel)[1]).toBeGreaterThanOrEqual(49);
+  });
+
+  it("an anchor that is no longer in the column (the page re-rendered between the press and the frame): nothing is touched", () => {
+    const { result, sel } = run(COLUMN.right + 40, 300, { press: { node: elsewhere("a node that went"), offset: 1 } });
+    expect(result).toBe(false);
+    expect(sel.collapse).not.toHaveBeenCalled();
+    expect(sel.extend).not.toHaveBeenCalled();
+  });
+
+  it("the end already there: not extended again, and a selection whose anchor is in the column is not restored", () => {
+    const spot = { offsetNode: { inColumn: true }, offset: 7 };
+    caret.mockReturnValue(spot);
+    const { result, sel } = run(COLUMN.right + 40, 300, { selection: { focusNode: spot.offsetNode, focusOffset: 7 } });
+    expect(result).toBe(false);
+    expect(sel.extend).not.toHaveBeenCalled();
+    expect(sel.collapse).not.toHaveBeenCalled();
+  });
+
+  it("with no anchor read at a press it is a drag's rule as before: a collapsed selection and a pointer over the column are left alone", () => {
+    expect(run(COLUMN.right + 40, 300, { press: null, selection: { isCollapsed: true } }).result).toBe(false);
+    expect(run(600, 300, { press: null }).result).toBe(false);
+  });
+});
+
+describe("selectionKeeper — a Shift+press outside the column, with a selection that began in it standing", () => {
+  let frames: Array<(() => void) | null>;
+  let calls: unknown[][];
+  let standing: Held | null;
+  const held: Held = { node: inColumn("the clicked word"), offset: 5 };
+  type ShiftEnv = Env & { startsOutside(target: unknown): boolean; standing(): Held | null };
+  const shiftEnv = (): ShiftEnv => ({
+    startsInText: (target) => (target as { inColumn?: boolean })?.inColumn === true && (target as { control?: boolean }).control !== true,
+    startsOutside: (target) => (target as { inColumn?: boolean })?.inColumn === false && (target as { control?: boolean }).control !== true,
+    standing: () => standing,
+    endAt: ((x: number, y: number, ...rest: unknown[]) => calls.push([x, y, ...rest])) as Env["endAt"],
+    frame: (run) => frames.push(run) - 1,
+    cancel: (handle) => {
+      frames[handle as number] = null;
+    },
+  });
+  const runFrames = () => frames.splice(0).forEach((run) => run?.());
+  const press = (over: Partial<Pointer & { shiftKey: boolean }> = {}): Pointer & { shiftKey?: boolean } => ({
+    pointerType: "mouse",
+    pointerId: 1,
+    isPrimary: true,
+    button: 0,
+    buttons: 1,
+    clientX: 1000,
+    clientY: 300,
+    target: elsewhere("the margin"),
+    shiftKey: true,
+    ...over,
+  });
+
+  beforeEach(() => {
+    frames = [];
+    calls = [];
+    standing = held;
+  });
+
+  it("asks for one correction at the next frame, at the press's place, carrying the anchor read at the press: nothing in the event itself (the browser's own extension comes first)", () => {
+    const k = selectionKeeper(shiftEnv());
+    k.down(press());
+    expect(calls).toEqual([]);
+    runFrames();
+    expect(calls).toEqual([[1000, 300, held]]);
+  });
+
+  it("follows the press as a drag's: three moves in a frame make one correction, the release the last, and nothing after it", () => {
+    const k = selectionKeeper(shiftEnv());
+    k.down(press());
+    runFrames();
+    for (const x of [1004, 1010, 1020]) k.move(press({ clientX: x }));
+    runFrames();
+    k.up(press({ buttons: 0, clientX: 1030, clientY: 310 }));
+    runFrames();
+    k.move(press({ clientX: 1200 }));
+    runFrames();
+    expect(calls).toEqual([
+      [1000, 300, held],
+      [1020, 300, held],
+      [1030, 310, held],
+    ]);
+  });
+
+  it("a click (the press and the release in one frame) asks once, at the release's place", () => {
+    const k = selectionKeeper(shiftEnv());
+    k.down(press());
+    k.up(press({ buttons: 0, clientX: 1002, clientY: 301 }));
+    runFrames();
+    expect(calls).toEqual([[1002, 301, held]]);
+  });
+
+  it("a press without Shift outside the text is not followed, whatever stands", () => {
+    const k = selectionKeeper(shiftEnv());
+    k.down(press({ shiftKey: false }));
+    k.move(press({ shiftKey: false, clientX: 1100 }));
+    k.up(press({ shiftKey: false, buttons: 0 }));
+    runFrames();
+    expect(calls).toEqual([]);
+  });
+
+  it("a Shift+press on a control outside the column (the notes tab, a link of the map, a card's button) is the control's", () => {
+    const k = selectionKeeper(shiftEnv());
+    k.down(press({ target: { inColumn: false, control: true, name: "the notes tab" } }));
+    k.up(press({ buttons: 0 }));
+    runFrames();
+    expect(calls).toEqual([]);
+  });
+
+  it("no selection that began in the column stands (a card's text, the notes editor, the left pane's title, a field's own caret, none): left alone, and the moves after it too", () => {
+    standing = null;
+    const k = selectionKeeper(shiftEnv());
+    k.down(press());
+    k.move(press({ clientX: 1100 }));
+    k.up(press({ buttons: 0, clientX: 1100 }));
+    runFrames();
+    expect(calls).toEqual([]);
+  });
+
+  it("a Shift+press inside the column's text is the browser's, as before: followed as any press in the text, corrected at its release only, with no anchor", () => {
+    const k = selectionKeeper(shiftEnv());
+    k.down(press({ target: inColumn() }));
+    runFrames();
+    expect(calls).toEqual([]);
+    k.up(press({ target: inColumn(), buttons: 0, clientX: 1100 }));
+    runFrames();
+    expect(calls).toEqual([[1100, 300]]);
+  });
+
+  it("only a mouse's primary button: a touch, a pen, the secondary button, a pointer that is not primary", () => {
+    const k = selectionKeeper(shiftEnv());
+    for (const over of [{ pointerType: "touch" }, { pointerType: "pen" }, { button: 2 }, { isPrimary: false }]) {
+      k.down(press(over));
+      k.up(press({ buttons: 0 }));
+    }
+    runFrames();
+    expect(calls).toEqual([]);
+  });
+
+  it("another pointer's moves are not this press's, and a cancelled pointer takes back the correction that was waiting", () => {
+    const k = selectionKeeper(shiftEnv());
+    k.down(press());
+    k.move(press({ pointerId: 2, clientX: 1100 }));
+    runFrames();
+    expect(calls).toEqual([[1000, 300, held]]);
+    calls.length = 0;
+    k.down(press());
+    k.cancel();
+    runFrames();
+    k.move(press({ clientX: 1100 }));
+    runFrames();
+    expect(calls).toEqual([]);
+  });
+
+  it("the anchor is the press's own: a later press in the text carries none", () => {
+    const k = selectionKeeper(shiftEnv());
+    k.down(press());
+    k.up(press({ buttons: 0 }));
+    runFrames();
+    k.down(press({ shiftKey: false, target: inColumn() }));
+    k.up(press({ shiftKey: false, target: inColumn(), buttons: 0, clientX: 1100 }));
+    runFrames();
+    expect(calls).toEqual([
+      [1000, 300, held],
+      [1100, 300],
+    ]);
+  });
+});
+
+describe("domEnv — a Shift+press's tests of a target and of the selection that stands", () => {
+  type Shifted = { startsOutside(target: unknown): boolean; standing(): Held | null; endAt(x: number, y: number, press?: Held): void };
+  const shifted = (col: unknown = column()) => domEnv(col as never) as unknown as Shifted;
+  const target = (inside: boolean, control: unknown = null) => ({ inColumn: inside, closest: (selector: string) => (selector.includes("button") ? control : null) });
+
+  it("a press starts outside the column when its target is not in the column and on no control of its own; a control that wraps the column is not one", () => {
+    const col = column();
+    const env = shifted(col);
+    expect(env.startsOutside(target(false))).toBe(true);
+    expect(env.startsOutside(target(true))).toBe(false);
+    expect(env.startsOutside(target(false, { name: "the notes tab" }))).toBe(false);
+    expect(env.startsOutside(target(false, { contains: (node: unknown) => node === col }))).toBe(true);
+    expect(env.startsOutside(null)).toBe(false);
+    expect(env.startsOutside({ inColumn: false })).toBe(false); // no `closest`: not an element
+  });
+
+  describe("the selection that stands", () => {
+    const stand = (over: { selection?: Record<string, unknown>; active?: unknown } = {}) => {
+      const node = { inColumn: true };
+      vi.stubGlobal("window", { getSelection: () => ({ rangeCount: 1, isCollapsed: true, anchorNode: node, anchorOffset: 9, ...over.selection }) });
+      vi.stubGlobal("document", { activeElement: over.active ?? null });
+      return node;
+    };
+
+    it("one whose anchor is in the column, collapsed (the caret a click leaves) or not: its anchor's node and offset", () => {
+      const node = stand();
+      expect(shifted().standing()).toEqual({ node, offset: 9 });
+      stand({ selection: { isCollapsed: false } });
+      expect(shifted().standing()).not.toBeNull();
+    });
+
+    it("none, one with no anchor, one that began outside the column (a card's text, the notes editor, the left pane's title)", () => {
+      stand({ selection: { rangeCount: 0 } });
+      expect(shifted().standing()).toBeNull();
+      stand({ selection: { anchorNode: null } });
+      expect(shifted().standing()).toBeNull();
+      stand({ selection: { anchorNode: { inColumn: false } } });
+      expect(shifted().standing()).toBeNull();
+      vi.stubGlobal("window", { getSelection: () => null });
+      expect(shifted().standing()).toBeNull();
+    });
+
+    it("a field's own caret is not a selection of the paper: the question field, or any text field or editable block, has the focus", () => {
+      stand({ active: { matches: (selector: string) => selector.includes("textarea") } });
+      expect(shifted().standing()).toBeNull();
+      stand({ active: { matches: () => false } });
+      expect(shifted().standing()).not.toBeNull();
+    });
+  });
+
+  it("puts the end at the column's edge with the anchor read at the press: restored first where the browser collapsed the selection elsewhere", () => {
+    const node = { inColumn: true };
+    const order: string[] = [];
+    const sel = {
+      rangeCount: 1,
+      isCollapsed: true,
+      anchorNode: { inColumn: false },
+      anchorOffset: 0,
+      focusNode: { inColumn: false },
+      focusOffset: 0,
+      collapse: vi.fn(() => order.push("collapse")),
+      extend: vi.fn(() => order.push("extend")),
+    };
+    vi.stubGlobal("window", { innerHeight: 720, getSelection: () => sel });
+    vi.stubGlobal("document", { caretPositionFromPoint: vi.fn(() => ({ offsetNode: node, offset: 3 })) });
+    shifted().endAt(COLUMN.right + 12, 300, { node, offset: 5 });
+    expect(order).toEqual(["collapse", "extend"]);
+    expect(sel.collapse).toHaveBeenCalledWith(node, 5);
+    expect(sel.extend).toHaveBeenCalledWith(node, 3);
+  });
+});
+
+describe("watchSelection — a Shift+press, through the real wiring", () => {
+  it("a Shift+press on something outside the column with a caret in the text: nothing in the event, then one correction at the next frame; one in the text is left alone", () => {
+    const frames: Array<(() => void) | null> = [];
+    vi.stubGlobal("requestAnimationFrame", (run: () => void) => frames.push(run) - 1);
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => {
+      frames[id] = null;
+    });
+    const node = { inColumn: true, closest: () => null };
+    const extend = vi.fn();
+    const collapse = vi.fn();
+    vi.stubGlobal("window", { innerHeight: 720, getSelection: () => ({ rangeCount: 1, isCollapsed: true, anchorNode: node, anchorOffset: 4, focusNode: node, focusOffset: 4, extend, collapse }) });
+    vi.stubGlobal("document", { activeElement: null, caretPositionFromPoint: () => ({ offsetNode: node, offset: 30 }) });
+    const handlers: Record<string, (event: unknown) => void> = {};
+    watchSelection(column() as never, { addEventListener: (type: string, run: (event: unknown) => void) => (handlers[type] = run), removeEventListener: () => {} } as never);
+    const margin = { inColumn: false, closest: () => null };
+    const at = { pointerType: "mouse", pointerId: 1, isPrimary: true, button: 0, buttons: 1, shiftKey: true, clientX: 1100, clientY: 300 };
+    handlers.pointerdown({ ...at, target: margin });
+    expect(extend).not.toHaveBeenCalled();
+    frames.forEach((run) => run?.());
+    expect(extend).toHaveBeenCalledTimes(1);
+    expect(extend).toHaveBeenCalledWith(node, 30);
+    expect(collapse).not.toHaveBeenCalled();
+    handlers.pointerup({ ...at, buttons: 0, target: margin });
+    frames.splice(0).forEach((run) => run?.());
+    extend.mockClear();
+    handlers.pointerdown({ ...at, clientX: 600, target: node });
+    frames.splice(0).forEach((run) => run?.());
+    expect(extend).not.toHaveBeenCalled();
   });
 });
