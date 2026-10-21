@@ -79,11 +79,12 @@ The full skill texts are in Appendix A (reviewing-cycle) and Appendix B (abc). T
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-21 19:03Z
+AS OF        2026-10-21 19:05Z
 BRANCH HEAD  b8e2a685 (reader-three-pane-p11, pushed)   PR Aspen-Lab/peer#35 draft, CI green on 4de16f6f (older heads green)
 LAST RULING  §1h.170   NEXT RULING NUMBER §1h.171   NEXT ITEM ID P11-61   NEXT FREE PORT 4164
-RUNNING      (nothing — every round-4 item is landed; the round-5 walks are the next spawn)
-THEN         (P11-54 landed §1h.170) round 5 walks A (P11-59, port 4162, pack r5a) and B (P11-60, port 4163, pack r5b) — briefs already written; before spawning, re-check their "Landed since" lines and the checkpoint lists against what actually landed, give each the head hash; 3 readers each; director; score; repeat.
+RUNNING      A P11-59 (round 5, Theme A; head 9e23d63a; worktree scratchpad/p11a59/wt; port 4162; pack scratchpad/p11/r5a/)
+             A P11-60 (round 5, Theme B; head 9e23d63a; worktree scratchpad/p11a60/wt; port 4163; pack scratchpad/p11/r5b/)
+THEN         when each walk returns: pick its deliverable, spawn 3 blind readers on its pack (briefs/P11-R1-reader.md; rubric and owner file at the walk's head), director check, record the score (rubric Scores row 5, a ruling); a theme ≥ 97.9 in rounds 5 and 6 ends its walking round 5 walks A (P11-59, port 4162, pack r5a) and B (P11-60, port 4163, pack r5b) — briefs already written; before spawning, re-check their "Landed since" lines and the checkpoint lists against what actually landed, give each the head hash; 3 readers each; director; score; repeat.
 OPEN FOR THE OWNER  BACKLOG-108 (two identical quotes in one Summary block — keep both or dedupe); the title clamp at 4 lines (§1h.115); "Open as page" as a glyph at 1024/1093; the left pane's default width 320 vs 360; the edge tab's resting word; the margin's minimum at 1024.
 ```
 
@@ -125,6 +126,7 @@ OPEN FOR THE OWNER  BACKLOG-108 (two identical quotes in one Summary block — k
 - 2026-10-21 18:50Z | c0240ffb | manager (Sonnet 5.5) | C P11-57 verified and landed (Shift+click outside the column corrected like a drag's release; 482 → 946 good cells of 1,120; longest selection ~39,200 → ≤ 80 characters; drags identical 576/576; own mutation 2 red; gates 10,541); ruling §1h.169; BACKLOG-112 (an unreachable restore branch); worktree p11c57 removed. Only C P11-54 (the place kept to the line) is still running | evidence: P11-57-C-20261021T1840Z.md, p504/final-p1157.log | next: land P11-54 if clean, then spawn the round-5 walks (briefs P11-59 / P11-60 are ready; re-check their "Landed since" lines)
 - 2026-10-21 18:58Z | 3780e310 | manager (Fable 5.1) | Owner asked whether a ChatGPT stint would show on the dashboard when Claude resumes. Fixed both gaps: §1 step 7 (a resuming Claude backfills every §6 entry another agent wrote, under that agent's name) and §3 (a non-Claude agent writes §6 entries in the work-row shape with `by`); the dashboard's work table has a new 谁做的 column (`by`, default Claude; all 44 existing rows Claude) | evidence: this file §1/§3; dashboard page files/index.html v2; work.json with `by` | next: land P11-54 if clean; spawn the round-5 walks
 - 2026-10-21 19:03Z | d5b36956 | manager (Fable 5.1) | C P11-54 verified and landed (character anchor + rule 4; drift median 0.20 → 0.01 lines, worst 1.01; wheel undone 19/24 → 0/24; top paragraph 366/366 unchanged; own mutation 18 red; gates 10,587); ruling §1h.170; BACKLOG-113; worktree p11c54 removed. **Every round-4 item is now on the branch.** | evidence: P11-54-C-20261021T1853Z.md, p504/final-p1154.log | next: spawn the round-5 walks P11-59 (A, port 4162) and P11-60 (B, port 4163) on this head
+- 2026-10-21 19:05Z | 9e23d63a | manager (Fable 5.1) | Round 5's walks spawned (Sonnet): A P11-59 Theme A (port 4162, pack r5a) and A P11-60 Theme B (port 4163, pack r5b), both on 9e23d63a; dashboard: P11-54 已合入, P11-59/60 进行中, phase 第五轮 | evidence: briefs/P11-59.md, P11-60.md | next: wait for the walks; then readers ×3 per theme
 <!-- APPEND NEW ENTRIES BELOW THIS LINE, ONE PER COMPLETED UNIT OF WORK -->
 
 ---
