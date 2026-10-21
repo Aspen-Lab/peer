@@ -120,13 +120,16 @@ describe("globals.css — the text steps scale the reading text inside the wrapp
     expect(layout).toMatch(/<div className="reading-scaled" style=\{readingScaleStyle\}>\{p\.additions\}<\/div>/);
   });
 
-  it("gives a verdict to every size class the wrappers' components use", () => {
-    const TOKEN = /(?<![\w-])(?:[\w[\]@():>&-]+:)*(text-(?:micro|caption|meta|body-sm|body-lg|body|lead|title-lg|title|display-xs|display-sm|display-lg|display-xl|display|xs|sm|base|lg|xl|[2-9]xl)|reading-prose|annotation|eyebrow)(?![\w-])/g;
+  it("gives a verdict to every size class the wrappers' components use, and none is behind a variant", () => {
+    const TOKEN = /(?<![\w-])((?:[\w[\]@():>&-]+:)*)(text-(?:micro|caption|meta|body-sm|body-lg|body|lead|title-lg|title|display-xs|display-sm|display-lg|display-xl|display|xs|sm|base|lg|xl|[2-9]xl)|reading-prose|annotation|eyebrow)(?![\w-])/g;
     const ARBITRARY = /(?<![\w-])(?:[\w[\]@():>&-]+:)*text-\[[^\]\s]*(?:px|rem|em|cqw|vw|vh|clamp)[^\]\s]*\]/g;
     for (const file of WRAPPED_FILES) {
       const source = stripComments(read(file));
-      const used = new Set([...source.matchAll(TOKEN)].map((match) => match[1]));
-      for (const token of used) expect(SIZE_CLASSES.has(token), `${file} uses \`${token}\`, which has no verdict`).toBe(true);
+      for (const [, variant, token] of source.matchAll(TOKEN)) {
+        expect(SIZE_CLASSES.has(token), `${file} uses \`${token}\`, which has no verdict`).toBe(true);
+        // A rule here matches the whole class token, so `sm:text-title` would stay at its size while `text-title` scales.
+        expect(variant, `${file} uses \`${variant}${token}\`: a rule cannot match a size behind a variant`).toBe("");
+      }
       expect(source.match(ARBITRARY) ?? [], `${file} sets a literal size inside the wrappers`).toEqual([]);
     }
   });

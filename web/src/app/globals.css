@@ -884,17 +884,42 @@ html[data-mode="dark"] {
 /* 6-09: the font-size controls' actual effect. `--text-lead`/`--text-body`/
    `--text-body-lg` above are plain px again — a `calc()` inside a custom
    property resolves at that property's own declaration site (`:root`), so
-   it can never see a `--reading-scale` a descendant sets. These three rules
+   it can never see a `--reading-scale` a descendant sets. These rules
    apply the scale at the USE site instead, only inside `.reading-scaled`
-   (the two wrap points in reader-layout.tsx) — unlayered, so each beats the
+   (the three wrap points in reader-layout.tsx: the blocks both tabs share,
+   the words, the additions) — unlayered, so each beats the
    Tailwind-generated utility whatever its specificity, matching the
    `rounded-full` override just above. `[class~="text-body"]` cannot
    false-match `text-body-lg`/`text-body-sm`: `~=` matches a whole
    space-delimited class token, and `text-body-lg` is one token, not
-   `text-body` plus a suffix. */
+   `text-body` plus a suffix.
+
+   P11-48 (ruling §1h.152): the steps scale EVERY piece of reading text inside
+   the wrappers — the paper's body and its section headings (`text-title`),
+   the Summary's deck (`text-title-lg`), its one loud sentence
+   (`text-display-sm`) and its claims and quotes (`reading-prose`, the lead
+   size under another name), the answers' reasons and the figures' captions
+   (`text-body-sm` in the serif, which is what marks reading text from the
+   chips and rows that share the size), and the paper's own figure captions
+   (`figcaption.annotation`, its words in the mono note form) — as well as the
+   three the lede and the question prose happened to use. They do not scale
+   the controls, the labels (`text-micro`, `text-caption`, `text-meta`, and the
+   mono `annotation` and `eyebrow` forms) or anything outside the wrappers
+   (the left pane, the margin's cards, the masthead, the legend): the rule is
+   under `.reading-scaled`, and a class with no rule here stays at its token.
+   Each token is a plain px size above, so at scale 1 every size is the one it
+   was. globals.css.reading-text.test.ts holds the inventory — every size class
+   the wrappers' components use, with a verdict and the reason — and fails on a
+   class that has none. */
 .reading-scaled [class~="text-lead"] { font-size: calc(var(--text-lead) * var(--reading-scale, 1)); }
 .reading-scaled [class~="text-body"] { font-size: calc(var(--text-body) * var(--reading-scale, 1)); }
 .reading-scaled [class~="text-body-lg"] { font-size: calc(var(--text-body-lg) * var(--reading-scale, 1)); }
+.reading-scaled [class~="text-title"] { font-size: calc(var(--text-title) * var(--reading-scale, 1)); }
+.reading-scaled [class~="text-title-lg"] { font-size: calc(var(--text-title-lg) * var(--reading-scale, 1)); }
+.reading-scaled [class~="text-display-sm"] { font-size: calc(var(--text-display-sm) * var(--reading-scale, 1)); }
+.reading-scaled [class~="text-body-sm"][class~="font-reading"] { font-size: calc(var(--text-body-sm) * var(--reading-scale, 1)); }
+.reading-scaled [class~="reading-prose"] { font-size: calc(var(--text-lead) * var(--reading-scale, 1)); }
+.reading-scaled figcaption[class~="annotation"] { font-size: calc(var(--text-caption) * var(--reading-scale, 1)); }
 
 /* P11-29: smooth root scrolling only where the reader has not asked for less motion (the same query as the panes' transitions above). A
    focus scroll to the far end of a long paper, or an anchor jump from the map, was an animation of 18,000px whatever the setting said
