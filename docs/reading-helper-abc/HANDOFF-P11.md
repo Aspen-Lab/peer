@@ -85,7 +85,7 @@ BRANCH HEAD  b6aa9c22 (reader-three-pane-p11, pushed)   PR Aspen-Lab/peer#35 dra
 LAST RULING  §1h.173   NEXT RULING NUMBER §1h.174   NEXT ITEM ID P11-63   NEXT FREE PORT 4166
 RUNNING      3 blind readers, round 5 Theme B → scratchpad/p11/r5b/readers/r{1,2,3}.md (pack head 9e23d63a; rubric at 20ea02ed)
              C P11-61 (the question bar refits after a text step / separator drag; worktree scratchpad/p11c61/wt, base c84c9a0a, port 4164)
-             C P11-62 (a release over the foot legend ends at the last visible line; worktree scratchpad/p11c62/wt, base = the commit carrying briefs/P11-62.md, port 4165) — spawn it if the log's last entry says it was not yet spawned
+             C P11-62 (a release over the foot legend ends at the last visible line; worktree scratchpad/p11c62/wt, base b6aa9c22, port 4165)
 THEN         readers r5b → median → rubric Scores row 5 (B) + ruling; verify and land C P11-61 and C P11-62 (manager's own mutation, full gates); then round 6: write briefs P11-63 (A, Theme A, port 4166, pack r6a) and P11-64 (A, Theme B, port 4167, pack r6b) from scratchpad/briefgen/r5walks.py's pattern on the landed head, 3 readers each, director, score; Theme A ≥ 97.9 again ends its walking; Theme B needs rounds 6 and 7.
 OPEN FOR THE OWNER  BACKLOG-108 (two identical quotes in one Summary block — keep both or dedupe); the title clamp at 4 lines (§1h.115); "Open as page" as a glyph at 1024/1093; the left pane's default width 320 vs 360; the edge tab's resting word; the margin's minimum at 1024.
 ```
