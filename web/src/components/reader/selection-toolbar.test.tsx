@@ -4,6 +4,7 @@ import { createElement } from "react";
 import type { ReactElement, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import * as toolbarModule from "./selection-toolbar";
 import {
   OPEN_CARD_SELECTOR,
   SELECTION_LABELS,
@@ -540,5 +541,209 @@ describe("SelectionToolbarView — the group's own surface over a card (P11-27 r
     expect(html({ overCard: true })).toContain("data-over-card");
     expect(html({ overCard: false })).not.toContain("data-over-card");
     expect(html()).not.toContain("data-over-card");
+  });
+});
+
+// ── P11-38 rule 2 (owner item 5, "一旦点击其中一个，就会显示其中一个的功能"; round 2's Theme-B walk X-5; ruling §1h.138 (a)) ──────────────────────────────────────
+// The group still stands in the margin level with the selection's first line, over a card's body where it must, but it never stands over a card's header row:
+// its X, its title, its controls (Open as page, Export, zoom). Where the level place would cover one, the group stands on the header's free part if it fits whole,
+// else just below the header; it never leaves the margin sideways (X-1 stays gone). Below 1024 px (no margin) nothing changes. The headers are read from the
+// cards in the page (`readHeaders`), the place is made from them (`actionsPlace`'s `headers`, `clearOfHeaders`). Every number is invented.
+// Reached through the module's namespace, so the suite type-checks against the code as it stood before the rule.
+type Zone = { box: Box; parts: Box[] };
+type Cleared = { left: number; top: number; how: string };
+const toolbarApi = toolbarModule as unknown as {
+  clearOfHeaders?: (input: { margin: MarginRect; size: { width: number; height: number }; left: number; top: number; headers: readonly Zone[] }) => Cleared;
+  readHeaders?: (root: unknown) => Zone[];
+};
+const sized = (box: Box) => ({ ...box, width: box.right - box.left, height: box.bottom - box.top });
+const sq = (left: number, top: number, right: number, bottom: number): Box => ({ left, top, right, bottom });
+/** Where the group stands with `headers` on the page: the place `actionsPlace` makes for the default selection (first line at 400). */
+const placeWith = (headers: Zone[], over: Record<string, unknown> = {}) => place({ headers, ...over } as never) as (ReturnType<typeof place> & { clear?: string }) | null;
+
+describe("actionsPlace — never over a card's header (P11-38 rule 2; ruling §1h.138 (a))", () => {
+  // A sticky's header, 40 px tall at the card's top (380): the title, a long quote head, the X at the end.
+  const sticky = (headline: Box = sq(1148, 392, 1330, 408)): Zone => ({
+    box: sq(1080, 380, 1440, 420),
+    parts: [sq(1092, 392, 1140, 408), headline, sq(1400, 380, 1440, 420)],
+  });
+  // The explain card's header block: the big X and the title on a row, and the quoted passage under them, 122 px in all.
+  const explain: Zone = { box: sq(1081, 391, 1440, 513), parts: [sq(1097, 407, 1133, 443), sq(1145, 417, 1424, 433), sq(1097, 455, 1424, 500)] };
+
+  it("stands where it stood when no header is under it: level with the first line, the keys of the place as they were", () => {
+    const LEVEL = { mode: "margin", left: MARGIN.left + 8, top: 400, below: false };
+    expect(placeWith([])).toEqual(LEVEL);
+    expect(placeWith([{ box: sq(1080, 600, 1440, 640), parts: [sq(1092, 612, 1140, 628)] }])).toEqual(LEVEL);
+    expect(placeWith([{ box: sq(1080, 300, 1440, 340), parts: [sq(1092, 312, 1140, 328)] }])).toEqual(LEVEL);
+  });
+
+  it("stands over a card's body, level with the line, when only the body is under it", () => {
+    expect(placeWith([{ box: sq(1080, 300, 1440, 340), parts: [sq(1092, 312, 1140, 328)] }])?.top).toBe(400);
+  });
+
+  it("stands just below a sticky's header when the level place would cover its title (the line is inside the header: it moves less than the header is tall)", () => {
+    const got = placeWith([sticky()])!;
+    expect(got).toEqual({ mode: "margin", left: MARGIN.left + 8, top: 420, below: false, clear: "below" });
+    expect(got.top - 400).toBeLessThanOrEqual(40);
+  });
+
+  it("stands just below the explain card's header block — its X, its title and the quote — whatever height of it the line is at", () => {
+    for (const line of [391, 400, 430, 470, 500]) {
+      const got = placeWith([explain], { bounds: { left: 300, top: line, right: 520, bottom: line + 22 } })!;
+      expect(got.top, String(line)).toBe(513);
+      expect(got.clear, String(line)).toBe("below");
+      expect(got.top - line, String(line)).toBeLessThanOrEqual(explain.box.bottom - explain.box.top);
+    }
+  });
+
+  it("stands on the header's free part, level with the line, when it fits whole beside the title and the X (a short quote head leaves room)", () => {
+    const got = placeWith([sticky(sq(1148, 392, 1190, 408))])!;
+    expect(got).toEqual({ mode: "margin", left: 1194, top: 400, below: false, clear: "free" });
+    // …whole: clear of the title, the head and the X, and inside the margin.
+    const right = got.left + SIZES.margin.width;
+    expect(got.left).toBeGreaterThanOrEqual(1190 + 4);
+    expect(right).toBeLessThanOrEqual(1400 - 4);
+  });
+
+  it("stands below it, not on the free part, when the free part is narrower than the group", () => {
+    const got = placeWith([sticky(sq(1148, 392, 1300, 408))])!;
+    expect(got.clear).toBe("below");
+    expect(got.top).toBe(420);
+  });
+
+  it("clears a whole stack of headers, one under the other: below the last of them, the front card's zoom row included", () => {
+    const stack: Zone[] = [
+      sticky(),
+      { box: sq(1080, 420, 1440, 460), parts: [sq(1092, 432, 1140, 448), sq(1148, 432, 1330, 448), sq(1400, 420, 1440, 460)] },
+      { box: sq(1080, 460, 1440, 500), parts: [sq(1092, 472, 1140, 488), sq(1148, 472, 1330, 488), sq(1400, 460, 1440, 500)] },
+      { box: sq(1080, 500, 1440, 536), parts: [sq(1090, 506, 1120, 530), sq(1130, 506, 1200, 530)] },
+    ];
+    const got = placeWith(stack)!;
+    expect(got.top).toBe(536);
+    expect(got.clear).toBe("below");
+  });
+
+  it("moves down just far enough when the line is above the header and the group's foot would reach into it", () => {
+    const got = placeWith([{ box: sq(1080, 440, 1440, 480), parts: [sq(1092, 452, 1140, 468), sq(1148, 452, 1330, 468), sq(1400, 440, 1440, 480)] }])!;
+    expect(got.top).toBe(480);
+    expect(got.clear).toBe("below");
+  });
+
+  it("stands just above the header when there is no room below it in the band", () => {
+    const got = placeWith([{ box: sq(1080, 900, 1440, 940), parts: [sq(1092, 912, 1140, 928), sq(1148, 912, 1330, 928), sq(1400, 900, 1440, 940)] }], { bounds: { left: 300, top: 880, right: 520, bottom: 902 } })!;
+    expect(got.clear).toBe("above");
+    expect(got.top).toBe(900 - SIZES.margin.height);
+  });
+
+  it("stays level, saying it is held, when no place in the band is clear of the headers", () => {
+    const wall: Zone = { box: sq(1080, 48, 1440, 960), parts: [sq(1090, 48, 1430, 960)] };
+    const got = placeWith([wall])!;
+    expect(got.top).toBe(400);
+    expect(got.clear).toBe("held");
+  });
+
+  it("never leaves the margin sideways, so never stands over the centre column's words, whatever header it clears", () => {
+    for (const margin of [MARGIN, { ...MARGIN, left: 1000, width: 280 }, { ...MARGIN, left: 1180, width: 260 }]) {
+      const dx = margin.left - MARGIN.left;
+      const shift = (z: Zone): Zone => ({ box: { ...z.box, left: z.box.left + dx, right: z.box.right + dx }, parts: z.parts.map((p) => ({ ...p, left: p.left + dx, right: p.right + dx })) });
+      for (const zone of [sticky(), sticky(sq(1148, 392, 1190, 408)), explain]) {
+        const got = placeWith([shift(zone)], { margin })!;
+        expect(got.mode).toBe("margin");
+        expect(got.left).toBeGreaterThanOrEqual(margin.left + 8);
+        expect(got.left + SIZES.margin.width).toBeLessThanOrEqual(margin.left + margin.width);
+      }
+    }
+  });
+
+  it("is the pill above the selection where there is no margin, headers or none: below 1024 nothing changes (rule 3)", () => {
+    const pill = { mode: "above", ...toolbarPlace({ bounds, viewport: VIEW, size: SIZES.above })! };
+    expect(placeWith([sticky(), explain], { margin: null })).toEqual(pill);
+    expect(placeWith([], { margin: null })).toEqual(pill);
+  });
+
+  it("is the pure `clearOfHeaders` underneath: the same answers for a box of the group's size at the level place", () => {
+    const got = toolbarApi.clearOfHeaders!({ margin: MARGIN, size: SIZES.margin, left: MARGIN.left + 8, top: 400, headers: [sticky()] });
+    expect(got).toEqual({ left: MARGIN.left + 8, top: 420, how: "below" });
+    expect(toolbarApi.clearOfHeaders!({ margin: MARGIN, size: SIZES.margin, left: MARGIN.left + 8, top: 400, headers: [] })).toEqual({ left: MARGIN.left + 8, top: 400, how: "level" });
+  });
+});
+
+describe("readHeaders — a card's header and what it holds, read from the page (P11-38 rule 2)", () => {
+  type Fake = { tag: string; box: Box; text?: string; kids?: Fake[] };
+  const node = (spec: Fake): Record<string, unknown> => {
+    const kids = (spec.kids ?? []).map(node);
+    return {
+      tagName: spec.tag.toUpperCase(),
+      childNodes: [...(spec.text ? [{ nodeType: 3, nodeValue: spec.text }] : []), ...kids.map(() => ({ nodeType: 1, nodeValue: null }))],
+      children: kids,
+      textContent: [spec.text ?? "", ...kids.map((kid) => String(kid.textContent))].join(""),
+      getBoundingClientRect: () => sized(spec.box),
+    };
+  };
+  const card = (kind: string, box: Box, head: Fake | null, zoom?: Fake) => ({
+    getAttribute: (name: string) => (name === "data-margin-card" ? kind : null),
+    getBoundingClientRect: () => sized(box),
+    firstElementChild: head ? node(head) : null,
+    querySelector: (selector: string) => (selector === "[data-figure-zoom-row]" && zoom ? node(zoom) : null),
+  });
+  const root = (...cards: unknown[]) => ({ querySelectorAll: () => cards });
+  const read = (...cards: unknown[]) => toolbarApi.readHeaders!(root(...cards));
+
+  // A sticky's header as the page draws it: a row; a raise button over the title and the quote head; the X.
+  const stickyHead: Fake = {
+    tag: "div",
+    box: sq(1080, 380, 1440, 420),
+    kids: [
+      { tag: "button", box: sq(1080, 380, 1400, 420), kids: [{ tag: "span", box: sq(1092, 392, 1140, 408), text: "NOTE 1" }, { tag: "span", box: sq(1148, 392, 1190, 408), text: "Quote" }] },
+      { tag: "button", box: sq(1400, 380, 1440, 420), kids: [{ tag: "span", box: sq(1410, 390, 1430, 410), text: "×" }] },
+    ],
+  };
+
+  it("takes the card's first element as its header and the text and the controls in it as what the header holds — not the raise button's empty width", () => {
+    const [zone] = read(card("sticky", sq(1080, 380, 1440, 640), stickyHead));
+    expect(zone.box).toEqual(sq(1080, 380, 1440, 420));
+    expect(zone.parts).toEqual(expect.arrayContaining([sq(1092, 392, 1140, 408), sq(1148, 392, 1190, 408), sq(1410, 390, 1430, 410)]));
+    expect(zone.parts).not.toContainEqual(sq(1080, 380, 1400, 420));
+  });
+
+  it("counts an icon-only control (the big X, an svg in a button) as a part", () => {
+    const x: Fake = { tag: "button", box: sq(1097, 407, 1133, 443), kids: [{ tag: "svg", box: sq(1105, 415, 1125, 435) }] };
+    const [zone] = read(card("explain", sq(1080, 390, 1440, 920), { tag: "div", box: sq(1081, 391, 1440, 513), kids: [{ tag: "div", box: sq(1097, 407, 1424, 443), kids: [x, { tag: "p", box: sq(1145, 417, 1424, 433), text: "Explain this" }] }, { tag: "p", box: sq(1097, 455, 1424, 500), text: "the quoted words" }] }));
+    expect(zone.box).toEqual(sq(1081, 391, 1440, 513));
+    expect(zone.parts).toEqual(expect.arrayContaining([sq(1097, 407, 1133, 443), sq(1145, 417, 1424, 433), sq(1097, 455, 1424, 500)]));
+  });
+
+  it("adds the figure's zoom row as a second header: its controls are the card's controls", () => {
+    const zones = read(card("figure", sq(1080, 48, 1440, 860), { tag: "div", box: sq(1080, 48, 1440, 88), kids: [{ tag: "span", box: sq(1092, 60, 1140, 76), text: "Figure 3" }] }, { tag: "div", box: sq(1080, 88, 1440, 124), kids: [{ tag: "button", box: sq(1090, 94, 1118, 118), text: "−" }, { tag: "button", box: sq(1200, 94, 1228, 118), text: "+" }] }));
+    expect(zones.map((zone) => zone.box)).toEqual([sq(1080, 48, 1440, 88), sq(1080, 88, 1440, 124)]);
+    expect(zones[1].parts).toEqual([sq(1090, 94, 1118, 118), sq(1200, 94, 1228, 118)]);
+  });
+
+  it("reads every card of the margin, and leaves out a card with no header, a header with no box, and a part with no box", () => {
+    const zones = read(
+      card("sticky", sq(1080, 380, 1440, 640), stickyHead),
+      card("notes", sq(1080, 100, 1440, 300), null),
+      card("sticky", sq(1080, 700, 1440, 860), { tag: "div", box: sq(0, 0, 0, 0), kids: [{ tag: "span", box: sq(0, 0, 0, 0), text: "NOTE 2" }] }),
+      { getBoundingClientRect: () => sized(sq(1080, 100, 1440, 300)) },
+    );
+    expect(zones).toHaveLength(1);
+    expect(zones[0].box).toEqual(sq(1080, 380, 1440, 420));
+  });
+
+  it("is empty with no card open, and asks the page through the margin's one selector", () => {
+    const asked: string[] = [];
+    expect(toolbarApi.readHeaders!({ querySelectorAll: (selector: string) => (asked.push(selector), []) })).toEqual([]);
+    expect(asked).toEqual([MARGIN_CARD_SELECTOR]);
+  });
+});
+
+describe("SelectionToolbarView — says when it was moved off a header (P11-38 rule 2)", () => {
+  const view = (place: Record<string, unknown>) =>
+    renderToStaticMarkup(createElement(SelectionToolbarView, { place, canExplain: true, onExplain: () => {}, onTakeNote: () => {}, onHighlight: () => {} } as never));
+
+  it("carries the way it cleared the header, and nothing when it stands level", () => {
+    expect(view({ mode: "margin", left: 1088, top: 420, below: false, clear: "below" })).toContain('data-header-clear="below"');
+    expect(view({ mode: "margin", left: 1194, top: 400, below: false, clear: "free" })).toContain('data-header-clear="free"');
+    expect(view({ mode: "margin", left: 1088, top: 400, below: false })).not.toContain("data-header-clear");
   });
 });

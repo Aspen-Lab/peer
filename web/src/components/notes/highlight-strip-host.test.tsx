@@ -194,6 +194,10 @@ let mark: ViewRect | null;
 /** P11-27: the lines of the mark after its first, for a highlight that runs over more than one line. */
 let extraLines: ViewRect[];
 let cards: ViewRect[];
+/** P11-38: cards as the page draws them, with a header and the parts in it, for the host to read the headers from; the plain boxes above have none. */
+let headerCards: unknown[];
+/** P11-38: the selectors the host asked the page for cards with. */
+let askedSelectors: string[];
 let stripThere: boolean;
 const fire = (map: Map<string, Set<Listener>>, type: string, event?: unknown) => [...(map.get(type) ?? [])].forEach((one) => one(event));
 
@@ -205,6 +209,8 @@ function stubPage() {
   mark = null;
   extraLines = [];
   cards = [];
+  headerCards = [];
+  askedSelectors = [];
   stripThere = false;
   const track = (map: Map<string, Set<Listener>>) => ({
     addEventListener: (type: string, fn: Listener) => void map.set(type, (map.get(type) ?? new Set()).add(fn)),
@@ -218,8 +224,10 @@ function stubPage() {
       if (selector === "[data-highlight-strip]") return stripThere ? {} : null;
       return null;
     },
-    querySelectorAll: () =>
-      cards.map((one) => ({ getBoundingClientRect: () => ({ ...one, width: one.right - one.left, height: one.bottom - one.top }) })),
+    querySelectorAll: (selector: string) => {
+      askedSelectors.push(selector);
+      return [...cards.map((one) => ({ getBoundingClientRect: () => ({ ...one, width: one.right - one.left, height: one.bottom - one.top }) })), ...headerCards];
+    },
   });
   vi.stubGlobal("window", {
     ...track(winListeners),
@@ -701,5 +709,156 @@ describe("HighlightStripHost — the strip leaves when its mark leaves the windo
     frame();
     expect(host.tree?.type).toBe(HighlightStrip);
     expect(host.props.top).toBe(300);
+  });
+});
+
+// ── P11-38 rule 2 (owner item 5; round 2's Theme-B walk X-5; ruling §1h.138 (a)): the strip follows the rule the selection's actions follow ───────────────
+// It still stands in the margin, level with the mark's first line, over a card's body where it must; it never stands over a card's header — its X, its title,
+// its controls. Where the level place would cover one it stands on the header's free part if it fits whole, else just below the header; it never leaves the
+// margin sideways. The headers are read from the page as the strip is placed, and again when the stack changes. Every number is invented.
+type Box = { left: number; top: number; right: number; bottom: number };
+const sq = (left: number, top: number, right: number, bottom: number): Box => ({ left, top, right, bottom });
+type Zone = { box: Box; parts: Box[] };
+const withHeaders = (input: Record<string, unknown>) => stripStanding(input as Parameters<typeof stripStanding>[0]) as (ReturnType<typeof stripStanding> & { clear?: string }) | null;
+const stickyZone = (headline: Box = sq(1068, 292, 1230, 308), right = 1280): Zone => ({
+  box: sq(1000, 280, right, 320),
+  parts: [sq(1012, 292, 1060, 308), headline, sq(right - 40, 280, right, 320)],
+});
+
+describe("stripStanding — never over a card's header (P11-38 rule 2; ruling §1h.138 (a))", () => {
+  it("stands where it stood when no header is under it: level with the mark, the keys of the place as they were", () => {
+    const LEVEL = { mode: "margin", left: 1008, top: 300, width: 264 };
+    expect(withHeaders({ mark: line(300), viewport: VIEW, margin: MARGIN, headers: [] })).toEqual(LEVEL);
+    expect(withHeaders({ mark: line(300), viewport: VIEW, margin: MARGIN, headers: [{ box: sq(1000, 500, 1280, 540), parts: [sq(1012, 512, 1060, 528)] }] })).toEqual(LEVEL);
+    expect(withHeaders({ mark: line(300), viewport: VIEW, margin: MARGIN })).toEqual(LEVEL);
+  });
+
+  it("stands just below a sticky's header when the level place would cover its title and its X", () => {
+    const got = withHeaders({ mark: line(300), viewport: VIEW, margin: MARGIN, headers: [stickyZone()] })!;
+    expect(got).toEqual({ mode: "margin", left: 1008, top: 320, width: 264, clear: "below" });
+    expect(got.top - 300).toBeLessThanOrEqual(40);
+  });
+
+  it("stands just below the explain card's header block — the X, the title and the quote — at any height of the mark inside it", () => {
+    const block: Zone = { box: sq(1001, 291, 1280, 413), parts: [sq(1017, 307, 1053, 343), sq(1065, 317, 1264, 333), sq(1017, 355, 1264, 400)] };
+    for (const top of [291, 300, 340, 380, 410]) {
+      const got = withHeaders({ mark: line(top), viewport: VIEW, margin: MARGIN, headers: [block] })!;
+      expect(got.top, String(top)).toBe(413);
+      expect(got.clear, String(top)).toBe("below");
+    }
+  });
+
+  it("stands on the header's free part, level with the mark, when it fits whole beside the title and the X (a wide margin, a short quote head)", () => {
+    const wide: MarginRect = { ...MARGIN, width: 360 };
+    const got = withHeaders({ mark: line(300), viewport: VIEW, margin: wide, headers: [stickyZone(sq(1068, 292, 1090, 308), 1360)] })!;
+    expect(got).toEqual({ mode: "margin", left: 1094, top: 300, width: 344, clear: "free" });
+    expect(got.left + STRIP_ONE_ROW_WIDTH_PX).toBeLessThanOrEqual(1316);
+  });
+
+  it("clears a stack of headers, one under the other, and stands below the last of them", () => {
+    const stack: Zone[] = [stickyZone(), { ...stickyZone(), box: sq(1000, 320, 1280, 360), parts: [sq(1012, 332, 1060, 348), sq(1068, 332, 1230, 348), sq(1240, 320, 1280, 360)] }];
+    expect(withHeaders({ mark: line(300), viewport: VIEW, margin: MARGIN, headers: stack })?.top).toBe(360);
+  });
+
+  it("stands just above the header when there is no room below it in the band", () => {
+    const low: Zone = { box: sq(1000, 830, 1280, 860), parts: [sq(1012, 836, 1060, 852), sq(1240, 830, 1280, 860)] };
+    const got = withHeaders({ mark: line(840), viewport: VIEW, margin: MARGIN, headers: [low] })!;
+    expect(got.clear).toBe("above");
+    expect(got.top).toBe(830 - STRIP_ROW_PX);
+  });
+
+  it("never leaves the margin sideways, and keeps its width", () => {
+    for (const margin of [MARGIN, { ...MARGIN, left: 1180, width: 260 }]) {
+      const dx = margin.left - MARGIN.left;
+      const zone = stickyZone();
+      const moved: Zone = { box: { ...zone.box, left: zone.box.left + dx, right: zone.box.right + dx }, parts: zone.parts.map((p) => ({ ...p, left: p.left + dx, right: p.right + dx })) };
+      const got = withHeaders({ mark: line(300), viewport: VIEW, margin, headers: [moved] })!;
+      expect(got.left).toBeGreaterThanOrEqual(margin.left + MARGIN_INSET_PX);
+      expect(got.left + STRIP_ONE_ROW_WIDTH_PX).toBeLessThanOrEqual(margin.left + margin.width);
+      expect(got.width).toBe(margin.width - 2 * MARGIN_INSET_PX);
+    }
+  });
+
+  it("goes with its mark all the same: a mark out of the window has no strip, headers or none", () => {
+    expect(withHeaders({ mark: line(1801), viewport: VIEW, margin: MARGIN, headers: [stickyZone()] })).toBeNull();
+  });
+});
+
+describe("HighlightStripHost — never over a card's header (P11-38 rule 2)", () => {
+  const node = (spec: { tag: string; box: Box; text?: string; kids?: Array<{ tag: string; box: Box; text?: string }> }): Record<string, unknown> => {
+    const kids = (spec.kids ?? []).map(node);
+    return {
+      tagName: spec.tag.toUpperCase(),
+      childNodes: [...(spec.text ? [{ nodeType: 3, nodeValue: spec.text }] : []), ...kids.map(() => ({ nodeType: 1, nodeValue: null }))],
+      children: kids,
+      textContent: spec.text ?? "",
+      getBoundingClientRect: () => ({ ...spec.box, width: spec.box.right - spec.box.left, height: spec.box.bottom - spec.box.top }),
+    };
+  };
+  /** A sticky at the card's top `top`: a header row 40 px tall with the title, a long quote head and the X. */
+  const stickyCard = (top: number) => ({
+    getAttribute: (name: string) => (name === "data-margin-card" ? "sticky" : null),
+    getBoundingClientRect: () => ({ left: 1000, top, right: 1280, bottom: top + 260, width: 280, height: 260 }),
+    querySelector: () => null,
+    firstElementChild: node({
+      tag: "div",
+      box: sq(1000, top, 1280, top + 40),
+      kids: [
+        { tag: "span", box: sq(1012, top + 12, 1060, top + 28), text: "NOTE 1" },
+        { tag: "span", box: sq(1068, top + 12, 1230, top + 28), text: "The mulch layers held" },
+        { tag: "span", box: sq(1250, top + 10, 1270, top + 30), text: "×" },
+      ],
+    }),
+  });
+
+  it("stands just below the header of a card at the mark's height, read from the page, and level with the mark where no header is under it", () => {
+    headerCards = [stickyCard(280)];
+    const host = mountHost();
+    mark = line(300);
+    host.act(() => useHighlightStrip.getState().show("h1", 300));
+    expect(host.props).toMatchObject({ left: 1008, top: 320, width: 264 });
+    mark = line(500);
+    host.act(() => fire(winListeners, "scroll"));
+    frame();
+    expect(host.props).toMatchObject({ left: 1008, top: 500 });
+  });
+
+  it("reads the headers again when the stack changes: a card opened at the mark's height moves the strip off its header, and closing it brings it back level", () => {
+    const host = mountHost();
+    mark = line(300);
+    host.act(() => useHighlightStrip.getState().show("h1", 300));
+    expect(host.props).toMatchObject({ left: 1008, top: 300 });
+    headerCards = [stickyCard(280)];
+    host.act(() => useWindows.getState().open({ id: "sticky-1", kind: "sticky", title: "Note 1" }));
+    frame();
+    expect(host.props).toMatchObject({ left: 1008, top: 320 });
+    headerCards = [];
+    host.act(() => useWindows.getState().close("sticky-1"));
+    frame();
+    expect(host.props).toMatchObject({ left: 1008, top: 300 });
+  });
+
+  it("asks the page for the cards only through the margin's selector", async () => {
+    headerCards = [stickyCard(280)];
+    const host = mountHost();
+    mark = line(300);
+    host.act(() => useHighlightStrip.getState().show("h1", 300));
+    expect(host.props.top).toBe(320);
+    const { MARGIN_CARD_SELECTOR } = await import("@/lib/reader/margin");
+    expect(askedSelectors.length).toBeGreaterThan(0);
+    for (const selector of askedSelectors) expect(selector).toBe(MARGIN_CARD_SELECTOR);
+  });
+
+  it("asks one frame for a burst of stack changes, as it does for scrolls (one measure per frame)", () => {
+    const host = mountHost();
+    mark = line(300);
+    host.act(() => useHighlightStrip.getState().show("h1", 300));
+    const before = askedFrames;
+    host.act(() => {
+      useWindows.getState().open({ id: "sticky-1", kind: "sticky", title: "Note 1" });
+      useWindows.getState().open({ id: "sticky-2", kind: "sticky", title: "Note 2" });
+      fire(winListeners, "scroll");
+    });
+    expect(askedFrames - before).toBe(1);
   });
 });

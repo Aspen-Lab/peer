@@ -36,6 +36,12 @@ type Box = { left: number; top: number; right: number; bottom: number };
 
 let measureTop = 400;
 let cards: Box[] = [];
+/** P11-38: cards as the page draws them (a header, its parts, a text), where a test needs the toolbar to read the headers; null: the plain boxes above. */
+let richCards: unknown[] | null = null;
+/** P11-38: whether the page's selection is collapsed (`window.getSelection().isCollapsed`). */
+let selectionCollapsed = false;
+/** P11-38: how many times the toolbar asked the browser to drop the selection (it never does: Explain this leaves the words drawn). */
+let selectionCleared = 0;
 let listeners: Map<string, Set<(event: unknown) => void>>;
 let observers: Array<{ callback: () => void; target: unknown; init: unknown; live: boolean }>;
 let measured = 0;
@@ -53,12 +59,13 @@ const listenerCount = () => [...listeners.values()].reduce((sum, set) => sum + s
 
 const ROOT = { style: {}, tag: "html" };
 function stubPage(width: number, height = 900) {
-  vi.stubGlobal("window", { ...recorder(), innerWidth: width, innerHeight: height, requestAnimationFrame: (fn: () => void) => setTimeout(fn, 0), cancelAnimationFrame: (id: number) => clearTimeout(id) });
+  vi.stubGlobal("window", { ...recorder(), innerWidth: width, innerHeight: height, getSelection: () => ({ isCollapsed: selectionCollapsed, removeAllRanges: () => void (selectionCleared += 1), collapseToEnd: () => void (selectionCleared += 1) }), requestAnimationFrame: (fn: () => void) => setTimeout(fn, 0), cancelAnimationFrame: (id: number) => clearTimeout(id) });
   vi.stubGlobal("document", {
     ...recorder(),
     documentElement: ROOT,
     querySelectorAll: (selector: string) => {
       asked.push(selector);
+      if (richCards !== null) return richCards;
       return cards.map((box) => ({ getBoundingClientRect: () => ({ ...box, width: box.right - box.left, height: box.bottom - box.top }) }));
     },
   });
@@ -105,13 +112,28 @@ const lookAt = (tree: ReactNode): Look => {
   return element && typeof element === "object" && "props" in element ? { place: element.props.place, onHighlight: element.props.onHighlight } : { place: null, onHighlight: undefined };
 };
 
+/** P11-38: a mount a failing test left standing keeps its store subscription and its timer alive into the next test, whose globals are stubbed again: every mount is taken down after its test. */
+const liveMounts: Array<{ unmount: () => void }> = [];
+async function track<T extends { unmount: () => void }>(mounting: Promise<T>): Promise<T> {
+  const mounted = await mounting;
+  const unmount = mounted.unmount;
+  let done = false;
+  mounted.unmount = () => {
+    if (done) return;
+    done = true;
+    unmount();
+  };
+  liveMounts.push(mounted);
+  return mounted;
+}
+
 type Ctx = { props: Props; rerender: () => void; tree: ReactNode };
 type Step = (ctx: Ctx) => void;
 /** Each step runs in an effect, after the render before it; the first one only waits for the toolbar's own first measure. */
 async function scenario(initial: Props, steps: Step[] = []) {
   const ctx: Ctx = { props: initial, rerender: () => {}, tree: null };
   const trees: ReactNode[] = [];
-  const mounted = await hookRuntime.mount(() => {
+  const mounted = await track(hookRuntime.mount(() => {
     const tree = SelectionToolbar(ctx.props);
     const [step, setStep] = useState(0);
     const [, setTick] = useState(0);
@@ -125,7 +147,7 @@ async function scenario(initial: Props, steps: Step[] = []) {
       setStep(step + 1);
     }, [step]);
     return tree;
-  });
+  }));
   return { trees, mounted, last: () => lookAt(trees[trees.length - 1]) };
 }
 const wait: Step = () => {};
@@ -136,6 +158,9 @@ beforeEach(() => {
   observers = [];
   asked.length = 0;
   cards = [];
+  richCards = null;
+  selectionCollapsed = false;
+  selectionCleared = 0;
   measureTop = 400;
   measured = 0;
   stub.margin = null;
@@ -144,6 +169,7 @@ beforeEach(() => {
   stubPage(1440);
 });
 afterEach(() => {
+  liveMounts.splice(0).forEach((one) => one.unmount());
   setHighlightOffer(false);
   useWindows.setState({ windows: [] });
   vi.unstubAllGlobals();
@@ -508,5 +534,316 @@ describe("SelectionToolbar — a selection in a caption or a heading (P11-27 rul
     no.mounted.unmount();
     expect(yesNow.canExplain).toBe(true);
     expect(noNow.canExplain).toBe(false);
+  });
+});
+
+// ── P11-38 (round 2's Theme-B walk X-5; ruling §1h.138 (a); owner item 5, "一旦点击其中一个，就会显示其中一个的功能") ─────────────────────────────────────────
+// Rule 1: a press of Explain this ends the group's job, as Take notes and Highlight already do (they clear the selection, so the group goes with it): once
+// pressed — by its button, or by `e` / the thumb bar, which the toolbar sees as the Explain card now holding the selection's passage — the group is gone until
+// the reader makes a NEW selection. The selection itself stays drawn (it is the card's quote, and the box follows it); a new object from the page, a drag
+// that selects the same words again and a double click bring the group back; a press that changes no selection does not. Below 1024 px nothing changes.
+// Rule 2: the group never covers a card's header; the cards' headers are read from the page when the group is placed.
+const viewOf = (tree: ReactNode) => (tree && typeof tree === "object" && "props" in tree ? (tree as ReactElement<{ onExplain: () => void; place: ActionsPlace & { clear?: string } }>).props : null);
+const fireWith = (type: string, event: unknown) => [...(listeners.get(type) ?? [])].forEach((listener) => listener(event));
+const press: Step = (ctx) => void viewOf(ctx.tree)?.onExplain();
+const newSelection = (over: Partial<ExplainSelection> = {}): Step => (ctx) => {
+  ctx.props = { ...ctx.props, target: selection(over) };
+  ctx.rerender();
+};
+const none: Step = (ctx) => {
+  ctx.props = { ...ctx.props, target: null };
+  ctx.rerender();
+};
+const drawn = (into: boolean[]): Step => (ctx) => void into.push(viewOf(ctx.tree) !== null);
+const PASSAGE = "The rafting ratio rose from 0.2 to 0.7.";
+
+/** A card as the page draws it, for the toolbar to read: its box, its kind, its first element (the header) and the text in it. */
+const fakeBox = (b: Box) => ({ ...b, width: b.right - b.left, height: b.bottom - b.top });
+type Part = { tag: string; box: Box; text?: string; kids?: Part[] };
+const fakeNode = (spec: Part): Record<string, unknown> => {
+  const kids = (spec.kids ?? []).map(fakeNode);
+  return {
+    tagName: spec.tag.toUpperCase(),
+    childNodes: [...(spec.text ? [{ nodeType: 3, nodeValue: spec.text }] : []), ...kids.map(() => ({ nodeType: 1, nodeValue: null }))],
+    children: kids,
+    textContent: [spec.text ?? "", ...kids.map((kid) => String(kid.textContent))].join(""),
+    getBoundingClientRect: () => fakeBox(spec.box),
+  };
+};
+const fakeCard = (kind: string, box: Box, head: Part) => ({
+  getAttribute: (name: string) => (name === "data-margin-card" ? kind : null),
+  getBoundingClientRect: () => fakeBox(box),
+  firstElementChild: fakeNode(head),
+  querySelector: () => null,
+});
+const explainCard = (passage: string) =>
+  fakeCard("explain", { left: 1080, top: 380, right: 1440, bottom: 860 }, {
+    tag: "div",
+    box: { left: 1081, top: 381, right: 1440, bottom: 503 },
+    kids: [
+      { tag: "div", box: { left: 1097, top: 397, right: 1424, bottom: 433 }, kids: [{ tag: "button", box: { left: 1097, top: 397, right: 1133, bottom: 433 }, kids: [{ tag: "svg", box: { left: 1105, top: 405, right: 1125, bottom: 425 } }] }, { tag: "p", box: { left: 1145, top: 407, right: 1424, bottom: 423 }, text: "Explain this" }] },
+      { tag: "p", box: { left: 1097, top: 445, right: 1424, bottom: 490 }, text: passage },
+    ],
+  });
+const stickyCard = () =>
+  fakeCard("sticky", { left: 1080, top: 380, right: 1440, bottom: 640 }, {
+    tag: "div",
+    box: { left: 1080, top: 380, right: 1440, bottom: 420 },
+    kids: [
+      { tag: "button", box: { left: 1080, top: 380, right: 1400, bottom: 420 }, kids: [{ tag: "span", box: { left: 1092, top: 392, right: 1140, bottom: 408 }, text: "NOTE 1" }, { tag: "span", box: { left: 1148, top: 392, right: 1330, bottom: 408 }, text: "The rafting ratio rose" }] },
+      { tag: "button", box: { left: 1400, top: 380, right: 1440, bottom: 420 }, text: "×" },
+    ],
+  });
+
+describe("SelectionToolbar — a press of Explain this puts the group away (P11-38 rule 1)", () => {
+  it("is gone once the button is pressed: the page's explain action ran once, and the group is not drawn", async () => {
+    stub.margin = MARGIN;
+    const onExplain = vi.fn();
+    const shown: boolean[] = [];
+    const run = await scenario(base({ onExplain }), [wait, drawn(shown), press, drawn(shown)]);
+    run.mounted.unmount();
+    expect(onExplain).toHaveBeenCalledTimes(1);
+    expect(shown).toEqual([true, false]);
+  });
+
+  it("stays gone while the same selection stands: through a scroll, a resize, a change of the stack and a move of the margin", async () => {
+    stub.margin = MARGIN;
+    const shown: boolean[] = [];
+    const run = await scenario(base(), [
+      wait,
+      press,
+      drawn(shown),
+      () => {
+        measureTop = 300;
+        fire("scroll");
+      },
+      drawn(shown),
+      () => fire("resize"),
+      drawn(shown),
+      () => useWindows.getState().open({ id: "s1", kind: "sticky", title: "Note 1" }),
+      drawn(shown),
+      (ctx) => {
+        stub.margin = { ...MARGIN, left: 900, width: 540 };
+        ctx.rerender();
+      },
+      drawn(shown),
+    ]);
+    run.mounted.unmount();
+    expect(shown).toEqual([false, false, false, false, false]);
+  });
+
+  it("comes back with a new selection: another selection object from the page, or the same words again after none", async () => {
+    stub.margin = MARGIN;
+    const shown: boolean[] = [];
+    const run = await scenario(base(), [wait, press, drawn(shown), newSelection({ passage: "Another passage of the paper." }), drawn(shown), press, drawn(shown), none, drawn(shown), newSelection(), drawn(shown)]);
+    run.mounted.unmount();
+    expect(shown).toEqual([false, true, false, false, true]);
+  });
+
+  it("is put away by `e` as well: the Explain card now holds the selection's passage, which the toolbar reads from the page", async () => {
+    stub.margin = MARGIN;
+    const shown: boolean[] = [];
+    const run = await scenario(base(), [
+      wait,
+      drawn(shown),
+      () => {
+        richCards = [explainCard(PASSAGE)];
+        fire("scroll");
+      },
+      drawn(shown),
+    ]);
+    run.mounted.unmount();
+    expect(shown).toEqual([true, false]);
+  });
+
+  it("is put away when `e` swaps the card's passage for this selection's, and not when the card holds another one", async () => {
+    stub.margin = MARGIN;
+    richCards = [explainCard("A passage explained before.")];
+    const shown: boolean[] = [];
+    const run = await scenario(base(), [
+      wait,
+      drawn(shown),
+      () => {
+        richCards = [explainCard("A passage explained before. And the one after it.")];
+        fire("scroll");
+      },
+      drawn(shown),
+      () => {
+        richCards = [explainCard(PASSAGE)];
+        fire("scroll");
+      },
+      drawn(shown),
+    ]);
+    run.mounted.unmount();
+    expect(shown).toEqual([true, true, false]);
+  });
+
+  it("does not put it away for a card that already held the passage when the selection came (the same words selected again): Take notes and Highlight are still on offer", async () => {
+    stub.margin = MARGIN;
+    richCards = [explainCard(PASSAGE)];
+    const shown: boolean[] = [];
+    const run = await scenario(base(), [wait, drawn(shown), () => fire("scroll"), drawn(shown)]);
+    run.mounted.unmount();
+    expect(shown).toEqual([true, true]);
+  });
+
+  it("leaves the selection to the page: it never asks the browser to drop it, so the words stay drawn as the card's quote", async () => {
+    stub.margin = MARGIN;
+    const target = selection();
+    const onExplain = vi.fn();
+    const run = await scenario(base({ target, onExplain }), [wait, press, wait]);
+    run.mounted.unmount();
+    expect(onExplain).toHaveBeenCalledTimes(1);
+    expect(selectionCleared).toBe(0);
+  });
+
+  it("comes back for a new drag over the same words: the press changed the selection, and a selection stands when it ends", async () => {
+    stub.margin = MARGIN;
+    const shown: boolean[] = [];
+    const down = { button: 0, isPrimary: true, target: { closest: () => null } };
+    const run = await scenario(base(), [
+      wait,
+      press,
+      drawn(shown),
+      () => {
+        selectionCollapsed = false;
+        fireWith("pointerdown", down);
+        fireWith("selectionchange", {});
+        fireWith("pointerup", {});
+      },
+      wait,
+      drawn(shown),
+    ]);
+    run.mounted.unmount();
+    expect(shown).toEqual([false, true]);
+  });
+
+  it("does not come back for a press that changes no selection (a button, a tab), nor for a click that collapses it, nor for a press inside a card", async () => {
+    stub.margin = MARGIN;
+    const shown: boolean[] = [];
+    const outside = { button: 0, isPrimary: true, target: { closest: () => null } };
+    const inCard = { button: 0, isPrimary: true, target: { closest: () => ({}) } };
+    const run = await scenario(base(), [
+      wait,
+      press,
+      () => {
+        fireWith("pointerdown", outside);
+        fireWith("pointerup", {});
+      },
+      wait,
+      drawn(shown),
+      () => {
+        selectionCollapsed = true;
+        fireWith("pointerdown", outside);
+        fireWith("selectionchange", {});
+        fireWith("pointerup", {});
+      },
+      wait,
+      drawn(shown),
+      () => {
+        selectionCollapsed = false;
+        fireWith("pointerdown", inCard);
+        fireWith("selectionchange", {});
+        fireWith("pointerup", {});
+      },
+      wait,
+      drawn(shown),
+    ]);
+    run.mounted.unmount();
+    expect(shown).toEqual([false, false, false]);
+  });
+
+  it("listens to the pointer only while the group is put away, and takes its listeners back with it", async () => {
+    stub.margin = MARGIN;
+    const before = await scenario(base());
+    expect(listenerCount()).toBeGreaterThan(0);
+    const normal = [...listeners.keys()].sort();
+    before.mounted.unmount();
+    expect(normal).not.toContain("pointerdown");
+    const run = await scenario(base(), [wait, press, wait]);
+    expect([...listeners.entries()].filter(([, set]) => set.size > 0).map(([type]) => type)).toEqual(expect.arrayContaining(["pointerdown", "pointerup", "selectionchange"]));
+    run.mounted.unmount();
+    expect(listenerCount()).toBe(0);
+  });
+
+  it("changes nothing below 1024 px: the pill above the selection stands after the press, as it did", async () => {
+    stub.margin = null;
+    const shown: boolean[] = [];
+    const run = await scenario(base(), [wait, press, drawn(shown), () => fire("scroll"), drawn(shown)]);
+    run.mounted.unmount();
+    expect(shown).toEqual([true, true]);
+  });
+});
+
+describe("SelectionToolbar — never over a card's header (P11-38 rule 2)", () => {
+  it("reads the headers of the cards in the page and stands below a sticky's header the level place would cover; back level when the card goes", async () => {
+    stub.margin = MARGIN;
+    const seen: Look[] = [];
+    const run = await scenario(base(), [
+      wait,
+      read(seen),
+      () => {
+        richCards = [stickyCard()];
+        fire("scroll");
+      },
+      read(seen),
+      () => {
+        richCards = [];
+        fire("scroll");
+      },
+      read(seen),
+    ]);
+    run.mounted.unmount();
+    expect(seen.map((look) => look.place?.top)).toEqual([400, 420, 400]);
+    expect((seen[1].place as { clear?: string }).clear).toBe("below");
+    expect(seen[0].place).toEqual({ mode: "margin", left: MARGIN.left + 8, top: 400, below: false });
+    expect(seen[2].place).toEqual({ mode: "margin", left: MARGIN.left + 8, top: 400, below: false });
+  });
+
+  it("stands below the explain card's header block, whose X the level place would have covered, from the first frame", async () => {
+    stub.margin = MARGIN;
+    richCards = [explainCard("Some other passage of the paper.")];
+    const run = await scenario(base());
+    const got = run.last().place as ActionsPlace & { clear?: string };
+    run.mounted.unmount();
+    expect(got.top).toBe(503);
+    expect(got.clear).toBe("below");
+    expect(got.left).toBe(MARGIN.left + 8);
+  });
+
+  it("measures the headers again when the stack changes (a card opened, raised or closed), as it measures the cards", async () => {
+    stub.margin = MARGIN;
+    const seen: Look[] = [];
+    const run = await scenario(base(), [
+      wait,
+      read(seen),
+      () => {
+        richCards = [stickyCard()];
+        useWindows.getState().open({ id: "s1", kind: "sticky", title: "Note 1" });
+      },
+      wait,
+      read(seen),
+    ]);
+    run.mounted.unmount();
+    expect(seen.map((look) => look.place?.top)).toEqual([400, 420]);
+  });
+
+  it("asks the page only through the margin's selector, for the cards and their headers together", async () => {
+    stub.margin = MARGIN;
+    richCards = [stickyCard()];
+    const run = await scenario(base());
+    run.mounted.unmount();
+    expect(asked.length).toBeGreaterThan(0);
+    for (const selector of asked) expect(selector).toBe(MARGIN_CARD_SELECTOR);
+  });
+
+  it("changes nothing where there is no margin: the pill above the selection, whatever header stands", async () => {
+    stub.margin = null;
+    richCards = [stickyCard()];
+    const run = await scenario(base());
+    const got = run.last().place!;
+    run.mounted.unmount();
+    expect(got.mode).toBe("above");
+    expect((got as { clear?: string }).clear).toBeUndefined();
   });
 });
