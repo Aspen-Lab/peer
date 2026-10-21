@@ -465,6 +465,22 @@ describe("Fit and the reading scale (the page's, which the shell sits in)", () =
   });
 });
 
+describe("Fit's and the text steps' transition (0.3 s of frames after the variables have flipped)", () => {
+  it("a text step that grows the content frame by frame after the scale variable has changed: the place is held through every frame", () => {
+    const page = open();
+    readAt(page.page, "paper-section-5-p2", 0.5);
+    const before = place(page.page);
+    env.page.setScale("1.1");
+    env.page.frame();
+    for (let frame = 0; frame < 8; frame++) {
+      env.page.growAbove(11);
+      env.page.frame();
+      expect(page.page.top()!.id).toBe(before.id);
+      expect(Math.abs(held(page.page, before))).toBeLessThan(1);
+    }
+  });
+});
+
 describe("the reader's own scroll", () => {
   it("is followed: after they scroll on, a drag keeps the place they scrolled to", () => {
     const page = open();

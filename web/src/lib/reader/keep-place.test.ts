@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { paragraphAtTop } from "@/lib/notes/return-to-paper";
+import { COLUMN_SELECTOR, EDGE_PX, MIN_SHIFT_PX, PLACE_LINE_PX, SETTLE_MS, atEdge, heldPlace, keepPlace, layoutKey, shiftToKeep, type KeepPlaceEnv as Env, type View } from "./keep-place";
 import { createReflowPage, type SimParagraph } from "@/test-support/reflow-page";
 
 // P11-45 (A P11-43's note "The place is not kept when a boundary is dragged"; ruling §1h.146): the reader's place survives a re-flow.
@@ -11,32 +12,6 @@ import { createReflowPage, type SimParagraph } from "@/test-support/reflow-page"
 // This file holds the arithmetic (`heldPlace`, `shiftToKeep`, `layoutKey`) and the controller (`keepPlace`) over a simulated page that re-flows
 // as the browser does (`test-support/reflow-page.ts`: the layout changes and the offset is kept; the observers are told; the scroll event comes at
 // the next frame). The real shell, its dividers and the real DOM reads are in `reader-shell.keep-place.flow.test.tsx`.
-
-// The module is reached through a typed handle, so this file compiles where it is not there yet.
-type Held = { id: string; fraction: number; gap: number };
-type View = { scrollY: number; viewportHeight: number; scrollHeight: number; top: { id: string; top: number; height: number } | null };
-interface Env {
-  view(): View;
-  paragraph(id: string): { top: number; height: number } | null;
-  key(): string;
-  scrollY(): number;
-  scrollBy(dy: number): void;
-  onScroll(run: () => void): () => void;
-  observe(run: () => void): () => void;
-}
-interface KeepPlace {
-  PLACE_LINE_PX: number;
-  EDGE_PX: number;
-  MIN_SHIFT_PX: number;
-  COLUMN_SELECTOR: string;
-  atEdge(view: Pick<View, "scrollY" | "viewportHeight" | "scrollHeight">): boolean;
-  heldPlace(view: View): Held | null;
-  shiftToKeep(held: Held, now: { top: number; height: number }): number;
-  layoutKey(width: number, scale: string, zoom: string): string;
-  keepPlace(env: Env): () => void;
-}
-const specifier = "./keep-place";
-const load = async () => (await import(/* @vite-ignore */ specifier)) as unknown as KeepPlace;
 
 // ── The page ──
 
@@ -56,6 +31,7 @@ function envOf(p: Page, over: Partial<Env> = {}): Env {
       return `${p.columnPx}|${style.getPropertyValue("--reading-scale")}|${style.getPropertyValue("--page-zoom")}`;
     },
     scrollY: () => p.scrollY,
+    now: () => p.clock.now,
     scrollBy: (dy) => p.win.scrollBy({ top: dy, behavior: "instant" }),
     onScroll: (run) => {
       p.win.addEventListener("scroll", run);
@@ -93,49 +69,41 @@ describe("the defect, in the simulated page (a guard: the browser alone keeps th
 describe("heldPlace — what is read of the page", () => {
   const view = (over: Partial<View> = {}): View => ({ scrollY: 8000, viewportHeight: 720, scrollHeight: 25000, top: { id: "paper-section-2-p4", top: -300, height: 1200 }, ...over });
 
-  it("is the line's fraction into the paragraph at the top, for a paragraph the line falls in", async () => {
-    const { heldPlace } = await load();
+  it("is the line's fraction into the paragraph at the top, for a paragraph the line falls in", () => {
     // The line is at 56; the paragraph started 300 above the top of the window: 356 of its 1200 px are above the line.
     expect(heldPlace(view())).toEqual({ id: "paper-section-2-p4", fraction: 356 / 1200, gap: 0 });
   });
 
-  it("is the gap below the line for a paragraph that starts below it", async () => {
-    const { heldPlace } = await load();
+  it("is the gap below the line for a paragraph that starts below it", () => {
     expect(heldPlace(view({ top: { id: "paper-section-2-p5", top: 80, height: 200 } }))).toEqual({ id: "paper-section-2-p5", fraction: 0, gap: 24 });
   });
 
-  it("is a paragraph that starts exactly at the line, with no gap and nothing above it", async () => {
-    const { heldPlace } = await load();
+  it("is a paragraph that starts exactly at the line, with no gap and nothing above it", () => {
     expect(heldPlace(view({ top: { id: "paper-section-2-p5", top: 56, height: 200 } }))).toEqual({ id: "paper-section-2-p5", fraction: 0, gap: 0 });
   });
 
-  it("is nothing at the top of the page (scroll 0), where nothing is kept", async () => {
-    const { heldPlace } = await load();
+  it("is nothing at the top of the page (scroll 0), where nothing is kept", () => {
     expect(heldPlace(view({ scrollY: 0 }))).toBeNull();
     expect(heldPlace(view({ scrollY: 0.4 }))).toBeNull();
     expect(heldPlace(view({ scrollY: 1 }))).not.toBeNull();
   });
 
-  it("is nothing at the foot of the page, where nothing is kept", async () => {
-    const { heldPlace } = await load();
+  it("is nothing at the foot of the page, where nothing is kept", () => {
     // 25000 high, a 720 window: the foot is at scroll 24280.
     expect(heldPlace(view({ scrollY: 24280 }))).toBeNull();
     expect(heldPlace(view({ scrollY: 24279.5 }))).toBeNull();
     expect(heldPlace(view({ scrollY: 24270 }))).not.toBeNull();
   });
 
-  it("is nothing without a paragraph at the top (the Summary tab, a page with no body)", async () => {
-    const { heldPlace } = await load();
+  it("is nothing without a paragraph at the top (the Summary tab, a page with no body)", () => {
     expect(heldPlace(view({ top: null }))).toBeNull();
   });
 
-  it("is nothing for a paragraph that starts below the window: the reader is looking at something else", async () => {
-    const { heldPlace } = await load();
+  it("is nothing for a paragraph that starts below the window: the reader is looking at something else", () => {
     expect(heldPlace(view({ top: { id: "paper-section-1-p0", top: 900, height: 200 } }))).toBeNull();
   });
 
-  it("reads the line where paragraphAtTop does: a paragraph whose bottom is at the line is above it, one pixel more is the one at the top", async () => {
-    const { PLACE_LINE_PX } = await load();
+  it("reads the line where paragraphAtTop does: a paragraph whose bottom is at the line is above it, one pixel more is the one at the top", () => {
     const doc = (bottom: number) => ({
       querySelectorAll: () => [{ id: "paper-section-1-p0", getBoundingClientRect: () => ({ top: bottom - 100, bottom }) }],
     });
@@ -146,8 +114,7 @@ describe("heldPlace — what is read of the page", () => {
 });
 
 describe("atEdge", () => {
-  it("is true within a pixel of either end, false between", async () => {
-    const { atEdge, EDGE_PX } = await load();
+  it("is true within a pixel of either end, false between", () => {
     expect(EDGE_PX).toBe(1);
     const at = (scrollY: number) => atEdge({ scrollY, viewportHeight: 700, scrollHeight: 10000 });
     expect([at(0), at(0.9), at(1), at(5000), at(9298), at(9299), at(9300)]).toEqual([true, true, false, false, false, true, true]);
@@ -155,24 +122,21 @@ describe("atEdge", () => {
 });
 
 describe("shiftToKeep — how far the page has to move", () => {
-  it("puts the same fraction of the paragraph above the line: a paragraph twice as tall, twice as much above", async () => {
-    const { shiftToKeep } = await load();
+  it("puts the same fraction of the paragraph above the line: a paragraph twice as tall, twice as much above", () => {
     const held = { id: "paper-section-2-p4", fraction: 0.25, gap: 0 };
-    // Now 1000 px tall and starting at -100: 156 of it is above the line; it should be 250. The page has to scroll back up by 94.
-    expect(shiftToKeep(held, { top: -100, height: 1000 })).toBeCloseTo(-94, 6);
+    // Now 1000 px tall and starting at -100: 156 of it is above the line; it should be 250. The page has to scroll on by 94.
+    expect(shiftToKeep(held, { top: -100, height: 1000 })).toBeCloseTo(94, 6);
     // Where it already is, nothing.
     expect(shiftToKeep(held, { top: LINE - 250, height: 1000 })).toBe(0);
   });
 
-  it("keeps the gap of a paragraph that began below the line", async () => {
-    const { shiftToKeep } = await load();
+  it("keeps the gap of a paragraph that began below the line", () => {
     const held = { id: "paper-section-2-p5", fraction: 0, gap: 24 };
     expect(shiftToKeep(held, { top: 300, height: 90 })).toBe(300 - (LINE + 24));
     expect(shiftToKeep(held, { top: LINE + 24, height: 90 })).toBe(0);
   });
 
-  it("makes no correction smaller than a pixel", async () => {
-    const { shiftToKeep, MIN_SHIFT_PX } = await load();
+  it("makes no correction smaller than a pixel", () => {
     expect(MIN_SHIFT_PX).toBe(1);
     const held = { id: "paper-section-2-p4", fraction: 0.5, gap: 0 };
     expect(shiftToKeep(held, { top: LINE - 100 + 0.9, height: 200 })).toBe(0);
@@ -181,8 +145,7 @@ describe("shiftToKeep — how far the page has to move", () => {
 });
 
 describe("layoutKey — what makes a re-flow", () => {
-  it("changes with the column's width (to a tenth of a pixel), the reading scale and Fit's zoom — and with nothing else", async () => {
-    const { layoutKey } = await load();
+  it("changes with the column's width (to a tenth of a pixel), the reading scale and Fit's zoom — and with nothing else", () => {
     const base = layoutKey(552, "1", "1");
     expect(layoutKey(552.04, "1", "1")).toBe(base);
     expect(layoutKey(552, " 1 ", "1")).toBe(base);
@@ -202,8 +165,7 @@ describe("keepPlace — the paragraph at the top stays at the top", () => {
     ["a collapse (552 to 646)", 646],
   ];
 
-  it.each(WIDTHS)("%s: the same paragraph, the same line, to within a pixel — at three places in each of 56 paragraphs", async (_name, width) => {
-    const { keepPlace } = await load();
+  it.each(WIDTHS)("%s: the same paragraph, the same line, to within a pixel — at three places in each of 56 paragraphs", (_name, width) => {
     for (const [index, spec] of paragraphs().entries()) {
       if (index > 55) continue; // the last few are at the page's foot, where nothing is kept
       for (const fraction of [0.1, 0.5, 0.9]) {
@@ -223,8 +185,7 @@ describe("keepPlace — the paragraph at the top stays at the top", () => {
     }
   });
 
-  it("keeps the line nearest the top inside a long paragraph: the same fraction of it, not its first line", async () => {
-    const { keepPlace } = await load();
+  it("keeps the line nearest the top inside a long paragraph: the same fraction of it, not its first line", () => {
     const long = paragraphs()[24].id;
     const p = page();
     readAt(p, long, 0.5);
@@ -241,12 +202,11 @@ describe("keepPlace — the paragraph at the top stays at the top", () => {
     expect((LINE - after.top) / after.height).toBeCloseTo(0.5, 2);
   });
 
-  it("keeps the gap of a paragraph that starts below the line", async () => {
-    const { keepPlace } = await load();
+  it("keeps the gap of a paragraph that starts below the line", () => {
     const p = page();
-    // Put the second paragraph's top 20 px below the line, in the space between two.
+    // Put a paragraph's top 10 px below the line, in the space between two (the one above it ends 6 px above the line).
     const id = paragraphs()[20].id;
-    p.scroll(p.scrollY + p.box(id).top - (LINE + 20));
+    p.scroll(p.scrollY + p.box(id).top - (LINE + 10));
     p.frame();
     expect(p.top()!.id).toBe(id);
     const gap = p.top()!.top - LINE;
@@ -257,8 +217,7 @@ describe("keepPlace — the paragraph at the top stays at the top", () => {
     expect(p.top()!.top - LINE).toBeCloseTo(gap, 6);
   });
 
-  it("keeps the place when Fit's zoom changes the page though the column's own width does not move", async () => {
-    const { keepPlace } = await load();
+  it("keeps the place when Fit's zoom changes the page though the column's own width does not move", () => {
     const p = page();
     readAt(p, "paper-section-4-p3", 0.4);
     const before = p.top()!;
@@ -274,8 +233,7 @@ describe("keepPlace — the paragraph at the top stays at the top", () => {
     expect(Math.abs(p.drift(before.id, f))).toBeLessThanOrEqual(1);
   });
 
-  it("leaves the page alone at scroll 0: no scroll is made", async () => {
-    const { keepPlace } = await load();
+  it("leaves the page alone at scroll 0: no scroll is made", () => {
     const p = page();
     keepPlace(envOf(p));
     p.reflow(492);
@@ -286,8 +244,7 @@ describe("keepPlace — the paragraph at the top stays at the top", () => {
     expect(p.scrollY).toBe(0);
   });
 
-  it("leaves the page alone at its foot: no scroll is made, whatever the width does", async () => {
-    const { keepPlace } = await load();
+  it("leaves the page alone at its foot: no scroll is made, whatever the width does", () => {
     const p = page();
     p.scroll(1e9);
     p.frame();
@@ -303,8 +260,7 @@ describe("keepPlace — the paragraph at the top stays at the top", () => {
     expect(p.scrollY).toBe(Math.min(y, p.scrollHeight - 720));
   });
 
-  it("makes no scroll when the column's height changes but its layout does not (the reading arriving, a block opening)", async () => {
-    const { keepPlace } = await load();
+  it("makes no scroll when the column's height changes but its layout does not (the reading arriving, a block opening)", () => {
     const p = page();
     readAt(p, "paper-section-3-p4", 0.5);
     keepPlace(envOf(p));
@@ -313,8 +269,7 @@ describe("keepPlace — the paragraph at the top stays at the top", () => {
     expect(p.calls).toEqual([]);
   });
 
-  it("ignores the observer's first notice (it fires on observe) and any notice before a re-flow", async () => {
-    const { keepPlace } = await load();
+  it("ignores the observer's first notice (it fires on observe) and any notice before a re-flow", () => {
     const p = page();
     readAt(p, "paper-section-3-p4", 0.5);
     const y = p.scrollY;
@@ -323,8 +278,7 @@ describe("keepPlace — the paragraph at the top stays at the top", () => {
     expect(p.scrollY).toBe(y);
   });
 
-  it("scrolls at once and never smoothly: the instant behavior, the reduced-motion reader's own", async () => {
-    const { keepPlace } = await load();
+  it("scrolls at once and never smoothly: the instant behavior, the reduced-motion reader's own", () => {
     const p = page();
     readAt(p, "paper-section-3-p4", 0.5);
     keepPlace(envOf(p, { scrollBy: (dy) => p.win.scrollBy({ top: dy, behavior: "instant" }) }));
@@ -333,8 +287,7 @@ describe("keepPlace — the paragraph at the top stays at the top", () => {
     expect(p.calls.every((call) => call.kind === "scrollBy" && call.behavior === "instant")).toBe(true);
   });
 
-  it("makes the correction in the frame of the re-flow, before the scroll event: the observer's callback is the only caller", async () => {
-    const { keepPlace } = await load();
+  it("makes the correction in the frame of the re-flow, before the scroll event: the observer's callback is the only caller", () => {
     const p = page();
     readAt(p, "paper-section-3-p4", 0.5);
     const before = p.top()!;
@@ -345,8 +298,7 @@ describe("keepPlace — the paragraph at the top stays at the top", () => {
     expect(Math.abs(p.drift(before.id, f))).toBeLessThanOrEqual(1);
   });
 
-  it("follows the reader's own scroll: the next re-flow keeps the place they scrolled to, not the one they left", async () => {
-    const { keepPlace } = await load();
+  it("follows the reader's own scroll: the next re-flow keeps the place they scrolled to, not the one they left", () => {
     const p = page();
     readAt(p, "paper-section-3-p4", 0.5);
     keepPlace(envOf(p));
@@ -362,8 +314,7 @@ describe("keepPlace — the paragraph at the top stays at the top", () => {
     expect(Math.abs(p.drift(before.id, f))).toBeLessThanOrEqual(1);
   });
 
-  it("does not read the place again at its own correction's scroll event: a drag's corrections all go back to the one place", async () => {
-    const { keepPlace } = await load();
+  it("does not read the place again at its own correction's scroll event: a drag's corrections all go back to the one place", () => {
     const p = page();
     readAt(p, "paper-section-3-p4", 0.5);
     const reads = vi.fn();
@@ -379,8 +330,7 @@ describe("keepPlace — the paragraph at the top stays at the top", () => {
     expect(reads.mock.calls.length).toBe(afterStart + 1);
   });
 
-  it("holds through a drag of 60 frames: the point under the line is never a pixel from where it began, and ends where it began", async () => {
-    const { keepPlace } = await load();
+  it("holds through a drag of 60 frames: the point under the line is never a pixel from where it began, and ends where it began", () => {
     const p = page();
     readAt(p, "paper-section-3-p4", 0.37);
     const before = p.top()!;
@@ -406,8 +356,7 @@ describe("keepPlace — the paragraph at the top stays at the top", () => {
     expect(Math.abs(p.drift(before.id, f))).toBeLessThanOrEqual(1);
   });
 
-  it("drops a paragraph that is no longer on the page without failing or scrolling", async () => {
-    const { keepPlace } = await load();
+  it("drops a paragraph that is no longer on the page without failing or scrolling", () => {
     const p = page();
     readAt(p, "paper-section-3-p4", 0.5);
     keepPlace(envOf(p, { paragraph: () => null }));
@@ -415,8 +364,7 @@ describe("keepPlace — the paragraph at the top stays at the top", () => {
     expect(p.calls).toEqual([]);
   });
 
-  it("stops listening when it is stopped: no scroll listener, no observer, no correction", async () => {
-    const { keepPlace } = await load();
+  it("stops listening when it is stopped: no scroll listener, no observer, no correction", () => {
     const p = page();
     readAt(p, "paper-section-3-p4", 0.5);
     const stop = keepPlace(envOf(p));
@@ -429,8 +377,53 @@ describe("keepPlace — the paragraph at the top stays at the top", () => {
     expect(p.calls).toEqual([]);
   });
 
-  it("names the text column the shell draws: [data-reader-centre-inner]", async () => {
-    const { COLUMN_SELECTOR } = await load();
+  it("holds the place through the page's settling: for a moment after a re-flow a height that goes on changing is put right (Fit's and the text steps' 0.3 s transition)", () => {
+    expect(SETTLE_MS).toBeGreaterThan(350);
+    const p = page();
+    readAt(p, "paper-section-5-p2", 0.5);
+    const before = p.top()!;
+    const f = (LINE - before.top) / before.height;
+    keepPlace(envOf(p));
+    p.reflow(492);
+    p.frame();
+    // The next frames of the transition: the layout key is the one it was, the content above grows a little each frame.
+    for (let frame = 0; frame < 6; frame++) {
+      p.clock.now += 50;
+      p.growAbove(9);
+      p.frame();
+      expect(p.top()!.id).toBe(before.id);
+      expect(Math.abs(p.drift(before.id, f))).toBeLessThan(1);
+    }
+  });
+
+  it("lets the browser have a height that changes after the page has settled: no scroll for the reading arriving a second later", () => {
+    const p = page();
+    readAt(p, "paper-section-5-p2", 0.5);
+    keepPlace(envOf(p));
+    p.reflow(492);
+    p.frame();
+    const made = p.calls.length;
+    p.clock.now += SETTLE_MS;
+    p.growAbove(300);
+    p.frame();
+    expect(p.calls.length).toBe(made);
+  });
+
+  it("ends the hold at the reader's own scroll: what they scrolled to is the place, and a growth after it is not put back to the old one", () => {
+    const p = page();
+    readAt(p, "paper-section-5-p2", 0.5);
+    keepPlace(envOf(p));
+    p.reflow(492);
+    p.frame();
+    readAt(p, "paper-section-3-p1", 0.5);
+    const made = p.calls.length;
+    p.clock.now += 50;
+    p.growAbove(40);
+    p.frame();
+    expect(p.calls.length).toBe(made);
+  });
+
+  it("names the text column the shell draws: [data-reader-centre-inner]", () => {
     expect(COLUMN_SELECTOR).toBe("[data-reader-centre-inner]");
   });
 });

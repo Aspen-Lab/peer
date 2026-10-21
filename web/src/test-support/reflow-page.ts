@@ -34,13 +34,13 @@ type Listener = () => void;
 
 export function createReflowPage(options: SimOptions) {
   const viewportHeight = options.viewportHeight ?? 720;
-  const head = options.head ?? 900;
   const foot = options.foot ?? 400;
   const lineHeight = options.lineHeight ?? 29;
   const charPx = options.charPx ?? 8.6;
   const gap = options.gap ?? 16;
 
   let column = options.column;
+  let head = options.head ?? 900;
   let zoom = 1;
   let scale = "1";
   let scrollY = 0;
@@ -191,6 +191,13 @@ export function createReflowPage(options: SimOptions) {
     setScale(s: string) {
       scale = s;
       scrollY = Math.min(scrollY, maxScroll());
+      this.notify();
+    },
+    /** The clock, in ms, that a test moves. */
+    clock: { now: 0 },
+    /** Something above the paragraphs grows by `px` (the reading arriving, a block opening, a transition's next frame): the offset stays; the observers are told. */
+    growAbove(px: number) {
+      head += px;
       this.notify();
     },
     /** The paragraph at the top, as a reader would name it: the first that reaches below `line`, and where its top stands. */
