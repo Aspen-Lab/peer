@@ -34,8 +34,9 @@ import { BackToFeedLink } from "@/components/navigation/back-to-feed-link";
 import { hasImmediateFeedHistoryEntry } from "@/lib/navigation/feed-history";
 import { NONE } from "@/lib/navigation/card-focus";
 import { paperNav } from "@/lib/reader/paper-nav";
-import { paperKeysFor, registerReaderActions, type ReaderActions } from "@/lib/reader/reader-keys";
+import { paperKeysFor, registerReaderActions, selectionActions, type ReaderActions } from "@/lib/reader/reader-keys";
 import { recommendationLine } from "@/lib/reader/recommendation";
+import { scrollBehavior } from "@/lib/reader/scroll-motion";
 import { allocatePlateTerms } from "@/lib/papers/plate-terms";
 import { mergeTerms, paperDefinedTermsInReading, routeTermScope, termScopeKey, termScopeOfKey } from "@/lib/papers/terms";
 import { placeEvidence } from "@/lib/papers/evidence";
@@ -55,7 +56,7 @@ import { PaperPlate, isSameFigure, leadCaption, leadFigurePending } from "@/comp
 import { SwipeableCard } from "@/components/cards/swipe-card";
 import { useResolvedFigure } from "@/components/paper-figure";
 import { TitleBlock } from "@/components/reader/title-block";
-import { PaperWords } from "@/components/reader/paper-words";
+import { PaperWords, SUMMARY_ID, SummaryBlock } from "@/components/reader/paper-words";
 import {
   PaperBody,
   mergeQuestionRoute,
@@ -114,9 +115,17 @@ import { useDebouncedQuestions } from "@/components/reader/use-debounced-questio
 import { SectionLinks } from "@/components/reader/evidence-quote";
 import { ReaderTabs } from "@/components/reader/reader-tabs";
 import { useReaderTab } from "@/components/reader/use-reader-tab";
+import { useRestoreReaderPlace } from "@/lib/notes/return-to-paper";
 import { settledQuestions, useReadingQuestionsHydrated } from "@/store/reading-questions";
+import { ExplainBoundary } from "@/components/reader/explain-boundary";
 import { SelectionToolbar, selectionCanExplain } from "@/components/reader/selection-toolbar";
 import { StickyNotes, useTakeNote } from "@/components/notes/sticky-note";
+import { canHighlight, useHighlight } from "@/components/notes/highlight";
+import { useHighlightStrip } from "@/components/notes/highlight-strip";
+import { HighlightStripHost } from "@/components/notes/highlight-strip-host";
+import { useSummaryHost } from "@/components/notes/note-tags";
+import { FigureHost } from "@/components/reader/figure-host";
+import { useSelectionEscape } from "@/components/reader/front-escape";
 import { anchorMap } from "@/lib/notes/blocks";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
 import { explanationFor, passageHash, useExplainThreadsStore, type ExplainTurn } from "@/store/explain-threads";
@@ -680,8 +689,9 @@ function Reader({
   // The sections' own figure claims, for the page's life; keyed by paper
   // inside, so j/k to the next paper starts its claims fresh.
   const [figureRegistry] = useState(() => new FigureRegistry());
-  // ≥ xl: the spread. Owned here so the decided-read observer can follow the
-  // DecisionBlock when the structure switches and it remounts.
+  // From 1024 css px (`SPREAD_QUERY`, 64rem): the three panes (`ReaderShell`);
+  // below it, one column. Owned here so the decided-read observer can follow
+  // the DecisionBlock's commands when the structure switches and they remount.
   const spread = useSpread();
   // S20/S21: the page-zoom multiplier, set on the one `<PageContainer>`
   // below so its `max-w` (page-container.tsx's `spread` variant) and
@@ -926,6 +936,11 @@ function Reader({
   // P10-09a (review 7.1, 8.4): "Take notes" on the selection — a numbered sticky note at the right, saved into the
   // paper's own note. The pill that offers it and "Explain this" is `SelectionToolbar` (mounted by the box below).
   const takeNote = useTakeNote({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions, body: reading?.body });
+  // P11-17b (owner item 8; B P11-04 §5; ruling §1h.112): "Highlight" on the selection — the passage painted in the paper (Yellow, black words), kept as a
+  // block of the paper's own note, the colour strip raised in the margin. Beside `takeNote`, with the same inputs. A Tier 0 act: it needs no key and no
+  // model, so the toolbar offers it whether or not the page can explain (`canHighlight` below is its own gate, never `canExplain`'s: a paragraph, a heading or a caption of the
+  // paper's body, and, since P11-28, a Summary block or an answer).
+  const highlight = useHighlight({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions, body: reading?.body });
   // The tags the passages carry: the sticky notes in the paper's own note, by paragraph.
   const readingNote = useNotesStore((state) => readingNoteFor(state.notes, paper.id));
   const noteAnchors = useMemo(() => anchorMap(readingNote, paper.id), [readingNote, paper.id]);
@@ -941,6 +956,13 @@ function Reader({
   const clearExplain = useCallback(() => selectExplain(null), [selectExplain]);
   const startOfTab = useCallback(() => scrollToTabStart(spread, document), [spread]);
   const { tab, select: selectTab, reveal } = useReaderTab({ hasBody, onChange: clearExplain, atStart: startOfTab });
+  // P11-17b (rule 3; C P11-14's defect (c)): the notes' blue square for a note taken on a Summary block goes to that block, which stands only under the
+  // "Summary" tab. The sticky notes register `reveal` for a paper's paragraphs (Paper digestion); this is the same for the Summary — the square asks the
+  // page to show the Summary tab, and the jump follows once its blocks are on the page. A paper with no body has no tabs and is on its Summary always.
+  const showSummaryTab = useCallback(() => selectTab("summary"), [selectTab]);
+  useSummaryHost({ paperId: paper.id, onSummary: !hasBody || tab === "summary", showSummary: showSummaryTab });
+  // P11-06 (the owner's item 3): back from the notes page by "Back to paper", the tab and the place the reader left, once.
+  useRestoreReaderPlace({ paperId: paper.id, ready: fromServer, hasBody, tab, select: selectTab });
   // P10-08 (review 8.4): a selection in the Summary or an answer is an explain target too. The body listens for the whole document while
   // Paper digestion is open (its own `onSelect`, below); the Summary tab has no body to listen, so the page does.
   useSelectionListener(hasBody && tab !== "digestion" ? selectExplain : undefined);
@@ -951,7 +973,8 @@ function Reader({
     // Only where it is not already on the screen — scrolling to a block the
     // reader is looking at throws the page for nothing.
     if (top < 0 || top > window.innerHeight * 0.6) {
-      block.scrollIntoView({ behavior: "smooth", block: "start" });
+      // P11-32 (BACKLOG-107): smooth only for a reader who has not asked for reduced motion.
+      block.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
     }
   }, []);
   // Where Peer has read the paper, the text is already on the page — "Read it here" is a way down
@@ -1231,11 +1254,26 @@ function Reader({
       like,
       undoOrToggleRead,
       ...(hasBody ? { read: readHere, ask: focusFirstEmptyQuestion, explain: openExplain } : {}),
+      // P11-13 (rule 3): `n` takes notes on the selection the page holds, as `e` explains it; inert with none. P11-17b (rule 1): `h` highlights it, and
+      // the phone's thumb bar Highlight cell calls the same action. A Summary or an answer selection is no highlight (`highlightSelection` leaves it).
+      ...(hasBody ? selectionActions(() => explainTarget, { note: takeNote, highlight }) : {}),
       ...(isUploadId ? {} : { open }),
       copy,
       back,
     };
     return registerReaderActions(actions);
+  });
+
+  // P11-40 (round 2, Theme B weighed (b); ruling §1h.138 (c)): Escape does one thing at a time, nearest first. A selection standing with its buttons is put away
+  // first — the document's selection and the page's hold on it, so the buttons go with it; no card closes and the page stays — then the front card closes
+  // (`front-escape.ts`, one Escape one card), and only then is Escape the page's `back`, as the legend says. `back` is for Backspace as well and still is; an
+  // Escape typed into a field is the field's.
+  useSelectionEscape({
+    standing: () => explainTarget !== null,
+    end: () => {
+      window.getSelection()?.removeAllRanges();
+      selectExplain(null);
+    },
   });
 
   if (!reading) return null;
@@ -1360,6 +1398,10 @@ function Reader({
   const related = pickRelated(paper, feedPapers);
   const reviewSections = report?.reviewContents?.sections ?? [];
 
+  // P11-20 follow-up (ruling §1h.120): one element, two places — the commands' last row in one column, the details' head in the three panes
+  // (`decision-block.tsx` draws it where the window says).
+  const uploadAction = !paper.id.startsWith("upload:") && uploadsAvailable ? <UploadButton targetPaper={paper} onUploaded={setUpload} /> : undefined;
+
   return (
     // `tabIndex={-1}`: Next's layout router focuses the segment's first
     // element after a client navigation, and an article that cannot take
@@ -1371,7 +1413,7 @@ function Reader({
     // would paint once at full opacity and then snap to hidden.
     <>
     <PageContainer
-      width="spread"
+      width="reader"
       rhythm="reader"
       className={`${PAGE_CLASS} md:pb-16 outline-none`}
       tabIndex={-1}
@@ -1425,19 +1467,20 @@ function Reader({
           </figure>
           )
         }
-        title={<TitleBlock paper={paper} recommendation={recommendation} now={now} />}
+        // P11-16: from 1024 css px the title stands in the left pane, where it is clamped to four lines (`pane`).
+        title={<TitleBlock paper={paper} recommendation={recommendation} now={now} pane={spread} />}
+        // P11-16: the decision block is three parts. The commands stand under the title, in the left pane's fixed zone, where they stay in
+        // view (and carry the decided-read observer's ref); the details — the sentence, the private-PDF line, the DOI — follow the map in
+        // its scroll zone, and in one column follow the commands; the progress is the third part, below.
         decision={
           <DecisionBlock
+            part="commands"
             ref={decisionRef}
-            sentences={sentences}
-            stage={model.stage}
             // P7-12 (R4): the reader is already on the uploaded file's own page; its source is the
             // private file route, so no "Open the PDF" command. `RecordBlock` keeps `reading.source`
             // to dedupe its "Publisher" door against.
             source={isUploadId ? null : reading.source}
-            doi={paper.doi}
             isSaved={paper.isSaved}
-            showAddKey={showAddKey}
             onSave={save}
             onSkip={isUploadId ? undefined : skip}
             onCopy={copy}
@@ -1447,7 +1490,20 @@ function Reader({
             notesAction={<NotesButton variant="row" paper={paper} questions={settledQuestions(asked)} forYourQuestions={report?.forYourQuestions} />}
             onRead={hasBody ? readHere : undefined}
             readLabel={BODY.open}
-            uploadAction={!paper.id.startsWith("upload:") && uploadsAvailable ? <UploadButton targetPaper={paper} onUploaded={setUpload} /> : undefined}
+            uploadAction={uploadAction}
+          />
+        }
+        details={
+          <DecisionBlock
+            part="details"
+            sentences={sentences}
+            // P11-20 (item 2a): in the panes the fixed zone holds the title alone; the venue, byline, affiliation and recommendation head the details.
+            paper={paper}
+            recommendation={recommendation}
+            now={now}
+            uploadAction={uploadAction}
+            doi={paper.doi}
+            showAddKey={showAddKey}
             uploadStatus={upload ? <PrivatePdfStatus upload={upload}
               attachedToTitle={!paper.id.startsWith("upload:") ? paper.title : undefined}
               onDeleted={() => {
@@ -1456,6 +1512,9 @@ function Reader({
               }} /> : undefined}
           />
         }
+        // P11-16 follow-up: what the report is waiting on — the progress bar and its status line — stands in the left pane's fixed zone, directly
+        // after the commands, so it stays on screen while a report generates; in one column it follows the details, as it always did.
+        progress={<DecisionBlock part="progress" stage={model.stage} />}
         // P7-14 (R10): the strip under the decision block, only on a paper Peer has read in full.
         tabs={hasBody ? <ReaderTabs tab={tab} onSelect={selectTab} /> : undefined}
         tab={hasBody ? tab : undefined}
@@ -1498,7 +1557,7 @@ function Reader({
             {/* P7-14 (R10): Paper digestion — the paper: everything the extractor read. Its map
                 (P1-04, R5) is the layout's `map` slot now (P10-04), under the strip, under both tabs. */}
             {/* The paper, when Peer reached it. */}
-            <PaperBody reading={reading} route={route} plain={plainForBody} onSelect={selectExplain} noteAnchors={noteAnchors} />
+            <PaperBody reading={reading} route={route} plain={plainForBody} onSelect={selectExplain} noteAnchors={noteAnchors} onHighlightClick={(id, rect) => useHighlightStrip.getState().show(id, rect.top)} />
           </>
         ) : (
           <div data-explain-source="summary" className="contents">
@@ -1509,128 +1568,150 @@ function Reader({
                 blocks, directly after the words that open it (the claim over the
                 closed abstract), as a block of its own and nowhere else on the page.
                 Drawn only where there is a report; inside, only with a line to show. */}
-            {report && (
-              <NewHereBlock
-                report={report}
-                stagger={stagger++}
-                scramble={shouldScrambleReport}
-              />
-            )}
+            <SummaryBlock id={SUMMARY_ID.newHere}>
+              {report && (
+                <NewHereBlock
+                  report={report}
+                  stagger={stagger++}
+                  scramble={shouldScrambleReport}
+                />
+              )}
+            </SummaryBlock>
 
             {/* ── The report as it read before the rewrite, in its order ── */}
 
             {/* S6: "What is new" merged into "What it proposes" — one block, one
                 figure slot. P9-27: the "new here" lines are the block above's now. */}
-            {report && (
-              <ProposalBlock
-                report={report}
-                paper={paper}
-                figure={proposalFigure}
-                registry={figureRegistry}
-                bound={boundShown}
-                stagger={stagger++}
-                scramble={shouldScrambleReport}
-              />
-            )}
+            <SummaryBlock id={SUMMARY_ID.proposal}>
+              {report && (
+                <ProposalBlock
+                  report={report}
+                  paper={paper}
+                  figure={proposalFigure}
+                  registry={figureRegistry}
+                  bound={boundShown}
+                  stagger={stagger++}
+                  scramble={shouldScrambleReport}
+                />
+              )}
+            </SummaryBlock>
 
-            {methods.length > 0 ? (
-              <ClaimList
-                block="method"
-                claims={methods}
-                abstractSentences={abstractSentences}
-                scramble={shouldScrambleReport}
-              />
-            ) : (
-              fromServer && (
-                <QuoteList block="method" quotes={reading.method} />
-              )
-            )}
+            <SummaryBlock id={SUMMARY_ID.method}>
+              {methods.length > 0 ? (
+                <ClaimList
+                  block="method"
+                  claims={methods}
+                  abstractSentences={abstractSentences}
+                  scramble={shouldScrambleReport}
+                />
+              ) : (
+                fromServer && (
+                  <QuoteList block="method" quotes={reading.method} />
+                )
+              )}
+            </SummaryBlock>
 
             {/* A review's contents stand where its results would; a research
                 paper's results carry the headline, each result's novelty
                 and its figure. Without a report, the paper's own sentences. */}
-            {reviewSections.length > 0 ? (
-              <ReviewContentsBlock
-                sections={reviewSections}
-                stagger={stagger++}
-                scramble={shouldScrambleReport}
-              />
-            ) : report && (keyResults.length > 0 || report.resultsAndSignificance.summary) ? (
-              <ResultsBlock
-                report={report}
-                paper={paper}
-                abstractSentences={abstractSentences}
-                figures={resultFigures}
-                registry={figureRegistry}
-                bound={boundShown}
-                stagger={stagger++}
-                scramble={shouldScrambleReport}
-              />
-            ) : (
-              fromServer && (
-                <QuoteList block="findings" quotes={reading.findings} />
-              )
-            )}
+            <SummaryBlock id={SUMMARY_ID.results}>
+              {reviewSections.length > 0 ? (
+                <ReviewContentsBlock
+                  sections={reviewSections}
+                  stagger={stagger++}
+                  scramble={shouldScrambleReport}
+                />
+              ) : report && (keyResults.length > 0 || report.resultsAndSignificance.summary) ? (
+                <ResultsBlock
+                  report={report}
+                  paper={paper}
+                  abstractSentences={abstractSentences}
+                  figures={resultFigures}
+                  registry={figureRegistry}
+                  bound={boundShown}
+                  stagger={stagger++}
+                  scramble={shouldScrambleReport}
+                />
+              ) : (
+                fromServer && (
+                  <QuoteList block="findings" quotes={reading.findings} />
+                )
+              )}
+            </SummaryBlock>
 
             {/* S6 deleted "Why it fits you"; the rewrite's project relation,
                 then the shared terms line, stand in its place, as before. */}
-            {relation && relation.items.length > 0 ? (
-              <ClaimList
-                block="forYou"
-                claims={relation.items}
-                abstractSentences={abstractSentences}
-                anchor={relation.basedOn}
-                scramble={shouldScrambleReport}
-              />
-            ) : (
-              shared.length > 0 && (
-                <section>
-                  <p className="font-reading text-lead leading-[1.6] text-text mt-12 reading-justify">
-                    {sharedTermsLine(shared)}
-                  </p>
-                </section>
-              )
-            )}
+            <SummaryBlock id={SUMMARY_ID.forYou}>
+              {relation && relation.items.length > 0 ? (
+                <ClaimList
+                  block="forYou"
+                  claims={relation.items}
+                  abstractSentences={abstractSentences}
+                  anchor={relation.basedOn}
+                  scramble={shouldScrambleReport}
+                />
+              ) : (
+                shared.length > 0 && (
+                  <section>
+                    <p className="font-reading text-lead leading-[1.6] text-text mt-12 reading-justify">
+                      {sharedTermsLine(shared)}
+                    </p>
+                  </section>
+                )
+              )}
+            </SummaryBlock>
 
-            <GlanceBlock paper={paper} now={now} stagger={stagger++} />
+            <SummaryBlock id={SUMMARY_ID.glance}>
+              <GlanceBlock paper={paper} now={now} stagger={stagger++} />
+            </SummaryBlock>
 
-            <RelatedBlock related={related} now={now} stagger={stagger++} />
+            <SummaryBlock id={SUMMARY_ID.related}>
+              <RelatedBlock related={related} now={now} stagger={stagger++} />
+            </SummaryBlock>
 
             {/* ── The blocks the rewrite added, kept under the old report ── */}
 
-            {limitations.length > 0 ? (
-              <ClaimList
-                block="caveats"
-                claims={limitations}
-                abstractSentences={abstractSentences}
-                scramble={shouldScrambleReport}
-              />
-            ) : (
-              fromServer && (
-                <QuoteList block="caveats" quotes={reading.caveats} />
-              )
-            )}
+            <SummaryBlock id={SUMMARY_ID.caveats}>
+              {limitations.length > 0 ? (
+                <ClaimList
+                  block="caveats"
+                  claims={limitations}
+                  abstractSentences={abstractSentences}
+                  scramble={shouldScrambleReport}
+                />
+              ) : (
+                fromServer && (
+                  <QuoteList block="caveats" quotes={reading.caveats} />
+                )
+              )}
+            </SummaryBlock>
 
-            {nextStep?.text && (
-              <ClaimList
-                block="nextStep"
-                claims={[nextStep]}
-                abstractSentences={abstractSentences}
-                scramble={shouldScrambleReport}
-              />
-            )}
+            <SummaryBlock id={SUMMARY_ID.nextStep}>
+              {nextStep?.text && (
+                <ClaimList
+                  block="nextStep"
+                  claims={[nextStep]}
+                  abstractSentences={abstractSentences}
+                  scramble={shouldScrambleReport}
+                />
+              )}
+            </SummaryBlock>
 
             {/* Last, and always there: the facts that need no key. On a page with no model
                 page it is the only block under the abstract, which is the
                 point — the column used to end at the abstract's footer with
                 half the page under it. */}
-            <RecordBlock paper={paper} primaryUrl={reading.source?.url ?? null} />
+            <SummaryBlock id={SUMMARY_ID.record}>
+              <RecordBlock paper={paper} primaryUrl={reading.source?.url ?? null} />
+            </SummaryBlock>
 
             {/* And last, the reader's own context: what they read or kept
                 under the same topics, and the topics as searches. On a paper
                 with no full text this stands where the column used to end
                 in air. */}
-            <InYourLibrary paper={paper} />
+            <SummaryBlock id={SUMMARY_ID.library}>
+              <InYourLibrary paper={paper} />
+            </SummaryBlock>
           </div>
         )}
         next={<NextRow nav={nav} next={nextPaper} />}
@@ -1644,12 +1725,22 @@ function Reader({
         inside the section links, so the quotes' "§Heading" is a link as
         everywhere. One per paper: a card never follows the reader to the next. */}
     <SectionLinks headings={bodyHeadings}>
-      <ExplainBox key={paper.id} target={explainTarget} terms={terms} canAsk={explainCanAsk} onAsk={askExplain} cached={explainCached} cachedTurns={explainKeptThread?.turns} onReply={replyExplain} onSayMore={moreExplain} onResetThread={resetExplain} openRef={explainOpen} reading={reading} />
+      {/* P11-14 (B P11-02 D3): a throw in the box leaves the paper and everything else on the page as they are, and shows one quiet line in its place. */}
+      <ExplainBoundary key={paper.id}>
+        <ExplainBox key={paper.id} target={explainTarget} terms={terms} canAsk={explainCanAsk} onAsk={askExplain} cached={explainCached} cachedTurns={explainKeptThread?.turns} onReply={replyExplain} onSayMore={moreExplain} onResetThread={resetExplain} openRef={explainOpen} reading={reading} />
+      </ExplainBoundary>
     </SectionLinks>
     {/* P10-09a (review 7.1, 8.4; ruling §1h.78): the pill above a selection with "Explain this" and "Take notes", and
-        the sticky notes it opens at the right. Fixed, in the window's pixels, like the box above. */}
-    <SelectionToolbar target={explainTarget} canExplain={selectionCanExplain({ canAsk: explainCanAsk, terms, passage: explainTarget?.passage ?? null })} onExplain={openExplain} onTakeNote={takeNote} />
+        the sticky notes it opens at the right. Fixed, in the window's pixels, like the box above. P11-17b: and "Highlight" — wherever `canHighlight`
+        accepts the selection (a paragraph, a heading or a caption of the paper's body; since P11-28 a Summary block or an answer), with or without a key. */}
+    <SelectionToolbar target={explainTarget} canExplain={selectionCanExplain({ canAsk: explainCanAsk, terms, passage: explainTarget?.passage ?? null })} onExplain={openExplain} onTakeNote={takeNote} onHighlight={highlight} canHighlight={canHighlight(explainTarget)} />
     <StickyNotes key={paper.id} paper={paper} reveal={reveal} />
+    {/* P11-15 (owner item 1): a figure opened from the paper's body, in the margin's stack, or the lightbox where there is no margin. One per paper, as the stickies: the store's keys repeat across papers. Its key is not the stickies' (a sibling's), or React meets two children with one key. */}
+    <FigureHost key={`figure:${paper.id}`} />
+    {/* P11-17b (owner item 8; B P11-04 §5): the highlight's colour strip, in the margin, level with its mark — raised by the Highlight action and by a click
+        on a mark (`onHighlightClick` above). One per paper, as the stickies and the figure host: it hides the strip when it unmounts. Outside the zoom
+        container, as the cards are: it is placed in the window's pixels. */}
+    <HighlightStripHost key={`highlight-strip:${paper.id}`} paperId={paper.id} />
     {/* P7-14 (R9): the notes, as a small tab fixed at the window's right edge (from `md`; a phone has
         the row in the command stack instead). Beside the explain box, for the same reason: it is
         placed in the window's pixels, which the zoom on the page container would scale. */}

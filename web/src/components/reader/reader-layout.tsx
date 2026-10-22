@@ -1,11 +1,18 @@
 "use client";
 
-// Arranges the reader's blocks — it renders none of them. Below xl the
-// children come back as a fragment, from xl they are placed on the spread:
-// plate, title, decision and tab strip in the panel, the common blocks, the
-// active tab's blocks and the Next row in the column. The block order, strings
-// and type are untouched; only the place. The rail is not a block any more:
-// position and the way back live in the shell.
+// Arranges the reader's blocks — it renders none of them. Below 1024 css px the children come back as a fragment, in one column; from it
+// they are placed in the three-pane shell (`reader-shell.tsx`, P11-10): the left pane (the reading controls in its header row beside the pin
+// button; the title, the commands and the Summary / Paper digestion strip in its fixed zone; the map, then the plate and the details in its scroll zone), the centre (the common
+// blocks, the active tab's blocks and the Next row), and the margin, which the shell draws and keeps empty. The block order, strings and
+// type are untouched; only the place. The rail is not a block any more: position and the way back live in the shell.
+//
+// P11-16 (B P11-01 §2.3, §2.4, §3.2; ruling §1h.113 (a)), the owner's items 2 and 6: the owner's paper has a plate and a six-line title, which
+// filled the old spread's first 845 px, so the map stood at y 915 and was never on screen on arrival (and under 1280 css px there was no panel
+// at all). The left pane is split: what the reader needs in view while reading — the title, the commands, the strip — is a
+// fixed zone that never scrolls, and the map is the first thing of the pane's one scroller, so its first rows are on screen at 1280 x 720.
+// The decision block is three slots for it: `decision` (the commands), `details` (the sentence, the private-PDF line, the DOI) and `progress`.
+// The map stays outside the tabpanel, under both tabs, and no block remounts on a tab switch, a pin, a rail or peek change, or a drag: each
+// is built once here and appears once, and the shell keeps one DOM node per zone in every state.
 //
 // P7-14 (R2, Q1): the decision block — the commands: "Read it here", Save,
 // Copy — follows the title in BOTH layouts, before the abstract and before
@@ -24,40 +31,27 @@
 // P9-04 (X3): in one column the tab strip stands directly above its tabpanel. The order is plate,
 // title, decision, the common blocks, the strip, the panel, Next: on a phone the strip used
 // to stand under the decision, with the question box and more (about 2,000 px) between it and the
-// panel it switches. The spread is unchanged: there the strip is in the panel beside the column, a
-// remote control for the column by design (R10).
-//
-// P9-04 (X2): the panel scrolls as one. The panel, bounded by the window in `reader-panel` (globals.css),
-// is the one scroll region, and nothing inside it scrolls on its own. (P10-04b: now the sticky part, below.)
+// panel it switches. In the panes the strip is in the left pane beside the column, a remote control for the column by design (R10).
 //
 // P10-02 (ruling §1h.78): the paper's terms strip, which stood in the panel under the tab strip (after
 // the common blocks in one column), is deleted, and with it its `terms` slot. The paper's own definitions
 // still feed "Explain this" and the plate; they are not a block of this layout.
 //
-// P10-04 (review 3.1; A8): the reading map stands directly under the strip — in the panel on the spread, so
-// it floats with the strip (the panel is the sticky, window-bounded scroll region) and scrolls inside the
-// panel when it is taller than the window; in one column between the strip and the tabpanel, with no
-// stickiness there. It is a slot of its own, outside the tabpanel: under both tabs, never remounted by a
-// switch, and nothing of it is duplicated in the column.
-//
-// P10-04b (A8, X-A1; ruling §1h.87 (a)): the panel is split. At 1440 x 1000 the plate, the six-line title and the
-// decision block filled 760 of the sticky panel's 892 px, so no row of the map was in view; the owner's A8 wants
-// the map to float so that "wherever the reader is" it can be used. Now the head (plate, title, decision) is in
-// normal flow and scrolls away with the page, and the sticky part is the strip and the map (`PANEL_STICKY_CLASS`):
-// under the masthead at every scroll past the head, window-bounded, the map scrolling inside it only when it is
-// taller than the room. This supersedes P9-04's "the panel scrolls as one" for the head: the panel has no scroll
-// region of its own any more. The DOM order is unchanged; for a paper with no strip and no map the head is the
-// sticky part, as the whole panel was.
+// P10-04 (review 3.1; A8): the reading map stands directly under the strip — in one column between the strip and the tabpanel; in the panes it
+// is the left pane's scroll zone's first block. It is a slot of its own, outside the tabpanel: under both tabs, never remounted by a switch,
+// and nothing of it is duplicated in the column.
 //
 // The structure is chosen in JS rather than with `display: contents` and
 // `order`, so what a screen reader announces is what the page shows. Crossing
-// 80rem remounts the blocks (the authors toggle resets); a window resize
+// 64rem remounts the blocks (the authors toggle resets); a window resize
 // across the breakpoint is rare and gets no transition.
 
 import { useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { fitZoom, READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
 import { TABPANEL_ID, tabId } from "./reader-tabs";
-import { COLUMN_CLASS, PANEL_CLASS, PANEL_STICKY_CLASS, PANEL_TAIL_CLASS, SPREAD_GRID, SPREAD_QUERY } from "./spread";
+import { ReaderShell } from "./reader-shell";
+import { ReadingControls } from "./reading-controls";
+import { SPREAD_QUERY } from "./spread";
 import type { ReaderTab } from "./use-reader-tab";
 
 /** The id of the wrapper that holds the blocks both tabs share. */
@@ -65,8 +59,8 @@ export const COMMON_ID = "reader-common";
 
 /**
  * Where a tab the reader picks starts, once its blocks are on the page: the page goes there only if it has
- * scrolled off the top. On the spread the column opens with the common blocks, so that is the start (the
- * panel when there are none). In one column (P9-04, X3) the common blocks stand ABOVE the strip and the
+ * scrolled off the top. In the panes (the spread) the centre opens with the common blocks, so that is the start (the
+ * tabpanel when there are none). In one column (P9-04, X3) the common blocks stand ABOVE the strip and the
  * panel directly below it, so the start is the panel — `scroll-mt-20` leaves the strip in view above it —
  * and never the common blocks: a pick made at the strip must not throw the page back up to them.
  * `doc` is the document (a stub in the tests).
@@ -81,17 +75,24 @@ interface ReaderLayoutProps {
   spread: boolean;
   plate: ReactNode;
   title: ReactNode;
-  /** The commands, then the sentence — straight after the title in both
-   *  layouts (P7-14, R2 + Q1). */
+  /** The commands — straight after the title in both layouts (P7-14, R2 + Q1). In the panes: the left
+   *  pane's fixed zone, which never scrolls. */
   decision: ReactNode;
-  /** P7-14 (R10): the Summary / Paper digestion strip. Under the decision block in the
-   *  spread's panel; in one column (P9-04) directly above the tabpanel it switches.
+  /** P11-16: what follows the commands — the sentence, the private-PDF line, the DOI. In the
+   *  panes: the left pane's scroll zone, after the map and the plate; in one column straight after `decision`. */
+  details?: ReactNode;
+  /** P11-16 follow-up (ruling §1h.115 item 3): the report's progress bar and status line. In the panes: the left pane's fixed
+   *  zone, directly after the commands, so it is on screen while a report generates; in one column after `details`, where it
+   *  always stood. Present only while a stage stands. */
+  progress?: ReactNode;
+  /** P7-14 (R10): the Summary / Paper digestion strip. At the foot of the left pane's fixed zone in the panes;
+   *  in one column (P9-04) directly above the tabpanel it switches.
    *  Present only on a paper Peer has read in full; its presence is what makes
    *  `words` and `additions` a tabpanel. */
   tabs?: ReactNode;
-  /** P10-04 (review 3.1): the reading map. Directly under the strip in the spread's panel (it floats with
-   *  the strip and scrolls inside the panel); in one column between the strip and the tabpanel. Under both
-   *  tabs, outside the tabpanel. */
+  /** P10-04 (review 3.1): the reading map. The first block of the left pane's scroll zone in the panes (on
+   *  screen on arrival, P11-16); in one column between the strip and the tabpanel. Under both tabs, outside
+   *  the tabpanel. */
   map?: ReactNode;
   /** The tab on show, for the tabpanel's label. */
   tab?: ReaderTab;
@@ -110,7 +111,7 @@ function subscribe(onChange: () => void) {
 }
 
 /**
- * ≥ xl, by the window. Safe to read on the first render: `Reader` mounts
+ * ≥ 64rem (1024 css px, the three panes), by the window. Safe to read on the first render: `Reader` mounts
  * only once the paper is known, which is after `StoreHydrator` rehydrates
  * (all stores are `skipHydration`) or after the by-id fetch — never during
  * SSR or hydration. The server snapshot is the one-column page regardless.
@@ -142,7 +143,7 @@ export function useResolvedReadingScale(): number {
 /**
  * Ruling 21 (round 7, item 7-07): Fit's whole-page zoom multiplier — 1
  * (no-op) unless Fit is on and the spread applies (Fit has nothing to do
- * below xl, per spec). COMPUTED from the viewport width and the reader's
+ * below the three panes, per spec). COMPUTED from the viewport width and the reader's
  * own `readingScale` step (`fitZoom`, `store/reading-prefs.ts`) — never
  * measured off a live DOM element any more. The previous version read
  * `[data-zoom-root]`'s own `offsetWidth` as a stand-in for the page's 1x
@@ -170,23 +171,24 @@ export function usePageZoom(): number {
   return fitZoom(viewportWidth, readingScale);
 }
 
+/** What a zone gives the focus ring (2px + 3px offset) of whatever stands at its edge: a zone clips what overflows it, and a command or a
+ *  map row at the edge would lose its ring. The old map had `xl:-mx-1.5 xl:px-1.5` for it. */
+const ZONE_INSET = "px-1.5";
+
 export function ReaderLayout(p: ReaderLayoutProps) {
   // S15/S21: read here, not threaded as a prop from page.tsx — this file
   // already self-contains its other layout-affecting state (`useSpread`),
   // so the reading-size scale follows the same shape. Sets --reading-scale
   // on a thin wrapper around `words` and `additions` only (never
-  // `decision`, never the panel) — the CSS variable falls back to 1
+  // `decision`, never the pane) — the CSS variable falls back to 1
   // everywhere it isn't explicitly set, so nothing outside these two wraps
   // is affected.
   const readingScale = useResolvedReadingScale();
   const readingScaleStyle = { "--reading-scale": readingScale } as CSSProperties;
 
-  // P7-14 (R2): no panel-height measuring. The panel pins by its top
-  // (`globals.css`, `reader-panel`); it used to measure itself so that a panel
-  // taller than the window could pin by its bottom and keep the decision in view.
-
   const tabbed = p.tabs !== undefined && p.tabs !== null;
-  // P10-04b: the strip and the map are the spread panel's sticky part; with neither, the head is.
+  // The strip and the map are what the left pane's two zones are for; with neither (a paper with no body) the pane has nothing to float and
+  // scrolls as one.
   const tail = tabbed || (p.map !== undefined && p.map !== null);
   // Built from the slot alone — the tab is not read here, on purpose (see the header).
   const common = p.common ? (
@@ -214,6 +216,8 @@ export function ReaderLayout(p: ReaderLayoutProps) {
         {p.plate}
         {p.title}
         {p.decision}
+        {p.details}
+        {p.progress}
         {common}
         {/* P9-04 (X3): the strip stands directly above the panel it switches (`aria-controls`),
             after the blocks both tabs share — not four screens above it. */}
@@ -227,67 +231,64 @@ export function ReaderLayout(p: ReaderLayoutProps) {
     );
   }
 
-  // The same, in the column: a flex column, so the Next row can take the free space.
+  // The three panes (P11-16). The tabpanel is a flex column, as the old spread's was, so the first block's own top gap stays inside it.
   const panel = tabbed ? (
-    <div role="tabpanel" id={TABPANEL_ID} aria-labelledby={p.tab ? tabId(p.tab) : undefined} className="scroll-mt-20 xl:flex xl:flex-col">
+    <div role="tabpanel" id={TABPANEL_ID} aria-labelledby={p.tab ? tabId(p.tab) : undefined} className="scroll-mt-20 flex flex-col">
       {blocks}
     </div>
   ) : (
     blocks
   );
 
+  // The left pane. The shell's header row holds the pin and the collapse button, and the reading controls beside it (`header`); the fixed
+  // zone is the title, the commands, the report's progress while one stands, and the strip. With nothing to float — no strip, no map — the pane scrolls as one.
+  // The pane is a window high at most and the fixed zone must leave the map room, so the blocks' own gaps — made for a page — are
+  // tightened here, by the wrapper, and not in the blocks (they keep their gaps in one column): the commands 20 -> 12px under the title, the
+  // strip 32 -> 16px under the commands, the map 24 -> 16px under the strip. P11-17c rule 2: the first two read `--pane-gap` (12 px, the
+  // strip's 4 px more), which a window under 700 css px high sets to 8 px (`globals.css`), so the zone fits its cap there.
+  const head = (
+    <>
+      {p.title}
+      <div data-pane-commands="" className="[&>*>:first-child]:mt-[var(--pane-gap,0.75rem)]">{p.decision}</div>
+      {p.progress}
+      {p.tabs ? <div className="[&>:first-child]:mt-[calc(var(--pane-gap,0.75rem)_+_0.25rem)]">{p.tabs}</div> : null}
+    </>
+  );
+  const rest = (
+    <>
+      {p.map ? <div className="[&>:first-child]:mt-4">{p.map}</div> : null}
+      {p.plate}
+      {p.details}
+    </>
+  );
+
   return (
-    // S20: `--reading-scale` set here too, not only on the `words`/
-    // `additions` wraps below — `grid-template-columns` (spread.ts) is a
-    // regular property, not a custom one, so its own `var()` resolves fresh
-    // per element from whatever is inherited AT THAT ELEMENT. The grid div
-    // is an ancestor of the existing wraps, not a descendant, so it
-    // needs the variable set on itself; `readingScaleStyle` is the same
-    // constant those wraps already use, reused rather than duplicated.
-    <div className={SPREAD_GRID} style={readingScaleStyle}>
-      {/* data-reader-panel: no longer read by this file (Ruling 19 moved
-          Fit's own DOM query to [data-zoom-root], see usePageZoom above) —
-          left on the element as a stable selector future code may still
-          want, costs nothing to keep. */}
-      <div className={PANEL_CLASS} data-reader-panel="">
-        {tail ? (
-          <>
-            {/* P10-04b (A8, X-A1): the head — plate, title, decision — is in normal flow and scrolls away
-                with the page. */}
-            {p.plate}
-            {p.title}
-            {p.decision}
-            {/* The holder is the sticky part's containing block: it takes the rest of the panel's height
-                (which is the column's), and carries the strip's 32px gap, so the margin is not the sticky
-                element's own. */}
-            <div className="xl:mt-8 xl:flex-1">
-              {/* The strip and the map (P10-04) stay under the masthead while the reader scrolls the column;
-                  the map scrolls inside when it is taller than the window's remaining height. */}
-              <div className={PANEL_TAIL_CLASS} data-reader-sticky="">
-                {p.tabs}
-                {p.map}
-              </div>
-            </div>
-          </>
-        ) : (
-          // No strip and no map (a paper with no body): there is nothing to float but the head, so the head is
-          // the sticky part, as the whole panel was.
-          <div className={PANEL_STICKY_CLASS} data-reader-sticky="">
-            {p.plate}
-            {p.title}
-            {p.decision}
-          </div>
-        )}
-      </div>
-      <div className={COLUMN_CLASS}>
-        {common}
-        {panel}
-        {/* Takes the free space on a page shorter than the panel, so the row
-            sits bottom-right level with the DOI line; on a long page it is
-            simply last. Never at the top — full text arriving later must
-            not re-place it. */}
-        <div className="xl:mt-auto">{p.next}</div>
-      </div>
-    </div>
+    <ReaderShell
+      header={<ReadingControls spread />}
+      left={
+        tail
+          ? {
+              fixed: <div className={ZONE_INSET}>{head}</div>,
+              scroll: <div className={ZONE_INSET}>{rest}</div>,
+            }
+          : {
+              whole: (
+                <div className={ZONE_INSET}>
+                  {head}
+                  {rest}
+                </div>
+              ),
+            }
+      }
+      centre={
+        // A flex column, as the old reading column was; the first block's own top gap is dropped, so whatever opens the column — the claim's
+        // band, the skim deck, a TL;DR — starts level with the top of the left pane.
+        <div className="flex flex-col [&>:first-child>:first-child]:mt-0 [&>:first-child>:first-child>:first-child]:mt-0">
+          {common}
+          {panel}
+          <div>{p.next}</div>
+        </div>
+      }
+    />
   );
 }

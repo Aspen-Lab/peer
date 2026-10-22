@@ -1,38 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState, type PointerEvent, type Ref, type SyntheticEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type Ref, type SyntheticEvent } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
+import { clampFigurePan, clampFigureSize, DETAIL_ZOOM, SUMMARY_ZOOM_STEPS, type Size } from "./figure-zoom";
+import { useFigureZoom } from "./use-figure-zoom";
 
-type Size = { width: number; height: number };
-type Point = { x: number; y: number };
-const DETAIL_ZOOM = 2;
-
-/** Fit the entire figure into the available space, preserving its aspect ratio. */
-export function clampFigureSize(natural: Size, viewport: Size): Size {
-  if (natural.width <= 0 || natural.height <= 0 || viewport.width <= 0 || viewport.height <= 0) {
-    return { width: 0, height: 0 };
-  }
-  const scale = Math.min(viewport.width * 0.96 / natural.width, viewport.height * 0.96 / natural.height);
-  return { width: natural.width * scale, height: natural.height * scale };
-}
-
-/** Keep every edge reachable without letting the zoomed figure get dragged away. */
-export function clampFigurePan(pan: Point, image: Size, viewport: Size): Point {
-  const limitX = Math.max(0, (image.width - viewport.width) / 2);
-  const limitY = Math.max(0, (image.height - viewport.height) / 2);
-  return {
-    x: Math.max(-limitX, Math.min(limitX, pan.x)),
-    y: Math.max(-limitY, Math.min(limitY, pan.y)),
-  };
-}
+// The math moved to figure-zoom.ts (P11-11, shared with the margin's figure card); the clamps stay this module's exports.
+export { clampFigurePan, clampFigureSize, DETAIL_ZOOM };
 
 function setRef(ref: Ref<HTMLImageElement> | undefined, node: HTMLImageElement | null) {
   if (typeof ref === "function") ref(node);
   else if (ref) ref.current = node;
 }
 
-function FigureViewer({ src, alt, caption, natural, onClose }: {
+export function FigureViewer({ src, alt, caption, natural, onClose }: {
   src: string;
   alt: string;
   caption?: string | null;
@@ -44,11 +26,6 @@ function FigureViewer({ src, alt, caption, natural, onClose }: {
   const captionRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const [frame, setFrame] = useState<(Size & { captionHeight: number }) | null>(null);
-  const [zoomed, setZoomed] = useState(false);
-  const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
-  const [dragging, setDragging] = useState(false);
-  const drag = useRef<{ pointerId: number; start: Point; origin: Point; moved: boolean } | null>(null);
-  const suppressClick = useRef(false);
 
   // Equal clearance above and below keeps the image at the viewport's exact
   // center, clear of the caption and close control, even when the caption wraps.
@@ -105,50 +82,8 @@ function FigureViewer({ src, alt, caption, natural, onClose }: {
     width: Math.max(0, (frame?.width ?? 0) - 32),
     height: Math.max(0, (frame?.height ?? 0) - clearance * 2),
   };
-  const size = clampFigureSize(natural, viewport);
-  const scale = zoomed ? DETAIL_ZOOM : 1;
-  const scaledSize = { width: size.width * scale, height: size.height * scale };
-  const offset = clampFigurePan(pan, scaledSize, viewport);
-
-  const toggleZoom = () => {
-    if (suppressClick.current) {
-      suppressClick.current = false;
-      return;
-    }
-    setZoomed((value) => !value);
-    setPan({ x: 0, y: 0 });
-  };
-
-  const startDrag = (event: PointerEvent<HTMLButtonElement>) => {
-    suppressClick.current = false;
-    if (!zoomed || event.button !== 0 || !event.isPrimary) return;
-    event.preventDefault();
-    event.currentTarget.focus({ preventScroll: true });
-    event.currentTarget.setPointerCapture(event.pointerId);
-    drag.current = { pointerId: event.pointerId, start: { x: event.clientX, y: event.clientY }, origin: offset, moved: false };
-    setDragging(true);
-  };
-
-  const moveDrag = (event: PointerEvent<HTMLButtonElement>) => {
-    const active = drag.current;
-    if (!active || active.pointerId !== event.pointerId) return;
-    const dx = event.clientX - active.start.x;
-    const dy = event.clientY - active.start.y;
-    if (!active.moved && Math.hypot(dx, dy) < 4) return;
-    active.moved = true;
-    setPan(clampFigurePan({ x: active.origin.x + dx, y: active.origin.y + dy }, scaledSize, viewport));
-  };
-
-  const endDrag = (event: PointerEvent<HTMLButtonElement>) => {
-    const active = drag.current;
-    if (!active || active.pointerId !== event.pointerId) return;
-    suppressClick.current = active.moved || event.type !== "pointerup";
-    drag.current = null;
-    setDragging(false);
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-  };
+  // The Summary's settings of the shared zoom core: two states (fit, 2x), no wheel, no keys (the capture handler above keeps every key).
+  const zoom = useFigureZoom({ natural, viewport, steps: SUMMARY_ZOOM_STEPS, wheel: false, keys: false });
 
   return (
     <div
@@ -170,20 +105,15 @@ function FigureViewer({ src, alt, caption, natural, onClose }: {
           {frame && (
             <button
               type="button"
-              aria-label={zoomed ? "Fit figure to screen" : "Zoom in on figure"}
-              aria-pressed={zoomed}
-              title={zoomed ? "Drag to pan; click to fit to screen" : "Click to zoom in"}
-              onClick={toggleZoom}
-              onPointerDown={startDrag}
-              onPointerMove={moveDrag}
-              onPointerUp={endDrag}
-              onPointerCancel={endDrag}
-              onLostPointerCapture={endDrag}
+              aria-label={zoom.zoomed ? "Fit figure to screen" : "Zoom in on figure"}
+              aria-pressed={zoom.zoomed}
+              title={zoom.zoomed ? "Drag to pan; click to fit to screen" : "Click to zoom in"}
+              {...zoom.surface}
               className={cn(
                 "relative block shrink-0 touch-none select-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white",
-                zoomed ? (dragging ? "cursor-grabbing" : "cursor-grab") : "cursor-zoom-in",
+                zoom.zoomed ? (zoom.dragging ? "cursor-grabbing" : "cursor-grab") : "cursor-zoom-in",
               )}
-              style={{ width: size.width, height: size.height, transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` }}
+              style={zoom.style}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={src} alt={alt} referrerPolicy="no-referrer" draggable={false} className="pointer-events-none block h-full w-full max-w-none object-contain" />

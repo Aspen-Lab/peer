@@ -6,12 +6,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { block, stickySpan, stickyText, stickyTitle } from "@/lib/notes/blocks";
 import type { Block } from "@/lib/notes/types";
-import { DOCK_VAR } from "@/components/reader/explain-dock";
-import { NOTES_WINDOW_ID, bindWindowsReserve, useWindows } from "@/lib/reader/windows";
+import { NOTES_WINDOW_ID, useWindows } from "@/lib/reader/windows";
+import { MarginCard, MarginCardShell, type MarginCardShellProps } from "@/components/reader/margin-card";
 import { WysiwygField } from "./wysiwyg-field";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
 import { reconcileWindow } from "./notes-window";
-import { STICKY_SAVE_MS, StickyWindowView, closeSticky, makeStickyWriter, passageFromHash, stickyFollowText, stickyRows, takeStickyNote, withoutSticky } from "./sticky-note";
+import { SUMMARY_ID } from "@/components/reader/paper-words";
+import { ANSWERS_BLOCK_ID, SUMMARY_ID_PREFIX } from "./note-tags";
+import { STICKY_SAVE_MS, StickyWindowView, blockFromHash, browserArrival, closeSticky, followHash, makeStickyWriter, passageFromHash, stickyFollowText, stickyRows, takeStickyNote, withoutSticky } from "./sticky-note";
 
 // P10-09a (review 7.1; rubric B7–B10; ruling §1h.78): "Take notes" opens a numbered sticky at the right, its
 // header "Note N" with the passage's first words quoted and a Close (×), a text area focused at once; typing writes
@@ -19,11 +21,13 @@ import { STICKY_SAVE_MS, StickyWindowView, closeSticky, makeStickyWriter, passag
 // everything. Every text is invented.
 
 type Props = Record<string, unknown> & { children?: ReactNode };
-/** The element tree with the (hook-free) function components expanded. */
+/** The element tree with the (hook-free) function components expanded. P11-14 (re-aimed, §1c): the window stands in `MarginCard`, which reads
+ *  the margin's rect with a hook; the tree is expanded through its hook-free shell (`MarginCardShell`, with no margin: the right edge). */
 function elements(node: ReactNode): ReactElement<Props>[] {
   if (Array.isArray(node)) return node.flatMap(elements);
   if (!node || typeof node !== "object" || !("props" in node)) return [];
   const element = node as ReactElement<Props>;
+  if (element.type === MarginCard) return [element, ...elements(MarginCardShell({ ...(element.props as unknown as MarginCardShellProps), frame: null }))];
   // the field has hooks (and is its own component, with its own tests): it is the leaf here
   if (typeof element.type === "function" && element.type !== WysiwygField) return [element, ...elements((element.type as (p: Props) => ReactNode)(element.props))];
   return [element, ...elements(element.props.children)];
@@ -222,6 +226,418 @@ describe("passageFromHash — the notes page's square arrives with the paragraph
     expect(passageFromHash("")).toBeNull();
     expect(passageFromHash("#%E0%A4%A")).toBeNull();
   });
+
+  it("a Summary block's id or the answers' block is not a paragraph: it is the other function's, and a paragraph is not theirs", () => {
+    expect(passageFromHash("#summary-proposal")).toBeNull();
+    expect(passageFromHash("#answers-block")).toBeNull();
+    expect(blockFromHash("#paper-section-1-p2")).toBeNull();
+  });
+});
+
+// P11-20 rule 1 (C P11-17b "For the manager" 1; ruling §1h.118): the notes PAGE's blue square for a note taken on a Summary block or an answer
+// navigates to `/papers/<id>#summary-proposal` or `#answers-block`; the paper opens on Paper digestion, and the arrival knew only the paper's own
+// paragraphs, so the page stayed at the top. `blockFromHash` names those two kinds; `followHash` is the arrival (the poll the page always had, for a
+// paragraph, now for either). The tab is chosen in `use-reader-tab.ts` (its own test). Invented ids.
+describe("blockFromHash — the notes page's square arrives with a Summary block or the answers' block in the address", () => {
+  it("reads a Summary block's id and the answers' block, and nothing else", () => {
+    expect(blockFromHash("#summary-proposal")).toBe("summary-proposal");
+    expect(blockFromHash("#summary-new-here")).toBe("summary-new-here");
+    expect(blockFromHash("#answers-block")).toBe("answers-block");
+    expect(blockFromHash("#summary-")).toBeNull();
+    expect(blockFromHash("#summary")).toBeNull();
+    expect(blockFromHash("#Summary-proposal")).toBeNull();
+    expect(blockFromHash("#summary-proposal x")).toBeNull();
+    expect(blockFromHash("#answers")).toBeNull();
+    expect(blockFromHash("#answers-block-2")).toBeNull();
+    expect(blockFromHash("#elsewhere")).toBeNull();
+    expect(blockFromHash("")).toBeNull();
+    expect(blockFromHash("#%E0%A4%A")).toBeNull();
+  });
+
+  it("knows every id the page gives a Summary block, and the answers' block: the square can arrive at any block it can leave from", () => {
+    for (const id of Object.values(SUMMARY_ID)) expect(blockFromHash(`#${id}`), id).toBe(id);
+    expect(blockFromHash(`#${ANSWERS_BLOCK_ID}`)).toBe(ANSWERS_BLOCK_ID);
+    expect(SUMMARY_ID_PREFIX).toBe("summary-");
+  });
+});
+
+describe("followHash — the arrival waits for its block, then goes there once (the paragraph's poll, as it was)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+  /** A page that holds the ids put in `present` — and none before. A block it holds is where it should be (top 80). */
+  const pageHolding = () => {
+    const present = new Set<string>();
+    const block = { getBoundingClientRect: () => ({ top: 80 }), scrollIntoView: () => {} } as unknown as HTMLElement;
+    return { present, doc: { getElementById: (asked: string) => (present.has(asked) ? block : null) } };
+  };
+  /** A window that never runs a frame and is never moved: the arrival of a block is landed again in it only by its two-second limit (item 3b). */
+  const stillWindow = { frame: () => () => {}, scrollY: () => 0, onUserMove: () => () => {} };
+
+  for (const id of ["summary-proposal", "answers-block", "paper-section-0-p2"]) {
+    it(`#${id}: goes to it once the page holds it — not before, and not twice`, () => {
+      const seen: string[] = [];
+      const { present, doc } = pageHolding();
+      // Re-aimed (P11-20 item 3b, §1c): a block's arrival now also starts its landing again, so it is given a window (`stillWindow`); what it asserts is as it was.
+      followHash(`#${id}`, doc, (target) => seen.push(target), stillWindow);
+      vi.advanceTimersByTime(250 * 3);
+      expect(seen).toEqual([]);
+      present.add(id);
+      vi.advanceTimersByTime(250);
+      expect(seen).toEqual([id]);
+      vi.advanceTimersByTime(250 * 10);
+      expect(seen).toEqual([id]);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+  }
+
+  it("gives up after forty looks, a quarter second apart, and goes nowhere", () => {
+    const seen: string[] = [];
+    let looks = 0;
+    followHash("#summary-proposal", { getElementById: () => (looks++, null) }, (target) => seen.push(target));
+    vi.advanceTimersByTime(250 * 39);
+    expect(vi.getTimerCount()).toBe(1);
+    vi.advanceTimersByTime(250);
+    expect(looks).toBe(40);
+    expect(seen).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("leaving the page stops the wait", () => {
+    const seen: string[] = [];
+    const { present, doc } = pageHolding();
+    const stop = followHash("#answers-block", doc, (target) => seen.push(target));
+    expect(typeof stop).toBe("function");
+    stop?.();
+    present.add("answers-block");
+    vi.advanceTimersByTime(250 * 5);
+    expect(seen).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("an address with no block or paragraph in it starts no wait at all", () => {
+    for (const hash of ["", "#", "#elsewhere", "#paper-section-1", "#summary-"]) {
+      expect(followHash(hash, { getElementById: () => null }, () => {}), hash).toBeUndefined();
+    }
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("StickyNotes arrives through it, with the address the window has now and the paper it shows", () => {
+    const src = readFileSync(resolve(process.cwd(), "src/components/notes/sticky-note.tsx"), "utf8");
+    expect(src).toMatch(/followHash\(window\.location\.hash,\s*document,/);
+    expect(src).not.toMatch(/passageFromHash\(window\.location\.hash\)/);
+  });
+});
+
+// P11-20 follow-up (ruling §1h.119, item 3b): on a phone the page settles late — the one column's figure card, 197 px at the top for an upload with no
+// picture, is taken out of the page about a second after the Summary shows, in the middle of the arrival's smooth scroll, which keeps its first target
+// and ends 186 px past the block (top −106 at 390 × 844). For the new arrivals only — a Summary block, the answers' block — `followHash` lands the block
+// again once the page has settled: after the images on the page have loaded or failed, and two frames in which the scroll has not moved, at most one
+// extra correction, within two seconds of the first scroll, and none if the reader has moved the page themselves. A paragraph's arrival is what it was.
+describe("followHash — a Summary block or the answers' block is landed again once the page has settled (item 3b)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** A page and a window to watch: the block's top and its scroll calls, the images, the frames asked for and the scroll position, by hand. */
+  const rig = (id: string, top: number, images: { complete: boolean }[] = []) => {
+    const state = { top, y: 0 };
+    const scrolls: unknown[] = [];
+    const element = { getBoundingClientRect: () => ({ top: state.top }), scrollIntoView: (options: unknown) => scrolls.push(options) } as unknown as HTMLElement;
+    const handlers = images.map(() => new Map<string, () => void>());
+    const imgs = images.map((image, i) => ({
+      complete: image.complete,
+      addEventListener: (type: string, run: () => void) => void handlers[i].set(type, run),
+      removeEventListener: (type: string) => void handlers[i].delete(type),
+    }));
+    const frames: (() => void)[] = [];
+    const moves: (() => void)[] = [];
+    const env = {
+      frame: (run: () => void) => {
+        frames.push(run);
+        return () => {
+          const at = frames.indexOf(run);
+          if (at >= 0) frames.splice(at, 1);
+        };
+      },
+      scrollY: () => state.y,
+      onUserMove: (told: () => void) => {
+        moves.push(told);
+        return () => {
+          const at = moves.indexOf(told);
+          if (at >= 0) moves.splice(at, 1);
+        };
+      },
+    };
+    const doc = { getElementById: (asked: string) => (asked === id ? element : null), images: imgs };
+    const gone: string[] = [];
+    return { state, scrolls, handlers, imgs, frames, moves, env, doc, gone, frame: () => frames.shift()?.() };
+  };
+  const arrive = (hash: string, r: ReturnType<typeof rig>) => {
+    const stop = followHash(hash, r.doc, (id) => r.gone.push(id), r.env);
+    vi.advanceTimersByTime(250);
+    return stop;
+  };
+
+  it("a block the page left 186 px past its place is landed again after two frames with the scroll still: once, at the top of the window, at once", () => {
+    const r = rig("summary-proposal", -106.2);
+    arrive("#summary-proposal", r);
+    expect(r.gone).toEqual(["summary-proposal"]);
+    expect(r.scrolls).toEqual([]);
+    // Re-aimed (P11-20 rule 1b, §1c): the smooth scroll has run and stopped at the page's end (it moved, then two frames agree); a scroll that has not started is not "still".
+    r.state.y = 1132;
+    r.frame();
+    r.frame();
+    expect(r.scrolls).toEqual([]);
+    r.frame();
+    expect(r.scrolls).toEqual([{ block: "start", behavior: "instant" }]);
+    expect(r.frames).toEqual([]);
+    vi.advanceTimersByTime(5000);
+    expect(r.scrolls).toHaveLength(1);
+  });
+
+  it("the answers' block is a new arrival too", () => {
+    const r = rig("answers-block", 300);
+    arrive("#answers-block", r);
+    r.state.y = 220;
+    r.frame();
+    r.frame();
+    r.frame();
+    expect(r.scrolls).toHaveLength(1);
+  });
+
+  it("a block already within two pixels of 80 is left where it is", () => {
+    for (const top of [80, 79.4, 81.9]) {
+      const r = rig("summary-proposal", top);
+      arrive("#summary-proposal", r);
+      r.frame();
+      r.frame();
+      expect(r.scrolls, String(top)).toEqual([]);
+    }
+  });
+
+  it("waits for the images on the page to load or fail, then two frames", () => {
+    const r = rig("summary-proposal", -106, [{ complete: true }, { complete: false }, { complete: false }]);
+    arrive("#summary-proposal", r);
+    expect(r.frames).toHaveLength(0);
+    r.handlers[1].get("load")?.();
+    expect(r.frames).toHaveLength(0);
+    r.handlers[2].get("error")?.();
+    expect(r.frames).toHaveLength(1);
+    r.state.y = 946;
+    r.frame();
+    r.frame();
+    r.frame();
+    expect(r.scrolls).toHaveLength(1);
+  });
+
+  it("while the scroll is still moving the two frames are not yet: the correction comes after two that agree", () => {
+    const r = rig("summary-proposal", -106);
+    arrive("#summary-proposal", r);
+    r.state.y = 100;
+    r.frame();
+    r.state.y = 400;
+    r.frame();
+    r.frame();
+    expect(r.scrolls).toEqual([]);
+    r.frame();
+    expect(r.scrolls).toHaveLength(1);
+  });
+
+  it("a scroll that has not started is not one that has stopped: the frames wait for it to move, and the two-second limit lands the block if it never does", () => {
+    const r = rig("summary-proposal", -106);
+    arrive("#summary-proposal", r);
+    for (let i = 0; i < 6; i++) r.frame();
+    expect(r.scrolls).toEqual([]);
+    expect(r.frames).toHaveLength(1);
+    vi.advanceTimersByTime(1999);
+    expect(r.scrolls).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(r.scrolls).toHaveLength(1);
+    expect(r.frames).toEqual([]);
+  });
+
+  it("an image that never settles does not keep it waiting: at two seconds from the first scroll it lands the block, once", () => {
+    const r = rig("summary-proposal", -106, [{ complete: false }]);
+    arrive("#summary-proposal", r);
+    vi.advanceTimersByTime(1999);
+    expect(r.scrolls).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(r.scrolls).toHaveLength(1);
+    vi.advanceTimersByTime(5000);
+    expect(r.scrolls).toHaveLength(1);
+    expect(r.moves).toEqual([]);
+  });
+
+  it("a reader who has moved the page themselves is not pulled back", () => {
+    const r = rig("summary-proposal", -106);
+    arrive("#summary-proposal", r);
+    r.moves[0]?.();
+    r.frame();
+    r.frame();
+    vi.advanceTimersByTime(5000);
+    expect(r.scrolls).toEqual([]);
+    expect(r.frames).toEqual([]);
+  });
+
+  it("leaving the page stops it: no frame, no listener, no correction", () => {
+    const r = rig("summary-proposal", -106);
+    const stop = arrive("#summary-proposal", r);
+    stop?.();
+    expect(r.frames).toEqual([]);
+    expect(r.moves).toEqual([]);
+    vi.advanceTimersByTime(5000);
+    expect(r.scrolls).toEqual([]);
+  });
+
+  // Re-aimed (P11-20 rule 1b, §1c): was "a paragraph's arrival is what it was: no look at the images, no frame, no listener, no correction". Rule 1b lands every
+  // arrival as soon as its target is drawn; a paragraph landed that early is exposed to the page's late settling as a block is (measured at 390 x 844: top -117,
+  // where it had landed at 80.0 when it came a quarter second later), so it is landed again once, the same way.
+  it("a paragraph is landed again too, the same way: once, after its images, once the scroll has moved and stopped, if it is not in place", () => {
+    const r = rig("paper-section-0-p2", -117, [{ complete: false }]);
+    arrive("#paper-section-0-p2", r);
+    expect(r.gone).toEqual(["paper-section-0-p2"]);
+    expect(r.frames).toEqual([]);
+    r.handlers[0].get("error")?.();
+    r.state.y = 1087;
+    r.frame();
+    r.frame();
+    r.frame();
+    expect(r.scrolls).toEqual([{ block: "start", behavior: "instant" }]);
+    vi.advanceTimersByTime(5000);
+    expect(r.scrolls).toHaveLength(1);
+  });
+});
+
+// P11-20 follow-up (ruling §1h.123, rule 1b): on `/notes/<id>` the blue square for a body note reached its paragraph only after about 9 s. The arrival's poll —
+// a look every 250 ms, forty looks — is a timer, and on a long page it is queued behind the work of drawing it: the paragraph was in the page long before the next
+// look ran. An arrival now lands as soon as its target is drawn — a paragraph, a Summary block or the answers' block: it is told when the page's tree changes
+// (`onTreeChange`, a MutationObserver in the browser) and looks then, and once as the page is mounted; the poll stays as the outer bound.
+describe("followHash — an arrival lands as soon as its target is drawn (rule 1b)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** A page that draws `id` when `draw()` is called, and tells whoever watches its tree, as the browser's observer does. */
+  const rig = (id: string) => {
+    const state = { drawn: false, watchers: 0, stopped: 0, told: undefined as (() => void) | undefined };
+    const element = { getBoundingClientRect: () => ({ top: 80 }), scrollIntoView: () => {} } as unknown as HTMLElement;
+    const doc = { getElementById: (asked: string) => (state.drawn && asked === id ? element : null) };
+    const env = {
+      frame: () => () => {},
+      scrollY: () => 0,
+      onUserMove: () => () => {},
+      onTreeChange: (told: () => void) => {
+        state.watchers += 1;
+        state.told = told;
+        return () => {
+          state.stopped += 1;
+          state.told = undefined;
+        };
+      },
+    };
+    const gone: string[] = [];
+    return { state, doc, env, gone, draw: () => { state.drawn = true; state.told?.(); } };
+  };
+
+  for (const id of ["paper-section-0-p2", "summary-proposal", "answers-block"]) {
+    it(`#${id}: lands at the moment the page's tree changes to hold it — not at the next look, and not twice`, () => {
+      const r = rig(id);
+      followHash(`#${id}`, r.doc, (target) => r.gone.push(target), r.env);
+      expect(r.state.watchers).toBe(1);
+      vi.advanceTimersByTime(250 * 5);
+      expect(r.gone).toEqual([]);
+      // drawn between two looks of the poll: the observer's call, with no timer advanced, lands it
+      r.draw();
+      expect(r.gone).toEqual([id]);
+      expect(r.state.stopped).toBe(1);
+      vi.advanceTimersByTime(250 * 10);
+      expect(r.gone).toEqual([id]);
+      r.state.told?.();
+      expect(r.gone).toEqual([id]);
+    });
+  }
+
+  it("a target the page already holds when it is mounted is landed once the page's own effects have run, with no timer advanced", async () => {
+    const r = rig("paper-section-0-p2");
+    r.state.drawn = true;
+    followHash("#paper-section-0-p2", r.doc, (target) => r.gone.push(target), r.env);
+    expect(r.gone).toEqual([]);
+    await Promise.resolve();
+    expect(r.gone).toEqual(["paper-section-0-p2"]);
+    expect(r.state.stopped).toBe(1);
+    // the poll is over; the landing again's two-second limit (rule 1b: a paragraph too) is what stands, and it ends
+    expect(vi.getTimerCount()).toBe(1);
+    vi.advanceTimersByTime(2000);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  // Re-aimed (P11-20 rule 1b, §1c): was "the paragraph's arrival ends at the landing: no timer left…"; it is landed again too, so its two-second limit stands.
+  it("the poll ends at the landing: what stands after it is the landing again's two-second limit, and that ends too", () => {
+    const r = rig("paper-section-0-p2");
+    followHash("#paper-section-0-p2", r.doc, (target) => r.gone.push(target), r.env);
+    r.draw();
+    expect(vi.getTimerCount()).toBe(1);
+    vi.advanceTimersByTime(2000);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("leaving the page stops the watching: no landing from a later change of the tree", () => {
+    const r = rig("summary-proposal");
+    const stop = followHash("#summary-proposal", r.doc, (target) => r.gone.push(target), r.env);
+    stop?.();
+    expect(r.state.stopped).toBe(1);
+    r.draw();
+    expect(r.gone).toEqual([]);
+  });
+
+  it("the poll is still the outer bound: after forty looks it gives up, and the watching with it", () => {
+    const r = rig("summary-proposal");
+    followHash("#summary-proposal", r.doc, (target) => r.gone.push(target), r.env);
+    vi.advanceTimersByTime(250 * 40);
+    expect(r.state.stopped).toBe(1);
+    expect(vi.getTimerCount()).toBe(0);
+    r.draw();
+    expect(r.gone).toEqual([]);
+  });
+
+  it("where there is no page to watch (no observer) the poll lands it, as it always did", () => {
+    const r = rig("paper-section-0-p2");
+    const { onTreeChange: _unused, ...quiet } = r.env;
+    void _unused;
+    followHash("#paper-section-0-p2", r.doc, (target) => r.gone.push(target), quiet);
+    r.state.drawn = true;
+    vi.advanceTimersByTime(250);
+    expect(r.gone).toEqual(["paper-section-0-p2"]);
+  });
+
+  it("the browser's own environment watches the tree where there is an observer, and is quiet where there is none", () => {
+    expect(typeof browserArrival.onTreeChange).toBe("function");
+    expect(() => browserArrival.onTreeChange?.(() => {})()).not.toThrow();
+  });
+
+  it("StickyNotes installs the arrival in a layout effect: in the commit that draws the body, before the paint, not a passive effect after it", () => {
+    // Measured (P11-20 rule 1b): in a passive effect the answers' block and a paragraph were landed 250 to 450 ms after they were in the page, the time the
+    // browser took to lay out and paint the commit that drew them before its passive effects ran.
+    const src = readFileSync(resolve(process.cwd(), "src/components/notes/sticky-note.tsx"), "utf8");
+    expect(src).toMatch(/useLayoutEffect\(\s*\(\) =>\s*followHash\(window\.location\.hash,\s*document,/);
+    expect(src).toMatch(/import \{[^}]*\buseLayoutEffect\b[^}]*\} from "react"/);
+  });
+
+  it("StickyNotes asks for it with the browser's environment: it passes no environment of its own", () => {
+    const src = readFileSync(resolve(process.cwd(), "src/components/notes/sticky-note.tsx"), "utf8");
+    expect(src).toMatch(/followHash\(window\.location\.hash,\s*document,\s*\(id\) =>/);
+    expect(src).toMatch(/onTreeChange: \(told\) => \{[\s\S]*?new MutationObserver\(told\)[\s\S]*?observe\(document\.documentElement, \{ childList: true, subtree: true \}\)/);
+  });
 });
 
 // ── P10-09c ───────────────────────────────────────────────────────────────
@@ -418,61 +834,41 @@ describe("a sticky and the notes window on one note (P10-09c, rule 3)", () => {
   });
 });
 
-describe("a sticky reserves the column and holds the selection in place (P10-09d, X-B1; rules 1 and 2)", () => {
+// P11-14 rule 3 (re-aimed, §1c): was "a sticky reserves the column and holds the selection in place (P10-09d, X-B1; rules 1 and 2)" — five
+// cases about the shared reserve (`bindWindowsReserve`, `--explain-dock`) and the scroll that kept the selected words where the eyes
+// are (`holdInPlace`). The margin is a track of the reader's shell now, so opening or closing a sticky moves nothing: there is no reserve
+// to take, no reflow to measure across and no scroll to make. What the old cases protected — the selected words stay where the eyes are
+// when a sticky opens or closes, and a sticky opens only in the stack — is asserted below on the new mechanism.
+describe("a sticky reserves nothing and moves nothing (P11-14, rule 3; was P10-09d, X-B1)", () => {
   const target = { sectionIndex: 1, paragraphIndex: 2, passage: QUOTE };
-  let unbind: (() => void) | undefined;
   beforeEach(() => {
     useNotesStore.setState({ notes: {} });
-    useWindows.setState({ windows: [], clock: 0 });
+    useWindows.setState({ windows: [], clock: 0, origin: null });
   });
-  afterEach(() => {
-    unbind?.();
-    unbind = undefined;
-    useWindows.setState({ windows: [], clock: 0 });
-  });
+  afterEach(() => useWindows.setState({ windows: [], clock: 0, origin: null }));
 
-  /** A page whose words sit 220 px lower once the column is reserved (a narrower text column wraps to more lines). */
-  function page(width: number) {
-    const props = new Map<string, string>();
-    const style = { setProperty: (k: string, v: string) => void props.set(k, v), removeProperty: (k: string) => (props.delete(k), "") };
-    unbind = bindWindowsReserve({ root: { style }, width: () => width, onResize: () => () => {} });
-    return { props, top: () => (props.has(DOCK_VAR) ? 520 : 300) };
-  }
-
-  it("opening a sticky takes the shared reserve, so the text moves out of the column; closing the last gives it back", () => {
-    const p = page(1440);
-    const made = takeStickyNote(target, PAPER, undefined, vi.fn())!;
-    expect(p.props.get(DOCK_VAR)).toBe("376px");
-    closeSticky(Object.values(useNotesStore.getState().notes)[0].id, made.id);
-    expect(p.props.has(DOCK_VAR)).toBe(false);
+  it("opening a sticky only joins the stack: it never asks where the selection is to compensate for a reflow, and scrolls nothing", () => {
+    const measure = vi.fn(() => ({ bounds: { top: 300 } }) as never);
+    const scrollBy = vi.fn();
+    vi.stubGlobal("window", { scrollBy });
+    try {
+      const made = takeStickyNote({ ...target, measure }, PAPER)!;
+      expect(useWindows.getState().windows.map((w) => w.id)).toEqual([made.id]);
+      // The one read of the selection is where the first card opens (R-open) — once, not before and after a change of the layout.
+      expect(measure).toHaveBeenCalledTimes(1);
+      expect(scrollBy).not.toHaveBeenCalled();
+      closeSticky(Object.values(useNotesStore.getState().notes)[0].id, made.id);
+      expect(useWindows.getState().windows).toEqual([]);
+      expect(scrollBy).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
-  it("scrolls the page by what the reflow moved the selection, so the selected words stay where the eyes are", () => {
-    const p = page(1440);
-    const scroll = vi.fn();
-    takeStickyNote({ ...target, measure: () => ({ bounds: { top: p.top() } }) as never }, PAPER, undefined, scroll);
-    expect(scroll).toHaveBeenCalledExactlyOnceWith(220);
-  });
-
-  it("with the explain window's reserve already standing nothing moves, so nothing is scrolled", () => {
-    const p = page(1440);
-    p.props.set(DOCK_VAR, "376px");
-    const scroll = vi.fn();
-    takeStickyNote({ ...target, measure: () => ({ bounds: { top: 520 } }) as never }, PAPER, undefined, scroll);
-    expect(scroll).not.toHaveBeenCalled();
-  });
-
-  it("under 1024 px nothing is reserved and nothing is scrolled", () => {
-    const p = page(800);
-    const scroll = vi.fn();
-    takeStickyNote({ ...target, measure: () => ({ bounds: { top: p.top() } }) as never }, PAPER, undefined, scroll);
-    expect(p.props.has(DOCK_VAR)).toBe(false);
-    expect(scroll).not.toHaveBeenCalled();
-  });
-
-  it("the stickies' module opens windows through the store that the reserve is bound to", () => {
+  it("the stickies' module opens windows through the stack's store, and takes no reserve and holds no place", () => {
     const src = readFileSync(resolve(process.cwd(), "src/components/notes/sticky-note.tsx"), "utf8");
-    expect(src).toContain("holdInPlace(");
+    expect(src).toContain("useWindows.getState().open(");
+    expect(src).not.toContain("holdInPlace(");
     expect(src).not.toContain("reserveDock(");
   });
 });

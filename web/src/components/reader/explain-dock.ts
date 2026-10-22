@@ -2,11 +2,11 @@
 // stands level with the paragraph it explains (P8-02; BACKLOG-31, the owner's words, ruling §1h.41 (b)) — P9-03b
 // (ruling §1h.49): level with the SELECTED paragraph.
 //
-// From a window of 1024 px the box is not a card at the selection but a window
-// fixed at the right edge of the screen: flush with the edge, 360 px wide, in the
-// margin the page keeps clear (below), scrolling inside. P10-08 (review 8.5; the owner: no window on entering a paper): it exists only
-// while a passage is open — the selection buttons and `e` open it, Close and Escape close it — and the page's width is kept clear only
-// then (`reserveDock` when it opens, given back when it closes). Once it is open it STAYS open across
+// From a window of 1024 px the box is not a card at the selection but a card in the margin (P11-14: one card of the margin's stack,
+// `lib/reader/windows.ts`, `margin-card.tsx`; where no shell has registered a margin, a window fixed at the right edge: flush with the
+// edge, 360 px wide), scrolling inside. P10-08 (review 8.5; the owner: no window on entering a paper): it exists only
+// while a passage is open — the selection buttons and `e` open it, Close and Escape close it. P11-14: nothing is reserved for it — the
+// margin is a track of the reader's shell, so the paper's words never move when it opens or closes. Once it is open it STAYS open across
 // selections (`explain-box.tsx`), and its top is level with the first line of
 // the PARAGRAPH it stands at (below: the selected one), measured again as the page scrolls and the window
 // resizes:
@@ -179,18 +179,14 @@ export function settleHeight(guard: HeightGuard, held: number | null, reading: n
   return reading;
 }
 
-// ── Room for the stack ────────────────────────────────────────────────────
+// ── The band the cards stand in ───────────────────────────────────────────
 //
-// P10-18 (A P10-14 §4 X-B1, B9; ruling §1h.93 (a)): the explain window stands at z 70, over the stickies' column (z 60+). The column
-// rises above it or stands under it, but with the explain window, three stickies and the notes window the screen is not high
-// enough for both, and the headers, the X and the notes window's Export stood under the explain window. The explain window now
-// gives way: its body scrolls inside a height that leaves the column its room (`room`, from `stackRoom` in `lib/reader/windows.ts`:
-// a gap, a header for every window behind, and the front's least height). It never goes below `DOCK_STACK_FLOOR_PX`, which keeps its
-// sticky header (with its X) and its sticky controls row (the follow-up field and Send). The decision reads the paragraph's place
-// and the screen only, never the window's own measured height, so a window that has been shrunk cannot read its smaller height
-// and un-shrink itself.
+// P10-18 (A P10-14 §4 X-B1, B9; ruling §1h.93 (a)) made the explain window give the stickies' column its room (`dockInStack`): it stood
+// at z 70 over the stack and had to shrink so no header stood under it. P11-14 (O-8, BACKLOG-66) retires that: the explain card is one
+// card OF the stack (`lib/reader/windows.ts`) — a header when another card is in front, the front otherwise — so nothing stands over
+// the others and there is nothing to make room for. What stays is the band every card stands in and the floor of the explain card.
 
-/** The column's foot: the screen's bottom less the foot legend and a margin, but at least this much (`useColumn`, `windows.ts`). */
+/** The column's foot: the screen's bottom less the foot legend and a margin, but at least this much (`margin.ts`, `windows.ts`). */
 export const COLUMN_FOOT_PX = 40;
 export const COLUMN_LEGEND_MARGIN_PX = 8;
 
@@ -200,113 +196,8 @@ export function columnBottomPx(viewportHeight: number, legend: number): number {
 }
 
 /**
- * The least the explain window is given while other windows stand: its sticky header with the quote and its X (140 px), its sticky
- * controls row with the follow-up field and Send (101 px), and a few lines of the answer between them. Above the card's own
- * `CARD_MIN_HEIGHT` on purpose: at 120 px the two bars would overlap and cover each other's controls.
+ * The least the explain card keeps in front when the stack is lifted to make room for it: its sticky header with the quote and its X
+ * (140 px), its sticky controls row with the follow-up field and Send (101 px), and a few lines of the answer between them. Above the
+ * card's own `CARD_MIN_HEIGHT` on purpose: at 120 px the two bars would overlap and cover each other's controls.
  */
 export const DOCK_STACK_FLOOR_PX = 250;
-
-/** Sub-pixel slack: the column's top is the explain window's bottom rounded up, and a fractional paragraph top must not tip it over. */
-const STACK_SLACK_PX = 2;
-
-const clampTo = (value: number, low: number, high: number) => Math.min(Math.max(value, low), Math.max(low, high));
-
-/**
- * The dock's top and its `maxHeight` once the stack's `room` is counted. `top` is `placePanel`'s own (level with the paragraph,
- * lifted for the window's height), `paragraphTop` the paragraph's, `height` the screen's, `legend` the foot legend's height.
- *
- *   - `room` 0 (no other window stands): `top`, and down to the legend — as it always was.
- *   - the column can stand ABOVE the window (`DOCK_TOP_PX + room` fits over the paragraph, read at the thread floor so the answer
- *     does not matter): the window keeps its place, no higher than the column needs;
- *   - otherwise the window shrinks: level with the paragraph, but ending `room` above the column's foot, down to
- *     `DOCK_STACK_FLOOR_PX` (from the masthead's foot at the highest). It scrolls inside.
- */
-export function dockInStack({
-  top,
-  paragraphTop,
-  height,
-  legend,
-  room,
-}: {
-  top: number;
-  paragraphTop: number;
-  height: number;
-  legend: number;
-  room: number;
-}): { top: number; maxHeight: number } {
-  if (!(room > 0)) return { top, maxHeight: Math.max(0, height - top - legend) };
-  const above = DOCK_TOP_PX + room;
-  const steady = clampTo(paragraphTop, DOCK_TOP_PX, height - legend - DOCK_THREAD_FLOOR_PX);
-  if (steady >= above) {
-    const standing = Math.max(top, above);
-    return { top: standing, maxHeight: Math.max(0, height - standing - legend) };
-  }
-  const limit = Math.floor(columnBottomPx(height, legend)) - room - STACK_SLACK_PX;
-  const standing = clampTo(paragraphTop, DOCK_TOP_PX, limit - DOCK_STACK_FLOOR_PX);
-  return { top: standing, maxHeight: Math.max(limit - standing, DOCK_STACK_FLOOR_PX) };
-}
-
-// ── Making room ───────────────────────────────────────────────────────────
-//
-// The dock covers nothing (Q4): while it is open the page keeps its width clear. P10-09d (X-B1): so does every other floating
-// window at the right — the stickies and the notes window take the same reserve through the stack (`lib/reader/windows.ts`),
-// counted: the properties stay while any of them stands. The box is
-// mounted outside the page's container on purpose (its pixels are the window's, which the
-// container's zoom would scale), so it tells the page through two custom properties on the
-// document's root, written while the dock is open and taken off when it closes:
-//
-//   `--explain-dock`        what the page leaves free at its right: the dock and a gap, 376px.
-//                           `globals.css` pads the shell's <main> by it, so the page container — whose
-//                           width is a cap on the room it is given — is given the room that is left,
-//                           and centres itself in it: the spread moves left and the reading column
-//                           keeps its width where the cap allows, else it narrows; the panel never does.
-//   `--explain-dock-width`  the dock itself, 360px. The notes tab (`notes-button.tsx`) stands at this
-//                           offset from the window's edge, beside the dock instead of under it.
-
-/** The room between the page's right edge and the dock. */
-export const DOCK_GAP_PX = 16;
-
-/** What the page keeps clear: the dock and the gap. */
-export const DOCK_RESERVE_PX = DOCK_WIDTH_PX + DOCK_GAP_PX;
-
-export const DOCK_VAR = "--explain-dock";
-export const DOCK_WIDTH_VAR = "--explain-dock-width";
-
-type StyleRoot = { style?: Pick<CSSStyleDeclaration, "setProperty" | "removeProperty"> } | null | undefined;
-
-/** How many takers hold the reserve on each root (keyed by the root's style, which is what is written to). */
-const takers = new WeakMap<object, number>();
-
-/**
- * Keep the dock's width clear on the page: write the two properties on `root` (the document element)
- * and return what gives the take back. Quiet where there is no root to write to (a server render,
- * a test with a bare document).
- *
- * P10-09d (X-B1; ruling §1h.87 (c)): the reserve is shared and counted. Every floating window at the right — the explain window
- * here (`explain-box.tsx`), the stickies and the notes window through the stack (`lib/reader/windows.ts`) — takes it, the first
- * taker writes the properties, a later one only adds to the count, and the last release takes them off. So the text column is
- * clear of all of them while any stands, and closing one of two leaves the page as it was. A release given twice counts once.
- */
-export function reserveDock(root: StyleRoot): () => void {
-  const style = root?.style;
-  if (!style) return () => {};
-  const held = takers.get(style) ?? 0;
-  takers.set(style, held + 1);
-  if (held === 0) {
-    style.setProperty(DOCK_VAR, `${DOCK_RESERVE_PX}px`);
-    style.setProperty(DOCK_WIDTH_VAR, `${DOCK_WIDTH_PX}px`);
-  }
-  let released = false;
-  return () => {
-    if (released) return;
-    released = true;
-    const left = (takers.get(style) ?? 1) - 1;
-    if (left > 0) {
-      takers.set(style, left);
-      return;
-    }
-    takers.delete(style);
-    style.removeProperty(DOCK_VAR);
-    style.removeProperty(DOCK_WIDTH_VAR);
-  };
-}

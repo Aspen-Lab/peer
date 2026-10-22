@@ -62,6 +62,14 @@ const map = reading.map!;
 const over = partitionedMap(map, reading.body, FOUR);
 
 const escaped = (text: string) => text.replace(/&/g, "&amp;").replace(/'/g, "&#x27;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+// P11-23 rule 4 (BACKLOG-104; ruling §1h.126), RE-AIMED: the summary line is drawn in parts (`SummaryLine`: each separator in a slot of its own, a clipped box),
+// so its words are no longer one contiguous string of the markup. What a reader or a copy gets is the same string (`MAP.summary`'s own): these read it as the
+// text of its box, the tags removed, and where a test looked the string up in the markup it looks the box up (`data-map-summary`).
+const summaryText = (html: string): string => {
+  const at = html.indexOf("data-map-summary");
+  return at < 0 ? "" : html.slice(html.indexOf(">", at) + 1, html.indexOf("<button", at)).replace(/<[^>]*>/g, "");
+};
 const render = (props: Partial<Parameters<typeof ReadingMapView>[0]> = {}) => renderToStaticMarkup(createElement(ReadingMapView, { map, ...props }));
 const hrefs = (html: string): string[] => [...html.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]);
 /** The paragraph lines' anchors in a row (or a whole map): every link to a paragraph but a group row's own, the first in its row. */
@@ -77,6 +85,10 @@ function rowOf(html: string, heading: string): string {
   return html.slice(start, next < 0 ? html.length : next);
 }
 const opened = (...positions: number[]) => ({ openRows: positions });
+// P11-35 (re-aimed, §1c): the fact line is drawn in parts (`MentionsLine`: each term's last word and its count in one span, so that they never part at a line's end), so
+// its words are no longer one contiguous string of the markup. The text a reader or a copy gets is the same, plain spaces and all: these read it as the line's text,
+// the tags removed, and compare it in full.
+const factText = (row: string): string | undefined => /<p class="annotation pl-5 [^"]*">([\s\S]*?)<\/p>/.exec(row)?.[1].replace(/<[^>]*>/g, "");
 
 describe("ReadingMapView — a partition's group rows (B P10-05 §3.1)", () => {
   it("draws one row per part where the trunk's row was, then the paper's own rows", () => {
@@ -168,9 +180,9 @@ describe("ReadingMapView — a partition's group rows (B P10-05 §3.1)", () => {
     const totalWords = map.sections.reduce((sum, row) => sum + row.words, 0);
 
     expect(over.sections).toHaveLength(5);
-    expect(render({ map: over, source: "PDF" })).toContain(escaped(MAP.summary(5, map.totalMinutes, totalWords, "PDF")));
-    expect(render({ map: over, source: "PDF" })).toContain("5 sections");
-    expect(render({ map, source: "PDF" })).toContain(escaped(MAP.summary(2, map.totalMinutes, totalWords, "PDF")));
+    expect(summaryText(render({ map: over, source: "PDF" }))).toBe(MAP.summary(5, map.totalMinutes, totalWords, "PDF"));
+    expect(summaryText(render({ map: over, source: "PDF" }))).toContain("5 sections");
+    expect(summaryText(render({ map, source: "PDF" }))).toBe(MAP.summary(2, map.totalMinutes, totalWords, "PDF"));
   });
 
   it("the keyed unheaded map: four \"Peer's reading\" rows under \"4 sections\"; the no-key single row says \"1 section\"", () => {
@@ -180,9 +192,9 @@ describe("ReadingMapView — a partition's group rows (B P10-05 §3.1)", () => {
 
     expect(four.sections).toHaveLength(4);
     expect(keyed.split(`>${escaped(MAP.parts.tag)}<`).length - 1).toBe(4);
-    expect(keyed).toContain("Read from PDF · 4 sections ·");
+    expect(summaryText(keyed)).toContain("Read from PDF · 4 sections ·");
     expect(keyed).not.toContain("1 section");
-    expect(render({ map: trunkOnly, source: "PDF" })).toContain("Read from PDF · 1 section ·");
+    expect(summaryText(render({ map: trunkOnly, source: "PDF" }))).toContain("Read from PDF · 1 section ·");
   });
 
   it("indents a group row as a level-1 row and marks no row a group of the paper's hierarchy", () => {
@@ -290,7 +302,7 @@ describe("ReadingMapView — a group row is marked from its paragraphs (B §4)",
     const results = rowOf(html, "Results");
 
     expect(results).toContain('data-route="strong"');
-    expect(results).toContain("mentions lattice ×2, quillwort ×2, crack ×1");
+    expect(factText(results)).toBe("strongest · mentions lattice ×2, quillwort ×2, crack ×1");
     expect(results).toContain("strongest");
     const line = results.slice(results.indexOf('href="#paper-section-0-p12"') - 80);
     expect(line).toContain('data-route="strong"');
@@ -298,7 +310,7 @@ describe("ReadingMapView — a group row is marked from its paragraphs (B §4)",
 
   it("tints the group that only mentions faintly, and says \"not mentioned\" for a group that does not mention", () => {
     expect(rowOf(html, "Introduction")).toContain('data-route="faint"');
-    expect(rowOf(html, "Introduction")).toContain("mentions quillwort ×1");
+    expect(factText(rowOf(html, "Introduction"))).toBe("mentions quillwort ×1");
     expect(rowOf(html, "Discussion")).not.toContain("data-route");
     expect(rowOf(html, "Discussion")).toContain(ROUTE.tiers.none);
   });

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useEffect, useState } from "react";
 
 // P1-03: the keyboard layer itself is driven below on the minimal hook
 // runtime (no DOM here) to show `q` typed into the question field is typing,
@@ -27,7 +28,10 @@ import {
   readerHelpItems,
   registerReaderActions,
   resolvePaperKey,
+  selectionActions,
+  undoLabel,
 } from "./reader-keys";
+import { PLAIN_REWRITE_ENABLED } from "@/lib/papers/plain-levels";
 
 describe("resolvePaperKey", () => {
   it("maps every key in the table to its action", () => {
@@ -70,19 +74,22 @@ describe("resolvePaperKey", () => {
 // undoable act), and only when none shows does what it did before — undo a dismiss, else mark
 // unread / read. It is still ONE row: the help sheet and the foot legend read this table, so the
 // label says both and nothing else moves.
+// P11-17a rule 3 re-aims the first two cases: "Say it plainly" is switched off (`PLAIN_REWRITE_ENABLED`
+// false, the owner's 2026-10-19 switch), so `u` takes no rewrite back and its row says only what it does.
+// The P4-01 label comes back, byte-identical, with the switch (pinned in "u's words follow the plain switch").
 describe("the u row (P4-01)", () => {
   const row = PAPER_KEYS.filter((entry) => entry.keys.includes("u"));
 
-  it("is one row, still the undoOrToggleRead action, and says the plain rewrite comes first", () => {
+  it("is one row, still the undoOrToggleRead action, and says what u does while Say it plainly is off", () => {
     expect(row).toHaveLength(1);
     expect(row[0].action).toBe("undoOrToggleRead");
-    expect(row[0].label).toBe("Undo a plain rewrite or a dismiss, else mark unread / read");
+    expect(row[0].label).toBe("Undo a dismiss, else mark unread / read");
     expect(row[0].short).toBe("undo");
     expect(resolvePaperKey("u")).toBe("undoOrToggleRead");
   });
 
   it("is the sheet's row and the legend's, from the same table", () => {
-    expect(readerHelpItems().find((item) => item.keys === "u")?.label).toBe("Undo a plain rewrite or a dismiss, else mark unread / read");
+    expect(readerHelpItems().find((item) => item.keys === "u")?.label).toBe("Undo a dismiss, else mark unread / read");
     expect(paperKeysFor({ upload: true }).find((entry) => entry.keys.includes("u"))?.label).toBe(row[0].label);
     expect(paperKeysFor({ upload: false }).find((entry) => entry.keys.includes("u"))?.label).toBe(row[0].label);
   });
@@ -342,3 +349,236 @@ describe("paperKeysFor (P1-08, P7-12)", () => {
   });
 });
 
+
+// ── P11-13 (rule 3; owner items 5 and 8; B P11-03 §2.4; ruling §1h.113 (b) O-4) ──────────────────────────────────────────────
+// `n` takes notes and `h` highlights, each on the selection the page holds, exactly as `e` explains it, and each inert with
+// nothing selected. Two actions, two rows in the one table the help sheet and the foot legend read.
+describe("the note and highlight keys (P11-13)", () => {
+  it("maps n to note and h to highlight, once each, with their own label and legend word", () => {
+    expect(resolvePaperKey("n")).toBe("note");
+    expect(resolvePaperKey("h")).toBe("highlight");
+    expect(PAPER_KEYS.find((entry) => entry.action === "note")).toEqual({
+      keys: ["n"],
+      action: "note",
+      label: "Take notes on the selected passage",
+      short: "notes",
+    });
+    expect(PAPER_KEYS.find((entry) => entry.action === "highlight")).toEqual({
+      keys: ["h"],
+      action: "highlight",
+      label: "Highlight the selected passage",
+      short: "highlight",
+    });
+    expect(PAPER_KEYS.filter((entry) => entry.keys.includes("n"))).toHaveLength(1);
+    expect(PAPER_KEYS.filter((entry) => entry.keys.includes("h"))).toHaveLength(1);
+    expect(resolvePaperKey("N")).toBeNull();
+    expect(resolvePaperKey("H")).toBeNull();
+  });
+
+  it("is on the help sheet and in every page's legend table, upload or not", () => {
+    expect(readerHelpItems()).toContainEqual({ keys: "n", label: "Take notes on the selected passage" });
+    expect(readerHelpItems()).toContainEqual({ keys: "h", label: "Highlight the selected passage" });
+    for (const upload of [true, false]) {
+      const actions = paperKeysFor({ upload }).map((entry) => entry.action);
+      expect(actions).toContain("note");
+      expect(actions).toContain("highlight");
+    }
+  });
+
+  it("leaves Escape as it was: with nothing else to close it is the page's back", () => {
+    expect(resolvePaperKey("Escape")).toBe("back");
+    expect(resolvePaperKey("Backspace")).toBe("back");
+  });
+
+  // P11-40 (ruling §1h.138 (c) rule 3): Escape now puts a standing selection away, then closes the front card, before it is "back" (`front-escape.ts`); the
+  // table, the help sheet and the foot legend say what they always said — one row, Esc and Backspace, "Back to the briefing", "back" along the foot.
+  it("keeps the words of Esc and Backspace: one row, the sheet's label and the legend's word", () => {
+    const rows = PAPER_KEYS.filter((entry) => entry.action === "back");
+    expect(rows).toEqual([{ keys: ["Escape", "Backspace"], action: "back", label: "Back to the briefing", short: "back" }]);
+    expect(readerHelpItems().find((item) => item.label === "Back to the briefing")).toEqual({ keys: "Esc", label: "Back to the briefing" });
+  });
+});
+
+describe("selectionActions — the keys that act on the selection the page holds (P11-13)", () => {
+  type Target = { passage: string };
+
+  it("runs the handler on the selection the page holds at the moment of the press, not the one it held when it registered", () => {
+    let held: Target | null = { passage: "first" };
+    const note = vi.fn();
+    const keys = selectionActions(() => held, { note });
+    keys.note?.();
+    held = { passage: "second" };
+    keys.note?.();
+    expect(note.mock.calls).toEqual([[{ passage: "first" }], [{ passage: "second" }]]);
+  });
+
+  it("is inert with nothing selected: the handler is not called", () => {
+    const note = vi.fn();
+    const highlight = vi.fn();
+    const keys = selectionActions<Target>(() => null, { note, highlight });
+    keys.note?.();
+    keys.highlight?.();
+    expect(note).not.toHaveBeenCalled();
+    expect(highlight).not.toHaveBeenCalled();
+  });
+
+  it("registers only the actions the page has a handler for: no highlight handler, no `highlight` key (the page does not wire one yet)", () => {
+    const note = vi.fn();
+    expect(Object.keys(selectionActions<Target>(() => ({ passage: "x" }), { note }))).toEqual(["note"]);
+    expect(Object.keys(selectionActions<Target>(() => ({ passage: "x" }), {}))).toEqual([]);
+    expect(Object.keys(selectionActions<Target>(() => ({ passage: "x" }), { note, highlight: vi.fn() })).sort()).toEqual(["highlight", "note"]);
+  });
+
+  it("does not put anything under the explain key: `e` stays the explain box's own", () => {
+    const keys = selectionActions<Target>(() => ({ passage: "x" }), { note: vi.fn(), highlight: vi.fn() }) as Record<string, unknown>;
+    expect(keys.explain).toBeUndefined();
+  });
+});
+
+describe("the keyboard layer and the selection's keys (P11-13)", () => {
+  class FakeElement {
+    constructor(readonly tagName: string) {}
+    isContentEditable = false;
+    blur() {}
+  }
+  let keydown: ((event: unknown) => void) | null = null;
+
+  beforeEach(() => {
+    keydown = null;
+    vi.stubGlobal("HTMLElement", FakeElement);
+    vi.stubGlobal("HTMLInputElement", class extends FakeElement {});
+    vi.stubGlobal("window", {
+      location: { pathname: "/papers/openalex:W1" },
+      addEventListener: (type: string, listener: (event: unknown) => void) => {
+        if (type === "keydown") keydown = listener;
+      },
+      removeEventListener: () => {},
+      getSelection: () => ({ isCollapsed: true }),
+      matchMedia: () => ({ matches: false }),
+      setTimeout: (fn: () => void, ms: number) => setTimeout(fn, ms),
+      clearTimeout: (id: number) => clearTimeout(id),
+    });
+    vi.stubGlobal("document", { activeElement: null, getElementById: () => null, querySelectorAll: () => [] });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    registerReaderActions({})();
+  });
+
+  function press(key: string, target: unknown) {
+    const event = { key, target, metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, preventDefault: vi.fn() };
+    keydown?.(event);
+    return event;
+  }
+
+  it("leaves an n or an h typed into a field alone, and runs the page's note and highlight for one pressed anywhere else", async () => {
+    const note = vi.fn();
+    const highlight = vi.fn();
+    registerReaderActions({ note, highlight });
+    const mounted = await hookRuntime.mount(() => KeyboardLayer());
+
+    for (const tag of ["TEXTAREA", "INPUT"]) {
+      for (const key of ["n", "h"]) expect(press(key, new FakeElement(tag)).preventDefault).not.toHaveBeenCalled();
+    }
+    expect(note).not.toHaveBeenCalled();
+    expect(highlight).not.toHaveBeenCalled();
+
+    expect(press("n", new FakeElement("DIV")).preventDefault).toHaveBeenCalled();
+    expect(press("h", new FakeElement("DIV")).preventDefault).toHaveBeenCalled();
+    expect(note).toHaveBeenCalledTimes(1);
+    expect(highlight).toHaveBeenCalledTimes(1);
+    mounted.unmount();
+  });
+
+  it("leaves n and h inert on a page that registered neither (the highlight is not wired yet)", async () => {
+    registerReaderActions({ next: vi.fn() });
+    const mounted = await hookRuntime.mount(() => KeyboardLayer());
+
+    expect(press("n", new FakeElement("DIV")).preventDefault).not.toHaveBeenCalled();
+    expect(press("h", new FakeElement("DIV")).preventDefault).not.toHaveBeenCalled();
+    mounted.unmount();
+  });
+
+  it("acts on the selection and on nothing else: with the page's selection actions and no selection, the press does nothing", async () => {
+    type Target = { passage: string };
+    const note = vi.fn();
+    let held: Target | null = null;
+    registerReaderActions(selectionActions<Target>(() => held, { note }));
+    const mounted = await hookRuntime.mount(() => KeyboardLayer());
+
+    press("n", new FakeElement("DIV"));
+    expect(note).not.toHaveBeenCalled();
+    held = { passage: "the words" };
+    press("n", new FakeElement("DIV"));
+    expect(note).toHaveBeenCalledWith({ passage: "the words" });
+    mounted.unmount();
+  });
+
+  // The `g` chord reads its second key before the paper's table does, so `g` then `h` still goes to the briefing.
+  it("leaves the g chord's h to the chord: g then h highlights nothing", async () => {
+    const highlight = vi.fn();
+    registerReaderActions({ highlight });
+    let second: ReturnType<typeof press> | null = null;
+    const mounted = await hookRuntime.mount(() => {
+      KeyboardLayer();
+      const [step, setStep] = useState(0);
+      useEffect(() => {
+        if (step === 1) press("g", new FakeElement("DIV"));
+        if (step === 2) second = press("h", new FakeElement("DIV"));
+        if (step < 3) setStep(step + 1);
+      }, [step]);
+      return null;
+    });
+    expect(second).not.toBeNull();
+    expect(highlight).not.toHaveBeenCalled();
+    expect(second!.preventDefault).toHaveBeenCalled();
+    // …and a bare h, a moment later, is the highlight.
+    press("h", new FakeElement("DIV"));
+    expect(highlight).toHaveBeenCalledTimes(1);
+    mounted.unmount();
+  });
+});
+
+// ── P11-17a rule 3: `u`'s words follow the plain switch ───────────────────────────────────────────────────────────────
+// "Say it plainly" is switched off (`PLAIN_REWRITE_ENABLED = false`, c0f97114), and `u` no longer takes a rewrite back
+// (page.tsx reads the same switch), so the help sheet must not say it does. The words are chosen where the table is
+// built: the keyboard layer, the help sheet and the legend still read one table. `plain-levels.ts` is not edited here:
+// the switch is passed in, or the module is mocked.
+describe("u's words follow the plain switch (P11-17a rule 3)", () => {
+  const P4_01 = "Undo a plain rewrite or a dismiss, else mark unread / read";
+  const OFF = "Undo a dismiss, else mark unread / read";
+  const uRow = (keys: readonly { keys: readonly string[]; label: string }[]) => keys.find((entry) => entry.keys.includes("u"))?.label;
+
+  it("says undo a dismiss, else mark unread / read, with the switch off", () => {
+    expect(undoLabel(false)).toBe(OFF);
+  });
+
+  it("is P4-01's label, byte-identical, with the switch on", () => {
+    expect(undoLabel(true)).toBe(P4_01);
+  });
+
+  it("reads the switch as the owner left it: off, so the table, the sheet and every page's legend say the short words", () => {
+    expect(PLAIN_REWRITE_ENABLED).toBe(false);
+    expect(uRow(PAPER_KEYS)).toBe(OFF);
+    expect(readerHelpItems().find((item) => item.keys === "u")?.label).toBe(OFF);
+    for (const upload of [true, false]) expect(uRow(paperKeysFor({ upload }))).toBe(OFF);
+  });
+
+  it("with the switch mocked on, the one table says P4-01's words again, in the sheet as in the table", async () => {
+    vi.resetModules();
+    vi.doMock("@/lib/papers/plain-levels", async (importOriginal) => ({
+      ...(await importOriginal<typeof import("@/lib/papers/plain-levels")>()),
+      PLAIN_REWRITE_ENABLED: true,
+    }));
+    try {
+      const on = await import("./reader-keys");
+      expect(uRow(on.PAPER_KEYS)).toBe(P4_01);
+      expect(on.readerHelpItems().find((item) => item.keys === "u")?.label).toBe(P4_01);
+      expect(on.PAPER_KEYS.filter((entry) => entry.keys.includes("u"))).toHaveLength(1);
+    } finally {
+      vi.doUnmock("@/lib/papers/plain-levels");
+      vi.resetModules();
+    }
+  });
+});

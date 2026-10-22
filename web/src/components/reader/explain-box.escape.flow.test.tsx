@@ -151,7 +151,11 @@ function stubWindow(width = 1280, height = 800) {
 let root: Map<string, string>;
 let setProperty: ReturnType<typeof vi.fn>;
 let removeProperty: ReturnType<typeof vi.fn>;
-const RESERVED = { "--explain-dock": "376px", "--explain-dock-width": "360px" };
+// P11-14 (re-aimed, §1c; B P11-01 §3.1): the dock used to keep the page's width clear with two custom properties on the root
+// (`--explain-dock` 376px, `--explain-dock-width` 360px), written when the window opened and taken off when it closed. The margin is a grid
+// track of the reader's shell now, so NOTHING is reserved: where a case read "the properties are there while the window stands" it reads
+// "nothing was ever written", and where it read "they are taken off" it reads "nothing to take off".
+const NOTHING_RESERVED = {} as const;
 
 beforeEach(() => {
   openRef = { current: null };
@@ -353,7 +357,7 @@ describe("Escape with no window open (P10-08; was P8-06's \"with the empty state
 // ── With a passage in the window, Escape closes it ──────────────────────────────────────────────────
 
 describe("Escape with a passage in the window (P10-08; was P8-06's \"returns the window to the empty state\")", () => {
-  it("closes the window: the width goes back, nothing is scrolled, and the key goes no further", async () => {
+  it("closes the window: nothing is written on the page or scrolled, and the key goes no further (re-aimed, P11-14: was \"…the width goes back, nothing is scrolled…\")", async () => {
     const back = vi.fn();
     const release = registerReaderActions({ back });
     window.addEventListener("keydown", (() => readerActions()?.back?.()) as never);
@@ -376,9 +380,8 @@ describe("Escape with a passage in the window (P10-08; was P8-06's \"returns the
     expect(event.preventDefault).toHaveBeenCalledTimes(1);
     expect(event.stopPropagation).toHaveBeenCalledTimes(1);
     expect(back).not.toHaveBeenCalled();
-    expect(setProperty).toHaveBeenCalledTimes(2);
-    expect(removeProperty).toHaveBeenCalledWith("--explain-dock");
-    expect(removeProperty).toHaveBeenCalledWith("--explain-dock-width");
+    expect(setProperty).not.toHaveBeenCalled();
+    expect(removeProperty).not.toHaveBeenCalled();
     expect(Object.fromEntries(root)).toEqual({});
     expect(scrollBy).not.toHaveBeenCalled();
     // No control stands for the selection that is still there: the selection buttons (the page's) and `e` open it again.
@@ -439,8 +442,8 @@ describe("Escape with a passage in the window (P10-08; was P8-06's \"returns the
     expect(run.last().card).toBeUndefined();
     expect(run.last().button).toBeUndefined();
     expect(Object.fromEntries(root)).toEqual({});
-    expect(removeProperty).toHaveBeenCalledWith("--explain-dock");
-    expect(removeProperty).toHaveBeenCalledWith("--explain-dock-width");
+    expect(setProperty).not.toHaveBeenCalled();
+    expect(removeProperty).not.toHaveBeenCalled();
     expect(listening("keydown")).toBe(0);
     run.mounted.unmount();
   });
@@ -449,13 +452,13 @@ describe("Escape with a passage in the window (P10-08; was P8-06's \"returns the
 // ── The Tier 0 definition, the card and the sheet close on Escape as they always did ───────────────
 
 describe("Escape on the Tier 0 definition, the card and the sheet (unchanged)", () => {
-  it("no key: the Tier 0 definition's window closes, and the width goes back", async () => {
+  it("no key: the Tier 0 definition's window closes, and nothing was reserved to go back (re-aimed, P11-14)", async () => {
     const defined = { ...first, passage: "The rafting ratio rose." };
     const run = await scenario(base({ canAsk: false, terms: [term], target: defined, cached: undefined }), [
       (tree) => click(tree),
       (tree) => {
         expect(look(tree).card).toBeDefined();
-        expect(Object.fromEntries(root)).toEqual(RESERVED);
+        expect(Object.fromEntries(root)).toEqual(NOTHING_RESERVED);
         press("Escape");
       },
     ]);
@@ -523,7 +526,7 @@ describe("Escape's order when something else is open (P10-31, BACKLOG-86)", () =
       (tree) => {
         expect(closeLightbox).toHaveBeenCalledTimes(1);
         expect(look(tree).card, "the window stays while the lightbox closes").toBeDefined();
-        expect(Object.fromEntries(root)).toEqual(RESERVED);
+        expect(Object.fromEntries(root)).toEqual(NOTHING_RESERVED);
       },
       () => void press("Escape"),
     ]);
@@ -550,7 +553,7 @@ describe("Escape's order when something else is open (P10-31, BACKLOG-86)", () =
       (tree) => {
         expect(listboxOpen).toBe(false);
         expect(look(tree).card, "the window stays while the list closes").toBeDefined();
-        expect(Object.fromEntries(root)).toEqual(RESERVED);
+        expect(Object.fromEntries(root)).toEqual(NOTHING_RESERVED);
       },
       () => void press("Escape"),
     ]);
@@ -574,7 +577,7 @@ describe("Escape's order when something else is open (P10-31, BACKLOG-86)", () =
 
     expect(closeSticky).toHaveBeenCalledTimes(1);
     expect(standsOpen(run)).toBe(true);
-    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    expect(Object.fromEntries(root)).toEqual(NOTHING_RESERVED);
     run.mounted.unmount();
   });
 

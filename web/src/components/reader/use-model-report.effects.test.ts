@@ -23,40 +23,54 @@ const net = vi.hoisted(() => ({
   /** The sign-in outcome the hook reads (P4-00): a reader's own key counts only for a
    *  signed-in reader, so the default is "signed-in" and a case sets it otherwise. */
   authOutcome: "signed-in" as "signed-in" | "signed-out" | "unknown",
-  /** P2-08b (§1g.18): per request, whether it was abandoned before it finished,
-   *  and how long a request is held after `mode`. */
+  /** P2-08b (§1g.18): per request, whether it was abandoned before it finished. */
   flights: [] as Array<{ aborted: boolean; done: boolean }>,
-  delayMs: 0,
+  // P11-18 (BACKLOG-97; `test-support/page-pacing`): a request is held in flight until the test lets it go, not
+  // for a number of milliseconds, and the tests wait on what the stub counts, never on timer ticks.
+  /** Whether the first request is held after `mode`, until `released` (or until the page lets it go). */
+  holdFirst: false,
+  released: false,
+  /** Requests held after `mode`, and streams closed (read to the end, or let go by the page). */
+  held: 0,
+  closed: 0,
 }));
 
 vi.mock("@/lib/papers/report-stream", () => ({
   streamPaperReport: async function* (body: Record<string, unknown>, signal?: AbortSignal) {
     net.streamCalls.push(body);
     const flight = { aborted: false, done: false };
+    const mine = net.flights.length;
     net.flights.push(flight);
     signal?.addEventListener("abort", () => {
       if (!flight.done) flight.aborted = true;
     });
-    if (net.script) {
-      for (const event of net.script) yield event;
+    try {
+      if (net.script) {
+        for (const event of net.script) yield event;
+        flight.done = true;
+        return;
+      }
+      yield { type: "mode", aiMode: "tier2" };
+      if (net.holdFirst && mine === 0) {
+        net.held += 1;
+        await until(() => net.released, "the held request to be released", signal);
+      }
       flight.done = true;
-      return;
+      yield { type: "stage", stage: "done", label: "Report ready", pct: 100 };
+      yield {
+        type: "report",
+        report: {
+          noLlm: false,
+          depth: body.deepReport ? "deep" : "abstract",
+          skim: [],
+          whatItProposes: { summary: "A report asked for once.", methods: [] },
+          resultsAndSignificance: { summary: "", keyResults: [] },
+          provenance: { basis: "model-full-text", droppedClaims: 0 },
+        },
+      };
+    } finally {
+      net.closed += 1;
     }
-    yield { type: "mode", aiMode: "tier2" };
-    if (net.delayMs > 0) await new Promise((resolve) => setTimeout(resolve, net.delayMs));
-    flight.done = true;
-    yield { type: "stage", stage: "done", label: "Report ready", pct: 100 };
-    yield {
-      type: "report",
-      report: {
-        noLlm: false,
-        depth: body.deepReport ? "deep" : "abstract",
-        skim: [],
-        whatItProposes: { summary: "A report asked for once.", methods: [] },
-        resultsAndSignificance: { summary: "", keyResults: [] },
-        provenance: { basis: "model-full-text", droppedClaims: 0 },
-      },
-    };
   },
 }));
 vi.mock("@/lib/api", () => ({
@@ -71,12 +85,16 @@ vi.mock("@/components/profile-sync", () => ({
 
 import { useEffect, useState } from "react";
 import { hookRuntime } from "@/test-support/hook-runtime";
+import { CEILING_MS, TEST_TIMEOUT_MS, pacing, resetPacing, throwIfLapsed, until } from "@/test-support/page-pacing";
 import { defaultProfile, type Paper, type UserProfile } from "@/types";
 import { buildReading } from "@/lib/papers/reading";
 import type { ExtractedDocument } from "@/lib/papers/html-text";
 import { useReadingQuestionsStore } from "@/store/reading-questions";
 import { readingRoute } from "./reading-map";
-import { useModelReport } from "./use-model-report";
+import { useModelReport, type ModelReportState } from "./use-model-report";
+
+// A test is several waits long at worst; the runner's 5 s would cut a slow machine off before the ceiling speaks.
+vi.setConfig({ testTimeout: TEST_TIMEOUT_MS });
 
 /**
  * P3-05 (§1h.8 (2)): the hook listens for `pagehide` and `pageshow` on `window`, so
@@ -139,6 +157,93 @@ async function open(paper: Paper, reader: UserProfile = profile, questions?: rea
   return opened.value;
 }
 
+/** A step of `drive` that holds the next one back until the page has what the assertion needs. */
+interface Wait {
+  what: string;
+  ready: () => boolean;
+}
+type Act = (() => void) | Wait;
+const waitFor = (what: string, ready: () => boolean): Wait => ({ what, ready });
+
+/** What the page last drew, and how many renders there have been. */
+const view = { state: null as ModelReportState | null, renders: 0 };
+
+/** The open's report is on the page. */
+const reportOnPage = () => waitFor("the open's report on the page", () => view.state?.report != null);
+
+/** At least `n` streams have closed, read to their end or let go. */
+const requestsClosed = (n: number) => waitFor(`${n} stream(s) to close`, () => net.closed >= n);
+
+/** A request has said `mode` and is held in flight. */
+const requestHeld = () => waitFor("a request held in flight", () => net.held >= 1);
+
+/**
+ * An act, then the wait for the page to take it up: the render that carries it, then the effects of that render,
+ * then the render of what those effects set. What is read after this is read from a page that has answered the act.
+ */
+function actAndSettle(act: () => void): Act[] {
+  let mark = 0;
+  return [
+    () => {
+      mark = view.renders;
+      act();
+    },
+    waitFor("the page to take the change up", () => view.renders >= mark + 2),
+  ];
+}
+
+/** A full cycle with nothing changed since: the render, the effects of that render, the render of what they set. */
+const aFullCycle = () => actAndSettle(() => {});
+
+/**
+ * One page open with a scripted browser: one act per render round (a wait holds the next act back, kept alive by a
+ * 1 ms poll, until its condition holds), the settled questions read from `asked()` on every render, as the page
+ * reads them from the store. A wait that runs out the ceiling fails the test, naming it.
+ */
+async function drive(paper: Paper | (() => Paper), asked: () => readonly string[], acts: Act[], reader: UserProfile = profile) {
+  const queued = [...acts];
+  const waiting = { since: 0 };
+  view.state = null;
+  view.renders = 0;
+  const opened = await hookRuntime.mount(
+    () => {
+      const state = useModelReport({ paper: typeof paper === "function" ? paper() : paper, profile: reader, questions: asked() });
+      view.state = state;
+      view.renders += 1;
+      const [tick, setTick] = useState(0);
+      useEffect(() => {
+        const next = queued[0];
+        if (next === undefined) return;
+        if (typeof next === "function") {
+          queued.shift();
+          next();
+          setTick((n) => n + 1);
+          return;
+        }
+        if (next.ready()) {
+          queued.shift();
+          waiting.since = 0;
+          setTick((n) => n + 1);
+          return;
+        }
+        waiting.since = waiting.since || Date.now();
+        if (Date.now() - waiting.since >= CEILING_MS) {
+          pacing.lapsed.push(next.what);
+          queued.length = 0;
+          return;
+        }
+        const timer = setTimeout(() => setTick((n) => n + 1), 1);
+        return () => clearTimeout(timer);
+      }, [tick]);
+      return state;
+    },
+    // The ceiling is what bounds a run, not the number of rounds a slow machine gets through.
+    { maxRounds: 100_000 },
+  );
+  throwIfLapsed(opened.unmount);
+  return opened;
+}
+
 describe("useModelReport with effects running — one report request across two opens (P0-06)", () => {
   beforeEach(() => {
     vi.stubGlobal("localStorage", memoryStorage());
@@ -149,7 +254,11 @@ describe("useModelReport with effects running — one report request across two 
     net.script = null;
     net.authOutcome = "signed-in";
     net.flights.length = 0;
-    net.delayMs = 0;
+    net.holdFirst = false;
+    net.released = false;
+    net.held = 0;
+    net.closed = 0;
+    resetPacing();
   });
 
   afterEach(() => vi.unstubAllGlobals());
@@ -298,24 +407,19 @@ describe("useModelReport with effects running — one report request across two 
     });
 
     it("a different paper while a request is in flight abandons it and asks for the new one", async () => {
-      net.delayMs = 200;
+      // The first request is held in flight and never released: it stands until the page abandons it.
+      net.holdFirst = true;
       let current: Paper = { ...attached, id: "openalex:W7000000011", fullTextUploadId: "upload:0123456789abcde1" };
-      let rounds = 0;
-      const opened = await hookRuntime.mount(
-        () => {
-          const state = useModelReport({ paper: current, profile });
-          const [tick, setTick] = useState(0);
-          useEffect(() => {
-            rounds += 1;
-            // Round 3 is well inside the first request's 200 ms.
-            if (rounds === 3) current = { ...attached, id: "openalex:W7000000012", fullTextUploadId: "upload:0123456789abcde2" };
-            if (rounds > 60) return;
-            const timer = setTimeout(() => setTick((n) => n + 1), 1);
-            return () => clearTimeout(timer);
-          }, [tick]);
-          return state;
-        },
-        { maxRounds: 100 },
+      const opened = await drive(
+        () => current,
+        () => [],
+        [
+          requestHeld(),
+          () => {
+            current = { ...attached, id: "openalex:W7000000012", fullTextUploadId: "upload:0123456789abcde2" };
+          },
+          requestsClosed(2),
+        ],
       );
       opened.unmount();
 
@@ -326,7 +430,7 @@ describe("useModelReport with effects running — one report request across two 
     });
 
     it("leaving the page while a request is in flight abandons it", async () => {
-      net.delayMs = 200;
+      net.holdFirst = true;
       // `mount` returns once nothing is left to do, which is while the request is held.
       const opened = await hookRuntime.mount(() => useModelReport({ paper: attached, profile }));
       expect(net.flights).toEqual([{ aborted: false, done: false }]);
@@ -423,56 +527,19 @@ describe("useModelReport with effects running — one report request across two 
   describe("nothing is sent from an unloading page (P3-05, §1g.21 (6))", () => {
     const FIRST = "synthetic first question";
     const SECOND = "synthetic second question";
-    type Act = (() => void) | { wait: number };
-
-    /**
-     * One page open with a scripted browser: one act per render round (a wait being
-     * rounds kept alive by a 1 ms poll), the settled questions read from `asked()` on
-     * every render, as the page reads them from the store.
-     */
-    async function drive(paper: Paper, asked: () => readonly string[], acts: Act[], reader: UserProfile = profile) {
-      const queued = [...acts];
-      const clock = { until: 0 };
-      return hookRuntime.mount(
-        () => {
-          const state = useModelReport({ paper, profile: reader, questions: asked() });
-          const [tick, setTick] = useState(0);
-          useEffect(() => {
-            if (Date.now() < clock.until) {
-              const timer = setTimeout(() => setTick((n) => n + 1), 1);
-              return () => clearTimeout(timer);
-            }
-            const next = queued.shift();
-            if (!next) return;
-            if (typeof next === "function") {
-              next();
-              setTick((n) => n + 1);
-              return;
-            }
-            clock.until = Date.now() + next.wait;
-            const timer = setTimeout(() => setTick((n) => n + 1), 1);
-            return () => clearTimeout(timer);
-          }, [tick]);
-          return state;
-        },
-        { maxRounds: 400 },
-      );
-    }
-
     it("a settle after pagehide sends nothing; pageshow sends the one request, with the settled questions", async () => {
       let questions: readonly string[] = [];
       const seen: number[] = [];
       const opened = await drive(attached, () => questions, [
-        { wait: 25 },
+        reportOnPage(),
         () => seen.push(net.streamCalls.length), // the open, finished
         () => page.fire("pagehide"),
-        () => {
+        ...actAndSettle(() => {
           questions = [FIRST, SECOND]; // a settle lands as the page hides (a tick, a ×, Submit): the hook is re-keyed
-        },
-        { wait: 40 },
+        }),
         () => seen.push(net.streamCalls.length), // nothing from the dying page
         () => page.fire("pageshow"),
-        { wait: 40 },
+        requestsClosed(2), // the one request goes out, and ends
       ]);
       opened.unmount();
 
@@ -486,18 +553,16 @@ describe("useModelReport with effects running — one report request across two 
     it("the questions settled while hidden are sent once, however many times the set changed", async () => {
       let questions: readonly string[] = [];
       const opened = await drive(attached, () => questions, [
-        { wait: 25 },
+        reportOnPage(),
         () => page.fire("pagehide"),
-        () => {
+        ...actAndSettle(() => {
           questions = [FIRST];
-        },
-        { wait: 15 },
-        () => {
+        }),
+        ...actAndSettle(() => {
           questions = [FIRST, SECOND];
-        },
-        { wait: 15 },
+        }),
         () => page.fire("pageshow"),
-        { wait: 60 },
+        requestsClosed(2),
       ]);
       opened.unmount();
 
@@ -508,26 +573,36 @@ describe("useModelReport with effects running — one report request across two 
     it("a page hidden and shown again with nothing settled in between sends nothing: a restore is not a reason to ask", async () => {
       // The open's report is cached by then; the hook's own `cached` read is from its
       // first render, so a restore that re-ran the request effect would ask again.
-      const opened = await drive(attached, () => [], [{ wait: 25 }, () => page.fire("pagehide"), { wait: 15 }, () => page.fire("pageshow"), { wait: 40 }]);
+      const opened = await drive(attached, () => [], [
+        reportOnPage(),
+        () => page.fire("pagehide"),
+        ...aFullCycle(),
+        () => page.fire("pageshow"),
+        ...aFullCycle(),
+      ]);
       opened.unmount();
 
       expect(net.streamCalls).toHaveLength(1);
     });
 
     it("a request in flight when the page hides is left alone; the questions settled meanwhile go once it is shown and the flight has ended", async () => {
-      net.delayMs = 60;
+      net.holdFirst = true; // the open's request is held in flight until the test lets it go
       let questions: readonly string[] = [];
       const seen: Array<{ calls: number; done: boolean }> = [];
       const opened = await drive(attached, () => questions, [
-        { wait: 10 },
+        requestHeld(),
         () => page.fire("pagehide"),
-        () => {
+        ...actAndSettle(() => {
           questions = [FIRST];
+        }),
+        () => {
+          net.released = true; // the open's request ends in here: nothing is sent for the new set
         },
-        { wait: 120 }, // the open's request ends in here: nothing is sent for the new set
+        requestsClosed(1),
+        ...aFullCycle(),
         () => seen.push({ calls: net.streamCalls.length, done: net.flights[0]?.done === true }),
         () => page.fire("pageshow"),
-        { wait: 160 },
+        requestsClosed(2),
       ]);
       opened.unmount();
 
@@ -542,11 +617,11 @@ describe("useModelReport with effects running — one report request across two 
     it("without either event the behaviour is as before: a settle sends one request, at once", async () => {
       let questions: readonly string[] = [];
       const opened = await drive(attached, () => questions, [
-        { wait: 25 },
+        reportOnPage(),
         () => {
           questions = [FIRST];
         },
-        { wait: 40 },
+        requestsClosed(2),
       ]);
       opened.unmount();
 
@@ -555,7 +630,7 @@ describe("useModelReport with effects running — one report request across two 
     });
 
     it("a pageshow with no pagehide before it (every page load fires one) changes nothing", async () => {
-      const opened = await drive(attached, () => [], [{ wait: 25 }, () => page.fire("pageshow"), { wait: 25 }]);
+      const opened = await drive(attached, () => [], [reportOnPage(), () => page.fire("pageshow"), ...aFullCycle()]);
       opened.unmount();
 
       expect(net.streamCalls).toHaveLength(1);
@@ -565,12 +640,13 @@ describe("useModelReport with effects running — one report request across two 
       let questions: readonly string[] = [];
       const counts: Array<[number, number]> = [];
       const opened = await drive(attached, () => questions, [
-        { wait: 25 },
+        reportOnPage(),
         () => counts.push([page.count("pagehide"), page.count("pageshow")]),
         () => {
           questions = [FIRST];
         },
-        { wait: 40 },
+        requestsClosed(2),
+        ...aFullCycle(),
         () => counts.push([page.count("pagehide"), page.count("pageshow")]),
       ]);
 

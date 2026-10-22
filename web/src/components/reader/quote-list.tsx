@@ -18,9 +18,13 @@ export function QuoteList({ block, quotes }: { block: BlockName; quotes: Reading
       <BlockHeading block={block} className="rv" />
       {/* The abstract's measure, so the column has one right edge. */}
       <ul className="rv rv-late reading-prose space-y-4 list-none measure-paper">
-        {quotes.map((quote) => (
+        {quotes.map((quote, index) => (
           <li
-            key={`${quote.from.heading}${quote.text}`}
+            // P11-32 (§1h.130): the position is part of the key. The heading and the words are not unique to a quote: a section that says
+            // one sentence twice, or two sections under one heading, give two identical quotes, and React logged "two children with the
+            // same key" and raised the dev overlay. The list is static (a few quotes, drawn in the order they were picked), so its index is
+            // stable; the heading and the words stay in the key, so a different quote in the same place is a different item.
+            key={`${index}:${quote.from.heading}:${quote.text}`}
             className="font-reading text-lead leading-[1.6] text-text reading-justify"
           >
             <MathText text={quote.text} />

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 // P7-14 (R10, the owner's review; Q5): a paper Peer has read in full has two tabs, "Summary" and
 // "Paper digestion", and it opens on the second. `useReaderTab` is the page's one place for which
@@ -22,7 +22,7 @@ vi.mock("react", async (importOriginal) => {
 
 import { useEffect, useState } from "react";
 import { hookRuntime } from "@/test-support/hook-runtime";
-import { DEFAULT_READER_TAB, READER_TABS, useReaderTab, type ReaderTab } from "./use-reader-tab";
+import { DEFAULT_READER_TAB, READER_TABS, summaryBlockFromHash, useReaderTab, type ReaderTab } from "./use-reader-tab";
 
 type Value = ReturnType<typeof useReaderTab>;
 
@@ -170,5 +170,85 @@ describe("revealing the paper's own text (R10: t, the § links, the terms)", () 
     expect(seen).toEqual(["ran"]);
     expect(run.tabs).toEqual(["summary"]);
     expect(run.changes).toEqual([]);
+  });
+});
+
+// P11-20 rule 1 (C P11-17b "For the manager" 1; ruling §1h.118): the notes page's blue square for a note taken on a Summary block navigates to
+// `/papers/<id>#summary-proposal`. The paper opens on Paper digestion (Q5), which does not hold the block; the tab that does is the Summary. So a paper
+// with a body whose address names a Summary block opens on the Summary — once, after the first commit (during a client-side navigation the address
+// is changed after the render that mounts the page, so a render-time read would miss it; the arrival's own wait, `followHash`, reads it the same way).
+// It is not a pick (no scroll to the tab's start: the arrival scrolls to the block), and the reader's own picks after it are theirs.
+describe("summaryBlockFromHash — which addresses name a Summary block", () => {
+  it("reads a Summary block's id, decoded, and nothing else", () => {
+    expect(summaryBlockFromHash("#summary-proposal")).toBe("summary-proposal");
+    expect(summaryBlockFromHash("#summary-new-here")).toBe("summary-new-here");
+    expect(summaryBlockFromHash("#summary%2Dproposal")).toBe("summary-proposal");
+    for (const hash of ["", "#", "#summary", "#summary-", "#Summary-proposal", "#summary-proposal x", "#answers-block", "#paper-section-1-p2", "#%E0%A4%A"]) {
+      expect(summaryBlockFromHash(hash), hash).toBeNull();
+    }
+  });
+});
+
+describe("arriving with a Summary block in the address", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+  const addressed = (hash: string) => vi.stubGlobal("window", { location: { hash } });
+
+  it("a paper with a body opens on the Summary, tells onChange once, and does not scroll to the tab's start", async () => {
+    addressed("#summary-proposal");
+    const run = await page(true, []);
+
+    expect(run.tabs).toEqual(["digestion", "summary"]);
+    expect(run.changes).toEqual(["summary"]);
+    expect(run.starts).toEqual([]);
+  });
+
+  it("every other address leaves the paper on Paper digestion: the answers' block (under both tabs), a paragraph, a bare #, none", async () => {
+    for (const hash of ["#answers-block", "#paper-section-0-p1", "#", ""]) {
+      addressed(hash);
+      const run = await page(true, []);
+
+      expect(run.tabs, hash).toEqual(["digestion"]);
+      expect(run.changes, hash).toEqual([]);
+    }
+  });
+
+  it("a paper with no body is on the Summary already: nothing changes, nothing is told", async () => {
+    addressed("#summary-proposal");
+    const run = await page(false, []);
+
+    expect(run.tabs).toEqual(["summary"]);
+    expect(run.changes).toEqual([]);
+  });
+
+  it("is read once: the reader's pick of Paper digestion afterwards is not undone by the address, which still names the block", async () => {
+    addressed("#summary-proposal");
+    const run = await page(true, [() => {}, (v) => v.select("digestion"), () => {}, () => {}]);
+
+    expect(run.tabs).toEqual(["digestion", "summary", "digestion"]);
+    expect(run.changes).toEqual(["summary", "digestion"]);
+    expect(run.starts).toEqual(["digestion"]);
+  });
+
+  it("a jump into the paper's own text from it still switches back first, as from any Summary", async () => {
+    addressed("#summary-proposal");
+    const seen: string[] = [];
+    const run = await page(true, [
+      () => {},
+      (v, now) => v.reveal(() => seen.push(`ran on ${now.shown}`)),
+      () => {},
+      () => {},
+    ]);
+
+    expect(seen).toEqual(["ran on digestion"]);
+    expect(run.tabs).toEqual(["digestion", "summary", "digestion"]);
+  });
+
+  it("a page with no window (a server) is left on Paper digestion", async () => {
+    vi.stubGlobal("window", undefined);
+    const run = await page(true, []);
+
+    expect(run.tabs).toEqual(["digestion"]);
   });
 });

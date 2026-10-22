@@ -18,10 +18,13 @@
 
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
-import { useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { create } from "zustand";
 import type { PaperReading } from "@/lib/papers/reading";
+import { ANSWERS_BLOCK_ID, SUMMARY_ID_PREFIX, isPageBlockId, type AnchorSection } from "@/lib/notes/anchor-blocks";
 import { stickyTitle } from "@/lib/notes/blocks";
-import type { NoteAnchor } from "@/lib/notes/types";
+import type { HighlightColourId, NoteAnchor } from "@/lib/notes/types";
+import { scrollBehavior } from "@/lib/reader/scroll-motion";
 import { useWindows } from "@/lib/reader/windows";
 import { anchorRange, readingNoteFor, resolveAnchors, useLostPassages, useNotesStore } from "@/store/notes";
 
@@ -38,13 +41,31 @@ const MARK_FLASH_CLASSES = ["outline", "outline-2", "outline-offset-2", "outline
 
 // ── The marked words in the paragraph ─────────────────────────────────────
 
-/** A sticky's place in its paragraph: the anchor map's entry (`start` / `end` / `quote` only when the anchor has a range). */
+/**
+ * A sticky's place in its paragraph: the anchor map's entry (`start` / `end` / `quote` only when the anchor has a range).
+ * P11-09 (owner item 8): a highlight rides the same map. A spot with a `colour` is a highlight — drawn in that colour, with
+ * no number and no tag (`n` is 0) — and `order` is its place among the note's blocks, which tells two of them apart.
+ */
 export interface AnchorSpot {
   id: string;
   n: number;
   start?: number;
   end?: number;
   quote?: string;
+  colour?: HighlightColourId;
+  order?: number;
+}
+
+/** Whether a spot is a highlight's (it has a colour) and not a sticky's. */
+export const isHighlightSpot = (spot: AnchorSpot): boolean => spot.colour !== undefined;
+
+/**
+ * P11-09: which of two spots over the same words is the outer mark. A sticky is the outer of a highlight; two stickies are
+ * told by their numbers, two highlights by their `order` (the earlier is the outer). With stickies only this is the number
+ * order the paragraph always had.
+ */
+export function tieOrder(a: AnchorSpot, b: AnchorSpot): number {
+  return Number(isHighlightSpot(a)) - Number(isHighlightSpot(b)) || (a.order ?? a.n) - (b.order ?? b.n);
 }
 
 /**
@@ -67,7 +88,7 @@ export function rangeOf(text: string, spot: AnchorSpot): { start: number; end: n
 /**
  * P10-09f (rule 2), P10-20: cut a paragraph's text for the highlighter. Each note whose range the text still holds
  * marks its own words, in the order they stand; a note whose words lie wholly inside another's is drawn as its own
- * mark inside that one (`inner`; equal ranges: the earlier note is the outer); a later note that only overlaps an
+ * mark inside that one (`inner`; equal ranges: a sticky is the outer of a highlight, else the earlier note — `tieOrder`); a later note that only overlaps an
  * earlier one starts its mark where the earlier ends (the pair never cross); a note with no range, or one the text no
  * longer holds, has its tag at the paragraph's end. The text is never changed: the runs and marks, in order, are
  * exactly the paragraph.
@@ -80,8 +101,8 @@ export function passageSegments(text: string, spots: readonly AnchorSpot[]): Pas
     if (range) pool.push({ spot, ...range });
     else loose.push(spot);
   }
-  // Outer before inner: by start, then the longer first, then the earlier note.
-  pool.sort((a, b) => a.start - b.start || b.end - a.end || a.spot.n - b.spot.n);
+  // Outer before inner: by start, then the longer first, then (P11-09) a sticky before a highlight, then the earlier note.
+  pool.sort((a, b) => a.start - b.start || b.end - a.end || tieOrder(a.spot, b.spot));
   // The runs of [lo, hi): the pool's ranges that end by `hi`, taken in order, each cutting its own inside the same way.
   const cut = (lo: number, hi: number, depth: number): PassageSegment[] => {
     const out: PassageSegment[] = [];
@@ -109,8 +130,11 @@ export function passageSegments(text: string, spots: readonly AnchorSpot[]): Pas
 /** U+2060, which allows no line break on either side of it. */
 const WORD_JOINER = "\u2060";
 
-/** The reference tag after a passage: [N], opens sticky N. */
-export function NoteTag({ n, id }: { n: number; id: string }) {
+/**
+ * The reference tag after a passage: [N], opens sticky N. P11-09: `ink`, given when the tag stands inside a highlight, is the
+ * colour of its words there — the tag's own muted ink is not made for a bright highlight behind it. Without it, as it was.
+ */
+export function NoteTag({ n, id, ink }: { n: number; id: string; ink?: string }) {
   return (
     <sup className="ml-0.5 select-none whitespace-nowrap align-super">
       {/* P10-20: a word joiner before the tag — no line break between the last marked word and the tag, so a line never opens with "[2]". */}
@@ -120,6 +144,7 @@ export function NoteTag({ n, id }: { n: number; id: string }) {
         aria-label={`Open note ${n}`}
         onClick={() => useWindows.getState().open({ id, kind: "sticky", title: stickyTitle(n) })}
         className="select-none px-px font-mono text-meta leading-none text-text-muted underline-offset-2 hover:text-heading hover:underline"
+        {...(ink ? { style: { color: ink } } : {})}
       >
         {`[${n}]`}
       </button>
@@ -160,40 +185,129 @@ export function registerPassageHost(next: PassageHost): () => void {
   };
 }
 
+// ── The Summary's blocks and the answers' block (P11-17b, rule 3) ─────────
+
+/**
+ * The ids of the Summary's blocks begin with `SUMMARY_ID_PREFIX` (`paper-words.tsx`'s `SUMMARY_ID`). They stand only under the "Summary" tab, where the paper's
+ * paragraphs (`paper-section-N-pM`) stand only under "Paper digestion": `goToPassage` asks the right host to bring the right tab back. The answers under the
+ * question are one block, `ANSWERS_BLOCK_ID`, `for-your-questions.tsx`'s section; it stands under both tabs (the common slot), so no tab is brought back.
+ * P11-28: the two are defined with the page-block text model (`lib/notes/anchor-blocks.ts`), which the notes store shares, and re-exported here as they were.
+ */
+export { ANSWERS_BLOCK_ID, SUMMARY_ID_PREFIX };
+
+let summaryHost: PassageHost | null = null;
+
+/**
+ * P11-28: the paper whose reading page is on show, told by the Summary's host. A Summary block and the answers draw the marks of the paper's highlights
+ * (`block-marks.ts`), and a block does not know which paper it belongs to: the page registers the host with the paper's id, so the host says it. Null with no
+ * reading page. Not persisted, not per-user data.
+ */
+export const useBlockPaper = create<{ paperId: string | null }>()(() => ({ paperId: null }));
+
+/** The reading page registers how to bring the Summary tab back (`useSummaryHost`); the returned function takes it off again (identity-guarded). */
+export function registerSummaryHost(next: PassageHost): () => void {
+  summaryHost = next;
+  useBlockPaper.setState({ paperId: next.paperId });
+  return () => {
+    if (summaryHost !== next) return;
+    summaryHost = null;
+    useBlockPaper.setState({ paperId: null });
+  };
+}
+
+/**
+ * The page's side of the Summary's host: registers, for its paper, a `reveal` that runs the jump at once when the Summary is on show (and for a
+ * paper with no body, which has no tabs) and otherwise asks the page to show it (`showSummary`) and runs the jump once, after the render that put
+ * the Summary on the page. A Summary that comes on show by the reader's own pick runs nothing: no jump is waiting.
+ */
+export function useSummaryHost({ paperId, onSummary, showSummary }: { paperId: string; onSummary: boolean; showSummary: () => void }): void {
+  const job = useRef<(() => void) | null>(null);
+  const reveal = useCallback(
+    (run: () => void) => {
+      if (onSummary) {
+        run();
+        return;
+      }
+      job.current = run;
+      showSummary();
+    },
+    [onSummary, showSummary],
+  );
+  useEffect(() => registerSummaryHost({ paperId, reveal }), [paperId, reveal]);
+  useEffect(() => {
+    if (!onSummary) return;
+    const run = job.current;
+    job.current = null;
+    run?.();
+  }, [onSummary]);
+}
+
 function flash(el: Element, classes: readonly string[] = FLASH_CLASSES): void {
   el.classList.add(...classes);
   setTimeout(() => el.classList.remove(...classes), FLASH_MS);
 }
 
+/** P11-09: a highlight to go back to — the paper, its paragraph and the highlight's block id (`data-highlight`). */
+export interface HighlightGoal {
+  paperId: string;
+  paragraphId: string;
+  highlightId: string;
+}
+
+/** The selector of a highlight's marks in a paragraph: its own (`data-highlight`) and the nested parts of it (`data-highlight-part`), by block id. */
+export function highlightMarks(id: string): string {
+  const quoted = id.replace(/["\\]/g, "\\$&");
+  return `mark[data-highlight="${quoted}"], mark[data-highlight-part="${quoted}"]`;
+}
+
 /**
- * Scroll the paper to the sticky's passage and mark it for `FLASH_MS`; when the paper is not on this page, go to
- * its page at the paragraph. The reading page of that paper (registered) first brings the paper's text on show.
+ * Scroll the paper to the sticky's passage — or, P11-09, to a highlight's — and mark it for `FLASH_MS`; when the paper is not
+ * on this page, go to its page at the paragraph. The reading page of that paper (registered) first brings the paper's text on show.
  */
 export function goToPassage(
-  anchor: NoteAnchor,
+  anchor: NoteAnchor | HighlightGoal,
   env: { doc: Pick<Document, "getElementById">; navigate: (href: string) => void },
 ): void {
   const run = (): boolean => {
     const el = env.doc.getElementById(anchor.paragraphId);
     if (!el) return false;
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
     // P10-09f (rule 3): the paragraph is scrolled to as before (it holds every mark of the note, so its top is at or
     // before the first of them in reading order); the flash lands on the marked words when the paragraph draws a mark
     // for this note, else on the whole paragraph. P10-46: a note's words can stand in more than one mark — the first
     // ones nested inside an earlier note's mark (`data-note-part`), the rest in its own (`data-note`) — and the flash
     // covers them all.
+    // P11-09: a highlight's marks are `data-highlight` (its own) and `data-highlight-part` (its first words inside an earlier
+    // mark), found by its block id; the same flash. A highlight whose words are gone draws no mark: the paragraph flashes.
     const marks =
-      anchor.start !== undefined
-        ? Array.from(el.querySelectorAll(`mark[data-note="${anchor.n}"], mark[data-note-part="${anchor.n}"]`))
-        : [];
+      "highlightId" in anchor
+        ? Array.from(el.querySelectorAll(highlightMarks(anchor.highlightId)))
+        : anchor.start !== undefined
+          ? Array.from(el.querySelectorAll(`mark[data-note="${anchor.n}"], mark[data-note-part="${anchor.n}"]`))
+          : [];
+    // P11-28: a highlight on a page block — a Summary block, the answers — can stand far down a tall block (the answers are one): the first of its marks is scrolled
+    // to, centred; the block's top is scrolled to for everything else, as it always was.
+    const inPageBlock = "highlightId" in anchor && isPageBlockId(anchor.paragraphId) ? marks[0] : undefined;
+    // P11-32 (BACKLOG-107): smooth only for a reader who has not asked for reduced motion.
+    const behavior = scrollBehavior();
+    if (inPageBlock) inPageBlock.scrollIntoView({ behavior, block: "center" });
+    else el.scrollIntoView({ behavior, block: "start" });
     if (marks.length > 0) for (const mark of marks) flash(mark, MARK_FLASH_CLASSES);
     else flash(el);
     return true;
   };
-  if (host && host.paperId === anchor.paperId) {
-    host.reveal(() => {
+  // P11-17b (rule 3): which tab the target stands under decides who brings it back. A Summary block: the page's Summary host. The answers' block
+  // stands under both tabs: nothing to bring back, and on the paper's own page nowhere else to go. Anything else is a paragraph of the paper (as it was).
+  const inSummary = anchor.paragraphId.startsWith(SUMMARY_ID_PREFIX);
+  const inAnswers = anchor.paragraphId === ANSWERS_BLOCK_ID;
+  const revealer = inSummary ? summaryHost : inAnswers ? null : host;
+  if (revealer && revealer.paperId === anchor.paperId) {
+    revealer.reveal(() => {
       run();
     });
+    return;
+  }
+  if (inAnswers && host && host.paperId === anchor.paperId) {
+    run();
     return;
   }
   if (!run()) env.navigate(`/papers/${anchor.paperId}#${anchor.paragraphId}`);
@@ -204,7 +318,8 @@ export function goToPassage(
 /** P10-35's quiet line, said beside a lost note's heading and in its sticky window. */
 export const PASSAGE_LOST_LINE = "This passage is not in this version of the paper.";
 
-type Body = readonly { readonly paragraphs: readonly string[] }[];
+/** P11-27: the sections of a reading as far as an anchor goes — paragraphs, and (where the stored reading has them) the heading and the figures' captions. */
+type Body = readonly AnchorSection[];
 
 /** The key of the reading the reading page keeps in this browser (`use-reading.ts`); an entry's key starts with the paper's id. */
 const READING_CACHE_KEY = "peer-reading-v2";
@@ -265,6 +380,8 @@ export function storedBodyOf(paperId: string, storage?: Pick<Storage, "getItem">
  * show). The same search the paper's body makes (`resolveAnchors`). A note with no range has nothing to check.
  */
 export function passageIsLost(anchor: NoteAnchor, id: string, lost: Readonly<Record<string, true>>, body: Body | null): boolean {
+  // P11-28: a Summary block's or the answers' words are the page's, not the paper's body, which never holds them: nothing off the page can say they are gone.
+  if (isPageBlockId(anchor.paragraphId)) return false;
   if (lost[id] === true) return true;
   if (!body || anchor.start === undefined || anchor.end === undefined) return false;
   const { start, end, quote, n, paragraphId } = anchor;

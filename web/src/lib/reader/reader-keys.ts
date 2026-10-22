@@ -9,6 +9,8 @@
 // chose not to wire `next`) the key is inert and falls through to the global
 // keys.
 
+import { PLAIN_REWRITE_ENABLED } from "@/lib/papers/plain-levels";
+
 export type ReaderAction =
   | "next"
   | "prev"
@@ -21,6 +23,8 @@ export type ReaderAction =
   | "copy"
   | "back"
   | "ask"
+  | "note"
+  | "highlight"
   | "explain";
 
 export interface PaperKey {
@@ -35,6 +39,18 @@ export interface PaperKey {
   short: string;
 }
 
+/**
+ * P11-17a rule 3: `u`'s words, under the "Say it plainly" switch (`plain-levels.ts`). The page's
+ * `u` takes a plain rewrite back only while the switch is on, so only then does the row say so.
+ * Chosen here, where the table is built: the keyboard layer, the help sheet and the legend still
+ * read the one table.
+ */
+export function undoLabel(plainRewriteEnabled: boolean): string {
+  return plainRewriteEnabled
+    ? "Undo a plain rewrite or a dismiss, else mark unread / read"
+    : "Undo a dismiss, else mark unread / read";
+}
+
 export const PAPER_KEYS: readonly PaperKey[] = [
   { keys: ["j", "]", "ArrowRight"], action: "next", label: "Next paper", short: "next" },
   { keys: ["k", "[", "ArrowLeft"], action: "prev", label: "Previous paper", short: "prev" },
@@ -44,10 +60,13 @@ export const PAPER_KEYS: readonly PaperKey[] = [
   // P4-01 (§1h.12 (h)): one row. With a plain rewrite showing, `u` takes the latest one back first
   // (the original stands alone again; the rewrite stays kept); only when none shows does it do
   // what it did — undo a dismiss, else mark unread / read.
+  // P11-17a rule 3: the words follow the "Say it plainly" switch (`undoLabel`). Off (the owner's
+  // 2026-10-19 switch), `u` takes no rewrite back and the row says "Undo a dismiss, else mark
+  // unread / read"; with `PLAIN_REWRITE_ENABLED` true the label is P4-01's above, byte-identical.
   {
     keys: ["u"],
     action: "undoOrToggleRead",
-    label: "Undo a plain rewrite or a dismiss, else mark unread / read",
+    label: undoLabel(PLAIN_REWRITE_ENABLED),
     short: "undo",
   },
   // `t` for the text: `r` is the briefing's own key and stays global.
@@ -58,14 +77,20 @@ export const PAPER_KEYS: readonly PaperKey[] = [
   // field itself, `q` is a letter — the layer never intercepts a key typed
   // into an input.
   { keys: ["q"], action: "ask", label: "Ask a question about this paper", short: "ask" },
+  // P11-13 (rule 3; owner items 5 and 8; ruling §1h.113 (b) O-4): the selection's other two actions, each on the selection the page
+  // holds exactly as `e` explains it, each inert with nothing selected (`selectionActions`). Typed into a field, they are letters.
+  { keys: ["n"], action: "note", label: "Take notes on the selected passage", short: "notes" },
+  { keys: ["h"], action: "highlight", label: "Highlight the selected passage", short: "highlight" },
   // P3-02b (§1h.3): open "Explain this?" on the selected passage, as its button
   // does. Typed into the box's own input, `e` is a letter.
   { keys: ["e"], action: "explain", label: "Explain the selected passage", short: "explain" },
+  // P11-17a (BACKLOG-98): `back`, not `briefing` — four characters the foot legend needs at 768 px; the label
+  // still says where back goes.
   {
     keys: ["Escape", "Backspace"],
     action: "back",
     label: "Back to the briefing",
-    short: "briefing",
+    short: "back",
   },
 ];
 
@@ -139,4 +164,24 @@ export function registerReaderActions(actions: ReaderActions): () => void {
 
 export function readerActions(): ReaderActions | null {
   return current;
+}
+
+/**
+ * P11-13 (rule 3): the keys that act on the selection the page holds — `n` takes notes, `h` highlights — as handlers for the
+ * registry. `current` is read at the press, not at the registration, so a key always acts on the selection of the moment, and with
+ * nothing selected it does nothing. A handler the page does not have leaves its key out (inert): the page passes `highlight` only
+ * once it can highlight. `e` is not here: the explain box owns it (`openRef`). Generic over the page's selection type.
+ */
+export function selectionActions<T>(
+  current: () => T | null,
+  handlers: { note?: (target: T) => void; highlight?: (target: T) => void },
+): Pick<ReaderActions, "note" | "highlight"> {
+  const onSelection = (handler: (target: T) => void) => () => {
+    const target = current();
+    if (target !== null) handler(target);
+  };
+  return {
+    ...(handlers.note ? { note: onSelection(handlers.note) } : {}),
+    ...(handlers.highlight ? { highlight: onSelection(handlers.highlight) } : {}),
+  };
 }

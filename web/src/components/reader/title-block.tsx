@@ -3,6 +3,15 @@
 // Title and meta: where and when, the title, who — and, for a paper from
 // today's briefing, the one line saying why it is here. The authors line is a
 // real button: on a phone it is the tap target for the full list.
+//
+// P11-16 (B P11-01 §2.3; ruling §1h.113 (a)): from 1024 css px the title stands in the left pane's fixed zone, which never scrolls, and the owner's
+// six-line title would take the room the map needs. The page tells the block it is in the pane (`pane`): the title is clamped to four lines, the
+// whole of it in `title=` and in the markup, and it is set at the pane's size at every width (the one column's `sm:` step up is for a column).
+//
+// P11-20 follow-up (ruling §1h.119, item 2a): in the panes the fixed zone holds only what must stay in view while reading — the title (this block),
+// the commands, the strip, the report's progress. The paper's bibliographic lines (the venue and its age, the byline with its "and N more", the
+// affiliation, and the line saying why a briefing paper is here) are `Bibliography`, the head of the pane's details in the scroll zone, whole at every
+// height. In one column the block is what it was, byte for byte.
 
 import { useState } from "react";
 import type { Paper } from "@/types";
@@ -85,26 +94,77 @@ function AuthorLine({ authors, affiliation }: { authors: string[]; affiliation?:
   );
 }
 
+/** "Nature Communications · 3d ago": where and when, or null when the record has neither. */
+function metaLine(paper: Pick<Paper, "venue" | "publishedDate">, now: number): string | null {
+  const meta = [shortVenue(paper.venue), formatDayAge(paper.publishedDate, now)].filter(Boolean) as string[];
+  return meta.length > 0 ? meta.join(" · ") : null;
+}
+
+/** `relevanceReason`, only for a paper from today's briefing: the one line saying why it is here. */
+function Recommendation({ text }: { text: string }) {
+  return <p className="font-sans text-body-sm text-text-muted mt-1">{text}</p>;
+}
+
+/**
+ * P11-20 follow-up (item 2a): what the left pane's fixed zone no longer holds — the venue line, the byline (with its control for the rest) and the
+ * affiliation, and the recommendation — as the head of the pane's details, whole at every window height. Nothing for a paper that has none of
+ * them (an upload). The one column keeps them in `TitleBlock`.
+ */
+export function Bibliography({
+  paper,
+  recommendation = null,
+  now,
+}: {
+  paper: Pick<Paper, "venue" | "publishedDate" | "authors" | "leadAffiliation">;
+  recommendation?: string | null;
+  now: number;
+}) {
+  const line = metaLine(paper, now);
+  if (!line && paper.authors.length === 0 && !recommendation) return null;
+  return (
+    <div data-pane-bibliography="" className="mt-6">
+      {line && <p className="annotation text-meta text-text-muted">{line}</p>}
+      {paper.authors.length > 0 && <AuthorLine authors={paper.authors} affiliation={paper.leadAffiliation} />}
+      {recommendation && <Recommendation text={recommendation} />}
+    </div>
+  );
+}
+
 export function TitleBlock({
   paper,
   recommendation,
   now,
+  pane = false,
 }: {
   paper: Paper;
   /** `relevanceReason`, only for a paper from today's briefing. */
   recommendation: string | null;
   now: number;
+  /** The title stands in the three-pane page's left pane (P11-16): four lines at most, the pane's size — and nothing else: the venue, the byline, the
+   *  affiliation and the recommendation are `Bibliography`, in the pane's details (P11-20, item 2a). */
+  pane?: boolean;
 }) {
-  const meta = [shortVenue(paper.venue), formatDayAge(paper.publishedDate, now)].filter(
-    Boolean,
-  ) as string[];
   const long = paper.title.length > LONG_TITLE_CHARS;
 
+  if (pane) {
+    return (
+      <header>
+        <h1
+          className="paper-line text-heading text-display-sm measure-title mt-2 line-clamp-4"
+          title={paper.title}
+          // The short-window rule of the pane's fixed zone reads this (`globals.css`, P11-17c rule 2): three lines, not four, under 700 css px high.
+          data-pane-title=""
+        >
+          {paper.title}
+        </h1>
+      </header>
+    );
+  }
+
+  const line = metaLine(paper, now);
   return (
     <header>
-      {meta.length > 0 && (
-        <p className="annotation text-meta text-text-muted mt-6">{meta.join(" · ")}</p>
-      )}
+      {line && <p className="annotation text-meta text-text-muted mt-6">{line}</p>}
       <h1
         className={`paper-line text-heading text-display-sm measure-title mt-2${long ? "" : " sm:text-display xl:text-display-sm"}`}
       >
@@ -113,9 +173,7 @@ export function TitleBlock({
       {paper.authors.length > 0 && (
         <AuthorLine authors={paper.authors} affiliation={paper.leadAffiliation} />
       )}
-      {recommendation && (
-        <p className="font-sans text-body-sm text-text-muted mt-1">{recommendation}</p>
-      )}
+      {recommendation && <Recommendation text={recommendation} />}
     </header>
   );
 }

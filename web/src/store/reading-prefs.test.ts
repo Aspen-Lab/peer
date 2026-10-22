@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { PLAIN_DEFAULT_LEVEL, PLAIN_LEVELS } from "@/lib/papers/plain-levels";
+import { useReaderPanesStore } from "@/store/reader-panes";
 import { fitZoom, READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
 
 // S15: the font-size ladder's clamp logic — the only real behaviour this
@@ -98,47 +99,85 @@ describe("reading prefs — fit to screen", () => {
 });
 
 // Ruling 19 (round 7, second pass): replaces `fitScaleIndex`'s ladder
-// 7-07 (Ruling 21): Fit is computed from the layout's own constants — the
-// article's 1x cap at the viewport's breakpoint (1072px at xl, 1184px at
-// 2xl) times the reader's A/A scale — never measured off the zoomed element,
-// so an A/A change under Fit recomputes at once and a resize while fitted
-// can never read a container-clamped width. (Rewritten from the
-// pageWidthAt1x-argument version of 7-04, not deleted.)
+// 7-07 (Ruling 21): Fit is computed from the layout's own constants, never measured off the zoomed
+// element, so an A/A change under Fit recomputes at once and a resize while fitted can never read a
+// container-clamped width.
+//
+// P11-10 (B P11-01 §2.7; ruling §1h.113 (a), D8) RE-AIM — every test of this describe, named:
+//   "2560 wide at 1x"            was 2176 / 1184 (the 2xl cap)        now 2176 / 1344 (the three-pane reference)
+//   "2560 wide at the 1.2 step"  was 2176 / 1320 (504 + 680 x 1.2)    now 2176 / 1472 (320 + 640 x 1.2 + 360 + 24)
+//   "1440 wide ... at 1x"        was 1224 / 1072 = 1.142              now 1 (the panes already fill a 1440 window)
+//   "1300 wide ... at 1x"        was 1105 / 1072 = 1.031              now 1
+//   "below xl (1200 wide)"       was inert below 1280                 now 1 below 1024 (1000); the formula alone is 1 below 1,582
+//   "clamps to the 2.5 ceiling"  unchanged in kind (0.85 x 5000 / 1344 = 3.16)
+//   "never shrinks below 1x"     the scaled reference (320 + 1024 + 384 = 1728) exceeds 0.85 x 1600
+// The reference width is the shell's default panes at this A/A step: left 320, the paper's column 640 x the step, margin 360 and the
+// two dividers 24 = 1,344 at 1x, in place of the retired two-column spread's caps (1072 / 1184). A pane's width never enters.
 describe("fitZoom", () => {
-  it("2560 wide at 1x: ≈ 1.838 (0.85 × 2560 / 1184)", () => {
-    expect(fitZoom(2560, 1)).toBeCloseTo(2176 / 1184, 4);
+  it("the reference is the three-pane defaults at 1x: 320 + 640 + 360 + 24 = 1,344, so Fit starts to zoom above 1,344 / 0.85 = 1,581 px", () => {
+    expect(fitZoom(1500, 1)).toBe(1);
+    expect(fitZoom(1581, 1)).toBe(1);
+    expect(fitZoom(1582, 1)).toBeGreaterThan(1);
+    expect(fitZoom(1600, 1)).toBeCloseTo(1360 / 1344, 4);
   });
 
-  it("2560 wide at the 1.2 step: ≈ 1.648 — A/A under Fit re-derives the zoom from the 2xl pair (504 + 680 × 1.2)", () => {
-    expect(fitZoom(2560, 1.2)).toBeCloseTo(2176 / 1320, 4);
+  it("1440 wide at 1x: exactly 1 — the panes already fill the window", () => {
+    expect(fitZoom(1440, 1)).toBe(1);
   });
 
-  it("1440 wide (xl band, 1072px cap) at 1x: ≈ 1.142", () => {
-    expect(fitZoom(1440, 1)).toBeCloseTo(1224 / 1072, 3);
+  it("1920 wide at 1x: ≈ 1.214 (0.85 × 1920 / 1344)", () => {
+    expect(fitZoom(1920, 1)).toBeCloseTo(1632 / 1344, 4);
+    expect(fitZoom(1920, 1)).toBeCloseTo(1.21, 2);
   });
 
-  it("1300 wide (xl band) at 1x: ≈ 1.031", () => {
-    expect(fitZoom(1300, 1)).toBeCloseTo(1105 / 1072, 3);
+  it("2560 wide at 1x: ≈ 1.619 (0.85 × 2560 / 1344)", () => {
+    expect(fitZoom(2560, 1)).toBeCloseTo(2176 / 1344, 4);
+    expect(fitZoom(2560, 1)).toBeCloseTo(1.62, 2);
   });
 
-  it("below xl (1200 wide) Fit is inert: exactly 1", () => {
-    expect(fitZoom(1200, 1)).toBe(1);
+  it("2560 wide at the 1.2 step: ≈ 1.478 — A/A under Fit re-derives the zoom from the reference (320 + 640 × 1.2 + 360 + 24)", () => {
+    expect(fitZoom(2560, 1.2)).toBeCloseTo(2176 / 1472, 4);
+  });
+
+  it("1300 wide at 1x: exactly 1", () => {
+    expect(fitZoom(1300, 1)).toBe(1);
+  });
+
+  it("below the shell's 1024 css px Fit is inert: exactly 1", () => {
+    expect(fitZoom(1000, 1)).toBe(1);
+    expect(fitZoom(1023, 1)).toBe(1);
+    expect(fitZoom(400, 1)).toBe(1);
   });
 
   it("clamps to the 2.5 ceiling on an ultra-wide viewport", () => {
-    // 0.85*5000/1184 ≈ 3.59, past the ceiling.
+    // 0.85*5000/1344 ≈ 3.16, past the ceiling.
     expect(fitZoom(5000, 1)).toBe(2.5);
   });
 
   it("never shrinks below 1x: a page already wider than 85% of the viewport stays at 1", () => {
-    // 2xl band, but the scaled page (504 + 680 × 1.6 = 1592) already exceeds 0.85 × 1600 = 1360.
+    // The scaled reference (320 + 640 × 1.6 + 360 + 24 = 1728) already exceeds 0.85 × 1600 = 1360.
     expect(fitZoom(1600, 1.6)).toBe(1);
+  });
+
+  it("never reads a pane's width: a divider drag cannot change it (B P11-01 §6 item 3)", () => {
+    const before = [fitZoom(1920, 1), fitZoom(2560, 1.2)];
+    useReaderPanesStore.setState({ leftPinned: true, leftWidth: 480, marginWidth: 560 });
+    expect([fitZoom(1920, 1), fitZoom(2560, 1.2)]).toEqual(before);
+    useReaderPanesStore.setState({ leftPinned: undefined, leftWidth: undefined, marginWidth: undefined });
+  });
+
+  it("is the reference of pane-layout's defaults, not a number of its own", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/store/reading-prefs.ts"), "utf8");
+    expect(source).toContain('from "@/components/reader/pane-layout"');
+    expect(source).not.toMatch(/XL_CAP_PX|TWO_XL_/);
   });
 });
 
-// The formula and the CSS must agree on the caps: page-container.tsx's class
-// strings carry the literals Tailwind scans, spread.ts exports the numbers
-// fitZoom uses. Pin them to each other so neither can drift alone.
+// The spread variant's caps and the CSS must agree: page-container.tsx's class
+// strings carry the literals Tailwind scans, spread.ts exports the numbers.
+// Pin them to each other so neither can drift alone. (P11-10: `fitZoom` no longer
+// reads these — the loading and error states' `spread` width still does; the test
+// is unchanged, its comment re-aimed.)
 describe("fit caps match page-container's class strings", () => {
   it("1072px at xl and 1184px at 2xl appear verbatim in the container's calc pair", async () => {
     const fs = await import("node:fs");

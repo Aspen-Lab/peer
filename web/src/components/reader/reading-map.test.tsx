@@ -32,6 +32,20 @@ const map: ReadingMap = {
 const render = (props: Partial<Parameters<typeof ReadingMapView>[0]> = {}) =>
   renderToStaticMarkup(createElement(ReadingMapView, { map, ...props }));
 
+// P11-23 rule 4 (BACKLOG-104; ruling §1h.126), RE-AIMED: the summary line is drawn in parts (`SummaryLine`: each separator in a slot of its own, a clipped box),
+// so its words are no longer one contiguous string of the markup. What a reader or a copy gets is the same string (`MAP.summary`'s own): these read it as the
+// text of its box, the tags removed, and where a test looked the string up in the markup it looks the box up (`data-map-summary`).
+const summaryText = (html: string): string => {
+  const at = html.indexOf("data-map-summary");
+  return at < 0 ? "" : html.slice(html.indexOf(">", at) + 1, html.indexOf("<button", at)).replace(/<[^>]*>/g, "");
+};
+/** The whole markup as text: the tags removed. */
+const textOf = (html: string): string => html.replace(/<[^>]*>/g, "");
+// P11-35 (re-aimed, §1c): the fact line is drawn in parts (`MentionsLine`: each term's last word and its count in one span, so that they never part at a line's end), so
+// its words are no longer one contiguous string of the markup. The text a reader or a copy gets is the same, plain spaces and all: these read it as the line's text,
+// the tags removed, and compare it in full.
+const factText = (row: string): string | undefined => /<p class="annotation pl-5 [^"]*">([\s\S]*?)<\/p>/.exec(row)?.[1].replace(/<[^>]*>/g, "");
+
 describe("ReadingMapView", () => {
   it("heads the table with the summary line", () => {
     const html = render();
@@ -41,8 +55,8 @@ describe("ReadingMapView", () => {
     expect(MAP.summary(1, 1)).toBe("1 section · about 1 min");
     expect(html).toContain(MAP.heading);
     // P7-14 (R5): the rendered line also carries the words the map's rows add up to (400 + 150 + 90).
-    expect(html).toContain(MAP.summary(3, 4, 640));
-    expect(html.indexOf(MAP.summary(3, 4, 640))).toBeLessThan(html.indexOf("1 Introduction"));
+    expect(summaryText(html)).toBe(MAP.summary(3, 4, 640));
+    expect(html.indexOf("data-map-summary")).toBeLessThan(html.indexOf("1 Introduction"));
   });
 
   // P7-14 (R5, the owner's review): the contents rail and the count line under "The paper" are gone,
@@ -53,9 +67,9 @@ describe("ReadingMapView", () => {
     expect(MAP.summary(2, 3, 1000)).toBe("2 sections · 1,000 words · about 3 min");
 
     const html = render({ source: "PDF" });
-    expect(html).toContain("Read from PDF · 3 sections · 640 words · about 4 min");
-    expect(html.split("Read from").length - 1).toBe(1);
-    expect(render()).not.toContain("Read from");
+    expect(summaryText(html)).toBe("Read from PDF · 3 sections · 640 words · about 4 min");
+    expect(textOf(html).split("Read from").length - 1).toBe(1);
+    expect(textOf(render())).not.toContain("Read from");
   });
 
   it("is handed the reading's source label by the page, so 'Read from …' is said", async () => {
@@ -141,10 +155,12 @@ describe("ReadingMapView", () => {
       expect(classes).toContain("shrink-0");
       // Still the phone-only control it was.
       expect(classes).toContain("sm:hidden");
-      // The summary sentence beside it is not the nowrap one: it is the part that wraps.
-      const summary = /<span([^>]*)>(?:Read from [^<]*|\d+ sections?[^<]*)<\/span><button/.exec(html);
-      expect(summary, "the summary span").not.toBeNull();
+      // The summary sentence beside it is not the nowrap one: it is the part that wraps (its box and its lines; only a separator's slot and the
+      // first word after it, which must not part, are nowrap pieces).
+      const summary = /<span data-map-summary=""([^>]*)><span([^>]*)>/.exec(html);
+      expect(summary, "the summary box and its lines").not.toBeNull();
       expect(summary?.[1] ?? "").not.toContain("whitespace-nowrap");
+      expect(summary?.[2] ?? "").not.toContain("whitespace-nowrap");
     }
   });
 
@@ -207,9 +223,9 @@ describe("ReadingMapView — the route (P1-05)", () => {
   it("states the facts beside a tinted row — tier and counts, as the reader typed the terms — and 'not mentioned' for the rest", () => {
     const html = render({ route });
 
-    expect(rowOf(html, "1 Introduction")).toContain(`${ROUTE.tiers.strong} · mentions LCO ×3, H1-3 ×3, creep ×2`);
+    expect(factText(rowOf(html, "1 Introduction"))).toBe(`${ROUTE.tiers.strong} · mentions LCO ×3, H1-3 ×3, creep ×2`);
     // P10-06 (re-aimed, §1c): the faintest tier states no tier word, only the counts.
-    expect(rowOf(html, "2.1 Samples")).toContain(">mentions samples ×1<");
+    expect(factText(rowOf(html, "2.1 Samples"))).toBe("mentions samples ×1");
     expect(rowOf(html, "2.1 Samples")).not.toContain(`${ROUTE.tiers.faint} ·`);
     expect(rowOf(html, "Problem Statement")).toContain(`>${ROUTE.tiers.none}<`);
   });
@@ -300,7 +316,7 @@ describe("ReadingMapView — the background mark's fact line (P2-04b)", () => {
   it("keeps 'background · mentions …' when the mark has hits, and never shows the context line then", () => {
     const html = render({ route: backgroundRoute });
 
-    expect(rowOf(html, "2.1 Samples")).toContain(`${ROUTE.tiers.background} · mentions samples ×2`);
+    expect(factText(rowOf(html, "2.1 Samples"))).toBe(`${ROUTE.tiers.background} · mentions samples ×2`);
     expect(rowOf(html, "2.1 Samples")).not.toContain(ROUTE.backgroundWhy);
   });
 
@@ -337,6 +353,10 @@ const metaText = (html: string, heading: string) => metaMarkup(html, heading).re
 /** The parts, in order: [name, text]. */
 const metaParts = (html: string, heading: string) =>
   [...metaMarkup(html, heading).matchAll(/<span data-meta-part="([a-z]+)"[^>]*>([^<]*)<\/span>/g)].map((m) => [m[1], m[2]] as const);
+
+/** The separator slots, in order: the text of each `data-meta-slot` span. */
+const metaSlots = (html: string, heading: string) =>
+  [...metaMarkup(html, heading).matchAll(/<span data-meta-slot="" class="[^"]*">([^<]*)<\/span>/g)].map((m) => m[1]);
 
 const wordsMap: ReadingMap = {
   sections: [
@@ -382,7 +402,7 @@ describe("ReadingMapView — each row says its words (P9-51, F08)", () => {
       words: 137 * (i + 1) + (i === 5 ? 1 : 0), minutes: Math.max(1, Math.ceil((137 * (i + 1)) / 230)), paragraphs: [],
     }));
     const html = renderToStaticMarkup(createElement(ReadingMapView, { map: { sections: rows, totalMinutes: 40 }, source: "PDF" }));
-    const stated = Number(/([\d,]+) words · about/.exec(html)?.[1].replace(/,/g, ""));
+    const stated = Number(/([\d,]+) words · about/.exec(summaryText(html))?.[1].replace(/,/g, ""));
     const said = rows.map((row) => Number(/([\d,]+) words?/.exec(metaText(html, row.heading))?.[1].replace(/,/g, "")));
 
     expect(said).toHaveLength(12);
@@ -402,34 +422,43 @@ describe("ReadingMapView — each row says its words (P9-51, F08)", () => {
     }
   });
 
-  it("puts each part in a span of its own, with the separator as the first word of every part but the first", () => {
+  // P11-23 rule 2 (A P11-21 X-A2; ruling §1h.120), RE-AIMED from "puts each part in a span of its own, with the separator as the first word of every
+  // part but the first" and "keeps each part whole ... joins two parts with one plain space that stands outside both" (P9-51, which drew each
+  // separator with the part AFTER it: a break left "· 11 min" at the start of a line). The separator belongs to the part BEFORE it now, in a slot of
+  // its own beside the part, and the two runs ("setup · p.1", "1,234 words · 6 min") are the only places a line may break. What a reader or a copy gets
+  // is unchanged (the test above), and so is every part's own span, its text and its `whitespace-nowrap`.
+  it("puts each part in a span of its own, none of them opening with a separator, the separator after it in a slot of its own (the last part's slot empty)", () => {
     const html = renderWords();
 
-    expect(metaParts(html, "1 Introduction")).toEqual([["role", "setup"], ["page", "· p.1"], ["words", "· 1,234 words"], ["minutes", "· 6 min"]]);
-    expect(metaParts(html, "Problem Statement")).toEqual([["words", "90 words"], ["minutes", "· 1 min"]]);
+    expect(metaParts(html, "1 Introduction")).toEqual([["role", "setup"], ["page", "p.1"], ["words", "1,234 words"], ["minutes", "6 min"]]);
+    expect(metaParts(html, "Problem Statement")).toEqual([["words", "90 words"], ["minutes", "1 min"]]);
     expect(metaParts(html, "Appendix")).toEqual([["words", "0 words"]]);
     for (const row of wordsMap.sections) {
       const parts = metaParts(html, row.heading);
       expect(parts.length, row.heading).toBeGreaterThanOrEqual(1);
-      parts.forEach(([, text], index) => {
-        // No part ends on a separator or a space; none but the first starts with anything but "· ".
-        expect(text, `${row.heading}: ${text}`).not.toMatch(/[·\s]$/);
-        if (index > 0) expect(text.startsWith("· ")).toBe(true);
-        else expect(text.startsWith("·")).toBe(false);
-      });
+      for (const [, text] of parts) {
+        // No part starts or ends with a separator or a space: the separator is not part of a part.
+        expect(text, `${row.heading}: ${text}`).not.toMatch(/^[·\s]|[·\s]$/);
+      }
+      // The slots, in order: " ·" after every part but the last, which has an empty one (it only holds the room the box clips).
+      expect(metaSlots(html, row.heading), row.heading).toEqual([...parts.slice(1).map(() => " ·"), ""]);
     }
   });
 
-  it("keeps each part whole (whitespace-nowrap) and joins two parts with one plain space that stands outside both", () => {
+  it("keeps each part whole (whitespace-nowrap) and breaks a row only between its two runs: the plain space between them, none inside one", () => {
     const html = renderWords();
     const markup = metaMarkup(html, "1 Introduction");
     const classes = [...markup.matchAll(/<span data-meta-part="[a-z]+"[^>]*class="([^"]*)"/g)].map((m) => m[1].split(/\s+/));
 
     expect(classes).toHaveLength(4);
     for (const each of classes) expect(each).toContain("whitespace-nowrap");
-    // The only break the row has between parts is the plain space between two spans.
-    expect(markup.split("</span> <span data-meta-part=")).toHaveLength(4);
-    expect(markup.replace(/<span data-meta-part="[a-z]+"[^>]*>[^<]*<\/span>/g, "|").replace(/<[^>]*>/g, "")).toBe("| | | |");
+    // Two runs, each whole: where the section is, and how long it is. The one plain space between them is the row's only break.
+    const runs = [...markup.matchAll(/<span data-meta-run="([a-z]+)" class="([^"]*)">/g)].map((m) => [m[1], m[2].split(/\s+/)] as const);
+    expect(runs.map(([name]) => name)).toEqual(["place", "size"]);
+    for (const [, cls] of runs) expect(cls).toContain("whitespace-nowrap");
+    expect(markup).toContain('</span></span> <span data-meta-run="size"');
+    // A row with only the words and minutes has the one run, and so no break at all.
+    expect([...metaMarkup(html, "Problem Statement").matchAll(/data-meta-run="([a-z]+)"/g)].map((m) => m[1])).toEqual(["size"]);
   });
 
   // The copy: one function, the summary line's own number format (a thousands comma), "1 word" singular.
@@ -622,7 +651,7 @@ describe("ReadingMapView — the paper's hierarchy (P10-04, A10)", () => {
     const html = renderTree({ source: "PDF" });
     const leaves = 400 + 500 + 290 + 100 + 60 + 900 + 662;
 
-    expect(html).toContain(MAP.summary(9, 17, leaves, "PDF"));
+    expect(summaryText(html)).toBe(MAP.summary(9, 17, leaves, "PDF"));
     // The group rows' summed words are not in the line: 890 + 1,562 more would double count.
     expect(MAP.summary(9, 17, leaves, "PDF")).toContain("2,912 words");
   });

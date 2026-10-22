@@ -1,5 +1,32 @@
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { PANEL_STICKY_CLASS, PANEL_TAIL_CLASS, SPREAD_GRID, TWO_XL_PANEL_PX, XL_CAP_PX } from "./spread";
+import { DOCK_MIN_VIEWPORT_PX } from "./explain-dock";
+import { SHELL_MIN_VIEWPORT_PX } from "./pane-layout";
+import * as spread from "./spread";
+import { SPREAD_GRID, SPREAD_QUERY, TWO_XL_PANEL_PX, XL_CAP_PX } from "./spread";
+
+// P11-10 rule 3 (B P11-01 §2.2, §4 C2; ruling §1h.113 (a)): `useSpread` — the one switch between the one-column page and the spread — now
+// asks for the three-pane shell's width, 64rem = 1024 css px (it asked for 80rem, the old two-column spread's xl). Everything below this
+// describe is the old spread's own arithmetic. It is KEPT, not rewritten, because the constants it pins still stand: `SPREAD_GRID` and
+// the caps are what the loading mat and the error states (`loading.tsx`, `page.tsx`'s `width="spread"` sites) still lay out with. The
+// `PANEL_*` / `COLUMN_CLASS` constants are retired (P11-16 follow-up, ruling §1h.115 item 5), and so is the describe that pinned
+// `PANEL_TAIL_CLASS`; the file's last describe pins their absence. Re-aimed: nothing; the file's new first describe is the new rule.
+describe("SPREAD_QUERY — the shell's width (P11-10)", () => {
+  it("is (min-width: 64rem)", () => {
+    expect(SPREAD_QUERY).toBe("(min-width: 64rem)");
+  });
+
+  it("is 1024 css px at the browser's 16px root: the shell's minimum and the explain dock's, one threshold", () => {
+    const rem = Number(/min-width:\s*([\d.]+)rem/.exec(SPREAD_QUERY)?.[1]);
+    expect(rem * 16).toBe(SHELL_MIN_VIEWPORT_PX);
+    expect(rem * 16).toBe(DOCK_MIN_VIEWPORT_PX);
+  });
+
+  it("is no longer the xl breakpoint", () => {
+    expect(SPREAD_QUERY).not.toContain("80rem");
+  });
+});
 
 // P6-03 (A P6-02 S1, mutation M8): the spread's panel tracks were pinned by no
 // test. Widening the xl panel from 320 to 360 left every test green, although
@@ -60,17 +87,56 @@ describe("SPREAD_GRID's tracks against the caps spread.ts documents", () => {
   });
 });
 
-// P10-21 rule 3 (A P10-14 §8 item 7): at the very foot of the page, at 1280 x 720, the sticky part stops where its
-// holder ends, 64 px above the window's bottom, and its top (43.9 px) stood 4 px under the masthead's bottom (48 px).
-// The part's bottom margin is -12 px, so it ends 12 px below the holder: its top is 55.9 px there. The layout is not
-// computed in this runtime; the page's pixels are measured in docs/reading-helper-abc/P10-21-C-*.md.
-describe("PANEL_TAIL_CLASS keeps the strip under the masthead at the foot of the page", () => {
-  it("the sticky part has a negative bottom margin, so the holder's end never lifts its top into the masthead", () => {
-    expect(PANEL_TAIL_CLASS.split(/\s+/)).toContain("xl:-mb-3");
+// Retired (P11-16 follow-up, ruling §1h.115 item 5): the old spread's panel, its sticky part, its tail and its reading column. P10-21's
+// "PANEL_TAIL_CLASS keeps the strip under the masthead at the foot of the page" (its two cases, "the sticky part has a negative bottom
+// margin…" and "still pins under the masthead and drops the strip's own top gap…") pinned a class nothing imported once the blocks moved
+// into the shell's panes (P11-16): the strip stands in the left pane's fixed zone, and where that pane stands under the masthead is the
+// shell's own rule (`.reader-left` in globals.css, `reader-shell.tsx`), not this class. They are retired with the constant. What stands in
+// their place: the four names are gone, from this module and from every file under src/, and `SPREAD_GRID` is kept exactly while the
+// loading mat and the error states still lay out with it.
+const RETIRED = ["PANEL_CLASS", "PANEL_STICKY_CLASS", "PANEL_TAIL_CLASS", "COLUMN_CLASS"] as const;
+
+function sourceFiles(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) return sourceFiles(path);
+    return /\.(ts|tsx)$/.test(name) ? [path] : [];
+  });
+}
+
+describe("the old spread's panel and column constants are retired (ruling §1h.115 item 5)", () => {
+  it("spread.ts exports none of PANEL_CLASS, PANEL_STICKY_CLASS, PANEL_TAIL_CLASS, COLUMN_CLASS", () => {
+    const exported = Object.keys(spread);
+    for (const name of RETIRED) expect(exported).not.toContain(name);
+    const source = readFileSync(resolve(process.cwd(), "src/components/reader/spread.ts"), "utf8");
+    for (const name of RETIRED) expect(source).not.toMatch(new RegExp(`export\\s+const\\s+${name}\\b`));
   });
 
-  it("still pins under the masthead and drops the strip's own top gap, as P10-04b built it", () => {
-    expect(PANEL_TAIL_CLASS.split(/\s+/)).toContain(PANEL_STICKY_CLASS);
-    expect(PANEL_TAIL_CLASS).toContain("xl:[&>:first-child]:mt-0");
+  it("no file under src/ imports or defines them (this test names them only to forbid them)", () => {
+    const root = resolve(process.cwd(), "src");
+    const self = resolve(process.cwd(), "src/components/reader/spread.test.ts");
+    const pattern = new RegExp(`\\b(${RETIRED.join("|")})\\b`);
+    // Another test names them to forbid them too (`reader-layout.order.test.tsx`, on the layout's source): a test that only forbids a
+    // name is not a user of it, so tests are read for imports and definitions, every other file for any mention outside a comment.
+    const users = sourceFiles(root)
+      .filter((file) => file !== self)
+      .filter((file) => {
+        const text = readFileSync(file, "utf8");
+        if (/\.test\.tsx?$/.test(file)) {
+          return RETIRED.some((name) => new RegExp(`import[^;]*\\b${name}\\b[^;]*from|const\\s+${name}\\b`).test(text));
+        }
+        return pattern.test(text.replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, ""));
+      })
+      .map((file) => relative(root, file));
+    expect(users).toEqual([]);
+  });
+
+  it("SPREAD_GRID stays, because the loading mat and the error states still lay out with it", () => {
+    // When neither uses it any more it is dead too, and this test is the reminder to retire it with them.
+    const loading = readFileSync(resolve(process.cwd(), "src/app/papers/[id]/loading.tsx"), "utf8");
+    const page = readFileSync(resolve(process.cwd(), "src/app/papers/[id]/page.tsx"), "utf8");
+    expect(loading).toMatch(/className=\{SPREAD_GRID\}/);
+    expect(page).toMatch(/className=\{SPREAD_GRID\}/);
+    expect(typeof spread.SPREAD_GRID).toBe("string");
   });
 });
