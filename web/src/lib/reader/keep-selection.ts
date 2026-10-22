@@ -47,6 +47,23 @@
 // (Tried first: the box's `bottom` itself moved above the legend. It put the search at the row above the legend's top edge and every release below the window, and the last pixel
 // over the margin, ended one line lower than today — measured, 1280 x 720: 599 to 668 characters.)
 //
+// P11-66 (ruling §1h.180): the same rule for a TRIPLE click and a drag. Round 7's Theme B walk (`z21`, five windows, 40 drags each, paragraphs of 1,100 to 1,700 characters):
+// a triple click on a paragraph, then a drag released beside the column or beyond its visible box, ended the selection in the left pane in 12 of 100 (1,649 characters at 1440;
+// 4 over a pane control; no button offered) and, where it stayed in the paper, left the triple-clicked paragraph out in 56 more (its first lines, or all but its first line,
+// 77 to 1,362 characters of a paragraph of 1,009 to 1,413). A single press's drag, and a double click's, were clean in 100 of 100. The cause, by execution on the real page
+// (`Selection.extend` logged): the correction ran, once, at the first move, and put the end at the character the column's edge gives at the pointer's height. A triple
+// click's selection starts at the paragraph's start, so on its first line that character IS the start: the selection collapsed (0 characters); the browser's next move then took
+// the collapsed selection's place for its base, in the pane's own block, and every later correction found a selection that "began outside the column" and returned. On a later
+// line the end went to that line's start — a character is not what the browser's paragraph granularity gives. The browser's Chrome keeps that granularity for the whole drag, so
+// the end has to be a paragraph's too. A triple click is a third press within `MULTI_CLICK_MS` and `MULTI_CLICK_PX` of the second (pointer events carry no count) that leaves
+// a selection standing at its first move; that selection is the base (the paragraph, from its start to its end, as the browser has it), read before the browser's own move
+// of it. The correction (`endParagraphsInColumn`) finds the paragraph at the column's nearest visible point with the browser's own `modify(…, "paragraphboundary")` and puts
+// the selection at the base's start through that paragraph's end (a later paragraph), or at that paragraph's start from the base's end (an earlier one); the base is never left
+// out, and it does not depend on where the browser has taken the selection since. Once a correction has been made the selection is ours for the rest of the press (setting
+// a selection by hand ends the browser's paragraph granularity: measured, a drag taken over the pane and back over the column ended at the pointer's character, 112 to 122
+// characters of a paragraph), so a pointer that comes back over the column is followed too, at its own place. A single press, a double click, a plain triple click, a pointer over the column, touch and
+// pen, and a Shift+press are as before. (A third press has to be the third: three presses a second apart, or 10 px apart, are single presses.)
+//
 // Everything that decides something is a pure function, or a small controller over an `env`, so it runs in the Node-only test suite; only `domEnv` and the hook
 // touch the real page.
 
@@ -68,6 +85,10 @@ export const LEGEND_EDGE_EPSILON_PX = 1e-6;
 /** How far (px) and how many times the caret is looked for further in when the nearest point is a fixed overlay's (the legend, the masthead). */
 export const CARET_STEP_PX = 6;
 export const CARET_TRIES = 12;
+
+/** A third press within this long (ms) and this far (px) of the second is a triple click: pointer events carry no click count, so the keeper counts (P11-66). */
+export const MULTI_CLICK_MS = 1000;
+export const MULTI_CLICK_PX = 10;
 
 /**
  * The visible part of the column, vertically: the first line under the masthead's foot, and the window's last row (null where it is not known); `legendTop` is the foot
@@ -98,6 +119,12 @@ export type SelectionLike = Pick<Selection, "rangeCount" | "isCollapsed" | "anch
 export interface Held {
   node: Node;
   offset: number;
+}
+
+/** A selection's two ends in document order: what a triple click selected (a paragraph, from its start to the next one's, as the browser has it) when the drag began. */
+export interface Span {
+  start: Held;
+  end: Held;
 }
 
 /** What a text field is: where a caret is the field's own and not a selection of the paper. */
@@ -163,6 +190,83 @@ export function endSelectionInColumn(
   return false;
 }
 
+/** The selection's members `endParagraphsInColumn` moves: the ones above, and the browser's own `modify` (the paragraph's boundaries). */
+export type ParagraphSelectionLike = SelectionLike & Pick<Selection, "modify">;
+
+/**
+ * Where `a` stands against `b` in the document: negative before, zero the same, positive after. Positions in one node by offset; in two, by the nodes' order, and where one
+ * holds the other, by the child that holds it.
+ */
+export function comparePositions(a: Held, b: Held): number {
+  if (a.node === b.node) return a.offset - b.offset;
+  const rel = a.node.compareDocumentPosition(b.node);
+  const childAt = (parent: Node, inside: Node): number => {
+    let child = inside;
+    while (child.parentNode && child.parentNode !== parent) child = child.parentNode;
+    return Array.prototype.indexOf.call(parent.childNodes, child) as number;
+  };
+  // 16: b lies inside a; 8: a lies inside b; 4: b follows a; else b precedes a.
+  if (rel & 16) return childAt(a.node, b.node) < a.offset ? 1 : -1;
+  if (rel & 8) return childAt(b.node, a.node) < b.offset ? -1 : 1;
+  return rel & 4 ? -1 : 1;
+}
+
+/**
+ * P11-66: put the end of a triple-click selection at the paragraph the column's nearest visible point to (x, y) lies in. `base` is the paragraph that was triple-clicked, read
+ * before the browser moved it. False, and nothing touched, with no column, a base that is no longer in it, a pointer over the column's visible box, or no text there.
+ *
+ * The nearest point and the rows tried are `endSelectionInColumn`'s. `engaged` is set once a correction has been made for this press: the selection is then ours — setting it
+ * by hand ends the browser's paragraph granularity for the rest of the drag (measured: a drag taken over the pane and back over the column ended at the pointer's character, 112
+ * to 122 characters of a paragraph) — so a pointer back over the column is followed too, at its own place. The paragraph under the point is found with the browser's own boundaries, not read off the DOM: the caret
+ * is put there, moved back to the paragraph's start, then extended to its end. The selection is then set whole — the base's start through that paragraph's end (or the base's end,
+ * if that is later: the same paragraph), or, for a paragraph wholly before the base, its start through the base's end — whatever the browser has done with it since the press.
+ */
+export function endParagraphsInColumn(
+  column: ColumnLike | null,
+  x: number,
+  y: number,
+  visible: Visible,
+  base: Span,
+  doc: CaretSource = document,
+  selection: ParagraphSelectionLike | null = typeof window === "undefined" ? null : window.getSelection(),
+  order: (a: Held, b: Held) => number = comparePositions,
+  engaged = false,
+): boolean {
+  if (!column || !selection || !column.contains(base.start.node)) return false;
+  const box = column.getBoundingClientRect();
+  const bottom = visible.bottom ?? Number.POSITIVE_INFINITY;
+  const beside = x < box.left || x > box.right;
+  const beyond = y < visible.top || y > bottom || (typeof visible.legendTop === "number" && y >= visible.legendTop - LEGEND_EDGE_EPSILON_PX);
+  if (!beside && !beyond && !engaged) return false;
+  const px = x > box.right ? box.right - 1 : x < box.left ? box.left + 1 : x;
+  const py = Math.min(Math.max(y, visible.top), bottom);
+  const inward = Number.isFinite(bottom) && py > (visible.top + bottom) / 2 ? -1 : 1;
+  let touched = false;
+  for (let attempt = 0; attempt < CARET_TRIES; attempt++) {
+    const spot = caretAt(doc, px, py + inward * attempt * CARET_STEP_PX);
+    if (!spot || !column.contains(spot.node)) continue;
+    touched = true;
+    selection.collapse(spot.node, spot.offset);
+    selection.modify("move", "backward", "paragraphboundary");
+    const first = selection.focusNode ? { node: selection.focusNode, offset: selection.focusOffset } : null;
+    selection.modify("extend", "forward", "paragraphboundary");
+    const last = selection.focusNode ? { node: selection.focusNode, offset: selection.focusOffset } : null;
+    if (!first || !last) continue;
+    const earlier = order(last, base.start) < 0;
+    const anchor = earlier ? base.end : base.start;
+    const focus = earlier ? first : order(last, base.end) > 0 ? last : base.end;
+    selection.collapse(anchor.node, anchor.offset);
+    selection.extend(focus.node, focus.offset);
+    return true;
+  }
+  // No paragraph of the column's could be read after the caret was moved: the base is put back, as the browser had it at the press.
+  if (touched) {
+    selection.collapse(base.start.node, base.start.offset);
+    selection.extend(base.end.node, base.end.offset);
+  }
+  return false;
+}
+
 /** The members of a pointer event the controller reads. */
 export interface PointerLike {
   pointerType: string;
@@ -174,6 +278,8 @@ export interface PointerLike {
   clientY: number;
   target: unknown;
   shiftKey?: boolean;
+  /** The event's time (ms): the keeper counts presses by it (P11-66). Absent: the press counts as a single one. */
+  timeStamp?: number;
 }
 
 /** What the controller needs from the page. */
@@ -186,6 +292,10 @@ export interface KeeperEnv {
   standing(): Held | null;
   /** Put the selection's end at the column's nearest visible point to (x, y); `press` is the anchor read at a Shift+press (P11-57). */
   endAt(x: number, y: number, press?: Held): void;
+  /** The paragraph a triple click selected, read before the browser moves it; null where the selection is not one of the column's (P11-66). Absent: triple clicks are not followed as such. */
+  paragraph?(): Span | null;
+  /** Put the end of a triple-click selection at the paragraph of the column's nearest visible point to (x, y), `base` kept whole (P11-66). */
+  endParagraphsAt?(x: number, y: number, base: Span): void;
   /** Run `run` at the next animation frame; the result is what `cancel` takes. */
   frame(run: () => void): unknown;
   cancel(handle: unknown): void;
@@ -203,12 +313,25 @@ export function selectionKeeper(env: KeeperEnv) {
   /** The anchor read at a Shift+press outside the column, while that press is held; null for a press that began in the text. */
   let held: Held | null = null;
   let waiting: unknown = null;
+  /** The last mouse press: when and where, and how many in a row (P11-66). */
+  let last: { time: number; x: number; y: number } | null = null;
+  let clicks = 0;
+  /** The held press is a triple click's (or a later click's) and is read at its first move or release; the paragraph it selected, once read. */
+  let triple = false;
+  let base: Span | null = null;
+  const takeBase = () => {
+    if (!triple) return;
+    triple = false;
+    base = env.paragraph ? env.paragraph() : null;
+  };
   const ask = (x: number, y: number) => {
     if (waiting !== null) env.cancel(waiting);
     const press = held;
+    const paragraphs = base;
     waiting = env.frame(() => {
       waiting = null;
       if (press) env.endAt(x, y, press);
+      else if (paragraphs && env.endParagraphsAt) env.endParagraphsAt(x, y, paragraphs);
       else env.endAt(x, y);
     });
   };
@@ -223,6 +346,17 @@ export function selectionKeeper(env: KeeperEnv) {
       const mouse = event.pointerType === "mouse" && event.button === 0 && event.isPrimary !== false;
       pressed = mouse && env.startsInText(event.target) ? event.pointerId : null;
       held = null;
+      base = null;
+      triple = false;
+      if (mouse && typeof event.timeStamp === "number") {
+        const again = last !== null && event.timeStamp >= last.time && event.timeStamp - last.time <= MULTI_CLICK_MS && Math.abs(event.clientX - last.x) <= MULTI_CLICK_PX && Math.abs(event.clientY - last.y) <= MULTI_CLICK_PX;
+        clicks = again ? clicks + 1 : 1;
+        last = { time: event.timeStamp, x: event.clientX, y: event.clientY };
+        triple = pressed !== null && clicks >= 3 && event.shiftKey !== true && typeof env.paragraph === "function";
+      } else {
+        clicks = 0;
+        last = null;
+      }
       if (pressed === null && mouse && event.shiftKey === true && env.startsOutside(event.target)) {
         const standing = env.standing();
         if (standing) {
@@ -234,18 +368,22 @@ export function selectionKeeper(env: KeeperEnv) {
     },
     move(event: PointerLike) {
       if (pressed === null || event.pointerId !== pressed) return;
+      takeBase();
       // The button came up where the page did not see it (outside the window): that was the release.
       if ((event.buttons & 1) === 0) release(event.clientX, event.clientY);
       else ask(event.clientX, event.clientY);
     },
     up(event: PointerLike) {
       if (pressed === null || event.pointerId !== pressed) return;
+      takeBase();
       release(event.clientX, event.clientY);
     },
     /** The pointer was cancelled (a drag of the text itself began; the system took the touch): nothing to correct. */
     cancel() {
       pressed = null;
       held = null;
+      triple = false;
+      base = null;
       if (waiting !== null) env.cancel(waiting);
       waiting = null;
     },
@@ -254,6 +392,8 @@ export function selectionKeeper(env: KeeperEnv) {
 
 /** The real page, for a column. Browser only. */
 export function domEnv(column: Element): KeeperEnv {
+  /** A correction has been made for the triple click that is held (P11-66): the selection is ours until it is released, over the column as beside it. */
+  let engaged = false;
   /**
    * The column's visible rows: below the masthead's foot, above the foot legend (P11-62: its top edge is the window's height less the legend's, as the page computes it —
    * `legendHeightPx` at the page's Fit zoom). The window's last row is still where the last visible line is looked for from, a pointer below the window's foot.
@@ -285,6 +425,24 @@ export function domEnv(column: Element): KeeperEnv {
       if (!selection || selection.rangeCount === 0 || !selection.anchorNode || !column.contains(selection.anchorNode)) return null;
       if (fieldHasFocus()) return null;
       return { node: selection.anchorNode, offset: selection.anchorOffset };
+    },
+    paragraph() {
+      engaged = false;
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0 || selection.isCollapsed || !selection.anchorNode || !selection.focusNode) return null;
+      if (fieldHasFocus()) return null;
+      const anchor = { node: selection.anchorNode, offset: selection.anchorOffset };
+      const focus = { node: selection.focusNode, offset: selection.focusOffset };
+      const forward = comparePositions(anchor, focus) <= 0;
+      const span = forward ? { start: anchor, end: focus } : { start: focus, end: anchor };
+      return column.contains(span.start.node) ? span : null;
+    },
+    endParagraphsAt(x, y, base) {
+      if (fieldHasFocus()) return;
+      const selection = window.getSelection();
+      // A browser with no `modify` has no paragraph to find: the end is put at the character, as for any press.
+      if (selection && typeof selection.modify === "function") engaged = endParagraphsInColumn(column, x, y, visible(), base, document, selection, undefined, engaged) || engaged;
+      else endSelectionInColumn(column, x, y, visible());
     },
     endAt(x, y, press) {
       if (!press) {

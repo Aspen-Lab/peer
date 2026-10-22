@@ -1,5 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { watchSelection } from "./keep-selection";
+import {
+  MULTI_CLICK_MS,
+  MULTI_CLICK_PX,
+  comparePositions,
+  domEnv,
+  endParagraphsInColumn,
+  selectionKeeper,
+  watchSelection,
+  type Held,
+  type KeeperEnv,
+  type Span,
+  type Visible,
+} from "./keep-selection";
 
 // P11-66 (ruling §1h.180; round 7's Theme B walk, item 2 and (g), matrix `z21`): a TRIPLE click on a paragraph followed by a drag released beside the column (over the left
 // pane's text or a pane control, the margin, a separator) or beyond its visible box (above the masthead, below the window, over the foot legend) ended the selection in the
@@ -303,6 +315,46 @@ describe("what a triple click's drag does not change", () => {
     expect(calls).toEqual([]);
   });
 
+  it("once the pointer has been beside the column, a pointer back over it is followed too (setting the selection by hand ends the browser's paragraph granularity): the paragraph at its place", () => {
+    click(3);
+    for (const [x, y] of [[330, 300], [60, 330]]) {
+      handlers.pointermove(pointer({ clientX: x, clientY: y }));
+      browserFollows(x, y);
+      runFrames();
+    }
+    expect(startsAt(1)).toBe(true);
+    // the pointer comes back over the column, onto the next paragraph: the browser's own move puts the end at a character
+    handlers.pointermove(pointer({ clientX: 700, clientY: 450 }));
+    browserFollows(700, 450);
+    runFrames();
+    expect(startsAt(1)).toBe(true);
+    expect(endsIn(2)).toBe(true);
+    // and onto the paragraph itself again, and onto the one before it
+    handlers.pointermove(pointer({ clientX: 700, clientY: 330 }));
+    browserFollows(700, 330);
+    runFrames();
+    expect(covers(1)).toBe(true);
+    expect(startsAt(1)).toBe(true);
+    handlers.pointermove(pointer({ clientX: 700, clientY: 120 }));
+    browserFollows(700, 120);
+    handlers.pointerup(pointer({ buttons: 0, clientX: 700, clientY: 120 }));
+    runFrames();
+    expect(startsAt(0)).toBe(true);
+    expect(covers(1)).toBe(true);
+  });
+
+  it("the next triple click starts clean: a drag that never leaves the column is the browser's, whatever the last one did", () => {
+    click(3);
+    dragTo(60, 330);
+    handlers.pointerup(pointer({ buttons: 0, clientX: 60, clientY: 330 }));
+    fresh();
+    click(3);
+    calls.length = 0;
+    dragTo(700, 450);
+    dragTo(700, 120);
+    expect(calls).toEqual([]);
+  });
+
   it("a plain triple click, released where it went down: nothing is touched", () => {
     click(3);
     calls.length = 0;
@@ -370,5 +422,347 @@ describe("what a triple click's drag does not change", () => {
       dragTo(60, 330, { target });
       expect(calls).toEqual([]);
     }
+  });
+});
+
+// ── The parts, one at a time: the order of two positions, the correction, the controller's count of presses, the page's two reads ──
+
+const hold = (n: Spot, offset: number): Held => ({ node: n as unknown as Node, offset });
+const SPAN: Span = { start: hold(PARAGRAPH[1], 0), end: hold(PARAGRAPH[2], 0) };
+const VISIBLE: Visible = { top: 49, bottom: 719, legendTop: 692 };
+const column = () => ({
+  getBoundingClientRect: () => ({ left: COLUMN.left, right: COLUMN.right }),
+  contains: (n: unknown) => (n as Spot | null)?.inColumn === true,
+});
+const asOrder = (a: Held, b: Held) => (a.node === b.node ? a.offset - b.offset : (a.node as unknown as Spot).rank - (b.node as unknown as Spot).rank);
+
+describe("comparePositions — where one position stands against another", () => {
+  it("in one node by offset; in two by the nodes' order in the document", () => {
+    const a = hold(PARAGRAPH[0], 40);
+    expect(comparePositions(a, hold(PARAGRAPH[0], 40))).toBe(0);
+    expect(comparePositions(a, hold(PARAGRAPH[0], 41))).toBeLessThan(0);
+    expect(comparePositions(hold(PARAGRAPH[0], 41), a)).toBeGreaterThan(0);
+    expect(comparePositions(hold(PARAGRAPH[0], 1000), hold(PARAGRAPH[1], 0))).toBeLessThan(0);
+    expect(comparePositions(hold(PARAGRAPH[2], 0), hold(PARAGRAPH[1], 1400))).toBeGreaterThan(0);
+  });
+
+  it("where one node holds the other: by the child that holds it (a position before a child is before everything in it)", () => {
+    const leaf = { parentNode: null as unknown, childNodes: [] as unknown[], compareDocumentPosition: () => 0 };
+    const other = { parentNode: null as unknown, childNodes: [] as unknown[], compareDocumentPosition: () => 0 };
+    const box = { parentNode: null as unknown, childNodes: [other, leaf] as unknown[], compareDocumentPosition: () => 0 };
+    leaf.parentNode = box;
+    other.parentNode = box;
+    // box.compareDocumentPosition(leaf): the leaf is contained by the box (16 + 4); leaf.compareDocumentPosition(box): the box contains the leaf (8 + 2)
+    box.compareDocumentPosition = () => 20;
+    leaf.compareDocumentPosition = () => 10;
+    const at = (n: unknown, offset: number) => ({ node: n as Node, offset });
+    expect(comparePositions(at(box, 1), at(leaf, 3))).toBeLessThan(0); // before the leaf's child, so before the leaf's text
+    expect(comparePositions(at(box, 2), at(leaf, 3))).toBeGreaterThan(0); // after it
+    expect(comparePositions(at(leaf, 3), at(box, 1))).toBeGreaterThan(0);
+    expect(comparePositions(at(leaf, 3), at(box, 2))).toBeLessThan(0);
+  });
+});
+
+describe("endParagraphsInColumn — the paragraph at the column's nearest visible point, the base kept whole", () => {
+  const run = (x: number, y: number, over: { base?: Span; sel?: Selection; visible?: Visible; doc?: unknown } = {}) => {
+    const sel = over.sel ?? new Selection();
+    const result = endParagraphsInColumn(column(), x, y, over.visible ?? VISIBLE, over.base ?? SPAN, (over.doc ?? { caretPositionFromPoint: caret }) as never, sel as never, asOrder);
+    return { result, sel };
+  };
+
+  it("a pointer over the column's visible box, or no column, or a base that is no longer in the column: false, nothing touched", () => {
+    const sel = new Selection();
+    sel.anchor = { node: PANE, offset: 3 };
+    sel.focus = { node: PANE, offset: 9 };
+    expect(run(600, 300, { sel }).result).toBe(false);
+    expect(run(COLUMN.left, 49, { sel }).result).toBe(false);
+    expect(run(COLUMN.right, 691, { sel }).result).toBe(false);
+    expect(endParagraphsInColumn(null, 60, 300, VISIBLE, SPAN, { caretPositionFromPoint: caret } as never, sel as never, asOrder)).toBe(false);
+    expect(run(60, 300, { sel, base: { start: hold(PANE, 0), end: hold(PANE, 9) } }).result).toBe(false);
+    expect(run(60, 300, { sel }).result).toBe(true);
+    expect(sel.anchor).not.toEqual({ node: PANE, offset: 3 });
+  });
+
+  it("the selection is set whole from the base, whatever the browser has done with it: its anchor in the pane, collapsed, cleared", () => {
+    for (const set of [
+      (sel: Selection) => {
+        sel.anchor = { node: PANE, offset: 0 };
+        sel.focus = { node: PANE, offset: 15 };
+      },
+      (sel: Selection) => {
+        sel.anchor = sel.focus = { node: PARAGRAPH[1], offset: 0 };
+      },
+      (sel: Selection) => {
+        sel.anchor = sel.focus = null;
+      },
+    ]) {
+      const sel = new Selection();
+      set(sel);
+      expect(run(60, 300, { sel }).result).toBe(true);
+      expect(sel.anchor).toEqual(SPAN.start);
+      expect(sel.focus).toEqual(SPAN.end);
+    }
+  });
+
+  it("a later paragraph: the base's start through its end; the same paragraph: the base as it was (its end is the next paragraph's start, which is later than the paragraph's text)", () => {
+    const later = run(60, 450);
+    expect(later.sel.anchor).toEqual(SPAN.start);
+    expect(later.sel.focus).toEqual({ node: PARAGRAPH[2], offset: LENGTH[2] });
+    const same = run(60, 300);
+    expect(same.sel.anchor).toEqual(SPAN.start);
+    expect(same.sel.focus).toEqual(SPAN.end);
+  });
+
+  it("an earlier paragraph: its start, from the base's end", () => {
+    const { sel } = run(COLUMN.right + 40, 120);
+    expect(sel.anchor).toEqual(SPAN.end);
+    expect(sel.focus).toEqual({ node: PARAGRAPH[0], offset: 0 });
+  });
+
+  it("the rows the caret is looked for on are `endSelectionInColumn`'s: the pointer's height clamped to the visible box, the legend cleared by six pixels at a time", () => {
+    const asked: Array<[number, number]> = [];
+    const doc = { caretPositionFromPoint: (x: number, y: number) => (asked.push([x, y]), caret(x, y)) };
+    run(60, 300, { doc });
+    expect(asked).toEqual([[COLUMN.left + 1, 300]]);
+    asked.length = 0;
+    run(COLUMN.right + 60, 710, { doc });
+    expect(asked).toEqual([[COLUMN.right - 1, 710], [COLUMN.right - 1, 704], [COLUMN.right - 1, 698], [COLUMN.right - 1, 692]]);
+    asked.length = 0;
+    run(600, 5, { doc });
+    expect(asked).toEqual([[600, 49]]);
+  });
+
+  it("engaged (a correction has been made for this press): a pointer over the column is followed too, at its own place; not engaged: the browser's", () => {
+    const sel = new Selection();
+    sel.anchor = { node: PARAGRAPH[1], offset: 40 };
+    sel.focus = { node: PARAGRAPH[1], offset: 90 };
+    expect(endParagraphsInColumn(column(), 700, 450, VISIBLE, SPAN, { caretPositionFromPoint: caret } as never, sel as never, asOrder)).toBe(false);
+    expect(sel.anchor).toEqual({ node: PARAGRAPH[1], offset: 40 });
+    expect(endParagraphsInColumn(column(), 700, 450, VISIBLE, SPAN, { caretPositionFromPoint: caret } as never, sel as never, asOrder, true)).toBe(true);
+    expect(sel.anchor).toEqual(SPAN.start);
+    expect(sel.focus).toEqual({ node: PARAGRAPH[2], offset: LENGTH[2] });
+  });
+
+  it("no text of the column's under any row tried: false, and the selection is what it was", () => {
+    const sel = new Selection();
+    sel.anchor = { node: PANE, offset: 1 };
+    sel.focus = { node: PANE, offset: 5 };
+    const { result } = run(60, 300, { sel, doc: { caretPositionFromPoint: () => ({ offsetNode: PANE, offset: 0 }) } });
+    expect(result).toBe(false);
+    expect(sel.anchor).toEqual({ node: PANE, offset: 1 });
+    expect(sel.focus).toEqual({ node: PANE, offset: 5 });
+  });
+});
+
+describe("selectionKeeper — a triple click is a third press, and its paragraph is read before the browser moves it", () => {
+  let ends: Array<[string, number, number, unknown?]>;
+  let reads: number;
+  const frames2: Array<(() => void) | null> = [];
+  const env = (over: Partial<KeeperEnv> = {}): KeeperEnv => ({
+    startsInText: (target) => (target as Spot | null)?.inColumn === true,
+    startsOutside: () => false,
+    standing: () => null,
+    endAt: (x, y) => ends.push(["char", x, y]),
+    paragraph: () => (reads++, SPAN),
+    endParagraphsAt: (x, y, base) => ends.push(["paragraph", x, y, base]),
+    frame: (run) => frames2.push(run) - 1,
+    cancel: (handle) => {
+      frames2[handle as number] = null;
+    },
+    ...over,
+  });
+  const at = (over: Record<string, unknown> = {}) => ({ pointerType: "mouse", pointerId: 1, isPrimary: true, button: 0, buttons: 1, clientX: 600, clientY: 260, target: PARAGRAPH[1], timeStamp: 1000, ...over });
+  const run = () => frames2.splice(0).forEach((f) => f?.());
+  beforeEach(() => {
+    ends = [];
+    reads = 0;
+    frames2.length = 0;
+  });
+
+  const presses = (k: ReturnType<typeof selectionKeeper>, count: number, gap = 200, shift = (i: number) => ({ clientX: 600 + i, clientY: 260 })) => {
+    for (let i = 0; i < count; i++) {
+      k.down(at({ timeStamp: 1000 + i * gap, ...shift(i) }));
+      if (i < count - 1) k.up(at({ buttons: 0, timeStamp: 1010 + i * gap, ...shift(i) }));
+    }
+  };
+
+  it("the third press: the paragraph is read once, at the first move, and every correction after carries it", () => {
+    const k = selectionKeeper(env());
+    presses(k, 3);
+    expect(reads).toBe(0);
+    k.move(at({ clientX: 300, timeStamp: 1500 }));
+    k.move(at({ clientX: 100, timeStamp: 1520 }));
+    expect(reads).toBe(1);
+    run();
+    k.up(at({ buttons: 0, clientX: 100, timeStamp: 1600 }));
+    run();
+    expect(reads).toBe(1);
+    expect(ends).toEqual([["paragraph", 100, 260, SPAN], ["paragraph", 100, 260, SPAN]]);
+  });
+
+  it("a triple click released where it went down: the paragraph is read at the release; the correction asked for is the paragraph's (the page decides there is nothing to do over the column)", () => {
+    const k = selectionKeeper(env());
+    presses(k, 3);
+    k.up(at({ buttons: 0, timeStamp: 1450 }));
+    run();
+    expect(reads).toBe(1);
+    expect(ends).toEqual([["paragraph", 600, 260, SPAN]]);
+  });
+
+  it("a double click, one press, three presses a second apart or 10 px apart, and presses with no time: the character's correction, the paragraph never read", () => {
+    const cases: Array<[string, (k: ReturnType<typeof selectionKeeper>) => void]> = [
+      ["one press", (k) => presses(k, 1)],
+      ["a double click", (k) => presses(k, 2)],
+      ["slow", (k) => presses(k, 3, MULTI_CLICK_MS + 1)],
+      ["scattered", (k) => presses(k, 3, 200, (i) => ({ clientX: 600 + i * (MULTI_CLICK_PX + 1), clientY: 260 }))],
+      ["no time", (k) => {
+        for (let i = 0; i < 3; i++) {
+          k.down(at({ timeStamp: undefined }));
+          if (i < 2) k.up(at({ buttons: 0, timeStamp: undefined }));
+        }
+      }],
+    ];
+    for (const [name, make] of cases) {
+      ends = [];
+      reads = 0;
+      const k = selectionKeeper(env());
+      make(k);
+      k.move(at({ clientX: 100, timeStamp: 5000 }));
+      run();
+      k.up(at({ buttons: 0, clientX: 100, timeStamp: 5100 }));
+      run();
+      expect(reads, name).toBe(0);
+      expect(ends.every(([kind]) => kind === "char"), name).toBe(true);
+      expect(ends.length, name).toBeGreaterThan(0);
+    }
+  });
+
+  it("three presses exactly at the limits are a triple click (a second, 10 px); a fourth press is one too", () => {
+    const k = selectionKeeper(env());
+    presses(k, 3, MULTI_CLICK_MS, (i) => ({ clientX: 600 + i * MULTI_CLICK_PX, clientY: 260 + i * MULTI_CLICK_PX }));
+    k.move(at({ clientX: 100, timeStamp: 9000 }));
+    expect(reads).toBe(1);
+    reads = 0;
+    const k4 = selectionKeeper(env());
+    presses(k4, 4, 200, () => ({ clientX: 600, clientY: 260 }));
+    // the release of the third press reads it (a plain triple click), the fourth is read at its first move
+    expect(reads).toBe(1);
+    k4.move(at({ clientX: 100, timeStamp: 9000 }));
+    expect(reads).toBe(2);
+  });
+
+  it("a press that is not a mouse's, not the primary button, not in the text, or a Shift+press, is not a triple click, and a later press starts the count again", () => {
+    for (const over of [{ pointerType: "touch" }, { pointerType: "pen" }, { button: 2 }, { isPrimary: false }, { target: PANE }, { shiftKey: true }]) {
+      reads = 0;
+      const k = selectionKeeper(env());
+      for (let i = 0; i < 3; i++) k.down(at({ timeStamp: 1000 + i * 100, ...over }));
+      k.move(at({ clientX: 100, timeStamp: 1400, ...over }));
+      expect(reads, JSON.stringify(over)).toBe(0);
+    }
+    const k = selectionKeeper(env());
+    presses(k, 2);
+    k.down(at({ timeStamp: 1000 + MULTI_CLICK_MS + 1500 }));
+    k.move(at({ clientX: 100, timeStamp: 4000 }));
+    expect(reads).toBe(0);
+  });
+
+  it("a page that cannot read a paragraph (an env with no `paragraph`), or finds none (a collapsed selection): the character's correction", () => {
+    const plain = selectionKeeper(env({ paragraph: undefined, endParagraphsAt: undefined }));
+    presses(plain, 3);
+    plain.move(at({ clientX: 100, timeStamp: 1500 }));
+    run();
+    expect(ends).toEqual([["char", 100, 260]]);
+    ends = [];
+    const none = selectionKeeper(env({ paragraph: () => (reads++, null) }));
+    presses(none, 3);
+    none.move(at({ clientX: 100, timeStamp: 1500 }));
+    run();
+    expect(reads).toBe(1);
+    expect(ends).toEqual([["char", 100, 260]]);
+  });
+
+  it("a cancelled pointer ends the press and forgets the paragraph; the next press starts clean", () => {
+    const k = selectionKeeper(env());
+    presses(k, 3);
+    k.move(at({ clientX: 100, timeStamp: 1500 }));
+    k.cancel();
+    run();
+    expect(ends).toEqual([]);
+    k.down(at({ timeStamp: 8000 }));
+    k.move(at({ clientX: 100, timeStamp: 8100 }));
+    run();
+    expect(ends).toEqual([["char", 100, 260]]);
+  });
+});
+
+describe("domEnv — a triple click's paragraph and the correction through the page", () => {
+  const page = (sel: Selection, over: { modify?: boolean; active?: unknown } = {}) => {
+    const wrapped = sel as unknown as Record<string, unknown>;
+    if (over.modify === false) wrapped.modify = undefined;
+    vi.stubGlobal("window", { innerHeight: HEIGHT, getSelection: () => sel, getComputedStyle: () => ({ getPropertyValue: () => "" }) });
+    vi.stubGlobal("document", { activeElement: over.active ?? null, querySelector: () => null, caretPositionFromPoint: caret });
+    return domEnv(column() as never);
+  };
+
+  it("reads the standing selection as a span in document order, whichever way it was made", () => {
+    const sel = new Selection();
+    sel.anchor = { node: PARAGRAPH[1], offset: 0 };
+    sel.focus = { node: PARAGRAPH[2], offset: 0 };
+    expect(page(sel).paragraph?.()).toEqual({ start: hold(PARAGRAPH[1], 0), end: hold(PARAGRAPH[2], 0) });
+    sel.anchor = { node: PARAGRAPH[2], offset: 0 };
+    sel.focus = { node: PARAGRAPH[0], offset: 30 };
+    expect(page(sel).paragraph?.()).toEqual({ start: hold(PARAGRAPH[0], 30), end: hold(PARAGRAPH[2], 0) });
+  });
+
+  it("none for no selection, a collapsed one, one that began outside the column, or a text field's own", () => {
+    const sel = new Selection();
+    expect(page(sel).paragraph?.()).toBeNull();
+    sel.anchor = sel.focus = { node: PARAGRAPH[1], offset: 4 };
+    expect(page(sel).paragraph?.()).toBeNull();
+    sel.anchor = { node: PANE, offset: 0 };
+    sel.focus = { node: PANE, offset: 9 };
+    expect(page(sel).paragraph?.()).toBeNull();
+    sel.anchor = { node: PARAGRAPH[1], offset: 0 };
+    sel.focus = { node: PARAGRAPH[2], offset: 0 };
+    expect(page(sel, { active: { matches: (q: string) => q.includes("textarea") } }).paragraph?.()).toBeNull();
+  });
+
+  it("the correction through the page: the paragraph's, with the visible box the page reads; a text field with the focus is left alone", () => {
+    const sel = new Selection();
+    sel.anchor = { node: PANE, offset: 0 };
+    sel.focus = { node: PANE, offset: 15 };
+    page(sel).endParagraphsAt?.(60, 450, SPAN);
+    expect(sel.anchor).toEqual(SPAN.start);
+    expect(sel.focus).toEqual({ node: PARAGRAPH[2], offset: LENGTH[2] });
+    const field = new Selection();
+    field.anchor = field.focus = { node: PANE, offset: 2 };
+    page(field, { active: { matches: () => true } }).endParagraphsAt?.(60, 450, SPAN);
+    expect(field.anchor).toEqual({ node: PANE, offset: 2 });
+  });
+
+  it("the page remembers a correction was made for the held triple click, and forgets it at the next one's paragraph", () => {
+    const sel = new Selection();
+    sel.anchor = { node: PANE, offset: 0 };
+    sel.focus = { node: PANE, offset: 15 };
+    const env = page(sel);
+    env.endParagraphsAt?.(700, 450, SPAN); // over the column, nothing made yet: the browser's
+    expect(sel.anchor).toEqual({ node: PANE, offset: 0 });
+    env.endParagraphsAt?.(60, 450, SPAN); // beside: made
+    env.endParagraphsAt?.(700, 120, SPAN); // back over the column: followed
+    expect(sel.focus).toEqual({ node: PARAGRAPH[0], offset: 0 });
+    sel.anchor = { node: PARAGRAPH[1], offset: 0 };
+    sel.focus = { node: PARAGRAPH[2], offset: 0 };
+    env.paragraph?.(); // the next triple click
+    sel.anchor = sel.focus = null;
+    env.endParagraphsAt?.(700, 450, SPAN);
+    expect(sel.anchor).toBeNull();
+  });
+
+  it("a browser with no `modify`: the end is put at the character, as for any press", () => {
+    const sel = new Selection();
+    sel.anchor = { node: PARAGRAPH[1], offset: 0 };
+    sel.focus = { node: PANE, offset: 15 };
+    page(sel, { modify: false }).endParagraphsAt?.(60, 330, SPAN);
+    expect(sel.focus).toEqual({ node: PARAGRAPH[1], offset: 131 });
   });
 });
