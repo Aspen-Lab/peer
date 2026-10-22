@@ -82,7 +82,7 @@ The full skill texts are in Appendix A (reviewing-cycle) and Appendix B (abc). T
 
 ```
 AS OF        2026-10-22 08:50Z
-BRANCH HEAD  b86db7ad (reader-three-pane-p11, pushed)   PR Aspen-Lab/peer#35 draft, CI green on 4de16f6f (older heads green)
+BRANCH HEAD  70b31fea (reader-three-pane-p11, pushed)   PR Aspen-Lab/peer#35 draft, CI green on 4de16f6f (older heads green)
 LAST RULING  §1h.177   NEXT RULING NUMBER §1h.178   NEXT ITEM ID P11-65   NEXT FREE PORT 4168
 RUNNING      3 blind readers, round 6 Theme B → scratchpad/p11/r6b/readers/r{1,2,3}.md (pack head d68ddd73; rubric at 4eca2d40)
              A P11-64 (round 6, Theme B; head d68ddd73; worktree scratchpad/p11a64/wt; port 4167; pack scratchpad/p11/r6b/)
