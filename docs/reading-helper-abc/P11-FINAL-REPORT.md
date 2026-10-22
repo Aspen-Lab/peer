@@ -26,7 +26,7 @@
 **质量数字:** 568 个测试文件 / 10,636 个测试全过(另有 3 个跳过),构建 0 错,类型检查 0 错,lint 0 错 / 144 警告(与基线持平);每个修复都由我自己做过一次"去掉修复 → 测试变红 → 原样还原"的验证;没有删减或削弱任何已有测试。隐私检查(51 组字符串)在日志和缓存里 0 命中,你的论文 PDF 只通过上传界面使用,没有被复制、引用或提交。
 
 **需要你来定的事**(都不影响达标):
-- **BACKLOG-114(新,小):** 三击一段后拖到**左栏**松手,100 次里有 12 次选区落在左栏里、不出按钮(普通拖选 100 次全部正常)。与已修的"页脚条误选"同类。要不要修?(只改 `keep-selection.ts` 一个文件。)
+- **BACKLOG-114(已修,§1h.181 / C P11-66):** 三击一段后拖到**左栏**松手,100 次里有 12 次选区落在左栏里、不出按钮(普通拖选 100 次全部正常)。与已修的"页脚条误选"同类。要不要修?(只改 `keep-selection.ts` 一个文件。)
 - **按钮盖住卡片文字**(237–238 / 607 次选择:Explain 卡片的引文、图注、便签):不盖任何按钮或标题字,选区一撤就回来。我们按你批准的"一处 0.25"处理,没修(避开它要把按钮挪离选区 60–580 px)。一位评分员把它算成 1.0,我裁定仍为 0.25。
 - **图片 Fit 的宽度**:七种窗口宽度下图片只占右栏 0.70–0.96(窗口窄时不到满宽)。是"尽量大但不出滚动",还是"撑满右栏"?
 - **Explain 卡片只解释所选文字的前 1,200 字**,要不要在卡片上说出来?
@@ -60,6 +60,6 @@ Scores are the median of three blind readers; the director's reading and the rev
 
 **Standing costs (accepted, not defects):** the three-button group stands over words of an open card's content (237–238 of ~607 selections beside a card; 0 controls, 0 header words) — the owner's allowance (§1h.163, §1h.168; B P11-58 measured every rule that clears the words moves the group 60–580 px from its line); a selection across two body paragraphs offers nothing and across two Summary blocks offers no Highlight (D5, §1h.112 / §1h.155 / §1h.166 (b)).
 
-**Open, for the owner:** BACKLOG-114 (triple click then a drag released over the left pane, 12 of 100 — same family as the foot-legend fix; one file); BACKLOG-108, -111, -112, -113; the Fit width of a figure in the margin; whether the Explain card should say it read the first 1,200 characters; the title clamp, the "Open as page" glyph at 1024/1093, the margin minimum at 1024, the left pane's default width, the edge tab's resting word. Item 7 of the owner's file (push to main plainly and on its own) is the owner's to do.
+**Done after the loop, at the owner's "修":** BACKLOG-114 (a triple click then a drag released beside the column) — fixed by C P11-66, landed 4f6091f9 (§1h.181): 12 ended in the pane + 56 left the paragraph out → 0 + 0, 100 / 100 whole with three buttons; everything else measured identical; full suite 569 files / 10,684 tests. **Open, for the owner:** BACKLOG-108, -111, -112, -113; the Fit width of a figure in the margin; whether the Explain card should say it read the first 1,200 characters; the title clamp, the "Open as page" glyph at 1024/1093, the margin minimum at 1024, the left pane's default width, the edge tab's resting word. Item 7 of the owner's file (push to main plainly and on its own) is the owner's to do.
 
 **Caveats:** Chromium only was measured. Every walk used a stubbed model (no live model call, no key). The owner's PDF was used only through the upload UI. Three container restarts (two from the session's disk allowance) cost two walks, which were re-run in full.
