@@ -94,13 +94,13 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-23T23:54:10.627Z
+AS OF        2026-10-23T23:57:21.985Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.194   NEXT RULING §1h.195   NEXT ITEM ID P12-07   NEXT FREE PORT 4206
+LAST RULING  §1h.195   NEXT RULING §1h.196   NEXT ITEM ID P12-07   NEXT FREE PORT 4206
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      three C clusters continue; early05 dependency contract independently checked, not landed
-THEN         C06 can consume exact early token range in detached copy; full05 verification/clean gates still required
+RUNNING      three C clusters continue; manager preparing native Linux CI via existing authorized Git channel
+THEN         inspect exact-tree native baseline; then manager full-gates checks on reviewed C patches before landing
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
 ```
@@ -155,6 +155,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-23T23:53:27.513Z | parent 679fbfa3 (entry commit follows) | manager | P12-04-MINIMUM-RULING: C measured unchanged Explain furniture exceeds equal third: header144.406 + keyed row63.297 + text22.475 >=230.178px versus167.333 available. DOM compact experiment measures80.475px minimum,93.96 at1.6scale; three cards fit shortest392px band. Rule standard fixed header plus whole independently scrollable content for multiple cards; explicit shared overflow for unbounded cards. | evidence: ruling194; P12-04 scratch h/compact-geometry.json and compact screenshots; updated brief and rubric clarification | next: C04 implements measured compact split and overcapacity scrolling; manager continues early token contract verification
 
 - 2026-10-23T23:54:10.627Z | parent b49f0d3c (entry commit follows) | manager | P12-05-EARLY-CHECK: Manager read early token production diff in free detached copy verify-05/wt, picked worker range through02b1c3d7 onto679fbfa3. Focused4/4 tests passed three times. Own mutation changes orange to white:4/4 red; restored exact SHA256382fba9d546b8eafce041af38b84293bd33c10a1ad0862fd5349f4b3b9c19da7,4/4green. This checks only dependency contract, not final05 verification or landing. | evidence: scratch verify-05/early-contract-results.json and logs; detached verification tip6cc31115; worker02b1c3d7 | next: use stable orange API for06 once worker slot frees; later verify full05 including browser, type/lint and full gates
+
+- 2026-10-23T23:57:21.985Z | parent 8d92661e (entry commit follows) | manager | NATIVE-CI-GIT-ATTEMPT: Prepared branch-scoped native Linux workflow using the already-authorized ordinary Git push channel after connector403. Exact public base plus optional manager-reviewed web patch is checked against expected web tree; no third-party actions, secrets, dependencies, deployment or credential change. Initial run is unchanged app baseline; no pass asserted before result. | evidence: .github/workflows/p12-gates.yml; ruling195; existing approved branch push authorization | next: push through unchanged Git remote, inspect native gate result; if remote refuses workflow write record and stop that route
 
 ---
 
