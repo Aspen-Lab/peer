@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:            P12 preparation; both themes consecutive passes 0 / 2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-23T23:53:27.513Z; only writer of this file
-CURRENT ITEM:          three C clusters continue; C04 minimum conflict ruled; manager checking C05 early contract in free copy
-NEXT TURN:          C04 implements measured compact split and overcapacity scrolling; manager continues early token contract verification
+HELD BY:          Codex manager, local desktop chat, 2026-10-23T23:54:10.627Z; only writer of this file
+CURRENT ITEM:          three C clusters continue; early05 dependency contract independently checked, not landed
+NEXT TURN:          use stable orange API for06 once worker slot frees; later verify full05 including browser, type/lint and full gates
 STOPPED BECAUSE:          — (active after quota reset; baseline discrepancies isolated before product edits)
 GATE BASELINE:          220ca9e1 unchanged: Linux Node22.23.4 build0 tsc0 lint0errors/144warnings test1;4failed565passed3skipped files(572),4failed10680passed3skipped tests(10687). Failures:2x5000ms property timeouts;55.087ms serializer versus16ms; missing origin/freemium-round10 setup ref. Native Windows serializer file120/120 pass; Linux isolated reruns pending.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
