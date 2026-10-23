@@ -43,8 +43,8 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ROUND:            P12 preparation; both themes consecutive passes 0 / 2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
 HELD BY:          Codex manager, local desktop chat, 2026-10-23T18:37:27.858Z; only writer of this file
-CURRENT ITEM:          Windows baseline completed; portable Linux baseline setup running; P12 rubric frozen before round-1 briefs
-NEXT TURN:          Linux unchanged-head gates; then round-1 parallel B/C work from committed rubric, no product edits until baseline resolved
+CURRENT ITEM:          Linux baseline setup; P12-01 B read-only investigation brief committed, awaiting spawn
+NEXT TURN:          spawn B at exact brief head on4200; finish Linux baseline before C product edits
 STOPPED BECAUSE:  — (active; baseline discrepancies under investigation)
 GATE BASELINE:          220ca9e1 app tree unchanged: Windows Node22.23.4/TZ America/Chicago build0 tsc0 lint0errors/144warnings test1; 25 failed +545 passed +2 skipped files (572),35 failed +10641 passed +2 skipped tests (10678); Linux pending
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
