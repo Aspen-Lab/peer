@@ -1,0 +1,168 @@
+# HANDOFF-P12 — the reading helper (Peer), round P12 "update on paper digest": for the next manager (ChatGPT / Codex, or any agent)
+
+Written 2026-10-23 by the P11 manager (Claude, cloud session `session_017DGPdGJqr95t3pMMcspXjE`) at the owner's request, because that session's budget is nearly spent. **Everything you need is in this repository; nothing is on the previous manager's machine.** Read §1, do its steps, and you are working within ten minutes. Then obey §6: **one log entry after every completed unit of work**, so the next agent after you can resume from this file alone.
+
+The owner writes Chinese; answer the owner in Chinese, with the numbers. The owner wants this round **fully automatic**: no questions to the owner except the ones §2 names, every item in parallel, stop only at the stop line.
+
+---
+
+## §1 Read this first — how to resume in ten minutes
+
+1. **Get the code.** `git clone https://github.com/Aspen-Lab/peer.git && cd peer && git checkout update-on-paper-digest`. The branch exists (created 2026-10-23 from `main` a2575ddb by the previous manager, with the owner's approval of its name; a draft PR is open for it — find it with `gh pr list --head update-on-paper-digest` or on GitHub). **Never create another branch without the owner's written approval** (AGENTS.md). All P12 work is committed on this branch; the PR is merged only when the owner says so.
+2. **Install and baseline.** Node 22 (`node --version` → v22.x). `cd web && npm ci`. Chromium for the walks: `npx playwright install chromium` (the walks drive the real page). Then run the gates once on the untouched head (Appendix A's script): expect **build 0, tsc 0, lint 0 errors / 144 warnings, 569 test files + 3 skipped / 10,684 tests + 3 skipped** (`TZ=America/Chicago`). Write the numbers as the GATE BASELINE line of the state file's §1 (step 5). If they differ, stop and record why before anything else.
+3. **Read, whole, in this order** (all paths from the repo root):
+   - `AGENTS.md` (the project rules: parallel work, no branch without approval, the decision priorities) and `docs/PRODUCT_DIRECTION.md`.
+   - **The two skills you work by — "download them from the owner's GitHub" means these files:** `.claude/skills/abc/SKILL.md` with `.claude/skills/abc/references/{agent-briefs.md,state-file.md,resume-clock.md}` and `.claude/skills/abc/assets/STATE-TEMPLATE.md`; then `.claude/skills/reviewing-cycle/SKILL.md` with `.claude/skills/reviewing-cycle/templates/{RUBRIC.md,brief-C-parallel.md,checkpoint.md}` and its `README.md`. (`docs/reading-helper-abc/HANDOFF-P11.md` Appendices A–B carry both SKILL.md files verbatim as well.) **On the ChatGPT platform the skill's model table applies: the manager runs on `sol`, the A / B / C workers and the blind readers on `tera`; a worker is never on a larger model than the manager.** If `tera` is refused by a usage limit, re-spawn the item on `sol` and go back at the next item.
+   - `docs/reading-helper-abc/P12-OWNER-2026-10-23.md` — the owner's nine items verbatim and the manager's reading (the spec of this round).
+   - `docs/reading-helper-abc/HANDOFF-P11.md` §2, §3 and the protocol part of §6 — the method **as practised** here (worktrees, the manager's own mutation, cherry-picking, the readers, the director), which this file repeats in short in §3.
+   - `docs/reading-helper-abc/P11-RUBRIC.md` (the rubric's pattern: themes, units, prices, pass requirements, the Scores table) and `docs/reading-helper-abc/P11-FINAL-REPORT.md` (what P11 delivered, what is open).
+   - The state file `ABC-DEEP-REPORT-READING-HELPER.md`: its §1 header; rulings **§1h.111–§1h.182** (P11's decisions — many bind P12: the one 0.25 allowance §1h.163, the accepted cost of the group over a card's words §1h.168, the cross-block rule §1h.112 / §1h.166 (b), the keep-selection design §1h.157 / §1h.176 / §1h.181); the ledger's P11 rows; the BACKLOG table (BACKLOG-108, -111, -112, -113 are open).
+   - Exemplar briefs, all in `docs/reading-helper-abc/briefs/`: `P11-59.md` (an A walk), `P11-58.md` (a B investigation), `P11-62.md` and `P11-66.md` (a C), `P11-R1-reader.md` (a blind reader — reused unchanged every round). Write P12's briefs by these patterns, from a script file or by hand, never from an inline shell heredoc that substitutes.
+4. **Take the clock and the state file over.** The hourly Haiku resume clock of P11 is **disabled** (the owner's "关掉吧"); if your platform has a scheduler, set an hourly poke of your own per `abc/references/resume-clock.md` (it only wakes the manager; it never does work). Edit the state file's `HELD BY:` line to yourself and append the ruling that opens your tenure (the next free number is **§1h.183**; §1h.182 is the hand-off itself).
+5. **Write the rubric** `docs/reading-helper-abc/P12-RUBRIC.md` from `.claude/skills/reviewing-cycle/templates/RUBRIC.md`, by `P11-RUBRIC.md`'s pattern, with §4's themes, units and pass requirements; commit it before round 1's first brief. The rubric changes only by a dated ruling.
+6. **Round 1, all at once** (§4's plan): one B for the shared cause of items 3 / 5 / 6, and the Cs for items 1 + 7, 2, 4, 8, 9 in their own detached worktrees; then the Cs the B's finding names; then an A walk per theme, three blind readers per theme, the director, the score. Repeat until the stop line.
+7. **Log** (§6) after every completed unit, and keep `docs/reading-helper-abc/P12-PROGRESS.md` (§7) for the owner's progress page.
+
+---
+
+## §2 The project, the branch, the hard rules
+
+**Peer** is a calm daily forecast for research reading (`docs/PRODUCT_DIRECTION.md` is the spec; the owner's site https://hermes-admin-eta.vercel.app/ wins where they differ). The paper page ("report" to the owner) is `web/` — Next.js 16 (Turbopack), React, Tailwind v4, zustand, Vitest. Round P11 (PR #35, merged 2026-10-22 at the owner's instruction, before the owner's own look) built the three-pane reader, the margin actions (Explain this / Take notes / Highlight), the figure viewer and "Back to paper". **Round P12 is the owner's review of that merged `main`: nine items, `P12-OWNER-2026-10-23.md`.**
+
+**Branch:** `update-on-paper-digest` (from `main` a2575ddb). Commit on it; push `git push -u origin update-on-paper-digest`; the draft PR stays a draft until the owner says "merge". Never push to `main`. Never force-push, rebase, amend a pushed commit, `git checkout -- <file>`, `git restore` or `git reset`; restore a mutation from a saved copy (sha256 before = after). State the current branch at the start of every session with the owner.
+
+**The owner's standing constraints (every one of them held through P11; keep them):**
+- Never create a branch without the owner's written approval. Never merge the PR without the owner's word.
+- Never print, log or commit a credential or a key's value. Never commit anything per-user (`web/.local-data/`, uploads, logs with a reader's words).
+- **The owner's PDF** (a paper of their own, used for the walks in P11) **is not in the repository and is not on your machine.** Ask the owner for it **once** (an upload or a path), use it only through the product's upload UI, never copy, quote (more than 3 consecutive words in a pack's index, none in a deliverable) or commit it. Until it arrives, walk with public papers (any arXiv PDF the stub can digest; P11 used two public papers besides the owner's).
+- Never delete, skip, quarantine or weaken a test; name any re-aimed test.
+- No new dependency. No switch or feature flag to route around a rule.
+- Workers never push, never branch, touch only the files their brief names, stop only the dev server they started (by its process group: `setsid` to start, `kill -- -<pgid>` to stop), one port each (P12 starts at **4200**, upward).
+- Every commit ends with an attribution trailer naming the model that wrote it (P11's shape: `Co-Authored-By: <vendor> <model> <noreply@…>`); no model identifiers anywhere else in a commit, a PR or a document.
+- The owner's decisions on record: justified prose stays ("两端对齐", §1h.134); the group over a card's words is an accepted 0.25 cost (§1h.168); the stop line is the owner's (§1h.163).
+
+**What you may ask the owner (only these):** the PDF (once); a decision §4 marks "the owner rules" when a B's finding leaves two designs of equal cost; the stop line if the owner wants it changed. Everything else: decide, record the ruling, go on.
+
+---
+
+## §3 The method — reviewing-cycle on top of abc, as practised here (short)
+
+Roles: **the manager** (you; the only writer of the state file, the rubric and the briefs; verifies every C itself; never writes product code), **A** the reviewer (read-only; walks the real page with Playwright at the rubric's widths; one deliverable `P12-NN-A-<UTC>.md`; an evidence pack of screenshots and DOM dumps with an `index.md` that has **no score and no verdict**), **B** the investigator (read-only; one report `P12-NN-B-<UTC>.md` with numbers and three candidate rules, never the fix), **C** the implementer (its own detached worktree from the head you name; commits `test red on the base → fix → checkpoint P12-NN-C-<UTC>.md`, the path named on each commit; one mutation per rule, restored byte-identical; measures before and after on an invented input), **three blind readers** per theme (told nothing but the rubric, the owner's file and the pack; each writes one file; the median is the score of record; the director — you — checks every disputed mark against the evidence and voids a mark the input itself prints or a rule already ruled by design).
+
+The round (reviewing-cycle "The round"): RENDER (a fresh stubbed dev server from the worktree, the owner's input through the real upload path) → SCORE (A's walk, the readers, the director) → CLUSTER by mechanism → BRIEF one C per cluster in disjoint files, a B first where the cause is unknown → VERIFY (you, in a free copy that is not the worker's worktree: cherry-pick the C's range onto the branch head, read the diff, `npx tsc --noEmit`, `npm run lint` (0 errors, ≤ 144 warnings), the touched tests three times, **one mutation of your own** — disable the rule the item claims → its test red → restore byte-identical — then the full gates of Appendix A) → LAND (`git merge --ff-only <tip>` when the branch has not moved, else cherry-pick; `git diff --quiet <tip> HEAD -- web` must be silent; remove the worktree) → RECORD (a numbered ruling, the ledger row, the log entry, the progress file; the owner told in Chinese).
+
+**Stop:** every theme ≥ the line in two consecutive rounds. **The owner's standing line (from P11, ruling §1h.163, the owner's decision of 2026-10-21): ≥ 97.9 per theme; one extra priced 0.25 is allowed per theme per round; a 0.5, a FAIL unit or a failed pass requirement is not a pass; two consecutive rounds per theme.** It applies to P12 unless the owner writes a different number; the owner was told so at the hand-off. Both themes' counts start at 0. Never lower a price to fit the line, never raise one; a disagreement among readers is recorded in the ruling, not hidden.
+
+Practicalities that cost P11 time, so you do not pay them again:
+- **Disk.** Walks write ~1.5 GB each (screenshots + a `.next` build). Check free space before spawning; delete a round's screenshots after it is scored (readers' files, dumps and scripts stay); remove every landed item's worktree.
+- **A full-page `.next` cache per worktree:** delete `web/.next/dev/cache` before a build in a reused copy.
+- **The dev server with the stub** (no model, no key; `docs/reading-helper-abc/harness/model-stub.cjs` answers every model call from the paper's own sentences): from the worktree, `mkdir -p <scratch>/stub && cd web && P602_DIR=<scratch>/stub NODE_OPTIONS="--require $(pwd)/../docs/reading-helper-abc/harness/model-stub.cjs" setsid npm run dev -- -p <port> > <scratch>/dev.log 2>&1 &`. Everything per-run goes to a scratch directory **outside the repository** (never committed).
+- **Items 3 / 5 / 6 need the production build too:** `npm run build && npx next start -p <port>` with the same `NODE_OPTIONS` / `P602_DIR`.
+- Take every reading after 300 ms of still scroll; record load averages with timings; Chromium only is what P11 measured — say so in every deliverable.
+- When a brief's literal wording and its "nothing else changes" rule collide, the C measures and stops at the rule (§1h.176 is the precedent); you rule.
+
+---
+
+## §4 The spec, the themes, the plan for round 1
+
+The spec is `P12-OWNER-2026-10-23.md` (verbatim + the binding reading). **Two themes** for the rubric (the P11 pattern: 12 units each, the formula `100 × (Σ units − Σ costs) / Σ units`, prices 1.0 / 0.5 / 0.25 by kind, pass requirements that hold whatever the number says):
+
+**Theme A — the note** (items 1, 2, 7). Units to write (the manager may split or merge, 12 is the pattern): A1 the sticky card shows a formatting row; A2 bold / italic / underline work and survive save; A3 bullet list; A4 indent / outdent, Tab / Shift+Tab; A5 the structure is in the record and in every export (Markdown, Obsidian, the notes page, "Open your notes"); A6 the blue square is aligned to the first text line at every reading-scale step; A7 its side equals the text's font size; A8 Save puts the note in "Open your notes" and closes the card; A9 Delete removes the note outright and closes the card; A10 Escape and every other path unchanged (name them from the measurement); A11 keyboard reach and labels for every new control; A12 light and dark, at every step, nothing per-user.
+
+**Theme B — the margin and the controls** (items 3, 4, 5, 6, 8, 9). Units: B1 the two pane dividers are visible at rest and draggable at the owner's likely window sizes and zooms (the B's finding decides which sizes the page must serve — a ruling); B2 the one-column page / the breakpoint per that ruling; B3 Explain + note open: equal split; B4 the boundary between cards drags, with a minimum height and keys; B5 three cards: thirds, two boundaries; B6 a selection offers Highlight wherever a mark can be drawn (and the other two buttons), at every width the page serves; B7 every visible figure opens in the margin on a click, at every width the page serves, in the production build; B8 the answers control: section-title size, orange, white, AA, dark mode, scales; B9 the Submit control's two states with their colours and words; B10 contrast AA for every new colour, light and dark; B11 P11's guard — the P11 rubric's A1–A12 and B1–B12 still PASS on this head (the regression guard, as P11 carried P10's); B12 no error overlay, no "Maximum update depth", no snag, Tier 0 without a key.
+
+**Pass requirements (both themes):** no error view / snag / max-depth in the pack's checks; Tier 0 complete without a key; the privacy grep (every string named by what it is, never its value) 0 hits outside the upload store; the paper's text unchanged by any route; the P11 guard units hold; no run of 4+ words of the owner's paper in a pack or a deliverable.
+
+**Round 1, in parallel (group only by file overlap; say why whenever two run one after another):**
+
+| item | role | files (yours) | port |
+|---|---|---|---|
+| **P12-01** the shared cause of the owner's 3 / 5 / 6 | **B** (read-only) — test the width / zoom hypothesis, the discoverability hypothesis and the deployment hypothesis on the production build and the deployed site, with real clicks and drags; report numbers and three candidate rules per item | none | 4200 |
+| **P12-02** items 1 + 7 (the sticky card) | C | `web/src/components/notes/sticky-note.tsx`, `note-toolbar.tsx`, `note-editor.tsx`, `wysiwyg-field.tsx`, the notes export code the toolbar's structure must reach (find it: `paper-notes.tsx`, the notes page under `web/src/app/notes/`), their tests | 4201 |
+| **P12-03** item 2 (the square) | C | `web/src/components/notes/highlight-row.tsx` and the square's rules in `web/src/app/globals.css` (the P10-46 token lines ~320 and ~379); tests | 4202 |
+| **P12-04** item 4 (equal split + card divider) | C | `web/src/components/reader/explain-dock.ts`, `margin-card.tsx`, `figure-host.tsx`, a horizontal variant of `pane-divider.tsx` (or a new file beside it), `lib/reader/figure-viewer.ts` only if the stack logic lives there; tests | 4203 |
+| **P12-05** item 8 (the answers control) | C | `web/src/components/reader/for-your-questions.tsx`, `copy.ts` (the `control` string), a colour token in `globals.css` (a disjoint section from P12-03's); tests | 4204 |
+| **P12-06** item 9 (the Submit control) | C | `web/src/components/reader/question-field.tsx`, `copy.ts` (its own strings), tests | 4205 |
+| P12-07 … | C | items 3 / 5 / 6 as the B's finding names them (likely `reader-layout.tsx` / `reader-shell.tsx` / `pane-divider.tsx` for the width or the affordance; `selection-toolbar.tsx` / `paper-body.tsx` for Highlight; `matted-figure.tsx` / `figure-viewer.ts` / `keep-selection.ts` for the figure click) | 4206+ |
+
+`copy.ts` is touched by P12-05 and P12-06: give each its own lines and merge yourself, or run P12-06 after P12-05 and say so. `globals.css` likewise (P12-03, P12-05). `sticky-note.tsx` holds items 1 and 7 → one C. Then **A P12-1x** walks Theme A and **A P12-1y** Theme B on the landed head (both at once), three readers each, the director, the score; the extras become the next items; round 2 walks the next landed head. A theme's walking ends after its second consecutive pass; the loop ends when both have; then the final report (the P11 one is the pattern) and the owner's own look.
+
+Ruling numbers continue the state file's §1h series (next free: **§1h.183**). Item ids **P12-01** upward. Checkpoints and deliverables `docs/reading-helper-abc/P12-NN-{A,B,C}-<UTC>.md`. Briefs `docs/reading-helper-abc/briefs/P12-NN.md`.
+
+---
+
+## §5 Current state — always true (update it with every log entry)
+
+```
+AS OF        2026-10-23 (the hand-off commit)
+BRANCH       update-on-paper-digest, created from main a2575ddb; draft PR open (see the log's first entry for its number)
+HELD BY      nobody yet — the next manager takes the state file over in §1 step 4
+LAST RULING  §1h.182 (the hand-off)   NEXT RULING §1h.183   NEXT ITEM ID P12-01   NEXT FREE PORT 4200
+RUBRIC       not yet written (§1 step 5)   SCORES none   STOP LINE ≥ 97.9 / one 0.25 / two consecutive rounds (§1h.163), unless the owner changes it
+RUNNING      nothing
+THEN         §1 steps 1–7; round 1 per §4
+OWNER'S PDF  not on this machine — ask once; public papers meanwhile
+CLOCK        P11's hourly clock disabled; set your own if your platform has one
+```
+
+---
+
+## §6 Work log — the protocol, then the entries
+
+**Protocol (the owner's requirement; it is what makes the work survive a cut-off):** after **every completed unit of work** — a brief written, an agent spawned, a deliverable picked, a C verified and landed, a round scored, a ruling, a push — append **one line** above the marker below, newest last, and update §5; commit the two files together with the path named (`git commit -m "docs(abc): handoff log — <what>" -- docs/reading-helper-abc/HANDOFF-P12.md …`) and push. Shape:
+
+`- <UTC> | <head sha after the commit> | <who: manager (model) / A / B / C / reader> | <what was completed, with the numbers> | evidence: <paths> | next: <the next unit>`
+
+When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry first (what is done, what is not, where the worktree is) so the next agent does not redo or lose it. A resuming agent of another vendor (Claude, ChatGPT, …) reads the entries since its last one and continues; it backfills the owner's progress page (§7) under the other agent's name.
+
+<!-- APPEND NEW ENTRIES BELOW THIS LINE, ONE PER COMPLETED UNIT OF WORK -->
+- 2026-10-23 (hand-off) | (this commit) | manager (Claude Fable 5.1, the P11 manager) | Round P12 opened: the owner's nine items recorded verbatim with the binding reading (`P12-OWNER-2026-10-23.md`); this hand-off written; branch `update-on-paper-digest` created from main a2575ddb with the owner's approval; ruling §1h.182 in the state file; P11's hourly clock disabled | evidence: this file, P12-OWNER-2026-10-23.md, state file §1h.182 | next: the next manager does §1 steps 1–7
+
+---
+
+## §7 Where everything is
+
+| what | where |
+|---|---|
+| the owner's spec for P12 | `docs/reading-helper-abc/P12-OWNER-2026-10-23.md` |
+| this hand-off and its log | `docs/reading-helper-abc/HANDOFF-P12.md` |
+| **the owner's progress page** | The P11 owner followed a live dashboard (a Claude artifact) the previous manager updated; you cannot write it. Keep **`docs/reading-helper-abc/P12-PROGRESS.md`** instead: one table, columns `id | kind | what (Chinese, one line) | state (进行中 / 已交回 / 已合入 / 不做) | started (UTC) | by (谁做的)`, plus a two-line status at the top in Chinese; update it with every log entry. A resuming Claude backfills the dashboard from it. |
+| the state file (rulings, ledger, BACKLOG) | `ABC-DEEP-REPORT-READING-HELPER.md` (repo root) — the manager's only; §1h.183 is the next ruling |
+| the rubric | `docs/reading-helper-abc/P12-RUBRIC.md` (to write, from `.claude/skills/reviewing-cycle/templates/RUBRIC.md`, by `P11-RUBRIC.md`) |
+| the skills | `.claude/skills/abc/` and `.claude/skills/reviewing-cycle/` (verbatim copies also in `HANDOFF-P11.md` Appendices A–B) |
+| briefs | `docs/reading-helper-abc/briefs/P12-NN.md` (exemplars: `P11-59.md` A, `P11-58.md` B, `P11-62.md` / `P11-66.md` C, `P11-R1-reader.md` reader) |
+| deliverables and checkpoints | `docs/reading-helper-abc/P12-NN-{A,B,C}-<UTC>.md` |
+| the model stub | `docs/reading-helper-abc/harness/model-stub.cjs` (§3 has the command); `render-digestion.mjs` renders a digestion without a server |
+| the gates script | Appendix A below (also `HANDOFF-P11.md` Appendix D) |
+| P11's record | `P11-FINAL-REPORT.md`, `P11-RUBRIC.md`, `HANDOFF-P11.md`, `P11-*-{A,B,C}-*.md`, rulings §1h.111–§1h.181 |
+| the P11 evidence packs, screenshots, the owner's PDF | **gone with the previous manager's machine** — not needed; a new round makes its own |
+| the product's web app | `web/` (`npm run dev`, `npm run build`, `npm test` = Vitest, `npm run lint`); private uploads in `web/.local-data/` (never committed) |
+
+---
+
+## Appendix A — the gates script (`gates-build-first.sh`; usage: `bash gates-build-first.sh <worktree> <log> "<label>"`)
+
+Keep it outside the repository (it was `scratchpad/p505/gates-build-first.sh` in P11). A clean run reads `build 0`, `tsc 0`, `✖ 144 problems (0 errors, 144 warnings)`, `test 0`, and the file and test counts.
+
+```bash
+#!/bin/bash
+cd "$1/web" || exit 1
+L="$2"
+echo "== gates at $(git rev-parse --short HEAD) ($3) $(date -u +%H:%MZ), build first" > "$L"
+npm run build > "$L.build" 2>&1; echo "build $?" >> "$L"
+npx tsc --noEmit >/dev/null 2>&1; echo "tsc $?" >> "$L"
+npm run lint 2>&1 | grep problems >> "$L"
+TZ=America/Chicago npm test -- --maxWorkers=2 > "$L.test" 2>&1; echo "test $?" >> "$L"
+grep -E "Test Files|^      Tests|×| FAIL " "$L.test" | head -20 >> "$L"
+echo "== done $(date -u +%H:%MZ)" >> "$L"
+```
+
+## Appendix B — the manager's verification of a C, step by step (what "verified" meant in P11)
+
+1. In a free copy of the repo (a second worktree of your own, never the C's): `git checkout -q --detach <branch head>`; `git cherry-pick <C's base>..<C's tip>`.
+2. Read the whole production diff. Anything outside the brief's "yours" files, any test deleted or weakened, any new dependency → back to the C with the reason.
+3. `npx tsc --noEmit` → 0. `npm run lint` → 0 errors, ≤ 144 warnings.
+4. The touched test files three times (`TZ=America/Chicago npx vitest run <paths>`), all green each time.
+5. **Your own mutation:** save a copy of the production file (sha256), disable the rule the item claims with a one-line edit, run the touched tests → red; copy the saved file back → sha256 equal → green again. A C whose rule cannot be made red has not tested its rule.
+6. The full gates (Appendix A) on the combined head, in the background; clean.
+7. Land: `git merge --ff-only <tip>` on the branch (or cherry-pick the range when the branch moved); `git diff --quiet <tip> HEAD -- web` silent; `git worktree remove --force <the C's worktree>`; push; ruling + ledger row + log entry + progress row; tell the owner.
