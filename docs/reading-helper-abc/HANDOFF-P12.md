@@ -94,13 +94,13 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-23T23:48:59.192Z
+AS OF        2026-10-23T23:50:33.044Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.192   NEXT RULING §1h.193   NEXT ITEM ID P12-07   NEXT FREE PORT 4206
+LAST RULING  §1h.193   NEXT RULING §1h.194   NEXT ITEM ID P12-07   NEXT FREE PORT 4206
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      three C clusters implementing in detached worktrees; Linux environment checkpoint banked
-THEN         log C dispatch and active/visible contract; prepare measured follow-up briefs; verify returned C work
+RUNNING      C02/03 notes port4201, C04 margin port4203, C05 disclosure port4204; all detached at d8a4574d; baseline landing gate unresolved
+THEN         independent early-contract verification; C06 after05 token contract; measured follow-up briefs
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
 ```
@@ -145,6 +145,12 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-23T23:48:36.764Z | parent 36dec920 (entry commit follows) | manager | P12-01-B-BOUNDED: Banked bounded final B addendum34c1a565: owner420 andpublicA210 figure clicks opened; publicB63delivered opened,66blocked beforeclick fromimagefailures; verifiedstandingselection36/36opens; phonesall3Highlightmarks butnoanchoredTake notes; deployedcrossbody21/21noactions. Auth/actualzoom/enhancement/Summary/exportlimitationsstillPARTIAL. Own4200serverstopped. | evidence: P12-01-B-20261023T190000Z.md; scratchmatrix evidence filenames in report | next: manager rules responsivewidth/range/viewer contracts; issue B-named implementation briefs by shared-file dependencies
 
 - 2026-10-23T23:48:59.192Z | parent 9bbfeb35 (entry commit follows) | manager | P12-ENV-B-PARTIAL: Imported independent environment checkpoint affea779 under campaign directory, removing an unnecessary model identifier before commit. Exact Linux and isolated counts, fetched historical ref, runtime restart and unresolved native executor are recorded. No app/test change; full gates remain red. | evidence: P12-ENV-B-20261023T234546Z.md; source affea779; scratch baseline-logs | next: continue detached C implementation; manager resolves independent full clean-gates execution before landing
+
+- 2026-10-23T23:50:32.807Z | parent d84dff85 (entry commit follows) | manager | P12-02/03-SPAWN: Independent C02/03 started at d8a4574d in p12-02/wt on port4201. Export and structured ownership early commits returned, not landed. | evidence: briefs/P12-02.md; worker5bb7f13b and6f880860 | next: manager checks early contracts in independent copy; complete C work; prepare measured follow-up briefs
+
+- 2026-10-23T23:50:32.935Z | parent d84dff85 (entry commit follows) | manager | P12-04-SPAWN: Independent C04 started at d8a4574d in p12-04/wt on port4203; existing model stub, invented upload, active/visible contract coordinated. | evidence: briefs/P12-04.md; ruling193 | next: manager checks early contracts in independent copy; complete C work; prepare measured follow-up briefs
+
+- 2026-10-23T23:50:33.044Z | parent d84dff85 (entry commit follows) | manager | P12-05-SPAWN: Independent C05 started at d8a4574d in p12-05/wt on port4204. Requested worker model unavailable again; exposed same-generation fallback used. Early token range through02b1c3d7 returned, not landed. | evidence: briefs/P12-05.md; early worker token range; ruling193 | next: manager checks early contracts in independent copy; complete C work; prepare measured follow-up briefs
 
 ---
 
