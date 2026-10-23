@@ -23,7 +23,7 @@ import { highlightColour, highlightPaint, isHighlightColour } from "@/lib/notes/
 import type { Block, BlockType, HighlightColourId, HighlightSpot } from "@/lib/notes/types";
 import { useLostPassages } from "@/store/notes";
 import { HighlightSwatches } from "./highlight-strip";
-import { PASSAGE_LOST_LINE, SQUARE_PX, goToPassage, passageIsLost, storedBodyOf, type HighlightGoal } from "./note-tags";
+import { PASSAGE_LOST_LINE, goToPassage, passageIsLost, storedBodyOf, type HighlightGoal } from "./note-tags";
 
 /** The most lines of its words the row shows (the `line-clamp-2` below); the rest is cut with an ellipsis. The whole passage stays in the page, and in the tooltip. */
 export const WORDS_LINES = 2;
@@ -144,7 +144,7 @@ export function HighlightRowView({ id, spot, lost, open, onGo, onToggle, onPick,
   const paint = spot ? highlightPaint(spot.colour, 0) : null;
   return (
     <div ref={rootRef} data-highlight-row={id} onKeyDown={onKeyDown} className="min-w-0">
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-2 font-reading text-body-sm leading-[1.5]">
         {spot && named && !lost ? (
           <button
             type="button"
@@ -152,12 +152,12 @@ export function HighlightRowView({ id, spot, lost, open, onGo, onToggle, onPick,
             title="Go to the passage"
             onMouseDown={keep}
             onClick={onGo}
-            style={{ width: SQUARE_PX, height: SQUARE_PX, backgroundColor: named.fill }}
-            className="mt-[5px] shrink-0 border border-border-strong p-0 opacity-90 transition-opacity hover:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-heading"
+            style={{ width: "1em", height: "1em", marginTop: "calc(0.25em + 2px)", fontSize: "inherit", backgroundColor: named.fill }}
+            className="shrink-0 border border-border-strong p-0 opacity-90 transition-opacity hover:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-heading"
           />
         ) : (
           // A passage that is gone has no square to go to it; this holds its place so the rows keep their line (P10-36).
-          <span aria-hidden style={{ width: SQUARE_PX, height: SQUARE_PX }} className="mt-[5px] inline-block shrink-0 bg-text-faint opacity-60" />
+          <span aria-hidden style={{ width: "1em", height: "1em", marginTop: "calc(0.25em + 2px)" }} className="inline-block shrink-0 bg-text-faint opacity-60" />
         )}
         <div className="min-w-0 flex-1">
           {spot && paint ? (

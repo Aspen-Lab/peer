@@ -13,18 +13,19 @@
 // `takeStickyNote` is what the toolbar's "Take notes" does; `StickyNotes` renders the open stickies; the view
 // (`StickyWindowView`) has no state, so it is tested as markup and as an element tree.
 
-import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import type { Paper } from "@/types";
 import type { QuestionAnswers } from "@/lib/papers/report";
-import { quoteHead, stickyParagraphs, stickyText, stickyTitle } from "@/lib/notes/blocks";
+import { block, quoteHead, stickyParagraphs, stickySpan, stickyTitle } from "@/lib/notes/blocks";
 import type { Block } from "@/lib/notes/types";
 import { citableFromPaper } from "@/lib/notes/cite";
 import type { ReadingNoteExtras } from "@/lib/notes/templates";
 import type { Citable, NoteAnchor } from "@/lib/notes/types";
 import { paragraphAnchor, type ExplainSelection } from "@/components/reader/paper-body";
-import { useFrontEscape } from "@/components/reader/front-escape";
+import { isFrontCard, useFrontEscape } from "@/components/reader/front-escape";
+import { ReaderToast, useReaderToast } from "@/components/reader/reader-toast";
 import { MarginCard } from "@/components/reader/margin-card";
 import { hashTarget, summaryBlockFromHash } from "@/components/reader/use-reader-tab";
 import { stackRows, useColumn, useWindows, type FloatingWindow, type StackFrame } from "@/lib/reader/windows";
@@ -33,6 +34,7 @@ import { readingNoteFor, stripTagText, useLostPassages, useNotesStore, withoutSt
 export { withoutSticky };
 import { ANSWERS_BLOCK_ID, AnchorSquare, PASSAGE_LOST_LINE, goToPassage, registerPassageHost } from "./note-tags";
 import { WysiwygField } from "./wysiwyg-field";
+import { NoteEditor } from "./note-editor";
 
 /** A sticky writes through into the paper's note no later than this long after the last keystroke. P10-09c: 150 ms, not 250 —
  *  measured in the dev server, last keystroke to the notes window showing it took 301-333 ms with 250 (the window starts its
@@ -44,11 +46,15 @@ export function StickyWindowView({
   quote,
   text,
   front,
+  active = front,
   top,
   height,
   z,
   onText,
   onClose,
+  onSave = onClose,
+  onDelete = onClose,
+  children,
   onRaise,
   onGo,
   lost = false,
@@ -58,11 +64,15 @@ export function StickyWindowView({
   text: string;
   /** In front and whole; else only its header shows. */
   front: boolean;
+  active?: boolean;
   top: number;
   height: number;
   z: number;
   onText: (text: string) => void;
   onClose: () => void;
+  onSave?: () => void;
+  onDelete?: () => void;
+  children?: ReactNode;
   onRaise: () => void;
   onGo: () => void;
   /** P10-35: the paper on show does not hold the passage this note was taken on: no square to go to it, one quiet line says so. */
@@ -78,7 +88,7 @@ export function StickyWindowView({
       onKeyDown={(event) => {
         // Only the front card answers (P11-17c rule 1): one with only its header showing, behind another, lets the key go on to the document,
         // where the front card takes it.
-        if (event.key !== "Escape" || !front) return;
+        if (event.key !== "Escape" || !active) return;
         event.stopPropagation();
         event.preventDefault();
         onClose();
@@ -95,21 +105,32 @@ export function StickyWindowView({
       onRaise={onRaise}
       onClose={onClose}
       headerAttrs={{ "data-sticky-header": "" }}
+      header={<div className="flex min-h-10 shrink-0 items-stretch border-b border-border-strong">
+        <button type="button" data-margin-header="" data-sticky-header="" onClick={onRaise}
+          className="flex min-w-0 flex-1 flex-col justify-center px-2 py-1 text-left hover:bg-surface-hover">
+          <span className="eyebrow text-heading">{stickyTitle(n)}</span>
+          <span className="truncate font-reading text-body-sm italic text-text-muted">“{quoteHead(stripTagText(quote))}”</span>
+        </button>
+        <button type="button" aria-label={`Save note ${n}`} onClick={onSave}
+          className="shrink-0 px-2 text-body-sm text-heading hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-heading">Save</button>
+        <button type="button" aria-label={`Delete note ${n}`} onClick={onDelete}
+          className="shrink-0 px-2 text-body-sm text-text-muted hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-heading">Delete</button>
+      </div>}
     >
       <div className="flex min-h-0 flex-1 gap-2 border-t border-border-strong p-3">
-        {!lost && (
+        {!lost && !children && (
           <span className="mt-1 shrink-0">
             <AnchorSquare onClick={onGo} />
           </span>
         )}
-        <WysiwygField
+        {children ?? <WysiwygField
           autoFocus
           value={text}
           ariaLabel={stickyTitle(n)}
           placeholder="Write here. It is saved in your notes."
           onChange={onText}
           className="min-h-0 flex-1 overflow-y-auto font-reading text-body-sm leading-[1.6] text-text"
-        />
+        />}
       </div>
       {lost && <p className="shrink-0 px-3 pb-2 font-reading text-body-sm italic text-text-faint">{PASSAGE_LOST_LINE}</p>}
     </MarginCard>
@@ -142,6 +163,11 @@ export function makeStickyWriter(write: (text: string, base?: string) => string 
       timer = setTimeout(flush, ms);
     },
     flush,
+    cancel() {
+      clearTimeout(timer);
+      timer = undefined;
+      pending = null;
+    },
     /** A keystroke is waiting to be written. */
     pending: () => pending !== null,
     /** The text the store held when the sticky last took it: what the next write is measured against. */
@@ -464,15 +490,24 @@ export function stickyRows(windows: readonly FloatingWindow[], blocks: readonly 
   return rows.sort((a, b) => a.z - b.z);
 }
 
-function StickyWindow({ row, noteId, paperId }: { row: Row; noteId: string; paperId: string }) {
+function stickyContent(blocks: readonly Block[], id: string): Block[] {
+  const span = stickySpan(blocks, id);
+  return span ? blocks.slice(span.start + 1, span.end) : [];
+}
+
+function StickyWindow({ row, noteId, onSaved }: { row: Row; noteId: string; onSaved: () => void }) {
   const router = useRouter();
-  const [text, setText] = useState(() => stickyText(readingNoteFor(useNotesStore.getState().notes, paperId)?.blocks ?? [], row.id));
+  const note = useNotesStore((s) => s.notes[noteId]);
+  const windows = useWindows((s) => s.windows);
+  const active = isFrontCard(windows, row.id);
+  const [content, setContent] = useState(() => stickyContent(note?.blocks ?? [], row.id));
+  const [editorVersion, setEditorVersion] = useState(0);
   const [writer] = useState(() => {
     const made = makeStickyWriter((next, base) => {
-      useNotesStore.getState().setStickyText(noteId, row.id, next, base);
-      return stickyText(useNotesStore.getState().notes[noteId]?.blocks ?? [], row.id);
+      useNotesStore.getState().setStickyBlocks(noteId, row.id, JSON.parse(next) as Block[], base ? JSON.parse(base) as Block[] : undefined);
+      return JSON.stringify(stickyContent(useNotesStore.getState().notes[noteId]?.blocks ?? [], row.id));
     });
-    made.sync(stickyText(readingNoteFor(useNotesStore.getState().notes, paperId)?.blocks ?? [], row.id));
+    made.sync(JSON.stringify(stickyContent(note?.blocks ?? [], row.id)));
     return made;
   });
   const raise = useWindows((s) => s.raise);
@@ -480,49 +515,79 @@ function StickyWindow({ row, noteId, paperId }: { row: Row; noteId: string; pape
   const lost = useLostPassages((s) => s.lost[row.id] === true);
   // P10-09c: the sticky follows its blocks — when the notes window edits them, the text area shows the change, unless a
   // keystroke of the sticky's own is waiting to be written (then its write, a quarter second away, is the newer).
-  const stored = useNotesStore((s) => stickyText(readingNoteFor(s.notes, paperId)?.blocks ?? [], row.id));
+  const stored = JSON.stringify(stickyContent(note?.blocks ?? [], row.id));
   const [seen, setSeen] = useState(stored);
   if (stored !== seen) {
     setSeen(stored);
     // P10-29: with no keystroke of its own waiting, what is stored now is what the next write is measured against.
     if (!writer.pending()) writer.sync(stored);
-    const next = stickyFollowText({ local: text, stored, pending: writer.pending() });
-    if (next !== null) setText(next);
+    if (!writer.pending() && stored !== JSON.stringify(content)) {
+      setContent(JSON.parse(stored) as Block[]);
+      setEditorVersion((v) => v + 1);
+    }
   }
 
   useEffect(() => registerStickyWriter(row.id, writer), [row.id, writer]);
 
   // What is typed and not yet written is written when the window goes behind, closes or is left.
   useEffect(() => {
-    if (!row.front) writer.flush();
-  }, [row.front, writer]);
+    if (!active) writer.flush();
+  }, [active, writer]);
   useEffect(() => () => writer.flush(), [writer]);
 
+  if (!note) return null;
   return (
     <StickyWindowView
       n={row.n}
       quote={row.quote}
-      text={text}
+      text={content.map((b) => b.text).join("\n")}
       front={row.front}
+      active={active}
       top={row.top}
       height={row.height}
       z={row.z}
       onText={(next) => {
-        setText(next);
-        writer.push(next);
+        const blocks = next.split("\n").map((text) => block("text", text));
+        setContent(blocks);
+        writer.push(JSON.stringify(blocks));
       }}
       onClose={() => {
         writer.flush();
         closeSticky(noteId, row.id);
       }}
+      onSave={() => {
+        writer.flush();
+        useNotesStore.getState().saveSticky(noteId, row.id);
+        useWindows.getState().close(row.id);
+        onSaved();
+      }}
+      onDelete={() => {
+        writer.cancel();
+        useNotesStore.getState().removeSticky(noteId, row.id);
+        useWindows.getState().close(row.id);
+      }}
       lost={lost}
       onRaise={() => raise(row.id)}
       onGo={() => goToPassage(row.anchor, { doc: document, navigate: (href) => router.push(href as Route) })}
-    />
+    >
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain">
+        <NoteEditor key={editorVersion} compact transient autoFocus
+          leadingMarker={lost ? undefined : <AnchorSquare onClick={() => goToPassage(row.anchor, { doc: document, navigate: (href) => router.push(href as Route) })} />}
+          note={{ ...note, blocks: content }}
+          onDoc={(doc) => {
+            const owned = doc.blocks.map((b) => ({ ...b, stickyId: row.id }));
+            const next = JSON.stringify(owned);
+            if (next === JSON.stringify(content)) return;
+            setContent(owned);
+            writer.push(next);
+          }} />
+      </div>
+    </StickyWindowView>
   );
 }
 
 export function StickyNotes({ paper, reveal }: { paper: Paper; reveal: (run: () => void) => void }) {
+  const [toast, showToast] = useReaderToast();
   const windows = useWindows((s) => s.windows);
   const note = useNotesStore((s) => readingNoteFor(s.notes, paper.id));
 
@@ -585,8 +650,9 @@ export function StickyNotes({ paper, reveal }: { paper: Paper; reveal: (run: () 
   return (
     <>
       {rows.map((row) => (
-        <StickyWindow key={row.id} row={row} noteId={note.id} paperId={paper.id} />
+        <StickyWindow key={row.id} row={row} noteId={note.id} onSaved={() => showToast("Note saved")} />
       ))}
+      <ReaderToast toast={toast} />
     </>
   );
 }

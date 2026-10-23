@@ -138,8 +138,8 @@ describe("the page's leaving is watched (P10-29, rule 2) — the source", () => 
     expect(src).toContain("registerStickyWriter(row.id, writer)");
   });
 
-  it("the sticky's write is made against the text it last saw", () => {
+  it("the structured sticky's write carries the blocks it last saw (P12 item 1)", () => {
     expect(src).toContain("writer.sync(stored)");
-    expect(src).toMatch(/setStickyText\(noteId, row\.id, next, base\)/);
+    expect(src).toContain("setStickyBlocks(noteId, row.id, JSON.parse(next) as Block[], base ? JSON.parse(base) as Block[] : undefined)");
   });
 });

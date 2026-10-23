@@ -65,6 +65,7 @@ import {
   listNumber,
   moveBlock,
   nextType,
+  ownStickyContents,
   parseMarkdown,
   shortcut,
   wordCount,
@@ -247,6 +248,7 @@ interface RowApi {
 }
 
 interface RowProps {
+  leadingMarker?: React.ReactNode;
   block: Block;
   first: boolean;
   number: number;
@@ -267,7 +269,7 @@ function Grip() {
   );
 }
 
-const Row = memo(function Row({ block: b, first, number, editing, sources, dragging, dropBefore, dropAfter, api }: RowProps) {
+const Row = memo(function Row({ block: b, first, number, editing, sources, dragging, dropBefore, dropAfter, api, leadingMarker }: RowProps) {
   const area = useRef<HTMLTextAreaElement | null>(null);
   const view = useRef<HTMLDivElement | null>(null);
   const cls = textClass(b.type);
@@ -386,7 +388,7 @@ const Row = memo(function Row({ block: b, first, number, editing, sources, dragg
 
   // The marker a list item carries, centred on its first line.
   const indent = b.indent ?? 0;
-  let marker: React.ReactNode = null;
+  let marker: React.ReactNode = leadingMarker ?? null;
   if (b.type === "bullet") {
     marker = <span className="block h-[5px] w-[5px] bg-text-muted" />;
   } else if (b.type === "numbered") {
@@ -457,7 +459,7 @@ const Row = memo(function Row({ block: b, first, number, editing, sources, dragg
         </button>
       </div>
       <div className="flex min-w-0 flex-1" style={indent ? { paddingLeft: indent * 24 } : undefined}>
-        {marker && <div className={cn(cls, "flex h-[1lh] w-6 shrink-0 items-center")}>{marker}</div>}
+        {marker && <div className={cn(cls, "flex h-[1lh] shrink-0 items-center")} style={{ width: "calc(1em + 0.5rem)" }}>{marker}</div>}
         <div
           className={cn(
             "min-w-0 flex-1",
@@ -637,6 +639,9 @@ export function NoteEditor({
   compact = false,
   onDoc,
   hiddenBlockId = null,
+  transient = false,
+  autoFocus = false,
+  leadingMarker,
 }: {
   note: Note;
   /** P10-09b: the editor as the notes window holds it — the blocks and the toolbar alone, no rail, no page bar, no
@@ -648,6 +653,10 @@ export function NoteEditor({
    *  and saves it, but it is out of reach: the caret never moves into it, no key joins text into or out of it, and the
    *  word count leaves it out. The window does not pass one. */
   hiddenBlockId?: string | null;
+  /** A scoped sticky supplies its own structured writer through onDoc; never save it over the whole note. */
+  transient?: boolean;
+  autoFocus?: boolean;
+  leadingMarker?: React.ReactNode;
 }) {
   const router = useRouter();
   const saveNote = useNotesStore((s) => s.save);
@@ -666,7 +675,7 @@ export function NoteEditor({
   // P10-28: an anchored block an old Backspace left as text is a sticky's heading again. The doc starts as the repaired
   // copy, so the editor's own save (it saves a doc that is not `initial`) writes the repair back.
   const [doc, setDoc] = useState<Doc>(() => {
-    const blocks = repairAnchored(initial.current.blocks);
+    const blocks = ownStickyContents(repairAnchored(initial.current.blocks));
     return blocks === initial.current.blocks ? initial.current : { ...initial.current, blocks };
   });
   const docRef = useRef(doc);
@@ -677,7 +686,16 @@ export function NoteEditor({
     docRef.current = next;
     setDoc(next);
   }, []);
-  const setBlocks = (blocks: Block[]) => commit({ ...docRef.current, blocks });
+  const setBlocks = (blocks: Block[]) => {
+    const old = new Map(docRef.current.blocks.map((b) => [b.id, b]));
+    const owned = blocks.map((b, i) => {
+      if (b.anchor || b.highlight || b.stickyId || old.has(b.id)) return b;
+      const prev = blocks[i - 1];
+      const owner = prev?.stickyId ?? (prev?.anchor ? prev.id : undefined);
+      return owner ? { ...b, stickyId: owner } : b;
+    });
+    commit({ ...docRef.current, blocks: owned });
+  };
   /** What a citation key reads as in the text: the read view's "Rose et al., 2024", or its key. */
   const label: Label = (key) => {
     const source = docRef.current.sources[key];
@@ -730,6 +748,7 @@ export function NoteEditor({
   // ── Saving ──
   const dirty = useRef(false);
   useEffect(() => {
+    if (transient) return;
     if (doc === initial.current) return;
     dirty.current = true;
     setStatus("saving");
@@ -739,8 +758,9 @@ export function NoteEditor({
       setStatus("saved");
     }, 500);
     return () => clearTimeout(t);
-  }, [doc, note.id, saveNote]);
+  }, [doc, note.id, saveNote, transient]);
   useEffect(() => {
+    if (transient) return;
     const flush = () => {
       if (!dirty.current) return;
       saveNote(note.id, docRef.current);
@@ -751,7 +771,7 @@ export function NoteEditor({
       window.removeEventListener("pagehide", flush);
       flush();
     };
-  }, [note.id, saveNote]);
+  }, [note.id, saveNote, transient]);
 
   useEffect(() => {
     if (compact) return;
@@ -811,6 +831,11 @@ export function NoteEditor({
   // A note that was just made opens ready to write in: an empty title first,
   // else the first prompt a template left.
   useEffect(() => {
+    if (autoFocus) {
+      const first = initial.current.blocks.find((b) => isTextual(b.type));
+      if (first) focusBlock(first.id, "end");
+      return;
+    }
     const fresh = Date.now() - Date.parse(note.createdAt) < 15_000;
     if (!fresh) return;
     if (!initial.current.title.trim()) {
@@ -1870,6 +1895,13 @@ export function NoteEditor({
             enabled={Boolean(editingBlock && isTextual(editingBlock.type))}
             onMark={(m) => editing && applyMark(editing, m)}
             onType={(t) => editing && applyType(editing, t)}
+            onIndent={(delta) => {
+              if (!editing) return;
+              const index = docRef.current.blocks.findIndex((b) => b.id === editing);
+              if (index < 0 || !canIndent(docRef.current.blocks[index].type)) return;
+              setBlocks(indentBlock(docRef.current.blocks, index, delta));
+              focusBlock(editing, { plain: lastCaret.current?.id === editing ? lastCaret.current.plain : 0 });
+            }}
             className={compact ? "sticky top-0 z-10 bg-surface py-1" : "sticky top-0 z-10 -ml-1 mt-4 bg-bg py-1 md:top-12"}
           />
 
@@ -1900,6 +1932,7 @@ export function NoteEditor({
               <Row
                 key={b.id}
                 block={b}
+                leadingMarker={i === 0 ? leadingMarker : undefined}
                 first={i === 0}
                 number={b.type === "numbered" ? listNumber(doc.blocks, i) : 0}
                 editing={editing === b.id}

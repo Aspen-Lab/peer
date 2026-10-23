@@ -265,6 +265,22 @@ export function stickySpan(blocks: readonly Block[], headerId: string): { start:
   return { start, end };
 }
 
+/** Preserve legacy text ownership before a notes-surface toolbar changes its kind. */
+export function ownStickyContents(blocks: Block[]): Block[] {
+  let out = blocks;
+  for (const heading of blocks) {
+    if (!heading.anchor || heading.type !== "h3") continue;
+    const span = stickySpan(blocks, heading.id);
+    if (!span) continue;
+    for (let i = span.start + 1; i < span.end; i++) {
+      if (blocks[i].stickyId === heading.id) continue;
+      if (out === blocks) out = blocks.slice();
+      out[i] = { ...blocks[i], stickyId: heading.id };
+    }
+  }
+  return out;
+}
+
 /** What a sticky holds, its paragraphs joined by line breaks (what its text area shows). */
 export function stickyText(blocks: readonly Block[], headerId: string): string {
   const span = stickySpan(blocks, headerId);

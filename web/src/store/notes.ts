@@ -475,6 +475,8 @@ export const useNotesStore = create<NotesState>()(
             if (blocks !== patch.blocks) patch = { ...patch, blocks: [...blocks] };
           }
           if (patch.blocks && removedStickies.size > 0) patch = { ...patch, blocks: withoutDeletedStickies(patch.blocks) };
+          if (patch.blocks) patch = { ...patch, blocks: patch.blocks.map((b) =>
+            note.blocks.some((old) => old.id === b.id && old.stickySaved) && !b.stickySaved ? { ...b, stickySaved: true } : b) };
           return { notes: { ...s.notes, [id]: { ...note, ...patch, updatedAt: at } } };
         }),
       remove: (id) =>
