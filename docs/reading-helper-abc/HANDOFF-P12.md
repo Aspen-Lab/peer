@@ -116,6 +116,7 @@ CLOCK        P11's hourly clock disabled; set your own if your platform has one
 When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry first (what is done, what is not, where the worktree is) so the next agent does not redo or lose it. A resuming agent of another vendor (Claude, ChatGPT, …) reads the entries since its last one and continues; it backfills the owner's progress page (§7) under the other agent's name.
 
 - 2026-10-23 18:17Z | 3402e465 | manager (Claude Fable 5.1) | Branch pushed; draft PR Aspen-Lab/peer#37 opened (base main; documents only so far); the owner's progress page updated | evidence: https://github.com/Aspen-Lab/peer/pull/37 | next: the next manager (ChatGPT) does §1 steps 1–7; Claude's session is handing off
+- 2026-10-23 18:2xZ | (this commit) | manager (Claude Fable 5.1) | The owner's start prompt for ChatGPT written: `P12-START-PROMPT.md` (points at this hand-off, the owner file, the skills' paths, the rules, the stop line, the log protocol) | evidence: that file | next: the next manager starts from HANDOFF-P12 §1
 <!-- APPEND NEW ENTRIES BELOW THIS LINE, ONE PER COMPLETED UNIT OF WORK -->
 - 2026-10-23 (hand-off) | 453c8732 | manager (Claude Fable 5.1, the P11 manager) | Round P12 opened: the owner's nine items recorded verbatim with the binding reading (`P12-OWNER-2026-10-23.md`); this hand-off written; branch `update-on-paper-digest` created from main a2575ddb with the owner's approval; ruling §1h.182 in the state file; P11's hourly clock disabled | evidence: this file, P12-OWNER-2026-10-23.md, state file §1h.182 | next: the next manager does §1 steps 1–7
 
@@ -126,6 +127,7 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 | what | where |
 |---|---|
 | the owner's spec for P12 | `docs/reading-helper-abc/P12-OWNER-2026-10-23.md` |
+| the prompt the owner pastes to start ChatGPT | `docs/reading-helper-abc/P12-START-PROMPT.md` |
 | this hand-off and its log | `docs/reading-helper-abc/HANDOFF-P12.md` |
 | **the owner's progress page** | The P11 owner followed a live dashboard (a Claude artifact) the previous manager updated; you cannot write it. Keep **`docs/reading-helper-abc/P12-PROGRESS.md`** instead: one table, columns `id | kind | what (Chinese, one line) | state (进行中 / 已交回 / 已合入 / 不做) | started (UTC) | by (谁做的)`, plus a two-line status at the top in Chinese; update it with every log entry. A resuming Claude backfills the dashboard from it. |
 | the state file (rulings, ledger, BACKLOG) | `ABC-DEEP-REPORT-READING-HELPER.md` (repo root) — the manager's only; §1h.183 is the next ruling |
