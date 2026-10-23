@@ -94,13 +94,13 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-23T19:02:33.630Z
+AS OF        2026-10-23T19:04:38.856Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.188   NEXT RULING §1h.189   NEXT ITEM ID P12-07   NEXT FREE PORT 4206
+LAST RULING  §1h.189   NEXT RULING §1h.190   NEXT ITEM ID P12-07   NEXT FREE PORT 4206
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      Linux original-head gates; B P12-01; independent brief-contract audit; product edits held
-THEN         resolve audit findings; green Linux baseline; parallel C dispatch with committed briefs
+RUNNING      Linux original-head gates; B P12-01 dev/public production investigation; independent contract audit done; C edits held
+THEN         pick Bcheckpoint2; finish Linux baseline; dispatch independent C clusters once green
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
 ```
