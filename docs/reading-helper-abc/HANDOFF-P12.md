@@ -94,15 +94,15 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-23 (the hand-off commit)
-BRANCH       update-on-paper-digest, created from main a2575ddb; draft PR Aspen-Lab/peer#37 (https://github.com/Aspen-Lab/peer/pull/37)
-HELD BY      nobody yet — the next manager takes the state file over in §1 step 4
-LAST RULING  §1h.182 (the hand-off)   NEXT RULING §1h.183   NEXT ITEM ID P12-01   NEXT FREE PORT 4200
-RUBRIC       not yet written (§1 step 5)   SCORES none   STOP LINE ≥ 97.9 / one 0.25 / two consecutive rounds (§1h.163), unless the owner changes it
-RUNNING      nothing
-THEN         §1 steps 1–7; round 1 per §4
-OWNER'S PDF  not on this machine — ask once; public papers meanwhile
-CLOCK        P11's hourly clock disabled; set your own if your platform has one
+AS OF        2026-10-23T18:37:27.858Z
+BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
+HELD BY      Codex manager (local desktop chat); only writer of the state file
+LAST RULING  §1h.183   NEXT RULING §1h.184   NEXT ITEM ID P12-01   NEXT FREE PORT 4200
+RUBRIC       pending verified baseline; scores none; consecutive passes A 0 / B 0; stop ≥97.9 / one 0.25 / two consecutive rounds
+RUNNING      untouched-head baseline gates; read-only preflight investigation of source-shape test failures
+THEN         resolve and record baseline discrepancy before product work; commit rubric, then round-1 briefs
+OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
+CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
 ```
 
 ---
@@ -118,6 +118,11 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-23 18:17Z | 3402e465 | manager (Claude Fable 5.1) | Branch pushed; draft PR Aspen-Lab/peer#37 opened (base main; documents only so far); the owner's progress page updated | evidence: https://github.com/Aspen-Lab/peer/pull/37 | next: the next manager (ChatGPT) does §1 steps 1–7; Claude's session is handing off
 - 2026-10-23 18:2xZ | 5108ebdb | manager (Claude Fable 5.1) | The owner's start prompt for ChatGPT written: `P12-START-PROMPT.md` (points at this hand-off, the owner file, the skills' paths, the rules, the stop line, the log protocol) | evidence: that file | next: the next manager starts from HANDOFF-P12 §1
 <!-- APPEND NEW ENTRIES BELOW THIS LINE, ONE PER COMPLETED UNIT OF WORK -->
+- 2026-10-23T18:37:27.858Z | base 220ca9e1 (this entry's commit follows) | manager | SETUP: Fresh clone, existing approved branch checked out, head 220ca9e1; PR #37 attached; complete hand-off and owner review read | evidence: HANDOFF-P12.md, P12-OWNER-2026-10-23.md | next: resolve baseline then commit rubric
+- 2026-10-23T18:37:27.858Z | base 220ca9e1 (this entry's commit follows) | manager | ENV: Node 22.23.4 SHA256 verified, npm ci completed, Chromium installed outside project dependencies | evidence: scratch baseline logs; manifests unchanged | next: resolve baseline then commit rubric
+- 2026-10-23T18:37:27.858Z | base 220ca9e1 (this entry's commit follows) | manager | PREFLIGHT: Independent read-only guard comparison delivered; source-shape baseline discrepancy investigation running | evidence: P11-RUBRIC.md, P12-OWNER-2026-10-23.md | next: resolve baseline then commit rubric
+- 2026-10-23T18:37:27.858Z | base 220ca9e1 (this entry's commit follows) | manager | CLOCK: Hourly heartbeat peer-p12 created and confirmed ACTIVE; cheapest model parameter unavailable | evidence: app automation peer-p12 | next: resolve baseline then commit rubric
+- 2026-10-23T18:37:27.858Z | base 220ca9e1 (this entry's commit follows) | manager | TAKEOVER: PARTIAL baseline: build 0, tsc 0, lint 0 errors / 144 warnings; full tests running, failures observed; no product changes | evidence: state ruling §1h.183 | next: resolve baseline then commit rubric
 - 2026-10-23 (hand-off) | 453c8732 | manager (Claude Fable 5.1, the P11 manager) | Round P12 opened: the owner's nine items recorded verbatim with the binding reading (`P12-OWNER-2026-10-23.md`); this hand-off written; branch `update-on-paper-digest` created from main a2575ddb with the owner's approval; ruling §1h.182 in the state file; P11's hourly clock disabled | evidence: this file, P12-OWNER-2026-10-23.md, state file §1h.182 | next: the next manager does §1 steps 1–7
 
 ---
