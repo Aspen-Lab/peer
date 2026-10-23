@@ -101,12 +101,12 @@ export function ForYourQuestions({
         aria-expanded={open}
         aria-controls={PANEL_ID}
         onClick={() => setOpen((was) => !was)}
-        className="annotation inline-flex items-center gap-2 rounded-full border border-border-strong px-3 py-2 text-text-muted transition-colors hover:text-heading [@media(hover:none)]:min-h-11"
+        className="inline-flex max-w-full items-center gap-2 rounded-full border border-action-boundary bg-action-orange px-3 py-2 font-mono text-title leading-[1.3] text-left text-action-foreground transition-colors hover:bg-action-orange-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action-focus [@media(hover:none)]:min-h-11"
       >
-        <span aria-hidden className={`inline-block transition-transform ${open ? "rotate-90" : ""}`}>
+        <span aria-hidden className={`inline-block shrink-0 transition-transform ${open ? "rotate-90" : ""}`}>
           {"\u25b8"}
         </span>
-        {FOR_YOUR_QUESTIONS.control}
+        <span className="min-w-0">{FOR_YOUR_QUESTIONS.control}</span>
       </button>
       <div id={PANEL_ID} hidden={!open} className="mt-4 space-y-8 measure">
         {questions.map((entry, questionIndex) => {
