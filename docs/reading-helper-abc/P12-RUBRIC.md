@@ -97,3 +97,6 @@ The unmodified app baseline must be measured and its discrepancies explained bef
 | — | — | Not measured | Not measured | 0 / 0; preparation only |
 
 The loop's end is the manager's measure; **the owner's own look at the surface is the acceptance above this rubric**. The final report follows P11-FINAL-REPORT.md and states in Chinese each theme's two scores, changes, open backlog, owner-only decisions and material evidence limits.
+
+
+Dated clarification, ruling §1h.194 (2026-10-23): for B3–B5, multiple cards use a fixed labelled header with full quotation/content/controls inside each independently scrolling body. Actual header plus one content-row minimum includes padding/borders. When an unbounded number of existing cards cannot physically fit, one shared margin track scrolls vertically and retains equal initial shares at the largest required minimum; bodies remain mounted and reachable regardless of active state, with opening order stable. Record the score under the original simultaneous-fit reading alongside this clarification if an overcapacity case differs. No unit, price, stop threshold or pass requirement changes.
