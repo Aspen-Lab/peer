@@ -8,7 +8,7 @@ The owner writes Chinese; answer the owner in Chinese, with the numbers. The own
 
 ## §1 Read this first — how to resume in ten minutes
 
-1. **Get the code.** `git clone https://github.com/Aspen-Lab/peer.git && cd peer && git checkout update-on-paper-digest`. The branch exists (created 2026-10-23 from `main` a2575ddb by the previous manager, with the owner's approval of its name; a draft PR is open for it — find it with `gh pr list --head update-on-paper-digest` or on GitHub). **Never create another branch without the owner's written approval** (AGENTS.md). All P12 work is committed on this branch; the PR is merged only when the owner says so.
+1. **Get the code.** `git clone https://github.com/Aspen-Lab/peer.git && cd peer && git checkout update-on-paper-digest`. The branch exists (created 2026-10-23 from `main` a2575ddb by the previous manager, with the owner's approval of its name; a draft PR is open for it: Aspen-Lab/peer#37, https://github.com/Aspen-Lab/peer/pull/37). **Never create another branch without the owner's written approval** (AGENTS.md). All P12 work is committed on this branch; the PR is merged only when the owner says so.
 2. **Install and baseline.** Node 22 (`node --version` → v22.x). `cd web && npm ci`. Chromium for the walks: `npx playwright install chromium` (the walks drive the real page). Then run the gates once on the untouched head (Appendix A's script): expect **build 0, tsc 0, lint 0 errors / 144 warnings, 569 test files + 3 skipped / 10,684 tests + 3 skipped** (`TZ=America/Chicago`). Write the numbers as the GATE BASELINE line of the state file's §1 (step 5). If they differ, stop and record why before anything else.
 3. **Read, whole, in this order** (all paths from the repo root):
    - `AGENTS.md` (the project rules: parallel work, no branch without approval, the decision priorities) and `docs/PRODUCT_DIRECTION.md`.
@@ -95,7 +95,7 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 
 ```
 AS OF        2026-10-23 (the hand-off commit)
-BRANCH       update-on-paper-digest, created from main a2575ddb; draft PR open (see the log's first entry for its number)
+BRANCH       update-on-paper-digest, created from main a2575ddb; draft PR Aspen-Lab/peer#37 (https://github.com/Aspen-Lab/peer/pull/37)
 HELD BY      nobody yet — the next manager takes the state file over in §1 step 4
 LAST RULING  §1h.182 (the hand-off)   NEXT RULING §1h.183   NEXT ITEM ID P12-01   NEXT FREE PORT 4200
 RUBRIC       not yet written (§1 step 5)   SCORES none   STOP LINE ≥ 97.9 / one 0.25 / two consecutive rounds (§1h.163), unless the owner changes it
@@ -115,6 +115,7 @@ CLOCK        P11's hourly clock disabled; set your own if your platform has one
 
 When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry first (what is done, what is not, where the worktree is) so the next agent does not redo or lose it. A resuming agent of another vendor (Claude, ChatGPT, …) reads the entries since its last one and continues; it backfills the owner's progress page (§7) under the other agent's name.
 
+- 2026-10-23 18:17Z | (this commit) | manager (Claude Fable 5.1) | Branch pushed; draft PR Aspen-Lab/peer#37 opened (base main; documents only so far); the owner's progress page updated | evidence: https://github.com/Aspen-Lab/peer/pull/37 | next: the next manager (ChatGPT) does §1 steps 1–7; Claude's session is handing off
 <!-- APPEND NEW ENTRIES BELOW THIS LINE, ONE PER COMPLETED UNIT OF WORK -->
 - 2026-10-23 (hand-off) | 453c8732 | manager (Claude Fable 5.1, the P11 manager) | Round P12 opened: the owner's nine items recorded verbatim with the binding reading (`P12-OWNER-2026-10-23.md`); this hand-off written; branch `update-on-paper-digest` created from main a2575ddb with the owner's approval; ruling §1h.182 in the state file; P11's hourly clock disabled | evidence: this file, P12-OWNER-2026-10-23.md, state file §1h.182 | next: the next manager does §1 steps 1–7
 
