@@ -94,13 +94,13 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-23T23:48:36.764Z
+AS OF        2026-10-23T23:48:59.192Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
 LAST RULING  §1h.192   NEXT RULING §1h.193   NEXT ITEM ID P12-07   NEXT FREE PORT 4206
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      C02/03 notes, C04 splitmargin, C05 orangecontract in independent worktrees; B bounded report banked
-THEN         record sharedactive/visible API; brief measured width/selection/figure work; resolve clean-gates executor
+RUNNING      three C clusters implementing in detached worktrees; Linux environment checkpoint banked
+THEN         log C dispatch and active/visible contract; prepare measured follow-up briefs; verify returned C work
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
 ```
@@ -143,6 +143,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-23T23:45:32.664Z | parent 93c7d0b2 (entry commit follows) | manager | BASELINE-CAUSAL-DONE: Four original-head failures causally classified; historical ref fixed and migration9/9 passes. Default isolated TCG runs preserve failures: pane29pass1timeout;partition54pass1timeout;wysiwyg118pass2fail(frame46.979ms and propertytimeout). Native unchanged wysiwyg120/120 passes. Release only detached implementation hold to allow parallel progress; hard clean-gates landing requirement unchanged. | evidence: ruling192; environment B scratch isolated logs; unchanged native serializer benchmark; updated C briefs | next: dispatch disjoint note/margin/orange C clusters as slots free; resolve verification executor before landing; B finishes remaining probes
 
 - 2026-10-23T23:48:36.764Z | parent 36dec920 (entry commit follows) | manager | P12-01-B-BOUNDED: Banked bounded final B addendum34c1a565: owner420 andpublicA210 figure clicks opened; publicB63delivered opened,66blocked beforeclick fromimagefailures; verifiedstandingselection36/36opens; phonesall3Highlightmarks butnoanchoredTake notes; deployedcrossbody21/21noactions. Auth/actualzoom/enhancement/Summary/exportlimitationsstillPARTIAL. Own4200serverstopped. | evidence: P12-01-B-20261023T190000Z.md; scratchmatrix evidence filenames in report | next: manager rules responsivewidth/range/viewer contracts; issue B-named implementation briefs by shared-file dependencies
+
+- 2026-10-23T23:48:59.192Z | parent 9bbfeb35 (entry commit follows) | manager | P12-ENV-B-PARTIAL: Imported independent environment checkpoint affea779 under campaign directory, removing an unnecessary model identifier before commit. Exact Linux and isolated counts, fetched historical ref, runtime restart and unresolved native executor are recorded. No app/test change; full gates remain red. | evidence: P12-ENV-B-20261023T234546Z.md; source affea779; scratch baseline-logs | next: continue detached C implementation; manager resolves independent full clean-gates execution before landing
 
 ---
 
