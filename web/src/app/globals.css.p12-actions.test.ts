@@ -34,3 +34,18 @@ describe("P12 shared orange action palette", () => {
     });
   }
 });
+
+describe("P12 answers disclosure style", () => {
+  const source = readFileSync(new URL("../components/reader/for-your-questions.tsx", import.meta.url), "utf8");
+  it("uses the paper section title scale and shared action states without shrinking the label", () => {
+    const button = source.slice(source.indexOf("<button"), source.indexOf("</button>"));
+    for (const name of ["text-title", "bg-action-orange", "text-action-foreground", "border-action-boundary", "hover:bg-action-orange-hover", "focus-visible:outline-action-focus", "focus-visible:outline-2", "focus-visible:outline-offset-2", "max-w-full", "text-left"]) {
+      expect(button).toContain(name);
+    }
+    expect(button).not.toContain("annotation");
+    expect(button).toContain("shrink-0");
+    expect(button).toContain("min-w-0");
+    expect(button).not.toMatch(/whitespace-nowrap|truncate|line-clamp/);
+    expect(css).toMatch(/\.reading-scaled \[class~="text-title"\]\s*\{\s*font-size:\s*calc\(var\(--text-title\)\s*\*\s*var\(--reading-scale,\s*1\)\);?\s*\}/);
+  });
+});
