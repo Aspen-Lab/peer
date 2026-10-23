@@ -116,7 +116,7 @@ CLOCK        P11's hourly clock disabled; set your own if your platform has one
 When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry first (what is done, what is not, where the worktree is) so the next agent does not redo or lose it. A resuming agent of another vendor (Claude, ChatGPT, …) reads the entries since its last one and continues; it backfills the owner's progress page (§7) under the other agent's name.
 
 <!-- APPEND NEW ENTRIES BELOW THIS LINE, ONE PER COMPLETED UNIT OF WORK -->
-- 2026-10-23 (hand-off) | (this commit) | manager (Claude Fable 5.1, the P11 manager) | Round P12 opened: the owner's nine items recorded verbatim with the binding reading (`P12-OWNER-2026-10-23.md`); this hand-off written; branch `update-on-paper-digest` created from main a2575ddb with the owner's approval; ruling §1h.182 in the state file; P11's hourly clock disabled | evidence: this file, P12-OWNER-2026-10-23.md, state file §1h.182 | next: the next manager does §1 steps 1–7
+- 2026-10-23 (hand-off) | 453c8732 | manager (Claude Fable 5.1, the P11 manager) | Round P12 opened: the owner's nine items recorded verbatim with the binding reading (`P12-OWNER-2026-10-23.md`); this hand-off written; branch `update-on-paper-digest` created from main a2575ddb with the owner's approval; ruling §1h.182 in the state file; P11's hourly clock disabled | evidence: this file, P12-OWNER-2026-10-23.md, state file §1h.182 | next: the next manager does §1 steps 1–7
 
 ---
 
