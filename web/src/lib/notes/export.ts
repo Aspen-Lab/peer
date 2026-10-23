@@ -76,7 +76,7 @@ function highlightWords(b: Block): string | null {
 function blockMarkdown(b: Block, blocks: Block[], i: number, sources: Record<string, Source>): string | null {
   // P10-09e (review 7.3): quoted text is not exported — a quote block leaves no line, in any format.
   if (b.type === "quote") return null;
-  const pad = "    ".repeat(b.indent ?? 0);
+  const pad = "  ".repeat(b.indent ?? 0);
   if (isTextual(b.type) && !b.text.trim()) return null;
   // Prose loses trailing spaces (a citation typed at a line's end leaves
   // one); code keeps every character it was given.
