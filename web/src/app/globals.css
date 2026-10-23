@@ -1,6 +1,12 @@
 @import "tailwindcss";
 
 @theme {
+  /* P12 action colour tokens: shared answers / Submit; white text AA. */
+  --color-action-orange: #c2410c;
+  --color-action-orange-hover: #a93608;
+  --color-action-foreground: #ffffff;
+  --color-action-boundary: #9a3412;
+  --color-action-focus: #9a3412;
   /* ── Screens above Tailwind's last one ──────────────────
      `xl` is 80rem and `2xl` is 96rem, and the board runs out of named
      screens well before a desk monitor runs out of pixels.
@@ -263,6 +269,12 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; }
 
 /* Light palette (default; also data-mode="light" and system-on-light-OS) */
 :root {
+  /* P12 action colour tokens: shared answers / Submit; white text AA. */
+  --color-action-orange: #c2410c;
+  --color-action-orange-hover: #a93608;
+  --color-action-foreground: #ffffff;
+  --color-action-boundary: #9a3412;
+  --color-action-focus: #9a3412;
   --seed: #ff520d;
   --seed-dark: #ff6a2b;
   --color-bg: #fafafa;
@@ -335,6 +347,12 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; }
 
 /* Dark palette — explicit toggle */
 html[data-mode="dark"] {
+  /* P12 action colour tokens: shared answers / Submit; white text AA. */
+  --color-action-orange: #c2410c;
+  --color-action-orange-hover: #a93608;
+  --color-action-foreground: #ffffff;
+  --color-action-boundary: #ffb38a;
+  --color-action-focus: #ffb38a;
   --color-bg: #111111;
   --color-bg-secondary: #181818;
   --color-surface: #232323;
@@ -396,6 +414,12 @@ html[data-mode="dark"] {
    above; CSS has no mixins, keep the two in sync. */
 @media (prefers-color-scheme: dark) {
   html[data-mode="system"] {
+  /* P12 action colour tokens: shared answers / Submit; white text AA. */
+  --color-action-orange: #c2410c;
+  --color-action-orange-hover: #a93608;
+  --color-action-foreground: #ffffff;
+  --color-action-boundary: #ffb38a;
+  --color-action-focus: #ffb38a;
   --color-bg: #111111;
   --color-bg-secondary: #181818;
   --color-surface: #232323;
@@ -574,6 +598,12 @@ html[data-mode="dark"] {
    every one of them is byte-identical to the un-zoomed value whenever Fit is off. Widths are NOT divided: the grid's tracks are layout
    px, and Fit scales the whole grid with them. */
 :root {
+  /* P12 action colour tokens: shared answers / Submit; white text AA. */
+  --color-action-orange: #c2410c;
+  --color-action-orange-hover: #a93608;
+  --color-action-foreground: #ffffff;
+  --color-action-boundary: #9a3412;
+  --color-action-focus: #9a3412;
   /* `KeyLegend` is `h-[var(--legend-h)]`, inside the zoom (painted × zoom); the pane keeps clear of it. */
   --legend-h: 1.75rem;
 }
