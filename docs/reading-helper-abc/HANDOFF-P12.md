@@ -94,13 +94,13 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-23T23:43:58.447Z
+AS OF        2026-10-23T23:45:32.664Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.191   NEXT RULING §1h.192   NEXT ITEM ID P12-07   NEXT FREE PORT 4206
+LAST RULING  §1h.192   NEXT RULING §1h.193   NEXT ITEM ID P12-07   NEXT FREE PORT 4206
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      existing Linux/B investigators resumed; baseline4fail diagnostic and native serializer timing; no product C edits
-THEN         resolve reference/timing causes; record honest baseline; then parallel C work and independent verification
+RUNNING      B remaining probes; C clusters ready for parallel dispatch; genuine clean-gates executor unresolved
+THEN         parallel detached implementation; independent verification before any landing
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
 ```
@@ -139,6 +139,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-23T14:09:01-05:00 | 687c7bda | manager (backfilled from committed progress/events after CRLF log bug) | P12-01-PARTIAL-2: Picked second B checkpoint: observed productiona2575dd has identical web tree (manager independently git-diff confirmed); preview login-blocked, synthetic auth restart policy-blocked and suspended. Corrected stale P12 resume branch/clock playbook and added per-item ledger. Native Linux CI feasibility will be attempted while portable baseline continues. | evidence: P12-01-B-20261023T190000Z.md; manager git-diff exit0; ruling§1h.190; shared ledger | next: attempt branch-scoped dependency-free native Linux baseline workflow through connected GitHub; preserve portable baseline until result
 
 - 2026-10-23T23:43:58.447Z | parent a77f7fa7 (entry commit follows) | manager | P12-RESUME-1: Resumed after usage-limit interruption without duplicating workers; banked B checkpoint3 dc3134d4 as a77f7fa7. Genuine Linux original-head gates completed build0/tsc0/lint0errors144warnings/test1: 4failed565passed3skipped files,4failed10680passed3skipped tests. Four causes now being checked in isolation; native CI create_file was rejected403. Corrected scratch log helper CRLF delimiter and backfilled12 missing section6 records from committed progress/events. | evidence: P12-01-B-20261023T190000Z.md; Linux scratch logs/exits.txt and test.log; P12-PROGRESS.md; ruling191; git history | next: collect isolated four-file Linux reruns and native performance comparison; finish B remaining probes; rule baseline next step before product C edits
+
+- 2026-10-23T23:45:32.664Z | parent 93c7d0b2 (entry commit follows) | manager | BASELINE-CAUSAL-DONE: Four original-head failures causally classified; historical ref fixed and migration9/9 passes. Default isolated TCG runs preserve failures: pane29pass1timeout;partition54pass1timeout;wysiwyg118pass2fail(frame46.979ms and propertytimeout). Native unchanged wysiwyg120/120 passes. Release only detached implementation hold to allow parallel progress; hard clean-gates landing requirement unchanged. | evidence: ruling192; environment B scratch isolated logs; unchanged native serializer benchmark; updated C briefs | next: dispatch disjoint note/margin/orange C clusters as slots free; resolve verification executor before landing; B finishes remaining probes
 
 ---
 
