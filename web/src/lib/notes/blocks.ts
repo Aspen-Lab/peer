@@ -260,7 +260,8 @@ export function stickySpan(blocks: readonly Block[], headerId: string): { start:
   const start = blocks.findIndex((b) => b.id === headerId && b.type === "h3");
   if (start < 0) return null;
   let end = start + 1;
-  while (end < blocks.length && blocks[end].type === "text" && !blocks[end].anchor) end++;
+  while (end < blocks.length && !blocks[end].anchor &&
+    (blocks[end].stickyId === headerId || (blocks[end].type === "text" && !blocks[end].stickyId))) end++;
   return { start, end };
 }
 
