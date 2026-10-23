@@ -598,12 +598,6 @@ html[data-mode="dark"] {
    every one of them is byte-identical to the un-zoomed value whenever Fit is off. Widths are NOT divided: the grid's tracks are layout
    px, and Fit scales the whole grid with them. */
 :root {
-  /* P12 action colour tokens: shared answers / Submit; white text AA. */
-  --color-action-orange: #c2410c;
-  --color-action-orange-hover: #a93608;
-  --color-action-foreground: #ffffff;
-  --color-action-boundary: #9a3412;
-  --color-action-focus: #9a3412;
   /* `KeyLegend` is `h-[var(--legend-h)]`, inside the zoom (painted × zoom); the pane keeps clear of it. */
   --legend-h: 1.75rem;
 }
