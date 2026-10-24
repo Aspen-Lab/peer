@@ -19,10 +19,11 @@ const find = (passage: string, ...segments: ReturnType<typeof seg>[]) => locateE
 
 describe("P12-11 bounded descriptor shape", () => {
   it("allows only the bounded four fields and no prose/identity payload", () => {
+    const malformed = (part: unknown) => ({ segments: [part] });
     expect(readExplainRange(range(full(0, first)))).toEqual(range(full(0, first)));
     for (const value of [null, {}, [], { segments: [] }, { segments: "bad" }, { segments: [null] },
-      { ...range(full(0, first)), quote: first }, range({ ...full(0, first), quote: first }),
-      range({ ...full(0, first), paragraphText: first }), range({ ...full(0, first), source: "summary" }),
+      { ...range(full(0, first)), quote: first }, malformed({ ...full(0, first), quote: first }),
+      malformed({ ...full(0, first), paragraphText: first }), malformed({ ...full(0, first), source: "summary" }),
       range({ ...full(0, first), sectionId: "x".repeat(129) }), range({ ...full(0, first), sectionId: "" }),
       ...[-1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1].flatMap((bad) => [
         range({ ...full(0, first), paragraphIndex: bad }), range({ ...full(0, first), start: bad }), range({ ...full(0, first), end: bad }),
@@ -62,6 +63,21 @@ describe("P12-11 exact canonical rendered ranges", () => {
     expect(locateExplainRange(cited, first, range(full(0, "Amber [12] coils store heat.")))).toBeNull();
   });
 
+  it("does not confuse raw DOM formula offsets with canonical rendered block offsets", () => {
+    const raw = `Amber ${inlineMath("x_{long}=y^{two}")} coils store heat.`;
+    const canonical = "Amber \u0000 coils store heat.";
+    const mathDoc = { ...doc, sections: [{ ...doc.sections[0], text: raw }] };
+    expect(locateExplainRange(mathDoc, "coils store heat.", range(seg(0, raw.indexOf("coils"), raw.length)))).toBeNull();
+    expect(locateExplainRange(mathDoc, "coils store heat.", range(seg(0, canonical.indexOf("coils"), canonical.length)))).not.toBeNull();
+  });
+
+  it("accepts the600one-character segment bound but rejects metadata beyond its clipped words", () => {
+    const manyDoc = { ...doc, sections: [{ ...doc.sections[0], text: Array.from({ length: 600 }, () => "a").join("\n\n") }] };
+    const segments = Array.from({ length: 600 }, (_, i) => seg(i, 0, 1));
+    expect(locateExplainRange(manyDoc, Array.from({ length: 600 }, () => "a").join(" "), range(...segments))).not.toBeNull();
+    expect(locateExplainRange(manyDoc, "a", range(...segments))).toBeNull();
+  });
+
   it("preserves repeated occurrences and hashes only canonical occurrence metadata", () => {
     const repeated = { ...doc, sections: [{ ...doc.sections[0], text: `${first} ${first}\n\n${first}` }] };
     const a = locateExplainRange(repeated, first, range(seg(0, 0, first.length)))!;
@@ -98,6 +114,17 @@ describe("P12-11 exact canonical rendered ranges", () => {
       expect(json.paper.abstract.length).toBe(2500);
     }
   });
+
+  it("keeps first-block/context budgets independent of how many blocks the range spans", () => {
+    const long = "amber ".repeat(600).trim();
+    const longDoc = { ...doc, sections: [{ ...doc.sections[0], text: `${long}\n\n${long}\n\n${second}` }] };
+    const found = locateExplainRange(longDoc, `amber ${second}`, range(seg(1, long.length - 5, long.length), full(2, second)))!;
+    const prompt = JSON.parse(buildExplainPrompt({ paper: { title: "T", abstract: "A" }, map: [], passage: `amber ${second}`, located: found.located }).userPrompt);
+    expect(prompt.context.paragraph.length).toBeLessThanOrEqual(2000);
+    expect(prompt.context.before.length).toBeLessThanOrEqual(1500);
+    expect(prompt.context.after).toBe(second);
+    expect(prompt.context.paragraphs).toBeUndefined();
+  });
 });
 
 describe("P12-11 renderer barriers and caption variants", () => {
@@ -124,6 +151,7 @@ describe("P12-11 renderer barriers and caption variants", () => {
     const mathDoc = { ...doc, sections: [{ ...doc.sections[0], text: `Amber ${inlineMath("x=y")} coils store heat.` }] };
     const canonical = "Amber \u0000 coils store heat.";
     expect(locateExplainRange(mathDoc, "Amber coils store heat.", range(full(0, canonical)))).toBeNull();
+    expect(locateExplainRange(mathDoc, canonical, range(full(0, canonical)))).toBeNull();
     expect(locateExplainRange(mathDoc, "coils store heat.", range(seg(0, canonical.indexOf("coils"), canonical.length)))).not.toBeNull();
     expect(locateExplainRange(mathDoc, "Amber", range(seg(0, 0, 5)))).not.toBeNull();
   });

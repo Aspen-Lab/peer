@@ -3,6 +3,8 @@ import { NextRequest } from "next/server";
 import type { ExtractedDocument } from "@/lib/papers/html-text";
 import { explainCache } from "@/lib/papers/explain";
 import { resetCounterStoreForTests } from "@/lib/usage/counters";
+import { clipPassage } from "@/lib/papers/explain";
+import { blockMarker, inlineMath } from "@/lib/text/math";
 
 // Constructed actual-handler tests. Ordinary test-runtime auth is untouched;
 // data/provider stubs prove no UI, deployed-auth or live-provider behavior.
@@ -90,6 +92,67 @@ describe.each(modes)("P12-11 $label validates before cache and generation", ({ b
     expect(await response.json()).toEqual({ unavailable: true });
     expect(mocks.getFullText).not.toHaveBeenCalled();
     expect(generate).not.toHaveBeenCalled();
+  });
+
+  it("keeps upload ownership/revision gates and private headers for a new range", async () => {
+    const attached = { ...paper, fullTextUploadId: "upload:0123456789abcdef" };
+    mocks.ownedUpload.mockResolvedValueOnce({ revision: 3, paperIds: [paper.id] }).mockResolvedValueOnce({ revision: 4, paperIds: [paper.id] });
+    const changed = await call({ ...body, paper: attached });
+    expect(changed.status).toBe(410);
+    expect(changed.headers.get("Cache-Control")).toContain("private");
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(explainCache.size()).toBe(0);
+    mocks.ownedUpload.mockResolvedValue(null); generate.mockClear(); mocks.getFullText.mockClear();
+    const absent = await call({ ...body, paper: attached });
+    expect(absent.status).toBe(404);
+    expect(mocks.getFullText).not.toHaveBeenCalled();
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it("covers rendered heading/caption/section boundaries, formulas and bounded long prefixes", async () => {
+    const cap = "Figure 1 · Coils during the cycle.";
+    const start = "See Figure 1 for the coils.";
+    const heading = "2 Results";
+    const after = "The second measured cycle ends.";
+    const p = (i: number, text: string, sectionId = "s1") => seg(i, text, sectionId);
+    const figDoc: ExtractedDocument = { ...doc, source: "pdf", figureCaptions: [{ ordinal: 0, label: "Figure 1", caption: "Coils during the cycle.", page: 2 }],
+      sections: [{ ...doc.sections[0], text: `${start}\n\n${second}` }, { id: "s2", heading, canonical: "body", text: after }] };
+    const cases = [
+      { passage: `1 Setup ${start}`, segments: [p(2, "1 Setup"), p(0, start)], status: 200 },
+      { passage: `${start} ${cap} ${second}`, segments: [p(0, start), p(3, cap), p(1, second)], status: 200 },
+      { passage: `${cap} · p.2 of the PDF ${second}`, segments: [p(3, `${cap} · p.2 of the PDF`), p(1, second)], status: 200 },
+      { passage: `coils. ${cap.slice(0, 8)}`, segments: [{ ...p(0, start), start: start.indexOf("coils") }, { ...p(3, cap), end: 8 }], status: 200 },
+      { passage: `${second} ${heading} ${after}`, segments: [p(1, second), p(1, heading, "s2"), p(0, after, "s2")], status: 200 },
+      { passage: `${start} ${second}`, segments: [p(0, start), p(1, second)], status: 422 },
+      { passage: `${second} ${after}`, segments: [p(1, second), p(0, after, "s2")], status: 422 },
+      { passage: `${second} ${start}`, segments: [p(1, second), p(0, start)], status: 422 },
+      { passage: `${start} ${cap} · p.3 of the PDF`, segments: [p(0, start), p(3, `${cap} · p.3 of the PDF`)], status: 422 },
+      { passage: `${start} ${cap} Unknown ${second}`, segments: [p(0, start), p(3, cap), p(1, second)], status: 422 },
+    ];
+    for (const test of cases) {
+      explainCache.clear(); generate.mockClear();
+      mocks.getFullText.mockResolvedValue({ status: "ok", doc: figDoc, attempts: [] });
+      const response = await call({ ...body, passage: test.passage, range: { segments: test.segments } });
+      expect(response.status, test.passage).toBe(test.status);
+      expect(generate).toHaveBeenCalledTimes(test.status === 200 ? 1 : 0);
+    }
+    for (const equation of [false, true]) {
+      const formulaDoc = { ...doc, equations: [{ latex: "x=y" }], sections: [{ ...doc.sections[0], text: equation ? `${first}\n\n${blockMarker(0)}\n\n${second}` : `Amber ${inlineMath("x=y")} coils store heat.` }] };
+      mocks.getFullText.mockResolvedValue({ status: "ok", doc: formulaDoc, attempts: [] });
+      generate.mockClear();
+      const response = await call({ ...body, passage: equation ? `${first} ${second}` : "Amber coils store heat.", range: equation ? valid : { segments: [p(0, "Amber \u0000 coils store heat.")] } });
+      expect(response.status).toBe(422); expect(generate).not.toHaveBeenCalled();
+    }
+    for (const words of [270, 235]) {
+      const head = "amber ".repeat(words).trim(); const tail = "copper ".repeat(70).trim();
+      const bounded = clipPassage(`${head} ${tail}`);
+      const segments = bounded.length <= head.length ? [{ ...p(0, head), end: bounded.length }] : [p(0, head), { ...p(1, tail), end: bounded.length - head.length - 1 }];
+      mocks.getFullText.mockResolvedValue({ status: "ok", doc: { ...doc, sections: [{ ...doc.sections[0], text: `${head}\n\n${tail}` }] }, attempts: [] });
+      expect((await call({ ...body, passage: `${head} ${tail}`, range: { segments } })).status).toBe(200);
+      generate.mockClear();
+      expect((await call({ ...body, passage: `${head} ${tail}`, range: { segments: [p(0, head), p(1, tail)] } })).status).toBe(422);
+      expect(generate).not.toHaveBeenCalled();
+    }
   });
 });
 
