@@ -32,7 +32,7 @@ function explainProblems(source: string): string[] {
   if (text.split("<ExplainBox").length - 1 !== 1) problems.push("the popover is not mounted exactly once");
   const popover = /<ExplainBox [^>]*\/>/.exec(text)?.[0] ?? "";
   if (!popover.includes("key={paper.id}")) problems.push("the popover is no longer keyed by the paper (a card must not follow the reader to the next one)");
-  if (!popover.includes("target={explainTarget}")) problems.push("the popover is no longer handed the selection");
+  if (!popover.includes("target={explainTarget?.unavailableReason ? null : explainTarget}")) problems.push("the popover is no longer handed the selection");
   if (!popover.includes("terms={terms}")) problems.push("the popover is no longer handed the page's terms");
   // P8-06 (re-aimed: was `canAsk={providerConfigured}`): the always-on window asks `explainWindowAvailable`, which is
   // `aiAvailability`'s answer plus the reader's own local key while the sign-in check has not answered — so the window is in

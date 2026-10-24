@@ -181,8 +181,9 @@ describe("the page's hand-off (P10-08b, rule 3)", () => {
   const page = readFileSync(resolve(process.cwd(), "src/app/papers/[id]/page.tsx"), "utf8").replace(/\s+/g, " ");
 
   it("gives the toolbar the one boolean, made from the same key flag and terms the explain box gets", () => {
-    expect(page).toContain("canExplain={selectionCanExplain({ canAsk: explainCanAsk, terms, passage: explainTarget?.passage ?? null })}");
-    expect(page).toContain("<ExplainBox key={paper.id} target={explainTarget} terms={terms} canAsk={explainCanAsk}");
+    // P12-08: a formula/nonreader reason is never sent as an Explain target.
+    expect(page).toContain("canExplain={selectionCanExplain({ canAsk: explainCanAsk, terms, passage: explainTarget?.unavailableReason ? null : explainTarget?.passage ?? null })}");
+    expect(page).toContain("<ExplainBox key={paper.id} target={explainTarget?.unavailableReason ? null : explainTarget} terms={terms} canAsk={explainCanAsk}");
   });
 
   // P11-27 rule 2, RE-AIMED (§1c) twice: the view was handed the page's boolean less a heading's or a caption's selection (`explainable`: `canExplain && target?.block ===
