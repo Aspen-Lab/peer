@@ -56,7 +56,7 @@ export function useMarginStack(id: string, element: RefObject<HTMLElement | null
   const current = external ?? view;
   const windows = current.windows;
   const column = { minTop: current.rect?.top ?? DOCK_TOP_PX, bottom: current.rect?.bottom ?? current.bottom, top: current.rect?.top ?? DOCK_TOP_PX };
-  const [target, setTarget] = useState<HTMLDivElement | null>(null);
+  const [target, setTarget] = useState<HTMLDivElement | null>(() => host);
   const split = windows.length > 1;
   const rows = stackLayout(windows, column);
   const total = rows.length ? rows[rows.length - 1].top + rows[rows.length - 1].height - column.minTop : 0;
@@ -115,7 +115,10 @@ export function useMarginStack(id: string, element: RefObject<HTMLElement | null
     bandTop: column.minTop,
     rows,
     windows,
-    portal: (children: ReactNode) => enabled && target ? createPortal(children, target) : children,
+    ready: target !== null,
+    // Do not mount an editor/figure inline and then remount it in the portal:
+    // its first focus and its unsaved internal state must have one stable owner.
+    portal: (children: ReactNode) => enabled && target ? createPortal(children, target) : enabled && typeof document !== "undefined" && typeof document.createElement === "function" ? null : children,
     gap: CARD_DIVIDER_PX,
   };
 }

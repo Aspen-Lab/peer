@@ -370,10 +370,10 @@ export function FigureCard({ figure, frame, front, top, height, z, stacked, onCl
   // card is still behind it waits for the front. A header press brings the card forward and moves no focus.
   const focused = useRef<FigureRef | null>(null);
   useEffect(() => {
-    if (!front || focused.current === figure) return;
+    if (!front || focused.current === figure || !surfaceEl.current) return;
     focused.current = figure;
     surfaceEl.current?.focus({ preventScroll: true });
-  }, [figure, front]);
+  }, [figure, front, marginStack.ready]);
 
   const index = marginStack.rows.findIndex((r) => r.id === FIGURE_WINDOW_ID);
   const row = marginStack.rows[index];
