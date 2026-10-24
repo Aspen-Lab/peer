@@ -94,13 +94,13 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-24T04:51:08.335Z
+AS OF        2026-10-24T04:55:08.731Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.198   NEXT RULING §1h.199   NEXT ITEM ID P12-10   NEXT FREE PORT 4209
+LAST RULING  §1h.199   NEXT RULING §1h.200   NEXT ITEM ID P12-10   NEXT FREE PORT 4209
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      three C clusters continue; native early-patch full gates GREEN, final05 manager verification next
-THEN         read final05 checkpoint/diff; touched×3, own mutation and exact-tree CI before landing
+RUNNING      C04 split margin, C06 Submit port4205, C08 grouped selections port4207; manager final05 verification and02 fresh UI pending
+THEN         land only independently verified code;07 follows04 shared geometry; A/readers after landed heads
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
 ```
@@ -167,6 +167,10 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-24T04:51:07.882Z | parent 82deec33 (entry commit follows) | manager | P12-08-BRIEF: Separate grouped-selection C brief written after B confirmed cross-body actions absent. Ordered source-aware block segments become one persisted highlight group/note row; all marks recolour/remove/export together; phone selection actions, legacy single marks and model bounds preserved. Starts after02 overlapping types/store;07 geometry API coordinated without shared-file edits. | evidence: briefs/P12-08.md; B P12-01 validated matrices; ruling198 | next: finish05 final independent verification;06 on stable colour API;08 follows02 type/store dependency and07 presentation contract
 
 - 2026-10-24T04:51:08.335Z | parent 82deec33 (entry commit follows) | manager | P12-05-EARLY-NATIVE-GREEN: Exact-tree verification dispatch succeeded: manager read job120781646517 logs for run40063447808, base679fbfa3, expected webtree f268510ba5ebcd073b5c079544d245e5acc288e0 matched. Build0/tsc0/lint0errors144warnings/test0;570passed3skipped files10688passed3skipped tests. This proves unlanded-patch executor and early palette only; full05 component remains separate final check. | evidence: https://github.com/Aspen-Lab/peer/actions/runs/40063447808; scratch early05-dispatch-result.json; manager early contract hashes | next: verify final05 component diff/tests/mutation and exact-tree full gates, then fast-forward landing
+
+- 2026-10-24T04:55:08.603Z | parent dfd26c19 (entry commit follows) | manager | P12-06-SPAWN: Independent C06 started in own LF detached copy at frozen05 tip4deb4f0a, port4205; requested worker selection unavailable, same-generation fallback.05 source no longer changes; manager verification remains separate. | evidence: briefs/P12-06.md; worker /root/p12_06_implementer; ruling199 | next: manager verifies05 in fresh copy;06 and08 continue independently while04 completes shared geometry
+
+- 2026-10-24T04:55:08.731Z | parent dfd26c19 (entry commit follows) | manager | P12-08-SPAWN: Independent C08 started at frozen02 final4150f7fd, port4207, after02 types/store contract stopped changing. Manager separately verifies02; approved ordered segmented group API and explicit paper-body ownership.04 continues;07 waits shared geometry. | evidence: briefs/P12-08.md; worker /root/p12_08_implementer; ruling199 | next: manager verifies05 in fresh copy;06 and08 continue independently while04 completes shared geometry
 
 ---
 
