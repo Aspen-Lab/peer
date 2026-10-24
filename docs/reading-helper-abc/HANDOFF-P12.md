@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-24T21:05:26.332Z
+AS OF        2026-10-24T21:13:59.554Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.212   NEXT RULING §1h.213   NEXT ITEM ID P12-13   NEXT FREE PORT 4212
+LAST RULING  §1h.213   NEXT RULING §1h.214   NEXT ITEM ID P12-13   NEXT FREE PORT 4212
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      07/11/12independentCs; manager04UI/08review;02/03+05+06landed
+RUNNING      07/12independentCs; original04 focusedminimumreturn; manager08/11review;02/03+05+06landed
 THEN         verifyfinalcombinedsources,independentAand3blindreaders/theme;A0/B0
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -199,6 +199,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-24T21:04:15.366Z | parent b149c86b (entry commit follows) | manager | P12-12-CLIENT-BRIEF: C11 requestedworkerunavailable then separatefallback started at56d14ee7; earlyredb38101a7/fix84d5c445 publishes23tested rangeAPI. Prepared LFdetached12 dependency0075591c from56d14 plus04through09a9ffda,07throughc0b21cc8,08through4d69e4a1,11through84d5c445; treeb96db25eb3344a3be68b90be71228c69b922341e. No branch/productlanding/score. Client12 brief names boundedprefix/canonicaloffset translation/allreply/cache/source paths; excludes07placement and11server edits. Manager verified08paperrawoffsetoverride, so no blindforwarding permitted. | evidence: briefs/P12-12.md; C11explain-range.ts earlyAPI; frozenbundle0075591c; selection-segments.ts rawpaper branch; ruling211 | next: Independent12client on exactbundle while07matrix/11servergates continue; manager04ownUI and08wholeproductionreview/nativeverification
 
 - 2026-10-24T21:05:26.332Z | parent c57ff9b8 (entry commit follows) | manager | P12-12-START-MARGIN-LANDMARK: Independent12client started on prepared0075591c after requestedworkerrefusedagain/samegenerationfallback.07 actualsixorders24resize transitions retainedFigure/Explaintextarea/draft; keylessdefinitionExplainobserved, finalmatrixcontinuing. Managerread04sharedhost createsbodydiv withoutlandmark; approve07 only bottompresentation rolecomplementary/aria-labelMargin attrs anddirecttests, no hosttarget/style/mathrewrite.12doesnotownhost, so no fileoverlap. | evidence: briefs/P12-12.md; agent /root/p12_12_implementer; margin-stack-scroll.tsx sharedhost;07 actualUIcheckpoint; ruling212 | next: 07 addsfocusedlandmarkandfinishmatrix/gates;11/12server-clientcontinue; manager04 ownUI and08independentreview
+
+- 2026-10-24T21:13:59.554Z | parent 4b8e956e (entry commit follows) | manager | P12-04-TOOLBAR-MINIMUM-RETURN: Manager read native job120987796401: exact combined04+landed02/05/06 webtree827304c7ed141a7307818618e7c25ebaf8c91be3 build0/tsc0/lint0errors144warnings/test0;577passed3skipped files10730passed3skipped tests. Own actual UI16scale/theme cells plus30cycles and actual asymmetric Enter passed, but separate1024x480 probe found sticky Format toolbar76px over68px viewport fully occludes first26.4px text row. No04 landing. Return measurement-only minimum fix to original04 C in fresh combined detachedddd12342;07 host attrs frozen. C11 final694dd73a received (444testsx3/12ownmutations/worker gates0), manager verification pending. | evidence: verify-04/ui-results.json; ui-short-probe.json; manager-short-probe.png outsideGit; native run40132758476/job120987796401; briefs/P12-04.md; C11 checkpoint P12-11-C-20261024T210000Z.md | next: Original04 focused toolbar-minimum correction;07 frozen scaled-budget rerun and12client continue; manager08/11 independent diff/tests/mutations and combined verification
 
 ---
 
