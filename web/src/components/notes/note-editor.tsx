@@ -1282,6 +1282,7 @@ export function NoteEditor({
     citation: showPaper,
 
     highlightColour: (id, colour) => {
+      if (!transient && docRef.current.blocks.some((b) => b.id === id && b.highlight?.segments)) useNotesStore.getState().setHighlightColour(note.id, id, colour);
       const next = withHighlightColour(docRef.current.blocks, id, colour);
       if (next !== docRef.current.blocks) setBlocks(next);
     },
@@ -1677,6 +1678,7 @@ export function NoteEditor({
     } else if (action === "duplicate") {
       insertAt(i + 1, duplicateBlock(b, block().id));
     } else if (action === "delete") {
+      if (!transient && b.type === "highlight" && b.highlight?.segments) useNotesStore.getState().removeHighlight(note.id, id);
       const rest = blocks.filter((x) => x.id !== id);
       setBlocks(rest.length > 0 ? rest : [block("text")]);
       setUndo({ block: b, index: i });
@@ -2021,6 +2023,7 @@ export function NoteEditor({
                 type="button"
                 className="text-text-muted underline underline-offset-[3px] hover:text-heading"
                 onClick={() => {
+                  if (!transient && undo.block.highlight?.segments) useNotesStore.getState().restoreHighlightGroup(note.id, undo.block);
                   const blocks = docRef.current.blocks.slice();
                   blocks.splice(Math.min(undo.index, blocks.length), 0, undo.block);
                   setBlocks(blocks);

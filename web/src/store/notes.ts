@@ -33,6 +33,8 @@ import { MATH_CLOSE, MATH_OPEN } from "@/lib/text/math";
 
 /** U+2060: the word joiner a note's tag opens with (`NoteTag`), which allows no line break before the tag. */
 const TAG_JOINER = "\u2060";
+/** Session-only deletion intent, so an old editor snapshot cannot revive a group. */
+const removedHighlightGroups = new Set<string>();
 
 /**
  * P10-24 (X-B2′, BACKLOG-87): a passage without a note tag's text. A browser's selection reads the tag's `<sup>` as text —
@@ -330,6 +332,8 @@ function mergeStickyContent(base: readonly Block[], mine: readonly Block[], thei
 }
 
 interface NotesState {
+  /** Explicit editor undo; keeps the same group identity and ranges. */
+  restoreHighlightGroup: (noteId: string, block: Block) => void;
   /** One block/identity, all actual ranges validated before the atomic write. */
   addHighlightGroup: (noteId: string, at: { paperId: string; segments: readonly (PassageSegment & { paragraphText: string })[]; colour?: HighlightColourId }) => { id: string; created: boolean } | null;
   notes: Record<string, Note>;
@@ -482,12 +486,25 @@ export const useNotesStore = create<NotesState>()(
   persist(
     (set, get) => ({
       notes: {},
+      restoreHighlightGroup: (noteId, block) => {
+        const spot = readHighlight(block);
+        if (!spot?.segments || !get().notes[noteId]) return;
+        removedHighlightGroups.delete(block.id);
+        set((s) => {
+          const note = s.notes[noteId];
+          if (!note || note.blocks.some((b) => b.id === block.id)) return s;
+          return { notes: { ...s.notes, [noteId]: { ...note, blocks: [...note.blocks, block], updatedAt: new Date().toISOString() } } };
+        });
+      },
       addHighlightGroup: (noteId, at) => {
         const note = get().notes[noteId];
         if (!note || at.segments.length === 0) return null;
         const segments: PassageSegment[] = [];
         for (const segment of at.segments) {
           const { paragraphText, ...range } = segment;
+          const source = range.source ?? (parseAnchorId(range.paragraphId) ? "paper" : range.paragraphId === "answers-block" ? "answer" : "summary");
+          if (!["paper", "summary", "answer"].includes(source) || (range.kind !== undefined && !["paragraph", "heading", "caption"].includes(range.kind))) return null;
+          if (source === "paper" ? !parseAnchorId(range.paragraphId) : !isPageBlockId(range.paragraphId)) return null;
           // Exact offsets are evidence, not a hint: never choose another repeated occurrence.
           if (typeof paragraphText !== "string" || !range.paragraphId || !range.quote.trim() || !anchorHolds(paragraphText, range)
             || paragraphText.slice(range.start, range.end).replace(/\s+/g, " ").trim() !== range.quote) return null;
@@ -513,6 +530,18 @@ export const useNotesStore = create<NotesState>()(
         set((s) => {
           const note = s.notes[id];
           if (!note) return s;
+          if (patch.blocks) {
+            // Group metadata changes only through its explicit actions. An editor
+            // snapshot may predate a new group or its latest colour/repair.
+            const current = new Map(note.blocks.filter((b) => b.type === "highlight" && b.highlight?.segments).map((b) => [b.id, b]));
+            const blocks = patch.blocks.filter((b) => !removedHighlightGroups.has(b.id)).map((b) => {
+              const group = current.get(b.id);
+              current.delete(b.id);
+              return group ?? b;
+            });
+            blocks.push(...current.values());
+            patch = { ...patch, blocks };
+          }
           if (patch.blocks && removedEmpty.size > 0) {
             let blocks: readonly Block[] = patch.blocks;
             for (const headerId of removedEmpty) blocks = withoutSticky(blocks, headerId);
@@ -655,6 +684,7 @@ export const useNotesStore = create<NotesState>()(
         set((s) => {
           const note = s.notes[noteId];
           if (!note) return s;
+          if (note.blocks.some((b) => b.id === blockId && b.type === "highlight" && b.highlight?.segments)) removedHighlightGroups.add(blockId);
           const blocks = note.blocks.filter((b) => !(b.id === blockId && b.type === "highlight"));
           if (blocks.length === note.blocks.length) return s;
           return { notes: { ...s.notes, [noteId]: { ...note, blocks, updatedAt: new Date().toISOString() } } };

@@ -104,3 +104,13 @@ it("a scoped structured sticky writer preserves group metadata and saved-empty s
   expect(useNotesStore.getState().notes[id].blocks.some((b) => b.id === "late")).toBe(false);
   expect(useNotesStore.getState().notes[id].blocks.find((b) => b.id === group.id)!.highlight!.segments).toHaveLength(3);
 });
+it("explicit editor undo restores the original group identity without weakening stale-save deletion", () => {
+  const store = useNotesStore.getState(), id = store.ensureReadingNote(paper);
+  const made = store.addHighlightGroup(id, { paperId: paper.id, segments })!;
+  const original = useNotesStore.getState().notes[id].blocks.find((b) => b.id === made.id)!;
+  store.removeHighlight(id, made.id);
+  store.restoreHighlightGroup(id, original);
+  store.restoreHighlightGroup(id, original);
+  expect(useNotesStore.getState().notes[id].blocks.filter((b) => b.id === made.id)).toHaveLength(1);
+  expect(Object.keys(anchorMap(useNotesStore.getState().notes[id], paper.id))).toHaveLength(3);
+});

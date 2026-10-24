@@ -126,7 +126,7 @@ export interface HighlightRowViewProps {
   /** The highlight's block id. */
   id: string;
   /** Its words and colour, or null for a block that holds no readable highlight (stored data is read with care, B P11-04 I8). */
-  spot: Pick<HighlightSpot, "quote" | "colour"> | null;
+  spot: (Pick<HighlightSpot, "quote" | "colour"> & { grouped?: boolean }) | null;
   /** The paper no longer holds its words. */
   lost: boolean;
   /** The six swatches are open under the row. */
@@ -169,7 +169,7 @@ export function HighlightRowView({ id, spot, lost, open, onGo, onToggle, onPick,
           ) : (
             <p className="py-[2px] font-reading text-body-sm italic leading-[1.5] text-text-faint">This highlight has no words.</p>
           )}
-          {spot && lost && <p className="font-reading text-meta italic leading-tight text-text-faint">{PASSAGE_LOST_LINE}</p>}
+          {spot && lost && <p className="font-reading text-meta italic leading-tight text-text-faint">{spot.grouped ? "Some of this highlighted passage could not be found." : PASSAGE_LOST_LINE}</p>}
         </div>
         {spot && named && (
           <button
@@ -232,7 +232,7 @@ export function HighlightRow({ block, onColour, onRemove }: { block: Block; onCo
   return (
     <HighlightRowView
       id={block.id}
-      spot={spot ? { quote: highlightQuote(spot), colour: spot.colour } : null}
+      spot={spot ? { quote: highlightQuote(spot), colour: spot.colour, grouped: (spot.segments?.length ?? 0) > 1 } : null}
       lost={lost}
       open={open && spot !== null}
       onGo={() => {
