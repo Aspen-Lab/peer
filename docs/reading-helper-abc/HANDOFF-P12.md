@@ -94,13 +94,13 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-24T21:04:15.366Z
+AS OF        2026-10-24T21:05:26.332Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.211   NEXT RULING §1h.212   NEXT ITEM ID P12-13   NEXT FREE PORT 4212
+LAST RULING  §1h.212   NEXT RULING §1h.213   NEXT ITEM ID P12-13   NEXT FREE PORT 4212
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      07/11workers;12clientstarts frozen0075591c; manager04 UI/08 review;02/03+05+06landed
-THEN         verifyremainingfinalcombinedsources, independentAand3blindreaders/theme;A0/B0
+RUNNING      07/11/12independentCs; manager04UI/08review;02/03+05+06landed
+THEN         verifyfinalcombinedsources,independentAand3blindreaders/theme;A0/B0
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
 ```
@@ -197,6 +197,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-24T21:01:33.971Z | parent 1de5f8e1 (entry commit follows) | manager | P12-06-VERIFIED-LANDED: Manager corrected06 freecopy read original/focused diffs;17files198testsx3, ownack6red/dedupe1red, SHA80ee413f4844cc5206609ba27296ea6615e1336ec8adb9f1b632a8e4e788b3d3 restored198green. Native combined02/05/06 job120984640243 tree1cf763a7e4324c22cb5f2f21c284ef7b8c9d5dd3 build0tsc0lint0/144test0;574+3files10705+3tests. Own ordinaryDEV16width/scale cells and5lifecycle checks,0pageerrors,paperwordsunchanged,2px realkeyboardfocus,actualpointerguardnoops andraw/edit/revert states correct. Screenshotread;4292stopped. Rebuiltlineage onto56d14ee7,webquietagainstchecked e5845a1f/exactCI; FF1de5f8e1. No score/productionauthpass. | evidence: P12-06-C-20261024T050000Z.md; verify-06/check-results.json,ui-results.json,manager-phone.png; nativejob120984640243; ruling210 | next: Manager04 correctedownUI/CI and08diffverification;07/11working;12clientbrief on frozenpreparedbundle
 
 - 2026-10-24T21:04:15.366Z | parent b149c86b (entry commit follows) | manager | P12-12-CLIENT-BRIEF: C11 requestedworkerunavailable then separatefallback started at56d14ee7; earlyredb38101a7/fix84d5c445 publishes23tested rangeAPI. Prepared LFdetached12 dependency0075591c from56d14 plus04through09a9ffda,07throughc0b21cc8,08through4d69e4a1,11through84d5c445; treeb96db25eb3344a3be68b90be71228c69b922341e. No branch/productlanding/score. Client12 brief names boundedprefix/canonicaloffset translation/allreply/cache/source paths; excludes07placement and11server edits. Manager verified08paperrawoffsetoverride, so no blindforwarding permitted. | evidence: briefs/P12-12.md; C11explain-range.ts earlyAPI; frozenbundle0075591c; selection-segments.ts rawpaper branch; ruling211 | next: Independent12client on exactbundle while07matrix/11servergates continue; manager04ownUI and08wholeproductionreview/nativeverification
+
+- 2026-10-24T21:05:26.332Z | parent c57ff9b8 (entry commit follows) | manager | P12-12-START-MARGIN-LANDMARK: Independent12client started on prepared0075591c after requestedworkerrefusedagain/samegenerationfallback.07 actualsixorders24resize transitions retainedFigure/Explaintextarea/draft; keylessdefinitionExplainobserved, finalmatrixcontinuing. Managerread04sharedhost createsbodydiv withoutlandmark; approve07 only bottompresentation rolecomplementary/aria-labelMargin attrs anddirecttests, no hosttarget/style/mathrewrite.12doesnotownhost, so no fileoverlap. | evidence: briefs/P12-12.md; agent /root/p12_12_implementer; margin-stack-scroll.tsx sharedhost;07 actualUIcheckpoint; ruling212 | next: 07 addsfocusedlandmarkandfinishmatrix/gates;11/12server-clientcontinue; manager04 ownUI and08independentreview
 
 ---
 
