@@ -144,17 +144,19 @@ export function useHighlight({
   questions,
   forYourQuestions,
   body,
+  onUnavailable,
 }: {
   paper: Paper;
   questions?: readonly string[];
   forYourQuestions?: readonly QuestionAnswers[];
   /** The paper's body as the page renders it. */
   body?: readonly { paragraphs: readonly string[] }[];
+  onUnavailable?: (reason: string) => void;
 }): (target: HighlightTarget) => void {
   return useCallback(
     (target: HighlightTarget) => {
-      highlightSelection(target, { paper, questions, forYourQuestions, body });
+      if (!highlightSelection(target, { paper, questions, forYourQuestions, body })) onUnavailable?.(target.unavailableReason ?? "This selection changed. Select the text again.");
     },
-    [paper, questions, forYourQuestions, body],
+    [paper, questions, forYourQuestions, body, onUnavailable],
   );
 }

@@ -268,19 +268,21 @@ export function useTakeNote({
   questions,
   forYourQuestions,
   body,
+  onUnavailable,
 }: {
   paper: Paper;
   questions?: readonly string[];
   forYourQuestions?: readonly QuestionAnswers[];
   /** P10-09f: the paper's body as the page renders it; the paragraph the selection is in gives the anchor its range. */
   body?: readonly { paragraphs: readonly string[] }[];
+  onUnavailable?: (reason: string) => void;
 }): (target: ExplainSelection) => void {
   return useCallback(
     (target: ExplainSelection) => {
       const paragraphText = body?.[target.sectionIndex]?.paragraphs[target.paragraphIndex];
-      takeStickyNote({ ...target, paragraphText }, citableFromPaper(paper), { questions, forYourQuestions });
+      if (!takeStickyNote({ ...target, paragraphText }, citableFromPaper(paper), { questions, forYourQuestions })) onUnavailable?.(target.unavailableReason ?? "This selection changed. Select the text again.");
     },
-    [paper, questions, forYourQuestions, body],
+    [paper, questions, forYourQuestions, body, onUnavailable],
   );
 }
 

@@ -406,6 +406,7 @@ const sameOptionalRect = (a: ViewRect | undefined, b: ViewRect | undefined) => (
  *  a selection that has not changed (every `selectionchange` is not a change). */
 export function sameSelection(a: ExplainSelection | null, b: ExplainSelection | null): boolean {
   if (a === null || b === null) return a === b;
+  if (a.selectionStillHolds && !a.selectionStillHolds()) return false;
   return (
     a.sectionIndex === b.sectionIndex &&
     a.paragraphIndex === b.paragraphIndex &&

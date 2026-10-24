@@ -935,12 +935,12 @@ function Reader({
   const openExplain = useCallback(() => explainOpen.current?.(), []);
   // P10-09a (review 7.1, 8.4): "Take notes" on the selection — a numbered sticky note at the right, saved into the
   // paper's own note. The pill that offers it and "Explain this" is `SelectionToolbar` (mounted by the box below).
-  const takeNote = useTakeNote({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions, body: reading?.body });
+  const takeNote = useTakeNote({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions, body: reading?.body, onUnavailable: (reason) => showToast(reason) });
   // P11-17b (owner item 8; B P11-04 §5; ruling §1h.112): "Highlight" on the selection — the passage painted in the paper (Yellow, black words), kept as a
   // block of the paper's own note, the colour strip raised in the margin. Beside `takeNote`, with the same inputs. A Tier 0 act: it needs no key and no
   // model, so the toolbar offers it whether or not the page can explain (`canHighlight` below is its own gate, never `canExplain`'s: a paragraph, a heading or a caption of the
   // paper's body, and, since P11-28, a Summary block or an answer).
-  const highlight = useHighlight({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions, body: reading?.body });
+  const highlight = useHighlight({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions, body: reading?.body, onUnavailable: (reason) => showToast(reason) });
   // The tags the passages carry: the sticky notes in the paper's own note, by paragraph.
   const readingNote = useNotesStore((state) => readingNoteFor(state.notes, paper.id));
   const noteAnchors = useMemo(() => anchorMap(readingNote, paper.id), [readingNote, paper.id]);

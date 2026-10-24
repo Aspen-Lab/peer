@@ -31,7 +31,7 @@ const WRAPPED = ["newHere", "proposal", "method", "results", "forYou", "glance",
 // ── Rule 1 ─────────────────────────────────────────────────────────────────
 
 const USE_HIGHLIGHT =
-  "const highlight = useHighlight({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions, body: reading?.body });";
+  "const highlight = useHighlight({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions, body: reading?.body, onUnavailable: (reason) => showToast(reason) });";
 const KEYS = "...(hasBody ? selectionActions(() => explainTarget, { note: takeNote, highlight }) : {}),";
 
 function rule1Problems(source: string): string[] {
