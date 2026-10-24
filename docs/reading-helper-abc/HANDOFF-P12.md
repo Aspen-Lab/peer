@@ -94,13 +94,13 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-24T04:48:34.978Z
+AS OF        2026-10-24T04:51:08.335Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.197   NEXT RULING §1h.198   NEXT ITEM ID P12-10   NEXT FREE PORT 4209
+LAST RULING  §1h.198   NEXT RULING §1h.199   NEXT ITEM ID P12-10   NEXT FREE PORT 4209
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      C02/03,04,05 continue; early05 exact-tree native dispatch in progress;07/09 brief banked
-THEN         separate08 range brief; verify05 then06;07 waits only04 shared geometry files
+RUNNING      three C clusters continue; native early-patch full gates GREEN, final05 manager verification next
+THEN         read final05 checkpoint/diff; touched×3, own mutation and exact-tree CI before landing
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
 ```
@@ -163,6 +163,10 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-24T04:41:51.590Z | parent cc6b4ae5 (entry commit follows) | manager | NATIVE-BASELINE-GREEN: Manager fetched actual native Linux job logs: run40042575107 exact original webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3 passed build0,tsc0,lint0errors144warnings,test0;569passed3skipped files,10684passed3skipped tests. Recovered after another usage-limit interval, resumed same three workers from existing files without duplication. No product code has landed. | evidence: https://github.com/Aspen-Lab/peer/actions/runs/40042575107/job/120716821616; original220ca9e1 webtree identity; ruling196 | next: finish and independently verify C05; start C06 when slot frees; continue C02/03 and04; write measured width/selection/figure briefs
 
 - 2026-10-24T04:48:34.978Z | parent 05d709f9 (entry commit follows) | manager | P12-07/09-BRIEF: B-measured responsive pane/viewer cluster brief committed: visible rest rules, comfortable rail+margin laptop mode, shared nonmodal docked margin below usable width, unified body/Summary/inline figure routing. Grouped07/09 only by actual layout/margin/figure-host overlap; starts after04 shared geometry. Selection remains separate08. | evidence: briefs/P12-07.md; B P12-01 measurements; ruling197 | next: write separate segmented-selection08 brief; finish05 verification and start06;07 starts after04 shared-file dependency
+
+- 2026-10-24T04:51:07.882Z | parent 82deec33 (entry commit follows) | manager | P12-08-BRIEF: Separate grouped-selection C brief written after B confirmed cross-body actions absent. Ordered source-aware block segments become one persisted highlight group/note row; all marks recolour/remove/export together; phone selection actions, legacy single marks and model bounds preserved. Starts after02 overlapping types/store;07 geometry API coordinated without shared-file edits. | evidence: briefs/P12-08.md; B P12-01 validated matrices; ruling198 | next: finish05 final independent verification;06 on stable colour API;08 follows02 type/store dependency and07 presentation contract
+
+- 2026-10-24T04:51:08.335Z | parent 82deec33 (entry commit follows) | manager | P12-05-EARLY-NATIVE-GREEN: Exact-tree verification dispatch succeeded: manager read job120781646517 logs for run40063447808, base679fbfa3, expected webtree f268510ba5ebcd073b5c079544d245e5acc288e0 matched. Build0/tsc0/lint0errors144warnings/test0;570passed3skipped files10688passed3skipped tests. This proves unlanded-patch executor and early palette only; full05 component remains separate final check. | evidence: https://github.com/Aspen-Lab/peer/actions/runs/40063447808; scratch early05-dispatch-result.json; manager early contract hashes | next: verify final05 component diff/tests/mutation and exact-tree full gates, then fast-forward landing
 
 ---
 
