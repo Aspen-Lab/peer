@@ -2,7 +2,9 @@ import type { PassageSegment } from "./types";
 import { boundaryOf, readBlockText, type BlockTextEnv } from "./anchor-blocks";
 
 export type DrawableSegment = PassageSegment & { paragraphText: string };
-export type DrawableRange = { segments: DrawableSegment[]; reason?: undefined } | { segments: []; reason: string };
+/** Ephemeral Explain offsets; deliberately outside highlight segments, which are persisted. */
+export type ExplainSegment = Pick<PassageSegment, "paragraphId" | "source" | "start" | "end">;
+export type DrawableRange = { segments: DrawableSegment[]; explainSegments: ExplainSegment[]; reason?: undefined } | { segments: []; explainSegments?: undefined; reason: string };
 const CONTROL = "button,a,input,textarea,select,summary,label,[role=button],[role=tab],[role=link],[contenteditable=true],[data-explain-skip]";
 const FORMULA = ".katex,.katex-display,code";
 
@@ -39,6 +41,15 @@ export function drawableSegments(range: Range, env: BlockTextEnv = {}): Drawable
   else for (let node = walker.nextNode(); node; node = walker.nextNode()) nodes.push(node as Text);
   const groups = new Map<Element, { at: NonNullable<ReturnType<typeof owner>>; nodes: { node: Text; lo: number; hi: number }[] }>();
   try {
+    // Empty controls/formulas still divide reader provenance. A text-only walk
+    // would silently erase them when joining the selected blocks.
+    const elements = doc.createTreeWalker(range.commonAncestorContainer, 1);
+    for (let node = elements.nextNode(); node; node = elements.nextNode()) {
+      const el = node as Element;
+      if (!range.intersectsNode(el) || el.closest("sup,[hidden],[aria-hidden=true]")) continue;
+      if (el.matches(FORMULA)) return no("Formula selections cannot be highlighted. Select the surrounding text separately.");
+      if (el.matches(CONTROL)) return no("Select paper text without controls or unrelated content.");
+    }
     for (const node of nodes) {
       if (!range.intersectsNode(node)) continue;
       const lo = range.startContainer === node ? range.startOffset : 0;
@@ -55,6 +66,7 @@ export function drawableSegments(range: Range, env: BlockTextEnv = {}): Drawable
       group.nodes.push({ node, lo, hi });
     }
     const segments: DrawableSegment[] = [];
+    const explainSegments: ExplainSegment[] = [];
     for (const { at, nodes: selected } of groups.values()) {
       const model = readBlockText(at.root, env);
       const picked = new Map(selected.map((s) => [s.node, s]));
@@ -71,6 +83,7 @@ export function drawableSegments(range: Range, env: BlockTextEnv = {}): Drawable
       if (!(end > start)) return no("This selection has no drawable words.");
       const quote = model.text.slice(start, end);
       if (quote.includes("\u0000")) return no("Formula selections cannot be highlighted. Select the surrounding text separately.");
+      explainSegments.push({ paragraphId: at.paragraphId, source: at.source, start, end });
       // Paper offsets use raw source text; page-block offsets use the existing collapsed text model.
       let paragraphText = model.text;
       if (at.source === "paper") {
@@ -90,6 +103,6 @@ export function drawableSegments(range: Range, env: BlockTextEnv = {}): Drawable
       }
       segments.push({ paragraphId: at.paragraphId, source: at.source, ...(at.kind ? { kind: at.kind } : {}), quote, start, end, paragraphText });
     }
-    return segments.length ? { segments } : no("Select text in the paper to highlight it.");
+    return segments.length ? { segments, explainSegments } : no("Select text in the paper to highlight it.");
   } catch { return no("This selection changed. Select the text again."); }
 }

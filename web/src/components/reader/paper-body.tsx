@@ -37,7 +37,9 @@ import { NoteTag, highlightMarks, isHighlightSpot, passageSegments, rangeOf, tie
 import type { NoteAnchorMap } from "@/lib/notes/blocks";
 import { highlightPaint } from "@/lib/notes/highlight-colours";
 import type { HighlightColourId } from "@/lib/notes/types";
-import { drawableSegments, type DrawableSegment } from "@/lib/notes/selection-segments";
+import { drawableSegments, type DrawableSegment, type ExplainSegment } from "@/lib/notes/selection-segments";
+import type { ExplainRange } from "@/lib/papers/explain-range";
+import type { ExplainIdentity } from "@/lib/reader/explain-range";
 import { domTextEnv } from "@/components/notes/block-marks";
 
 /** Each section is a destination: the map's rows jump here, and `scroll-mt`
@@ -318,6 +320,12 @@ export type ExplainSource = "paper" | "summary" | "answer";
 export interface SelectionTarget {
   /** Ordered actual ranges. Legacy/synthetic single-block callers may omit these. */
   segments?: DrawableSegment[];
+  /** Canonical Explain boundaries, separate from persisted raw highlight offsets. Ephemeral only. */
+  explainSegments?: ExplainSegment[];
+  range?: ExplainRange;
+  explainIdentity?: ExplainIdentity;
+  /** Explain-only refusal: other drawable actions remain applicable. */
+  explainUnavailableReason?: string;
   unavailableReason?: string;
   /** Captured DOM provenance still holds at the action press. Never stored or sent. */
   selectionStillHolds?: () => boolean;
@@ -416,6 +424,9 @@ export function sameSelection(a: ExplainSelection | null, b: ExplainSelection | 
     a.block === b.block &&
     a.offset === b.offset &&
     JSON.stringify(a.segments) === JSON.stringify(b.segments) &&
+    JSON.stringify(a.explainSegments) === JSON.stringify(b.explainSegments) &&
+    JSON.stringify(a.range) === JSON.stringify(b.range) &&
+    a.explainUnavailableReason === b.explainUnavailableReason &&
     a.unavailableReason === b.unavailableReason &&
     sameRect(a.rect, b.rect) &&
     sameRect(a.bounds, b.bounds) &&
@@ -650,10 +661,10 @@ export function readSelection(selection: SelectionLike | null): ExplainSelection
     const first = result.segments[0];
     const at = PARAGRAPH_ANCHOR.exec(first.paragraphId);
     return { sectionIndex: at ? Number(at[1]) : -1, paragraphIndex: at ? Number(at[2]) : -1, paragraphId: first.paragraphId, source: first.source,
-      passage: result.segments.map((s) => s.quote).join("\n\n"), offset: first.start, ...(first.kind === "heading" || first.kind === "caption" ? { block: first.kind } : {}), segments: result.segments,
+      passage: result.segments.map((s) => s.quote).join("\n\n"), offset: first.start, ...(first.kind === "heading" || first.kind === "caption" ? { block: first.kind } : {}), segments: result.segments, explainSegments: result.explainSegments,
       ...where, selectionStillHolds: () => {
         const now = drawableSegments(real, domTextEnv());
-        return !now.reason && JSON.stringify(now.segments) === JSON.stringify(result.segments);
+        return !now.reason && JSON.stringify(now.segments) === JSON.stringify(result.segments) && JSON.stringify(now.explainSegments) === JSON.stringify(result.explainSegments);
       }, measure: () => real.startContainer.isConnected && real.endContainer.isConnected ? measureRange(range) : null };
   }
   const spoken = selection.toString();

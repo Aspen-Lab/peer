@@ -89,6 +89,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type Ref } from "react";
 import { hasUserLlmOverride } from "@/lib/feed/ai-tier";
 import { setExplainOffer } from "@/lib/reader/explain-offer";
+import { explainRequestRange, explainTarget, sameExplainTarget } from "@/lib/reader/explain-range";
 import { CARD_CONTENT_MIN_PX, EXPLAIN_WINDOW_ID, WINDOW_HEADER_PX, stackFrameIn, stackLayout, useWindows, type FloatingWindow } from "@/lib/reader/windows";
 import { placeInMargin, useMarginStore, type MarginRect } from "@/lib/reader/margin";
 import { isPageBlockId } from "@/lib/notes/anchor-blocks";
@@ -540,9 +541,12 @@ export async function requestExplanation(args: {
 }): Promise<AskResult> {
   const { paper, selection, sectionId, llmOverride } = args;
   try {
+    const projected = explainRequestRange(selection);
+    if (!projected) return "unavailable";
     const response = await postExplain(paper.id, {
       paper,
-      passage: selection.passage.length > EXPLAIN_PASSAGE_CHARS ? explainPassage(selection.passage) : selection.passage,
+      passage: projected.passage.length > EXPLAIN_PASSAGE_CHARS ? explainPassage(projected.passage) : projected.passage,
+      ...(projected.range ? { range: projected.range } : {}),
       sectionId,
       paragraphIndex: selection.paragraphIndex,
       thread: [],
@@ -899,13 +903,14 @@ export interface ExplainBoxProps {
   onSayMore?: (target: SelectionTarget, thread: readonly ExplainTurn[], message: string) => Promise<ReplyResult>;
   /** Called when a passage whose thread is full is opened again: the page drops that thread. */
   onResetThread?: (target: SelectionTarget) => void;
+  onUnavailable?: (reason: string) => void;
   /** Filled with the box's `open`, which does what the button's click does on the
    *  current selection — the page's `e` key calls it. With the box already open
    *  it moves to the input instead. */
   openRef?: { current: (() => void) | null };
 }
 
-export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, reading, cachedTurns, onReply, onSayMore, onResetThread, openRef }: ExplainBoxProps) {
+export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, reading, cachedTurns, onReply, onSayMore, onResetThread, onUnavailable, openRef }: ExplainBoxProps) {
   // P11-42 rule 2 (ruling §1h.139 (b)): a selection in a figure's caption or a section's heading is this box's as a paragraph's is (P11-26 rule 4 kept it out, because the
   // explain route could not find such a passage; it can now, `locatePassage` with `blocks`): the thumb bar's cell, `e` and the selection's button are offered for it.
   const target = given;
@@ -940,14 +945,14 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
   // in the card collapses it). P8-02: the dock, from 1024 px, is not closed by a new selection — it
   // stays, and the reader takes the new passage into it with "Explain this" or `e`. Derived, so the
   // stale card never paints.
-  const stale = session !== null && target !== null && target.passage !== session.selection.passage && stack.rect === null && viewport.width < DOCK_MIN_VIEWPORT_PX;
+  const stale = session !== null && target !== null && !sameExplainTarget(target, session.selection) && stack.rect === null && viewport.width < DOCK_MIN_VIEWPORT_PX;
   const open = stale ? null : session;
   if (stale) setSession(null);
 
   // The selection the open window explains (null with none open), and the one the selection buttons and `e`
   // would take into it: the reader's current selection, when it is not the passage already there.
   const placed = open?.selection ?? null;
-  const offered = target !== null && target.passage !== placed?.passage ? target : null;
+  const offered = target !== null && (placed === null || !sameExplainTarget(target, placed)) ? target : null;
   // P9-03b: the selection the window stands level with: the settled one, else the last one it followed (derived while
   // rendering, like `stale`, so the move is in the same paint as the selection).
   if (target !== null && target !== followed) setFollowed(target);
@@ -1100,18 +1105,20 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
   const term = placed ? definingTerm(terms, placed.passage) : null;
   const offeredTerm = offered ? definingTerm(terms, offered.passage) : null;
   const next = offered !== null && (offeredTerm !== null || canAsk) ? offered : null;
-  const asked = (selection: ExplainSelection): SelectionTarget => ({
-    sectionIndex: selection.sectionIndex,
-    paragraphIndex: selection.paragraphIndex,
-    passage: selection.passage,
-    ...(selection.source !== undefined ? { source: selection.source } : {}),
-    ...(selection.paragraphId !== undefined ? { paragraphId: selection.paragraphId } : {}),
-  });
+  const asked = explainTarget;
 
   // What the button's click does — and what `e` does through `openRef`: explain `selection` (the
   // current one). With a window already open the session is replaced in place — never null on the way.
   const start = (selection: ExplainSelection) => {
-    if (!canAsk) {
+    if (selection.selectionStillHolds && !selection.selectionStillHolds()) {
+      onUnavailable?.("This Explain selection changed. Select the text again.");
+      return;
+    }
+    if (selection.explainUnavailableReason && !definingTerm(terms, selection.passage)) {
+      onUnavailable?.(selection.explainUnavailableReason);
+      return;
+    }
+    if (!canAsk || selection.explainUnavailableReason) {
       setSession({ selection, status: { kind: "none" }, ...noThread });
       return;
     }
@@ -1129,7 +1136,7 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
       .catch((): AskResult => "unavailable")
       .then((result) =>
         setSession((current) =>
-          current !== null && current.selection.passage === selection.passage
+          current !== null && sameExplainTarget(current.selection, selection)
             ? { ...current, status: typeof result === "string" ? { kind: result } : { kind: "answer", answer: result } }
             : current,
         ),
@@ -1152,7 +1159,7 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
       .catch((): ReplyResult => "unavailable")
       .then((result) =>
         setSession((current) => {
-          if (current === null || current.selection.passage !== selection.passage) return current;
+          if (current === null || !sameExplainTarget(current.selection, selection)) return current;
           if (typeof result === "string") return { ...current, reply: "failed" };
           return { ...current, reply: "idle", draft: "", turns: [...current.turns, ...replyPair(message, result)] };
         }),
@@ -1176,7 +1183,7 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
       .catch((): ReplyResult => "unavailable")
       .then((result) =>
         setSession((current) => {
-          if (current === null || current.selection.passage !== selection.passage) return current;
+          if (current === null || !sameExplainTarget(current.selection, selection)) return current;
           if (typeof result === "string") return { ...current, reply: "failed" };
           return { ...current, reply: "idle", turns: [...current.turns, ...moreReply(result)] };
         }),

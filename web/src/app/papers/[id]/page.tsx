@@ -128,7 +128,8 @@ import { FigureHost } from "@/components/reader/figure-host";
 import { useSelectionEscape } from "@/components/reader/front-escape";
 import { anchorMap } from "@/lib/notes/blocks";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
-import { explanationFor, passageHash, useExplainThreadsStore, type ExplainTurn } from "@/store/explain-threads";
+import { explanationFor, explainCacheKey, useExplainThreadsStore, type ExplainTurn } from "@/store/explain-threads";
+import { prepareExplainSelection } from "@/lib/reader/explain-range";
 import { paragraphKey, usePlainRewritesStore } from "@/store/plain-rewrites";
 import { PLAIN_DEFAULT_LEVEL, PLAIN_REWRITE_ENABLED, isPlainLevel, type PlainLevel } from "@/lib/papers/plain-levels";
 import { exampleQuestions } from "@/lib/reader/question-examples";
@@ -850,15 +851,18 @@ function Reader({
   // answer is remembered per paper and passage, so the same passage opens at once.
   const [explainTarget, setExplainTarget] = useState<ExplainSelection | null>(null);
   const selectExplain = useCallback(
-    (next: ExplainSelection | null) => setExplainTarget((current) => (sameSelection(current, next) ? current : next)),
-    [],
+    (next: ExplainSelection | null) => {
+      const prepared = next ? prepareExplainSelection(next, reading?.body ?? []) : null;
+      setExplainTarget((current) => (sameSelection(current, prepared) ? current : prepared));
+    },
+    [reading?.body],
   );
   const explainKept = useExplainThreadsStore((s) => s.byPaper[paper.id]);
   const rememberExplanation = useExplainThreadsStore((s) => s.remember);
   const addExplainTurns = useExplainThreadsStore((s) => s.addTurns);
   const resetExplainThread = useExplainThreadsStore((s) => s.resetThread);
   const explainKeptThread = useMemo(
-    () => (explainTarget ? explanationFor({ [paper.id]: explainKept ?? {} }, paper.id, explainTarget.passage) : undefined),
+    () => (explainTarget && !explainTarget.explainUnavailableReason ? explanationFor({ [paper.id]: explainKept ?? {} }, paper.id, explainTarget.passage, explainTarget.explainIdentity) : undefined),
     [explainTarget, explainKept, paper.id],
   );
   const explainCached = explainKeptThread?.answer;
@@ -869,7 +873,7 @@ function Reader({
       const result = await requestExplanation({ paper, selection, sectionId, llmOverride: explainLlmOverride(profile) });
       if (typeof result !== "string") {
         try {
-          rememberExplanation(paper.id, { passage: selection.passage, sectionId, paragraphIndex: selection.paragraphIndex, answer: result });
+          rememberExplanation(paper.id, { passage: selection.passage, sectionId, paragraphIndex: selection.paragraphIndex, answer: result, ...(selection.explainIdentity ? { identity: selection.explainIdentity } : {}) });
         } catch {
           // A full or blocked browser store never costs the reader the answer.
         }
@@ -892,7 +896,7 @@ function Reader({
       const result = await requestReply({ paper, selection, sectionId, thread, message, llmOverride: explainLlmOverride(profile) });
       if (typeof result !== "string") {
         try {
-          addExplainTurns(paper.id, passageHash(selection.passage), replyPair(message, result));
+          addExplainTurns(paper.id, explainCacheKey(selection.passage, selection.explainIdentity), replyPair(message, result), undefined, { passage: selection.passage, identity: selection.explainIdentity });
         } catch {
           // A full or blocked browser store never costs the reader the reply.
         }
@@ -912,7 +916,7 @@ function Reader({
       const result = await requestReply({ paper, selection, sectionId, thread, message, detail: true, llmOverride: explainLlmOverride(profile) });
       if (typeof result !== "string") {
         try {
-          addExplainTurns(paper.id, passageHash(selection.passage), moreReply(result));
+          addExplainTurns(paper.id, explainCacheKey(selection.passage, selection.explainIdentity), moreReply(result), undefined, { passage: selection.passage, identity: selection.explainIdentity });
         } catch {
           // A full or blocked browser store never costs the reader the reply.
         }
@@ -924,7 +928,7 @@ function Reader({
   const resetExplain = useCallback(
     (selection: SelectionTarget) => {
       try {
-        resetExplainThread(paper.id, passageHash(selection.passage));
+        resetExplainThread(paper.id, explainCacheKey(selection.passage, selection.explainIdentity), { passage: selection.passage, identity: selection.explainIdentity });
       } catch {
         // A blocked browser store leaves the old thread; the box still opens fresh.
       }
@@ -1727,7 +1731,7 @@ function Reader({
     <SectionLinks headings={bodyHeadings}>
       {/* P11-14 (B P11-02 D3): a throw in the box leaves the paper and everything else on the page as they are, and shows one quiet line in its place. */}
       <ExplainBoundary key={paper.id}>
-        <ExplainBox key={paper.id} target={explainTarget?.unavailableReason ? null : explainTarget} terms={terms} canAsk={explainCanAsk} onAsk={askExplain} cached={explainCached} cachedTurns={explainKeptThread?.turns} onReply={replyExplain} onSayMore={moreExplain} onResetThread={resetExplain} openRef={explainOpen} reading={reading} />
+        <ExplainBox key={paper.id} target={explainTarget?.unavailableReason ? null : explainTarget} terms={terms} canAsk={explainCanAsk} onAsk={askExplain} cached={explainCached} cachedTurns={explainKeptThread?.turns} onReply={replyExplain} onSayMore={moreExplain} onResetThread={resetExplain} onUnavailable={showToast} openRef={explainOpen} reading={reading} />
       </ExplainBoundary>
     </SectionLinks>
     {/* P10-09a (review 7.1, 8.4; ruling §1h.78): the pill above a selection with "Explain this" and "Take notes", and

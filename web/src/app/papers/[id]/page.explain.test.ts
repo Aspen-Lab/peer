@@ -26,7 +26,8 @@ function explainProblems(source: string): string[] {
   // selection. P10-02: the term's mark is gone from it with the strip that set it — the line as it now reads.
   has("<PaperBody reading={reading} route={route} plain={plainForBody} onSelect={selectExplain} noteAnchors={noteAnchors} onHighlightClick={(id, rect) => useHighlightStrip.getState().show(id, rect.top)} />", "the body no longer reports the reader's selection to the page");
   has("const [explainTarget, setExplainTarget] = useState<ExplainSelection | null>(null);", "the page no longer holds the selection as state");
-  has("sameSelection(current, next) ? current : next", "a repeated selection no longer bails out of a re-render");
+  // P12-12 named re-aim: compare the source-aware canonical projection, retaining the bail-out.
+  has("sameSelection(current, prepared) ? current : prepared", "a repeated selection no longer bails out of a re-render");
 
   // Mounted exactly once, for this paper, with the page's own terms and body.
   if (text.split("<ExplainBox").length - 1 !== 1) problems.push("the popover is not mounted exactly once");
@@ -58,7 +59,8 @@ function explainProblems(source: string): string[] {
   else {
     if (!/requestExplanation\(\{ paper, selection, sectionId, llmOverride: explainLlmOverride\(profile\) \}\)/.test(ask)) problems.push("the request is no longer `requestExplanation` with the reader's own key");
     if (!ask.includes("reading?.body?.[selection.sectionIndex]?.id")) problems.push("the section's id no longer comes from the body the reader selected in");
-    if (!/try \{ rememberExplanation\(paper\.id, \{ passage: selection\.passage, sectionId, paragraphIndex: selection\.paragraphIndex, answer: result \}\); \} catch/.test(ask)) problems.push("a kept answer is no longer remembered under a guard that never fails the answer");
+    // P12-12 named re-aim: only new groups add bounded canonical identity.
+    if (!/try \{ rememberExplanation\(paper\.id, \{ passage: selection\.passage, sectionId, paragraphIndex: selection\.paragraphIndex, answer: result, \.\.\.\(selection\.explainIdentity \? \{ identity: selection\.explainIdentity \} : \{\}\) \}\); \} catch/.test(ask)) problems.push("a kept answer is no longer remembered under a guard that never fails the answer");
     if (/useExplainThreadsStore\.getState\(\)/.test(ask)) problems.push("the request reaches into the store instead of the page's own selector");
   }
 
@@ -94,10 +96,12 @@ function explainProblems(source: string): string[] {
     if (/\bsearch\b/.test(reply.replace(/\(P10-08[^)]*\)/g, ""))) problems.push("the reply request mentions a web search again");
     if (!reply.includes("reading?.body?.[selection.sectionIndex]?.id")) problems.push("the reply's section id no longer comes from the body the reader selected in");
     // The pair that joins the thread is `replyPair`'s.
-    if (!/if \(typeof result !== "string"\) \{ try \{ addExplainTurns\(paper\.id, passageHash\(selection\.passage\), replyPair\(message, result\)\); \} catch/.test(reply)) problems.push("a reply joins the thread only once it has arrived, under a guard that never fails the reply");
+    // P12-12 named re-aim: same guarded reply pair, with occurrence key AND equality target.
+    if (!/if \(typeof result !== "string"\) \{ try \{ addExplainTurns\(paper\.id, explainCacheKey\(selection\.passage, selection\.explainIdentity\), replyPair\(message, result\), undefined, \{ passage: selection\.passage, identity: selection\.explainIdentity \}\); \} catch/.test(reply)) problems.push("a reply joins the thread only once it has arrived, under a guard that never fails the reply");
     if (/useExplainThreadsStore\.getState\(\)/.test(reply)) problems.push("the reply reaches into the store instead of the page's own selector");
   }
-  if (!/const resetExplain = useCallback\(.*?resetExplainThread\(paper\.id, passageHash\(selection\.passage\)\)/.test(text)) problems.push("a full thread is no longer dropped through `resetThread` for this paper and passage");
+  // P12-12 named re-aim: reset discriminates group identity like lookup/remember/replies.
+  if (!/const resetExplain = useCallback\(.*?resetExplainThread\(paper\.id, explainCacheKey\(selection\.passage, selection\.explainIdentity\), \{ passage: selection\.passage, identity: selection\.explainIdentity \}\)/.test(text)) problems.push("a full thread is no longer dropped through `resetThread` for this paper and passage");
 
   // `e` opens the box: registered with the keyboard layer, with the body, and calling the box's own `open`.
   if (!/const openExplain = useCallback\(\(\) => explainOpen\.current\?\.\(\), \[\]\);/.test(text)) problems.push("`openExplain` no longer calls the box's own open through the ref");
@@ -298,7 +302,8 @@ function sayMoreProblems(source: string): string[] {
     if (/\bsearch\b/.test(more)) problems.push("Say more asks to search the web");
     if (!/async \(selection: SelectionTarget, thread: readonly ExplainTurn\[\], message: string\): Promise<ReplyResult>/.test(more)) problems.push("`moreExplain` no longer takes the target, the thread before the message and the message");
     if (!more.includes("reading?.body?.[selection.sectionIndex]?.id")) problems.push("the section's id no longer comes from the body the reader selected in");
-    if (!/if \(typeof result !== "string"\) \{ try \{ addExplainTurns\(paper\.id, passageHash\(selection\.passage\), moreReply\(result\)\); \} catch/.test(more)) problems.push("a long reply joins the thread as Peer's turn alone, only once it has arrived, under a guard that never fails the reply");
+    // P12-12 named re-aim: same peer-only guarded append with the canonical occurrence key/equality.
+    if (!/if \(typeof result !== "string"\) \{ try \{ addExplainTurns\(paper\.id, explainCacheKey\(selection\.passage, selection\.explainIdentity\), moreReply\(result\), undefined, \{ passage: selection\.passage, identity: selection\.explainIdentity \}\); \} catch/.test(more)) problems.push("a long reply joins the thread as Peer's turn alone, only once it has arrived, under a guard that never fails the reply");
     if (/useExplainThreadsStore\.getState\(\)/.test(more)) problems.push("Say more reaches into the store instead of the page's own selector");
   }
   return problems;
