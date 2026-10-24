@@ -10,6 +10,7 @@ import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
 import { SITE_URL } from "@/lib/site";
 import { Masthead } from "@/components/shell/masthead";
+import { SiteFooter } from "@/components/shell/site-footer";
 import { ThumbBar } from "@/components/shell/thumb-bar";
 import { UndoToast } from "@/components/undo-toast";
 import { KeyboardLayer } from "@/components/keyboard";
@@ -116,6 +117,9 @@ export default function RootLayout({
             is in flow and sticky, the thumb bar leaves its own spacer. */}
         <Masthead />
         <main className="flex-1 peer-main-content">{children}</main>
+        {/* The AGPL source offer: source and license linked on every page.
+            Before <ThumbBar /> so its spacer keeps the footer above the bar. */}
+        <SiteFooter />
         <ThumbBar />
         <UndoToast />
         <KeyboardLayer />
