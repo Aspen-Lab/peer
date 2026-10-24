@@ -94,13 +94,13 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-24T10:05:24.191Z
+AS OF        2026-10-24T14:49:20.865Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.204   NEXT RULING §1h.205   NEXT ITEM ID P12-10   NEXT FREE PORT 4209
+LAST RULING  §1h.205   NEXT RULING §1h.206   NEXT ITEM ID P12-10   NEXT FREE PORT 4209
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      06/08/07 existing workers; manager02/04 fresh tests and native gates running
-THEN         complete own mutations/local gates/UI, integrate verified trees; independent A/readers remain
+RUNNING      07/08 same workers;04 focused test correction; manager02 ownUI/localgates;06final42d0b469 awaitingmanager
+THEN         02 FFafter ownUI;04 corrected exactcombined gate;06 independent verify; A/readers pending
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
 ```
@@ -181,6 +181,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-24T10:01:36.552Z | parent 75ebcee5 (entry commit follows) | manager | P12-05-VERIFIED-LANDED: Manager in free verify-05-final/wt read entire production/test diff, ran local build0/tsc0/lint0errors144warnings and41touched testsx3. Own title-size mutation1red and toggle mutation2red restored exactSHA1c92c33dd84e851047e4e67b8086dbf43afa9ea88efd041a21bd5ad1cd820fc6; restored41green. Exact native fullCI40064419492 build/tsc/lint/test0,570+3files10689+3tests. Own real invented-PDF DEV upload16width/scale cells at1024/390: computed title match14.875–28px,0clip,16mouseopen/Enterclose,2px real keyboardfocus,0pageerrors. Read screenshot. Rebuilt detached lineage atop34c1d401, webdiffquiet versus verified2e5efae2 and exactCI treeac2d35baa5fe9d9ca76d4353cf034221c6d959af; fast-forward75ebcee5. Own4290stopped. No score or production-upload proof. | evidence: P12-05-C-20261023T235600Z.md; scratch verify-05-final/check-results.json,local-gates.json,ui-results.json,manager-390-max.png; https://github.com/Aspen-Lab/peer/actions/runs/40064419492/job/120784556005 | next: Fresh manager02/03 verification and04 independent exact-tree checks;06/08/07 continue, A and3blind readers/theme after landing integration
 
 - 2026-10-24T10:05:24.191Z | parent 882feed6 (entry commit follows) | manager | P12-07-CONTAINER-SCOPE: Manager read ui/page-container.tsx and direct tests: reader cap760 and lg-only fullbleed would defeat197 laptop853 geometry even when ReaderShell changes. Authorize only reader width/rhythm variant and direct tests to follow actual responsive shell; spread/loading/error and unrelated variants unchanged. Manager fresh02/04 copies selected exact webtrees a084518db97aa6dea45f54189c7ede6a98f8cfb3 /823a6038164418f8c842bcb418ff2069912aa022; native jobs120844160117/120844153831 started, not passed yet. | evidence: web/src/components/ui/page-container.tsx and page-container.test.ts; briefs/P12-07.md; native runs40084371245 and40084369016 | next: 07 implements reader-only container contract; manager02/04 independent tests/mutations/UI and fullgates continue;06/08 unchanged live
+
+- 2026-10-24T14:49:20.865Z | parent 3f4d2ed2 (entry commit follows) | manager | RECOVERY-4-02-GREEN-04-RETURN: Recovered same07/08 workers after usage limit;06final42d0b469 banked, no duplicate. Read native exact jobs:02+landed05 treea084518db97aa6dea45f54189c7ede6a98f8cfb3 passes build0tsc0lint0/144test0,573+3files10698+3tests. Manager02 own671x3,save-empty1red/square2red,hashrestored671green.04+05 tree823a6038164418f8c842bcb418ff2069912aa022 build0tsc0lint0/144,test1:3failed10708passed3skipped; all3 are sticky-note.test legacy cascade expectations omitted from04 reaiminventory. Manager04 own314x3,bodyvisibility andpair mutationsred/hashrestored314green. Return only measured superseded geometry assertions to original04 C; no landing until fullgreen and ownUI. | evidence: native jobs120844160117/120844153831; scratch verify-02/check-results.json andverify-04/check-results.json;06 P12-06-C-20261024T050000Z.md; ruling205 | next: 04 C reaim exact3 superseded sticky geometry scenarios preserving semantics; manager02 localbuild/UI then FF;07/08 existing workerscontinue;06 fresh verification queued
 
 ---
 
