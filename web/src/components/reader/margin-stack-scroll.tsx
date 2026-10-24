@@ -14,6 +14,18 @@ import type { MarginFrame } from "./margin-card";
 let host: HTMLDivElement | null = null;
 let users = 0;
 
+/** P12-07/212: semantic placement follows the registered band; the shared
+ * portal target, its geometry and editor state stay exactly the same. */
+export function setMarginLandmark(target: Pick<HTMLElement, "setAttribute" | "removeAttribute">, bottom: boolean): void {
+  if (bottom) {
+    target.setAttribute("role", "complementary");
+    target.setAttribute("aria-label", "Margin");
+  } else {
+    target.removeAttribute("role");
+    target.removeAttribute("aria-label");
+  }
+}
+
 export function measuredCardMinimum(element: HTMLElement): number {
   const header = (element.querySelector("[data-margin-fixed]") ?? element.firstElementChild)?.getBoundingClientRect().height ?? 40;
   const body = element.querySelector<HTMLElement>("[data-margin-body]") ?? element;
@@ -83,6 +95,7 @@ export function useMarginStack(id: string, element: RefObject<HTMLElement | null
 
   useLayoutEffect(() => {
     if (!target) return;
+    setMarginLandmark(target, current.rect?.presentation === "bottom");
     target.style.cssText = split
       ? `position:fixed;top:${column.minTop}px;height:${Math.max(0, column.bottom - column.minTop)}px;left:${frame?.left ?? Math.max(0, window.innerWidth - 360)}px;width:${frame?.width ?? Math.min(360, window.innerWidth)}px;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;z-index:60;isolation:isolate;`
       : "display:contents";
@@ -90,7 +103,7 @@ export function useMarginStack(id: string, element: RefObject<HTMLElement | null
     let spacer = target.querySelector<HTMLElement>("[data-margin-stack-room]");
     if (!spacer) { spacer = document.createElement("div"); spacer.dataset.marginStackRoom = ""; spacer.style.pointerEvents = "none"; target.prepend(spacer); }
     spacer.style.height = split ? `${total}px` : "0";
-  }, [target, split, column.minTop, column.bottom, frame?.left, frame?.width, total]);
+  }, [target, split, column.minTop, column.bottom, frame?.left, frame?.width, total, current.rect?.presentation]);
 
   useLayoutEffect(() => {
     const card = element.current;

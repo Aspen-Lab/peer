@@ -806,7 +806,7 @@ html[data-mode="dark"] {
   padding-inline: 12px;
 }
 .reader-centre-inner {
-  max-width: 38em;
+  max-width: calc(38em * var(--reading-scale, 1));
   margin-inline: auto;
 }
 .reader-centre .measure,
