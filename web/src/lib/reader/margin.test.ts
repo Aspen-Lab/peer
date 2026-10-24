@@ -126,6 +126,13 @@ describe("readPageZoom", () => {
 });
 
 describe("registerMargin", () => {
+  it("P12-09 registers the real bottom rectangle and keeps its presentation", () => {
+    const p = page();
+    p.el.getBoundingClientRect = () => ({ left: 8, width: 374, top: 376, bottom: 796 }) as DOMRect;
+    const stop = registerMargin(p.el, { ...p.env, presentation: "bottom" });
+    expect(useMarginStore.getState().rect).toEqual({ left: 8, width: 374, top: 376, bottom: 796, presentation: "bottom" });
+    stop();
+  });
   it("publishes the cell's rect at once", () => {
     const p = page();
     const stop = registerMargin(p.el, p.env);

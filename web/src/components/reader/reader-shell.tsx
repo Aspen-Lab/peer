@@ -1,12 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent, type ReactNode } from "react";
+// P12-07/197: the page's scale-aware room budget decides whether this shell
+// stands; inside it, actual clientWidth decides pin versus temporary rail.
+// Saved choices are never overwritten. Historical1024px notes follow below.
+
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { useKeepPlace } from "@/lib/reader/keep-place";
 import { useKeepSelection } from "@/lib/reader/keep-selection";
 import { registerMargin } from "@/lib/reader/margin";
 import { useReaderPanesStore } from "@/store/reader-panes";
+import { READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
 import { PaneDivider } from "./pane-divider";
-import { fitPanes } from "./pane-layout";
+import { fitPanes, readingCentreMinimum } from "./pane-layout";
 
 // The reader's shell (P11-10 rule 3; B P11-01 §2; ruling §1h.113 (a)): from a window of 1024 css px the paper's page is three panes in
 // one full-width grid, as Claude's own: a left pane that stays pinned or folds into a thin rail, the paper's text in the centre, and an
@@ -97,11 +102,28 @@ export function ReaderShell({ left, centre, header }: ReaderShellProps) {
   const pinButton = useRef<HTMLButtonElement | null>(null);
   const margin = useRef<HTMLElement | null>(null);
 
-  const viewport = useSyncExternalStore(subscribeResize, () => window.innerWidth, () => SERVER_VIEWPORT_PX);
+  const windowWidth = useSyncExternalStore(subscribeResize, () => window.innerWidth, () => SERVER_VIEWPORT_PX);
+  const [measuredWidth, setMeasuredWidth] = useState<number | null>(null);
+  const prefs = useSyncExternalStore(useReadingPrefsStore.subscribe, useReadingPrefsStore.getState, useReadingPrefsStore.getInitialState);
+  const scale = READING_SCALE_STEPS[prefs.scaleIndex];
+  const centreMinimum = readingCentreMinimum(scale);
+  const viewport = measuredWidth ?? windowWidth;
+  // clientWidth is layout px: it already includes the scrollbar, actual page
+  // padding and CSS Fit zoom, rather than guessing from the outer window.
+  useLayoutEffect(() => {
+    const el = grid.current;
+    if (!el) return;
+    const read = () => { if (el.clientWidth > 0) setMeasuredWidth(el.clientWidth); };
+    read();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(read);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
   // The reader's saved choice. The server snapshot is the store's INITIAL state, never the live one: the stores load after mount
   // (`skipHydration`, <StoreHydrator/>), and a hydrating render that already saw the loaded widths would not match the markup.
   const saved = useSyncExternalStore(useReaderPanesStore.subscribe, useReaderPanesStore.getState, useReaderPanesStore.getInitialState);
-  const fit = fitPanes({ viewport, left: saved.leftWidth, margin: saved.marginWidth, leftPinned: saved.leftPinned });
+  const fit = fitPanes({ viewport, left: saved.leftWidth, margin: saved.marginWidth, leftPinned: saved.leftPinned, centreMinimum });
 
   const [peeking, setPeeking] = useState(false);
   // A pane that is pinned does not peek: forgotten at once, so that folding it again does not open it.
@@ -221,7 +243,7 @@ export function ReaderShell({ left, centre, header }: ReaderShellProps) {
 
   const onRailClick = () => {
     // A touch screen has no hover to rest on: the press peeks (and a second press puts it away); the pane's own button pins.
-    if (lastPointer.current === "touch") {
+    if (lastPointer.current === "touch" || fit.forced) {
       setPeeking((open) => !open);
       return;
     }
@@ -302,7 +324,7 @@ export function ReaderShell({ left, centre, header }: ReaderShellProps) {
         <PaneDivider
           pane="left"
           value={fit.left}
-          room={{ viewport, other: fit.margin }}
+          room={{ viewport, other: fit.margin, centreMinimum }}
           target={grid}
           variable="--left-pane-w"
           label="Resize left panel"
@@ -320,7 +342,7 @@ export function ReaderShell({ left, centre, header }: ReaderShellProps) {
       <PaneDivider
         pane="margin"
         value={fit.margin}
-        room={{ viewport, other: fit.leftTrack }}
+        room={{ viewport, other: fit.leftTrack, centreMinimum }}
         target={grid}
         variable="--margin-w"
         label="Resize margin"

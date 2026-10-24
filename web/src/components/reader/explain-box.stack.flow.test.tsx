@@ -296,9 +296,10 @@ describe("ExplainBox — one card of the margin's stack (P11-14 rule 4; O-8, BAC
   });
 });
 
-describe("ExplainBox — below 1024 px it is the card and the sheet, outside the stack (P11-14 rule 4)", () => {
+describe("ExplainBox — without a registered margin the card/sheet fallback remains (P12-07)", () => {
   it("does not register in the stack at 900 px (the card under the selection) or at 390 px (the sheet)", async () => {
     for (const width of [900, 390]) {
+      useMarginStore.setState({ rect: null });
       stubWindow(width, 900);
       const run = await scenario(base(selection(380, 300)), [() => open()]);
       await wait();
@@ -307,6 +308,20 @@ describe("ExplainBox — below 1024 px it is the card and the sheet, outside the
       expect(styleOf(run.last())!.zIndex, `${width}`).toBeUndefined();
       run.mounted.unmount();
     }
+  });
+});
+
+describe("P12-07: the registered bottom margin owns the same Explain card", () => {
+  it("joins the shared stack at phone width and follows the registered rectangle", async () => {
+    stubWindow(390, 844);
+    const rect: MarginRect = { left: 8, width: 374, top: 376, bottom: 796, presentation: "bottom" };
+    useMarginStore.setState({ rect });
+    const run = await scenario(base(selection(380, 300)), [() => open()]);
+    await wait();
+    expect(explainRegistered()).toBeDefined();
+    expect(styleOf(run.last())).toMatchObject({ left: 8, width: 374 });
+    expect(cardOf(run.last())?.props.sheet).toBe(false);
+    run.mounted.unmount();
   });
 });
 

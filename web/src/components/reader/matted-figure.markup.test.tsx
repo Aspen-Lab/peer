@@ -1,3 +1,4 @@
+// P12-09: first paint additionally exposes expanded state for the shared margin.
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -14,13 +15,13 @@ const render = (caption?: string | null) => renderToStaticMarkup(createElement(M
 describe("a bound figure's first paint is what it was (P9-57, rule 3)", () => {
   it("with a caption: the mat, the picture with the caption as its alt, the caption under it", () => {
     expect(render(CAPTION)).toBe(
-      '<figure class="cropmarks [--cm-inset:6px] [--cm-c:var(--plate-ink-faint)] bg-[var(--plate-mat)] p-4 mt-4"><button type="button" aria-label="Enlarge figure" class="cursor-zoom-in block"><img src="/api/papers/upload%3A0123456789abcdef/figure-image?page=2&amp;fig=1" alt="Figure 1. Soil water against layer depth, three orchards." loading="lazy" decoding="async" referrerPolicy="no-referrer" class="mx-auto max-h-[260px] sm:max-h-[360px] object-contain"/></button><figcaption class="font-reading text-body-sm text-text-muted mt-3">Figure 1. Soil water against layer depth, three orchards.</figcaption></figure>',
+      '<figure class="cropmarks [--cm-inset:6px] [--cm-c:var(--plate-ink-faint)] bg-[var(--plate-mat)] p-4 mt-4"><button type="button" aria-label="Enlarge figure" aria-expanded="false" class="cursor-zoom-in block"><img src="/api/papers/upload%3A0123456789abcdef/figure-image?page=2&amp;fig=1" alt="Figure 1. Soil water against layer depth, three orchards." loading="lazy" decoding="async" referrerPolicy="no-referrer" class="mx-auto max-h-[260px] sm:max-h-[360px] object-contain"/></button><figcaption class="font-reading text-body-sm text-text-muted mt-3">Figure 1. Soil water against layer depth, three orchards.</figcaption></figure>',
     );
   });
 
   it("without a caption: the mat and the picture with an empty alt, no figcaption", () => {
     expect(render(null)).toBe(
-      '<figure class="cropmarks [--cm-inset:6px] [--cm-c:var(--plate-ink-faint)] bg-[var(--plate-mat)] p-4 mt-4"><button type="button" aria-label="Enlarge figure" class="cursor-zoom-in block"><img src="/api/papers/upload%3A0123456789abcdef/figure-image?page=2&amp;fig=1" alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" class="mx-auto max-h-[260px] sm:max-h-[360px] object-contain"/></button></figure>',
+      '<figure class="cropmarks [--cm-inset:6px] [--cm-c:var(--plate-ink-faint)] bg-[var(--plate-mat)] p-4 mt-4"><button type="button" aria-label="Enlarge figure" aria-expanded="false" class="cursor-zoom-in block"><img src="/api/papers/upload%3A0123456789abcdef/figure-image?page=2&amp;fig=1" alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" class="mx-auto max-h-[260px] sm:max-h-[360px] object-contain"/></button></figure>',
     );
   });
 });

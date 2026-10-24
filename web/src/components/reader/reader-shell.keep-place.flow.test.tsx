@@ -306,13 +306,13 @@ describe("a separator dragged by the mouse", () => {
     expect(farthest).toBeLessThan(1);
   });
 
-  it("margin -80 (552 to 472 px)", () => {
+  it("P12-07: margin drag respects the new476px text floor", () => {
     const page = open();
     readAt(page.page, "paper-section-5-p2", 0.5);
     const before = place(page.page);
     const farthest = dragged(page, "margin", -80, before);
     expect(page.page.top()!.id).toBe(before.id);
-    expect(env.page.columnPx).toBe(472);
+    expect(env.page.columnPx).toBe(476);
     expect(farthest).toBeLessThan(1);
   });
 
@@ -378,13 +378,13 @@ describe("a separator moved by its keys", () => {
     expect(Math.abs(held(page.page, before))).toBeLessThan(1);
   });
 
-  it("End (the pane's greatest width: 552 to 416 px)", () => {
+  it("P12-07: End preserves place at the476px text floor", () => {
     const page = open();
     readAt(page.page, "paper-section-5-p2", 0.5);
     const before = place(page.page);
     stagedRuntime.event(() => page.look().left().on("onKeyDown")(key("End")));
     env.page.frame();
-    expect(env.page.columnPx).toBe(416);
+    expect(env.page.columnPx).toBe(476);
     expect(page.page.top()!.id).toBe(before.id);
     expect(Math.abs(held(page.page, before))).toBeLessThan(1);
   });

@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { fitPanes, railMinimumWidth, readingCentreMinimum } from "./pane-layout";
 import { bottomMarginRectOf } from "@/lib/reader/margin";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+it("P12-07 the functional pane boundary is visible before hover", () => {
+  const css = readFileSync(resolve(process.cwd(), "src/app/globals.css"), "utf8");
+  const start = css.indexOf(".reader-divider::before,");
+  const rest = css.slice(start, css.indexOf(".reader-divider:hover::before", start));
+  expect(parseFloat(/width:\s*([\d.]+)px/.exec(rest)?.[1] ?? "0")).toBeGreaterThanOrEqual(2);
+  expect(rest).toContain("background: var(--color-text-muted)");
+});
 
 describe("P12-07 comfortable reading before extra columns", () => {
   it("reserves 476px of actual text plus both 12px insets at 1x", () => {

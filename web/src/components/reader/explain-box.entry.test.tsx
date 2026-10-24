@@ -197,7 +197,8 @@ describe("ExplainBox — nothing stands on entering a paper (P10-08, review 8.5)
   it("the page's width is not reserved on entering: the source writes `--explain-dock` only where a passage is open", () => {
     const source = readFileSync(resolve(process.cwd(), "src/components/reader/explain-box.tsx"), "utf8");
 
-    expect(source).toContain("const docked = open !== null && viewport.width >= DOCK_MIN_VIEWPORT_PX;");
+    // P12-07/201: any registered margin keeps the shared card portal enabled.
+    expect(source).toContain("const docked = open !== null && (stack.rect !== null || viewport.width >= DOCK_MIN_VIEWPORT_PX);");
     expect(source).not.toMatch(/standing|waiting/);
     expect(source).not.toContain("data-explain-ask");
     expect(source).not.toContain("placeButton");

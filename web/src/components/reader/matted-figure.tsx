@@ -3,11 +3,10 @@
 // A figure the deep report bound to a result, mounted on the same mat as the
 // plate. Contained, never cropped — a scientific figure loses its axis labels
 // to a crop — and shown only with an image the binding actually chose.
-// S12: click it to fill the screen (FigureLightbox owns the open/close/
-// keyboard/focus mechanism; this file just supplies the image and caption).
+// P12-09: a click uses the same responsive margin viewer as a body figure.
 
 import { useState } from "react";
-import { FigureLightbox } from "./figure-lightbox";
+import { MarginFigure } from "./margin-figure";
 
 // ── The caption under a figure in a section (P9-59, N10) ─────────────────────────────────────────────
 //
@@ -89,7 +88,7 @@ export function figureCaption(caption: string | null | undefined): string | null
 }
 
 export function MattedFigure({ src, caption: handed }: { src: string; caption?: string | null }) {
-  // P9-59 (N10): one line for the caption under the picture, the picture's alt and the lightbox.
+  // P9-59: the mat/alt keep their bounded caption; the margin receives the complete source caption.
   const caption = figureCaption(handed);
   // P9-57: the picture is an owner-only route (`…/figure-image?page=N&fig=K`) that answers 404 when the
   // owner's cookie is gone or the route fails. Keyed on the URL, as the lead plate's failure is, so a new
@@ -107,10 +106,10 @@ export function MattedFigure({ src, caption: handed }: { src: string; caption?: 
   }
   return (
     <figure className="cropmarks [--cm-inset:6px] [--cm-c:var(--plate-ink-faint)] bg-[var(--plate-mat)] p-4 mt-4">
-      <FigureLightbox
+      <MarginFigure
         src={src}
         alt={caption ?? ""}
-        caption={caption}
+        caption={handed}
         onError={() => setFailedSrc(src)}
         className="mx-auto max-h-[260px] sm:max-h-[360px] object-contain"
       />

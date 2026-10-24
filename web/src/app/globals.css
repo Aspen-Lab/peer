@@ -785,9 +785,9 @@ html[data-mode="dark"] {
   position: absolute;
   inset-block: 0;
   left: 50%;
-  width: 1px;
-  margin-left: -0.5px;
-  background: var(--color-border-strong);
+  width: 2px;
+  margin-left: -1px;
+  background: var(--color-text-muted);
 }
 .reader-divider:hover::before,
 .reader-divider:focus-visible::before,

@@ -21,7 +21,7 @@ vi.mock("react", async (importOriginal) => {
 import type { ReactElement, ReactNode } from "react";
 import { leadCaption } from "@/components/cards/paper-plate";
 import { hookRuntime } from "@/test-support/hook-runtime";
-import { FigureLightbox } from "./figure-lightbox";
+import { MarginFigure as FigureLightbox } from "./margin-figure";
 import { MattedFigure } from "./matted-figure";
 
 const SRC = "/api/papers/upload%3A0123456789abcdef/figure-image?page=2&fig=1";
@@ -285,23 +285,23 @@ describe("a label, an abbreviation and an initial are not where a sentence ends 
   });
 });
 
-describe("the line under the picture, the picture's alt and the lightbox read the same (P9-59)", () => {
+describe("P12-09: mat and alt retain caption cuts; margin viewer retains the complete caption", () => {
   const measured = { short: SHORT, sliced: SLICED, slicedOnASpace: SLICED_ON_A_SPACE, runOn: RUN_ON, long: LONG };
   for (const [name, caption] of Object.entries(measured)) {
-    it(`gives one string to all three for the ${name} caption`, async () => {
+    it(`keeps the mat/alt equal and the complete margin caption for ${name}`, async () => {
       const { lines, alt, lightbox } = await printed(caption);
       expect(lines).toHaveLength(1);
       expect(typeof lines[0]).toBe("string");
       expect(alt).toBe(lines[0]);
-      expect(lightbox).toBe(lines[0]);
+      expect(lightbox).toBe(caption);
     });
   }
 
-  it("cuts them: none of the long ones is handed on whole to the alt or the lightbox", async () => {
+  it("keeps the mat/alt cut and hands the whole caption to the margin viewer", async () => {
     for (const caption of [SLICED, RUN_ON, LONG]) {
       const { alt, lightbox } = await printed(caption);
       expect(alt).not.toBe(caption);
-      expect(lightbox).not.toBe(caption);
+      expect(lightbox).toBe(caption);
     }
   });
 

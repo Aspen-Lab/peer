@@ -1,5 +1,10 @@
 "use client";
 
+// P12-07/197: `useSpread` now compares actual viewport room with a scaled
+// 476px text budget plus the rail, margin and real centre insets. Below that
+// budget the one-column reader keeps a registered complementary bottom margin.
+// The historical P11 layout notes below describe the former1024px boundary.
+
 // Arranges the reader's blocks — it renders none of them. Below 1024 css px the children come back as a fragment, in one column; from it
 // they are placed in the three-pane shell (`reader-shell.tsx`, P11-10): the left pane (the reading controls in its header row beside the pin
 // button; the title, the commands and the Summary / Paper digestion strip in its fixed zone; the map, then the plate and the details in its scroll zone), the centre (the common
@@ -51,8 +56,9 @@ import { fitZoom, READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/read
 import { TABPANEL_ID, tabId } from "./reader-tabs";
 import { ReaderShell } from "./reader-shell";
 import { ReadingControls } from "./reading-controls";
-import { SPREAD_QUERY } from "./spread";
 import type { ReaderTab } from "./use-reader-tab";
+import { railMinimumWidth } from "./pane-layout";
+import { ResponsiveMargin } from "./responsive-margin";
 
 /** The id of the wrapper that holds the blocks both tabs share. */
 export const COMMON_ID = "reader-common";
@@ -104,24 +110,16 @@ interface ReaderLayoutProps {
   next: ReactNode;
 }
 
-function subscribe(onChange: () => void) {
-  const media = window.matchMedia(SPREAD_QUERY);
-  media.addEventListener("change", onChange);
-  return () => media.removeEventListener("change", onChange);
-}
-
 /**
- * ≥ 64rem (1024 css px, the three panes), by the window. Safe to read on the first render: `Reader` mounts
+ * Comfortable room for a rail, text and margin at the current reading step. Safe to read on the first render: `Reader` mounts
  * only once the paper is known, which is after `StoreHydrator` rehydrates
  * (all stores are `skipHydration`) or after the by-id fetch — never during
  * SSR or hydration. The server snapshot is the one-column page regardless.
  */
 export function useSpread(): boolean {
-  return useSyncExternalStore(
-    subscribe,
-    () => window.matchMedia(SPREAD_QUERY).matches,
-    () => false,
-  );
+  const readingScale = useResolvedReadingScale();
+  const width = useSyncExternalStore(subscribeResize, () => document.documentElement.clientWidth, () => 0);
+  return width >= railMinimumWidth(readingScale);
 }
 
 function subscribeResize(onChange: () => void) {
@@ -213,6 +211,7 @@ export function ReaderLayout(p: ReaderLayoutProps) {
     );
     return (
       <>
+        <div data-reader-one-column="" className="mx-auto max-w-[760px] px-5 sm:px-6">
         {p.plate}
         {p.title}
         {p.decision}
@@ -227,6 +226,8 @@ export function ReaderLayout(p: ReaderLayoutProps) {
         {p.map}
         {panel}
         {p.next}
+        </div>
+        <ResponsiveMargin side={false} />
       </>
     );
   }
@@ -263,7 +264,7 @@ export function ReaderLayout(p: ReaderLayoutProps) {
   );
 
   return (
-    <ReaderShell
+    <><ReaderShell
       header={<ReadingControls spread />}
       left={
         tail
@@ -289,6 +290,6 @@ export function ReaderLayout(p: ReaderLayoutProps) {
           <div>{p.next}</div>
         </div>
       }
-    />
+    /><ResponsiveMargin side /></>
   );
 }

@@ -940,7 +940,7 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
   // in the card collapses it). P8-02: the dock, from 1024 px, is not closed by a new selection — it
   // stays, and the reader takes the new passage into it with "Explain this" or `e`. Derived, so the
   // stale card never paints.
-  const stale = session !== null && target !== null && target.passage !== session.selection.passage && viewport.width < DOCK_MIN_VIEWPORT_PX;
+  const stale = session !== null && target !== null && target.passage !== session.selection.passage && stack.rect === null && viewport.width < DOCK_MIN_VIEWPORT_PX;
   const open = stale ? null : session;
   if (stale) setSession(null);
 
@@ -1009,7 +1009,7 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
   // From 1024 px the box stands in the margin (P11-14: one card of the margin's stack). Nothing is reserved for it and nothing moves
   // when it opens or closes: the margin is a track of the reader's shell, so the paper's words stay where they are and there is no
   // reflow to hold the selection against (P7-15's measure-before / measure-after and its scroll are retired with the reserve).
-  const docked = open !== null && viewport.width >= DOCK_MIN_VIEWPORT_PX;
+  const docked = open !== null && (stack.rect !== null || viewport.width >= DOCK_MIN_VIEWPORT_PX);
   const marginStack = useMarginStack(EXPLAIN_WINDOW_ID, cardRef, stack.rect, docked, { windows: stack.windows, rect: stack.rect, bottom: columnBottomPx(viewport.height, legendOf(viewport)) });
   // P9-17 (ruling §1h.57): the window's whole height must be in view, so its height is read after each commit while the dock
   // stands: `scrollHeight` (the content, whatever `max-height` clips) and the border. It does not depend on where the window is,
@@ -1206,7 +1206,7 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
   const replyState = open?.reply;
   const answered = open?.status.kind === "answer";
   const turnCount = open?.turns.length ?? 0;
-  const sheet = open !== null && viewport.width < PHONE_WIDTH;
+  const sheet = open !== null && !docked && viewport.width < PHONE_WIDTH;
 
   // The page's `e` key opens the box through this, as the button does.
   useEffect(() => {
@@ -1316,7 +1316,7 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
   if (!open || levelWith === null) return null;
   // P9-17: the whole window stays in view (ruling §1h.57) — its measured height, and at least what a window that holds a passage
   // needs to show its header, its controls and two lines of the answer (ruling §1h.56).
-  const basePlace = placePanel(levelWith.bounds, viewport, paragraphTop, Math.max(cardHeight ?? 0, DOCK_THREAD_FLOOR_PX));
+  const basePlace = placePanel(levelWith.bounds, docked ? { ...viewport, width: Math.max(viewport.width, DOCK_MIN_VIEWPORT_PX) } : viewport, paragraphTop, Math.max(cardHeight ?? 0, DOCK_THREAD_FLOOR_PX));
   // From 1024 px the card is a row of the margin's stack: its top, its height (the whole room while it is in front — it is as tall as its
   // content up to that and scrolls inside — or a header's while another card is in front) and its z come from the one stack layout the
   // stickies and the notes window use, in the margin's own left and width (a page without the shell: the right edge, 360 px).
