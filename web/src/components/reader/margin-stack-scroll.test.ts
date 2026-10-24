@@ -25,6 +25,21 @@ function card(kind: string, headerHeight: number, line: number, compact = false)
 afterEach(() => { vi.unstubAllGlobals(); useWindows.setState({ windows: [], clock: 0, origin: null }); });
 
 describe("actual minimum furniture and stable store registration", () => {
+  for (const editable of [false, true]) {
+    for (const [toolbarHeight, line] of [[40, 26.4], [76, 26.4], [112, 35.96]]) {
+      it(`counts ${editable ? "editable" : "inactive"} note text below a ${toolbarHeight}px wrapped Format toolbar`, () => {
+        const root = card("sticky", 48, line);
+        const body = root.querySelector<HTMLElement>("[data-margin-body]")!;
+        const text = body.querySelector<HTMLElement>("unused")!;
+        const toolbar = { getBoundingClientRect: () => ({ height: toolbarHeight }) };
+        const css = getComputedStyle;
+        vi.stubGlobal("getComputedStyle", (node: Element) => node === toolbar as unknown ? { marginTop: "0", marginBottom: "0" } : css(node));
+        body.querySelector = vi.fn((selector: string) => selector.includes(editable ? "[contenteditable]" : ".reading-prose") ? text : null) as typeof body.querySelector;
+        body.querySelectorAll = vi.fn(() => [toolbar]) as unknown as typeof body.querySelectorAll;
+        expect(measuredCardMinimum(root)).toBe(Math.ceil(48 + toolbarHeight + line + 24 + 2));
+      });
+    }
+  }
   it("counts a custom48px sticky header, its content row, padding and border", () => {
     expect(measuredCardMinimum(card("sticky", 48, 22.4))).toBe(97);
     expect(measuredCardMinimum(card("sticky", 48, 35.96))).toBe(110);
