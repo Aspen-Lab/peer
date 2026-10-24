@@ -94,13 +94,13 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-23T23:59:47.971Z
+AS OF        2026-10-24T04:41:51.590Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.195   NEXT RULING §1h.196   NEXT ITEM ID P12-07   NEXT FREE PORT 4206
+LAST RULING  §1h.196   NEXT RULING §1h.197   NEXT ITEM ID P12-07   NEXT FREE PORT 4206
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      native Linux baseline run40042575107; C02/03,04,05 continue; manager early05 check banked
-THEN         collect exact-tree baseline; independently gate completed C in free copy and CI before fast-forward landing
+RUNNING      same C02/03 port4201, C04 port4203, C05 port4204 resumed; native exact-source baseline GREEN
+THEN         manager final verification of returned C work; C06 follows05 token dependency; measured width/selection/figure briefs
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
 ```
@@ -159,6 +159,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-23T23:57:21.985Z | parent 8d92661e (entry commit follows) | manager | NATIVE-CI-GIT-ATTEMPT: Prepared branch-scoped native Linux workflow using the already-authorized ordinary Git push channel after connector403. Exact public base plus optional manager-reviewed web patch is checked against expected web tree; no third-party actions, secrets, dependencies, deployment or credential change. Initial run is unchanged app baseline; no pass asserted before result. | evidence: .github/workflows/p12-gates.yml; ruling195; existing approved branch push authorization | next: push through unchanged Git remote, inspect native gate result; if remote refuses workflow write record and stop that route
 
 - 2026-10-23T23:59:47.971Z | parent e52fea49 (entry commit follows) | manager | NATIVE-CI-STARTED: Established ordinary Git push accepted workflow commit e52fea49. Native Linux run40042575107 started on exact original web tree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; verified Node install, source fetch and npm ci passed; unchanged build/type/lint/fulltests in progress. YAML parsed with existing system PyYAML and all4 shell blocks passed bash -n. No app changes landed. | evidence: .github/workflows/p12-gates.yml; https://github.com/Aspen-Lab/peer/actions/runs/40042575107; git diff original220ca9e1 HEAD -- web exit0 | next: read actual native run result and exact tree; then dispatch reviewed C verification patches
+
+- 2026-10-24T04:41:51.590Z | parent cc6b4ae5 (entry commit follows) | manager | NATIVE-BASELINE-GREEN: Manager fetched actual native Linux job logs: run40042575107 exact original webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3 passed build0,tsc0,lint0errors144warnings,test0;569passed3skipped files,10684passed3skipped tests. Recovered after another usage-limit interval, resumed same three workers from existing files without duplication. No product code has landed. | evidence: https://github.com/Aspen-Lab/peer/actions/runs/40042575107/job/120716821616; original220ca9e1 webtree identity; ruling196 | next: finish and independently verify C05; start C06 when slot frees; continue C02/03 and04; write measured width/selection/figure briefs
 
 ---
 
