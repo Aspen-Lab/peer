@@ -94,13 +94,13 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-24T09:52:31.617Z
+AS OF        2026-10-24T09:58:03.939Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.201   NEXT RULING §1h.202   NEXT ITEM ID P12-10   NEXT FREE PORT 4209
+LAST RULING  §1h.202   NEXT RULING §1h.203   NEXT ITEM ID P12-10   NEXT FREE PORT 4209
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      same04/06/08; manager05 local gates nowgreen, actualUI in progress
-THEN         complete05 freshUI then FF;02 fresh verification;07/09 follows04 frozen geometry
+RUNNING      06/08 existing workers;07/09 starts on frozen04; manager05 ownUI then FF
+THEN         manager02/04 fresh verification and exact-tree gates; independent A/readers after landed fixes
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
 ```
@@ -175,6 +175,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-24T09:44:33.575Z | parent 1e4dbe22 (entry commit follows) | manager | RECOVERY-3-FINAL05-CI: Recovered same workers after third quota interval. Final05 exact-tree run40064419492 passed build0,tsc0,lint0errors144warnings,test0;570passed3skipped files10689passed3skipped tests, webtreeac2d35baa5fe9d9ca76d4353cf034221c6d959af matched. Manager touched41x3 and own size/toggle mutations already passed restoration. Local build failed only because manager dependency junction points outside Turbopack root; preserve link and copy real locked dependencies, no app workaround. Fresh UI still pending before landing. | evidence: https://github.com/Aspen-Lab/peer/actions/runs/40064419492/job/120784556005; verify-05-final/check-results.json; ruling200 | next: complete independent05 fresh UI/local type/lint and fast-forward; then02 fresh verification; same04/06/08 continue
 
 - 2026-10-24T09:52:31.617Z | parent b4786c59 (entry commit follows) | manager | RANGE-MARGIN-SEAMS: Verified grouped strip producing host reads only first mark and margin.top visibility floor; approved focused host/tests extension for actual group-piece visibility and bottom dock.04 identified Explain docked predicate retains old1024 threshold;07 receives tiny placement/portal predicate scope, preserving drafted textarea through side-bottom transitions. | evidence: highlight-strip-host.tsx markBox/stripStanding read by manager;04 portal trace; updated07/08 briefs; ruling201 | next: same04/06/08 continue; manager completes05 actual UI and rebanks verified lineage for FF
+
+- 2026-10-24T09:58:03.939Z | parent bcbb06d9 (entry commit follows) | manager | P12-04-HANDOFF-07-START: Read entire C04 dependency checkpoint59efcbc3, frozen sourcefcddee50/webtreef2b27b34d0e6ebcc7bdd2738a71b37b14989a121. Worker314x3/6mutations/build/type/lint0 are worker evidence only; manager verification and missing UI remain open. Release07/09 implementation from this exact frozen dependency; requested worker choice unavailable again, exposed same-generation fallback. No product landing or score. | evidence: P12-04-C-20261024T095212Z.md in worker; briefs/P12-07.md; ruling202 | next: Start independent07/09 from frozen59efcbc3 while manager completes05 own UI/FF and fresh02/04 verification;06/08 continue existing work
 
 ---
 
