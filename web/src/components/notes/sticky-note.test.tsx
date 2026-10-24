@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { block, stickySpan, stickyText, stickyTitle } from "@/lib/notes/blocks";
 import type { Block } from "@/lib/notes/types";
 import { NOTES_WINDOW_ID, useWindows } from "@/lib/reader/windows";
+import { isFrontCard } from "@/components/reader/front-escape";
 import { MarginCard, MarginCardShell, type MarginCardShellProps } from "@/components/reader/margin-card";
 import { WysiwygField } from "./wysiwyg-field";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
@@ -207,10 +208,17 @@ describe("stickyRows", () => {
   const heads: Block[] = [1, 2, 3].map((n) => block("h3", stickyTitle(n), { anchor: { paperId: "p1", paragraphId: `paper-section-0-p${n}`, quote: `quote ${n}`, n } }));
   const windows = heads.map((h, i) => ({ id: h.id, kind: "sticky" as const, title: h.text, order: i + 1 }));
 
-  it("turns the open windows into rows with their number and quote, offset by a header each", () => {
+  it("P12-04/205: turns the same open windows into equal visible rows with their number and quote", () => {
     const rows = stickyRows(windows, heads, frame);
-    expect(rows.map((r) => [r.n, r.quote, r.top])).toEqual([[1, "quote 1", 100], [2, "quote 2", 140], [3, "quote 3", 180]]);
-    expect(rows.map((r) => r.front)).toEqual([false, false, true]);
+    // 188/193 supersede the40px cascade only; identities, order and quoted data remain exact.
+    expect(rows.map((r) => [r.n, r.quote])).toEqual([[1, "quote 1"], [2, "quote 2"], [3, "quote 3"]]);
+    expect(rows.map((r) => r.front)).toEqual([true, true, true]);
+    rows.forEach((row, i) => {
+      expect(row.height).toBeCloseTo(776 / 3, 10);
+      expect(row.top).toBeCloseTo(100 + i * (776 / 3 + 12), 10);
+      if (i > 0) expect(row.top - (rows[i - 1].top + rows[i - 1].height)).toBe(12);
+    });
+    expect(rows[2].top + rows[2].height).toBeCloseTo(900, 10);
   });
 
   it("drops a window whose note block is gone, and the other kinds", () => {
@@ -649,18 +657,33 @@ describe("stickyRows — with the notes window in the stack (P10-09c, B9)", () =
   const win = (i: number, order: number) => ({ id: heads[i].id, kind: "sticky" as const, title: heads[i].text, order });
   const notes = (order: number) => ({ id: NOTES_WINDOW_ID, kind: "notes" as const, title: "Your notes", order });
 
-  it("leaves a slot for the notes window: three stickies and the notes window are four cards, 40 px apart", () => {
+  it("P12-04/205: leaves an equal visible panel for the notes window, last or between the same three stickies", () => {
     const rows = stickyRows([win(0, 1), win(1, 2), win(2, 3), notes(4)], heads, frame);
-    expect(rows.map((r) => [r.n, r.top, r.front])).toEqual([[1, 100, false], [2, 140, false], [3, 180, false]]);
-    // The notes window opened between the stickies: the later stickies sit under its header.
+    // Four191px panels plus three12px boundaries fill the original800px frame.
+    expect(rows.map((r) => [r.n, r.quote, r.top, r.height, r.front])).toEqual([[1, "quote 1", 100, 191, true], [2, "quote 2", 303, 191, true], [3, "quote 3", 506, 191, true]]);
+    expect(900 - (rows[2].top + rows[2].height)).toBe(191 + 12);
+    // The same notes window between stickies reserves its full equal panel and boundary.
     const between = stickyRows([win(0, 1), notes(2), win(1, 3), win(2, 4)], heads, frame);
-    expect(between.map((r) => [r.n, r.top, r.front])).toEqual([[1, 100, false], [2, 180, false], [3, 220, true]]);
+    expect(between.map((r) => [r.n, r.quote, r.top, r.height, r.front])).toEqual([[1, "quote 1", 100, 191, true], [2, "quote 2", 506, 191, true], [3, "quote 3", 709, 191, true]]);
+    expect(between[1].top - (between[0].top + between[0].height)).toBe(191 + 24);
+    expect(between[2].top + between[2].height).toBe(900);
   });
 
-  it("brings a raised sticky in front of the notes window, and none of them is in front when the notes window is", () => {
-    const rows = stickyRows([win(0, 5), win(1, 2), notes(3), win(2, 4)], heads, frame);
-    expect(rows.map((r) => [r.n, r.front])).toEqual([[2, false], [3, false], [1, true]]);
-    expect(stickyRows([win(0, 1), win(1, 2), notes(9)], heads, frame).some((r) => r.front)).toBe(false);
+  it("P12-04/205: raising changes actual active ownership while every sticky stays visible in opening order", () => {
+    const opened = [win(0, 5), win(1, 2), notes(3), win(2, 4)];
+    const rows = stickyRows(opened, heads, frame);
+    expect(rows.map((r) => [r.n, r.quote, r.top, r.height, r.front])).toEqual([[1, "quote 1", 100, 191, true], [2, "quote 2", 303, 191, true], [3, "quote 3", 709, 191, true]]);
+    expect(isFrontCard(opened, heads[0].id)).toBe(true);
+    expect(isFrontCard(opened, NOTES_WINDOW_ID)).toBe(false);
+    useWindows.setState({ windows: opened, clock: 5 });
+    useWindows.getState().raise(NOTES_WINDOW_ID);
+    expect(useWindows.getState().clock).toBe(6);
+    expect(isFrontCard(useWindows.getState().windows, NOTES_WINDOW_ID)).toBe(true);
+    expect(stickyRows(useWindows.getState().windows, heads, frame)).toEqual(rows);
+    const notesActive = [win(0, 1), win(1, 2), notes(9)];
+    expect(stickyRows(notesActive, heads, frame).map((r) => [r.n, r.quote, r.front])).toEqual([[1, "quote 1", true], [2, "quote 2", true]]);
+    expect(isFrontCard(notesActive, NOTES_WINDOW_ID)).toBe(true);
+    expect(notesActive.filter((w) => w.kind === "sticky").some((w) => isFrontCard(notesActive, w.id))).toBe(false);
   });
 });
 
