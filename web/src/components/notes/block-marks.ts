@@ -45,6 +45,7 @@ export const BLOCK_MARK_ATTRIBUTE = "data-block-mark";
 
 /** One highlight of the paper's note, as far as its block's painter needs it. */
 export interface MarkSpot {
+  segmentIndex?: number;
   /** The highlight's block id in the note. */
   id: string;
   /** The page block it is anchored to (`summary-…`, `answers-block`). */
@@ -66,7 +67,7 @@ export function spotsForBlock(notes: Record<string, Note>, paperId: string, bloc
   const out: MarkSpot[] = [];
   for (const spot of spots) {
     if (spot.colour === undefined || spot.start === undefined || spot.end === undefined || spot.quote === undefined) continue;
-    out.push({ id: spot.id, paragraphId: blockId, colour: spot.colour, order: spot.order ?? 0, start: spot.start, end: spot.end, quote: spot.quote });
+    out.push({ id: spot.id, paragraphId: blockId, colour: spot.colour, order: spot.order ?? 0, start: spot.start, end: spot.end, quote: spot.quote, ...(spot.segmentIndex !== undefined ? { segmentIndex: spot.segmentIndex } : {}) });
   }
   return out;
 }
@@ -205,7 +206,7 @@ export function paintBlock(root: PaintRoot, spots: readonly MarkSpot[], env: Pai
   const fixes: AnchorFix[] = [];
   for (const { spot, start, end } of placed) {
     if (!done.has(spot.id) || (start === spot.start && end === spot.end)) continue;
-    fixes.push({ id: spot.id, was: { paragraphId: spot.paragraphId, start: spot.start, end: spot.end }, paragraphId: spot.paragraphId, start, end });
+    fixes.push({ id: spot.id, ...(spot.segmentIndex !== undefined ? { segmentIndex: spot.segmentIndex } : {}), was: { paragraphId: spot.paragraphId, start: spot.start, end: spot.end }, paragraphId: spot.paragraphId, start, end });
   }
   return { drawn: placed.filter((one) => done.has(one.spot.id)).map((one) => one.spot.id), fixes, text: block.text };
 }

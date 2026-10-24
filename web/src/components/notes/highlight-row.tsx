@@ -161,9 +161,9 @@ export function HighlightRowView({ id, spot, lost, open, onGo, onToggle, onPick,
         )}
         <div className="min-w-0 flex-1">
           {spot && paint ? (
-            <p title={highlightQuote(spot)} className="line-clamp-2 break-words py-[2px] font-reading text-body-sm leading-[1.5]">
+            <p title={spot.quote} className="line-clamp-2 break-words py-[2px] font-reading text-body-sm leading-[1.5]">
               <span data-highlight-words="" style={{ backgroundColor: paint.bg, color: paint.ink }} className="box-decoration-clone px-0.5">
-                {highlightQuote(spot)}
+                {spot.quote}
               </span>
             </p>
           ) : (
@@ -232,7 +232,7 @@ export function HighlightRow({ block, onColour, onRemove }: { block: Block; onCo
   return (
     <HighlightRowView
       id={block.id}
-      spot={spot ? { quote: spot.quote, colour: spot.colour } : null}
+      spot={spot ? { quote: highlightQuote(spot), colour: spot.colour } : null}
       lost={lost}
       open={open && spot !== null}
       onGo={() => {
