@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:            P12 preparation; both themes consecutive passes 0 / 2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-24T09:58:03.939Z; only writer of this file
-CURRENT ITEM:          06/08 existing workers;07/09 starts on frozen04; manager05 ownUI then FF
-NEXT TURN:          Start independent07/09 from frozen59efcbc3 while manager completes05 own UI/FF and fresh02/04 verification;06/08 continue existing work
+HELD BY:          Codex manager, local desktop chat, 2026-10-24T10:01:36.552Z; only writer of this file
+CURRENT ITEM:          06/08/07 independent workers; manager02/03 and04 fresh verification
+NEXT TURN:          Fresh manager02/03 verification and04 independent exact-tree checks;06/08/07 continue, A and3blind readers/theme after landing integration
 STOPPED BECAUSE:          — (active after third quota recovery; existing workers resumed)
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -868,6 +868,8 @@ Common constraints for every brief: verify the branch; preserve user edits; writ
 
 202. **Frozen split dependency releases responsive implementation (2026-10-24) — BINDING.** C04 sourcefcddee50 and checkpoint59efcbc3 freeze webtreef2b27b34d0e6ebcc7bdd2738a71b37b14989a121. Manager read the complete checkpoint, including unmeasured final UI, combined-note, no-key and stress rows; worker314 testsx3,6 restored mutations/build/type/lint are not independent acceptance. C07/09 may implement its already-committed197/201 brief in a separate LF detached worktree based exactly59efcbc3 while manager independently verifies04. This is a dependency release, not a landing or score. Its eventual range excludes d8a4574d..59efcbc3, so04 remains separately verified. Requested worker model is unavailable in the platform model list again; same-generation exposed fallback, retried at next item. No branch/config/auth/dependency change. Existing06/08 remain live and are not duplicated.
 
+203. **Answers disclosure independently verified and fast-forward landed (2026-10-24) — BINDING.** Manager independently read05 production/test diff and used a free detached copy. Local build0/tsc0/lint0errors144warnings,41 touched testsx3; own size mutation1red and toggle mutation2red, componentSHA1c92c33dd84e851047e4e67b8086dbf43afa9ea88efd041a21bd5ad1cd820fc6 restored byte-identical and41green. Earlier own palette white mutation4red/restored independently checked shared colours. Actual native job120784556005 at exact treeac2d35baa5fe9d9ca76d4353cf034221c6d959af passed build/tsc/lint/test0,570passed3skipped files10689passed3skipped tests. Fresh ordinaryDEV invented upload16cells1024/390x8 actual steps showed matching14.875–28px section-title font,white/orange,0clipping,16mouse-open/Enter-close,real2pxfocus and0pageerrors; screenshot inspected. The unrelated missing-Supabase cloud-read500 remains an environment error, not an error-overlay or production pass. Setup locator initially omitted the visible arrow, fixed external harness only. Detached lineage rebuilt atop34c1d401 without rebasing; webdiffquiet against previously checked tip2e5efae2 and exactCI hash; FF75ebcee5 landed first P12 product change. Source05 retained test-red/fix/checkpoint units; no weakening/dependency/private data. Own4290 stopped. Worker full224cells are separately labelled worker evidence. A/pane extremes/fullregression and actual production-upload evidence remain open; no theme score/closure is inferred.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -1129,7 +1131,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-01 | PARTIAL evidence / B handoff ready — bounded report banked; production/auth/zoom/Summary evidence remains open | owner3/5/6 | P12-01-B-20261023T190000Z.md; rulings186–187 | B → manager | sourcesda00d9a6,5a51962c,dc3134d4,34c1a565 |
 | P12-02/03 | AWAITING_MANAGER — final4150f7fd source56035901; clean worker;306touched testsx3,1265note tests,6mutations; fresh UI/gates open | owner1/2/7 | briefs/P12-02.md; rulings187,189,192–193 | C → manager → A | worker early5bb7f13b,6f880860; not landed |
 | P12-04 | AWAITING_MANAGER — frozen59efcbc3/sourcefcddee50;314testsx3,6mutations,build/type/lint0; missing UI and independent gates open | owner4 | briefs/P12-04.md; rulings188–189,192–194,202 | C → manager → A | not landed |
-| P12-05 | AWAITING_MANAGER — final4deb4f0a; exact native fullCI10689+3 green, own41x3/mutations/local gates green; fresh UI in progress | owner8 | briefs/P12-05.md; rulings187,189,192,200 | C → manager → A | not landed |
+| P12-05 | VERIFIED_LANDED — FF75ebcee5; own41x3,2mutations,16UIcells/local gates0; exact nativeCI10689+3 green; A pending | owner8 | briefs/P12-05.md; ruling203 | manager → A | webtreeac2d35baa5fe9d9ca76d4353cf034221c6d959af |
 | P12-06 | IN_PROGRESS — independent detached base4deb4f0a on frozen05 contract; port4205; raw ack/legacy list contract199 | owner9 | briefs/P12-06.md;§1h.188–189 | C → manager → A | — |
 | P12-07/09 | IN_PROGRESS — independent detached base59efcbc3 on frozen04 geometry; port4206; rulings197/201 placement contract | owner3/6 | briefs/P12-07.md;197,201–202 | C → manager → A | not landed |
 | P12-08 | IN_PROGRESS — frozen02 base4150f7fd; own detached copy/port4207; optional segmented group contract approved | owner5 | briefs/P12-08.md;198–199 | C → manager → A | — |

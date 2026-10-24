@@ -94,13 +94,13 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-24T09:58:03.939Z
+AS OF        2026-10-24T10:01:36.552Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.202   NEXT RULING §1h.203   NEXT ITEM ID P12-10   NEXT FREE PORT 4209
+LAST RULING  §1h.203   NEXT RULING §1h.204   NEXT ITEM ID P12-10   NEXT FREE PORT 4209
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      06/08 existing workers;07/09 starts on frozen04; manager05 ownUI then FF
-THEN         manager02/04 fresh verification and exact-tree gates; independent A/readers after landed fixes
+RUNNING      06/08/07 independent workers; manager02/03 and04 fresh verification
+THEN         land remaining verified fixes, independent A plus3blind readers/theme; scores A0/B0
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
 ```
@@ -177,6 +177,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-24T09:52:31.617Z | parent b4786c59 (entry commit follows) | manager | RANGE-MARGIN-SEAMS: Verified grouped strip producing host reads only first mark and margin.top visibility floor; approved focused host/tests extension for actual group-piece visibility and bottom dock.04 identified Explain docked predicate retains old1024 threshold;07 receives tiny placement/portal predicate scope, preserving drafted textarea through side-bottom transitions. | evidence: highlight-strip-host.tsx markBox/stripStanding read by manager;04 portal trace; updated07/08 briefs; ruling201 | next: same04/06/08 continue; manager completes05 actual UI and rebanks verified lineage for FF
 
 - 2026-10-24T09:58:03.939Z | parent bcbb06d9 (entry commit follows) | manager | P12-04-HANDOFF-07-START: Read entire C04 dependency checkpoint59efcbc3, frozen sourcefcddee50/webtreef2b27b34d0e6ebcc7bdd2738a71b37b14989a121. Worker314x3/6mutations/build/type/lint0 are worker evidence only; manager verification and missing UI remain open. Release07/09 implementation from this exact frozen dependency; requested worker choice unavailable again, exposed same-generation fallback. No product landing or score. | evidence: P12-04-C-20261024T095212Z.md in worker; briefs/P12-07.md; ruling202 | next: Start independent07/09 from frozen59efcbc3 while manager completes05 own UI/FF and fresh02/04 verification;06/08 continue existing work
+
+- 2026-10-24T10:01:36.552Z | parent 75ebcee5 (entry commit follows) | manager | P12-05-VERIFIED-LANDED: Manager in free verify-05-final/wt read entire production/test diff, ran local build0/tsc0/lint0errors144warnings and41touched testsx3. Own title-size mutation1red and toggle mutation2red restored exactSHA1c92c33dd84e851047e4e67b8086dbf43afa9ea88efd041a21bd5ad1cd820fc6; restored41green. Exact native fullCI40064419492 build/tsc/lint/test0,570+3files10689+3tests. Own real invented-PDF DEV upload16width/scale cells at1024/390: computed title match14.875–28px,0clip,16mouseopen/Enterclose,2px real keyboardfocus,0pageerrors. Read screenshot. Rebuilt detached lineage atop34c1d401, webdiffquiet versus verified2e5efae2 and exactCI treeac2d35baa5fe9d9ca76d4353cf034221c6d959af; fast-forward75ebcee5. Own4290stopped. No score or production-upload proof. | evidence: P12-05-C-20261023T235600Z.md; scratch verify-05-final/check-results.json,local-gates.json,ui-results.json,manager-390-max.png; https://github.com/Aspen-Lab/peer/actions/runs/40064419492/job/120784556005 | next: Fresh manager02/03 verification and04 independent exact-tree checks;06/08/07 continue, A and3blind readers/theme after landing integration
 
 ---
 
