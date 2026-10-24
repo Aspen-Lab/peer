@@ -30,6 +30,10 @@ export interface FloatingWindow {
   kind: WindowKind;
   title: string;
   order: number;
+  /** Session-only composition share; activation never changes visual opening order. */
+  share?: number;
+  /** Measured header, one content row and fixed furniture, in viewport pixels. */
+  minimum?: number;
 }
 
 interface WindowsState {
@@ -47,6 +51,8 @@ interface WindowsState {
   open: (window: Pick<FloatingWindow, "id" | "kind" | "title"> & { anchorTop?: number }) => void;
   close: (id: string) => void;
   raise: (id: string) => void;
+  resizePair: (above: string, below: string, aboveShare: number) => void;
+  setMinimum: (id: string, minimum: number) => void;
   /** An explain card that stands alone keeps level with its selection as the page scrolls; once a second card joins, the origin is
    *  frozen — a stack that moved with the text could not be a stack of headers. Anything else is ignored. */
   follow: (y: number) => void;
@@ -62,14 +68,15 @@ export const useWindows = create<WindowsState>()((set) => ({
       const exists = s.windows.some((w) => w.id === next.id);
       const windows = exists
         ? s.windows.map((w) => (w.id === next.id ? { ...w, title: next.title, order } : w))
-        : [...s.windows, { ...next, order }];
+        : [...s.windows, { ...next, order }].map((w) => ({ ...w, share: 1 / (s.windows.length + 1) }));
       const origin = s.windows.length > 0 ? s.origin : anchorTop !== undefined && Number.isFinite(anchorTop) ? anchorTop : null;
       return { windows, clock: order, origin };
     }),
   close: (id) =>
     set((s) => {
       if (!s.windows.some((w) => w.id === id)) return s;
-      const windows = s.windows.filter((w) => w.id !== id);
+      const released = s.windows.find((w) => w.id === id)?.share ?? 1 / s.windows.length;
+      const windows = s.windows.filter((w) => w.id !== id).map((w) => ({ ...w, share: (w.share ?? 1 / s.windows.length) + released / (s.windows.length - 1) }));
       return windows.length === 0 ? { windows, origin: null } : { windows };
     }),
   raise: (id) =>
@@ -78,6 +85,17 @@ export const useWindows = create<WindowsState>()((set) => ({
       const order = s.clock + 1;
       return { windows: s.windows.map((w) => (w.id === id ? { ...w, order } : w)), clock: order };
     }),
+  resizePair: (above, below, aboveShare) => set((s) => {
+    const index = s.windows.findIndex((w) => w.id === above);
+    if (index < 0 || s.windows[index + 1]?.id !== below || !Number.isFinite(aboveShare)) return s;
+    const total = (s.windows[index].share ?? 1 / s.windows.length) + (s.windows[index + 1].share ?? 1 / s.windows.length);
+    if (aboveShare <= 0 || aboveShare >= total) return s;
+    return { windows: s.windows.map((w, i) => i === index ? { ...w, share: aboveShare } : i === index + 1 ? { ...w, share: total - aboveShare } : w) };
+  }),
+  setMinimum: (id, minimum) => set((s) => {
+    if (!Number.isFinite(minimum) || minimum < WINDOW_HEADER_PX || !s.windows.some((w) => w.id === id && Math.abs((w.minimum ?? 0) - minimum) > 0.5)) return s;
+    return { windows: s.windows.map((w) => w.id === id ? { ...w, minimum } : w) };
+  }),
   follow: (y) =>
     set((s) => (s.windows.length === 1 && s.windows[0].kind === "explain" && Number.isFinite(y) && s.origin !== y ? { origin: y } : s)),
 }));
@@ -90,6 +108,28 @@ export const useWindows = create<WindowsState>()((set) => ({
 
 /** A window's header: all that shows of one that is behind another. */
 export const WINDOW_HEADER_PX = 40;
+export const CARD_DIVIDER_PX = 12;
+export const CARD_CONTENT_MIN_PX = 80;
+
+/** Constrain shares to measured minima without changing the page or dropping a body. */
+export function splitHeights(windows: readonly FloatingWindow[], bandHeight: number): number[] {
+  const minima = windows.map((w) => w.minimum ?? CARD_CONTENT_MIN_PX);
+  const available = Math.max(0, bandHeight - Math.max(0, windows.length - 1) * CARD_DIVIDER_PX);
+  const room = Math.max(available, windows.length * Math.max(CARD_CONTENT_MIN_PX, ...minima));
+  const result = windows.map(() => 0);
+  const pending = new Set(windows.map((_, i) => i));
+  let remaining = room;
+  while (pending.size) {
+    const weight = [...pending].reduce((sum, i) => sum + (windows[i].share ?? 1 / windows.length), 0);
+    const below = [...pending].filter((i) => remaining * (windows[i].share ?? 1 / windows.length) / weight < minima[i]);
+    if (!below.length) {
+      for (const i of pending) result[i] = remaining * (windows[i].share ?? 1 / windows.length) / weight;
+      break;
+    }
+    for (const i of below) { result[i] = minima[i]; remaining -= minima[i]; pending.delete(i); }
+  }
+  return result;
+}
 
 export interface StackRow {
   id: string;
@@ -195,6 +235,16 @@ function frontHeightOf(kind: WindowKind, frame: StackFrame): number {
  * P11-14: the explain card is one of these windows, so nothing stands over the stack and the column never steps round it. Pure.
  */
 export function stackLayout(windows: readonly FloatingWindow[], frame: StackFrame): StackRow[] {
+  if (windows.length > 1) {
+    const top = frame.minTop ?? frame.top;
+    const heights = splitHeights(windows, frame.bottom - top);
+    let next = top;
+    return windows.map((w, i) => {
+      const row = { id: w.id, top: next, height: heights[i], front: true, z: Math.min(STACK_Z_BASE + i, STACK_Z_MAX) };
+      next += heights[i] + CARD_DIVIDER_PX;
+      return row;
+    });
+  }
   const ordered = [...windows].sort((a, b) => a.order - b.order);
   const behind = Math.max(0, ordered.length - 1) * WINDOW_HEADER_PX;
   const frontKind = ordered[ordered.length - 1]?.kind;

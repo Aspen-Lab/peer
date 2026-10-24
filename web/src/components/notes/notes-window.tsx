@@ -146,7 +146,7 @@ export function NotesWindowView({
       front={front}
       top={top}
       maxHeight={maxHeight}
-      {...(front ? {} : { height })}
+      height={height}
       z={z ?? STACK_Z_BASE}
       keepMounted
       // In front the export menu hangs below the header and may pass the window's foot; behind it clips to a header.

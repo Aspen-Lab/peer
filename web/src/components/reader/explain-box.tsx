@@ -89,7 +89,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type Ref } from "react";
 import { hasUserLlmOverride } from "@/lib/feed/ai-tier";
 import { setExplainOffer } from "@/lib/reader/explain-offer";
-import { EXPLAIN_WINDOW_ID, WINDOW_HEADER_PX, stackFrameIn, stackLayout, useWindows, type FloatingWindow } from "@/lib/reader/windows";
+import { CARD_CONTENT_MIN_PX, EXPLAIN_WINDOW_ID, WINDOW_HEADER_PX, stackFrameIn, stackLayout, useWindows, type FloatingWindow } from "@/lib/reader/windows";
 import { placeInMargin, useMarginStore, type MarginRect } from "@/lib/reader/margin";
 import { isPageBlockId } from "@/lib/notes/anchor-blocks";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
@@ -121,6 +121,8 @@ import {
 import { EvidenceQuote } from "./evidence-quote";
 import { isFrontCard } from "./front-escape";
 import { MarginCardHeader } from "./margin-card";
+import { useMarginStack } from "./margin-stack-scroll";
+import { CardDivider } from "./card-divider";
 import { asItems, firstAnswerMessage, keyToSend, postExplain, moreReply, replyPair, sayMoreOf, type ReplyResult } from "./explain-thread";
 import type { ExplainSelection, ExplainSource, SelectionTarget, ViewRect, ViewRects } from "./paper-body";
 
@@ -349,16 +351,16 @@ interface StackView {
 
 function readStack(): StackView {
   const { windows, origin } = useWindows.getState();
-  const ordered = [...windows].sort((a, b) => a.order - b.order);
+  const ordered = windows;
   const cards: FloatingWindow[] = ordered.some((w) => w.id === EXPLAIN_WINDOW_ID) ? ordered : [...ordered, { id: EXPLAIN_WINDOW_ID, kind: "explain", title: EXPLAIN.title, order: 0 }];
-  return { windows: cards.map((w, i) => ({ ...w, order: i + 1 })), origin, rect: useMarginStore.getState().rect };
+  return { windows: cards, origin, rect: useMarginStore.getState().rect };
 }
 
 /** The box alone in the stack follows its own paragraph, and the origin it pushes to the store is not news to it. */
 const aloneInStack = (windows: readonly FloatingWindow[]) => windows.length === 1 && windows[0].id === EXPLAIN_WINDOW_ID;
 
 /** The same stack as far as laying it out goes: the same cards of the same kinds in the same order. Its own registering changes nothing. */
-const sameCards = (a: readonly FloatingWindow[], b: readonly FloatingWindow[]) => a.length === b.length && a.every((w, i) => w.id === b[i].id && w.kind === b[i].kind);
+const sameCards = (a: readonly FloatingWindow[], b: readonly FloatingWindow[]) => a.length === b.length && a.every((w, i) => w.id === b[i].id && w.kind === b[i].kind && w.order === b[i].order && w.share === b[i].share && w.minimum === b[i].minimum);
 
 /** The band the card stands in: the margin's rect, else the masthead's foot down to the legend's strip at the right edge, 360 px wide. */
 function bandOf(rect: MarginRect | null, viewport: Viewport): MarginRect {
@@ -647,6 +649,7 @@ export function ExplainCard({
   inputRef,
   behind,
   onRaise,
+  compact = false,
 }: {
   passage: string;
   /** The heading of the section the passage sits in. */
@@ -676,6 +679,7 @@ export function ExplainCard({
    *  the start (O-7), the title and the passage's opening words; a press on it raises the card (`onRaise`). */
   behind?: boolean;
   onRaise?: () => void;
+  compact?: boolean;
 }) {
   const asking = canAsk && status.kind === "answer" ? thread : undefined;
   const full = asking ? threadFull(asking.turns) : false;
@@ -718,25 +722,29 @@ export function ExplainCard({
       role="region"
       aria-label={EXPLAIN.card}
       data-explain-card=""
+      data-margin-id={dock ? EXPLAIN_WINDOW_ID : undefined}
+      data-margin-compact={compact || undefined}
       {...(sheet ? { "data-explain-sheet": "" } : {})}
       {...(dock ? { "data-explain-dock": "", "data-margin-card": "explain" } : {})}
       ref={cardRef}
       // The container can take the focus (never in the tab order), so a script can hand it the focus. It is no control, so it draws no ring.
       tabIndex={-1}
       style={style}
+      onFocusCapture={() => { if (compact && !isFrontCard(useWindows.getState().windows, EXPLAIN_WINDOW_ID)) onRaise?.(); }}
+      onPointerDownCapture={() => { if (compact && !isFrontCard(useWindows.getState().windows, EXPLAIN_WINDOW_ID)) onRaise?.(); }}
       // P9-20 (A P9-W2's N4): the quotes in this 360 px window (and the phone's sheet) are set ragged-right, not justified: the body's
       // `reading-justify` opened word gaps 4.4 times a space at this measure. The override is scoped to the window; the paper's own
       // column keeps its justification (the design).
-      className={`fixed z-[70] overflow-y-auto border border-border-strong bg-surface p-4 outline-none [&_.reading-justify]:text-left ${
-        dock ? "flex flex-col border-r-0" : `shadow-card-hover ${sheet ? "rounded-t-lg border-b-0" : "rounded-lg"}`
+      className={`${compact ? "absolute left-0 w-full p-2" : "fixed p-4"} z-[70] overflow-y-auto border border-border-strong bg-surface outline-none [&_.reading-justify]:text-left ${
+        dock ? compact ? "block" : "flex flex-col border-r-0" : `shadow-card-hover ${sheet ? "rounded-t-lg border-b-0" : "rounded-lg"}`
       }`}
     >
       {/* The card is what scrolls; its header stays at the top and its input at the foot (sticky, offset by the card's own padding,
           which a sticky box would otherwise stop short of). P10-08 (review 8.4, 8.5; the owner: the top-left close "要改成一个大大的X，并高亮"):
           Close is a large X in the accent colour at the header's top-left — 36 px (44 where there is no hover), the page's own accent, a
           button the keyboard reaches — with the window's title beside it; the passage's quote is under both. */}
-      <div className="sticky -top-4 z-10 -mx-4 -mt-4 border-b border-border bg-surface px-4 pb-3 pt-4">
-        <div className="flex items-center gap-3">
+      <div className={compact ? "contents" : "sticky -top-4 z-10 -mx-4 -mt-4 border-b border-border bg-surface px-4 pb-3 pt-4"}>
+        <div data-margin-fixed={compact ? "" : undefined} className={compact ? "sticky -top-2 z-10 -mx-2 -mt-2 flex h-10 shrink-0 items-center gap-3 border-b border-border bg-surface px-2" : "flex items-center gap-3"}>
           <button
             type="button"
             data-explain-close=""
@@ -748,15 +756,15 @@ export function ExplainCard({
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
           </button>
-          <p className="min-w-0 flex-1 font-mono text-caption text-heading">{EXPLAIN.title}</p>
+          {compact ? <button type="button" data-explain-header="" onClick={onRaise} className="h-10 min-w-0 flex-1 text-left font-mono text-caption text-heading">{EXPLAIN.title}</button> : <p className="min-w-0 flex-1 font-mono text-caption text-heading">{EXPLAIN.title}</p>}
         </div>
         <div className="mt-3 min-w-0">
           {source === undefined || source === "paper" ? (
-            <EvidenceQuote text={previewOf(passage)} where={heading} />
+            <EvidenceQuote text={compact ? passage : previewOf(passage)} where={heading} />
           ) : (
             <>
               <p className="annotation text-text-faint">{source === "summary" ? EXPLAIN.fromSummary : EXPLAIN.fromAnswer}</p>
-              <p className="font-reading italic text-body leading-[1.55] text-text-muted pl-5 mt-2">{previewOf(passage)}</p>
+              <p className="font-reading italic text-body leading-[1.55] text-text-muted pl-5 mt-2">{compact ? passage : previewOf(passage)}</p>
             </>
           )}
         </div>
@@ -814,7 +822,7 @@ export function ExplainCard({
         // The control row: the input, then Send. (P10-08, review 8.6: the web-search toggle that stood at its start is gone.)
         <div
           data-explain-controls=""
-          className={`sticky -bottom-4 -mx-4 -mb-4 ${dock ? "mt-auto" : "mt-4"} flex flex-wrap items-end gap-2 border-t border-border bg-surface p-3 ${sheet ? "pb-[max(0.75rem,env(safe-area-inset-bottom))]" : ""}`}
+          className={`${compact ? "static mt-4" : `sticky -bottom-4 -mx-4 -mb-4 ${dock ? "mt-auto" : "mt-4"}`} flex flex-wrap items-end gap-2 border-t border-border bg-surface p-3 ${sheet ? "pb-[max(0.75rem,env(safe-area-inset-bottom))]" : ""}`}
         >
           <textarea
             ref={inputRef}
@@ -952,6 +960,7 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
   const [measured, setMeasured] = useState<Array<{ of: ExplainSelection; where: ViewRects }>>([]);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
+  const marginStack = useMarginStack(EXPLAIN_WINDOW_ID, cardRef, stack.rect);
   const live = useRef<Session | null>(null);
   const refocus = useRef(false);
   const wasPending = useRef(false);
@@ -1017,7 +1026,7 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
     const card = cardRef.current;
-    if (!docked || !card) return;
+    if (!docked || !card || marginStack.split) return;
     const height = card.scrollHeight + (card.offsetHeight - card.clientHeight);
     if (!Number.isFinite(height)) return;
     const write = settleHeight(heightGuard.current, cardHeight, height, readerKey);
@@ -1323,7 +1332,7 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
         top: row.top,
         maxHeight: row.height,
         zIndex: row.z,
-        ...(behind ? { height: WINDOW_HEADER_PX } : {}),
+        ...(stack.windows.length > 1 ? { height: row.height } : behind ? { height: WINDOW_HEADER_PX } : {}),
       };
     }
   }
@@ -1340,7 +1349,13 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
           ...(onSayMore ? { onSayMore: sayMore } : {}),
         }
       : undefined;
-  return (
+  const splitRowIndex = marginStack.rows.findIndex((r) => r.id === EXPLAIN_WINDOW_ID);
+  const splitRow = marginStack.rows[splitRowIndex];
+  const splitNext = marginStack.rows[splitRowIndex + 1];
+  const splitMine = marginStack.windows[splitRowIndex];
+  const splitOther = marginStack.windows[splitRowIndex + 1];
+  const compact = place.kind === "dock" && marginStack.split;
+  return marginStack.portal(<>
     <ExplainCard
       passage={open.selection.passage}
       heading={heading}
@@ -1355,9 +1370,11 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
       source={open.selection.source}
       cardRef={behind ? undefined : cardRef}
       inputRef={inputRef}
-      style={styleOf(place)}
+      style={compact && splitRow ? { ...styleOf(place), position: "absolute", left: 0, top: splitRow.top - marginStack.bandTop, width: "100%", height: splitRow.height, maxHeight: splitRow.height } : styleOf(place)}
+      compact={compact}
       behind={behind}
       onRaise={raiseSelf}
     />
-  );
+    {compact && splitRow && splitNext && splitMine && splitOther && <CardDivider above={EXPLAIN_WINDOW_ID} below={splitNext.id} top={splitRow.top + splitRow.height - marginStack.bandTop} value={splitRow.height} pairHeight={splitRow.height + splitNext.height} min={splitMine.minimum ?? CARD_CONTENT_MIN_PX} max={splitRow.height + splitNext.height - (splitOther.minimum ?? CARD_CONTENT_MIN_PX)} />}
+  </>);
 }

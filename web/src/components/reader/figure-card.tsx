@@ -31,7 +31,7 @@ import { quoteHead } from "@/lib/notes/blocks";
 import type { FigureRef } from "@/lib/reader/figure-viewer";
 import { FIGURE_STACKED_CAPTION_SHARE, FIGURE_ZOOM_ROW_PX } from "@/lib/reader/windows";
 import type { Size } from "./figure-zoom";
-import { MarginCardShell, type MarginFrame } from "./margin-card";
+import { MarginCard, type MarginFrame } from "./margin-card";
 import { useFigureZoom, type FigureZoom } from "./use-figure-zoom";
 
 /** The figure card's id in the stack (there is one: a second figure replaces the first, D2). */
@@ -191,7 +191,7 @@ function FigureCardHeader({ label, caption, onClose, onRaise }: Pick<FigureCardV
 export function FigureCardView({ label, caption, src, front, top, height, z, stacked, frame, zoom, boxRef, surfaceRef, picture, pictureRef, failed, onPictureLoad, onPictureError, onClose, onRaise }: FigureCardViewProps) {
   const percent = Math.round(zoom.scale * 100);
   return (
-    <MarginCardShell
+    <MarginCard
       id={FIGURE_WINDOW_ID}
       kind="figure"
       role="region"
@@ -291,7 +291,7 @@ export function FigureCardView({ label, caption, src, front, top, height, z, sta
           {caption}
         </div>
       )}
-    </MarginCardShell>
+    </MarginCard>
   );
 }
 
