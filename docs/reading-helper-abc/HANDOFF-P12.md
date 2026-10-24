@@ -94,13 +94,13 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-24T14:58:54.492Z
+AS OF        2026-10-24T15:06:19.620Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.206   NEXT RULING §1h.207   NEXT ITEM ID P12-11   NEXT FREE PORT 4210
+LAST RULING  §1h.207   NEXT RULING §1h.208   NEXT ITEM ID P12-11   NEXT FREE PORT 4210
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      07/08 existing Cs and10read-only B; manager02 UI and corrected02+04 verification;06focusedreturnqueued
-THEN         complete02 FF,04 combinedgreen/ownUI,06 locatorreturn/nativegates; B10 rules next scope
+RUNNING      07/08 Cs and10B; manager02 lifecycle;04 asymmetric-minimum keyboard return and06 locatorreturnqueued
+THEN         finish02 FF; original04/06 focused corrections; B10 ruling/client-server group contract
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
 ```
@@ -185,6 +185,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-24T14:49:20.865Z | parent 3f4d2ed2 (entry commit follows) | manager | RECOVERY-4-02-GREEN-04-RETURN: Recovered same07/08 workers after usage limit;06final42d0b469 banked, no duplicate. Read native exact jobs:02+landed05 treea084518db97aa6dea45f54189c7ede6a98f8cfb3 passes build0tsc0lint0/144test0,573+3files10698+3tests. Manager02 own671x3,save-empty1red/square2red,hashrestored671green.04+05 tree823a6038164418f8c842bcb418ff2069912aa022 build0tsc0lint0/144,test1:3failed10708passed3skipped; all3 are sticky-note.test legacy cascade expectations omitted from04 reaiminventory. Manager04 own314x3,bodyvisibility andpair mutationsred/hashrestored314green. Return only measured superseded geometry assertions to original04 C; no landing until fullgreen and ownUI. | evidence: native jobs120844160117/120844153831; scratch verify-02/check-results.json andverify-04/check-results.json;06 P12-06-C-20261024T050000Z.md; ruling205 | next: 04 C reaim exact3 superseded sticky geometry scenarios preserving semantics; manager02 localbuild/UI then FF;07/08 existing workerscontinue;06 fresh verification queued
 
 - 2026-10-24T14:58:54.492Z | parent 8ef3d829 (entry commit follows) | manager | P12-10-B-START-06-RETURN: Committed B10 brief8ef3d829 then started independent read-only B at same base after requested worker unavailable; known keyed grouped Explain applicability investigated before hiding or broadening. Read04 correction71b2e71a all3scenarios retained with exact equal visiblegeometry/active checks; managercombined02+04 exacttree00eed38218681ddfdccf24bbb5e43581ab095b8a dispatched.06 own191x3 and acknowledgement6red/dedupe1red hashrestored191green; native run40104313531 build1 with Noto font CSS resolution stack,tsc0lint0/144,test1 only question-box.flow.test legacy singlelabel locator. Return exactlocator to C06, no source workaround.02 ownlocal build/tsc/lint0/144 and real formatting/listSave/reload verified; marker harness selector repair ongoing. | evidence: briefs/P12-10.md; jobs120902718586;04 P12-04-C-20261024T145250Z.md; scratch verify-06/check-results.json,verify-02/local-gates.json andui-results.json; ruling206 | next: B10 bounded producing-path report; C06 focused locator return when slot free; manager02 actual UI/export then FF; corrected combined04 ownchecks/fullgates
+
+- 2026-10-24T15:06:19.620Z | parent d9afd678 (entry commit follows) | manager | P12-04-COMBINED-GREEN-KEY-RETURN: Manager read corrected3sticky scenarios and combined02/04 diff, ran379touched testsx3 plus ownbodyvisibility/pairwrite red mutations, saved-byte restoration and379green. Exact combined native run40104741007/job120903978596 tree00eed38218681ddfdccf24bbb5e43581ab095b8a build0tsc0lint0/144test0;576+3files10720+3tests. Review found Enter midpoint uses(min+max)/2; unequal real minimums97/140 at pair514 produce235.5/278.5 instead of257/257. Return actual keyboard equalization to original04 C; cannot land on green tests that miss the boundary.02 ownMD download proved nested two-space list; notes-page locator/hydration harness repair remains. | evidence: native job120903978596; verify-04/check-results.json; card-divider.tsx cardDividerStep/commit;04 correction71b2e71a; verify-02/own-notes.md andui-results.json | next: Original04 C asymmetric-minimum redtest/fix/checkpoint once slot free; manager02 actual lifecycle then FF; B10 finishes boundedreport,06 locator correction queued
 
 ---
 
