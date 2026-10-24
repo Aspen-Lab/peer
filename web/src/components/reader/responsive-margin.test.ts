@@ -12,6 +12,12 @@ it("P12-07 the functional pane boundary is visible before hover", () => {
   expect(rest).toContain("background: var(--color-text-muted)");
 });
 
+it("P12-07 the inner line cap grows with reading size as well as the pane budget", () => {
+  const css = readFileSync(resolve(process.cwd(), "src/app/globals.css"), "utf8");
+  const inner = /\.reader-centre-inner\s*\{([^}]+)\}/.exec(css)?.[1] ?? "";
+  expect(inner).toContain("max-width: calc(38em * var(--reading-scale, 1))");
+});
+
 describe("P12-07 comfortable reading before extra columns", () => {
   it("reserves 476px of actual text plus both 12px insets at 1x", () => {
     expect(readingCentreMinimum(1)).toBe(500);

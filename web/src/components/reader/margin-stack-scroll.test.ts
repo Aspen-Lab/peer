@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { measuredCardMinimum } from "./margin-stack-scroll";
+import { measuredCardMinimum, setMarginLandmark } from "./margin-stack-scroll";
 import { useWindows } from "@/lib/reader/windows";
 
 // Direct geometry probes, not a claim about a rendered page. Browser matrix
@@ -23,6 +23,16 @@ function card(kind: string, headerHeight: number, line: number, compact = false)
   return root as unknown as HTMLElement;
 }
 afterEach(() => { vi.unstubAllGlobals(); useWindows.setState({ windows: [], clock: 0, origin: null }); });
+
+it("P12-07/212 exposes one complementary bottom Margin on the same host, removing it on side", () => {
+  const attributes = new Map<string, string>();
+  const target = { setAttribute: (name: string, value: string) => attributes.set(name, value), removeAttribute: (name: string) => attributes.delete(name), style: { position: "fixed" } };
+  setMarginLandmark(target, true);
+  expect(Object.fromEntries(attributes)).toEqual({ role: "complementary", "aria-label": "Margin" });
+  setMarginLandmark(target, false);
+  expect(attributes.size).toBe(0);
+  expect(target.style).toEqual({ position: "fixed" });
+});
 
 describe("actual minimum furniture and stable store registration", () => {
   for (const editable of [false, true]) {
