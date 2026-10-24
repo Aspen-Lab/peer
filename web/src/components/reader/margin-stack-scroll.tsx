@@ -4,6 +4,8 @@ import { useEffect, useLayoutEffect, useState, type ReactNode, type RefObject } 
 import { createPortal } from "react-dom";
 import { CARD_DIVIDER_PX, stackLayout, useWindows } from "@/lib/reader/windows";
 import { readPageZoom, useMarginStore } from "@/lib/reader/margin";
+import type { FloatingWindow } from "@/lib/reader/windows";
+import type { MarginRect } from "@/lib/reader/margin";
 import { columnBottomPx, DOCK_TOP_PX, legendHeightPx } from "./explain-dock";
 import type { MarginFrame } from "./margin-card";
 
@@ -35,10 +37,12 @@ export function measuredCardMinimum(element: HTMLElement): number {
   return Math.ceil(header + line + padding + 2);
 }
 
-export function useMarginStack(id: string, element: RefObject<HTMLElement | null>, frame: MarginFrame | null) {
+export function useMarginStack(id: string, element: RefObject<HTMLElement | null>, frame: MarginFrame | null, enabled = true, external?: { windows: readonly FloatingWindow[]; rect: MarginRect | null; bottom: number }) {
   const read = () => ({ windows: useWindows.getState().windows, rect: useMarginStore.getState().rect, bottom: typeof window === "undefined" ? 1000 : columnBottomPx(window.innerHeight, legendHeightPx(readPageZoom())) });
   const [view, setView] = useState(read);
+  const managed = external !== undefined;
   useEffect(() => {
+    if (!enabled || managed) return;
     const update = () => setView((old) => {
       const next = read();
       return old.windows === next.windows && old.rect === next.rect && old.bottom === next.bottom ? old : next;
@@ -48,15 +52,17 @@ export function useMarginStack(id: string, element: RefObject<HTMLElement | null
     const stopMargin = useMarginStore.subscribe(update);
     if (typeof window !== "undefined") window.addEventListener("resize", update);
     return () => { stopWindows(); stopMargin(); if (typeof window !== "undefined") window.removeEventListener("resize", update); };
-  }, []);
-  const windows = view.windows;
-  const column = { minTop: view.rect?.top ?? DOCK_TOP_PX, bottom: view.rect?.bottom ?? view.bottom, top: view.rect?.top ?? DOCK_TOP_PX };
+  }, [enabled, managed]);
+  const current = external ?? view;
+  const windows = current.windows;
+  const column = { minTop: current.rect?.top ?? DOCK_TOP_PX, bottom: current.rect?.bottom ?? current.bottom, top: current.rect?.top ?? DOCK_TOP_PX };
   const [target, setTarget] = useState<HTMLDivElement | null>(null);
   const split = windows.length > 1;
   const rows = stackLayout(windows, column);
   const total = rows.length ? rows[rows.length - 1].top + rows[rows.length - 1].height - column.minTop : 0;
 
   useLayoutEffect(() => {
+    if (!enabled) return;
     if (typeof document === "undefined" || typeof document.createElement !== "function") return;
     if (!host) {
       host = document.createElement("div");
@@ -66,7 +72,7 @@ export function useMarginStack(id: string, element: RefObject<HTMLElement | null
     users++;
     setTarget(host);
     return () => { if (--users === 0) { host?.remove(); host = null; } };
-  }, []);
+  }, [enabled]);
 
   useLayoutEffect(() => {
     if (!target) return;
@@ -109,7 +115,7 @@ export function useMarginStack(id: string, element: RefObject<HTMLElement | null
     bandTop: column.minTop,
     rows,
     windows,
-    portal: (children: ReactNode) => target ? createPortal(children, target) : children,
+    portal: (children: ReactNode) => enabled && target ? createPortal(children, target) : children,
     gap: CARD_DIVIDER_PX,
   };
 }

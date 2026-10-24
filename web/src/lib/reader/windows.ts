@@ -5,7 +5,10 @@
 // header press raises a card, the X closes it, opening raises. Nothing here is persisted: a reload closes every window, and what
 // a window wrote is already in the paper's note.
 //
-// `order` is the stacking: the window raised last has the highest, and stands in front.
+// P12-04 (rulings188/193/194): one card keeps the legacy selection-aligned
+// frame below. Multiple cards divide the whole band, with all bodies visible.
+// Array order is opening order; `order` only identifies the active Escape target.
+// Shares and measured minima remain in this page-session store, never persistence.
 //
 // P11-14 (B P11-01 §3.1, §4 C4): nothing is reserved on the page any more. The margin is a track of the reader's shell, so a card
 // opening or closing never moves the paper's words, and there is no reserve to bind, no place to hold and no scroll to make.
@@ -135,7 +138,7 @@ export interface StackRow {
   id: string;
   top: number;
   height: number;
-  /** In front, and whole. */
+  /** Visible body. Every split row is visible; active Escape ownership uses store order. */
   front: boolean;
   /** Stacking, from `STACK_Z_BASE` to `STACK_Z_MAX`: behind to front. */
   z: number;

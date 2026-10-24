@@ -31,7 +31,10 @@ import { quoteHead } from "@/lib/notes/blocks";
 import type { FigureRef } from "@/lib/reader/figure-viewer";
 import { FIGURE_STACKED_CAPTION_SHARE, FIGURE_ZOOM_ROW_PX } from "@/lib/reader/windows";
 import type { Size } from "./figure-zoom";
-import { MarginCard, type MarginFrame } from "./margin-card";
+import { MarginCardShell, type MarginFrame } from "./margin-card";
+import { useMarginStack } from "./margin-stack-scroll";
+import { CardDivider } from "./card-divider";
+import { CARD_CONTENT_MIN_PX } from "@/lib/reader/windows";
 import { useFigureZoom, type FigureZoom } from "./use-figure-zoom";
 
 /** The figure card's id in the stack (there is one: a second figure replaces the first, D2). */
@@ -135,6 +138,8 @@ export interface FigureCardViewProps {
   stacked?: boolean;
   /** The margin's left and width; null where there is none. */
   frame: MarginFrame | null;
+  elementRef?: Ref<HTMLElement>;
+  split?: boolean;
   zoom: FigureCardZoom;
   /** The mat's box, measured by the card; the surface, which takes the focus when a figure is pressed. */
   boxRef?: Ref<HTMLDivElement>;
@@ -188,10 +193,10 @@ function FigureCardHeader({ label, caption, onClose, onRaise }: Pick<FigureCardV
   );
 }
 
-export function FigureCardView({ label, caption, src, front, top, height, z, stacked, frame, zoom, boxRef, surfaceRef, picture, pictureRef, failed, onPictureLoad, onPictureError, onClose, onRaise }: FigureCardViewProps) {
+export function FigureCardView({ label, caption, src, front, top, height, z, stacked, frame, zoom, boxRef, surfaceRef, picture, pictureRef, failed, onPictureLoad, onPictureError, onClose, onRaise, elementRef, split }: FigureCardViewProps) {
   const percent = Math.round(zoom.scale * 100);
   return (
-    <MarginCard
+    <MarginCardShell
       id={FIGURE_WINDOW_ID}
       kind="figure"
       role="region"
@@ -201,6 +206,9 @@ export function FigureCardView({ label, caption, src, front, top, height, z, sta
       height={height}
       z={z}
       frame={frame}
+      elementRef={elementRef}
+      split={split}
+      className={split ? "!absolute !left-0 !right-auto !w-full" : undefined}
       header={<FigureCardHeader label={label} caption={caption} onClose={onClose} onRaise={onRaise} />}
     >
       <div data-figure-zoom-row="" className="flex shrink-0 items-center gap-2 border-t border-border-strong px-2" style={{ height: FIGURE_ZOOM_ROW_PX }}>
@@ -291,7 +299,7 @@ export function FigureCardView({ label, caption, src, front, top, height, z, sta
           {caption}
         </div>
       )}
-    </MarginCard>
+    </MarginCardShell>
   );
 }
 
@@ -315,6 +323,8 @@ export interface FigureCardProps {
  * it); the last size is kept while the box is not on the page, so the first frame after a raise has its picture.
  */
 export function FigureCard({ figure, frame, front, top, height, z, stacked, onClose, onRaise }: FigureCardProps) {
+  const cardElement = useRef<HTMLElement | null>(null);
+  const marginStack = useMarginStack(FIGURE_WINDOW_ID, cardElement, frame);
   const [boxEl, setBoxEl] = useState<HTMLDivElement | null>(null);
   const [box, setBox] = useState<Size | null>(null);
   // P11-26 rule 3: the loaded picture the card draws — the body's, or the one the card itself loaded before (kept by address) — and whether the
@@ -365,17 +375,24 @@ export function FigureCard({ figure, frame, front, top, height, z, stacked, onCl
     surfaceEl.current?.focus({ preventScroll: true });
   }, [figure, front]);
 
-  return (
+  const index = marginStack.rows.findIndex((r) => r.id === FIGURE_WINDOW_ID);
+  const row = marginStack.rows[index];
+  const next = marginStack.rows[index + 1];
+  const mine = marginStack.windows[index];
+  const other = marginStack.windows[index + 1];
+  return marginStack.portal(<>
     <FigureCardView
       label={figure.label}
       caption={figure.caption}
       src={figure.src}
       front={front}
-      top={top}
-      height={height}
+      top={marginStack.split && row ? row.top - marginStack.bandTop : top}
+      height={marginStack.split && row ? row.height : height}
       z={z}
       stacked={stacked}
       frame={frame}
+      elementRef={cardElement}
+      split={marginStack.split}
       zoom={zoom}
       boxRef={setBoxEl}
       surfaceRef={surfaceRef}
@@ -394,5 +411,6 @@ export function FigureCard({ figure, frame, front, top, height, z, stacked, onCl
       onClose={onClose}
       onRaise={onRaise}
     />
-  );
+    {marginStack.split && row && next && mine && other && <CardDivider above={FIGURE_WINDOW_ID} below={next.id} top={row.top + row.height - marginStack.bandTop} value={row.height} pairHeight={row.height + next.height} min={mine.minimum ?? CARD_CONTENT_MIN_PX} max={row.height + next.height - (other.minimum ?? CARD_CONTENT_MIN_PX)} />}
+  </>);
 }

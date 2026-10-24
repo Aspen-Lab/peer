@@ -112,7 +112,9 @@ describe("the explain card behind another card does not answer Escape", () => {
       expect(event.preventDefault).not.toHaveBeenCalled();
       expect(event.stopPropagation).not.toHaveBeenCalled();
       expect(inStack()).toBe(true);
-      expect(cardOf(run.last())?.props.behind).toBe(true);
+      // P12-04 RE-AIM: inactive does not mean hidden; Escape's active-order assertions above stay intact.
+      expect(cardOf(run.last())?.props.behind).toBe(false);
+      expect(cardOf(run.last())?.props.compact).toBe(true);
       run.mounted.unmount();
     });
   }

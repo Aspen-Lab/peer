@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { stackLayout, useWindows, type FloatingWindow, type WindowKind } from "./windows";
+import { splitHeights, stackLayout, useWindows, type FloatingWindow, type WindowKind } from "./windows";
 
 // P12-04/ruling188: these exercise real page-session transitions, separately from DOM proof.
 type SharedWindow = FloatingWindow & { share?: number };
@@ -12,6 +12,19 @@ const open = (id: string, kind: WindowKind = "sticky") => state().open({ id, kin
 afterEach(() => useWindows.setState({ windows: [], clock: 0, origin: null }));
 
 describe("P12-04 session composition and adjacent shares", () => {
+  it("uses the largest measured minimum for equal overcapacity shares rather than hiding bodies", () => {
+    const windows = ["notes", "explain", "sticky", "figure", "highlight"].map((kind, i) => ({ id: kind, kind: kind as WindowKind, title: kind, order: i, share: 0.2, minimum: i === 3 ? 140 : 94 }));
+    const heights = splitHeights(windows, 392);
+    expect(heights).toEqual([140, 140, 140, 140, 140]);
+    const rows = stackLayout(windows, { top: 48, minTop: 48, bottom: 440 });
+    expect(rows.at(-1)!.top + rows.at(-1)!.height).toBe(48 + 700 + 48);
+    expect(rows.every((r) => r.front)).toBe(true);
+  });
+  it("constrains a retained ratio to a measured minimum while still using every available pixel", () => {
+    const windows = [{ id: "a", kind: "sticky" as const, title: "a", order: 1, share: 0.1, minimum: 120 }, { id: "b", kind: "notes" as const, title: "b", order: 2, share: 0.9, minimum: 80 }];
+    expect(splitHeights(windows, 526)).toEqual([120, 394]);
+    expect(windows.map((w) => w.share)).toEqual([0.1, 0.9]);
+  });
   it("starts every new composition equally and never reorders a panel on activation", () => {
     open("a"); open("b", "explain"); open("c", "figure");
     expect(shares()).toEqual([1 / 3, 1 / 3, 1 / 3]);

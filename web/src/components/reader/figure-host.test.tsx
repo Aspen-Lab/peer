@@ -28,7 +28,7 @@ import type { ReactElement } from "react";
 import { stagedRuntime } from "@/test-support/staged-runtime";
 import { closeFigure, getOpenFigure, openFigure, type FigureRef } from "@/lib/reader/figure-viewer";
 import { useMarginStore, type MarginRect } from "@/lib/reader/margin";
-import { STACK_Z_BASE, WINDOW_HEADER_PX, useWindows, type FloatingWindow } from "@/lib/reader/windows";
+import { STACK_Z_BASE, useWindows, type FloatingWindow } from "@/lib/reader/windows";
 import { FIGURE_WINDOW_ID, FigureCard } from "./figure-card";
 import { FigureViewer } from "./figure-lightbox";
 import {
@@ -144,7 +144,8 @@ describe("opening: a press puts the figure in the margin's stack, in front", () 
     const host = mountHost();
     const three = ref("Figure 3");
     host.act(() => openFigure(three));
-    expect(windows()).toEqual([{ id: "figure", kind: "figure", title: "Figure 3", order: 1 }]);
+    // P12-04 RE-AIM: the page-session store now declares its sole composition share.
+    expect(windows()).toEqual([{ id: "figure", kind: "figure", title: "Figure 3", order: 1, share: 1 }]);
     expect(host.tree?.type).toBe(FigureStack);
     expect(host.tree?.props).toMatchObject({ figure: getOpenFigure(), frame: MARGIN });
     expect((host.tree?.props as { figure: FigureRef }).figure).toMatchObject({ key: "Figure 3:3", label: "Figure 3" });
@@ -200,9 +201,9 @@ describe("the row the stack gives the card", () => {
     expect(figureRowOf([win("figure", "figure", 1)], frame)).toMatchObject({ top: 48, height: 812, front: true });
   });
 
-  it("is a header's height behind another card, and the room less a header in front of one", () => {
-    expect(figureRowOf([win("figure", "figure", 1), win("s", "sticky", 2)], frame)).toMatchObject({ top: 48, height: WINDOW_HEADER_PX, front: false });
-    expect(figureRowOf([win("s", "sticky", 1), win("figure", "figure", 2)], frame)).toMatchObject({ top: 88, height: 772, front: true });
+  it("P12-04: retains an equal visible panel in either opening order, independent of active order", () => {
+    expect(figureRowOf([win("figure", "figure", 1), win("s", "sticky", 2)], frame)).toMatchObject({ top: 48, height: 400, front: true });
+    expect(figureRowOf([win("s", "sticky", 1), win("figure", "figure", 2)], frame)).toMatchObject({ top: 460, height: 400, front: true });
   });
 
   it("is absent while the window is not in the stack", () => {

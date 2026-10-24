@@ -68,7 +68,7 @@ export function CardDivider({ above, below, top, value, pairHeight, min, max }: 
     tabIndex={0} data-card-divider="" data-dragging={dragging || undefined}
     onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onLostPointerCapture={end}
     onKeyDown={key} onDoubleClick={() => commit(pairHeight / 2)}
-    style={{ position: "absolute", left: 0, right: 0, top, height: CARD_DIVIDER_PX, zIndex: 69, cursor: "row-resize", touchAction: "none", background: "var(--surface)" }}
+    style={{ position: "absolute", left: 0, right: 0, top, height: CARD_DIVIDER_PX, zIndex: 69, cursor: "row-resize", touchAction: "none", background: "var(--color-surface)" }}
     className="group flex items-center justify-center outline-none hover:bg-surface-hover focus-visible:bg-surface-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-heading data-[dragging=true]:bg-surface-hover"
   ><span aria-hidden="true" className="h-0.5 w-full bg-heading group-hover:bg-accent group-focus-visible:bg-accent" /><span aria-hidden="true" className="absolute h-1.5 w-8 border-y-2 border-heading bg-surface" /></div>;
 }

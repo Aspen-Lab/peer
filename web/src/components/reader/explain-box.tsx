@@ -360,7 +360,7 @@ function readStack(): StackView {
 const aloneInStack = (windows: readonly FloatingWindow[]) => windows.length === 1 && windows[0].id === EXPLAIN_WINDOW_ID;
 
 /** The same stack as far as laying it out goes: the same cards of the same kinds in the same order. Its own registering changes nothing. */
-const sameCards = (a: readonly FloatingWindow[], b: readonly FloatingWindow[]) => a.length === b.length && a.every((w, i) => w.id === b[i].id && w.kind === b[i].kind && w.order === b[i].order && w.share === b[i].share && w.minimum === b[i].minimum);
+const sameCards = (a: readonly FloatingWindow[], b: readonly FloatingWindow[]) => a.length === b.length && a.every((w, i) => w.id === b[i].id && w.kind === b[i].kind && (a.length <= 1 || (w.order === b[i].order && w.share === b[i].share && w.minimum === b[i].minimum)));
 
 /** The band the card stands in: the margin's rect, else the masthead's foot down to the legend's strip at the right edge, 360 px wide. */
 function bandOf(rect: MarginRect | null, viewport: Viewport): MarginRect {
@@ -960,7 +960,6 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
   const [measured, setMeasured] = useState<Array<{ of: ExplainSelection; where: ViewRects }>>([]);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
-  const marginStack = useMarginStack(EXPLAIN_WINDOW_ID, cardRef, stack.rect);
   const live = useRef<Session | null>(null);
   const refocus = useRef(false);
   const wasPending = useRef(false);
@@ -1011,6 +1010,7 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
   // when it opens or closes: the margin is a track of the reader's shell, so the paper's words stay where they are and there is no
   // reflow to hold the selection against (P7-15's measure-before / measure-after and its scroll are retired with the reserve).
   const docked = open !== null && viewport.width >= DOCK_MIN_VIEWPORT_PX;
+  const marginStack = useMarginStack(EXPLAIN_WINDOW_ID, cardRef, stack.rect, docked, { windows: stack.windows, rect: stack.rect, bottom: columnBottomPx(viewport.height, legendOf(viewport)) });
   // P9-17 (ruling §1h.57): the window's whole height must be in view, so its height is read after each commit while the dock
   // stands: `scrollHeight` (the content, whatever `max-height` clips) and the border. It does not depend on where the window is,
   // so the move it causes settles at once. After every commit on purpose: whatever changes what the card holds — a reply, a draft,
@@ -1026,7 +1026,8 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
     const card = cardRef.current;
-    if (!docked || !card || marginStack.split) return;
+    if (!docked || !card) return;
+    if (marginStack.split) return;
     const height = card.scrollHeight + (card.offsetHeight - card.clientHeight);
     if (!Number.isFinite(height)) return;
     const write = settleHeight(heightGuard.current, cardHeight, height, readerKey);

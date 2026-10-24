@@ -165,6 +165,16 @@ export function MarginCardShell({
       {...root}
       id={id}
       ref={elementRef}
+      onFocusCapture={(event) => {
+        const state = useWindows.getState();
+        if (state.windows.some((w) => w.id === id) && !isFrontCard(state.windows, id)) state.raise(id);
+        root.onFocusCapture?.(event);
+      }}
+      onPointerDownCapture={(event) => {
+        const state = useWindows.getState();
+        if (state.windows.some((w) => w.id === id) && !isFrontCard(state.windows, id)) state.raise(id);
+        root.onPointerDownCapture?.(event);
+      }}
       onKeyDown={(event) => {
         const windows = useWindows.getState().windows;
         if (event.key === "Escape" && windows.some((w) => w.id === id) && !isFrontCard(windows, id)) return;
@@ -188,7 +198,7 @@ export function MarginCardShell({
           closeAttrs={closeAttrs}
         />
       )}
-      {(front || keepMounted) && (split && kind !== "figure" ? <div data-margin-body="" className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">{children}</div> : children)}
+      {(front || keepMounted) && (kind !== "figure" ? <div data-margin-body="" className={cn("flex min-h-0 flex-1 flex-col", split && "overflow-y-auto overscroll-contain")}>{children}</div> : children)}
     </section>
   );
 }
