@@ -7,7 +7,7 @@ import { CardDivider, cardDividerStep, type CardDividerProps } from "./card-divi
 
 const props: CardDividerProps = { above: "a", below: "b", top: 257, value: 257, pairHeight: 514, min: 80, max: 434 };
 type Handlers = Record<string, (event: Record<string, unknown>) => void>;
-function mount() { return stagedRuntime.mount(() => CardDivider(props)); }
+function mount(overrides: Partial<CardDividerProps> = {}) { return stagedRuntime.mount(() => CardDivider({ ...props, ...overrides })); }
 function handlers(run: ReturnType<typeof mount>) { return (run.value as ReactElement<Handlers>).props; }
 const firstShare = () => useWindows.getState().windows[0].share;
 beforeEach(() => {
@@ -18,6 +18,23 @@ beforeEach(() => {
 afterEach(() => useWindows.setState({ windows: [], clock: 0, origin: null }));
 
 describe("horizontal divider, actual store and event handlers", () => {
+  for (const [min, max, equal] of [[97, 374, 257], [300, 374, 300], [97, 200, 200]] as const) {
+    it(`Enter equalizes the actual pair with asymmetric bounds ${min}..${max}`, () => {
+      useWindows.getState().open({ id: "c", kind: "sticky", title: "unaffected" });
+      const original = useWindows.getState().windows.map((w) => w.share!);
+      const total = original[0] + original[1];
+      const run = mount({ value: min, min, max }); const preventDefault = vi.fn();
+      stagedRuntime.event(() => handlers(run).onKeyDown({ key: "Enter", shiftKey: false, preventDefault }));
+      const keyboard = useWindows.getState().windows.map((w) => w.share!);
+      expect(keyboard[0]).toBeCloseTo(total * equal / 514);
+      expect(keyboard[0] + keyboard[1]).toBeCloseTo(total);
+      expect(keyboard[2]).toBe(original[2]);
+      expect(preventDefault).toHaveBeenCalledOnce();
+      stagedRuntime.event(() => handlers(run).onDoubleClick({}));
+      expect(useWindows.getState().windows.map((w) => w.share!)).toEqual(keyboard);
+      run.unmount();
+    });
+  }
   for (const [key, shift, result] of [["ArrowUp", false, 241], ["ArrowDown", false, 273], ["ArrowDown", true, 321], ["Home", false, 80], ["End", false, 434], ["Enter", false, 257]] as const) {
     it(`${key}${shift ? " Shift" : ""} changes only the bounded neighboring pair`, () => {
       const run = mount(); const preventDefault = vi.fn();
