@@ -388,7 +388,7 @@ const Row = memo(function Row({ block: b, first, number, editing, sources, dragg
 
   // The marker a list item carries, centred on its first line.
   const indent = b.indent ?? 0;
-  let marker: React.ReactNode = leadingMarker ?? null;
+  let marker: React.ReactNode = null;
   if (b.type === "bullet") {
     marker = <span className="block h-[5px] w-[5px] bg-text-muted" />;
   } else if (b.type === "numbered") {
@@ -459,7 +459,7 @@ const Row = memo(function Row({ block: b, first, number, editing, sources, dragg
         </button>
       </div>
       <div className="flex min-w-0 flex-1" style={indent ? { paddingLeft: indent * 24 } : undefined}>
-        {marker && <div className={cn(cls, "flex h-[1lh] shrink-0 items-center")} style={{ width: "calc(1em + 0.5rem)" }}>{marker}</div>}
+        {(marker || leadingMarker) && <div className={cn(cls, "flex h-[1lh] shrink-0 items-center gap-1")} style={{ width: marker && leadingMarker ? "calc(2em + 0.5rem)" : "calc(1em + 0.5rem)" }}>{leadingMarker}{marker}</div>}
         <div
           className={cn(
             "min-w-0 flex-1",

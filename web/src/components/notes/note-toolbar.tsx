@@ -10,6 +10,7 @@
 // is pressed. This file is the buttons and the key table; the editor applies them.
 
 import type { BlockType } from "@/lib/notes/types";
+import { canIndent } from "@/lib/notes/blocks";
 import type { MarkName } from "@/lib/notes/inline";
 import { cn } from "@/lib/cn";
 
@@ -89,7 +90,7 @@ export function NoteToolbarView({
       })}
       {onIndent && ([-1, 1] as const).map((delta) => (
         <button key={delta} type="button" aria-label={delta === 1 ? "Indent" : "Outdent"}
-          title={delta === 1 ? "Indent (Tab)" : "Outdent (Shift+Tab)"} disabled={!enabled}
+          title={delta === 1 ? "Indent (Tab)" : "Outdent (Shift+Tab)"} disabled={!enabled || !active || !canIndent(active)}
           onMouseDown={(e) => e.preventDefault()} onClick={() => onIndent(delta)}
           className="grid h-8 min-w-8 place-items-center px-2 text-body-sm text-text-muted hover:bg-bg-secondary hover:text-heading disabled:opacity-40">
           <span aria-hidden>{delta === 1 ? "→" : "←"}</span>
