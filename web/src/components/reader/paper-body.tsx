@@ -37,6 +37,8 @@ import { NoteTag, highlightMarks, isHighlightSpot, passageSegments, rangeOf, tie
 import type { NoteAnchorMap } from "@/lib/notes/blocks";
 import { highlightPaint } from "@/lib/notes/highlight-colours";
 import type { HighlightColourId } from "@/lib/notes/types";
+import { drawableSegments, type DrawableSegment } from "@/lib/notes/selection-segments";
+import { domTextEnv } from "@/components/notes/block-marks";
 
 /** Each section is a destination: the map's rows jump here, and `scroll-mt`
  *  keeps the heading clear of the sticky masthead. */
@@ -314,6 +316,11 @@ export type ExplainSource = "paper" | "summary" | "answer";
 
 /** Where the selection sits in the body, and its words. */
 export interface SelectionTarget {
+  /** Ordered actual ranges. Legacy/synthetic single-block callers may omit these. */
+  segments?: DrawableSegment[];
+  unavailableReason?: string;
+  /** Captured DOM provenance still holds at the action press. Never stored or sent. */
+  selectionStillHolds?: () => boolean;
   /** `reading.body[sectionIndex]` and its `paragraphs[paragraphIndex]`; −1 for a selection that is not the paper's (below). */
   sectionIndex: number;
   paragraphIndex: number;
@@ -407,6 +414,8 @@ export function sameSelection(a: ExplainSelection | null, b: ExplainSelection | 
     a.paragraphId === b.paragraphId &&
     a.block === b.block &&
     a.offset === b.offset &&
+    JSON.stringify(a.segments) === JSON.stringify(b.segments) &&
+    a.unavailableReason === b.unavailableReason &&
     sameRect(a.rect, b.rect) &&
     sameRect(a.bounds, b.bounds) &&
     sameOptionalRect(a.paragraph, b.paragraph)
@@ -624,6 +633,28 @@ export function readSelection(selection: SelectionLike | null): ExplainSelection
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
   // The selection's own range changes as the selection does; this one is ours.
   const range = selection.getRangeAt(0).cloneRange();
+  // Real ranges expose their document and comparison API. Keep the single-block
+  // compatibility reader below for older minimal callers without DOM provenance.
+  const real = range as unknown as Range;
+  if (typeof real.comparePoint === "function" && real.startContainer.ownerDocument) {
+    const result = drawableSegments(real, domTextEnv());
+    const where = measureRange(range);
+    if (!where) return null;
+    if (result.reason) {
+      const start = placeOf(range.startContainer);
+      if (!start) return null;
+      return { sectionIndex: -1, paragraphIndex: -1, passage: selection.toString().replace(/\s+/g, " ").trim(), source: start.source, paragraphId: start.id,
+        unavailableReason: result.reason, ...where, measure: () => real.startContainer.isConnected ? measureRange(range) : null };
+    }
+    const first = result.segments[0];
+    const at = PARAGRAPH_ANCHOR.exec(first.paragraphId);
+    return { sectionIndex: at ? Number(at[1]) : -1, paragraphIndex: at ? Number(at[2]) : -1, paragraphId: first.paragraphId, source: first.source,
+      passage: result.segments.map((s) => s.quote).join("\n\n"), offset: first.start, ...(first.kind === "heading" || first.kind === "caption" ? { block: first.kind } : {}), segments: result.segments,
+      ...where, selectionStillHolds: () => {
+        const now = drawableSegments(real, domTextEnv());
+        return !now.reason && JSON.stringify(now.segments) === JSON.stringify(result.segments);
+      }, measure: () => real.startContainer.isConnected && real.endContainer.isConnected ? measureRange(range) : null };
+  }
   const spoken = selection.toString();
   const start = placeOf(range.startContainer);
   let end = placeOf(range.endContainer);

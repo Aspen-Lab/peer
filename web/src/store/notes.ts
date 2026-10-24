@@ -164,7 +164,7 @@ export function resolveAnchors(
       fixes.push({ id: spot.id, ...(spot.segmentIndex !== undefined ? { segmentIndex: spot.segmentIndex } : {}), was: { paragraphId, start, end }, paragraphId: there, start: found.start, end: found.end });
     }
   }
-  return { map, fixes, lost };
+  return { map, fixes, lost: [...new Set(lost)] };
 }
 
 /**
@@ -348,6 +348,7 @@ interface NotesState {
       paperId: string;
       paragraphId: string;
       passage: string;
+      segments?: PassageSegment[];
       /** P10-09f: the paragraph's text as the body renders it; the anchor then records where the passage stands in it. */
       paragraphText?: string;
     },
@@ -546,7 +547,9 @@ export const useNotesStore = create<NotesState>()(
         // P11-27: the words of a heading or a caption are not in the paragraph lookup the callers make; the body on show has them.
         const text = at.paragraphText ?? anchorTextOnShow(at.paragraphId);
         const place = text === undefined ? null : locatePassage(text, passage);
-        const { header, blocks } = stickyBlocks({ paperId: at.paperId, paragraphId: at.paragraphId, quote: stickyQuote(passage), n, ...(place ?? {}) });
+        const primary = at.segments?.[0];
+        const { header, blocks } = stickyBlocks({ paperId: at.paperId, paragraphId: primary?.paragraphId ?? at.paragraphId, quote: stickyQuote(primary?.quote ?? passage), n,
+          ...(primary ? { start: primary.start, end: primary.end, segments: at.segments } : place ?? {}) });
         set((s) => {
           const current = s.notes[noteId];
           if (!current) return s;

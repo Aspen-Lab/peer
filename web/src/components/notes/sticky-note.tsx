@@ -239,10 +239,12 @@ export function stickyAnchorId(target: Pick<ExplainSelection, "sectionIndex" | "
 export function takeStickyNote(
   // P10-09f: `paragraphText` is the paragraph as the body renders it; with it the anchor records where the words stand.
   target: Pick<ExplainSelection, "sectionIndex" | "paragraphIndex" | "passage"> &
-    Partial<Pick<ExplainSelection, "measure" | "bounds" | "source" | "paragraphId">> & { paragraphText?: string },
+    Partial<Pick<ExplainSelection, "measure" | "bounds" | "source" | "paragraphId" | "segments" | "unavailableReason" | "selectionStillHolds">> & { paragraphText?: string },
   paper: Citable,
   extras?: ReadingNoteExtras,
 ): { id: string; n: number } | null {
+  if (target.unavailableReason || (target.segments && target.measure && !target.measure())) return null;
+  if (target.selectionStillHolds && !target.selectionStillHolds()) return null;
   const { ensureReadingNote, addSticky } = useNotesStore.getState();
   const noteId = ensureReadingNote(paper, extras);
   const made = addSticky(noteId, {
@@ -251,6 +253,7 @@ export function takeStickyNote(
     // P10-24: the words, never a note tag's text.
     passage: stripTagText(target.passage),
     paragraphText: target.paragraphText,
+    ...(target.segments ? { segments: target.segments.map((s) => ({ paragraphId: s.paragraphId, quote: s.quote, start: s.start, end: s.end, source: s.source, kind: s.kind })) } : {}),
   });
   if (!made) return null;
   // R-open: the first card of an empty margin opens level with the selection's first line, as the selection is now.
