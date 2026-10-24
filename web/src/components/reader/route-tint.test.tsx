@@ -376,7 +376,10 @@ describe("the graded tint (P10-06)", () => {
 
   it("states the facts: 'strongest · mentions …', 'relevant · mentions …', and for the faintest only 'mentions …'", () => {
     const html = mapOf(routeOf({ [ids[0]]: graded("strong", [0]), [ids[1]]: graded("medium", [0]), [ids[2]]: graded("faint", [0]) }));
-    const fact = (heading: string) => new RegExp(`>${heading}</a>[\\s\\S]*?<p class="annotation pl-5 text-text-faint">([^<]*)</p>`).exec(html)?.[1];
+    // P11-35 (re-aimed, §1c): the line is drawn in parts (`MentionsLine`: a term's last word and its count in one span), so its words are no longer one text node: this
+    // reads them as the line's text, the tags removed. The same string is expected, in full.
+    const fact = (heading: string) =>
+      new RegExp(`>${heading}</a>[\\s\\S]*?<p class="annotation pl-5 text-text-faint[^"]*">([\\s\\S]*?)</p>`).exec(html)?.[1]?.replace(/<[^>]*>/g, "");
 
     expect(fact("1 Introduction")).toBe("strongest · mentions lco ×2");
     expect(fact("2 Methods")).toBe("relevant · mentions lco ×2");

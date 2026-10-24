@@ -32,6 +32,14 @@ describe("helpGroups", () => {
     expect(reading?.items.map((i) => i.label)).toEqual(PAPER_KEYS.map((e) => e.label));
   });
 
+  // P11-13 (rule 3): n and h are the selection's keys on the reading page.
+  it("lists the selection's keys under Reading: n to take notes, h to highlight, e to explain", () => {
+    const reading = groups.find((g) => g.title === "Reading")!;
+    expect(reading.items).toContainEqual({ keys: "n", label: "Take notes on the selected passage" });
+    expect(reading.items).toContainEqual({ keys: "h", label: "Highlight the selected passage" });
+    expect(reading.items).toContainEqual({ keys: "e", label: "Explain the selected passage" });
+  });
+
   it("names no key twice within a group", () => {
     for (const group of groups) {
       const keys = group.items.map((i) => i.keys);

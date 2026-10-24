@@ -99,14 +99,25 @@
 // floor (a strong section whose top paragraph holds at least `PEER_MATCH_MIN_TERMS` of the selection's terms) there is no
 // paragraph and the prompts are exactly what P10-08b built. No model call, nothing per-reader.
 //
+// P11-42 (round 2 Theme B readers r1, r2, r3; ruling §1h.139 (b)): a caption's or a heading's words are the paper's text, so they are explained. The paper's text holds
+// them apart from its paragraphs: a section's heading is `ExtractedSection.heading`, a figure's caption is one of `ExtractedDocument.figureCaptions` (a label and
+// its words), and the page draws both as blocks of the section they stand in, numbered after its paragraphs (`lib/notes/anchor-blocks.ts`: the heading, then the
+// section's captions in the order `placeFigures` puts them). `locatePassage` looked in the paragraphs only. With `blocks` it also looks in those: the block the
+// browser's hint names first, then the paragraphs exactly as before, then every heading and caption. A block's context is as a paragraph's is: the block as the
+// `paragraph`, its neighbours as `before` and `after` (a heading: how its section opens; a caption: the paragraphs the figure stands between), and what the
+// paragraph's context does not need — that it is a heading or a caption, the figure's label and the section it stands in. A paragraph's passage is found, framed and
+// remembered exactly as it was.
+//
 // Pure apart from the hash and the clock the cache reads: no I/O, no logging.
 // Server-side — the browser imports this module for its types only.
 
 import { createHash } from "node:crypto";
+import { captionBlock, captionText, headingBlock } from "@/lib/notes/anchor-blocks";
 import { canonicalize, termOccurrences } from "@/lib/scoring/term-expand";
 import { cleanDisplayText } from "@/lib/text/clean";
 import { CJK_SENTENCE_BREAK, locateSection, normalizeForMatch, sectionCorpus, shapeEvidenceQuote } from "./evidence";
 import type { ExtractedDocument } from "./html-text";
+import { placeFigures, type ReadingSection } from "./reading";
 import { openingOf, readableSections, readingMapOf, routeByQuestions, specificTerms, termFormsMatch } from "./reading-map";
 import { splitSentences } from "./skim";
 
@@ -324,12 +335,76 @@ export interface LocatedPassage {
   /** The section's id and its place in the rendered body (`reading.body[k]`). */
   sectionId: string;
   sectionIndex: number;
+  /** The paragraph's place in the section. P11-42: for a heading or a caption (`block`) the block's number in the section, as the page's anchor counts it
+   *  (`paper-section-<k>-p<n>`): the paragraphs, then the heading, then the captions. */
   paragraphIndex: number;
-  /** The paragraph that holds the passage, as the body renders it. */
+  /** The paragraph that holds the passage, as the body renders it. P11-42: for a heading, its words; for a caption, the caption's words without its label. */
   paragraph: string;
-  /** The paragraphs on either side of it within the section, when they exist. */
+  /** The paragraphs on either side of it within the section, when they exist. P11-42: a heading has none before it and the section's first paragraph after; a
+   *  caption has the paragraph the figure follows before it and the next after. */
   before: string | null;
   after: string | null;
+  /** P11-42: set only when the passage stands in a section's heading or a figure's caption, never for a paragraph's. */
+  block?: "heading" | "caption";
+  /** P11-42: with `block`, the section's heading, as the body renders it. */
+  heading?: string;
+  /** P11-42: with a caption, the figure's label ("Figure 3"). */
+  label?: string;
+}
+
+/** A section's heading or one of its figures' captions, as the page draws it and numbers it. */
+interface SectionBlock {
+  kind: "heading" | "caption";
+  /** The block's number in its section (`paper-section-<k>-p<n>`'s `n`). */
+  index: number;
+  /** What the page draws, whole: a heading's words; a caption's label, a middle dot, its words and — where the picture is not drawn — the page of the PDF. A passage
+   *  is looked for in this, so it may span the label and the words and may take in the page. */
+  drawn: string;
+  /** What the prompt holds as the block's `paragraph`: the heading's words; the caption's words alone. */
+  words: string;
+  label?: string;
+  /** A caption: the paragraph the figure follows (`ReadingFigure.after`). */
+  follows?: number;
+}
+
+/** The blocks of a section beyond its paragraphs, in the order of their numbers. */
+function sectionBlocks(section: ReadingSection): SectionBlock[] {
+  const blocks: SectionBlock[] = [{ kind: "heading", index: headingBlock(section), drawn: section.heading, words: section.heading }];
+  (section.figures ?? []).forEach((figure, i) =>
+    blocks.push({
+      kind: "caption",
+      index: captionBlock(section, i),
+      // The longest form the page draws (with the PDF's page): every shorter form is a part of it.
+      drawn: captionText({ label: figure.label, caption: figure.caption, page: figure.page }),
+      words: figure.caption || figure.label,
+      label: figure.label,
+      follows: figure.after,
+    }),
+  );
+  return blocks;
+}
+
+/** The body as the page holds it: the rendered sections with their figures placed, so a section's blocks are numbered as the page numbers them. */
+function bodyWithFigures(doc: ExtractedDocument, rendered: ReturnType<typeof readableSections>): ReadingSection[] {
+  const sections: ReadingSection[] = rendered.map(({ id, section, paragraphs }) => ({ id, heading: section.heading, canonical: section.canonical, paragraphs }));
+  return placeFigures(sections, doc.figureCaptions, null);
+}
+
+/** The passage located in a heading or a caption: the block as the `paragraph`, its neighbours around it. */
+function locatedInBlock(section: ReadingSection, sectionIndex: number, block: SectionBlock): LocatedPassage {
+  const { paragraphs } = section;
+  const follows = block.follows ?? -1;
+  return {
+    sectionId: section.id,
+    sectionIndex,
+    paragraphIndex: block.index,
+    paragraph: block.words,
+    before: block.kind === "caption" ? (paragraphs[follows] ?? null) : null,
+    after: paragraphs[block.kind === "caption" ? follows + 1 : 0] ?? null,
+    block: block.kind,
+    heading: section.heading,
+    ...(block.label ? { label: block.label } : {}),
+  };
 }
 
 /**
@@ -340,15 +415,31 @@ export interface LocatedPassage {
  * whole body in reading order. The abstract is not part of the body, so a
  * passage found only there is not found. Null when nowhere: the selection was
  * not the paper's text.
+ *
+ * P11-42 (`options.blocks`): a section's heading and its figures' captions are the paper's text too, and a passage in one is found there. The block the hint names
+ * (its number is past the section's paragraphs: the heading, then the captions) is tried first — "Figure 3" selected in the caption is the caption's, not the paragraph
+ * that names the figure — then everything as without `blocks`, the paragraphs, and only then the headings and captions, the hinted section's first and the rest in
+ * reading order. Tables are not placed on the page, and the abstract's heading is not the body's: neither is found. The `blocks` are off by default, so a caller that
+ * wants a paragraph (the plain route's rewrite) gets one; a paragraph's result is the same with them on, and carries no `block`.
  */
 export function locatePassage(
   doc: ExtractedDocument,
   passage: string,
   hint: { sectionId?: string; paragraphIndex?: number } = {},
+  options: { blocks?: boolean } = {},
 ): LocatedPassage | null {
   const wanted = normalizeForMatch(passage);
   if (!wanted) return null;
   const rendered = readableSections(doc);
+  const holds = (text: string) => normalizeForMatch(text).includes(wanted);
+  const blocks = options.blocks === true ? bodyWithFigures(doc, rendered) : null;
+
+  const hinted = hint.sectionId ? rendered.findIndex((section) => section.id === hint.sectionId) : -1;
+  // P11-42: the hinted heading or caption, before any paragraph.
+  if (blocks && hinted >= 0 && typeof hint.paragraphIndex === "number") {
+    const block = sectionBlocks(blocks[hinted]).find((candidate) => candidate.index === hint.paragraphIndex);
+    if (block && holds(block.drawn)) return locatedInBlock(blocks[hinted], hinted, block);
+  }
 
   const order: Array<[number, number]> = [];
   const seen = new Set<string>();
@@ -358,7 +449,6 @@ export function locatePassage(
     seen.add(key);
     order.push([k, i]);
   };
-  const hinted = hint.sectionId ? rendered.findIndex((section) => section.id === hint.sectionId) : -1;
   if (hinted >= 0) {
     const index = hint.paragraphIndex;
     if (typeof index === "number" && Number.isInteger(index) && rendered[hinted].paragraphs[index] !== undefined) push(hinted, index);
@@ -368,7 +458,7 @@ export function locatePassage(
 
   for (const [k, i] of order) {
     const { id, paragraphs } = rendered[k];
-    if (!normalizeForMatch(paragraphs[i]).includes(wanted)) continue;
+    if (!holds(paragraphs[i])) continue;
     return {
       sectionId: id,
       sectionIndex: k,
@@ -377,6 +467,16 @@ export function locatePassage(
       before: paragraphs[i - 1] ?? null,
       after: paragraphs[i + 1] ?? null,
     };
+  }
+
+  // P11-42: no paragraph holds it — a heading or a caption might, the hinted section's first.
+  if (blocks) {
+    const all = blocks.map((_, k) => k);
+    const inOrder = hinted >= 0 ? [hinted, ...all.filter((k) => k !== hinted)] : all;
+    for (const k of inOrder) {
+      const block = sectionBlocks(blocks[k]).find((candidate) => holds(candidate.drawn));
+      if (block) return locatedInBlock(blocks[k], k, block);
+    }
   }
   return null;
 }
@@ -528,6 +628,7 @@ export function buildExplainPrompt(
     },
     rules: [
       "Return ONLY valid JSON.",
+      ...blockRules(args.located, "here.evidence"),
       "Use plain words a thoughtful non-specialist understands; define nothing with another unexplained term.",
       "`here.evidence` is one sentence copied character-for-character from `context.before`, `context.paragraph` or `context.after`. Do not paraphrase it, shorten it, or merge sentences.",
       "Omit `evidence` when no such sentence shows the author using it. Never quote the abstract or the section list; they are there for orientation only.",
@@ -588,17 +689,47 @@ function buildPeerWordsPrompt(args: {
 function promptContext(args: {
   paper: { title: string; abstract: string };
   map: readonly ExplainMapLine[];
-  located: Pick<LocatedPassage, "paragraph" | "before" | "after">;
+  located: Pick<LocatedPassage, "paragraph" | "before" | "after" | "block" | "heading" | "label">;
 }) {
   const { located } = args;
   return {
     ...promptOrientation(args),
     context: {
+      ...blockContext(located),
       ...(located.before ? { before: cutAtWord(located.before, EXPLAIN_CAPS.neighbourChars) } : {}),
       paragraph: cutAtWord(located.paragraph, EXPLAIN_CAPS.paragraphChars),
       ...(located.after ? { after: cutAtWord(located.after, EXPLAIN_CAPS.neighbourChars) } : {}),
     },
   };
+}
+
+/**
+ * P11-42: what the context says of a passage that stands in a heading or a caption — nothing for a paragraph's, so a paragraph's context is what it was. That
+ * the `paragraph` is a heading or a caption (`block`); for a caption, the figure's label and the heading of the section it stands in (a heading is its own section).
+ */
+function blockContext(located: Pick<LocatedPassage, "block" | "heading" | "label">) {
+  if (!located.block) return {};
+  return {
+    block: located.block,
+    ...(located.block === "caption" && located.label ? { figure: cutAtWord(located.label, EXPLAIN_CAPS.headingChars) } : {}),
+    ...(located.block === "caption" && located.heading ? { section: cutAtWord(located.heading, EXPLAIN_CAPS.headingChars) } : {}),
+  };
+}
+
+/**
+ * P11-42: the one rule a prompt adds when the passage stands in a heading or a caption — none for a paragraph's. It says what the `context` holds there and where the
+ * quote comes from: `quoted` is the schema's key for it (`here.evidence` in a first answer, `evidence` in a reply). A heading is not a sentence of the text, so it is
+ * never the quote; nor is a caption's own sentence — the verifier holds a quote to the sections' text (`placeQuote`), the captions are not in it, and a quote it cannot
+ * place leaves the prose Peer's reading — so the quote is asked for from the paragraphs on either side, which are the sections' own.
+ */
+function blockRules(located: Pick<LocatedPassage, "block">, quoted: string): string[] {
+  if (located.block === "heading") {
+    return [`\`context.paragraph\` is the heading of a section of the paper, not a sentence of its text, and \`context.after\` is how that section opens: say what the heading names and why the author puts it here, and take \`${quoted}\` from \`context.after\`, never from the heading.`];
+  }
+  if (located.block === "caption") {
+    return [`\`context.paragraph\` is the words of a figure's caption (\`context.figure\` is its label), and \`context.before\` and \`context.after\` are the paragraphs on either side of where the figure stands in \`context.section\`: say what the figure shows and why the author gives it here, and take \`${quoted}\` from \`context.before\` or \`context.after\`, never from the caption's own words.`];
+  }
+  return [];
 }
 
 /** The title, the abstract and the map's lines — what orients the model whether the passage is the paper's or Peer's own words;
@@ -636,7 +767,7 @@ const PEER_WORDS_FROM: Record<PeerWordsSource, string> = {
  *  in no paragraph of the paper, so the context is the abstract and the map — and, P10-38, the body paragraph that best matches
  *  them (`matched`, from `matchPeerWords`) when there is one. */
 export type PassageFrame =
-  | { located: Pick<LocatedPassage, "paragraph" | "before" | "after">; peerWords?: undefined; matched?: undefined }
+  | { located: Pick<LocatedPassage, "paragraph" | "before" | "after" | "block" | "heading" | "label">; peerWords?: undefined; matched?: undefined }
   | { peerWords: PeerWordsSource; located?: undefined; matched?: PeerWordsMatch | null };
 
 const EXPLAIN_REPLY_SYSTEM = [
@@ -707,6 +838,7 @@ export function buildExplainReplyPrompt(
       args.detail
         ? "Answer `lastReaderMessage`, the reader's last message in `thread`, about the selected passage, in plain words a thoughtful non-specialist understands. The reader asked for more, so `reply` may run to at most eight sentences and 1,400 characters; still no preamble and one idea per sentence. The earlier messages are there for what has been said so far."
         : "Answer `lastReaderMessage`, the reader's last message in `thread`, about the selected passage, in at most three sentences (560 characters) of plain words a thoughtful non-specialist understands; the reader has not asked for more. The earlier messages are there for what has been said so far.",
+      ...blockRules(args.located, "evidence"),
       "With `items`, `reply` is at most two sentences: say what the passage reports, quoting the author's own phrase, and leave the terms to the table.",
       "`evidence` is one sentence copied character-for-character from `context.before`, `context.paragraph` or `context.after`, and only when the reply rests on something the paper says. Do not paraphrase it, shorten it, or merge sentences.",
       "Omit `evidence` when the reply does not rest on a sentence of the paper. Never quote the abstract, the section list or the thread.",
@@ -1192,7 +1324,9 @@ export function explainDocHash(doc: ExtractedDocument): string {
  * asked to search nor the reverse. P3-07: and whether the reply is the long form (the
  * reader asked for more), so a short and a long reply to the same message are two entries. P10-08b: and, for a selection
  * of Peer's own words, where they are from (`peer:summary`, `peer:answer`), so the same words selected in the paper, in the
- * Summary and in an answer are three entries; a paper passage's key has nothing added and is what it was.
+ * Summary and in an answer are three entries; a paper passage's key has nothing added and is what it was. P11-42: and, for a passage that stands in a section's
+ * heading or a figure's caption, which (`block:heading`, `block:caption`), so the same words in a heading, in a caption and in a paragraph are three entries (the
+ * context the model was given differs); a paragraph's key has nothing added.
  * A hash of all of it — nothing in it is a reader's identity, and nothing of the passage or
  * the thread can be read back from it.
  */
@@ -1203,8 +1337,11 @@ export function explainCacheKey(
   searched = false,
   detail = false,
   peerWords?: PeerWordsSource,
+  block?: "heading" | "caption",
 ): string {
-  return sha256(`${docHash}|${normalizeForMatch(passage)}|${sha256(JSON.stringify(thread))}${searched ? "|search" : ""}${detail ? "|detail" : ""}${peerWords ? `|peer:${peerWords}` : ""}`);
+  return sha256(
+    `${docHash}|${normalizeForMatch(passage)}|${sha256(JSON.stringify(thread))}${searched ? "|search" : ""}${detail ? "|detail" : ""}${peerWords ? `|peer:${peerWords}` : ""}${block ? `|block:${block}` : ""}`,
+  );
 }
 
 /** What the memory holds: a first answer, or (P3-02b) a reply turn — both

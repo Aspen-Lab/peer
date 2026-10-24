@@ -35,9 +35,11 @@ const reading = buildReading(paper, fullText, new Date("2026-10-05T00:00:00.000Z
 /** The body as it rendered before P1-04 (captured from the code at 44140fe
  *  for exactly this reading). P7-14 (R5, the owner's review): re-pinned without the line that
  *  joined the section headings and the line that counted sections and words — the map is the
- *  paper's one contents list now, and says the count itself. Nothing else in the body moved. */
+ *  paper's one contents list now, and says the count itself. Nothing else in the body moved.
+ *  P11-12 (owner item 1): re-pinned with the figure's picture inside a button — "Open Figure 1 in the margin" — that
+ *  opens it in the margin; the picture, the mat and the caption are the markup they were. */
 const BEFORE =
-  '<div id="paper-body" class="scroll-mt-20"><section class="mt-12 sm:mt-16"><div class="flex items-center gap-3"><h2 class="eyebrow inline-flex items-center gap-2 whitespace-nowrap text-text-faint"><span aria-hidden="true" class="block h-[6px] w-[6px] shrink-0 bg-current"></span>The paper</h2><span aria-hidden="true" class="h-px flex-1 bg-border-strong"></span></div><section id="paper-section-0" class="mt-8 scroll-mt-20 first:mt-6"><h3 class="font-reading font-medium text-heading text-title leading-[1.3] mb-2">1 Introduction</h3><div class="font-reading text-title leading-[1.65] text-text-muted measure-paper space-y-4 reading-justify"><div class="space-y-4"><p>Creep limits the life of hot parts.</p></div><div class="space-y-4"><p>Grain boundaries carry the strain.</p></div></div></section><section id="paper-section-1" class="mt-8 scroll-mt-20 first:mt-6"><h3 class="font-reading font-medium text-heading text-title leading-[1.3] mb-2">2 Results</h3><div class="font-reading text-title leading-[1.65] text-text-muted measure-paper space-y-4 reading-justify"><div class="space-y-4"><p>Figure 1 shows the rate.</p><div class="group/eq relative my-6 flex items-center gap-4 border-l border-border-strong py-3 pl-5 pr-2"><div class="min-w-0 flex-1 overflow-x-auto text-center text-heading [&amp;_.katex-display]:my-0"><code class="block whitespace-pre-wrap font-mono text-body text-text">r = k d</code></div><div class="flex shrink-0 flex-col items-end gap-2"></div></div><figure class="my-6"><div class="bg-[var(--plate-mat)] p-3 sm:p-4"><img src="/api/papers/openalex%3AW1/figure-image?page=2&amp;fig=1" alt="Creep against density." loading="lazy" decoding="async" referrerPolicy="no-referrer" class="mx-auto block h-auto max-h-[32rem] w-auto max-w-full object-contain"/></div><figcaption class="annotation mt-2 leading-[1.6] text-text-faint measure-mono"><span class="text-text-muted">Figure 1</span> · Creep against density.</figcaption></figure></div><div class="space-y-4"><p>The finest grains crept fastest.</p></div></div></section></section></div>';
+  '<div id="paper-body" class="scroll-mt-20"><section class="mt-12 sm:mt-16"><div class="flex items-center gap-3"><h2 class="eyebrow inline-flex items-center gap-2 whitespace-nowrap text-text-faint"><span aria-hidden="true" class="block h-[6px] w-[6px] shrink-0 bg-current"></span>The paper</h2><span aria-hidden="true" class="h-px flex-1 bg-border-strong"></span></div><section id="paper-section-0" class="mt-8 scroll-mt-20 first:mt-6"><h3 id="paper-section-0-p2" data-anchor-block="heading" class="font-reading font-medium text-heading text-title leading-[1.3] scroll-mt-20 mb-2">1 Introduction</h3><div class="font-reading text-title leading-[1.65] text-text-muted measure-paper space-y-4 reading-justify"><div class="space-y-4"><p>Creep limits the life of hot parts.</p></div><div class="space-y-4"><p>Grain boundaries carry the strain.</p></div></div></section><section id="paper-section-1" class="mt-8 scroll-mt-20 first:mt-6"><h3 id="paper-section-1-p2" data-anchor-block="heading" class="font-reading font-medium text-heading text-title leading-[1.3] scroll-mt-20 mb-2">2 Results</h3><div class="font-reading text-title leading-[1.65] text-text-muted measure-paper space-y-4 reading-justify"><div class="space-y-4"><p>Figure 1 shows the rate.</p><div class="group/eq relative my-6 flex items-center gap-4 border-l border-border-strong py-3 pl-5 pr-2"><div class="min-w-0 flex-1 overflow-x-auto text-center text-heading [&amp;_.katex-display]:my-0"><code class="block whitespace-pre-wrap font-mono text-body text-text">r = k d</code></div><div class="flex shrink-0 flex-col items-end gap-2"></div></div><figure id="paper-section-1-p3" data-anchor-block="caption" class="my-6 scroll-mt-20"><div class="bg-[var(--plate-mat)] p-3 sm:p-4"><button type="button" aria-label="Open Figure 1 in the margin" aria-expanded="false" class="mx-auto block max-w-full cursor-zoom-in"><img src="/api/papers/openalex%3AW1/figure-image?page=2&amp;fig=1" alt="Creep against density." loading="lazy" decoding="async" referrerPolicy="no-referrer" class="mx-auto block h-auto max-h-[32rem] w-auto max-w-full object-contain"/></button></div><figcaption class="annotation mt-2 leading-[1.6] text-text-faint measure-mono"><span class="text-text-muted">Figure 1</span> · Creep against density.</figcaption></figure></div><div class="space-y-4"><p>The finest grains crept fastest.</p></div></div></section></section></div>';
 
 describe("PaperBody — paragraph anchors (P1-04)", () => {
   const html = renderToStaticMarkup(createElement(PaperBody, { reading }));
@@ -53,7 +55,10 @@ describe("PaperBody — paragraph anchors (P1-04)", () => {
         expect(html).toContain(`<div id="${paragraphAnchor(k, i)}" class="space-y-4 scroll-mt-20">`);
       });
     });
-    expect(html.match(/id="paper-section-\d+-p\d+"/g)).toHaveLength(4);
+    // P11-27 (rule 2), RE-AIMED (§1c): the four are the paragraphs' anchors; each heading (two) and each figure (one) now carries its own, in the same shape
+    // (`paper-body.blocks.test.tsx` pins them), so the ids of that shape in all are seven.
+    expect(html.match(/<div id="paper-section-\d+-p\d+"/g)).toHaveLength(4);
+    expect(html.match(/id="paper-section-\d+-p\d+"/g)).toHaveLength(7);
   });
 
   it("changes nothing else: the body without the anchors is the body it was", () => {
@@ -147,11 +152,15 @@ describe("PaperBody — a group heading stands alone (P10-04, A10)", () => {
     expect(html.indexOf('id="paper-section-1"')).toBeLessThan(html.indexOf('id="paper-section-2"'));
   });
 
-  it("leaves the paragraphs where they were: the child's anchors carry the body index, and no anchor is made for the heading", () => {
-    expect(html).toContain('id="paper-section-2-p0"');
-    expect(html).toContain('id="paper-section-0-p0"');
-    expect(html).not.toContain('id="paper-section-1-p0"');
-    expect(html.match(/id="paper-section-\d+-p\d+"/g)).toHaveLength(2);
+  // P11-27 (rule 2), RE-AIMED (§1c): was "…and no anchor is made for the heading", counting every id of the paragraph's shape. No paragraph anchor is made for the
+  // group heading still (no `<div id=…>` for it: the map's row jumps to the section's own anchor); the heading, like every heading, now carries the id of its own
+  // block — the one after its paragraphs, here p0 of a section that has none — and its marker (`paper-body.blocks.test.tsx`).
+  it("leaves the paragraphs where they were: the child's anchors carry the body index, and no paragraph anchor is made for the heading", () => {
+    expect(html).toContain('<div id="paper-section-2-p0"');
+    expect(html).toContain('<div id="paper-section-0-p0"');
+    expect(html).not.toContain('<div id="paper-section-1-p0"');
+    expect(html.match(/<div id="paper-section-\d+-p\d+"/g)).toHaveLength(2);
+    expect(html).toContain('<h3 id="paper-section-1-p0" data-anchor-block="heading"');
   });
 
   it("tints the group heading by the same class path as any heading", () => {

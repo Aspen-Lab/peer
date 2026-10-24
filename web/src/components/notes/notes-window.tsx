@@ -1,8 +1,8 @@
 "use client";
 
 // P10-09b (the owner's review 7.2, 7.3, 7.5; B12, B13, B15): "Open your notes" opens the paper's whole note as a
-// floating window at the right — no navigation. It stands in the dock's column (360 px, flush with the right
-// edge) and takes the height its text needs down to the foot legend; past that it scrolls inside itself. It is `fixed`,
+// floating window at the right — no navigation. It stands in the margin (P11-14: `MarginCard`'s frame, the margin's left and width)
+// and takes the height its text needs down to the foot legend; past that it scrolls inside itself. It is `fixed`,
 // so the page scrolling under it never moves it: the sticky pad the reader keeps writing on while they read on.
 //
 // P10-09c (review 7.1a, B9): it is one of the floating windows (`lib/reader/windows.ts`): it registers there as
@@ -10,35 +10,42 @@
 // notes, 40 px apart, the raised one in front and whole, the column under the explain window. Behind another window it
 // shows its header alone (the editor stays mounted, hidden, so nothing it holds is lost); a press on the header raises it.
 //
-// P10-09d (X-B1): like the explain window it keeps the text column clear — joining the stack takes the shared reserve
-// (`reserveDock`, counted), so the paper's words move out of the column and are never covered; its header and the editor's
-// toolbar carry the window's own surface, so nothing of the text scrolling under them shows through.
+// P10-09d (X-B1): its header and the editor's toolbar carry the window's own surface, so nothing of the text scrolling under them
+// shows through. (P11-14: the paper's words are never covered because the margin is a track of the shell, not because the page
+// reserves a column for the stack.)
 //
 // Its body is the paper's one reading note (`readingNoteFor`, the note the Saved page opens at `/notes/<id>`),
 // in the block editor with the formatting toolbar: the sticky notes' "Note N" headings and their text in order,
 // and whatever is typed here. There is no character limit anywhere in the path — blocks are strings in the store.
 //
+// P11-25 (the owner's item 3, ruling §1h.121 (c)): from 768 px "Open your notes" opens this window, so the notes page — and its
+// "← Back to paper" (P11-06) — was reachable only from the phone's row, the upload-fallback band and Saved. The header now carries
+// "Open as page": a link to the paper's note on its page `/notes/<id>` that first records the paper's tab and the place the reader
+// is at (`rememberPlace`, the phone row's own record) and closes the window as the page opens, so the notes page reads "Back to
+// paper" and the paper comes back on the tab and at the place the reader left, at every width.
+//
 // Not done: dragging the window by its header (the column is where it stands), and a phone (the row there still
 // navigates to the page).
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
-import { DOCK_TOP_PX } from "@/components/reader/explain-dock";
+import Link from "next/link";
+import type { Route } from "next";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { MouseEvent, ReactNode } from "react";
+import { useFrontEscape } from "@/components/reader/front-escape";
+import { MarginCard } from "@/components/reader/margin-card";
 import type { Paper } from "@/types";
 import type { Block, Note, Source } from "@/lib/notes/types";
 import { fileName, toMarkdown, toPlainText, toPrintHtml, toWordHtml } from "@/lib/notes/export";
 import { downloadFile, printHtml } from "@/lib/notes/print";
-import { cn } from "@/lib/cn";
-import { NOTES_WINDOW_ID, holdInPlace, stackRows, useColumn, useWindows } from "@/lib/reader/windows";
+import { rememberPlace } from "@/lib/notes/return-to-paper";
+import { useMarginRect } from "@/lib/reader/margin";
+import { NOTES_WINDOW_ID, STACK_Z_BASE, stackRows, useColumn, useWindows } from "@/lib/reader/windows";
 import { mergeText, readingNoteFor, useNotesStore } from "@/store/notes";
 import { NoteEditor } from "./note-editor";
 
-/** The sticky notes' height in front (the stack's frame needs it; the notes window in front takes what the screen leaves). */
-const STICKY_FRONT_HEIGHT_PX = 260;
-
 export type ExportKind = "copy" | "txt" | "md" | "doc" | "pdf";
 
-/** The export menu, in the order it stands. None of these formats carries a sticky note's quoted passage. */
+/** The export menu, in the order it stands. None of these formats carries a sticky note's quoted passage; every one carries a highlight's words (P11-08). */
 export const EXPORT_ITEMS: readonly { id: ExportKind; label: string; detail: string }[] = [
   { id: "copy", label: "Copy", detail: "the note as plain text" },
   { id: "txt", label: "Text (.txt)", detail: "words only, no markup" },
@@ -46,6 +53,37 @@ export const EXPORT_ITEMS: readonly { id: ExportKind; label: string; detail: str
   { id: "doc", label: "Word (.doc)", detail: "opens in Word" },
   { id: "pdf", label: "PDF (print)", detail: "choose Save as PDF" },
 ];
+
+/** What a press on a link carries that decides whether the app takes it or the browser keeps it (a new tab, a new window, a download). */
+export type PagePress = Pick<MouseEvent, "button" | "metaKey" | "ctrlKey" | "shiftKey" | "altKey">;
+
+/**
+ * P11-25: the press on "Open as page". A plain press records where the reader is on the paper (`remember`: the phone row's own record,
+ * `rememberPlace`) and then closes the window — the link's own navigation follows, so the record is made before the page leaves
+ * and the window is not left behind the page. A press the browser keeps for itself (a modifier key, a middle button) records nothing
+ * and leaves the window standing: the paper has not been left. Where nothing could be kept (storage blocked) the press goes on, and the
+ * notes page's button stays "Saved". True when the app took the press.
+ */
+export function openAsPage(
+  ids: { paperId: string; noteId: string },
+  press: PagePress,
+  steps: { remember: (ids: { paperId: string; noteId: string }) => boolean | void; close: () => void },
+): boolean {
+  if (press.button !== 0 || press.metaKey || press.ctrlKey || press.shiftKey || press.altKey) return false;
+  steps.remember(ids);
+  steps.close();
+  return true;
+}
+
+/**
+ * The narrowest card (the margin's width, 360 by default, 280 at its least) in which "Open as page" can say its words beside the title and
+ * Export: measured, the header (the card less its two 1 px borders) has the title 86 px at 360 where the title's own words need 76, so
+ * 352 leaves it 80. In a narrower card the link is an icon the width of the X (the title keeps its room, 81 px at 280); the words stay as
+ * its name and its tooltip.
+ */
+export const PAGE_LABEL_MIN_CARD_PX = 352;
+
+export const pageLabelFits = (cardWidth: number): boolean => cardWidth >= PAGE_LABEL_MIN_CARD_PX;
 
 export function NotesWindowView({
   top,
@@ -59,6 +97,9 @@ export function NotesWindowView({
   onMenu,
   onExport,
   onRaise,
+  pageHref,
+  onOpenPage,
+  narrow = false,
   children,
 }: {
   top: number;
@@ -78,90 +119,127 @@ export function NotesWindowView({
   onExport: (kind: ExportKind) => void;
   /** A press on the header: raise the window to the front. */
   onRaise?: () => void;
+  /** P11-25: the paper's note on its own page. Handed in, the header carries "Open as page" (in front only, as Export is). */
+  pageHref?: string;
+  /** P11-25: told of a press on "Open as page" before the link navigates; it must not stop it. */
+  onOpenPage?: (event: MouseEvent<HTMLAnchorElement>) => void;
+  /** P11-25: the card is too narrow for "Open as page" to say its words (`pageLabelFits`): the link is an icon. It is an icon too while an export notice stands beside it. */
+  narrow?: boolean;
   children?: ReactNode;
 }) {
+  const iconOnly = narrow || notice !== null;
   return (
-    <section
+    <MarginCard
+      id={NOTES_WINDOW_ID}
+      kind="notes"
       aria-label="Your notes"
       data-notes-window=""
       onKeyDown={(event) => {
-        if (event.key !== "Escape") return;
+        // Only the front card answers (P11-17c rule 1): behind another, with only its header showing, it lets the key go on to the document.
+        if (event.key !== "Escape" || !front) return;
         event.stopPropagation();
         event.preventDefault();
         // An open export menu closes first; the window next.
         if (menuOpen) onMenu();
         else onClose();
       }}
-      className={cn(
-        "fixed right-0 flex w-[360px] max-w-[calc(100vw-1rem)] flex-col border border-r-0 border-border-strong bg-surface shadow-card",
-        !front && "overflow-hidden",
-      )}
-      style={front ? { top, maxHeight, zIndex: z } : { top, height, maxHeight, zIndex: z }}
-    >
-      <header className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border bg-surface pl-4 pr-2">
-        <h2 className="eyebrow min-w-0 flex-1 text-heading">
-          <button
-            type="button"
-            data-window-header=""
-            onClick={onRaise}
-            className="flex h-10 w-full items-center text-left transition-colors hover:text-text"
-          >
-            Your notes
-          </button>
-        </h2>
-        <div className="relative flex items-center gap-2">
-          {front && (
-            <span className="annotation text-text-faint" aria-live="polite">
-              {notice}
-            </span>
-          )}
-          {front && (
+      front={front}
+      top={top}
+      maxHeight={maxHeight}
+      {...(front ? {} : { height })}
+      z={z ?? STACK_Z_BASE}
+      keepMounted
+      // In front the export menu hangs below the header and may pass the window's foot; behind it clips to a header.
+      className={front ? "overflow-visible" : undefined}
+      header={
+        <header className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border bg-surface pl-4 pr-2">
+          <h2 className="eyebrow min-w-0 flex-1 text-heading">
             <button
               type="button"
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              onClick={onMenu}
-              className="eyebrow px-2 py-1 text-text-muted transition-colors hover:bg-bg-secondary hover:text-heading"
+              data-window-header=""
+              onClick={onRaise}
+              className="flex h-10 w-full items-center text-left transition-colors hover:text-text"
             >
-              Export <span aria-hidden>▾</span>
+              Your notes
             </button>
-          )}
-          {front && menuOpen && (
-            <>
-              <button type="button" aria-hidden tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={onMenu} />
-              <div role="menu" className="absolute right-0 top-full z-20 mt-1 w-56 border border-border-strong bg-surface py-1 shadow-card">
-                {EXPORT_ITEMS.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    role="menuitem"
-                    onClick={() => onExport(item.id)}
-                    className="block w-full px-3 py-2 text-left hover:bg-bg-secondary/70"
-                  >
-                    <span className="block text-body-sm text-heading">{item.label}</span>
-                    <span className="annotation block text-text-faint">{item.detail}</span>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-          <button
-            type="button"
-            aria-label="Close your notes"
-            onClick={onClose}
-            className="grid h-8 w-8 place-items-center text-body text-text-muted transition-colors hover:bg-bg-secondary hover:text-heading"
-          >
-            ×
-          </button>
-        </div>
-      </header>
+          </h2>
+          <div className="relative flex items-center gap-2">
+            {front && pageHref && (
+              <Link
+                href={pageHref as Route}
+                aria-label="Open as page: your notes on this paper"
+                title={iconOnly ? "Open as page" : undefined}
+                onClick={onOpenPage}
+                className={
+                  iconOnly
+                    ? "grid h-8 w-8 shrink-0 place-items-center text-text-muted transition-colors hover:bg-bg-secondary hover:text-heading"
+                    : "eyebrow shrink-0 px-2 py-1 text-text-muted transition-colors hover:bg-bg-secondary hover:text-heading"
+                }
+              >
+                {iconOnly ? (
+                  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7z" />
+                    <path d="M14 3v4h4" />
+                  </svg>
+                ) : (
+                  "Open as page"
+                )}
+              </Link>
+            )}
+            {front && (
+              <span className="annotation text-text-faint" aria-live="polite">
+                {notice}
+              </span>
+            )}
+            {front && (
+              <button
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                onClick={onMenu}
+                className="eyebrow px-2 py-1 text-text-muted transition-colors hover:bg-bg-secondary hover:text-heading"
+              >
+                Export <span aria-hidden>▾</span>
+              </button>
+            )}
+            {front && menuOpen && (
+              <>
+                <button type="button" aria-hidden tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={onMenu} />
+                <div role="menu" className="absolute right-0 top-full z-20 mt-1 w-56 border border-border-strong bg-surface py-1 shadow-card">
+                  {EXPORT_ITEMS.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => onExport(item.id)}
+                      className="block w-full px-3 py-2 text-left hover:bg-bg-secondary/70"
+                    >
+                      <span className="block text-body-sm text-heading">{item.label}</span>
+                      <span className="annotation block text-text-faint">{item.detail}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            <button
+              type="button"
+              aria-label="Close your notes"
+              onClick={onClose}
+              className="grid h-8 w-8 place-items-center text-body text-text-muted transition-colors hover:bg-bg-secondary hover:text-heading"
+            >
+              ×
+            </button>
+          </div>
+        </header>
+      }
+    >
       <div hidden={!front} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-surface px-3 pb-4 [&_[role=toolbar]]:bg-surface">
         {children}
       </div>
       <p hidden={!front} className="annotation shrink-0 border-t border-border bg-surface px-4 py-2 text-text-faint">
         Kept in this browser
       </p>
-    </section>
+    </MarginCard>
   );
 }
 
@@ -246,17 +324,24 @@ export function NotesWindow({ paper, onClose }: { paper: Paper; onClose: () => v
   // The blocks the editor was started from, or last saw stored: what "unsaved" is measured against.
   const base = useRef<Block[] | null>(null);
 
-  // The window is one of the stack's: it joins when it stands and leaves when it closes. P10-09d (X-B1): joining reserves the
-  // column and the text reflows, so it joins before the first paint (no frame with the window over the words), and the reader's
-  // place — the selected words, else the first paragraph on the screen — is held across the reflow, going and coming.
+  // The window is one of the stack's: it joins when it stands and leaves when it closes. It joins before the first paint (no frame
+  // with the card missing from the stack); nothing is reserved and nothing is held in place — the margin is a track of the shell,
+  // and the paper's words do not move (P11-14).
   useLayoutEffect(() => {
-    holdInPlace({ change: () => useWindows.getState().open({ id: NOTES_WINDOW_ID, kind: "notes", title: "Your notes" }) });
-    return () => holdInPlace({ change: () => useWindows.getState().close(NOTES_WINDOW_ID) });
+    useWindows.getState().open({ id: NOTES_WINDOW_ID, kind: "notes", title: "Your notes" });
+    return () => useWindows.getState().close(NOTES_WINDOW_ID);
   }, []);
   const column = useColumn(true);
+  // The card's width across the page: the margin's, else the 360 it keeps at the right edge (where no shell registered a margin).
+  const margin = useMarginRect();
   const row = note
-    ? stackRows(windows, note.blocks, { ...column, frontHeight: STICKY_FRONT_HEIGHT_PX, minTop: DOCK_TOP_PX }).find((r) => r.id === NOTES_WINDOW_ID)
+    ? stackRows(windows, note.blocks, column).find((r) => r.id === NOTES_WINDOW_ID)
     : undefined;
+
+  // P11-17c rule 1: Escape closes the window when it is the front card of the stack, wherever the focus is — an open export menu first, as
+  // when the key is pressed inside it. Behind another card it answers nothing: one Escape, one card.
+  const takeEscape = useCallback(() => (menuOpen ? setMenuOpen(false) : onClose()), [menuOpen, onClose]);
+  useFrontEscape(NOTES_WINDOW_ID, !!note, takeEscape);
 
   useEffect(() => {
     if (!note) return;
@@ -325,6 +410,9 @@ export function NotesWindow({ paper, onClose }: { paper: Paper; onClose: () => v
       onMenu={() => setMenuOpen((o) => !o)}
       onExport={runExport}
       onRaise={() => raise(NOTES_WINDOW_ID)}
+      pageHref={`/notes/${note.id}`}
+      narrow={!pageLabelFits(margin ? margin.width : 360)}
+      onOpenPage={(event) => openAsPage({ paperId: paper.id, noteId: note.id }, event, { remember: rememberPlace, close: onClose })}
     >
       <NoteEditor
         key={`${note.id}:${fresh.rev}`}

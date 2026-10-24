@@ -535,83 +535,265 @@ html[data-mode="dark"] {
   backdrop-filter: blur(18px) saturate(1.25);
 }
 
-/* P10-04b (A8, X-A1): this utility is the panel's STICKY PART, not the whole
-   panel. The panel itself (`PANEL_CLASS`, spread.ts) stretches over the row
-   and is not sticky; its head — the plate, the title, the decision block —
-   is in normal flow and scrolls away with the page; the part below is this
-   utility: the Summary / Paper digestion strip and the reading map (or, for
-   a paper with no body, the head), pinned under the masthead, the window's
-   height at most, and the map — `overflow-y: auto` on its own section —
-   scrolling inside it when it is taller than the room. The old reading
-   (the panel pinned as one, 760 of its 892px taken by the head, no row of the
-   map in view on arrival) is below, as it was written.
+/* P11-10 (B P11-01 §2; ruling §1h.113 (a)): the reader's three panes. This replaces the `reader-panel` utility, the sticky part of the
+   old two-column spread's panel (P10-04b), whose rule the left pane inherits: pinned by its TOP, the window's height at most,
+   scrolling inside itself.
 
-   The reading spread's left panel (≥ xl), pinned by its top: the plate, the
-   title, the decision block (the commands, then the sentence, the reading
-   controls and the DOI), the Summary / Paper digestion tabs and the Terms
-   strip. P7-14 (R2): the question box and the map moved to the column, so the
-   panel pins at `top: 4rem` and nothing measures it. (It used to pin by its
-   BOTTOM once it was taller than the window, so that the decision, then at its
-   end, stayed in view while the plate scrolled away; that took a ResizeObserver
-   and `--panel-h`, and is gone.)
-   4rem = the article's xl top padding, so the stuck position is the
-   first-paint position and the panel never slides; the masthead is 48px
-   and never taller (its scrolled state changes background only), so it is
-   cleared with 16px to spare. Desktop-only. Any ancestor with an overflow
-   other than visible silently kills the sticky — main, the article and the
-   grid wrapper must keep it.
+   From a window of 1024 css px the paper's page is one full-width grid (`reader-shell.tsx`):
 
-   A panel pinned by its top has no way to show what is below the window, so
-   the panel is the window's height at most, and it scrolls as one (P9-04,
-   X2): nothing inside it scrolls on its own. The terms strip used to be a
-   flex item that shrank to a 112px window and scrolled inside itself (one of
-   eight terms in view, a scroll region inside the panel's own); it is an
-   ordinary block now, so when the blocks together are taller than the window
-   the panel scrolls, with a thin bar, and the last term is reached by
-   scrolling it. The 6px of side padding, taken back by the negative margin,
-   is the room the focus ring (2px + 3px offset) needs inside the scroll
-   port; it moves nothing.
+       .reader-shell      var(--left-w) 12px minmax(0, 1fr) 12px var(--margin-w)
+       .reader-left       the left pane — pinned (a column), the rail (48px, the pane out of sight) or the peek (over the centre)
+       .reader-divider    the two separators (`pane-divider.tsx`), 12px of hit area with a 1px line
+       .reader-centre     the paper's text, its content capped at 38em and centred
+       .reader-margin     an empty aside; the cards stand in it as fixed elements placed from its rect (`lib/reader/margin.ts`)
 
-   Ruling 19 (round 7, second pass): under Fit's whole-page `zoom`, a CSS
-   length declared inside a zoomed ancestor is resolved in that ancestor's
-   LOCAL (pre-zoom) space, then painted at `local × zoom` — so this panel's
-   own `top` would drift to `4rem × zoom` on screen unless divided back
-   down first (confirmed by execution: 4rem at zoom 1.8 painted at 115.2px,
-   not 64px, until divided). `100vh`, `--legend-h` and the flat lengths DO
-   need dividing the same way. `--page-zoom` defaults to 1 (set on `page.tsx`'s
-   `<PageContainer data-zoom-root>`, Fit off or not applicable) so this
-   is byte-identical to the un-zoomed value whenever Fit is off. */
+   `--left-pane-w` and `--margin-w` are the pane widths in unzoomed px, written by React from the reader's saved choice (and by a
+   divider, per frame, during a drag). The left TRACK is the pane's width while it is pinned and the rail's 48px otherwise: the peek is
+   drawn over the centre and moves nothing.
+
+   The pinned pane. Its stuck `top` is its first-paint position, so the pane never slides: the 48px masthead (3rem, outside Fit's zoom)
+   plus the article's 1rem of top padding (`PageContainer`'s `reader` width, inside it) — `calc(3rem / zoom + 1rem)`, which is 4rem at zoom 1
+   and 48 + 16 × zoom painted (P11-37, B P11-36: `4rem / zoom` stood 16 × (zoom - 1) px short, so under Fit the pane rode the page for the
+   first scroll, the rail's button with it, and a separator's focus moved the window). Any ancestor with an overflow other than visible
+   silently kills the sticky — main, the article and the grid must keep it. `margin-bottom: -4rem` (P10-21; P11-23 rule 1, A P11-21 X-A1): at the very foot of the page a
+   sticky element stops where its holder ends, and the holder ends 4rem above the window's bottom (the page's own bottom room, `md:pb-16`
+   in `papers/[id]/page.tsx`), while the window-high pane would end only the legend and 1rem (44px) above it, so a pane that may hang
+   less than 20px (rem 1.25) below its holder is pushed up by the rest — -0.75rem hung 12px and the whole pane stepped up about 8px as the
+   page ended. The negative margin is the whole of that room: the holder's end never stops the pane, so nothing in it moves from the first
+   scroll to the last; it still ends 16px above the legend (its own max-height, at every zoom) and never under the masthead. Its blocks are two zones: a fixed one that never scrolls and a scroll zone that is the pane's only scroller (the
+   map); a pane given its content `whole` scrolls as one. The 8px/16px of side padding are the room the focus ring (2px + 3px offset)
+   needs inside the scroll port.
+
+   Ruling 19 (round 7, second pass; re-aimed by P11-37, B P11-36): under Fit's whole-page `zoom`, a CSS length declared inside a zoomed
+   ancestor is resolved in that ancestor's LOCAL (pre-zoom) space, then painted at `local × zoom`. The zoom's boundary decides which way a
+   length goes. OUTSIDE it: the window (`100vh`) and the masthead (48px, `3rem`), which are divided by the zoom to be painted as they stand.
+   INSIDE it: the article's top padding (`1rem`) and `KeyLegend` (`--legend-h`; 28 × zoom painted), which are not divided, or they would
+   be painted short. So the stuck top is `3rem / zoom + 1rem` (48 + 16 × zoom), the pane's height is `(100vh - 4rem) / zoom - legend - 1rem`
+   (its foot 16px above the legend's top, 100vh - 28 × zoom, whatever the zoom) and the peek's is `(100vh - 3rem) / zoom - legend` (its foot
+   on the legend's top). `--page-zoom` defaults to 1 (set on `page.tsx`'s `<PageContainer data-zoom-root>`, Fit off or not applicable) so
+   every one of them is byte-identical to the un-zoomed value whenever Fit is off. Widths are NOT divided: the grid's tracks are layout
+   px, and Fit scales the whole grid with them. */
 :root {
-  /* `KeyLegend` is `h-[var(--legend-h)]`; the panel keeps clear of it. */
+  /* `KeyLegend` is `h-[var(--legend-h)]`, inside the zoom (painted × zoom); the pane keeps clear of it. */
   --legend-h: 1.75rem;
 }
 
-@utility reader-panel {
+.reader-shell {
+  --left-w: var(--left-pane-w, 320px);
+  display: grid;
+  grid-template-columns: var(--left-w) 12px minmax(0, 1fr) 12px var(--margin-w, 360px);
+  align-items: start;
+  width: 100%;
+  min-width: 0;
+}
+.reader-shell[data-left-state="rail"],
+.reader-shell[data-left-state="peek"] {
+  --left-w: 48px;
+}
+
+/* The cell holds the pane and the rail's button; it stretches over the row, so the sticky pane has the whole column's height to travel in. */
+.reader-left-cell {
+  position: relative;
+  align-self: stretch;
+  min-width: 0;
+}
+
+.reader-left {
   position: sticky;
-  top: calc(4rem / var(--page-zoom, 1));
+  top: calc(3rem / var(--page-zoom, 1) + 1rem);
   display: flex;
   flex-direction: column;
-  max-height: calc((100vh - 4rem - var(--legend-h) - 1rem) / var(--page-zoom, 1));
+  max-height: calc((100vh - 4rem) / var(--page-zoom, 1) - var(--legend-h) - 1rem);
+  margin-bottom: -4rem;
+  padding-inline: 16px 8px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
-  margin-inline: -6px;
-  padding-inline: 6px;
+}
+/* Given a fixed zone and a scroll zone, the pane itself does not scroll: the scroll zone does. */
+.reader-left[data-mode="split"] {
+  overflow: hidden;
+}
+.reader-left-header {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  padding-block: 4px;
+}
+.reader-left-fixed {
+  flex: none;
+  /* A safety valve, not a scroller: a fixed zone taller than this much of the pane would leave the scroll zone nothing. */
+  max-height: calc(0.62 * ((100vh - 4rem) / var(--page-zoom, 1) - var(--legend-h) - 1rem));
+  overflow-y: auto;
+}
+.reader-left-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+/* P11-17c rule 2 (BACKLOG-99): the fixed zone never scrolls inside itself. On a window shorter than 700 css px (the owner's laptop at 125 % is
+   1093 x 614) the zone — the title, the commands, the report's progress, the strip — was up to 337 px in a zone capped at 62 % of the pane's body
+   (314 at 614, 305 at 600): it scrolled inside itself by 11-32 px and its foot was cut off until the report arrived. Here the title is clamped to
+   three lines, not four (`title-block.tsx`: `data-pane-title`), and the gaps between the zone's blocks are 8 px, not 12 (`--pane-gap`, read with
+   the 12 px fallback by the layout's wrappers and the progress part: the one column has no pane to set it). The progress is never hidden and
+   the map is never pushed off: the zone gets smaller, the cap above is not raised. From 700 css px the zone fits its cap with the full title. */
+@media (max-height: 699px) {
+  .reader-left {
+    --pane-gap: 0.5rem;
+  }
+  .reader-left [data-pane-title] {
+    -webkit-line-clamp: 3;
+  }
+  .reader-left:has([data-pane-commands] > * > .grid > a) {
+    --pane-gap: 0.25rem;
+  }
+}
+/* P11-20 follow-up (rulings §1h.119, §1h.120, item 2b; BACKLOG-100): a briefing paper's fixed zone held four command rows (184 px) and, with a four-line title and
+   the strip, overflowed its cap at 1280 x 720 and below. With the bibliographic lines and the Upload row in the details (items 2a and 2b), the rows are compact on a
+   window under 800 css px high: 32 px high (every hit area stays at least 32 px) and 4 px apart, not 40 and 8. Only the stack of a paper with an Open row
+   (`:has(> a)`: a briefing paper's) is taken: an upload's page fits and keeps its rows and the y of its first map row. Under 700 css px high that stack's zone gaps (the
+   commands', the progress's, the strip's: they read `--pane-gap`) are 4 px, not 8 (the block above). Every command stays, the strip and the progress stay, and the
+   cap above is not raised. */
+@media (max-height: 799px) {
+  .reader-left [data-pane-commands] > * > .grid:has(> a) {
+    row-gap: 0.25rem;
+  }
+  .reader-left [data-pane-commands] > * > .grid:has(> a) :is(button, a) {
+    height: 2rem;
+  }
 }
 
-/* P7-15 (R7, ruling Q4): the "Explain this?" conversation is a dock at the window's right edge and it
-   must cover nothing, so while it is open the page keeps its width clear. The box (mounted outside
-   the zoomed page container, in the window's own pixels) writes `--explain-dock` on the document's
-   root — the dock's 360px and a 16px gap — and takes it off when it closes (`explain-dock.ts`).
-   The shell's <main> pads its right side by it, so the page container, whose `max-w` is a cap on
-   the room it is given, is given what is left and centres itself in that: at 1440 the spread moves
-   left by 184px and the column gives up 8px of its 640; at 1920 the 1184px spread keeps its widths and
-   moves 188px; at 1280 the column narrows from 640 to 472 — and the panel's track never changes.
-   Padding the shell, not the container, because the container's three caps (xl, 2xl, and Fit's zoom
-   on top of both) are then left exactly as they are: nothing here repeats their arithmetic. Unset,
-   the padding is 0 and nothing moves, on every page. */
-.peer-main-content {
-  padding-right: var(--explain-dock, 0px);
+/* The rail: one button's column. The pane is out of sight and `inert` (the shell sets the attribute). The peek: the same node drawn
+   over the centre — fixed, from the masthead's foot to the legend, on the surface token with the strong hairline and a shadow, below
+   the masthead (z-50) — so nothing re-flows under the reader's pointer. */
+.reader-rail-button,
+.reader-pin-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: var(--color-text-muted);
+}
+.reader-rail-button:hover,
+.reader-pin-button:hover {
+  color: var(--color-heading);
+}
+.reader-rail-button {
+  position: sticky;
+  top: calc(3rem / var(--page-zoom, 1) + 1rem);
+  margin-inline: 8px;
+}
+/* `display: inline-flex` above would beat the UA's `[hidden]`; a pinned pane has no rail button. */
+.reader-rail-button[hidden] {
+  display: none;
+}
+@media (hover: none) {
+  .reader-rail-button,
+  .reader-pin-button {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+.reader-left[data-state="rail"],
+.reader-left[data-state="peek"] {
+  position: fixed;
+  top: calc(3rem / var(--page-zoom, 1));
+  left: 0;
+  z-index: 40;
+  width: var(--left-pane-w, 320px);
+  /* From the masthead's foot to the legend's top. The content starts where the pinned pane's does, 1rem (the article's padding) lower. */
+  padding-top: 1rem;
+  height: calc((100vh - 3rem) / var(--page-zoom, 1) - var(--legend-h));
+  max-height: none;
+  margin-bottom: 0;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border-strong);
+}
+.reader-left[data-state="rail"] {
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(-100%);
+}
+.reader-left[data-state="peek"] {
+  box-shadow: 0 0 32px color-mix(in srgb, var(--color-heading) 16%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .reader-left[data-state="rail"] {
+    transition:
+      transform 160ms var(--ease-expo),
+      visibility 0s linear 160ms;
+  }
+  .reader-left[data-state="peek"] {
+    transition: transform 160ms var(--ease-expo);
+  }
+}
+
+/* The dividers: 12px of hit area the height of the row, a 1px line down the middle that takes the accent under the pointer, on focus and
+   while it is dragged. `touch-action: none` is what lets a finger drag it; the global focus ring is replaced by the line, which is the
+   visible focus. In the rail (and the peek) the left boundary is a plain hairline with nothing to grab. */
+.reader-divider,
+.reader-divider-rest {
+  position: relative;
+  align-self: stretch;
+  width: 12px;
+}
+.reader-divider {
+  cursor: col-resize;
+  touch-action: none;
+  /* The separator is as tall as the row, so the browser's keyboard focus-scroll aligns its top edge with the window's; at scroll 0 that
+     edge sits 4rem down (the masthead plus the article's padding; 48 + 16 × zoom under Fit) and the page jumped 64px the first time focus
+     reached it. Counting that — the pane's own sticky `top` — as part of the separator leaves nothing to align. Top only:
+     `scroll-margin-block` throws Tab from the paper's last link to the margin's separator back to the top, and `scroll-padding` on `html`
+     would move every `scroll-mt-20` landing (P11-29; B P11-24). Under Fit the figure is `3rem / zoom + 1rem`, not `4rem / zoom`, which
+     stood 16 × (zoom - 1) px short: the window still moved 3 px at 1920 x 1080 (P11-37; B P11-36). */
+  scroll-margin-top: calc(3rem / var(--page-zoom, 1) + 1rem);
+}
+.reader-divider:focus-visible {
+  outline: none;
+}
+.reader-divider::before,
+.reader-divider-rest::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  left: 50%;
+  width: 1px;
+  margin-left: -0.5px;
+  background: var(--color-border-strong);
+}
+.reader-divider:hover::before,
+.reader-divider:focus-visible::before,
+.reader-divider[data-dragging]::before {
+  width: 3px;
+  margin-left: -1.5px;
+  background: var(--color-accent);
+}
+
+/* The centre: the paper's text. Its content is capped at 38em (about 87 characters of Newsreader at 1x) and centred, so a wider window
+   adds blank gutter, not 150-character lines, and a pane narrower than the cap re-flows. The prose measures (`.measure`, `.measure-paper`),
+   which were lifted on the old spread because its column was sized for the text, are lifted here for the same reason: the cap is the
+   measure. */
+.reader-centre {
+  min-width: 0;
+  padding-inline: 12px;
+}
+.reader-centre-inner {
+  max-width: 38em;
+  margin-inline: auto;
+}
+.reader-centre .measure,
+.reader-centre .measure-paper {
+  max-width: none;
+}
+
+/* The margin: an empty placeholder, blank until a selection is made. Nothing is drawn in it. */
+.reader-margin {
+  align-self: stretch;
+  min-width: 0;
 }
 
 /* ── The measure ──────────────────────────────────────────────────────
@@ -702,19 +884,61 @@ html[data-mode="dark"] {
 /* 6-09: the font-size controls' actual effect. `--text-lead`/`--text-body`/
    `--text-body-lg` above are plain px again — a `calc()` inside a custom
    property resolves at that property's own declaration site (`:root`), so
-   it can never see a `--reading-scale` a descendant sets. These three rules
+   it can never see a `--reading-scale` a descendant sets. These rules
    apply the scale at the USE site instead, only inside `.reading-scaled`
-   (the two wrap points in reader-layout.tsx) — unlayered, so each beats the
+   (the three wrap points in reader-layout.tsx: the blocks both tabs share,
+   the words, the additions) — unlayered, so each beats the
    Tailwind-generated utility whatever its specificity, matching the
    `rounded-full` override just above. `[class~="text-body"]` cannot
    false-match `text-body-lg`/`text-body-sm`: `~=` matches a whole
    space-delimited class token, and `text-body-lg` is one token, not
-   `text-body` plus a suffix. */
+   `text-body` plus a suffix.
+
+   P11-48 (ruling §1h.152): the steps scale EVERY piece of reading text inside
+   the wrappers — the paper's body and its section headings (`text-title`),
+   the Summary's deck (`text-title-lg`), its one loud sentence
+   (`text-display-sm`) and its claims and quotes (`reading-prose`, the lead
+   size under another name), the answers' reasons and the figures' captions
+   (`text-body-sm` in the serif, which is what marks reading text from the
+   chips and rows that share the size), and the paper's own figure captions
+   (`figcaption.annotation`, its words in the mono note form) — as well as the
+   three the lede and the question prose happened to use. They do not scale
+   the controls, the labels (`text-micro`, `text-caption`, `text-meta`, and the
+   mono `annotation` and `eyebrow` forms) or anything outside the wrappers
+   (the left pane, the margin's cards, the masthead, the legend): the rule is
+   under `.reading-scaled`, and a class with no rule here stays at its token.
+   Each token is a plain px size above, so at scale 1 every size is the one it
+   was. globals.css.reading-text.test.ts holds the inventory — every size class
+   the wrappers' components use, with a verdict and the reason — and fails on a
+   class that has none. */
 .reading-scaled [class~="text-lead"] { font-size: calc(var(--text-lead) * var(--reading-scale, 1)); }
 .reading-scaled [class~="text-body"] { font-size: calc(var(--text-body) * var(--reading-scale, 1)); }
 .reading-scaled [class~="text-body-lg"] { font-size: calc(var(--text-body-lg) * var(--reading-scale, 1)); }
+.reading-scaled [class~="text-title"] { font-size: calc(var(--text-title) * var(--reading-scale, 1)); }
+.reading-scaled [class~="text-title-lg"] { font-size: calc(var(--text-title-lg) * var(--reading-scale, 1)); }
+.reading-scaled [class~="text-display-sm"] { font-size: calc(var(--text-display-sm) * var(--reading-scale, 1)); }
+.reading-scaled [class~="text-body-sm"][class~="font-reading"] { font-size: calc(var(--text-body-sm) * var(--reading-scale, 1)); }
+.reading-scaled [class~="reading-prose"] { font-size: calc(var(--text-lead) * var(--reading-scale, 1)); }
+.reading-scaled figcaption[class~="annotation"] { font-size: calc(var(--text-caption) * var(--reading-scale, 1)); }
 
-html[data-scroll-behavior="smooth"] { scroll-behavior: smooth; }
+/* P11-53 (ruling §1h.159): no word of the reading text passes its column, at any text step. The paper's paragraphs wrap only at spaces
+   and hyphens (`overflow-wrap: normal`), and `hyphens: auto` breaks nothing where the browser has no dictionary, so a run with no break
+   opportunity (a name joined by slashes, a URL) is as wide as it is. Since P11-48 scales the paper's own text, such a run grew with
+   the step: it stood over the column's padding, the separator and the margin's cards, and on a phone it made the page wider than the
+   window. One declaration on the wrapper does it, and it is inherited, so it reaches everything the three wrappers hold (the paper's
+   body, its headings and captions, the Summary's blocks, the answers): a run too wide for a line of its own breaks inside itself.
+   `break-word`, not `anywhere`: it moves a break only inside a word that cannot fit its line, so a line that fits wraps exactly as it
+   did, and the hyphenation, the justification (`reading-justify`) and the column's width are as they were. `anywhere` would also
+   take the word out of a flex or grid item's min-content width, and nothing here needs that: measured in Chromium, the page's
+   scrollWidth equals its clientWidth at every step from 390 to 1440 wide. globals.css.reading-text.test.ts pins the rule. */
+.reading-scaled { overflow-wrap: break-word; }
+
+/* P11-29: smooth root scrolling only where the reader has not asked for less motion (the same query as the panes' transitions above). A
+   focus scroll to the far end of a long paper, or an anchor jump from the map, was an animation of 18,000px whatever the setting said
+   (WCAG 2.3.3); under `reduce` the computed value is `auto` and either one is a single step. Default motion is unchanged. */
+@media (prefers-reduced-motion: no-preference) {
+  html[data-scroll-behavior="smooth"] { scroll-behavior: smooth; }
+}
 
 
 body {

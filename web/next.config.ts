@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { readBuildRef } from "./src/lib/build-ref";
 
 const nextConfig: NextConfig = {
   // ABC-freemium 9-05 · Ruling 26 point 5 — STATICALLY TYPED LINKS.
@@ -64,6 +65,13 @@ const nextConfig: NextConfig = {
   // accept.
   experimental: {
     proxyClientMaxBodySize: "30mb",
+  },
+  // P11-17a: the commit this build was made from, for the version line (`Peer 0.45.0 · c550daa · What's
+  // new`). Fixed here, when this file is evaluated — at `next build` or `next dev` start — so a server
+  // older than main says so. Seven hex characters or "" (`src/lib/build-ref.ts`); the line shows nothing
+  // for "".
+  env: {
+    PEER_BUILD_REF: readBuildRef(__dirname),
   },
 };
 

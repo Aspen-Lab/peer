@@ -38,6 +38,36 @@
 // space; the meta may wrap under the heading rather than squeeze it. And where there is no hover the
 // map's toggles — "show map" / "hide map" and each row's fold — are 44 px tall (the P9-23 rule).
 //
+// P11-23 rule 2 (A P11-21 X-A2; ruling §1h.120): in the left pane (a 284-px text column at its 320-px default, 236 at the 280 a first visit has
+// at 1024, 192 at 240) the meta broke between two parts and the line below it opened with "· 11 min". The separator now belongs to the part BEFORE
+// it ("setup ·", "p.1 ·"): each part ends with its own, in a slot of fixed width (2ch — the meta is monospace), and the meta sits in a box that
+// clips the slot's width off its right edge, which is where a right-aligned line's last part ends: so a separator between two parts on one line
+// shows, and the one that would end a line is dropped. The text a reader or a copy gets is the same words, separators and spaces as before.
+// The break has two places, not three: the role and page ("setup · p.1") and the words and minutes ("1,234 words · 6 min") stay whole, so a
+// narrow pane gets those two lines and not "6 min" alone. The one column draws the same markup; where nothing breaks it is pixel for pixel
+// what it was.
+//
+// P11-23 rule 4 (BACKLOG-104; ruling §1h.126): the summary line above the rows ("Read from PDF · 16 sections · 6,042 words · about 34 min") had the same
+// defect at the pane's default 320 (and from 313 to 332): its second line opened with "· about 34 min". It is left-aligned, where the rows' meta is
+// right-aligned, so the same clip works from the other side: in the pane the separator is drawn in a 2ch slot at the START of the part it introduces
+// ("· " before "about"), the box clips 2ch off its left edge (`-ml-[2ch]` on the lines inside it, `overflow-x-clip` on the box), and the first part has an
+// empty slot so that it begins at the edge. A part is one nowrap piece, so every line begins with a slot (the first's empty, any other's clipped) and a
+// break falls between parts. All of it is for the pane only (`[.reader-left_&]:`): the one column keeps the plain string's own breaks and is what it was,
+// glyph for glyph. The words are `MAP.summary`'s own (`copy.ts` is untouched): the line is split at its " · " and reads, to a reader and a copy, as the
+// one string it was.
+//
+// P11-35 (round 2, Theme A reader r1's extra 4; ruling §1h.133): a row's fact line ("relevant · mentions growing ×6, LCO ×6, parameter ×4") broke between a term
+// and its count at the pane's default 320 ("… growing ×6, LCO" / "×6, parameter ×4"): the browser may break at any space, and the one before "×" is one. A term's
+// last word and its count are now one unit (`MentionsLine`: an `inline-block` span, `max-w-full`, with the comma after the count inside it), so the line breaks
+// after a comma or inside a multi-word term, never between the word and "×n". A unit longer than the line (a long term in the narrowest pane) wraps inside itself
+// (`wrap-anywhere` on the line, inherited), runs nothing past the pane, and keeps the count with the last letters of the term (a `whitespace-nowrap` piece holds
+// them: a term that fits a line alone but not with its count broke at the space, and the count stood alone on the next line). The text is the string
+// `ROUTE.mentions` always was, plain spaces and all — the spans carry the "cannot break", not the characters, so a selection copied from the line, a screen reader
+// and the string itself are one and the same. Nothing else reads that string: no export, feed or JSON carries it (`reading-map.fact.test.tsx` pins the one caller).
+// The same rule, checked at every other place of the map that draws a count beside a word: the rows' meta ("1,041 words", "6 min") is whole parts already (P11-23) and
+// the summary line is whole parts in the pane; in the one column the summary line let a count part from its word ("about 24" / "min", at some widths from 343 to
+// 485 px), and `CountedPart` keeps each closing count and its word in one `nowrap` run.
+//
 // P10-04 (review 3.3; A10): the paper's own hierarchy. A row has its `level` (1 for "2.", 2 for "2.1", 3 for
 // "2.1.1") and is indented one step per level, in the one list (an inline padding, not a nested table, so the
 // keyboard walks the rows in order). A row with no paragraphs of its own that has rows under it is a group
@@ -61,7 +91,7 @@
 // And a map of one row (no key, or the guide not yet answered) starts open, so a headless paper's map is its
 // paragraphs under their one row, not a closed line.
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
 import type { PaperReading } from "@/lib/papers/reading";
 import {
   gistRoute,
@@ -178,6 +208,132 @@ function metaParts(row: ReadingMapSection, role: string | null) {
   ];
 }
 
+/**
+ * P11-23 rule 2: the meta's parts in the two runs that stay whole — where the section is ("setup · p.1") and how long it is ("1,234 words ·
+ * 6 min") — the only place a line may break being the space between the two. A run with no part (no role and no page) is left out.
+ */
+function metaRuns(parts: ReturnType<typeof metaParts>) {
+  const runs = [
+    { name: "place", parts: parts.filter((part) => part.name === "role" || part.name === "page") },
+    { name: "size", parts: parts.filter((part) => part.name === "words" || part.name === "minutes") },
+  ];
+  return runs.filter((run) => run.parts.length > 0);
+}
+
+/**
+ * P11-35 (rule 1: every place that draws a count beside a word): a part's closing count and its word ("24 min", "4,255 words", "9 sections") are one `nowrap` run, so a
+ * line never ends on the count and opens on its word ("about 24" / "min"). In the pane a part is whole already and this changes nothing; in the one column, where the
+ * parts wrap as the words always did, it is the only difference: the break that fell between a count and its word falls before the count instead. A part with no
+ * count in it ("Read from PDF") is drawn as it was. The text is the part's own, plain spaces and all.
+ */
+function CountedPart({ text }: { text: string }) {
+  const counted = /^([\s\S]*?)(\d[\d,]*\s\S+)$/.exec(text);
+  return counted ? (
+    <>
+      {counted[1]}
+      <span className="whitespace-nowrap">{counted[2]}</span>
+    </>
+  ) : (
+    <>{text}</>
+  );
+}
+
+/**
+ * P11-23 rule 4: the map's summary line, drawn so that a break never leaves a separator at the start of a line — in the left pane. `MAP.summary`'s string,
+ * split at its separators; each part but the first is introduced by a slot holding "· " (the first has an empty one). In the pane (`.reader-left`, the
+ * ancestor the one column has none of) the slot is 2ch wide, a part is one nowrap piece (so every line begins with a slot: the first's empty, the others'
+ * clipped), and the box clips the 2ch that the lines inside it stand left of its left edge. In the one column none of that applies: the slot is a plain
+ * inline span of the same text and the parts wrap as the words always did, so the line is what it was, glyph for glyph. The box is the flex item the
+ * plain `<span>` was.
+ */
+function SummaryLine({ text }: { text: string }) {
+  const parts = text.split(" · ");
+  return (
+    <span data-map-summary="" className="[.reader-left_&]:overflow-x-clip">
+      <span className="block [.reader-left_&]:-ml-[2ch]">
+        {parts.map((part, index) => (
+          <Fragment key={index}>
+            {index > 0 ? " " : null}
+            <span className="[.reader-left_&]:whitespace-nowrap">
+              <span data-summary-slot="" className="[.reader-left_&]:inline-block [.reader-left_&]:w-[2ch] [.reader-left_&]:whitespace-pre">
+                {index > 0 ? "· " : null}
+              </span>
+              <CountedPart text={part} />
+            </span>
+          </Fragment>
+        ))}
+      </span>
+    </span>
+  );
+}
+
+/** P11-35: how many characters at the end of a term's last word travel with its count when a term must break inside itself ("…ethane ×14" breaks as "…etha" / "ne ×14"). */
+const COUNT_COMPANY = 3;
+
+/**
+ * P11-35: the fact line's terms ("mentions growing ×6, LCO ×6, parameter ×4"), drawn so that a term's last word and its count never part at a line's end. The text is
+ * `ROUTE.mentions`' own, joined the same way with plain spaces. Each stated term is cut before its last word: what stands before it (the first words of a multi-word
+ * term) is plain text and may break; the last word, the space, the "×" and the count — and the comma after them, so no line opens with one — are one `inline-block`
+ * span, which the line breaker takes whole and clamps to the line (`max-w-full`; the line is `wrap-anywhere`, so a unit longer than the line wraps inside itself
+ * instead of running past the pane). Inside it the space is no place to break: the last `COUNT_COMPANY` characters of the word, the space and the count are a
+ * `whitespace-nowrap` piece, so a term that fits a line alone but not with its count breaks inside the word and the count follows its last letters, not alone. The one
+ * plain space after each comma is where the line may break.
+ */
+function MentionsLine({ hits }: { hits: ReadonlyArray<{ term: string; count: number }> }) {
+  const stated = ROUTE.mentioned(hits);
+  return (
+    <>
+      {`${ROUTE.mentionsLead} `}
+      {stated.map((piece, index) => {
+        // "multi word term ×6": the count is the last " ×…", the unit starts at the last space before it.
+        const countAt = piece.lastIndexOf(" ×");
+        const wordAt = piece.lastIndexOf(" ", countAt - 1) + 1;
+        const letters = Array.from(piece.slice(wordAt, countAt));
+        const last = index === stated.length - 1;
+        return (
+          <Fragment key={index}>
+            {piece.slice(0, wordAt)}
+            <span data-mention-unit="" className="inline-block max-w-full">
+              {letters.slice(0, -COUNT_COMPANY).join("")}
+              <span className="whitespace-nowrap">{`${letters.slice(-COUNT_COMPANY).join("")}${piece.slice(countAt)}${last ? "" : ","}`}</span>
+            </span>
+            {last ? null : " "}
+          </Fragment>
+        );
+      })}
+    </>
+  );
+}
+
+/** P11-23 rule 2: the row's meta, drawn so that a break never leaves a separator at the start of a line (see the box's comment in the row). */
+function MetaLine({ parts }: { parts: ReturnType<typeof metaParts> }) {
+  const last = parts[parts.length - 1];
+  return (
+    <span className="annotation ml-auto min-w-0 max-w-full overflow-x-clip text-right text-text-faint">
+      <span className="block -mr-[2ch]">
+        {metaRuns(parts).map((run, runIndex) => (
+          <Fragment key={run.name}>
+            {runIndex > 0 ? " " : null}
+            <span data-meta-run={run.name} className="whitespace-nowrap">
+              {run.parts.map((part, index) => (
+                <Fragment key={part.name}>
+                  {index > 0 ? " " : null}
+                  <span data-meta-part={part.name} className="whitespace-nowrap">
+                    {part.text}
+                  </span>
+                  <span data-meta-slot="" className="inline-block w-[2ch] whitespace-pre">
+                    {part === last ? null : " ·"}
+                  </span>
+                </Fragment>
+              ))}
+            </span>
+          </Fragment>
+        ))}
+      </span>
+    </span>
+  );
+}
+
 export function ReadingMapView({
   map,
   route,
@@ -255,8 +411,11 @@ export function ReadingMapView({
       return next;
     });
 
+  // P11-16 (B P11-01 §2.3, §3.2): no scroller of its own. From 1024 css px the map stands in the left pane's scroll zone, which is the
+  // pane's one scroller (the map used to scroll inside the old spread's sticky panel with `xl:overflow-y-auto`, a second scroller where
+  // the layout now has one); in one column it was never bounded. The zone gives its contents the focus ring's room (`reader-layout.tsx`).
   return (
-    <section aria-label={MAP.heading} className="mt-6 xl:min-h-0 xl:overflow-y-auto xl:-mx-1.5 xl:px-1.5">
+    <section aria-label={MAP.heading} className="mt-6">
       <p className="eyebrow inline-flex items-center gap-2 text-text-faint">
         <span aria-hidden className="block h-[6px] w-[6px] shrink-0 bg-current" />
         {MAP.heading}
@@ -267,7 +426,7 @@ export function ReadingMapView({
         <p className={["annotation mt-1 text-text-faint", shownOnPhone ? "" : "hidden sm:block"].join(" ").trim()}>{PEERS_READING}</p>
       )}
       <p className="annotation mt-2 flex items-baseline gap-3 text-text-faint">
-        <span>{MAP.summary(rowCount, map.totalMinutes, totalWords, source)}</span>
+        <SummaryLine text={MAP.summary(rowCount, map.totalMinutes, totalWords, source)} />
         <button
           type="button"
           aria-expanded={shownOnPhone}
@@ -302,14 +461,15 @@ export function ReadingMapView({
             const lineTiers = (part ? sectionMark(route, part.sectionId) : null)?.paragraphs ?? mark?.paragraphs;
             // P2-04b (§1g.15): a background mark Tier 0 found nothing in has no
             // counts to state, so it says what the mark is for, not the bare tier.
-            const fact = group
+            // P11-35: the words are `ROUTE.mentions`' own, drawn by `MentionsLine` so that a term and its count never part.
+            const fact: ReactNode = group
               ? null
               : mark
               ? mark.hits.length > 0
                 ? // P10-06: "strongest · mentions …", "relevant · mentions …", and for the faintest just "mentions …".
                   mark.tier === "faint"
-                  ? ROUTE.mentions(mark.hits)
-                  : `${ROUTE.tiers[mark.tier]} · ${ROUTE.mentions(mark.hits)}`
+                  ? <MentionsLine hits={mark.hits} />
+                  : <>{`${ROUTE.tiers[mark.tier]} · `}<MentionsLine hits={mark.hits} /></>
                 : mark.tier === "background"
                   ? ROUTE.backgroundWhy
                   : ROUTE.tiers[mark.tier]
@@ -347,24 +507,17 @@ export function ReadingMapView({
                     >
                       <MathText text={row.heading} />
                     </a>
-                    {/* P9-51 (F08): role · page · words · minutes. Each part keeps itself whole and owns the
-                        separator that introduces it; the one plain space between two parts is the only place
-                        the line may break, so no line ends on "·". The group drops under the heading, right
-                        aligned as it was beside it, when the heading would be left too little room. */}
-                    <span className="annotation ml-auto min-w-0 max-w-full text-right text-text-faint">
-                      {metaParts(shown, role).map((part, index) => (
-                        <Fragment key={part.name}>
-                          {index > 0 ? " " : null}
-                          <span data-meta-part={part.name} className="whitespace-nowrap">
-                            {index > 0 ? `· ${part.text}` : part.text}
-                          </span>
-                        </Fragment>
-                      ))}
-                    </span>
+                    {/* P9-51 (F08): role · page · words · minutes. P11-23 rule 2: each part owns the separator that FOLLOWS it
+                        (a slot 2ch wide, the last part's empty), the two runs (place, size) are whole, and the one plain space
+                        between them is the only place a line may break. The box clips what hangs 2ch past its right edge — the
+                        slot of the part that ends a line, for the lines are right-aligned — so no line opens with "·" and none
+                        ends with one. The meta drops under the heading, right aligned as it was beside it, when the heading
+                        would be left too little room. */}
+                    <MetaLine parts={metaParts(shown, role)} />
                   </div>
                 </div>
                 {/* Peer's words: the tier and the counts behind it. */}
-                {fact && <p className="annotation pl-5 text-text-faint">{fact}</p>}
+                {fact && <p className="annotation pl-5 text-text-faint wrap-anywhere">{fact}</p>}
                 {/* The paper's words: the sentence that says most. */}
                 {expanded && mark?.evidence && (
                   <p className="mt-1 pl-5 font-reading italic text-body-sm leading-[1.45] text-text-muted">

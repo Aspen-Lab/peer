@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { placeCard } from "./explain-box";
 import * as dock from "./explain-dock";
-import { DOCK_BOTTOM_PX, DOCK_GAP_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_RESERVE_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_VAR, DOCK_WIDTH_PX, DOCK_WIDTH_VAR, MASTHEAD_MIN_VIEWPORT_PX, PAGE_ZOOM_ROOT, PAGE_ZOOM_VAR, legendHeightPx, reserveDock } from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_THREAD_FLOOR_PX, DOCK_TOP_PX, DOCK_WIDTH_PX, MASTHEAD_MIN_VIEWPORT_PX, PAGE_ZOOM_ROOT, PAGE_ZOOM_VAR, legendHeightPx } from "./explain-dock";
 
 // P7-15 (the owner's R7): the dock's rectangle is built from three numbers that the shell owns —
 // the masthead's height above it, the foot legend's below it, and the width of the card it
@@ -117,99 +117,15 @@ describe("the dock's rectangle against the shell that frames it", () => {
   });
 });
 
-// ── The page makes room (P7-15, R7 / Q4) ──────────────────────────────────
-
-describe("what the page keeps clear while the dock is open", () => {
-  it("is the dock and a 16 px gap: 376 px, named for the page's CSS and for the notes tab", () => {
-    expect(DOCK_GAP_PX).toBe(16);
-    expect(DOCK_RESERVE_PX).toBe(DOCK_WIDTH_PX + DOCK_GAP_PX);
-    expect(DOCK_RESERVE_PX).toBe(376);
-    expect(DOCK_VAR).toBe("--explain-dock");
-    expect(DOCK_WIDTH_VAR).toBe("--explain-dock-width");
-  });
-
-  it("is written on the document's root as two custom properties, and taken off again by what it returns", () => {
-    const style = { setProperty: vi.fn(), removeProperty: vi.fn() };
-    const release = reserveDock({ style });
-
-    expect(style.setProperty).toHaveBeenCalledWith("--explain-dock", "376px");
-    expect(style.setProperty).toHaveBeenCalledWith("--explain-dock-width", "360px");
-    expect(style.removeProperty).not.toHaveBeenCalled();
-    release();
-    expect(style.removeProperty).toHaveBeenCalledWith("--explain-dock");
-    expect(style.removeProperty).toHaveBeenCalledWith("--explain-dock-width");
-  });
-
-  // P10-09d (X-B1; ruling §1h.87 (c)): the reserve is shared by every floating window at the right and counted.
-  it("is counted: the first taker writes the properties, later ones only add to the count, the last release takes them off", () => {
-    const style = { setProperty: vi.fn(), removeProperty: vi.fn() };
-    const root = { style };
-    const a = reserveDock(root);
-    const b = reserveDock(root);
-    const c = reserveDock(root);
-    expect(style.setProperty).toHaveBeenCalledTimes(2);
-    a();
-    b();
-    expect(style.removeProperty).not.toHaveBeenCalled();
-    c();
-    expect(style.removeProperty).toHaveBeenCalledWith("--explain-dock");
-    expect(style.removeProperty).toHaveBeenCalledWith("--explain-dock-width");
-    expect(style.removeProperty).toHaveBeenCalledTimes(2);
-  });
-
-  it("a release given twice counts once, and a new take after the last release writes the properties afresh", () => {
-    const style = { setProperty: vi.fn(), removeProperty: vi.fn() };
-    const root = { style };
-    const a = reserveDock(root);
-    const b = reserveDock(root);
-    a();
-    a();
-    expect(style.removeProperty).not.toHaveBeenCalled();
-    b();
-    expect(style.removeProperty).toHaveBeenCalledTimes(2);
-    const c = reserveDock(root);
-    expect(style.setProperty).toHaveBeenCalledTimes(4);
-    c();
-    expect(style.removeProperty).toHaveBeenCalledTimes(4);
-  });
-
-  it("keeps a count for each root", () => {
-    const one = { setProperty: vi.fn(), removeProperty: vi.fn() };
-    const two = { setProperty: vi.fn(), removeProperty: vi.fn() };
-    const a = reserveDock({ style: one });
-    const b = reserveDock({ style: two });
-    a();
-    expect(one.removeProperty).toHaveBeenCalledTimes(2);
-    expect(two.removeProperty).not.toHaveBeenCalled();
-    b();
-    expect(two.removeProperty).toHaveBeenCalledTimes(2);
-  });
-
-  it("does nothing, and fails at nothing, where there is no root to write to", () => {
-    for (const root of [null, undefined, {}, { style: undefined }]) {
-      expect(() => reserveDock(root as never)()).not.toThrow();
-    }
-  });
-});
-
-describe("the page's width is kept at <main>, in CSS", () => {
-  const css = read("src/app/globals.css");
-
-  it("the shell's <main> is the class the rule names", () => {
-    expect(read("src/app/layout.tsx")).toMatch(/<main className="[^"]*\bpeer-main-content\b[^"]*">/);
-  });
-
-  it("<main> pads its right side by the reserved width, none when nothing is open", () => {
-    const rule = /\.peer-main-content\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
-
-    expect(rule).toMatch(new RegExp(`padding-right:\\s*var\\(${DOCK_VAR},\\s*0px\\);`));
-  });
-
-  it("the custom property the rule reads is the one the dock writes", () => {
-    expect(css).toContain(`var(${DOCK_VAR}, 0px)`);
-    expect(read("src/components/notes/notes-button.tsx")).toContain(`var(${DOCK_WIDTH_VAR},0px)`);
-  });
-});
+// ── Retired with the reserve (P11-14, rule 3; B P11-01 §3.1) ────────────────────────────────────────────────────────────────────────
+//
+// "The page makes room (P7-15, R7 / Q4)" stood here: "what the page keeps clear while the dock is open" — six cases of `reserveDock` (376 px
+// = the dock and a 16 px gap, named `--explain-dock` and `--explain-dock-width`; written on the document's root and taken off by what it
+// returns; counted for the first taker to write and the last release to take off; a release given twice counts once; a count for each
+// root; nothing, and no failure, where there is no root) — and "the page's width is kept at <main>, in CSS" — three cases (<main> carries
+// `peer-main-content`, which pads its right side by the reserved width; the custom property the rule reads is the one the dock writes
+// and the notes tab reads). The margin is a track of the reader's shell now: nothing is reserved, so the functions, the constants and
+// the CSS rule are deleted with these nine cases. Their absence is pinned in `explain-dock.retired.test.ts`.
 
 // ── No window before the reader asks (P10-08, review 8.5) ───────────────────────────────────────────
 
@@ -220,11 +136,14 @@ describe("no empty window stands (P10-08; replaces P8-06's rule for it, whose pi
     expect(read("src/components/reader/explain-dock.ts")).not.toContain(rule);
   });
 
-  it("the page's width is kept clear only by `reserveDock`, which the box calls when a passage opens the dock", () => {
+  // P11-14 (re-aimed, §1c): was "the page's width is kept clear only by `reserveDock`, which the box calls when a passage opens the dock"
+  // (`box.match(/reserveDock\(/g)).toHaveLength(1)`). Nothing is reserved now; the dock's mode is still decided in that one place.
+  it("the dock stands from a window of 1024 px while a passage is open, decided in one place, and the box reserves nothing", () => {
     const box = read("src/components/reader/explain-box.tsx");
 
     expect(box).toContain("const docked = open !== null && viewport.width >= DOCK_MIN_VIEWPORT_PX;");
-    expect(box.match(/reserveDock\(/g)).toHaveLength(1);
+    expect(box.match(/const docked =/g)).toHaveLength(1);
+    expect(box).not.toContain("reserveDock");
   });
 });
 
@@ -290,60 +209,33 @@ describe("settleHeight — the after-every-commit height write cannot run away",
   });
 });
 
-// P10-18 (A P10-14 §4 X-B1; ruling §1h.93 (a)): the explain window gives the stack room.
-describe("dockInStack — the explain window leaves the stack its room (P10-18)", () => {
-  const legend = DOCK_BOTTOM_PX;
-  const room = (behind: number, front = 160) => 8 + behind * 40 + front;
-
-  it("is the plain placement when no window stands (room 0): its top, and down to the legend", () => {
-    expect(dock.dockInStack({ top: 300, paragraphTop: 300, height: 1000, legend, room: 0 })).toEqual({ top: 300, maxHeight: 1000 - 300 - legend });
-    expect(dock.dockInStack({ top: 48, paragraphTop: 10, height: 720, legend, room: 0 })).toEqual({ top: 48, maxHeight: 720 - 48 - legend });
-  });
-
-  it("the column's bottom is the screen less the foot legend and a margin, at least 40 px (windows.ts reads it the same)", () => {
+// P10-18 (A P10-14 §4 X-B1; ruling §1h.93 (a)) had the explain window give the stack room (`dockInStack`): seven cases — the plain
+// placement with no other window (room 0), the column's bottom, the column standing ABOVE the explain window where it fitted, the explain
+// window shrinking to leave the column its room below, its floor (`DOCK_STACK_FLOOR_PX`), never lower than the legend, and not depending on
+// its own measured height — and "the box asks the stack for its room" (one case: `dockInStack(…room: stackRoomPx)` once in the box).
+// P11-14 (rule 4; O-8, BACKLOG-66): the explain card is a card of the stack, so nothing stands over the others and there is nothing to make
+// room for. `dockInStack` and `stackRoom` are deleted with those eight cases; the invariants they protected (every header reachable, the
+// front keeps a usable height, the foot above the legend, in the six orders, on short screens and in Fit) are asserted of the one layout in
+// `windows.test.ts`, and the surviving one — the column's bottom — below.
+describe("columnBottomPx — the band's foot, which every card of the margin stands above (P10-18; margin.ts reads it)", () => {
+  it("is the screen less the foot legend and a margin, at least 40 px", () => {
     expect(dock.columnBottomPx(720, 28)).toBe(720 - 40);
     expect(dock.columnBottomPx(1000, 28 * 1.142)).toBe(1000 - 40);
     expect(dock.columnBottomPx(2000, 28 * 1.838)).toBe(2000 - (Math.ceil(28 * 1.838) + 8));
   });
 
-  it("where the column can stand above the explain window it does: the explain window keeps its place, no higher than the column needs", () => {
-    // 1440 × 1000, one sticky (room 168): the paragraph is low, the column fits above (48 + 168 = 216 <= 300).
-    expect(dock.dockInStack({ top: 300, paragraphTop: 300, height: 1000, legend, room: room(0) })).toEqual({ top: 300, maxHeight: 1000 - 300 - legend });
-    // The window was lifted high by a tall thread: it is brought down just enough to leave the column its place above.
-    expect(dock.dockInStack({ top: 100, paragraphTop: 300, height: 1000, legend, room: room(0) })).toEqual({ top: 48 + room(0), maxHeight: 1000 - 48 - room(0) - legend });
-  });
-
-  it("where the column cannot stand above it, the explain window shrinks to leave the column its room below, level with the paragraph still", () => {
-    // 1440 × 1000, three stickies (room 248), the paragraph at 250 (the column needs 48 + 248 = 296 above): the explain window ends 960 - 2 - 248 = 710 at the lowest.
-    const at = dock.dockInStack({ top: 250, paragraphTop: 250, height: 1000, legend, room: room(2) });
-    expect(at.top).toBe(250);
-    expect(at.top + at.maxHeight).toBe(1000 - 40 - 2 - room(2));
-    // 1280 × 720, three stickies and the notes window (room 368): it shrinks to its floor, from the masthead's foot.
-    const tight = dock.dockInStack({ top: 243, paragraphTop: 243, height: 720, legend, room: room(3, 240) });
-    expect(tight.maxHeight).toBeGreaterThanOrEqual(dock.DOCK_STACK_FLOOR_PX);
-    expect(tight.top + tight.maxHeight).toBeLessThanOrEqual(720 - 40 - 2 - room(3, 240) + 1);
-    expect(tight.top).toBeGreaterThanOrEqual(DOCK_TOP_PX);
-  });
-
-  it("never smaller than its floor, which holds its header, its follow-up field and Send; never lower than the legend", () => {
+  it("the explain card keeps a floor in front when the stack is lifted for it: its header, its follow-up field and Send", () => {
     expect(dock.DOCK_STACK_FLOOR_PX).toBeGreaterThanOrEqual(241);
-    const short = dock.dockInStack({ top: 48, paragraphTop: 48, height: 560, legend, room: room(3, 240) });
-    expect(short.top).toBe(DOCK_TOP_PX);
-    expect(short.maxHeight).toBe(dock.DOCK_STACK_FLOOR_PX);
-  });
-
-  it("does not depend on the window's own measured height: shrinking it cannot unshrink it", () => {
-    const a = dock.dockInStack({ top: 243, paragraphTop: 243, height: 720, legend, room: room(3, 240) });
-    const b = dock.dockInStack({ top: 332, paragraphTop: 243, height: 720, legend, room: room(3, 240) });
-    expect(a).toEqual(b);
+    expect(DOCK_TOP_PX).toBe(48);
   });
 });
 
-describe("the box asks the stack for its room (P10-18)", () => {
-  it("explain-box.tsx places the dock through dockInStack with the stack's room, once", () => {
+describe("the box lays itself out in the stack (P11-14, rule 4)", () => {
+  it("explain-box.tsx lays out through stackLayout once, with the explain card's id, and registers it", () => {
     const box = read("src/components/reader/explain-box.tsx");
-    expect(box.match(/dockInStack\(/g)).toHaveLength(1);
-    expect(box).toMatch(/dockInStack\(\{[^}]*room: stackRoomPx/);
-    expect(box).toMatch(/stackRoom\(useWindows\.getState\(\)\.windows\)/);
+    expect(box.match(/stackLayout\(/g)).toHaveLength(1);
+    expect(box).toContain("EXPLAIN_WINDOW_ID");
+    expect(box).toMatch(/useWindows\.getState\(\)\.open\(\{ id: EXPLAIN_WINDOW_ID, kind: "explain"/);
+    expect(box).toMatch(/useWindows\.getState\(\)\.close\(EXPLAIN_WINDOW_ID\)/);
   });
 });

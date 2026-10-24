@@ -3,13 +3,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { PLAIN_DEFAULT_LEVEL, isPlainLevel, type PlainLevel } from "@/lib/papers/plain-levels";
-import {
-  TWO_XL_BREAKPOINT_PX,
-  TWO_XL_COLUMN_PX,
-  TWO_XL_PANEL_PX,
-  XL_BREAKPOINT_PX,
-  XL_CAP_PX,
-} from "@/components/reader/spread";
+import { DIVIDER_PX, LEFT_DEFAULT_PX, MARGIN_DEFAULT_PX } from "@/components/reader/pane-layout";
 
 // S15: the reader's font-size controls (A / A) — one index into a fixed
 // ladder of multipliers, read by globals.css's --reading-scale-driven
@@ -90,44 +84,26 @@ export const useReadingPrefsStore = create<ReadingPrefsState>()(
   ),
 );
 
+/** The paper's column at the 1x A / A step, in the reference width Fit measures against (B P11-01 §2.7): today's 640 px reading column. */
+const FIT_COLUMN_PX = 640;
+
 /**
- * Ruling 21 (round 7, item 7-07): Fit's whole-page zoom multiplier — the
- * factor that scales the page (panel, gap, column, figures, all of it) so
- * it fills ~85% of the viewport, the way a PDF viewer's "fit width" reads
- * on a big monitor. Pure arithmetic, zero DOM access, unit-testable with
- * plain numbers.
+ * Fit's whole-page zoom multiplier — the factor that scales the page (panes, text, figures, all of it) so it fills ~85% of the window,
+ * the way a PDF viewer's "fit width" reads on a big monitor. Pure arithmetic, zero DOM access, unit-testable with plain numbers.
  *
- * The page's 1x width (`pageWidthAt1x`, the previous version's second
- * argument) used to be MEASURED — `reader-layout.tsx`'s `usePageZoom` read
- * `[data-zoom-root]`'s own `offsetWidth` off the live DOM. A7b-01/A7b-02
- * (round 7, closing) found two real ways that measurement lies: it goes
- * stale after "Larger text"/"Smaller text" while Fit is on (nothing
- * re-triggers the read until an actual window resize), and it is not
- * zoom-invariant once the zoomed element is clamped by `width: 100%` rather
- * than its own `max-width` (the xl breakpoint's regime), so a resize while
- * already fitted can strand the zoom near a self-inconsistent value with no
- * fixed point. Ruling 21: COMPUTE it instead, from the same two numbers
- * `page-container.tsx`'s own calc pair uses for the spread's max-width at
- * each breakpoint (`spread.ts`'s `XL_CAP_PX`/`TWO_XL_CAP_PX`, pinned against
- * that file's literals by its own test) times the reader's current
- * `readingScale` step — both already-known values with nothing to measure,
- * so this can never go stale or land on an inconsistent state.
+ * P11-10 (B P11-01 §2.7; ruling §1h.113 (a), D8): the reference width is the three-pane shell's DEFAULT panes at the reader's current
+ * A / A step — the left pane (320), the paper's column (640 × the step), the margin (360) and the two dividers (24): 1,344 at 1x. It
+ * replaces the caps of the retired two-column spread (1072 / 1184 px), against which Fit over-zoomed a layout that now fills the window:
+ * the zoom is 1.0 at 1440 (the panes already fill it), about 1.21 at 1920 and 1.62 at 2560, and starts above 1,581 px. It never reads a
+ * pane's width, so a divider drag cannot change it, and below the shell's 1024 px (the one column) there is nothing for it to do.
  *
- * Replaces `fitScaleIndex` (retired: nothing picks a ladder step for Fit
- * any more — Fit is continuous, not ladder-bound).
+ * History (Ruling 21, round 7, item 7-07): the page's 1x width used to be MEASURED off `[data-zoom-root]`, which went stale after
+ * "Larger/Smaller text" while Fit was on and was not zoom-invariant once the zoomed element was clamped by `width: 100%`. It is
+ * COMPUTED instead, from numbers that are already known, so it can never go stale or land on an inconsistent state.
+ *
+ * Replaces `fitScaleIndex` (retired: nothing picks a ladder step for Fit any more — Fit is continuous, not ladder-bound).
  */
 export function fitZoom(viewportWidth: number, readingScale: number): number {
-  // The page's 1x-zoom width at this A/A step — the same expression
-  // page-container.tsx's max-width calc pair evaluates to: at 2xl the panel
-  // share is fixed and only the reading track scales; at xl the whole cap
-  // scales; below xl Fit has nothing to do (spec) — book layout, not a
-  // divide-by-zero.
-  const pageWidth =
-    viewportWidth >= TWO_XL_BREAKPOINT_PX
-      ? TWO_XL_PANEL_PX + TWO_XL_COLUMN_PX * readingScale
-      : viewportWidth >= XL_BREAKPOINT_PX
-        ? XL_CAP_PX * readingScale
-        : 0;
-  if (pageWidth <= 0) return 1;
-  return Math.min(2.5, Math.max(1, (0.85 * viewportWidth) / pageWidth));
+  const referenceWidth = LEFT_DEFAULT_PX + FIT_COLUMN_PX * readingScale + MARGIN_DEFAULT_PX + 2 * DIVIDER_PX;
+  return Math.min(2.5, Math.max(1, (0.85 * viewportWidth) / referenceWidth));
 }

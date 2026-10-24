@@ -38,7 +38,8 @@ function newHereProblems(code: string): string[] {
   // Re-aimed (P10-08): the Summary's blocks stand in one explain container, `<div data-explain-source="summary" className="contents">` (was a fragment).
   const OPEN = 'data-explain-source="summary" className="contents">';
   const before = here < 0 ? "" : bare(onSummary.slice(onSummary.indexOf(OPEN) + OPEN.length, here));
-  if (before !== "{!hasBody && answers} {report && (") {
+  // Re-aimed (P11-17b, rule 3): every block of the Summary stands under an id of its own (`SummaryBlock`), the selection of a note reports it.
+  if (before !== "{!hasBody && answers} <SummaryBlock id={SUMMARY_ID.newHere}> {report && (") {
     problems.push("something stands between the words that open the Summary and the block, or it is drawn with no report to read it from");
   }
 
@@ -78,7 +79,7 @@ describe("the page's 'What is new here' block (P9-27)", () => {
   });
 
   it("would notice something placed between the opening words and the block", () => {
-    const wrong = source.replace("{report && (\n              <NewHereBlock", "<GlanceBlock paper={paper} now={now} stagger={stagger++} />\n            {report && (\n              <NewHereBlock");
+    const wrong = source.replace("<SummaryBlock id={SUMMARY_ID.newHere}>", "<GlanceBlock paper={paper} now={now} stagger={stagger++} />\n            <SummaryBlock id={SUMMARY_ID.newHere}>");
 
     expect(wrong).not.toBe(source);
     expect(newHereProblems(wrong)).toEqual(

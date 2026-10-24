@@ -116,7 +116,7 @@ export default function RootLayout({
             on /welcome. <main> carries no padding for either — the masthead
             is in flow and sticky, the thumb bar leaves its own spacer. */}
         <Masthead />
-        <main className="flex-1 peer-main-content">{children}</main>
+        <main className="flex-1">{children}</main>
         {/* The AGPL source offer: source and license linked on every page.
             Before <ThumbBar /> so its spacer keeps the footer above the bar. */}
         <SiteFooter />

@@ -104,9 +104,13 @@ describe("selectionTarget — a selection of the Summary or an answer (P10-08)",
     expect(selectionTarget({ anchorParagraphId: "answers", focusParagraphId: "answers", text: "x", source: "answer" })).toMatchObject({ source: "answer", paragraphId: "answers" });
   });
 
-  it("keeps the cap, the non-empty rule and the one-container rule", () => {
+  // RE-AIMED (§1c), P11-47 (ruling §1h.148 rule 1): this test kept the 1,200-character cap for a Summary block and an answer. Inside one block there is no cap now; what is kept is the
+  // cap for a selection across two blocks of the one container (`oneBlock: false`), the non-empty rule and the one-container rule.
+  it("keeps the non-empty rule and the one-container rule, and the cap only across two blocks", () => {
     expect(selectionTarget({ anchorParagraphId: "a", focusParagraphId: "a", text: "x".repeat(MAX_SELECTION_CHARS), source: "summary" })).not.toBeNull();
-    expect(selectionTarget({ anchorParagraphId: "a", focusParagraphId: "a", text: "x".repeat(MAX_SELECTION_CHARS + 1), source: "summary" })).toBeNull();
+    expect(selectionTarget({ anchorParagraphId: "a", focusParagraphId: "a", text: "x".repeat(MAX_SELECTION_CHARS + 1), source: "summary" })).not.toBeNull();
+    expect(selectionTarget({ anchorParagraphId: "a", focusParagraphId: "a", text: "x".repeat(MAX_SELECTION_CHARS), source: "summary", oneBlock: false })).not.toBeNull();
+    expect(selectionTarget({ anchorParagraphId: "a", focusParagraphId: "a", text: "x".repeat(MAX_SELECTION_CHARS + 1), source: "summary", oneBlock: false })).toBeNull();
     expect(selectionTarget({ anchorParagraphId: "a", focusParagraphId: "a", text: " \n ", source: "answer" })).toBeNull();
     expect(selectionTarget({ anchorParagraphId: "a", focusParagraphId: "b", text: "x", source: "summary" })).toBeNull();
     expect(selectionTarget({ anchorParagraphId: null, focusParagraphId: null, text: "x", source: "answer" })).toBeNull();
@@ -188,9 +192,11 @@ describe("readSelection — where a selection may be (P10-08, review 8.4)", () =
     expect(read).toMatchObject({ source: "summary", paragraphId: "block-a" });
   });
 
-  it("keeps the 1,200-character cap and the formula rule for these sources", () => {
-    const { pa } = page();
-    expect(readSelection(selecting(text(pa), text(pa), "x".repeat(MAX_SELECTION_CHARS + 1)))).toBeNull();
+  // RE-AIMED (§1c), P11-47: this test kept the 1,200-character cap for these sources. A selection over it inside one block is a target now; across two blocks it is none (D5). The formula rule is kept.
+  it("keeps the formula rule for these sources, and the cap only across two blocks", () => {
+    const { pa, pb } = page();
+    expect(readSelection(selecting(text(pa), text(pa), "x".repeat(MAX_SELECTION_CHARS + 1)))).toMatchObject({ source: "summary", paragraphId: "block-a" });
+    expect(readSelection(selecting(text(pa), text(pb), "x".repeat(MAX_SELECTION_CHARS + 1), 40))).toBeNull();
     const withFormula = selecting(text(pa));
     withFormula.getRangeAt(0).cloneContents = () => ({ querySelector: (selector: string) => (selector.includes(".katex") ? {} : null) });
     expect(readSelection(withFormula)).toBeNull();

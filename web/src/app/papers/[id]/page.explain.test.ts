@@ -24,7 +24,7 @@ function explainProblems(source: string): string[] {
 
   // P4-01 (§1h.12 (h)): the line also carries `plain={plainForBody}` ("Say it plainly"), before the
   // selection. P10-02: the term's mark is gone from it with the strip that set it — the line as it now reads.
-  has("<PaperBody reading={reading} route={route} plain={plainForBody} onSelect={selectExplain} noteAnchors={noteAnchors} />", "the body no longer reports the reader's selection to the page");
+  has("<PaperBody reading={reading} route={route} plain={plainForBody} onSelect={selectExplain} noteAnchors={noteAnchors} onHighlightClick={(id, rect) => useHighlightStrip.getState().show(id, rect.top)} />", "the body no longer reports the reader's selection to the page");
   has("const [explainTarget, setExplainTarget] = useState<ExplainSelection | null>(null);", "the page no longer holds the selection as state");
   has("sameSelection(current, next) ? current : next", "a repeated selection no longer bails out of a re-render");
 
@@ -116,7 +116,7 @@ describe("the page's Explain this? wiring (P3-02)", () => {
   });
 
   it("would notice the body no longer reporting the selection", () => {
-    expect(explainProblems(source.replace(" onSelect={selectExplain} noteAnchors={noteAnchors} />", " noteAnchors={noteAnchors} />"))).toEqual([
+    expect(explainProblems(source.replace(" onSelect={selectExplain} noteAnchors={noteAnchors}", " noteAnchors={noteAnchors}"))).toEqual([
       "the body no longer reports the reader's selection to the page",
     ]);
   });
@@ -151,7 +151,8 @@ describe("the page's Explain this? wiring (P3-02)", () => {
   });
 
   it("would notice the popover mounted inside the page container", () => {
-    const line = /\s*<SectionLinks headings=\{bodyHeadings\}>\s*<ExplainBox [^>]*\/>\s*<\/SectionLinks>/.exec(source)![0];
+    // P11-14 (re-aimed, §1c; rule 5): the box stands in its error boundary, between the section links and the box (and a comment on it).
+    const line = /\s*<SectionLinks headings=\{bodyHeadings\}>\s*(?:\{\/\*[^]*?\*\/\}\s*)?<ExplainBoundary [^>]*>\s*<ExplainBox [^>]*\/>\s*<\/ExplainBoundary>\s*<\/SectionLinks>/.exec(source)![0];
     const moved = source.replace(line, "").replace("<ReaderToast toast={toast} />", `${line.trim()}\n<ReaderToast toast={toast} />`);
 
     // Moved with its section links, it is inside the container, and the links are no longer after it.

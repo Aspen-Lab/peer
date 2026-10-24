@@ -26,13 +26,12 @@
 //
 // An answer already kept for the passage opens at once with no request, with the thread that followed it. Escape, a press outside the
 // window, or a new selection closes the CARD (640 to 1023 px) and the phone's sheet; a selection that merely goes away (a click in the
-// card collapses it) does not. P7-15: the dock is not closed by a press outside it — closing it gives the page its width back, and a
-// page that reflows on the press moves the word under the pointer before the press has chosen it. P8-02 (BACKLOG-31; the owner: "the
-// AI window should stay open", ruling §1h.41 (b)): nor is it closed by a new selection. Once open it stays, with the page's width kept
-// clear, until Escape or Close — the one thing that gives the width back; P10-08: Escape clears the passage AND closes the window
+// card collapses it) does not. P7-15: the dock is not closed by a press outside it — a press is the reader choosing the next word,
+// not asking to be rid of the window. P8-02 (BACKLOG-31; the owner: "the
+// AI window should stay open", ruling §1h.41 (b)): nor is it closed by a new selection. Once open it stays until Escape or Close;
+// P10-08: Escape clears the passage AND closes the window
 // (there is no empty state to go back to). Pressing "Explain this" on a new selection, or `e`, takes that passage into THE SAME window:
-// the session is replaced in place (never null in between, so `reserveDock`'s properties are not taken off and put on again and the
-// page does not reflow), the previous passage's thread staying the store's, kept for its passage. `e` on the open window with the same
+// the session is replaced in place (never null in between, so the card is not closed and opened again), the previous passage's thread staying the store's, kept for its passage. `e` on the open window with the same
 // passage (or none selected) goes to the input. Nothing here links off the page.
 //
 // P9-03b (ruling §1h.49; the owner, "level with the first line of the SELECTED paragraph"): while the window stands from 1024 px, it
@@ -41,7 +40,15 @@
 // window moves to that paragraph's first line (`placePanel`'s clamp, as for the explained one), with no close and no reflow, its
 // content unchanged; the window stays level with the last selection it followed when that selection goes away (a click in the window
 // collapses it — it must not jump from under the pointer). P10-08: a selection in the Summary or an answer has no paragraph of the
-// paper to be level with, so the window stands at the masthead's foot (`DOCK_TOP_PX`).
+// paper to be level with, so the window stood at the masthead's foot (`DOCK_TOP_PX`): 206 px (the Summary) and 245 px (an answer)
+// above the selection at 1440 x 900, and for a block lower in the Summary a card that no longer spanned the selection. P11-39 (round 2
+// Theme B weighed (a); ruling §1h.138 (b): the owner's P9 words, "level with the first line of the SELECTED paragraph"): the window is
+// level with the first line of the BLOCK the selection is in, as a paragraph's is — a Summary block's or the answers' block's first
+// line (`pageBlockLineTop`, found from the selection's own anchor), before the answer lands and after, held for the floor as a
+// paragraph's is. Where no block can be read, with the selection's own first line. P11-39 step 2 (the manager's, after round 2's walk): the answers' block is one section
+// holding every answer, so "the block's first line" stood 112 to 117 px above a selection in the first answer and further above a later one's; the window is level with
+// the first line of the PARAGRAPH — the block-level element — that holds the selection's start (`selectedParagraph`: an answer's own paragraph or its evidence quote, a
+// Summary block's line, item or quote), and with the block's first line only where no paragraph is found.
 //
 // P3-02b: under the first answer, the thread — the reader's messages under "You", Peer's replies under "Peer" (a verified quote through
 // `EvidenceQuote`, else Peer's label beside the prose) — and, pinned at the box's foot, a one-line input: Enter sends, Shift+Enter is a
@@ -54,9 +61,11 @@
 // again as the page scrolls — P9-50: held between the masthead's foot and the foot legend's top as the dock is, so a grown thread scrolls
 // inside it and never covers either; a bottom sheet on a phone. P8-02 (the owner: "level with the first line of the selected
 // paragraph"): the dock's TOP is level with the first line of the PARAGRAPH of the passage it stands at, held between the masthead's foot
-// and the room its whole height needs above the legend (P9-17, rulings §1h.56 and §1h.57: its measured height, at least 360 px once it
-// holds a passage — lifted until its bottom stands on the screen's bottom when the paragraph is too low for all of it) and measured
-// again as the page scrolls; its height is its content. The selections measured again as the page scrolls are the open window's
+// and the room its floor needs above the legend (P11-26, ruling §1h.122, over P9-17's §1h.56 and §1h.57, which held the band for its
+// whole measured height — at least 360 px once it holds a passage — and so lifted the card as the answer grew: now the top stays level
+// with the paragraph before and after the answer lands, and only a room under the floor, `DOCK_STACK_FLOOR_PX`, lifts it, by just what
+// the floor needs) and measured again as the page scrolls; its height is its content, at most the room from its top to the band's foot,
+// and the answer scrolls inside. The selections measured again as the page scrolls are the open window's
 // passage and the one the window stands level with (`stand`).
 //
 // P10-08 (review 1.1, B P10-01, ruling §1h.80): the after-every-commit layout effect that reads the card's height cannot run away
@@ -70,11 +79,19 @@
 // thread before that message and the message, no copy of it, so the reader count does not grow; the reply is appended as Peer's next
 // turn and replaces nothing. It waits while a request is in flight and at the full thread, as a send does; what the reader was typing
 // stays.
+//
+// P11-47 (round 3's Theme B walk, weighed (f); ruling §1h.148 rule 2, option (a)): a selection over the route's passage cap — 1,200 characters, a triple click on a long paragraph —
+// is offered Explain this like any other, and the first 1,200 characters are explained: the first request carries the passage clipped at the cap on a word boundary
+// (`explainPassage`; the route clips the same way, `clipPassage`, and its cap is unchanged), and the paragraph still rides in the prompt as its context. The card's quote is the
+// passage's opening words with an ellipsis (`previewOf`), as for any passage over 80 characters, so it shows the same words clipped or not. The kept answer, the thread and the
+// window's key stay the whole passage's: only the request is clipped. A reply's request carries the whole passage and the route clips it to the same words.
 
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type Ref } from "react";
 import { hasUserLlmOverride } from "@/lib/feed/ai-tier";
 import { setExplainOffer } from "@/lib/reader/explain-offer";
-import { stackRoom, useWindows } from "@/lib/reader/windows";
+import { EXPLAIN_WINDOW_ID, WINDOW_HEADER_PX, stackFrameIn, stackLayout, useWindows, type FloatingWindow } from "@/lib/reader/windows";
+import { placeInMargin, useMarginStore, type MarginRect } from "@/lib/reader/margin";
+import { isPageBlockId } from "@/lib/notes/anchor-blocks";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import type { ExplainAnswer, ExplainItem } from "@/lib/papers/explain";
 import type { PaperReading } from "@/lib/papers/reading";
@@ -87,6 +104,7 @@ import {
   DOCK_BOTTOM_PX,
   DOCK_MIN_VIEWPORT_PX,
   DOCK_MIN_VISIBLE_PX,
+  DOCK_STACK_FLOOR_PX,
   DOCK_THREAD_FLOOR_PX,
   DOCK_TOP_PX,
   DOCK_WIDTH_PX,
@@ -94,14 +112,15 @@ import {
   MODAL_OVER_PAGE,
   PAGE_ZOOM_ROOT,
   PAGE_ZOOM_VAR,
-  dockInStack,
+  columnBottomPx,
   legendHeightPx,
   newHeightGuard,
-  reserveDock,
   resetHeightGuard,
   settleHeight,
 } from "./explain-dock";
 import { EvidenceQuote } from "./evidence-quote";
+import { isFrontCard } from "./front-escape";
+import { MarginCardHeader } from "./margin-card";
 import { asItems, firstAnswerMessage, keyToSend, postExplain, moreReply, replyPair, sayMoreOf, type ReplyResult } from "./explain-thread";
 import type { ExplainSelection, ExplainSource, SelectionTarget, ViewRect, ViewRects } from "./paper-body";
 
@@ -252,6 +271,9 @@ export interface Place {
   top?: number;
   bottom?: number;
   maxHeight: number;
+  /** P11-14: the stack's row for the dock: a header tall (`height`) while another card is in front; its z in the stack. */
+  height?: number;
+  zIndex?: number;
 }
 
 /** A phone's sheet takes at most this share of the window's height. */
@@ -310,7 +332,37 @@ function styleOf(place: Place): CSSProperties {
     maxHeight: place.maxHeight,
     ...(place.top !== undefined ? { top: place.top } : {}),
     ...(place.bottom !== undefined ? { bottom: place.bottom } : {}),
+    ...(place.height !== undefined ? { height: place.height } : {}),
+    ...(place.zIndex !== undefined ? { zIndex: place.zIndex } : {}),
   };
+}
+
+// ── The stack ──────────────────────────────────────────────────────────
+
+/** What the box reads of the margin's stack: the cards in the order they stand — this one included, registered or not yet (it registers
+ *  after its first commit and is then the front, where it is laid out until then) — where the cascade started, and the margin's rect. */
+interface StackView {
+  windows: readonly FloatingWindow[];
+  origin: number | null;
+  rect: MarginRect | null;
+}
+
+function readStack(): StackView {
+  const { windows, origin } = useWindows.getState();
+  const ordered = [...windows].sort((a, b) => a.order - b.order);
+  const cards: FloatingWindow[] = ordered.some((w) => w.id === EXPLAIN_WINDOW_ID) ? ordered : [...ordered, { id: EXPLAIN_WINDOW_ID, kind: "explain", title: EXPLAIN.title, order: 0 }];
+  return { windows: cards.map((w, i) => ({ ...w, order: i + 1 })), origin, rect: useMarginStore.getState().rect };
+}
+
+/** The box alone in the stack follows its own paragraph, and the origin it pushes to the store is not news to it. */
+const aloneInStack = (windows: readonly FloatingWindow[]) => windows.length === 1 && windows[0].id === EXPLAIN_WINDOW_ID;
+
+/** The same stack as far as laying it out goes: the same cards of the same kinds in the same order. Its own registering changes nothing. */
+const sameCards = (a: readonly FloatingWindow[], b: readonly FloatingWindow[]) => a.length === b.length && a.every((w, i) => w.id === b[i].id && w.kind === b[i].kind);
+
+/** The band the card stands in: the margin's rect, else the masthead's foot down to the legend's strip at the right edge, 360 px wide. */
+function bandOf(rect: MarginRect | null, viewport: Viewport): MarginRect {
+  return rect ?? { left: viewport.width - DOCK_WIDTH_PX, width: DOCK_WIDTH_PX, top: DOCK_TOP_PX, bottom: columnBottomPx(viewport.height, legendOf(viewport)) };
 }
 
 /** P9-20 (BACKLOG-42): the page's Fit zoom, read from the page container (`--page-zoom`, `usePageZoom`'s number mirrored beside the CSS
@@ -329,10 +381,94 @@ function currentViewport(): Viewport {
     : { width: window.innerWidth, height: window.innerHeight, legend: legendHeightPx(pageZoom()) };
 }
 
-/** P10-08: the y the dock's top is level with — the first line of the selected paragraph of the paper (P9-03b); a selection in the
- *  Summary or an answer has no paragraph of the paper, so the window stands at the masthead's foot. */
-function levelTopOf(selection: ExplainSelection, where: ViewRects): number | undefined {
-  return selection.source === undefined || selection.source === "paper" ? where.paragraph?.top : DOCK_TOP_PX;
+/** `NodeFilter.SHOW_TEXT`: a walk over an element's text nodes. */
+const SHOW_TEXT = 4;
+/** How many text nodes of an element are looked at for its first line before it is given up as drawing none: an element hidden whole is not walked to its end. */
+const LOOKED_AT = 64;
+
+/**
+ * P11-39 (ruling §1h.138 (b)): the y of the first line of an element — the top of its first words that draw. The element's box is not its first line: a block's words can
+ * stand well below its box's top (measured on an invented paper: 56 px for "What they found", 16 for the abstract, 8 for "Where it is thin"), so the line is read from the
+ * words, as a range's rects give it — the first text node with words that draws; white space and a node in a hidden or empty box are passed over. Words inside an
+ * `aria-hidden` element are drawn words like any other (`ScrambleText` draws a fresh report's lines inside one — the Summary's skim line among them — and the answers' caret
+ * is part of the first line it stands in), so nothing is skipped for it. Read from the page each time it is asked, so it is where the page has put the element now.
+ * Undefined where no word draws (or the page cannot be walked).
+ */
+function firstLineTopIn(element: Element): number | undefined {
+  if (typeof document.createTreeWalker !== "function" || typeof document.createRange !== "function") return undefined;
+  const walker = document.createTreeWalker(element, SHOW_TEXT);
+  const range = document.createRange();
+  for (let looked = 0; looked < LOOKED_AT; looked += 1) {
+    const words = walker.nextNode() as Text | null;
+    if (words === null) break;
+    if (!/\S/.test(words.data)) continue;
+    range.selectNodeContents(words);
+    const line = Array.from(range.getClientRects()).find((rect) => rect.right - rect.left > 0);
+    if (line) return line.top;
+  }
+  return undefined;
+}
+
+/**
+ * The element a page block's id names: a Summary block (`summary-…`, `paper-words.tsx`'s `SUMMARY_ID`) or the answers' block (`answers-block`) — the ids a selection in them
+ * reports (`placeOf`, `paper-body.tsx`) and the ones the notes' squares and the highlights' marks find them by (`anchor-blocks.ts`'s `isPageBlockId`). Null for any other id
+ * (the bare kind a block with no id of its own is reported under, a paragraph's anchor), for a block that is not on the page, and where there is no document.
+ */
+function pageBlockElement(id: unknown): Element | null {
+  if (!isPageBlockId(id) || typeof document === "undefined" || typeof document.getElementById !== "function") return null;
+  return document.getElementById(id);
+}
+
+/** The first line of a page block (`pageBlockElement`, `firstLineTopIn`): its first drawn words. Undefined where it cannot be read. */
+export function pageBlockLineTop(id: unknown): number | undefined {
+  const block = pageBlockElement(id);
+  return block ? firstLineTopIn(block) : undefined;
+}
+
+/** What is not a line of its own: an inline element, `display: contents` (a wrapper that draws no box), `none`, ruby. Every other display is block-level — `anchor-blocks.ts`'s text model and `block-marks.ts`'s `domTextEnv` count it the same way. */
+const NOT_A_LINE = /^(inline|contents|none|ruby)/;
+
+/** The paragraph of a page block that `from` (the element at a selection's first line) is in: its nearest block-level ancestor inside `block`, `from` itself included; null for none. */
+function paragraphIn(block: Element, from: Element | null): Element | null {
+  for (let element = from; element !== null && element !== block; element = element.parentElement) {
+    if (!NOT_A_LINE.test(getComputedStyle(element).display)) return block.contains(element) ? element : null;
+  }
+  return null;
+}
+
+/** The paragraph each selection started in, found once (below) and kept: the selection's range is not at hand, a click in the card collapses it, and the page scrolls under it. */
+const paragraphOfSelection = new WeakMap<object, Element>();
+
+/**
+ * P11-39 step 2 (the manager's, after round 2; the owner's "level with the first line of the SELECTED paragraph", §1h.49 (a)): the paragraph of `block` that holds the
+ * selection's START — the block-level element at the first line of the selection, found by the page's own hit test at the left edge of the selection's box, a pixel or two
+ * under the top of its first line (`where.bounds`: where the selection stands now, as the box measures it again on every scroll frame). Found the first time it is asked for a
+ * selection and kept for it (`paragraphOfSelection`): the card then follows that paragraph, not whatever comes under the point as the page scrolls. A paragraph kept that has left
+ * the page, a point with nothing of the block at it, and a page that cannot hit-test or read a style are no paragraph: the caller takes the block's first line.
+ */
+function selectedParagraph(selection: ExplainSelection, where: ViewRects, block: Element): Element | null {
+  const kept = paragraphOfSelection.get(selection);
+  if (kept) return kept.isConnected && block.contains(kept) ? kept : null;
+  if (typeof document.elementFromPoint !== "function" || typeof getComputedStyle !== "function") return null;
+  const paragraph = paragraphIn(block, document.elementFromPoint(where.bounds.left + 1, where.bounds.top + 2));
+  if (paragraph) paragraphOfSelection.set(selection, paragraph);
+  return paragraph;
+}
+
+/**
+ * The y the dock's top is level with: the first line of the paragraph the selection starts in. The paper's body (P9-03b): the selected paragraph's first line, the top of the box
+ * of its `<p>` (`where.paragraph`; P11-27: of a heading's or a caption's own element). P11-39 (ruling §1h.138 (b)): a selection in a Summary block or an answer — which has no
+ * paragraph of the paper — the first line of the block's paragraph that holds its start (`selectedParagraph`: an answer's own paragraph or its evidence quote, a Summary block's
+ * line, item or quote; found from the selection's anchor and the page), else of the block itself (`pageBlockLineTop`), as the first step of P11-39 had it. It stood at the masthead's
+ * foot (P10-08, `DOCK_TOP_PX`) and, for the answers, at the one section's first line, 112 to 117 px above a selection in the first answer and further above a later one's.
+ * Undefined where there is none to read: the dock is then level with the selection's own first line (`placePanel`, `levelTop` below).
+ */
+export function levelTopOf(selection: ExplainSelection, where: ViewRects): number | undefined {
+  if (selection.source === undefined || selection.source === "paper") return where.paragraph?.top;
+  const block = pageBlockElement(selection.paragraphId);
+  if (!block) return undefined;
+  const paragraph = selectedParagraph(selection, where, block);
+  return (paragraph ? firstLineTopIn(paragraph) : undefined) ?? firstLineTopIn(block);
 }
 
 /** The same window as far as placing goes: a scroll frame that moved nothing renders nothing. P10-08 (B P10-01's step 2): a legend
@@ -372,10 +508,24 @@ function asAnswer(value: unknown): ExplainAnswer | null {
   };
 }
 
+/** P11-47: the longest passage the Explain request carries — the route's own cap (`EXPLAIN_CAPS.passageChars`, which is server-side and not imported here; `explain-box.long.test.tsx` pins the two equal). */
+export const EXPLAIN_PASSAGE_CHARS = 1200;
+
+/**
+ * P11-47 (ruling §1h.148 rule 2, option (a)): the passage as the explain request carries it — white space collapsed and trimmed, at most `EXPLAIN_PASSAGE_CHARS` characters,
+ * cut at a word boundary (an unbroken run is cut at the cap): exactly what the route makes of it (`clipPassage` in `lib/papers/explain.ts`). Pure.
+ */
+export function explainPassage(passage: string): string {
+  const text = passage.replace(/\s+/g, " ").trim();
+  if (text.length <= EXPLAIN_PASSAGE_CHARS) return text;
+  const space = text.lastIndexOf(" ", EXPLAIN_PASSAGE_CHARS);
+  return (space > 0 ? text.slice(0, space) : text.slice(0, EXPLAIN_PASSAGE_CHARS)).trimEnd();
+}
+
 /**
  * The one request "Explain this?" makes, when the reader clicks: the paper, the
  * passage and where it sits (the first message has no thread, and never asks to
- * search), and the reader's own key only when they have one. An answer,
+ * search), and the reader's own key only when they have one. A passage over the route's cap goes clipped at it (P11-47, `explainPassage`); one within it goes as it is. An answer,
  * "not_in_paper" when the server says the words are not the paper's (422), and
  * "unavailable" for everything else — an outage, a refusal, a gone upload, a reply
  * that is not what was promised.
@@ -390,7 +540,7 @@ export async function requestExplanation(args: {
   try {
     const response = await postExplain(paper.id, {
       paper,
-      passage: selection.passage,
+      passage: selection.passage.length > EXPLAIN_PASSAGE_CHARS ? explainPassage(selection.passage) : selection.passage,
       sectionId,
       paragraphIndex: selection.paragraphIndex,
       thread: [],
@@ -495,6 +645,8 @@ export function ExplainCard({
   source,
   cardRef,
   inputRef,
+  behind,
+  onRaise,
 }: {
   passage: string;
   /** The heading of the section the passage sits in. */
@@ -520,10 +672,42 @@ export function ExplainCard({
   /** The card itself — the one thing that scrolls, and what the sheet's height is read from. */
   cardRef?: Ref<HTMLDivElement>;
   inputRef?: Ref<HTMLTextAreaElement>;
+  /** P11-14: another card of the margin's stack is in front, so only this card's header shows — a header tall, with the big highlighted X at
+   *  the start (O-7), the title and the passage's opening words; a press on it raises the card (`onRaise`). */
+  behind?: boolean;
+  onRaise?: () => void;
 }) {
   const asking = canAsk && status.kind === "answer" ? thread : undefined;
   const full = asking ? threadFull(asking.turns) : false;
   const sendBlocked = (asking?.pending ?? false) || full;
+  if (behind) {
+    // The card is the same element in the same place, a header tall; its body is not drawn (the thread and the draft live in the box's
+    // session, so nothing is lost) and its height is not measured (no `cardRef`) until it is raised.
+    return (
+      <div
+        role="region"
+        aria-label={EXPLAIN.card}
+        data-explain-card=""
+        data-explain-dock=""
+        data-explain-behind=""
+        data-margin-card="explain"
+        tabIndex={-1}
+        style={style}
+        className="fixed z-[70] flex flex-col overflow-hidden border border-r-0 border-border-strong bg-surface outline-none"
+      >
+        <MarginCardHeader
+          title={EXPLAIN.title}
+          headline={previewOf(passage)}
+          closeAt="start"
+          closeLabel={EXPLAIN.close}
+          onRaise={onRaise ?? (() => {})}
+          onClose={onClose}
+          headerAttrs={{ "data-explain-header": "" }}
+          closeAttrs={{ "data-explain-close": "" }}
+        />
+      </div>
+    );
+  }
   return (
     <div
       // P9-20 (BACKLOG-44; A P8-05 §11.8; the owner: "改"): a region, not a dialog. The window is non-modal and never traps the focus (the page
@@ -535,7 +719,7 @@ export function ExplainCard({
       aria-label={EXPLAIN.card}
       data-explain-card=""
       {...(sheet ? { "data-explain-sheet": "" } : {})}
-      {...(dock ? { "data-explain-dock": "" } : {})}
+      {...(dock ? { "data-explain-dock": "", "data-margin-card": "explain" } : {})}
       ref={cardRef}
       // The container can take the focus (never in the tab order), so a script can hand it the focus. It is no control, so it draws no ring.
       tabIndex={-1}
@@ -713,15 +897,30 @@ export interface ExplainBoxProps {
   openRef?: { current: (() => void) | null };
 }
 
-export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cachedTurns, onReply, onSayMore, onResetThread, openRef }: ExplainBoxProps) {
+export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, reading, cachedTurns, onReply, onSayMore, onResetThread, openRef }: ExplainBoxProps) {
+  // P11-42 rule 2 (ruling §1h.139 (b)): a selection in a figure's caption or a section's heading is this box's as a paragraph's is (P11-26 rule 4 kept it out, because the
+  // explain route could not find such a passage; it can now, `locatePassage` with `blocks`): the thumb bar's cell, `e` and the selection's button are offered for it.
+  const target = given;
   const [session, setSession] = useState<Session | null>(null);
   const [viewport, setViewport] = useState<Viewport>(currentViewport);
-  // P10-18: what the other floating windows need below the dock (0 while none stands); a number, so the box re-renders only when the stack's need changes.
-  const [stackRoomPx, setStackRoomPx] = useState(() => stackRoom(useWindows.getState().windows));
+  // P11-14 (rule 4; O-8, BACKLOG-66): the card is one card of the margin's stack. What the box reads of it — the cards that stand, where the
+  // cascade started, the margin's rect — it reads with a store subscription (this box runs on the minimal hook runtime in its tests, which
+  // has no `useSyncExternalStore`). Alone in the stack the box pushes its own origin (below), so a change of the origin alone is not news.
+  const [stack, setStack] = useState<StackView>(readStack);
   useEffect(() => {
-    const read = () => setStackRoomPx(stackRoom(useWindows.getState().windows));
+    const read = () =>
+      setStack((previous) => {
+        const next = readStack();
+        const same = sameCards(previous.windows, next.windows) && previous.rect === next.rect && (previous.origin === next.origin || aloneInStack(next.windows));
+        return same ? previous : next;
+      });
     read();
-    return useWindows.subscribe(read);
+    const stopWindows = useWindows.subscribe(read);
+    const stopMargin = useMarginStore.subscribe(read);
+    return () => {
+      stopWindows();
+      stopMargin();
+    };
   }, []);
   // P9-03b: the last settled selection the reader made — what the window stands level with once the selection itself
   // has gone away (a click in the window collapses it; the window must not jump back from under the pointer).
@@ -741,7 +940,6 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   // would take into it: the reader's current selection, when it is not the passage already there.
   const placed = open?.selection ?? null;
   const offered = target !== null && target.passage !== placed?.passage ? target : null;
-  const anchor = placed ?? target;
   // P9-03b: the selection the window stands level with: the settled one, else the last one it followed (derived while
   // rendering, like `stale`, so the move is in the same paint as the selection).
   if (target !== null && target !== followed) setFollowed(target);
@@ -800,31 +998,10 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
     };
   }, [placed, following]);
 
-  // P7-15 (R7, Q4): while the box stands as the dock the page keeps its width clear (`reserveDock`),
-  // so the text reflows beside it instead of running under it, and gives the width back when the box
-  // closes or the window narrows below the dock's. The reflow moves the words — a selection deep in a
-  // paper lands hundreds of pixels lower in a narrower column — so, before the next paint, the box
-  // reads where the selection's top is, changes the layout, reads it again and scrolls the page by the
-  // difference: the words stay where the reader's eyes are, and the highlight (the browser's own
-  // selection, which the reflow does not touch) and the button follow them.
-  // P10-08 (review 8.5): the page's width is kept clear only while a passage is open — taken when the dock opens, given back when it
-  // closes; on entering a paper nothing is reserved.
+  // From 1024 px the box stands in the margin (P11-14: one card of the margin's stack). Nothing is reserved for it and nothing moves
+  // when it opens or closes: the margin is a track of the reader's shell, so the paper's words stay where they are and there is no
+  // reflow to hold the selection against (P7-15's measure-before / measure-after and its scroll are retired with the reserve).
   const docked = open !== null && viewport.width >= DOCK_MIN_VIEWPORT_PX;
-  const reserved = useRef<(() => void) | null>(null);
-  useLayoutEffect(() => {
-    if (!docked && reserved.current === null) return;
-    const before = anchor?.measure?.()?.bounds.top;
-    if (docked) reserved.current = reserveDock(typeof document === "undefined" ? null : document.documentElement);
-    else {
-      reserved.current?.();
-      reserved.current = null;
-    }
-    const after = before === undefined ? undefined : anchor?.measure?.()?.bounds.top;
-    if (before !== undefined && after !== undefined && Math.abs(after - before) >= 1) window.scrollBy({ top: after - before, behavior: "instant" });
-    // `anchor` is read as it is when `docked` changes: the window's passage when it opens, the reader's current
-    // selection when it closes (P8-02: a new passage no longer closes the dock, so that is Escape, Close, or a narrower window).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [docked]);
   // P9-17 (ruling §1h.57): the window's whole height must be in view, so its height is read after each commit while the dock
   // stands: `scrollHeight` (the content, whatever `max-height` clips) and the border. It does not depend on where the window is,
   // so the move it causes settles at once. After every commit on purpose: whatever changes what the card holds — a reply, a draft,
@@ -859,14 +1036,6 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
     },
     [],
   );
-  // Leaving the paper with the dock open gives the width back — and scrolls nothing: the next page is not this one's.
-  useLayoutEffect(
-    () => () => {
-      reserved.current?.();
-      reserved.current = null;
-    },
-    [],
-  );
   // Once the page has settled after either change, where the selection is gets read again, for the button
   // (after the effect above that follows the selection, so that a new passage's own measure is the one called).
   const dockedBefore = useRef(false);
@@ -892,6 +1061,11 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
       if (typeof document.querySelector === "function" && document.querySelector(MODAL_OVER_PAGE)) return;
+      // P11-17c rule 1: in the margin's stack the card answers only while it is the front one. Behind another card it is a header and the key is
+      // the front card's (`front-escape.ts`: a sticky, the notes window, the figure); one Escape closes one card. Outside the stack (below
+      // 1024 px: the card under the selection, the sheet) it answers as it always did.
+      const { windows } = useWindows.getState();
+      if (windows.some((w) => w.id === EXPLAIN_WINDOW_ID) && !isFrontCard(windows, EXPLAIN_WINDOW_ID)) return;
       event.preventDefault();
       event.stopPropagation();
       setSession(null);
@@ -999,14 +1173,23 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
       );
   };
 
+  // Opening raises (O-8): pressing Explain on a passage, or `e` on the open card, brings it in front of the cards that stand.
+  const raiseSelf = () => {
+    if (useWindows.getState().windows.some((w) => w.id === EXPLAIN_WINDOW_ID)) useWindows.getState().raise(EXPLAIN_WINDOW_ID);
+  };
+
   const openBox = () => {
     // A selection the window does not hold yet: explain it (in the window, when one is open).
     if (next) {
       start(next);
+      raiseSelf();
       return;
     }
     // Already open, with nothing new selected: `e` goes to the input, to ask the next thing.
-    if (open) inputRef.current?.focus();
+    if (open) {
+      raiseSelf();
+      inputRef.current?.focus();
+    }
   };
 
   const draft = open?.draft ?? "";
@@ -1090,24 +1273,60 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   }, [inBar]);
   useEffect(() => () => setExplainOffer(false), []);
 
+  // The selection the dock stands level with, and where that is now: the selection it follows (`stand`) from 1024 px, the passage it
+  // explains otherwise (P9-03b). Read before the early return below, because the stack's origin is pushed from an effect.
+  const levelSelection = open === null ? null : docked && stand ? stand : open.selection;
+  const levelWith = levelSelection === null ? null : whereOf(levelSelection);
+  // P10-08, P11-39: a selection in the Summary or an answer has no paragraph of the paper; the card is then level with the first line of its block (`levelTopOf`).
+  const paragraphTop = levelSelection !== null && levelWith !== null ? levelTopOf(levelSelection, levelWith) : undefined;
+  // R-open (O-6), P11-26 rule 1 (A P11-22 B3; ruling §1h.122): level with the paragraph's first line, held in the margin's band for the card's FLOOR
+  // (`DOCK_STACK_FLOOR_PX`: its header, its follow-up field and a few lines of the answer) and no more. It was held for the card's whole measured
+  // height — 632 px once the answer landed — so the top gave way to the answer: 107 / 227 px above the selection at 1440 x 900, at the margin's
+  // top at 1280 x 720 and 1093 x 614, and the card moved as the answer arrived. The card is now the room from its top to the band's foot and the
+  // answer scrolls inside it, whatever it holds; the top rises only where that room is under the floor, and by just what the floor needs.
+  // `placeInMargin` is the margin's own clamp.
+  const band = bandOf(stack.rect, viewport);
+  const levelTop = docked && levelWith !== null ? placeInMargin(band, paragraphTop ?? levelWith.bounds.top, DOCK_STACK_FLOOR_PX) : null;
+
+  // The card joins the stack while it stands at the margin (from 1024 px) and leaves when it closes; opening it raises it (`start`,
+  // `openBox`). Registered after the first commit — until then the render below lays it out as the front of the stack as it is.
+  useEffect(() => {
+    if (!docked) return;
+    useWindows.getState().open({ id: EXPLAIN_WINDOW_ID, kind: "explain", title: EXPLAIN.title });
+    return () => useWindows.getState().close(EXPLAIN_WINDOW_ID);
+  }, [docked]);
+  // Alone in the stack, the card keeps level with its paragraph as the page scrolls: it pushes where that is as the cascade's origin, and
+  // the moment a second card joins the origin is frozen (`useWindows.follow`). With a list of dependencies: it writes the store only.
+  useEffect(() => {
+    if (levelTop !== null) useWindows.getState().follow(levelTop);
+  }, [levelTop]);
+
   // Nothing is drawn until the reader asks: no empty window on entry, no pill beside a selection (review 8.4, 8.5). The window
   // exists only while a passage is open; the selection buttons and `e` open it (`openBox`, through `openRef`).
-  if (!open) return null;
-  // P9-03b: where the window stands level with: the selection it follows (`stand`), measured as of now.
-  const standAt = stand ? whereOf(stand) : null;
-
-  const placedAt = whereOf(open.selection);
-  // The dock stands level with the selected paragraph; the card and the sheet with the passage they explain.
-  const levelWith = docked && standAt ? standAt : placedAt;
-  const levelSelection = docked && stand ? stand : open.selection;
+  if (!open || levelWith === null) return null;
   // P9-17: the whole window stays in view (ruling §1h.57) — its measured height, and at least what a window that holds a passage
   // needs to show its header, its controls and two lines of the answer (ruling §1h.56).
-  const paragraphTop = levelTopOf(levelSelection, levelWith);
   const basePlace = placePanel(levelWith.bounds, viewport, paragraphTop, Math.max(cardHeight ?? 0, DOCK_THREAD_FLOOR_PX));
-  // P10-18 (X-B1, B9): the dock gives the stickies and the notes window their room — it shrinks (its body scrolls inside), so every other window's header stays reachable.
-  const place: Place = basePlace.kind === "dock" && basePlace.top !== undefined
-    ? { ...basePlace, ...dockInStack({ top: basePlace.top, paragraphTop: paragraphTop ?? levelWith.bounds.top, height: viewport.height, legend: legendOf(viewport), room: stackRoomPx }) }
-    : basePlace;
+  // From 1024 px the card is a row of the margin's stack: its top, its height (the whole room while it is in front — it is as tall as its
+  // content up to that and scrolls inside — or a header's while another card is in front) and its z come from the one stack layout the
+  // stickies and the notes window use, in the margin's own left and width (a page without the shell: the right edge, 360 px).
+  let place: Place = basePlace;
+  let behind = false;
+  if (basePlace.kind === "dock") {
+    const row = stackLayout(stack.windows, stackFrameIn(band, aloneInStack(stack.windows) ? levelTop : stack.origin)).find((one) => one.id === EXPLAIN_WINDOW_ID);
+    if (row) {
+      behind = !row.front;
+      place = {
+        kind: "dock",
+        ...(stack.rect ? { left: stack.rect.left } : { right: 0 }),
+        width: stack.rect ? stack.rect.width : DOCK_WIDTH_PX,
+        top: row.top,
+        maxHeight: row.height,
+        zIndex: row.z,
+        ...(behind ? { height: WINDOW_HEADER_PX } : {}),
+      };
+    }
+  }
   const heading = reading.body[open.selection.sectionIndex]?.heading ?? "";
   const threadView: ThreadView | undefined =
     canAsk && onReply && open.status.kind === "answer"
@@ -1134,9 +1353,11 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
       sheet={place.kind === "sheet"}
       dock={place.kind === "dock"}
       source={open.selection.source}
-      cardRef={cardRef}
+      cardRef={behind ? undefined : cardRef}
       inputRef={inputRef}
       style={styleOf(place)}
+      behind={behind}
+      onRaise={raiseSelf}
     />
   );
 }

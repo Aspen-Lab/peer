@@ -47,6 +47,14 @@ function lineOf(html: string, anchor: string): string {
 
 const escaped = (text: string) => text.replace(/&/g, "&amp;").replace(/'/g, "&#x27;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+// P11-23 rule 4 (BACKLOG-104; ruling §1h.126), RE-AIMED: the summary line is drawn in parts (`SummaryLine`: each separator in a slot of its own, a clipped box),
+// so its words are no longer one contiguous string of the markup. What a reader or a copy gets is the same string (`MAP.summary`'s own): these read it as the
+// text of its box, the tags removed, and where a test looked the string up in the markup it looks the box up (`data-map-summary`).
+const summaryText = (html: string): string => {
+  const at = html.indexOf("data-map-summary");
+  return at < 0 ? "" : html.slice(html.indexOf(">", at) + 1, html.indexOf("<button", at)).replace(/<[^>]*>/g, "");
+};
+
 /** The map's one line that says the gists are Peer's reading (P3-05, O12): a label-face
  *  paragraph holding `PEERS_READING` and nothing else, directly under the heading. */
 const LEGEND = new RegExp(`<p class="[^"]*">${escaped(PEERS_READING)}</p>`, "g");
@@ -245,7 +253,8 @@ describe("ReadingMapView — the mark once per map, under the heading (P3-05, O1
     // Directly under the heading: the next element after the heading's paragraph.
     expect(html.indexOf(legend)).toBe(html.indexOf("</p>", html.indexOf(MAP.heading)) + "</p>".length);
     // P7-14 (R5): the summary line also states the words the rows add up to (3 × 100).
-    expect(html.indexOf(legend)).toBeLessThan(html.indexOf(escaped(MAP.summary(3, 3, 300))));
+    expect(html.indexOf(legend)).toBeLessThan(html.indexOf("data-map-summary"));
+    expect(summaryText(html)).toBe(MAP.summary(3, 3, 300));
   });
 
   it("prints none when no gist renders: no guide, an empty guide, gists for another paper, or for paragraphs with no line", () => {

@@ -38,7 +38,8 @@ function partitionProblems(raw: string): string[] {
   const map = /<ReadingMapView [^>]*\/>/.exec(text)?.[0] ?? "";
   if (!map.includes("map={shownMap}") || !map.includes("route={route}")) problems.push("the map is not handed the overlay and the folded route");
   if (!/hasBody && shownMap \?/.test(text)) problems.push("the map is no longer mounted only where there is a body and a map");
-  const body = /<PaperBody [^>]*\/>/.exec(text)?.[0] ?? "";
+  // Re-aimed (P11-17b, rule 2): the tag now carries an arrow function (`onHighlightClick`), whose `=>` ends a `[^>]*`; it ends at the first `/>`.
+  const body = /<PaperBody [\s\S]*?\/>/.exec(text)?.[0] ?? "";
   if (!body.includes("reading={reading}") || !body.includes("route={route}")) problems.push("the body no longer reads the one route");
   return problems;
 }

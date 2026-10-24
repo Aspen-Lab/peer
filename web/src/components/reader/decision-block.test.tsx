@@ -175,7 +175,8 @@ describe("DecisionBlock — the DOI (P7-12, R6)", () => {
     expect(link).not.toBeNull();
     const [tag, inner] = [link![0], link![1]];
     expect(tag).toContain("font-mono");
-    expect(tag).toContain("xl:wrap-anywhere");
+    // P11-16, RE-AIMED: the wrap rule is the left pane's (from 1024 css px, `lg:`), not the old spread panel's (`xl:`).
+    expect(tag).toContain("lg:wrap-anywhere");
     expect(tag).toContain("[@media(hover:none)]:min-h-11");
     expect(inner).toContain("<svg");
     expect(inner.replace(/<svg\b.*?<\/svg>/g, "")).toBe(`doi:${DOI_VALUE}`);
@@ -312,5 +313,79 @@ describe("DecisionBlock — the notes row (P7-14, R9)", () => {
     );
 
     expect(without).not.toContain("NOTES-ROW");
+  });
+});
+
+// P11-16 (B P11-01 §2.3, §3.2; ruling §1h.113 (a)): the block splits into the commands and the details. The three-pane page puts the commands
+// in the left pane's fixed zone, under the title, and the details — the sentence, the private-PDF line, the DOI — in its scroll zone, after
+// the map; one column puts them one after the other, as the block always was. P11-16 follow-up (ruling §1h.115 item 3): the report's progress
+// is a third part, which the panes put in the fixed zone, directly after the commands, so it stays on screen while a report generates. All
+// three are the one component, `part=` picks the view; with none it is the whole block, in the order every test above reads.
+describe("DecisionBlock — the commands, the details and the progress apart (P11-16)", () => {
+  const DOI_VALUE = "10.1021/jacs.5c15436";
+  const base = {
+    sentences: ["SENTENCE-MARK says what Peer has read."],
+    stage: { label: "Reading", pct: 40 },
+    onRead: NOOP,
+    readLabel: "Read it here",
+    source: { label: "Open on arXiv", url: "https://arxiv.org/abs/2601.00001" },
+    doi: DOI_VALUE,
+    isSaved: false,
+    showAddKey: false,
+    onSave: NOOP,
+    onSkip: NOOP,
+    onCopy: NOOP,
+    onOpen: NOOP,
+    notesAction: createElement("p", null, "NOTES-ROW"),
+    uploadAction: createElement("p", null, "UPLOAD-ROW"),
+    uploadStatus: createElement("p", null, "PRIVATE-PDF-LINE"),
+  };
+  const part = (which: "commands" | "details" | "progress" | undefined) =>
+    renderToStaticMarkup(createElement(DecisionBlock, (which ? { ...base, part: which } : base) as never));
+  const PROGRESS = ['role="progressbar"', "Reading…", 'aria-live="polite"'];
+  const COMMANDS = [">Save<", ">Skip<", ">Copy<", "Read it here", "Open on arXiv", "NOTES-ROW", "UPLOAD-ROW"];
+  const DETAILS = ["SENTENCE-MARK", "PRIVATE-PDF-LINE", `doi:${DOI_VALUE}`];
+
+  it("the commands: the read command, the source, Save · Skip · Copy, the notes and the upload rows — and none of the rest", () => {
+    const html = part("commands");
+    const rows = ["Read it here", "Open on arXiv", ">Save<", ">Skip<", ">Copy<", "NOTES-ROW", "UPLOAD-ROW"].map((needle) => html.indexOf(needle));
+
+    expect(rows.every((index) => index >= 0)).toBe(true);
+    expect([...rows].sort((a, b) => a - b)).toEqual(rows);
+    for (const gone of [...DETAILS, ...PROGRESS, 'aria-label="Reading controls"']) expect(html).not.toContain(gone);
+  });
+
+  it("the details: the sentence, the private-PDF line, the reading controls (one column), the DOI — and no command, no progress", () => {
+    const html = part("details");
+    const after = ["SENTENCE-MARK", "PRIVATE-PDF-LINE", 'aria-label="Fit to screen"', `doi:${DOI_VALUE}`].map((needle) => html.indexOf(needle));
+
+    expect(after.every((index) => index >= 0)).toBe(true);
+    expect([...after].sort((a, b) => a - b)).toEqual(after);
+    for (const gone of [...COMMANDS, ...PROGRESS]) expect(html).not.toContain(gone);
+  });
+
+  it("the progress: the bar and the status line, and nothing else", () => {
+    const html = part("progress");
+
+    for (const kept of PROGRESS) expect(html).toContain(kept);
+    expect(html).toContain('aria-valuenow="40"');
+    for (const gone of [...COMMANDS, ...DETAILS, 'aria-label="Reading controls"']) expect(html).not.toContain(gone);
+  });
+
+  it("the progress part is empty while no stage stands", () => {
+    expect(renderToStaticMarkup(createElement(DecisionBlock, { ...base, stage: null, part: "progress" } as never))).toBe("");
+  });
+
+  it("the three parts say, between them, everything the whole block says — once, in the whole block's order", () => {
+    const whole = part(undefined).replace(/<[^>]*>/g, "");
+    const apart = (part("commands") + part("details") + part("progress")).replace(/<[^>]*>/g, "");
+
+    expect(apart).toBe(whole);
+    expect(whole.split("SENTENCE-MARK").length - 1).toBe(1);
+    expect(whole.split("Reading…").length - 1).toBe(1);
+  });
+
+  it("the commands part is the observer's element: it is a block of its own, as the page's decided-read ref needs", () => {
+    expect(part("commands").startsWith("<div")).toBe(true);
   });
 });

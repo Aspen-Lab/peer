@@ -9,6 +9,7 @@ import { useReadingPrefsStore } from "@/store/reading-prefs";
 import { useReadingQuestionsStore } from "@/store/reading-questions";
 import { useExplainThreadsStore } from "@/store/explain-threads";
 import { usePlainRewritesStore } from "@/store/plain-rewrites";
+import { useReaderPanesStore } from "@/store/reader-panes";
 
 // The zustand stores use `persist({ skipHydration: true })` so they do NOT
 // auto-load localStorage before React hydrates. That keeps the first client
@@ -28,6 +29,7 @@ export function StoreHydrator() {
     useReadingQuestionsStore.persist.rehydrate();
     useExplainThreadsStore.persist.rehydrate();
     usePlainRewritesStore.persist.rehydrate();
+    useReaderPanesStore.persist.rehydrate();
   }, []);
 
   return null;
