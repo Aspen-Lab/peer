@@ -561,10 +561,31 @@ From [`AGENTS.md`](AGENTS.md):
 - **State the current branch** at the start of any session.
 - Open an issue first for anything larger than a bugfix so we can align on fit — especially
   new source adapters and anything touching the pipeline.
+- **Every commit names the person behind it**, including commits written by an AI agent
+  (see "Commit Attribution" in `AGENTS.md`).
+- **Outside contributions need the Contributor License Agreement.** A pull request from
+  anyone other than the two owners can be merged only after its author agrees to
+  [`docs/CLA.md`](docs/CLA.md). That agreement is still a draft, so outside pull requests
+  cannot be merged yet.
 
 ## License
 
-MIT.
+Copyright (C) 2026 Baichuan Wang and Xiaoyang Wang.
+
+Peer is free software: you can redistribute it and/or modify it under the terms of the GNU
+Affero General Public License as published by the Free Software Foundation, version 3 of the
+License only (`AGPL-3.0-only`). The full text is in [`LICENSE`](LICENSE).
+
+Peer is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero
+General Public License for more details.
+
+- Versions of Peer published before the switch to AGPL-3.0-only were released under the MIT
+  License, and copies of those versions remain under it.
+- Third-party code and packages keep their own licenses; see
+  [`docs/THIRD_PARTY_NOTICES.md`](docs/THIRD_PARTY_NOTICES.md).
+- The iOS prototype in the early history of this repository (the `Hermes` / `Peer` Xcode
+  folders) is not part of Peer and is not covered by this license.
 
 ---
 

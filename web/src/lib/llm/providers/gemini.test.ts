@@ -208,7 +208,7 @@ describe("6-02 — the Gemini thinking control is decided per model family", () 
     ).rejects.toThrow();
 
     // The whole chain was walked, so this is a real enumeration and not one id.
-    // Merge note (2026-09-23): the chain is global-only (the founder's call,
+    // Merge note (2026-09-23): the chain is global-only (the owner's call,
     // 2026-09-14) — four global ids, not a regional pair plus a global
     // fallback — so the count is still four and at least three are distinct.
     expect(sentModels()).toHaveLength(4);
