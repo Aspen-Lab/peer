@@ -8,6 +8,7 @@ vi.mock("react", async (importOriginal) => {
 
 import { defaultProfile } from "@/types";
 import { useProfileStore } from "@/store/profile";
+import { questionTermsOf } from "@/lib/preferences/ledger";
 import { useReadingQuestionsStore } from "@/store/reading-questions";
 import { check, enter, focus, key, leave, pick, session, submit, type, type Step, type View } from "@/test-support/question-session";
 
@@ -71,7 +72,7 @@ describe("P12-06 truthful raw acknowledgement with normalized request guards", (
   it("explicit clearing acknowledges empty only in this session and keeps ledger removal", async () => {
     await run([type(Q), submit, type(""), state("Submit", false), submit, state("Submitted", true), enter]);
     expect(useReadingQuestionsStore.getState().byPaper[PAPER]).toBeUndefined();
-    expect(useProfileStore.getState().profile.preferenceLedger?.questions?.[PAPER]).toBeUndefined();
+    expect(questionTermsOf(useProfileStore.getState().profile.preferenceLedger, PAPER)).toEqual([]);
     await run([state("Submit", true)]);
   });
 

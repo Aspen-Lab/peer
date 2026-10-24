@@ -1,3 +1,4 @@
+// P12-06: native disabled assertions re-aimed to guarded, keyboard-reachable aria-disabled.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // P5-04 (S3, §1h.15 (c)): a question deleted with the × button was a finished gesture, like a tick: its words
@@ -87,7 +88,7 @@ describe("emptying the bar takes the question's words out of the ledger when the
       wait(60),
       check((view) => {
         expect(terms().length).toBeGreaterThan(0);
-        expect(view.submit.props.disabled).toBe(false);
+        expect(view.submit.props["aria-disabled"]).toBe(false);
       }),
     ]);
 

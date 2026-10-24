@@ -1,3 +1,4 @@
+// P12-06: native disabled assertions re-aimed to guarded, keyboard-reachable aria-disabled.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -186,12 +187,12 @@ describe("one question, one bar (A3, A4, review 2.5, 2.6)", () => {
     useReadingQuestionsStore.getState().set(PAPER, [A, B, "A third question?"], false, AT);
     useReadingQuestionsStore.getState().settle(PAPER);
     await run([
-      check((view) => expect(view.submit.props.disabled).toBe(false)),
+      check((view) => expect(view.submit.props["aria-disabled"]).toBe(false)),
       submit,
       check((view) => {
         expect(stored().items).toEqual([A]);
         expect(stored().settled).toEqual([A]);
-        expect(view.submit.props.disabled).toBe(true);
+        expect(view.submit.props["aria-disabled"]).toBe(true);
       }),
     ]);
   });
@@ -410,7 +411,7 @@ describe("the suggestions are a dropdown (A5, review 2.7)", () => {
           expect(view.bar.props.value).toBe(PROFILE_Q);
           expect(stored().items).toEqual([PROFILE_Q]);
           expect(stored().settled).toBeUndefined();
-          expect(view.submit.props.disabled).toBe(false);
+          expect(view.submit.props["aria-disabled"]).toBe(false);
           expect(view.listbox).toBeUndefined();
         }),
         type(`${PROFILE_Q} In air?`),
@@ -544,9 +545,9 @@ describe("the pure rules of the dropdown", () => {
 });
 
 describe("Submit (A7, §1h.77 (g))", () => {
-  it("is in the bar at rest, grey and inert with nothing to send", async () => {
-    expect(render()).toMatch(/<button[^>]*disabled=""[^>]*>Submit<\/button>/);
-    await run([check((view) => expect(view.submit.props.disabled).toBe(true))]);
+  it("is in the bar at rest, orange Submit and guarded with nothing to send", async () => {
+    expect(render()).toMatch(/<button[^>]*aria-disabled="true"[^>]*>Submit<\/button>/);
+    await run([check((view) => expect(view.submit.props["aria-disabled"]).toBe(true))]);
   });
 
   it("is enabled by a typed question, inert after the submit until the text changes, and a submit with the same text does nothing", async () => {
@@ -556,29 +557,32 @@ describe("Submit (A7, §1h.77 (g))", () => {
     });
     await run([
       type(A),
-      check((view) => expect(view.submit.props.disabled).toBe(false)),
+      check((view) => expect(view.submit.props["aria-disabled"]).toBe(false)),
       submit,
       check((view) => {
         expect(stored().settled).toEqual([A]);
-        expect(view.submit.props.disabled).toBe(true);
+        expect(view.submit.props["aria-disabled"]).toBe(true);
       }),
       // Enter with the same text, and the (inert) control's handler, change nothing.
       enter,
       submit,
       check(() => expect(writes).toBe(1)),
       type(`${A} `),
-      check((view) => expect(view.submit.props.disabled).toBe(true)),
+      // P12-06: raw whitespace needs acknowledgement, with no duplicate ledger write.
+      check((view) => expect(view.submit.props["aria-disabled"]).toBe(false)),
+      submit,
+      check(() => expect(writes).toBe(1)),
       type(`${A} At 50 C?`),
-      check((view) => expect(view.submit.props.disabled).toBe(false)),
+      check((view) => expect(view.submit.props["aria-disabled"]).toBe(false)),
     ]);
     stop();
   });
 
-  it("is styled grey when inert and inked when live, and keeps its 44-px floor on touch", () => {
+  it("is styled orange Submit before acknowledgement and keeps its 44-px floor on touch", () => {
     const button = /<button[^>]*>Submit<\/button>/.exec(render())![0];
-    expect(button).toMatch(/\bbg-heading\b/);
-    expect(button).toMatch(/disabled:bg-bg-secondary/);
-    expect(button).toMatch(/disabled:text-text-faint/);
+    expect(button).toMatch(/\bbg-action-orange\b/);
+    expect(button).toMatch(/\btext-action-foreground\b/);
+    expect(button).toMatch(/focus-visible:outline-action-focus/);
     expect(button).toMatch(/\[@media\(hover:none\)\]:min-h-11/);
     expect(button).toMatch(/\bannotation\b/);
   });

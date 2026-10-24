@@ -147,6 +147,7 @@ export const ASK = {
   /** P7-13 (R11c): the control, inside the bar, that sends the question — the only thing that
    *  does, besides Enter. */
   submit: "Submit",
+  submitted: "Submitted",
 } as const;
 
 /**
