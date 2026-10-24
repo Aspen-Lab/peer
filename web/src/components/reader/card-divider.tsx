@@ -13,9 +13,9 @@ export interface CardDividerProps {
   max: number;
 }
 
-export function cardDividerStep(value: number, key: string, shift: boolean, min: number, max: number): number | null {
+export function cardDividerStep(value: number, key: string, shift: boolean, min: number, max: number, pairHeight = min + max): number | null {
   const step = shift ? 64 : 16;
-  const next = key === "ArrowUp" ? value - step : key === "ArrowDown" ? value + step : key === "Home" ? min : key === "End" ? max : key === "Enter" ? (min + max) / 2 : null;
+  const next = key === "ArrowUp" ? value - step : key === "ArrowDown" ? value + step : key === "Home" ? min : key === "End" ? max : key === "Enter" ? pairHeight / 2 : null;
   return next === null ? null : Math.min(max, Math.max(min, next));
 }
 
@@ -57,7 +57,7 @@ export function CardDivider({ above, below, top, value, pairHeight, min, max }: 
   };
   const key = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
-    const next = cardDividerStep(value, event.key, event.shiftKey, min, max);
+    const next = cardDividerStep(value, event.key, event.shiftKey, min, max, pairHeight);
     if (next === null) return;
     event.preventDefault();
     commit(next);
