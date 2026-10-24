@@ -7,7 +7,7 @@ import { useWindows } from "@/lib/reader/windows";
 function card(kind: string, headerHeight: number, line: number, compact = false) {
   const header = { getBoundingClientRect: () => ({ height: headerHeight }) };
   const styles = new Map<object, object>();
-  const body = { parentElement: null as unknown, querySelector: () => text };
+  const body = { parentElement: null as unknown, querySelector: () => text, querySelectorAll: () => [] };
   const text = { parentElement: body };
   const caption = {};
   const root = {

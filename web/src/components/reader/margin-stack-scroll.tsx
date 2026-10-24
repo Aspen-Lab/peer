@@ -17,14 +17,16 @@ let users = 0;
 export function measuredCardMinimum(element: HTMLElement): number {
   const header = (element.querySelector("[data-margin-fixed]") ?? element.firstElementChild)?.getBoundingClientRect().height ?? 40;
   const body = element.querySelector<HTMLElement>("[data-margin-body]") ?? element;
-  const text = body.querySelector<HTMLElement>(".font-reading, [contenteditable], textarea") ?? body;
+  const text = body.querySelector<HTMLElement>(".reading-prose, .font-reading, [contenteditable], textarea") ?? body;
   const style = getComputedStyle(text);
   const line = parseFloat(style.lineHeight) || (parseFloat(style.fontSize) || 16) * 1.6;
   if (element.dataset.marginCompact) return Math.ceil(header + line + 16 + 2);
   let padding = 0;
   for (let node: HTMLElement | null = text; node && node !== element; node = node.parentElement) {
     const css = getComputedStyle(node);
-    padding += (parseFloat(css.paddingTop) || 0) + (parseFloat(css.paddingBottom) || 0);
+    padding += (parseFloat(css.paddingTop) || 0) + (parseFloat(css.paddingBottom) || 0)
+      + (parseFloat(css.marginTop) || 0) + (parseFloat(css.marginBottom) || 0)
+      + (parseFloat(css.borderTopWidth) || 0) + (parseFloat(css.borderBottomWidth) || 0);
     if (node === body) break;
   }
   if (element.dataset.marginCard === "figure") {
@@ -34,7 +36,12 @@ export function measuredCardMinimum(element: HTMLElement): number {
     const captionRow = captionStyle ? (parseFloat(captionStyle.lineHeight) || 24) + (parseFloat(captionStyle.paddingTop) || 0) + (parseFloat(captionStyle.paddingBottom) || 0) : 0;
     return Math.ceil(header + zoom + captionRow + 24 + 2);
   }
-  return Math.ceil(header + line + padding + 2);
+  let furniture = 0;
+  for (const toolbar of body.querySelectorAll<HTMLElement>('[role="toolbar"]')) {
+    const css = getComputedStyle(toolbar);
+    furniture += toolbar.getBoundingClientRect().height + (parseFloat(css.marginTop) || 0) + (parseFloat(css.marginBottom) || 0);
+  }
+  return Math.ceil(header + line + padding + furniture + 2);
 }
 
 export function useMarginStack(id: string, element: RefObject<HTMLElement | null>, frame: MarginFrame | null, enabled = true, external?: { windows: readonly FloatingWindow[]; rect: MarginRect | null; bottom: number }) {
@@ -92,9 +99,19 @@ export function useMarginStack(id: string, element: RefObject<HTMLElement | null
     measure();
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(measure);
-    observer.observe(card);
-    for (const child of card.children) observer.observe(child);
-    return () => observer.disconnect();
+    const observe = () => {
+      observer.disconnect();
+      observer.observe(card);
+      for (const child of card.children) observer.observe(child);
+      for (const child of card.querySelectorAll('.reading-prose, .font-reading, [contenteditable], textarea, [role="toolbar"]')) observer.observe(child);
+      measure();
+    };
+    observe();
+    // Editing replaces the reading surface; keep measuring its new row and
+    // the toolbar when its buttons wrap at a new width or reading scale.
+    const mutations = typeof MutationObserver === "undefined" ? null : new MutationObserver(observe);
+    mutations?.observe(card, { childList: true, subtree: true });
+    return () => { observer.disconnect(); mutations?.disconnect(); };
   }, [id, split, target, element]);
 
   const active = windows.find((w) => w.id === id)?.order;
