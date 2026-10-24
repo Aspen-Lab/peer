@@ -277,6 +277,7 @@ function mergeParagraphs(base: string, mine: string, theirs: string): string {
 export function withoutSticky(blocks: readonly Block[], headerId: string): readonly Block[] {
   const span = stickySpan(blocks, headerId);
   if (!span) return blocks;
+  if (blocks[span.start].stickySaved) return blocks;
   if (blocks.slice(span.start + 1, span.end).some((b) => b.text.trim() !== "")) return blocks;
   return [...blocks.slice(0, span.start), ...blocks.slice(span.end)];
 }
@@ -287,6 +288,44 @@ export function withoutSticky(blocks: readonly Block[], headerId: string): reado
  * is taken out of it again (never one that has words by then). Not kept across a reload: a reload shows the note as stored.
  */
 const removedEmpty = new Set<string>();
+const removedStickies = new Set<string>();
+
+function withoutDeletedStickies(blocks: readonly Block[]): Block[] {
+  let kept = blocks.slice();
+  for (const id of removedStickies) {
+    const span = stickySpan(kept, id);
+    if (span) kept.splice(span.start, span.end - span.start);
+    kept = kept.filter((b) => b.stickyId !== id);
+  }
+  return kept;
+}
+
+/** Three-way reconciliation is by stable block id; list structure never becomes plain paragraphs. */
+function mergeStickyContent(base: readonly Block[], mine: readonly Block[], theirs: readonly Block[]): Block[] {
+  const before = new Map(base.map((b) => [b.id, b]));
+  const own = new Map(mine.map((b) => [b.id, b]));
+  const same = (a: Block, b: Block) => JSON.stringify(a) === JSON.stringify(b);
+  const out: Block[] = [];
+  for (const t of theirs) {
+    const b = before.get(t.id);
+    const m = own.get(t.id);
+    if (!m) { if (!b || !same(b, t)) out.push(t); continue; }
+    if (!b || same(b, m)) out.push(t);
+    else if (same(b, t)) out.push(m);
+    else {
+      const metadata = (x: Block) => JSON.stringify({ ...x, text: "", stickyId: undefined });
+      const kept = metadata(m) === metadata(b) ? t : metadata(t) === metadata(b) ? m : t;
+      out.push({ ...kept, text: mergeText(b.text, m.text, t.text) });
+    }
+  }
+  for (let i = 0; i < mine.length; i++) {
+    const m = mine[i];
+    if (before.has(m.id) || out.some((b) => b.id === m.id)) continue;
+    const at = i > 0 ? out.findIndex((b) => b.id === mine[i - 1].id) : -1;
+    out.splice(at + 1, 0, m);
+  }
+  return out;
+}
 
 interface NotesState {
   notes: Record<string, Note>;
@@ -314,6 +353,9 @@ interface NotesState {
    *  into the same blocks meanwhile — the two are merged block by block (`mergeText`) rather than the writer's text
    *  replacing the other's words. */
   setStickyText: (noteId: string, headerId: string, text: string, base?: string) => void;
+  setStickyBlocks: (noteId: string, headerId: string, blocks: readonly Block[], base?: readonly Block[]) => void;
+  saveSticky: (noteId: string, headerId: string) => void;
+  removeSticky: (noteId: string, headerId: string) => void;
   /** P10-09c / P10-29: take a sticky out of the note when it holds no words — its heading and anchor with it, so the paper has
    *  no tag for a note that says nothing. A sticky with words stays. The number is not freed (`stickyCount` stands). */
   removeEmptySticky: (noteId: string, headerId: string) => void;
@@ -432,6 +474,9 @@ export const useNotesStore = create<NotesState>()(
             for (const headerId of removedEmpty) blocks = withoutSticky(blocks, headerId);
             if (blocks !== patch.blocks) patch = { ...patch, blocks: [...blocks] };
           }
+          if (patch.blocks && removedStickies.size > 0) patch = { ...patch, blocks: withoutDeletedStickies(patch.blocks) };
+          if (patch.blocks) patch = { ...patch, blocks: patch.blocks.map((b) =>
+            note.blocks.some((old) => old.id === b.id && old.stickySaved) && !b.stickySaved ? { ...b, stickySaved: true } : b) };
           return { notes: { ...s.notes, [id]: { ...note, ...patch, updatedAt: at } } };
         }),
       remove: (id) =>
@@ -482,6 +527,32 @@ export const useNotesStore = create<NotesState>()(
           if (blocks.length === note.blocks.length && blocks.every((b, i) => b === note.blocks[i])) return s;
           return { notes: { ...s.notes, [noteId]: { ...note, blocks, updatedAt: new Date().toISOString() } } };
         }),
+      setStickyBlocks: (noteId, headerId, content, base) => set((s) => {
+        const note = s.notes[noteId];
+        if (!note || removedStickies.has(headerId)) return s;
+        const span = stickySpan(note.blocks, headerId);
+        if (!span) return s;
+        const theirs = note.blocks.slice(span.start + 1, span.end);
+        const next = base ? mergeStickyContent(base, content, theirs) : content.slice();
+        const owned = next.map((b) => ({ ...b, anchor: undefined, highlight: undefined, stickyId: headerId }));
+        const blocks = [...note.blocks.slice(0, span.start + 1), ...owned, ...note.blocks.slice(span.end)];
+        if (JSON.stringify(blocks) === JSON.stringify(note.blocks)) return s;
+        return { notes: { ...s.notes, [noteId]: { ...note, blocks, updatedAt: new Date().toISOString() } } };
+      }),
+      saveSticky: (noteId, headerId) => set((s) => {
+        const note = s.notes[noteId];
+        if (!note || removedStickies.has(headerId)) return s;
+        return { notes: { ...s.notes, [noteId]: { ...note, blocks: note.blocks.map((b) => b.id === headerId ? { ...b, stickySaved: true } : b), updatedAt: new Date().toISOString() } } };
+      }),
+      removeSticky: (noteId, headerId) => set((s) => {
+        const note = s.notes[noteId];
+        if (!note) return s;
+        const span = stickySpan(note.blocks, headerId);
+        if (!span) return s;
+        removedStickies.add(headerId);
+        const blocks = [...note.blocks.slice(0, span.start), ...note.blocks.slice(span.end)];
+        return { notes: { ...s.notes, [noteId]: { ...note, blocks, updatedAt: new Date().toISOString() } } };
+      }),
       removeEmptySticky: (noteId, headerId) =>
         set((s) => {
           const note = s.notes[noteId];

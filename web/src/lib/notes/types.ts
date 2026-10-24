@@ -78,6 +78,10 @@ export interface Block {
   hint?: string;
   /** A sticky note's heading ("Note N") carries the passage it was taken on. Never exported. */
   anchor?: NoteAnchor;
+  /** Explicit owner for structured sticky content; old text-only notes need no migration. */
+  stickyId?: string;
+  /** An explicitly saved empty sticky is intentional, rather than an abandoned draft. */
+  stickySaved?: boolean;
   /** P11-07: a highlight's words, their place in the paper and their colour; only on a block of type `highlight`. */
   highlight?: HighlightSpot;
 }

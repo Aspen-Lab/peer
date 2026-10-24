@@ -43,13 +43,14 @@ const view = (extra: Partial<Parameters<typeof StickyWindowView>[0]> = {}) => ({
 });
 
 describe("StickyWindowView", () => {
-  it("shows Note N, the passage's first words in quotes (at most 80 characters) and a Close", () => {
+  it("shows Note N, its short quoted passage and explicit Save/Delete (P12 item 7)", () => {
     const html = renderToStaticMarkup(createElement(StickyWindowView, view()));
     expect(html).toContain("Note 2");
     expect(html).toContain("“The finest grains crept fastest");
     expect(html).not.toContain("lowest temperature of the series");
-    expect(html).toMatch(/aria-label="Close note 2"/);
-    expect(html).toContain("×");
+    expect(html).toMatch(/aria-label="Save note 2"/);
+    expect(html).toMatch(/aria-label="Delete note 2"/);
+    expect(html).not.toMatch(/aria-label="Close note 2"/);
   });
 
   it("says in one quiet line that its passage is not in this version of the paper, and has no square to go to it (P10-35)", () => {
@@ -86,14 +87,14 @@ describe("StickyWindowView", () => {
     expect(html.indexOf('aria-label="Go to the passage"')).toBeLessThan(html.indexOf('role="textbox"'));
   });
 
-  it("goes back to the passage from the square, closes from the ×, raises from the header", () => {
+  it("goes back from the square, saves from Save, raises from the header (P12 item 7)", () => {
     const props = view();
     const buttons = elements(StickyWindowView(props)).filter((el) => el.type === "button");
     const byLabel = (needle: string) => buttons.find((b) => String(b.props["aria-label"] ?? "").includes(needle))!;
     (byLabel("Go to the passage").props.onClick as () => void)();
     expect(props.onGo).toHaveBeenCalled();
     const stop = vi.fn();
-    (byLabel("Close note").props.onClick as (e: unknown) => void)({ stopPropagation: stop });
+    (byLabel("Save note").props.onClick as (e: unknown) => void)({ stopPropagation: stop });
     expect(props.onClose).toHaveBeenCalled();
     const header = buttons.find((b) => b.props["data-sticky-header"] !== undefined)!;
     (header.props.onClick as () => void)();

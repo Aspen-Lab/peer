@@ -36,13 +36,13 @@ describe("NoteTag", () => {
 });
 
 describe("AnchorSquare — the blue square", () => {
-  it("is a button labelled Go to the passage, at least 12 px square, blue", () => {
+  it("is a button labelled Go to the passage, one text em square and blue (P12 item 2)", () => {
     expect(SQUARE_PX).toBeGreaterThanOrEqual(12);
     const html = renderToStaticMarkup(createElement(AnchorSquare, { onClick: () => {} }));
     expect(html).toContain('aria-label="Go to the passage"');
     expect(html).toContain('type="button"');
-    expect(html).toContain(`width:${SQUARE_PX}px`);
-    expect(html).toContain(`height:${SQUARE_PX}px`);
+    expect(html).toContain("width:1em");
+    expect(html).toContain("height:1em");
     // P10-46 (§1c, re-aimed): the blue is the `--color-anchor` token now, not a literal `#3b82f6` (globals.css.test.ts pins its value).
     expect(html).toMatch(/background(-color)?:var\(--color-anchor\)/i);
     expect(html).not.toMatch(/#3b82f6/i);

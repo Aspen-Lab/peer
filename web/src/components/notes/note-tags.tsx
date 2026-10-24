@@ -161,7 +161,7 @@ export function AnchorSquare({ onClick }: { onClick: () => void }) {
       title="Go to the passage"
       onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
-      style={{ width: SQUARE_PX, height: SQUARE_PX, backgroundColor: SQUARE_COLOR }}
+      style={{ width: "1em", height: "1em", backgroundColor: SQUARE_COLOR, fontSize: "inherit" }}
       className="inline-block shrink-0 border-0 p-0 align-middle opacity-90 transition-opacity hover:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-heading"
     />
   );
@@ -395,7 +395,7 @@ export function passageIsLost(anchor: NoteAnchor, id: string, lost: Readonly<Rec
  */
 export function AnchorMarker({ lost, n, onGo, onOpen }: { lost: boolean; n: number; onGo: () => void; onOpen?: () => void }) {
   if (!lost) return <AnchorSquare onClick={onGo} />;
-  const square = { width: SQUARE_PX, height: SQUARE_PX };
+  const square = { width: "1em", height: "1em", fontSize: "inherit" };
   return onOpen ? (
     <button
       type="button"
