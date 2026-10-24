@@ -12,13 +12,14 @@
 import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Block, Citable, HighlightColourId, Note } from "@/lib/notes/types";
+import type { Block, Citable, HighlightColourId, Note, PassageSegment } from "@/lib/notes/types";
 import { anchorBlocks, anchorTextOnShow, blockAt, isPageBlockId, parseAnchorId, type AnchorSection } from "@/lib/notes/anchor-blocks";
 import {
   citedKeys,
   highlightBlock,
   type NoteAnchorMap,
   readHighlight,
+  highlightSegments,
   stickyBlocks,
   stickyParagraphs,
   stickyQuote,
@@ -105,6 +106,7 @@ export function anchorHolds(text: string, spot: { start: number; end: number; qu
 
 /** One anchor's repair: where it stood (`was`, to know it is still the stored one) and where its words stand now. */
 export interface AnchorFix {
+  segmentIndex?: number;
   /** The sticky's heading id — or, P11-07, a highlight's block id. */
   id: string;
   was: { paragraphId: string; start: number; end: number };
@@ -159,7 +161,7 @@ export function resolveAnchors(
       }
       const there = paragraphAnchorId(found.section, found.paragraph);
       put(there, { ...spot, start: found.start, end: found.end });
-      fixes.push({ id: spot.id, was: { paragraphId, start, end }, paragraphId: there, start: found.start, end: found.end });
+      fixes.push({ id: spot.id, ...(spot.segmentIndex !== undefined ? { segmentIndex: spot.segmentIndex } : {}), was: { paragraphId, start, end }, paragraphId: there, start: found.start, end: found.end });
     }
   }
   return { map, fixes, lost };
@@ -328,6 +330,8 @@ function mergeStickyContent(base: readonly Block[], mine: readonly Block[], thei
 }
 
 interface NotesState {
+  /** One block/identity, all actual ranges validated before the atomic write. */
+  addHighlightGroup: (noteId: string, at: { paperId: string; segments: readonly (PassageSegment & { paragraphText: string })[]; colour?: HighlightColourId }) => { id: string; created: boolean } | null;
   notes: Record<string, Note>;
   add: (note: Note) => void;
   /** Write the editor's state back. Stamps `updatedAt`. */
@@ -394,14 +398,27 @@ interface NotesState {
  */
 export function repairAnchors(fixes: readonly AnchorFix[]): void {
   if (fixes.length === 0) return;
-  const byId = new Map(fixes.map((fix) => [fix.id, fix]));
+  const byId = new Map(fixes.map((fix) => [`${fix.id}:${fix.segmentIndex ?? "primary"}`, fix]));
   useNotesStore.setState((s) => {
     let changed = false;
     const notes: Record<string, Note> = {};
     for (const [key, note] of Object.entries(s.notes)) {
       let touched = false;
       const blocks = note.blocks.map((b) => {
-        const fix = (b.type === "h3" && b.anchor) || (b.type === "highlight" && b.highlight) ? byId.get(b.id) : undefined;
+        if (b.type === "highlight" && b.highlight?.segments) {
+          let repaired = false;
+          const segments = b.highlight.segments.map((segment, index) => {
+            const fix = byId.get(`${b.id}:${index}`);
+            if (!fix || segment.paragraphId !== fix.was.paragraphId || segment.start !== fix.was.start || segment.end !== fix.was.end) return segment;
+            if (segment.paragraphId === fix.paragraphId && segment.start === fix.start && segment.end === fix.end) return segment;
+            repaired = true;
+            return { ...segment, paragraphId: fix.paragraphId, start: fix.start, end: fix.end };
+          });
+          if (!repaired) return b;
+          touched = true;
+          return { ...b, highlight: { ...b.highlight, ...segments[0], segments } };
+        }
+        const fix = (b.type === "h3" && b.anchor) || (b.type === "highlight" && b.highlight) ? byId.get(`${b.id}:primary`) : undefined;
         if (!fix) return b;
         // P11-07: a highlight is repaired in its own field, by the same rule.
         if (b.type === "highlight" && b.highlight) {
@@ -464,6 +481,32 @@ export const useNotesStore = create<NotesState>()(
   persist(
     (set, get) => ({
       notes: {},
+      addHighlightGroup: (noteId, at) => {
+        const note = get().notes[noteId];
+        if (!note || at.segments.length === 0) return null;
+        const segments: PassageSegment[] = [];
+        for (const segment of at.segments) {
+          const { paragraphText, ...range } = segment;
+          // Exact offsets are evidence, not a hint: never choose another repeated occurrence.
+          if (typeof paragraphText !== "string" || !range.paragraphId || !range.quote.trim() || !anchorHolds(paragraphText, range)
+            || paragraphText.slice(range.start, range.end).replace(/\s+/g, " ").trim() !== range.quote) return null;
+          segments.push(range);
+        }
+        const sameRanges = (b: Block) => {
+          const spot = readHighlight(b);
+          if (!spot || spot.paperId !== at.paperId) return false;
+          const old = highlightSegments(spot);
+          return old.length === segments.length && old.every((s, i) => s.paragraphId === segments[i].paragraphId && s.start === segments[i].start && s.end === segments[i].end && s.quote === segments[i].quote);
+        };
+        const twin = note.blocks.find(sameRanges);
+        if (twin) return { id: twin.id, created: false };
+        const made = highlightBlock({ paperId: at.paperId, ...segments[0], colour: isHighlightColour(at.colour) ? at.colour : DEFAULT_HIGHLIGHT_COLOUR, segments });
+        set((s) => {
+          const current = s.notes[noteId];
+          return current ? { notes: { ...s.notes, [noteId]: { ...current, blocks: [...current.blocks, made], updatedAt: new Date().toISOString() } } } : s;
+        });
+        return { id: made.id, created: true };
+      },
       add: (note) => set((s) => ({ notes: { ...s.notes, [note.id]: note } })),
       save: (id, patch, at = new Date().toISOString()) =>
         set((s) => {

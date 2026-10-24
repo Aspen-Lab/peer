@@ -1,7 +1,7 @@
 // What can be done to a note's blocks, as pure functions — the editor calls
 // these and renders the result, so every rule here is testable without a DOM.
 
-import type { Block, BlockType, HighlightColourId, HighlightSpot, Note, NoteAnchor, Source } from "./types";
+import type { Block, BlockType, HighlightColourId, HighlightSpot, Note, NoteAnchor, PassageSegment, Source } from "./types";
 import { citedIn, plainInline } from "./inline";
 import { authorYear } from "./cite";
 import { DEFAULT_HIGHLIGHT_COLOUR, isHighlightColour } from "./highlight-colours";
@@ -328,6 +328,7 @@ export type NoteAnchorMap = Record<
     colour?: HighlightColourId;
     /** P11-07: only on a highlight's spot: its block's index in the note, so two marks over one range are laid in the order they were made. */
     order?: number;
+    segmentIndex?: number;
   }[]
 >;
 
@@ -339,7 +340,9 @@ export function anchorMap(note: Pick<Note, "blocks"> | undefined, paperId: strin
     if (b.type === "highlight") {
       const spot = readHighlight(b);
       if (spot && spot.paperId === paperId) {
-        (map[spot.paragraphId] ??= []).push({ id: b.id, n: 0, start: spot.start, end: spot.end, quote: spot.quote, colour: spot.colour, order });
+        highlightSegments(spot).forEach((segment, segmentIndex) => {
+          (map[segment.paragraphId] ??= []).push({ id: b.id, n: 0, start: segment.start, end: segment.end, quote: segment.quote, colour: spot.colour, order, ...(spot.segments ? { segmentIndex } : {}) });
+        });
       }
       return;
     }
@@ -365,6 +368,23 @@ export function highlightBlock(spot: HighlightSpot): Block {
   return block("highlight", "", { highlight: spot });
 }
 
+/** Every range of one group, or the unchanged legacy single range. */
+export function highlightSegments(spot: HighlightSpot): readonly PassageSegment[] {
+  return spot.segments ?? [spot];
+}
+
+export function highlightQuote(spot: HighlightSpot): string {
+  return highlightSegments(spot).map((segment) => segment.quote).join("\n\n");
+}
+
+function validSegment(value: unknown): value is PassageSegment {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const s = value as PassageSegment;
+  return typeof s.paragraphId === "string" && s.paragraphId !== "" && typeof s.quote === "string" && s.quote.trim() !== "" && Number.isInteger(s.start) && Number.isInteger(s.end) && s.start >= 0 && s.start < s.end
+    && (s.source === undefined || ["paper", "summary", "answer"].includes(s.source))
+    && (s.kind === undefined || ["paragraph", "heading", "caption"].includes(s.kind));
+}
+
 /**
  * The spot of a highlight block as the paper's body may draw it, or null (invariant I8). Stored data is read with care: a
  * colour that is not in the table (a preset removed later, a hand edit) reads as yellow; a block of another type, or one
@@ -379,6 +399,8 @@ export function readHighlight(b: Pick<Block, "type" | "highlight"> | null | unde
   if (typeof paperId !== "string" || typeof paragraphId !== "string" || typeof quote !== "string" || quote === "") return null;
   if (typeof start !== "number" || typeof end !== "number" || !Number.isInteger(start) || !Number.isInteger(end)) return null;
   if (start < 0 || start >= end) return null;
+  const segments = (stored as HighlightSpot).segments;
+  if (segments !== undefined && (!Array.isArray(segments) || segments.length === 0 || !segments.every(validSegment))) return null;
   if (isHighlightColour(colour)) return stored as HighlightSpot;
-  return { paperId, paragraphId, quote, start, end, colour: DEFAULT_HIGHLIGHT_COLOUR };
+  return { ...(stored as HighlightSpot), paperId, paragraphId, quote, start, end, colour: DEFAULT_HIGHLIGHT_COLOUR };
 }

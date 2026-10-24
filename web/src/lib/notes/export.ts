@@ -21,7 +21,7 @@
 
 import type { Block, HighlightColourId, Note, Source } from "./types";
 import { isWrapping, parseInline } from "./inline";
-import { citedKeys, isList, isTextual, listNumber, readHighlight } from "./blocks";
+import { citedKeys, highlightSegments, isList, isTextual, listNumber, readHighlight } from "./blocks";
 import { authorYear, externalLink } from "./cite";
 import { highlightPaint } from "./highlight-colours";
 
@@ -69,7 +69,8 @@ function isTitleLine(note: Pick<Note, "title" | "blocks">, b: Block, i: number):
 /** P11-08: a highlight's words as an export carries them — the whole passage on one line; null when the block holds no readable ones
  *  (a highlight whose field is missing or malformed, or whose passage is empty, leaves no line). */
 function highlightWords(b: Block): string | null {
-  const words = readHighlight(b)?.quote.replace(/\s+/g, " ").trim();
+  const spot = readHighlight(b);
+  const words = spot ? highlightSegments(spot).map((s) => s.quote.replace(/\s+/g, " ").trim()).join("\n\n") : null;
   return words ? words : null;
 }
 
@@ -112,7 +113,8 @@ function blockMarkdown(b: Block, blocks: Block[], i: number, sources: Record<str
       // P11-08: the notes' own highlight mark around the words. A star, an underscore and an equals sign in the paper's words are
       // written with the dialect's escapes (`\*`, `\_`, `\=`), so the words come back as one mark and a renderer reads them the same.
       const words = highlightWords(b);
-      return words === null ? null : `==${words.replace(/[*_=]/g, "\\$&")}==`;
+      const spot = readHighlight(b);
+      return words === null || !spot ? null : highlightSegments(spot).map((segment) => `${segment.kind === "heading" ? "### " : ""}==${segment.quote.replace(/[*_=]/g, "\\$&")}==`).join("\n\n");
     }
   }
 }
@@ -357,7 +359,10 @@ function bodyHtml(note: Note): string {
         // P11-08: the words in a paragraph of their own, in the highlight's colour.
         const spot = readHighlight(b);
         const words = highlightWords(b);
-        if (spot && words) out.push(`<p><mark style="${highlightStyle(spot.colour)}">${esc(words)}</mark></p>\n`);
+        if (spot && words) for (const segment of highlightSegments(spot)) {
+          const tag = segment.kind === "heading" ? "h3" : "p";
+          out.push(`<${tag}><mark style="${highlightStyle(spot.colour)}">${esc(segment.quote)}</mark></${tag}>\n`);
+        }
         break;
       }
     }

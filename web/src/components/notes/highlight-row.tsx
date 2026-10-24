@@ -18,7 +18,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { KeyboardEvent, Ref } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
-import { readHighlight } from "@/lib/notes/blocks";
+import { highlightQuote, highlightSegments, readHighlight } from "@/lib/notes/blocks";
 import { highlightColour, highlightPaint, isHighlightColour } from "@/lib/notes/highlight-colours";
 import type { Block, BlockType, HighlightColourId, HighlightSpot } from "@/lib/notes/types";
 import { useLostPassages } from "@/store/notes";
@@ -65,7 +65,7 @@ function useHighlightLost(id: string, spot: HighlightSpot | null): boolean {
   const told = useLostPassages((s) => s.lost[id] === true);
   return useSyncExternalStore(
     subscribeToStorage,
-    () => told || (spot !== null && highlightIsLost(id, spot, {}, storedBodyOf(spot.paperId))),
+    () => told || (spot !== null && highlightSegments(spot).some((segment) => highlightIsLost(id, { ...segment, paperId: spot.paperId }, {}, storedBodyOf(spot.paperId)))),
     () => false,
   );
 }
@@ -161,9 +161,9 @@ export function HighlightRowView({ id, spot, lost, open, onGo, onToggle, onPick,
         )}
         <div className="min-w-0 flex-1">
           {spot && paint ? (
-            <p title={spot.quote} className="line-clamp-2 break-words py-[2px] font-reading text-body-sm leading-[1.5]">
+            <p title={highlightQuote(spot)} className="line-clamp-2 break-words py-[2px] font-reading text-body-sm leading-[1.5]">
               <span data-highlight-words="" style={{ backgroundColor: paint.bg, color: paint.ink }} className="box-decoration-clone px-0.5">
-                {spot.quote}
+                {highlightQuote(spot)}
               </span>
             </p>
           ) : (
