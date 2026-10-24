@@ -94,13 +94,13 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-24T21:01:33.971Z
+AS OF        2026-10-24T21:04:15.366Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.210   NEXT RULING §1h.211   NEXT ITEM ID P12-12   NEXT FREE PORT 4211
+LAST RULING  §1h.211   NEXT RULING §1h.212   NEXT ITEM ID P12-13   NEXT FREE PORT 4212
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      07/11 Cs; manager04ownUI/correctedCI and08review;12frozenbundleprepared
-THEN         12clientprovenance/cache wiring after07placementfreeze; verifyremainingandA/readers
+RUNNING      07/11workers;12clientstarts frozen0075591c; manager04 UI/08 review;02/03+05+06landed
+THEN         verifyremainingfinalcombinedsources, independentAand3blindreaders/theme;A0/B0
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
 ```
@@ -195,6 +195,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-24T20:53:54.088Z | parent 9c266ed8 (entry commit follows) | manager | RECOVERY-5-GROUP-RANGE-CONTRACT: Inspected same04/06/07/08 tips after fifth quota interval:04redcases pending at71b2e71a;06focusedtestreturn6b9387ab clean;07f3fdec1d clean;08final4d69e4a1 clean. Resume04/07 only, no duplicate06/08. Read06locator diff preserving allrequests/counts plus newSubmitted assertions; freshcombined02+06 tree1cf763a7e4324c22cb5f2f21c284ef7b8c9d5dd3 dispatched. B10 measured ambiguity warrants explicit bounded occurrence descriptors instead of blind global concatenation. Server11 brief committed; client12 waits07/08 sharedfile freeze. No modelcontext/cap expansion. | evidence: briefs/P12-11.md; B10 report;06return6b9387ab; detached verification e5845a1f; ruling209 | next: Start separateC11server on exactcurrent head; manager06 corrected tests/UI/nativegates and08 diff review;04/07 finishsamework
 
 - 2026-10-24T21:01:33.971Z | parent 1de5f8e1 (entry commit follows) | manager | P12-06-VERIFIED-LANDED: Manager corrected06 freecopy read original/focused diffs;17files198testsx3, ownack6red/dedupe1red, SHA80ee413f4844cc5206609ba27296ea6615e1336ec8adb9f1b632a8e4e788b3d3 restored198green. Native combined02/05/06 job120984640243 tree1cf763a7e4324c22cb5f2f21c284ef7b8c9d5dd3 build0tsc0lint0/144test0;574+3files10705+3tests. Own ordinaryDEV16width/scale cells and5lifecycle checks,0pageerrors,paperwordsunchanged,2px realkeyboardfocus,actualpointerguardnoops andraw/edit/revert states correct. Screenshotread;4292stopped. Rebuiltlineage onto56d14ee7,webquietagainstchecked e5845a1f/exactCI; FF1de5f8e1. No score/productionauthpass. | evidence: P12-06-C-20261024T050000Z.md; verify-06/check-results.json,ui-results.json,manager-phone.png; nativejob120984640243; ruling210 | next: Manager04 correctedownUI/CI and08diffverification;07/11working;12clientbrief on frozenpreparedbundle
+
+- 2026-10-24T21:04:15.366Z | parent b149c86b (entry commit follows) | manager | P12-12-CLIENT-BRIEF: C11 requestedworkerunavailable then separatefallback started at56d14ee7; earlyredb38101a7/fix84d5c445 publishes23tested rangeAPI. Prepared LFdetached12 dependency0075591c from56d14 plus04through09a9ffda,07throughc0b21cc8,08through4d69e4a1,11through84d5c445; treeb96db25eb3344a3be68b90be71228c69b922341e. No branch/productlanding/score. Client12 brief names boundedprefix/canonicaloffset translation/allreply/cache/source paths; excludes07placement and11server edits. Manager verified08paperrawoffsetoverride, so no blindforwarding permitted. | evidence: briefs/P12-12.md; C11explain-range.ts earlyAPI; frozenbundle0075591c; selection-segments.ts rawpaper branch; ruling211 | next: Independent12client on exactbundle while07matrix/11servergates continue; manager04ownUI and08wholeproductionreview/nativeverification
 
 ---
 
