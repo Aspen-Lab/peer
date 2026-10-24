@@ -67,3 +67,40 @@ it("repairs every moved segment separately and keeps loss reports stable for a p
   expect(absent.lost).toEqual([made.id]);
   expect(spot.segments).toHaveLength(3);
 });
+it("retains a newly added group when a full-note editor saves an older snapshot", () => {
+  const store = useNotesStore.getState(), id = store.ensureReadingNote(paper);
+  const snapshot = JSON.parse(JSON.stringify(useNotesStore.getState().notes[id].blocks));
+  const made = store.addHighlightGroup(id, { paperId: paper.id, segments })!;
+  store.save(id, { blocks: snapshot });
+  expect(useNotesStore.getState().notes[id].blocks.filter((b) => b.id === made.id)).toHaveLength(1);
+  expect(Object.keys(anchorMap(useNotesStore.getState().notes[id], paper.id))).toHaveLength(3);
+});
+it("a stale full-note save cannot resurrect a removed group or roll back its atomic colour", () => {
+  const store = useNotesStore.getState(), id = store.ensureReadingNote(paper);
+  const made = store.addHighlightGroup(id, { paperId: paper.id, segments })!;
+  const snapshot = JSON.parse(JSON.stringify(useNotesStore.getState().notes[id].blocks));
+  store.setHighlightColour(id, made.id, "pink");
+  store.save(id, { blocks: snapshot });
+  expect(Object.values(anchorMap(useNotesStore.getState().notes[id], paper.id)).flat().every((s) => s.colour === "pink")).toBe(true);
+});
+it("a stale full-note save cannot resurrect a removed group", () => {
+  const store = useNotesStore.getState(), id = store.ensureReadingNote(paper);
+  const made = store.addHighlightGroup(id, { paperId: paper.id, segments })!;
+  const snapshot = JSON.parse(JSON.stringify(useNotesStore.getState().notes[id].blocks));
+  store.removeHighlight(id, made.id);
+  store.save(id, { blocks: snapshot });
+  expect(useNotesStore.getState().notes[id].blocks.some((b) => b.id === made.id)).toBe(false);
+});
+it("a scoped structured sticky writer preserves group metadata and saved-empty semantics", () => {
+  const store = useNotesStore.getState(), id = store.ensureReadingNote(paper);
+  const group = store.addHighlightGroup(id, { paperId: paper.id, segments })!;
+  const sticky = store.addSticky(id, { paperId: paper.id, paragraphId: segments[0].paragraphId, passage: segments[0].quote, paragraphText: segments[0].paragraphText })!;
+  store.saveSticky(id, sticky.id);
+  store.setStickyBlocks(id, sticky.id, [{ id: "nested", type: "bullet", indent: 2, text: "My words", stickyId: sticky.id }]);
+  expect(useNotesStore.getState().notes[id].blocks.find((b) => b.id === group.id)!.highlight!.segments).toHaveLength(3);
+  expect(useNotesStore.getState().notes[id].blocks.find((b) => b.id === sticky.id)!.stickySaved).toBe(true);
+  store.removeSticky(id, sticky.id);
+  store.setStickyBlocks(id, sticky.id, [{ id: "late", type: "text", text: "late writer" }]);
+  expect(useNotesStore.getState().notes[id].blocks.some((b) => b.id === "late")).toBe(false);
+  expect(useNotesStore.getState().notes[id].blocks.find((b) => b.id === group.id)!.highlight!.segments).toHaveLength(3);
+});
