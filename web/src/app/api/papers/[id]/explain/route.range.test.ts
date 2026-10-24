@@ -20,7 +20,7 @@ const paper = { id: "arxiv:2610.00011", title: "Invented coils", authors: [], so
 const doc: ExtractedDocument = { source: "ar5iv", figureCaptions: [], sections: [{ id: "s1", heading: "1 Setup", canonical: "body", text: `${first}\n\n${second}\n\n${first}\n\n${second}` }] };
 const seg = (paragraphIndex: number, text: string, sectionId = "s1") => ({ sectionId, paragraphIndex, start: 0, end: text.length });
 const valid = { segments: [seg(0, first), seg(1, second)] };
-const generate = vi.fn(async (_args: { userPrompt: string; systemPrompt: string }) => JSON.stringify({ meaning: "Heat accumulates.", here: { text: "It describes the cycle.", evidence: "An invented sentence that is absent from the paper entirely." }, reply: "The cycle transfers heat.", evidence: "An invented sentence that is absent from the paper entirely." }));
+const generate = vi.fn<(args: { userPrompt: string; systemPrompt: string }) => Promise<string>>(async () => JSON.stringify({ meaning: "Heat accumulates.", here: { text: "It describes the cycle.", evidence: "An invented sentence that is absent from the paper entirely." }, reply: "The cycle transfers heat.", evidence: "An invented sentence that is absent from the paper entirely." }));
 const modes = [
   { label: "first", body: {} },
   { label: "followup", body: { thread: [{ role: "peer", text: "Heat accumulates." }, { role: "reader", text: "Why?" }] } },
@@ -132,9 +132,16 @@ describe.each(modes)("P12-11 $label validates before cache and generation", ({ b
     for (const test of cases) {
       explainCache.clear(); generate.mockClear();
       mocks.getFullText.mockResolvedValue({ status: "ok", doc: figDoc, attempts: [] });
+      const crossSection = test.status === 200 && test.segments.some((part) => part.sectionId === "s2");
+      if (crossSection) generate.mockResolvedValueOnce(JSON.stringify({ meaning: "Heat accumulates.", here: { text: "It describes the cycle.", evidence: `${second} ${after}` }, reply: "The cycle transfers heat.", evidence: `${second} ${after}` }));
       const response = await call({ ...body, passage: test.passage, range: { segments: test.segments } });
       expect(response.status, test.passage).toBe(test.status);
       expect(generate).toHaveBeenCalledTimes(test.status === 200 ? 1 : 0);
+      if (crossSection) {
+        const answer = await response.json();
+        expect(body.thread ? answer.turn : answer.answer.here).toMatchObject({ peer: true });
+        expect(JSON.stringify(answer)).not.toContain("evidence");
+      }
     }
     for (const equation of [false, true]) {
       const formulaDoc = { ...doc, equations: [{ latex: "x=y" }], sections: [{ ...doc.sections[0], text: equation ? `${first}\n\n${blockMarker(0)}\n\n${second}` : `Amber ${inlineMath("x=y")} coils store heat.` }] };
