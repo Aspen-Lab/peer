@@ -1,7 +1,7 @@
 import { beforeEach, expect, it } from "vitest";
 import { anchorMap } from "@/lib/notes/blocks";
 import { toMarkdown, toPlainText, toPrintHtml } from "@/lib/notes/export";
-import { useNotesStore } from "./notes";
+import { repairAnchors, resolveAnchors, useNotesStore } from "./notes";
 
 const paper = { id: "range-paper", title: "Invented range paper", authors: [] };
 const segments = [
@@ -45,4 +45,25 @@ it("recolours/removes all segments together after reload while exports keep ever
   }
   store.removeHighlight(id, made.id);
   expect(Object.keys(anchorMap(useNotesStore.getState().notes[id], paper.id))).toHaveLength(0);
+});
+it("compares the entire ordered range, not just its first segment", () => {
+  const store = useNotesStore.getState(), id = store.ensureReadingNote(paper);
+  const a = store.addHighlightGroup(id, { paperId: paper.id, segments })!;
+  const b = store.addHighlightGroup(id, { paperId: paper.id, segments: segments.slice(0, 2) })!;
+  expect(a.id).not.toBe(b.id);
+  expect(useNotesStore.getState().notes[id].blocks.filter((b) => b.type === "highlight")).toHaveLength(2);
+});
+it("repairs every moved segment separately and keeps loss reports stable for a partly lost group", () => {
+  const store = useNotesStore.getState(), id = store.ensureReadingNote(paper);
+  const made = store.addHighlightGroup(id, { paperId: paper.id, segments })!;
+  const before = useNotesStore.getState().notes[id];
+  const result = resolveAnchors([{ paragraphs: ["gone", "gone", "tide pools and tide pools", "Second whole paragraph."] }], anchorMap(before, paper.id));
+  expect(result.fixes).toHaveLength(2);
+  repairAnchors(result.fixes);
+  const spot = useNotesStore.getState().notes[id].blocks.find((b) => b.id === made.id)!.highlight!;
+  expect(spot.paragraphId).toBe("paper-section-0-p2");
+  expect(spot.segments!.map((s) => s.paragraphId)).toEqual(["paper-section-0-p2", "paper-section-0-p3", "summary-method"]);
+  const absent = resolveAnchors([{ paragraphs: ["gone"] }], anchorMap(useNotesStore.getState().notes[id], paper.id));
+  expect(absent.lost).toEqual([made.id]);
+  expect(spot.segments).toHaveLength(3);
 });
