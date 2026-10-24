@@ -94,13 +94,13 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-24T14:49:20.865Z
+AS OF        2026-10-24T14:58:54.492Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.205   NEXT RULING §1h.206   NEXT ITEM ID P12-10   NEXT FREE PORT 4209
+LAST RULING  §1h.206   NEXT RULING §1h.207   NEXT ITEM ID P12-11   NEXT FREE PORT 4210
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      07/08 same workers;04 focused test correction; manager02 ownUI/localgates;06final42d0b469 awaitingmanager
-THEN         02 FFafter ownUI;04 corrected exactcombined gate;06 independent verify; A/readers pending
+RUNNING      07/08 existing Cs and10read-only B; manager02 UI and corrected02+04 verification;06focusedreturnqueued
+THEN         complete02 FF,04 combinedgreen/ownUI,06 locatorreturn/nativegates; B10 rules next scope
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
 ```
@@ -183,6 +183,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-24T10:05:24.191Z | parent 882feed6 (entry commit follows) | manager | P12-07-CONTAINER-SCOPE: Manager read ui/page-container.tsx and direct tests: reader cap760 and lg-only fullbleed would defeat197 laptop853 geometry even when ReaderShell changes. Authorize only reader width/rhythm variant and direct tests to follow actual responsive shell; spread/loading/error and unrelated variants unchanged. Manager fresh02/04 copies selected exact webtrees a084518db97aa6dea45f54189c7ede6a98f8cfb3 /823a6038164418f8c842bcb418ff2069912aa022; native jobs120844160117/120844153831 started, not passed yet. | evidence: web/src/components/ui/page-container.tsx and page-container.test.ts; briefs/P12-07.md; native runs40084371245 and40084369016 | next: 07 implements reader-only container contract; manager02/04 independent tests/mutations/UI and fullgates continue;06/08 unchanged live
 
 - 2026-10-24T14:49:20.865Z | parent 3f4d2ed2 (entry commit follows) | manager | RECOVERY-4-02-GREEN-04-RETURN: Recovered same07/08 workers after usage limit;06final42d0b469 banked, no duplicate. Read native exact jobs:02+landed05 treea084518db97aa6dea45f54189c7ede6a98f8cfb3 passes build0tsc0lint0/144test0,573+3files10698+3tests. Manager02 own671x3,save-empty1red/square2red,hashrestored671green.04+05 tree823a6038164418f8c842bcb418ff2069912aa022 build0tsc0lint0/144,test1:3failed10708passed3skipped; all3 are sticky-note.test legacy cascade expectations omitted from04 reaiminventory. Manager04 own314x3,bodyvisibility andpair mutationsred/hashrestored314green. Return only measured superseded geometry assertions to original04 C; no landing until fullgreen and ownUI. | evidence: native jobs120844160117/120844153831; scratch verify-02/check-results.json andverify-04/check-results.json;06 P12-06-C-20261024T050000Z.md; ruling205 | next: 04 C reaim exact3 superseded sticky geometry scenarios preserving semantics; manager02 localbuild/UI then FF;07/08 existing workerscontinue;06 fresh verification queued
+
+- 2026-10-24T14:58:54.492Z | parent 8ef3d829 (entry commit follows) | manager | P12-10-B-START-06-RETURN: Committed B10 brief8ef3d829 then started independent read-only B at same base after requested worker unavailable; known keyed grouped Explain applicability investigated before hiding or broadening. Read04 correction71b2e71a all3scenarios retained with exact equal visiblegeometry/active checks; managercombined02+04 exacttree00eed38218681ddfdccf24bbb5e43581ab095b8a dispatched.06 own191x3 and acknowledgement6red/dedupe1red hashrestored191green; native run40104313531 build1 with Noto font CSS resolution stack,tsc0lint0/144,test1 only question-box.flow.test legacy singlelabel locator. Return exactlocator to C06, no source workaround.02 ownlocal build/tsc/lint0/144 and real formatting/listSave/reload verified; marker harness selector repair ongoing. | evidence: briefs/P12-10.md; jobs120902718586;04 P12-04-C-20261024T145250Z.md; scratch verify-06/check-results.json,verify-02/local-gates.json andui-results.json; ruling206 | next: B10 bounded producing-path report; C06 focused locator return when slot free; manager02 actual UI/export then FF; corrected combined04 ownchecks/fullgates
 
 ---
 
