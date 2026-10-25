@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:            P12 preparation; both themes consecutive passes 0 / 2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-25T22:53:49.225Z; only writer of this file
-CURRENT ITEM:          R1freshA23ThemeA4222/A24ThemeB4223onlanded82fe23db/web88ac;blind3perthemequeuedafterpacks;formalmediannoneA0B0;clockACTIVE
-NEXT TURN:          A23/A24freshrealpaperwalks/earlyPARTIAL;managerreviewevidencepackprivacy/factualitythen3freshblindreaders/theme/directoraudit;neverinfermissingPASS
+HELD BY:          Codex manager, local desktop chat, 2026-10-25T22:56:31.935Z; only writer of this file
+CURRENT ITEM:          R1A23setupPARTIALbanked/firstinputnext;A24setupinprogress;bothsame82fe23db/web88ac;blindqueued;A0B0;clockACTIVE
+NEXT TURN:          BothAfirst-input/action-familyevidenceandfinitePARTIALs;managerprepareuniformblindbrief;blindonlyaftercompletefactualpacks
 STOPPED BECAUSE:          — active after ninth quota recovery; same15/19workers and copies retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1024,6 +1024,10 @@ Managerwhole-diff/directtests3/ownmeaningfulredmutations+exactrestore/type/lint/
 
 FreshA23/A24startparallel onexactlanded82fe23db51d0bfda1096fd15080fb67ec0eb0582/web88ac,own4222/4223. EachrequestedworkerrejectedUnknownmodel, supported same-generationfallbackusedtruthfully;neitherreusesC/preparatoryAasfreshreviewer. Fourinputs/originalownerattachmentviaUI/allmatrix/legacy/privacy/productionevidencegatesremain. Indexfacts/noscore/noversdict;Aseparate;threefreshblindperthemeafterpacks,thenmanagerdirector. Missing/blockedchecksnotinferredpass. Formalmediansunmeasured,consecutiveA0/B0. CorrectP12-15ledger108transitions/0losseslegibilityonly. No rubric/price/denominator/stoplinechange.
 
+244. **§1h.244 — 2026-10-25: bank first formal-review setup checkpoint without inferring a score — BINDING.**
+
+A23report-only6235a8c0confirmsreleasedappidentity/ownportandexecutionplanbutcontainsnofreshunit/browserresult. Preserveallmissing4input/matrix/guard/privacy/productionevidenceasowed;noscoreorpassruninferred. ContinueoriginalA23/A24workers/copiesafteranyquota interruption. No rubric/price/denominator/stoplinechange.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -1302,7 +1306,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-20 | B_RETURNED — reportonly0b8b97a8/6fad2f9d;boundedcauseconfirmed | singlefloor/observerread-only36cells/3candidates | briefs/P12-20.md;reportlimitsretained | C21measuredminimumimplementation | 16/18shortfail18/18tallpass;97tests;3card189;finalhashsame;Explainunperformed |
 | P12-21 | MANAGER_VERIFIED_LANDED — integrated530918cc;FFda86379d/web88ac | 3singletongeometryfiles/directtests;C07landmarkpreserved | brief21;§1h.242 | freshAinitial/scrolled/longnotes/fullactionmatrix | own124x3/6redmutations/exactrestore/type/lint/native10872+3/3041x3;36actualcells+3headings+68hostoverflow;rawlimitsretained |
 | P12-22 | VERIFIED_LANDED_TRANSPORT — 233c04b0;actualbr85dispatch/nativepassed | codec/workflowonly;publicsamebytes/unchangedgates | briefs/P12-22.md;§1h.237–239 | no furthertransportworkunlessnewfailure | 61639payload;exact88acdecoder/index;native40240875208allgreen |
-| P12-23 | R1_FRESH_A_RUNNING — landed82fe23db/web88ac;own4222 | read-onlyThemeAnotes/export/keyboard/legacy/privatepack | brief23/commonR1/frozenrubric | setupPARTIALthen4inputactualwalk/indexfacts/separateAverdict | freshagent;TeraUnknown→supported6.1fallback;no scoreyet |
+| P12-23 | R1_FRESH_A_RUNNING_SETUP_PARTIAL_BANKED — source6235a8c0;app82fe23db | ThemeAread-onlyown4222/privatepack | brief23/commonR1/frozenrubric | firstoriginalinputactualupload/evidence;finitecheckpoints | exactapp/webconfirmed;no score/unitbrowserresultyet |
 | P12-24 | R1_FRESH_A_RUNNING — landed82fe23db/web88ac;own4223 | read-onlyThemeBfull79guards/layout/actions/figures/controls/privatepack | brief24/commonR1/frozenrubric | setupPARTIALthen4inputactualwalk/productionlimits/indexfacts/separateAverdict | freshagent;TeraUnknown→supported6.1fallback;no scoreyet |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
