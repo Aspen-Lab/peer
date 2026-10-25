@@ -42,10 +42,10 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:            P12 preparation; both themes consecutive passes 0 / 2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-25T07:40:25.604Z; only writer of this file
-CURRENT ITEM:          15keeperC;17captestqueued;manager07/08/12/16verification/native40173488648;Ainventoryready;02/03+04+05+06+11landed
-NEXT TURN:          StartC17disjointtestgap;C15keepercontinue;nativefull+scoped3;managerrestoredtests/type/lint;freshAafterlanding
-STOPPED BECAUSE:          — active after seventh quota recovery; same workers/copies retained
+HELD BY:          Codex manager, local desktop chat, 2026-10-25T12:06:00.570Z; only writer of this file
+CURRENT ITEM:          15keeperC;17captestC;18noteApreflightqueued;combinednativegreen10829+3/2641x3;02/03+04+05+06+11landed;A0B0
+NEXT TURN:          Dispatch independentA18note preflight;C15keeper/C17testcoveragecontinue;managerfinalcombinedverificationthenFF andfreshscoredA/readers
+STOPPED BECAUSE:          — active after eighth quota recovery; sameworkers/copies retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
 OWNER INPUT:      PDF supplied in chat attachment; use original attachment through upload UI only; no private path or text committed
@@ -928,6 +928,10 @@ Manager's newfreshcombinedordinaryDEVactualpointer checks5actionfamilies and3HTT
 
 Manager bottomMarginRectOf420-to999 mutation survives the existing844px-high test because its55% height411.4 never reaches420. Preserve this failed verification rather than claiming eight mutationspassed. C17 owns onlyresponsive-margin.test.ts and owncheckpoint innewdetachedf6e64e03/port4216; add honest tall-bound andindependent55%/legend controls without productedit/newrequirement. C15 retains keeper/layout/shell/reading-position directtests; responsive-margin.test.ts reservedC17. Existing7managerred mutations andbyteidenticalrestorations remainbounded evidence; finalrestored/family3/native gates stillrequired. No scoring orlanding until measured readingplace andallcombinedchecks close.
 
+222. **§1h.222 — 2026-10-25: exact combined native green and bounded parallel note review — BINDING.**
+
+Actual native40173488648 proves d32a9b66 build/type/lint/test0/144warnings,10829passed3skipped and144unchangedfiles2641tests threegreenruns. This covers frozen07/08/12 plus16 onlanded04/11, notdirtyC15 orC17. Existing52of108placefailures stillblock07combinedlanding; greenunitgates are not UIacceptance. Local14focusedrestoredchecks arelabelled14of103selected, no repositorytestskipchange. Resume same15/17 afterquota, preserve currentdirtysource. A18 may independently preflight onlylandednote functionality innewdetachedhead/4217 while15/17progress; it is explicitlyunscored/invented/ordinaryDEV, notthefreshrequiredrealinputroundpack. LaterAafterfinalcombinedlanding andthreefreshblindreaders/theme remainmandatory. No rubric/price/stopline/productionauthorizationchange.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -1199,8 +1203,9 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-13 | B_COMPLETE — pickedreport e6f31cbc;52of108legalpositionlosses;107oldtestspass | responsivekeepercauses/candidates | P12-13-B-20261025T021000Z.md;219 | C15undermeasuredcandidate1 | reportonly;own4212stopped |
 | P12-14 | PREPARATION_COMPLETE — picked897ebc44;79guards;zeroUI/score | P9/P10/P11guardinventory | P12-14-A-20261025T071832Z.md;218,220 | laterfreshlandedheadwalkbrief;blindreadersseparate | reportonly;noPDF/server |
 | P12-15 | IN_PROGRESS — originalresponsiveC innewdetached96775f69/port4214 | durablekeeper/layout/shell/ephemeraltokens | briefs/P12-15.md;219–220 | causalred/fix/mutation/108transitionproof;managerverification | /root/p12_07_implementer;excludesentirebase |
-| P12-16 | MANAGER_REVIEWED_PENDING_NATIVE — exact4testdiff;5ownmutationfamiliesred/restored;native40173488648running | 4legacyCSS/source testfilesONLY | briefs/P12-16.md;219–221 | fullnative+fourfilesx3;integratedlandingafterC15/17 | managerf6e64e03/webd32a9b66;no productchange |
-| P12-17 | QUEUED — cap999 survived manager mutation; tests-only return | responsive-margin.test.ts tall420/55%/legend bound | briefs/P12-17.md;221 | newdetachedf6e64e03;causalred/fix/mutations/tests3 | port4216reserved;no productfailureinferred |
+| P12-16 | MANAGER_VERIFIED_PENDING_COMBINED_LANDING — exactdiff/5mutationfamilies/hashrestore;native10829+3green/2641x3 | 4legacyCSS/source testfilesONLY | briefs/P12-16.md;219–222 | holdwith07dependentcodeuntilC15/17verified | managerf6e64e03/webd32a9b66;run40173488648 |
+| P12-17 | IN_PROGRESS — original04Cresumed afterquota; cap999 testgap | responsive-margin.test.ts tall420/55%/legendbound | briefs/P12-17.md;221 | causalred/fix/mutations/tests3;managerverification | owndetachedf6e64e03/4216reserved |
+| P12-18 | QUEUED — independentboundednoteApreflight,no score | landednoteformatting/list/lifecycle/export/markercells | briefs/P12-18.md;222 | ownfreshlandedcopy4217;inventedrealUI;reportonly | separateAfromC15/17;finalroundswait |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
 | P11-26 | **DONE 21:0xZ 2026-10-20** — on the branch (§1h.128 (b)); was RUNNING (rules 4, 5 added §1h.127 (c)) since 09:1xZ 2026-10-20 — C, `briefs/P11-26.md`, `scratchpad/p11c26/wt`, port 4127: the explain card keeps its top at the selection (B3); a figure in front of the stack is never a thumbnail (X-3) | round 1 Theme B | §1h.122 (b) 1, 4 | C → the manager | — |

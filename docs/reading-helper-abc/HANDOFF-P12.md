@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-25T07:40:25.604Z
+AS OF        2026-10-25T12:06:00.570Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.221   NEXT RULING §1h.222   NEXT ITEM ID P12-18   NEXT FREE PORT 4217
+LAST RULING  §1h.222   NEXT RULING §1h.223   NEXT ITEM ID P12-19   NEXT FREE PORT 4218
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      15keeperC;17captestqueued;manager07/08/12/16verification/native40173488648;Ainventoryready;02/03+04+05+06+11landed
+RUNNING      15keeperC;17captestC;18noteApreflightqueued;combinednativegreen10829+3/2641x3;02/03+04+05+06+11landed;A0B0
 THEN         verifyfinalcombinedsources,independentAand3blindreaders/theme;A0/B0
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -223,6 +223,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-25T07:33:34.023Z | parent 897ebc44 (entry commit follows) | manager | P12-16-START: Newitemrequestedworker unavailable; separate original04C resumed in newprepared p12-16/wt96775f69/port4215reserved for tests-only return. Baseline6namedlegacyfailures separatedfrom3knownWindowsENOENT scans; no productedit. Finalc5675b78 nowreceived, managerverificationpending. | evidence: briefs/P12-16.md;agent/root/p12_04_implementer;checkpointP12-16-C-20261025T072931Z.md | next: managerexact16diff/mutations/nativefull+scoped3;C15continue;actualAwalksafterintegration
 
 - 2026-10-25T07:40:25.604Z | parent 734b5dea (entry commit follows) | manager | P12-16-MANAGER-REVIEW-17-TEST-GAP: Read wholeC16 checkpoint/full4testdiff and wholeC07 productdiff. PickedC16 into managercopyf6e64e03/webd32a9b66, dispatched exactnative40173488648 fullgates plus07/08/12/16 unchangedfamiliesx3; pending. Manager focused6reaims+responsivecases14green, seven ownmutations red: line1,cap1,dock1,padding2,scope1,budget1,figure2, all restoredidentical. Eighth bottomcap999 mutationSURVIVES because existing844highfixture never reaches420cap; restoredidentical. No productfailure inferred. DisjointC17 tests-only brief adds actualtallcap coverage, keepsalloldscenarios; C15 continues separately. ManagerDEV4294stopped by owned session67184; no readingplace orA acceptance. | evidence: briefs/P12-17.md;managerverify-integrated/f6e64e03;outsideGit manager-responsive-check-results.json;native40173488648;C16c5675b78 | next: StartC17disjointtestgap;C15keepercontinue;nativefull+scoped3;managerrestoredtests/type/lint;freshAafterlanding
+
+- 2026-10-25T12:06:00.570Z | parent 52b24713 (entry commit follows) | manager | P12-COMBINED-NATIVE-GREEN-RECOVERY8: After eighth quota interval inspect sameworkers/copies, no duplicate. Actual native40173488648/job121109139539 exactwebd32a9b6624b66b0ede9fc2083129aa13430d3aaa passesbuild0type0lint0errors144warnings/test0;589passed3skippedfiles10829passed3skippedtests. Unchanged144files2641tests pass each of3runs. Managerlocaltype0lint0/144 andfocused14restoredgreen; filtered89notselected explicitly notfulltests. Main source still3251;unlandedcombined lacksC15/17 andactualplacefails, no FFacceptance. Resume originalC15dirtycopy/causalreda2c4c0f4 andC17samecopy afterquota; C17requestedworkerUnknown thenfallback, no live duplicate. Write independentA18 boundednote preflight onlandedhead inparallel, notscoredround/finalpack; laterfreshlandedcombinedA+readers stillrequired. | evidence: native40173488648/job121109139539;verify-integrated/combined-tsc.log,combined-lint.log,responsive-restored.log;briefs/P12-18.md;C15a2c4c0f4;C17brief17 | next: Dispatch independentA18note preflight;C15keeper/C17testcoveragecontinue;managerfinalcombinedverificationthenFF andfreshscoredA/readers
 
 ---
 
