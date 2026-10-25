@@ -46,5 +46,25 @@ describe("P12-09 complementary bottom margin", () => {
     const short = bottomMarginRectOf(853, 480, 1);
     expect(short.bottom - short.top).toBeCloseTo((432 - 48) * .55);
     expect(short.top).toBeGreaterThan(48);
+    const tall = bottomMarginRectOf(390, 1200, 1);
+    expect(tall).toMatchObject({ presentation: "bottom", left: 8, width: 374, top: 732, bottom: 1152 });
+    expect(tall.bottom - tall.top).toBe(420);
+    // The uncapped55% allocation is607.2px here: the absolute cap must bind.
+    expect((1152 - 48) * .55).toBeGreaterThan(420);
+    for (const [viewportHeight, zoom, bottom, height] of [
+      [480, 1, 432, 211.2],
+      [480, 2, 408, 198],
+      [480, 2.5, 394, 190.3],
+      // Straddle the420px branch boundary without copying its min() formula.
+      [859, 1, 811, 419.65],
+      [860, 1, 812, 420],
+      [1200, 2, 1128, 420],
+    ]) {
+      const rect = bottomMarginRectOf(390, viewportHeight, zoom);
+      expect(rect.bottom, `legend clearance at height${viewportHeight}, zoom${zoom}`).toBe(bottom);
+      expect(rect.bottom - rect.top, `height at viewport${viewportHeight}, zoom${zoom}`).toBeCloseTo(height);
+      expect(rect.top).toBeGreaterThan(48);
+      expect(rect.bottom - rect.top).toBeLessThanOrEqual(420);
+    }
   });
 });
