@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-25T22:42:58.195Z
+AS OF        2026-10-25T22:45:25.893Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.239   NEXT RULING §1h.240   NEXT ITEM ID P12-23   NEXT FREE PORT 4222
+LAST RULING  §1h.240   NEXT RULING §1h.241   NEXT ITEM ID P12-24   NEXT FREE PORT 4223
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      final88acnativefull+3041x3green;manageractual1440/85324cellsbanked/390+headingoverflowpending;clockACTIVEverified;scoresnoneA0B0
+RUNNING      final88acnativefull+3041x3green;managerUI390/headingoverflowpending;23AbriefpreparedWAITland;clockACTIVE;A0B0
 THEN         verifyfinalcombinedsources,independentAand3blindreaders/theme;A0/B0
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -259,6 +259,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-25T22:34:56.640Z | parent 2d735d6d (entry commit follows) | manager | P12-22-TRANSPORT-VERIFIED-AND-FINAL-C21: ReadwholeB22report5c5dd276/picked2d735d6d;1131positive26negative/exactindex-tree/YAML+5bash pass,noblockingtransportbug. Managerindependent1031positive14negative, same234517bytepatchSHA76882841dc8d266924cc7052da436c3e5f619f9fa784b1b2ff551276f9cfafe0,br85JSON61639underunchanged65000,externalindexexactweb88ac6122,legacygzip/brroundtrips,YAML+5bash0. Commitcodec+workflowtogetherpreservingallsource/privacy/gatechecks. ReadwholeC21final530918ccreport,pickedNEWmanagerb9fedc9b/web88ac6122;2newtestsLF/EOFcleanup only,producthashunchanged. Managerown124x3/6mutationsandtype/lintapplyproductbytes;nativefinal3stillrequired. OwnfirstUIassertfailed0cells:inactiveordinaryrowpartlyunderstickytoolbarwhileexistinginnereditorretains23pxscroll;rawpreserved. Separatenamedactualwheelupdiagnosticrestoresrow397.34..423.73belowtoolbar386.34,normalclick+keyboardpass;fullscrolled36matrixrunning,noinitial-allgreenclaim. Workeroriginal18talllongcentre failures remainseparatefrom18physicalvisiblelinepasses. NoFF/scoreyet. | evidence: P12-22-B-20261025T224000Z.md;patch-codec-check-results.json;transport-syntax-results.json;P12-21-C-20261025T173300Z.md@530918cc;verify-finalmanager-single-ui/diagnostic/scrolledresults | next: Dispatchfinal88acnativeallgroups21withreviewedbr85;finishownactual36+heading+trueoverflowUI;exactverifiedlineageFFthenfreshA/blind
 
 - 2026-10-25T22:42:58.195Z | parent 233c04b0 (entry commit follows) | manager | P12-HOURLY-CLOCK-RECONFIRMED-FINAL-NATIVE-GREEN: Ownerreconfirmedhourlyresumeinstruction. Purposebuiltviewpeer-p12andactualautomation.tomlconfirmexistingACTIVEheartbeat/every1hour/samechat, durableapprovedrepo/branch/statepaths/stopline/noduplicateworkerprompt, no duplicatecreated/no schedulechange. UsedOpenAIDocsread-onlyguidanceandlocalconfiguration; localapp/computermustrun,clockcannotbypassquota. Finalnative40240875208/job121312173281exactweb88ac6122decodedbr85success:build0type0lint0/144test0;594passed3skipfiles10872passed3skiptests.158files3041tests3green. Readactualdecodedlognumbers,notinferfromjobstatus. ManageractualscrolledUI1440all12cellsbanked;forcedrail853controlprobehit30shiddenlocatorafterNight,oldfailedrunretained. SeparatenewprobeusesactualShowSidebarhover,853all12cellsbanked,390pending;no productedit. FinalA/blindscorestillnone0/2. | evidence: automationpeer-p12view/localtoml;https://learn.chatgpt.com/docs/automations?surface=app;CI40240875208/job121312173281;verify-finalmanager-single-scrolled/railresults | next: Finish390+heading+overflowactualUI;prepareA23/A24briefs;rebuildexactverifiedlineage/FFonlymatch88ac;freshA+3blindreaders/theme
+
+- 2026-10-25T22:45:25.893Z | parent 08041c12 (entry commit follows) | manager | P12-23-A-BRIEF-PREPARED: Preparecommonfresh-AcontractandThemeA23brief,port4222,separatereviewerafterverifiedLANDEDrelease. Frozenrubric/4inputs/19servedzoomcells/8steps/lightdark/allnotesformat/export/lifecycle/keyboard/minimumandprivacy/rawhash/legacyrequirementsnamed. No productionauthworkaround or initial-scrollwaiver;blockedchecksFAIL evidence. Score-freeprivatepack separateAverdict/report;threefreshblindreaderslater. No Aagent/walk/scorestartedbeforeland. | evidence: briefs/P12-R1-A-COMMON.md;briefs/P12-23.md;frozenP12-RUBRIC;P12-14inventory | next: PrepareThemeB24brief;finishmanager390/heading/overflowUI;exactverifiedlineageFFthenreleasefreshA23/A24parallel
 
 ---
 
