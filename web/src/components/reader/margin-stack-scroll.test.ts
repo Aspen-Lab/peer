@@ -35,6 +35,20 @@ it("P12-07/212 exposes one complementary bottom Margin on the same host, removin
 });
 
 describe("actual minimum furniture and stable store registration", () => {
+  it("P12-21 counts inactive heading row typography and its ancestor padding after editing is replaced", () => {
+    const root = card("sticky", 45.34375, 28.6);
+    const body = root.querySelector<HTMLElement>("[data-margin-body]")!;
+    const text = body.querySelector<HTMLElement>("unused")!;
+    const toolbar = { getBoundingClientRect: () => ({ height: 76 }) };
+    const css = getComputedStyle;
+    vi.stubGlobal("getComputedStyle", (node: Element) => node === toolbar as unknown ? { marginTop: "0", marginBottom: "0" } : css(node));
+    // An inactive h2 is .paper-line.cursor-text, not .reading-prose or
+    // .font-reading and no longer contenteditable. Falling back to the body
+    // loses both the actual row and the ancestor padding.
+    body.querySelector = vi.fn((selector: string) => selector.includes("[data-row] .cursor-text") ? text : null) as typeof body.querySelector;
+    body.querySelectorAll = vi.fn(() => [toolbar]) as unknown as typeof body.querySelectorAll;
+    expect(measuredCardMinimum(root)).toBe(176);
+  });
   for (const editable of [false, true]) {
     for (const [toolbarHeight, line] of [[40, 26.4], [76, 26.4], [112, 35.96]]) {
       it(`counts ${editable ? "editable" : "inactive"} note text below a ${toolbarHeight}px wrapped Format toolbar`, () => {
