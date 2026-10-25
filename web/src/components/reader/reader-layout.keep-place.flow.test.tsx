@@ -141,6 +141,7 @@ describe("P12-15 ReaderLayout lifetime with reconstructed text and inputs", () =
   it("keeps the shell/centre ancestor chain mounted in both modes so captured native Ranges never lose their ancestors", () => {
     const page = open(); page.change(false, 350); page.change(true, 646);
     expect(page.ancestry.map((el) => el?.type)).toEqual([ReaderShell, ReaderShell, ReaderShell]);
+    expect(page.ancestry.map((el) => el?.key)).toEqual([null, null, null]);
     page.stop();
   });
   it.each([2, 32, 59])("keeps the logical glyph at long anchor%i across side/one-column/side and releases observers", (index) => {
