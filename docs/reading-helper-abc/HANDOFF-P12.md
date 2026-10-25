@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-25T17:14:55.158Z
+AS OF        2026-10-25T17:17:37.413Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.228   NEXT RULING §1h.229   NEXT ITEM ID P12-21   NEXT FREE PORT 4220
+LAST RULING  §1h.229   NEXT RULING §1h.230   NEXT ITEM ID P12-21   NEXT FREE PORT 4220
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      15finalselection/lifecycleC;19keyboardC/standalonegeometryblocked;20Bqueued;18boundedreportpicked;manager569857ac4HTTPpass;A0B0
+RUNNING      15finalstablecolumnC;19keyboardC/managerreview;20Bindependentactualminimum;18done;17verifiedheld;A0B0
 THEN         verifyfinalcombinedsources,independentAand3blindreaders/theme;A0/B0
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -237,6 +237,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-25T17:13:57.673Z | parent 145ae869 (entry commit follows) | manager | P12-18-DELIVERED-15-CORRECTED-UI-20-BRIEF-RECOVERY9: After ninthquota recovery reuse same15/19workers/copies, no duplicates. ReadwholeA18final21b5d220 andpickedreport-only4ab368cc/145ae869:actualformat/list/lifecycle/export routes,20geometrycells/60markers+3scrolled,30toolbarhits,2ownmutations/restored8green; keyboardroute remainsC19, no score/fullguard/private/production claim. ManagerreadwholeC15correctedc447diff/tests andpickedba805632/569857ac/web121f7fe6. OwnfreshactualUI6familiesincludingpost3resizesgroupedfollowup now4HTTP200samecanonicalrange,0errors/unchangedwords. SourcecheckflagsinitialnarrowCOLUMN_SELECTOR lifecycle/zero-rect risk; C15actual20new-selectionprobespending, no failure inferred. C19keyboard2ff18a08 early13tests/type0/UIpartial, butsingle1440x480sticky toolbarblocksrealrowclick; no out-of-scope fix. Write independentB20shortsinglecardcausalbrief on569857ac/4219;3candidatesbeforegeometryC. Own4294session84761stopped. Correctevidence bookkeeping: nextUIrun overwrote old8c69fullJSON beforecopy; wronglylabelledpassJSON renamedcorrectedC447, earlierfailurepreservedasexplicitexec-derivedsummary andindependentworkerrawcomparator, never fabricatedrawcapture. | evidence: P12-18-A-20261025T120732Z.md;briefs/P12-20.md;verify-integrated/correctedC447-resize-reply-results.json,early8c69-resize-reply-summary.json,place-early8c69.json;worker15 h/group-diagnose.json;C19ui-short-hit-failure.json | next: SpawnB20independentstandalonemin/placementinvestigation;C15finalnewselection/108/range/fullgates;C19keyboardfinishwithoutgeometryedit;managerexactfinalverification/FFthenfreshrounds
 
 - 2026-10-25T17:14:55.158Z | parent ab6536ff (entry commit follows) | manager | P12-ATTRIBUTION-CORRECTION: Manager typedonewrongdigitin explicit author email ofab6536ff; displayedauthornamepeter14531453 anddirectingowner remainPeter. Addonepublicmailmapalias tocanonicalowneremail, verifygitcheck-mailmap; neverrewrite/amendhistory. CorrectsubsequentexplicitcommandsandincludeownerCo-authored-by onthiscorrection. No application/test/credential/private-data change. B20brief alreadycommitted, dispatch follows push. | evidence: .mailmap;gitshowab6536ffauthor;gitcheck-mailmap;HANDOFF-P12entry | next: PushcanonicalattributionrecordandB20brief;spawnindependentB20;continue15/19andmanagerverification
+
+- 2026-10-25T17:17:37.413Z | parent 9286fa20 (entry commit follows) | manager | P12-20-B-START-19-REVIEW-SCOPE: RequestedworkerUnknown thenseparatefreshsupportedfallbackB20startedinown569857accopy4219, notreusedA/C; readwholebrief/rules, actualsource trace/freshuploadpreparing. C19exactrectcorrectswhollyhiddenclaim: single1440x480card280..440h160/header45.34/toolbar76; afterendscroll26.39line has15pxoverlap/11.39pxexposed,centrecovered;853alsohitblocked. ManagerreadwholeC19productiondiffthrough23e55019 (3authorizedfiles only, scopedephemeralselection/focus/AltF10, oldTab/Escape preserved). Addnativegroup19 unchangednote-editor/note-toolbar/wysiwyg-familytests soallthree productfamilies repeat3 withfinalcombinedgates, nottimeout/assertion change. C15corrected108andpostresizeHTTP/Rangepassreported, initialnarrow target/listener regression causalredbankedaac3b57f; finalownedmarkupcorrectionongoing. No acceptance/score. | evidence: briefs/P12-20.md;agent/root/p12_20_single_sticky_b;C19ui-short-rects.json,ui-853-short-failure.json;C15aac3b57f;.github/p12-repeat-tests.mjs | next: Managerpick/verifyC19frozenkeyboardreturn;C15finalstablecolumn;B20causal3candidates;nativefinalgroups07/08/12/16/19/place thenFF/freshA
 
 ---
 

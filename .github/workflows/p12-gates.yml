@@ -29,7 +29,7 @@ on:
         type: string
         required: false
       repeat_groups:
-        description: Optional approved test groups (07,08,12,16,place), unchanged tests three times
+        description: Optional approved test groups (07,08,12,16,19,place), unchanged tests three times
         type: string
         required: false
 

@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:            P12 preparation; both themes consecutive passes 0 / 2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-25T17:14:55.158Z; only writer of this file
-CURRENT ITEM:          15finalselection/lifecycleC;19keyboardC/standalonegeometryblocked;20Bqueued;18boundedreportpicked;manager569857ac4HTTPpass;A0B0
-NEXT TURN:          PushcanonicalattributionrecordandB20brief;spawnindependentB20;continue15/19andmanagerverification
+HELD BY:          Codex manager, local desktop chat, 2026-10-25T17:17:37.413Z; only writer of this file
+CURRENT ITEM:          15finalstablecolumnC;19keyboardC/managerreview;20Bindependentactualminimum;18done;17verifiedheld;A0B0
+NEXT TURN:          Managerpick/verifyC19frozenkeyboardreturn;C15finalstablecolumn;B20causal3candidates;nativefinalgroups07/08/12/16/19/place thenFF/freshA
 STOPPED BECAUSE:          — active after ninth quota recovery; same15/19workers and copies retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -962,6 +962,10 @@ CorrectedC15c447 nowpasses manageractualpostresize4HTTP200, butinitialnarrowsele
 
 Doccommitab6536ffwasdirectedbyPeterandcorrectlynamedpeter14531453, butmanager'sexplicitcommandmistypedoneemaildigit. Public.mailmap maps onlythattypo tocanonical274981268+peter14531453@users.noreply.github.com; subsequentauthorcommandsusecanonicaladdress. Thisrecordsactualownershipwithoutforbiddenamend/rebase/historyrewrite. No productscope,dependency,privatecontent,credential orscorechange. ThiscorrectioncommitalsonamesPeterinCo-authored-by andendswithactualmodeltrailer.
 
+229. **§1h.229 — 2026-10-25: exact standalone overlap and complete keyboard test repetition — BINDING.**
+
+C19'sfirstwhollyhiddenwordingiscoarse: actualend-scroll exposes11.39pxof26.39pxline, with15pxunderthe76pxtoolbar andcentreintercepted; stillfailswholeusableline. Keepthatcorrection,1440/853failures andactualscrollgeometry forindependentB20, notanassumedfloorfix. B20isnewseparateinvestigator afterrequestedworkerunavailable, notanimplementer/reviewer reused. Nativegroup19mayincludeonlyexisting/newtrackednote-editor/note-toolbar/wysiwyg-fieldtests, unchangedassertions/timeouts, tocoverthethreeC19productfamilies3times. Managerreadsourcebutfinaltest/mutation/UI/fullgatesbeforelanding remainrequired. No stoppedline/denominator/ownerdecisionchange.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -1237,7 +1241,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-17 | MANAGER_VERIFIED_PENDING_FF — own5x3/2mutations/restored;earlycombinednative10843+3/2739x3green | responsive-margin.test.ts only;20additions/5casesretained | briefs/P12-17.md;221–226 | landonlywithfinalverified07/15combination | manager4c2c7b1a->78757bbb;worker998c5c84;no productedit |
 | P12-18 | BOUNDED_PREFLIGHT_COMPLETE — picked145ae869;20cells/60+3markers/actualexports/2mutations | inventedno-keynoteformat/list/lifecycle/export/marker;keyboardgapidentified | briefs/P12-18.md;222–227 | C19keyboardandB20geometry;laterfreshrealinputAwalk | report21b5d220;no score;own4217stopped |
 | P12-19 | EARLY_IMPLEMENTED_PENDING_REVIEW — source2ff18a08;13newtests/type0/UIpartial;shortsinglecardblocked | note-editor/note-toolbar/wysiwyg+directtests;no stickygeometry | briefs/P12-19.md;224–227 | finishkeyboardboundedproof/mutations/families;B20separategeometry | owndetached72945f32/4218;ui-short-hit-failure.json |
-| P12-20 | QUEUED — independentshortsingle-stickytargetinvestigation | read-onlyactualminimum/placement/toolbarrow/3candidates | briefs/P12-20.md;227 | separateBown569857ac/4219;freshinventedUI | C19realhitfailure;no productfixauthorized |
+| P12-20 | IN_PROGRESS — independentfreshBown569857ac/4219 | read-onlysinglecardminimum/placement/actualtoolbarrow/3candidates | briefs/P12-20.md;227–229 | freshinventedupload/actualrecthitcomparators/recommendation | new/root/p12_20_single_sticky_b;no productedit |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
 | P11-26 | **DONE 21:0xZ 2026-10-20** — on the branch (§1h.128 (b)); was RUNNING (rules 4, 5 added §1h.127 (c)) since 09:1xZ 2026-10-20 — C, `briefs/P11-26.md`, `scratchpad/p11c26/wt`, port 4127: the explain card keeps its top at the selection (B3); a figure in front of the stack is never a thumbnail (X-3) | round 1 Theme B | §1h.122 (b) 1, 4 | C → the manager | — |
