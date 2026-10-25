@@ -40,12 +40,12 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ## §1. CURRENT STATE
 
 ```text
-ROUND:            P12 preparation; both themes consecutive passes 0 / 2
+ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-25T22:56:31.935Z; only writer of this file
-CURRENT ITEM:          R1A23setupPARTIALbanked/firstinputnext;A24setupinprogress;bothsame82fe23db/web88ac;blindqueued;A0B0;clockACTIVE
-NEXT TURN:          BothAfirst-input/action-familyevidenceandfinitePARTIALs;managerprepareuniformblindbrief;blindonlyaftercompletefactualpacks
-STOPPED BECAUSE:          — active after ninth quota recovery; same15/19workers and copies retained
+HELD BY:          Codex manager, local desktop chat, 2026-10-25T22:59:32.687Z; only writer of this file
+CURRENT ITEM:          R1A23originalinputURLwaitcorrection;A24firstinventeduploadcheckpointawaitingread;both82fe23db/web88ac;blindbriefready/noreadersstarted;A0B0;clockACTIVE
+NEXT TURN:          Read wholeA24 setup/first-input checkpoints and bank; bothA complete fourinputs/action-family factualpacks; launch threefreshblind/theme only after packs frozen
+STOPPED BECAUSE:          — active; same independent A23/A24 continue, no duplicate
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
 OWNER INPUT:      PDF supplied in chat attachment; use original attachment through upload UI only; no private path or text committed
@@ -1027,6 +1027,10 @@ FreshA23/A24startparallel onexactlanded82fe23db51d0bfda1096fd15080fb67ec0eb0582/
 244. **§1h.244 — 2026-10-25: bank first formal-review setup checkpoint without inferring a score — BINDING.**
 
 A23report-only6235a8c0confirmsreleasedappidentity/ownportandexecutionplanbutcontainsnofreshunit/browserresult. Preserveallmissing4input/matrix/guard/privacy/productionevidenceasowed;noscoreorpassruninferred. ContinueoriginalA23/A24workers/copiesafteranyquota interruption. No rubric/price/denominator/stoplinechange.
+
+### §1h.245 — 2026-10-25 — Uniform blind-reader contract and hourly-clock continuity
+
+The uniform P12-R1-reader brief is prepared before scoring. Each fresh reader receives only the frozen rubric, owner's file at the named landed commit and the named theme's frozen factual pack; no A report, code, state or other reader. Missing checks remain FAIL(evidence), and pass-requirement failures override arithmetic as written. Three independent readers per theme remain mandatory; none has started. Both original fresh A reviewers continue on exact82fe23db/web88ac; their setup/input checkpoints are not a score. The existing peer-p12 heartbeat is ACTIVE at one-hour intervals in the same chat, as independently read from its saved configuration. Do not duplicate it or imply it bypasses quota; resume from durable state after availability returns. No rubric, stop-line, price or requirement changes.
 
 ## §5. Durable work ledger — update in place, evidence append only
 

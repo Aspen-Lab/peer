@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-25T22:56:31.935Z
+AS OF        2026-10-25T22:59:32.687Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.244   NEXT RULING §1h.245   NEXT ITEM ID P12-25   NEXT FREE PORT 4224
+LAST RULING  §1h.245   NEXT RULING §1h.246   NEXT ITEM ID P12-25   NEXT FREE PORT 4224
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      R1A23setupPARTIALbanked/firstinputnext;A24setupinprogress;bothsame82fe23db/web88ac;blindqueued;A0B0;clockACTIVE
+RUNNING      R1A23originalinputURLwaitcorrection;A24firstinventeduploadcheckpointawaitingread;both82fe23db/web88ac;blindbriefready/noreadersstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -269,6 +269,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-25T22:53:49.225Z | parent 82fe23db (entry commit follows) | manager | P12-R1-A23-A24-STARTED: AfterverifiedFF+pushed82fe23db/exactweb88ac, liveagentschecked no duplicateworkers. RequestedTera6.1separatelyforA23/A24eachUnknownmodel; freshsupportedSol6.1fallbackagentsstarted, actualfallbackhonest. A23ThemeAownp12-23/wt4222, A24ThemeBownp12-24/wt4223, bothread-onlyfromSAMElanded82fe23db. Wholecommon/themebriefs/rubric/skills, owneroriginalprivateattachmentpathonlyviaUI(noaskagain), fixed2publicand invented inputs, production/deployedlimits and79guardchain assigned. Freshpacksfacts/noverdict/no scores;Averdictseparate;3freshblind/themequeuedafterpack. EarlyPARTIALrequired. Correctledgerlegibility:108transitions/0losses,notambiguousown1080losses. No scoresyet/0of2passruns each. ClockACTIVEhourlycontinues. | evidence: briefs/P12-23.md;P12-24.md;P12-R1-A-COMMON.md;agents/root/p12_23_theme_a_reviewer,/root/p12_24_theme_b_reviewer;landed82fe23db | next: A23/A24freshrealpaperwalks/earlyPARTIAL;managerreviewevidencepackprivacy/factualitythen3freshblindreaders/theme/directoraudit;neverinfermissingPASS
 
 - 2026-10-25T22:56:31.935Z | parent 95fef735 (entry commit follows) | manager | P12-23-SETUP-PARTIAL-BANKED: ReadwholeA23setupPARTIAL6235a8c0 andpickedreportonly. Exactreleased82fe23db/web88ac/own4222 verified; actualdepscopysuccessreportedandownDEVstarting. No browserinput/unit/scoreyetincheckpoint; all4inputs/fullmatrix/exports/legacy/passrequirementsowed. A24exactdetachedsetupalsoinprogress. Keepbothoriginalfreshreviewers/copies, no duplication. Reportpartialdoesnotreplacefreshevidenceorstartaconsecutivepass. | evidence: P12-23-A-20261025T230000Z.md;source6235a8c0;freshA23/A24liveagents | next: BothAfirst-input/action-familyevidenceandfinitePARTIALs;managerprepareuniformblindbrief;blindonlyaftercompletefactualpacks
+
+- 2026-10-25T22:59:32.687Z | parent de2adf9a (entry commit follows) | manager | P12-R1-BLIND-CONTRACT-PREPARED: Prepare uniform fresh blind-reader contract with exactly rubric/ownerfile/theme-pack inputs, raw evidence priority,12units/allcommonrequirements, missing evidence FAIL, frozen prices/no doublecharge, arithmetic+override+sensitivity. No readers started before factualpacks frozen. Reconfirm existing hourly peer-p12 ACTIVE/every1hour/samechat; no duplicate, cannot bypass quota. A23 original upload reached server; helper reader-URL wait being corrected against observed URL without duplicate upload. A24 reports setup and first invented real-UI upload checkpoints; reports not yet reviewed/picked, no score. | evidence: briefs/P12-R1-reader.md; frozenP12-RUBRIC; actual peer-p12 automation.toml; existingA23/A24 agents | next: Read wholeA24 setup/first-input checkpoints and bank; bothA complete fourinputs/action-family factualpacks; launch threefreshblind/theme only after packs frozen
 
 ---
 
