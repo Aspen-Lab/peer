@@ -219,7 +219,7 @@ export function MarginCard(props: Omit<MarginCardShellProps, "frame"> & { frame?
   return stack.portal(<>
     <MarginCardShell {...props} id={id} frame={props.frame === undefined ? rect : props.frame}
       elementRef={element} split={stack.split}
-      {...(stack.split && row ? { top: row.top - stack.bandTop, height: row.height, maxHeight: row.height, className: `${props.className ?? ""} !absolute !left-0 !right-auto !w-full` } : {})}
+      {...(stack.scroll && row ? { top: row.top - stack.bandTop, height: row.height, maxHeight: row.height, className: `${props.className ?? ""} !absolute !left-0 !right-auto !w-full` } : {})}
       onFocusCapture={(event) => { activate(); props.onFocusCapture?.(event); }}
       onPointerDownCapture={(event) => { activate(); props.onPointerDownCapture?.(event); }}
     />

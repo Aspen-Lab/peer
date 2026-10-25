@@ -253,17 +253,22 @@ export function stackLayout(windows: readonly FloatingWindow[], frame: StackFram
   const frontKind = ordered[ordered.length - 1]?.kind;
   // The front keeps its kind's height: a pad to write on or a figure to look into takes all the height the screen leaves (it scrolls
   // inside), a sticky its own, the explain card its content; and is lifted, not squeezed, below its least height.
-  const frontHeight = frontKind ? frontHeightOf(frontKind, frame) : 0;
+  // P12-21: actual wrapped furniture is a floor even for a single card. Keep
+  // the preferred height and selection alignment wherever that floor fits.
+  const measured = ordered[ordered.length - 1]?.minimum ?? 0;
+  const frontHeight = frontKind ? Math.max(frontHeightOf(frontKind, frame), measured) : 0;
   const bottom = frame.bottom;
   // A figure in front of other cards keeps its picture box at half the band (P11-26 rule 2); the others, their kind's least height.
   const least = frontKind === undefined ? 0 : frontKind === "figure" && ordered.length > 1 ? Math.max(LEAST_FRONT_PX.figure, figureStackedFloorPx(bottom - (frame.minTop ?? frame.top))) : LEAST_FRONT_PX[frontKind];
-  const want = frontKind ? Math.min(frontHeight, least) : 0;
+  const want = frontKind ? Math.max(measured, Math.min(frontHeight, least)) : 0;
   let top0 = frame.top;
   if (frame.minTop !== undefined && top0 + behind + want > bottom) top0 = Math.max(frame.minTop, bottom - behind - want);
   return ordered.map((w, i) => {
     const top = top0 + i * WINDOW_HEADER_PX;
     const front = i === ordered.length - 1;
-    const height = front ? Math.max(WINDOW_HEADER_PX, Math.min(frontHeight, bottom - top)) : WINDOW_HEADER_PX;
+    // An oversized actual minimum lives in the bounded shared scroll track;
+    // clipping it back to the band would hide the row it was measured to keep.
+    const height = front ? Math.max(WINDOW_HEADER_PX, measured, Math.min(frontHeight, bottom - top)) : WINDOW_HEADER_PX;
     return { id: w.id, top, height, front, z: Math.min(STACK_Z_BASE + i, STACK_Z_MAX) };
   });
 }

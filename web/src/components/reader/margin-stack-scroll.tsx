@@ -79,6 +79,9 @@ export function useMarginStack(id: string, element: RefObject<HTMLElement | null
   const split = windows.length > 1;
   const rows = stackLayout(windows, column);
   const total = rows.length ? rows[rows.length - 1].top + rows[rows.length - 1].height - column.minTop : 0;
+  // Split meaning/ratios stay separate: one oversized card uses the same
+  // bounded host only when its actual minimum cannot fit the available band.
+  const scroll = split || total > Math.max(0, column.bottom - column.minTop);
 
   useLayoutEffect(() => {
     if (!enabled) return;
@@ -96,18 +99,18 @@ export function useMarginStack(id: string, element: RefObject<HTMLElement | null
   useLayoutEffect(() => {
     if (!target) return;
     setMarginLandmark(target, current.rect?.presentation === "bottom");
-    target.style.cssText = split
+    target.style.cssText = scroll
       ? `position:fixed;top:${column.minTop}px;height:${Math.max(0, column.bottom - column.minTop)}px;left:${frame?.left ?? Math.max(0, window.innerWidth - 360)}px;width:${frame?.width ?? Math.min(360, window.innerWidth)}px;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;z-index:60;isolation:isolate;`
       : "display:contents";
     target.dataset.split = String(split);
     let spacer = target.querySelector<HTMLElement>("[data-margin-stack-room]");
     if (!spacer) { spacer = document.createElement("div"); spacer.dataset.marginStackRoom = ""; spacer.style.pointerEvents = "none"; target.prepend(spacer); }
-    spacer.style.height = split ? `${total}px` : "0";
-  }, [target, split, column.minTop, column.bottom, frame?.left, frame?.width, total, current.rect?.presentation]);
+    spacer.style.height = scroll ? `${total}px` : "0";
+  }, [target, split, scroll, column.minTop, column.bottom, frame?.left, frame?.width, total, current.rect?.presentation]);
 
   useLayoutEffect(() => {
     const card = element.current;
-    if (!card || !split || typeof getComputedStyle !== "function") return;
+    if (!enabled || !card || typeof getComputedStyle !== "function") return;
     const measure = () => useWindows.getState().setMinimum(id, measuredCardMinimum(card));
     measure();
     if (typeof ResizeObserver === "undefined") return;
@@ -125,7 +128,7 @@ export function useMarginStack(id: string, element: RefObject<HTMLElement | null
     const mutations = typeof MutationObserver === "undefined" ? null : new MutationObserver(observe);
     mutations?.observe(card, { childList: true, subtree: true });
     return () => { observer.disconnect(); mutations?.disconnect(); };
-  }, [id, split, target, element]);
+  }, [id, enabled, target, element]);
 
   const active = windows.find((w) => w.id === id)?.order;
   const latest = Math.max(0, ...windows.map((w) => w.order));
@@ -142,6 +145,7 @@ export function useMarginStack(id: string, element: RefObject<HTMLElement | null
 
   return {
     split,
+    scroll,
     bandTop: column.minTop,
     rows,
     windows,
