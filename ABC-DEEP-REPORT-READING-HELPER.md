@@ -42,10 +42,10 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:            P12 preparation; both themes consecutive passes 0 / 2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-25T01:57:42.717Z; only writer of this file
-CURRENT ITEM:          07/12Cs;13Bqueued; manager04minimum/08verification;02/03+05+06+11landed
-NEXT TURN:          Dispatch independentB13 on frozen07; manager04 ownminimum/Enter mutations,actualUI and exactnativegates;12client finishes;07 banks current finite evidence
-STOPPED BECAUSE:          — active after sixth quota recovery; same work resumed
+HELD BY:          Codex manager, local desktop chat, 2026-10-25T07:04:32.085Z; only writer of this file
+CURRENT ITEM:          07finitehandoff/13B;manager08/12verification;02/03+04+05+06+11landed
+NEXT TURN:          B13 bounded cause/candidates; manager08/12 combined verification;07 final frozen evidence then focusedrepair after ruling
+STOPPED BECAUSE:          — active after seventh quota recovery; same workers/copies retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
 OWNER INPUT:      PDF supplied in chat attachment; use original attachment through upload UI only; no private path or text committed
@@ -899,6 +899,10 @@ Manager freecopy35aed7bf read every C11 product/test change;444testsx3, own cano
 ### §1h.215 — 2026-10-25: independently investigate responsive reading-place regression
 
 07 final frozen598-view budget/figure matrix and90cycles do not establish B2 reading-place preservation. Separate same-anchor actual resize probe reports y79.94→−145.06→757.84→−145.06 while narrowing then widening. Freeze e65715ca source; separate read-only B13 verifies original steps, fixed-height controls and legal document-edge clamps on multiple anchors/long invented input, traces browser anchoring versus existing keep-place capture/restore and proposes three candidates. No repair policy or rubric exclusion is inferred from the first probe. Original07 may finish its finite current evidence/checkpoint but no product edit until B's cause and manager ruling. New B owns only report, own detached8992c964/port4212; no overlap with12client or04minimummeasurement. Stopline unchanged.
+
+### §1h.216 — 2026-10-25: independent equal-card and actual-toolbar acceptance
+
+Manager read full original04 plus205/207/213 corrections, ran388testsx3 and own bodyvisibility/pairwrite/oldEnter/toolbar mutations; all meaningfulred then exact saved-byte restoration. Extra Enter3red and toolbar6red restore SHA725bab5105b9c9bbc9ccf4568674874ca67fc9bb09fc7b69390cbc56f043e132/e150bf83eab5162999b33438cba2af158f19563425dbda64ccf05f83a6286ba1. Localtype0/lint0errors144warnings and actual native40152522356 all0/10768+3tests on3251d071c204ba4bdf4e8087ddc7921f91b395f5. Own invented ordinaryDEV16scale/theme+30cycles+8short inactive/editable observations expose26.39px of26.4px row beneath toolbar;3equal189px cards use shared591px track in392px band.0pageerrors,paperwords/draftsretained,screenshotread,4293stopped. FF19b5c2e5 after rebuilt ancestry and exactwebdiffquiet; no07responsive/productionauth/A/score inference. Seventh quota recovery reuses sameworkers. C12final826d1893 is received, manager combined verification stillrequired. StoplineA0/B0.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
