@@ -160,6 +160,65 @@ const base = (over: Partial<Props> = {}): Props => ({
   ...over,
 });
 
+describe("P12-12 grouped Explain session projection", () => {
+  const grouped = (): ExplainSelection => {
+    const range = { segments: [{ sectionId: "s2", paragraphIndex: 0, start: 2, end: 7 }, { sectionId: "s2", paragraphIndex: 1, start: 0, end: 4 }] };
+    return { ...first, passage: "pools\n\nrise", range, explainIdentity: { source: "paper", segments: range.segments }, selectionStillHolds: () => true };
+  };
+  it("asked(), ordinary follow-up and Say more keep identical bounded identity and original passage", async () => {
+    const selection = grouped();
+    const onAsk = vi.fn<Props["onAsk"]>(async () => answer), onReply = vi.fn<NonNullable<Props["onReply"]>>(async () => REPLY), onSayMore = vi.fn<NonNullable<Props["onSayMore"]>>(async () => REPLY);
+    const run = await scenario(base({ target: selection, cached: undefined, onAsk, onReply, onSayMore }), [
+      (tree) => click(tree), (tree) => draft(tree, "Why?"), (tree) => send(tree), () => {}, (tree) => look(tree).thread!.onSayMore!(),
+    ]);
+    await wait();
+    for (const callback of [onAsk, onReply, onSayMore]) {
+      expect(callback).toHaveBeenCalledTimes(1);
+      expect(callback.mock.calls[0][0]).toEqual(expect.objectContaining({ passage: selection.passage, range: selection.range, explainIdentity: selection.explainIdentity }));
+      expect(callback.mock.calls[0][0]).not.toHaveProperty("segments");
+    }
+    expect(onReply.mock.calls[0][1]).toEqual([firstAnswerMessage(answer)]);
+    expect(onSayMore.mock.calls[0][1]).toEqual([firstAnswerMessage(answer)]);
+    expect(onSayMore.mock.calls[0][2]).toBe("Why?");
+    run.mounted.unmount();
+  });
+  it("replaces the session for identical words at a different grouped occurrence", async () => {
+    const old = grouped(), next = grouped();
+    next.range = { segments: [{ sectionId: "s2", paragraphIndex: 0, start: 20, end: 25 }, next.range!.segments[1]] };
+    next.explainIdentity = { source: "paper", segments: next.range.segments };
+    const onAsk = vi.fn<Props["onAsk"]>(async () => answer);
+    const run = await scenario(base({ target: old, cached: undefined, onAsk }), [(tree) => click(tree)]); await wait();
+    const props = base({ target: next, cached: undefined, onAsk });
+    // The mounted closure owns initial props; use the scenario's explicit rerender step.
+    run.mounted.unmount();
+    const replaced = await scenario(props, [(tree) => click(tree), (_tree, ctx) => { ctx.props = { ...ctx.props, target: old }; ctx.rerender(); }, (tree) => click(tree)]); await wait();
+    expect(onAsk).toHaveBeenCalledTimes(3);
+    expect(onAsk.mock.calls[1][0].range).toEqual(next.range);
+    expect(onAsk.mock.calls[2][0].range).toEqual(old.range);
+    replaced.mounted.unmount();
+  });
+  it("mixed sources give an action-specific reason with no request or cached answer", async () => {
+    const onUnavailable = vi.fn();
+    const props = base({ target: { ...grouped(), explainUnavailableReason: "Explain one source at a time." }, onUnavailable });
+    const run = await scenario(props, [(tree) => click(tree)]); await wait();
+    expect(onUnavailable).toHaveBeenCalledWith("Explain one source at a time.");
+    expect(props.onAsk).not.toHaveBeenCalled(); expect(run.last().card).toBeUndefined();
+    run.mounted.unmount();
+  });
+  it("retains the no-key defined-term path across an unsupported source group", async () => {
+    const props = base({ target: { ...first, explainUnavailableReason: "Explain one source at a time." }, terms: [term], canAsk: false, cached: undefined });
+    const run = await scenario(props, [(tree) => click(tree)]); await wait();
+    expect(run.last().status).toBe("none"); expect(run.last().card?.props.term).toEqual(term); expect(props.onAsk).not.toHaveBeenCalled();
+    run.mounted.unmount();
+  });
+  it("checks stale provenance before cached reuse", async () => {
+    const onUnavailable = vi.fn(); const props = base({ target: { ...grouped(), selectionStillHolds: () => false }, onUnavailable });
+    const run = await scenario(props, [(tree) => click(tree)]); await wait();
+    expect(run.last().card).toBeUndefined(); expect(onUnavailable).toHaveBeenCalledOnce(); expect(props.onAsk).not.toHaveBeenCalled();
+    run.mounted.unmount();
+  });
+});
+
 describe("ExplainBox — the thread is the reader's to send (P3-02b)", () => {
   it("opens with the first answer and the thread kept for the passage, and sends nothing", async () => {
     const kept = pairs(2);

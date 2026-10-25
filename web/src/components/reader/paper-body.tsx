@@ -664,7 +664,8 @@ export function readSelection(selection: SelectionLike | null): ExplainSelection
       passage: result.segments.map((s) => s.quote).join("\n\n"), offset: first.start, ...(first.kind === "heading" || first.kind === "caption" ? { block: first.kind } : {}), segments: result.segments, explainSegments: result.explainSegments,
       ...where, selectionStillHolds: () => {
         const now = drawableSegments(real, domTextEnv());
-        return !now.reason && JSON.stringify(now.segments) === JSON.stringify(result.segments) && JSON.stringify(now.explainSegments) === JSON.stringify(result.explainSegments);
+        return !now.reason && now.provenance?.length === result.provenance?.length && now.provenance?.every((node, i) => node.isConnected && node === result.provenance?.[i]) === true
+          && JSON.stringify(now.segments) === JSON.stringify(result.segments) && JSON.stringify(now.explainSegments) === JSON.stringify(result.explainSegments);
       }, measure: () => real.startContainer.isConnected && real.endContainer.isConnected ? measureRange(range) : null };
   }
   const spoken = selection.toString();

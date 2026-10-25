@@ -32,4 +32,12 @@ describe("P12-12 bounded grouped request provenance", () => {
     await requestReply({ paper, selection, sectionId: "s1", thread: [], message: "Why?", detail: true });
     expect(fetch).not.toHaveBeenCalled();
   });
+  it.each([null, {}, { segments: [] }, { segments: Array(601).fill(range.segments[0]) }, { segments: [{ ...range.segments[0], end: Number.MAX_SAFE_INTEGER + 1 }] }, { segments: [{ ...range.segments[0], quote: "extra" }] }])("rejects invalid grouped metadata in every request mode: %j", async (invalid) => {
+    const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+    const selection = { ...target(), range: invalid } as unknown as SelectionTarget;
+    expect(await requestExplanation({ paper, selection, sectionId: "s1" })).toBe("unavailable");
+    expect(await requestReply({ paper, selection, sectionId: "s1", thread: [], message: "Why?" })).toBe("unavailable");
+    expect(await requestReply({ paper, selection, sectionId: "s1", thread: [], message: "Why?", detail: true })).toBe("unavailable");
+    expect(fetch).not.toHaveBeenCalled();
+  });
 });

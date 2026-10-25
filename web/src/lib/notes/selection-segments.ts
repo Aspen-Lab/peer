@@ -4,7 +4,7 @@ import { boundaryOf, readBlockText, type BlockTextEnv } from "./anchor-blocks";
 export type DrawableSegment = PassageSegment & { paragraphText: string };
 /** Ephemeral Explain offsets; deliberately outside highlight segments, which are persisted. */
 export type ExplainSegment = Pick<PassageSegment, "paragraphId" | "source" | "start" | "end">;
-export type DrawableRange = { segments: DrawableSegment[]; explainSegments: ExplainSegment[]; reason?: undefined } | { segments: []; explainSegments?: undefined; reason: string };
+export type DrawableRange = { segments: DrawableSegment[]; explainSegments: ExplainSegment[]; provenance: readonly Node[]; reason?: undefined } | { segments: []; explainSegments?: undefined; provenance?: undefined; reason: string };
 const CONTROL = "button,a,input,textarea,select,summary,label,[role=button],[role=tab],[role=link],[contenteditable=true],[data-explain-skip]";
 const FORMULA = ".katex,.katex-display,code";
 
@@ -103,6 +103,6 @@ export function drawableSegments(range: Range, env: BlockTextEnv = {}): Drawable
       }
       segments.push({ paragraphId: at.paragraphId, source: at.source, ...(at.kind ? { kind: at.kind } : {}), quote, start, end, paragraphText });
     }
-    return segments.length ? { segments, explainSegments } : no("Select text in the paper to highlight it.");
+    return segments.length ? { segments, explainSegments, provenance: [...groups.keys(), ...[...groups.values()].flatMap((group) => group.nodes.map((part) => part.node))] } : no("Select text in the paper to highlight it.");
   } catch { return no("This selection changed. Select the text again."); }
 }

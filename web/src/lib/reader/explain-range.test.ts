@@ -74,4 +74,10 @@ describe("P12-12 pure bounded canonical client projection", () => {
       ...[{ sectionId: "s".repeat(129) }, { paragraphIndex: -1 }, { start: .5 }, { end: Infinity }, { end: Number.MAX_SAFE_INTEGER + 1 }, { end: 0 }, { quote: "x" }, { paragraphText: "x" }].map((over) => ({ segments: [{ ...part, ...over }] }))];
     for (const value of malformed) expect(clientExplainRange(value)).toBeNull();
   });
+  it("a601-piece full selection sends only600 one-character pieces in the bounded prefix", () => {
+    const out = prepareExplainSelection(group(Array(601).fill("a")), body);
+    expect(out.explainUnavailableReason).toBeUndefined();
+    expect(out.range!.segments).toHaveLength(600);
+    expect(explainRequestRange(out)!.passage).toHaveLength(1199);
+  });
 });
