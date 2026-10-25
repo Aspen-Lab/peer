@@ -230,7 +230,7 @@ interface RowApi {
   /** What a citation key reads as in this note. */
   label: Label;
   caret: (id: string, el: HTMLElement) => void;
-  blur: (id: string) => void;
+  blur: (id: string, next?: EventTarget | null) => void;
   edit: (id: string, caret: Caret) => void;
   toggle: (id: string) => void;
   addBelow: (id: string) => void;
@@ -338,7 +338,9 @@ const Row = memo(function Row({ block: b, first, number, editing, sources, dragg
         onKeyDown={(e) => api.current.key(e, b.id)}
         onPaste={(e) => api.current.paste(e, b.id)}
         onSelect={(e) => api.current.caret(b.id, e.currentTarget)}
-        onBlur={() => api.current.blur(b.id)}
+        onBlur={(e) => api.current.blur(b.id, e.relatedTarget)}
+        aria-keyshortcuts="Alt+F10"
+        aria-description="Alt+F10 moves between this block and Format."
         className={cn(
           cls,
           "block w-full resize-none overflow-hidden bg-transparent p-0 outline-none placeholder:text-text-faint/70",
@@ -710,6 +712,7 @@ export function NoteEditor({
   const pendingFocus = useRef<{ id: string; caret: Caret } | null>(null);
   /** The caret last seen, as a visible-character offset, which stays true across a change of marks. */
   const lastCaret = useRef<{ id: string; plain: number } | null>(null);
+  const toolbarTarget = useRef<{ id: string; source: string; from: number; to: number } | null>(null);
   /** Each block's steps to undo: the source and the selection at each (the browser's undo cannot follow a surface that is drawn again). */
   const histories = useRef(new Map<string, History>());
   /** The editor's splits and joins of blocks, to undo and redo (P10-28): a step no block's own history can hold. */
@@ -930,12 +933,17 @@ export function NoteEditor({
     });
   }, [menu]);
 
+  const toolbarSelection = (id: string) => {
+    const held = toolbarTarget.current;
+    const toolbar = columnRef.current?.querySelector('[role="toolbar"]');
+    return held?.id === id && held.source === srcOf(id) && toolbar?.contains(document.activeElement) ? held : null;
+  };
   /** Where the reader's selection is in a block: source offsets (what the store and the menus speak) and visible-character offsets. */
   const selection = (id: string): { start: number; end: number; from: number; to: number; len: number } | null => {
     const el = areas.current.get(id);
     if (!el) return null;
     if (el instanceof HTMLTextAreaElement) return { start: el.selectionStart, end: el.selectionEnd, from: el.selectionStart, to: el.selectionEnd, len: el.value.length };
-    const sel = getPlainSelection(el);
+    const sel = toolbarSelection(id) ?? getPlainSelection(el);
     if (!sel) return null;
     const tree = treeOf(srcOf(id), label);
     return { start: sourceOfPlain(tree, sel.from, "start"), end: sourceOfPlain(tree, sel.to, "end"), from: sel.from, to: sel.to, len: plainLength(el) };
@@ -1023,12 +1031,13 @@ export function NoteEditor({
     const b = docRef.current.blocks.find((x) => x.id === id);
     const el = areas.current.get(id);
     if (!b || !el || b.type === "code" || el instanceof HTMLTextAreaElement) return;
-    const sel = getPlainSelection(el);
+    const sel = toolbarSelection(id) ?? getPlainSelection(el);
     if (!sel) return;
     const out = pressMark(b.text, sel, mark, pendingMarks.current?.id === id && pendingMarks.current.plain === sel.from ? pendingMarks.current.marks : null, label);
     if (out.kind === "pending") {
       // nothing selected (or only spaces): the mark is toggled for what is typed next, as in a word processor
       pendingMarks.current = { id, plain: sel.from, marks: out.marks };
+      if (toolbarSelection(id)) focusBlock(id, { plain: sel.from, to: sel.to });
       return;
     }
     // an edit that would have left a delimiter unmatched writes nothing
@@ -1256,7 +1265,14 @@ export function NoteEditor({
       if (pendingMarks.current && (pendingMarks.current.id !== id || pendingMarks.current.plain !== sel.from || sel.from !== sel.to)) pendingMarks.current = null;
     },
 
-    blur: (id) => {
+    blur: (id, next) => {
+      const toolbar = columnRef.current?.querySelector('[role="toolbar"]');
+      if (next && toolbar?.contains(next as Node)) {
+        const selected = selection(id);
+        if (selected) toolbarTarget.current = { id, source: srcOf(id), from: selected.from, to: selected.to };
+        return;
+      }
+      toolbarTarget.current = null;
       setEditing((cur) => (cur === id ? null : cur));
       if (menuRef.current?.blockId === id) setMenu(null);
     },
@@ -1387,6 +1403,15 @@ export function NoteEditor({
       // The selection: source offsets (pos, end), and the visible characters (sel.from, sel.to of sel.len).
       const sel = selection(id);
       if (!sel) return;
+      if (e.key === "F10" && e.altKey && !mod && !e.shiftKey) {
+        const first = columnRef.current?.querySelector<HTMLButtonElement>('[role="toolbar"] button:not(:disabled):not([aria-disabled="true"])');
+        if (first) {
+          e.preventDefault();
+          toolbarTarget.current = { id, source: srcOf(id), from: sel.from, to: sel.to };
+          first.focus({ preventScroll: true });
+        }
+        return;
+      }
       const pos = sel.start;
       const end = sel.end;
       const collapsed = sel.from === sel.to;
@@ -1612,12 +1637,15 @@ export function NoteEditor({
           return;
         }
         case "Tab": {
-          e.preventDefault();
           if (b.type === "code" && !e.shiftKey) {
+            e.preventDefault();
             replaceRange(id, pos, end, "  ");
             return;
           }
-          setBlocks(indentBlock(blocks, i, e.shiftKey ? -1 : 1));
+          if (canIndent(b.type)) {
+            e.preventDefault();
+            setBlocks(indentBlock(blocks, i, e.shiftKey ? -1 : 1));
+          }
           return;
         }
       }
@@ -1866,6 +1894,12 @@ export function NoteEditor({
 
         <div
           ref={columnRef}
+          onBlurCapture={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+              toolbarTarget.current = null;
+              setEditing(null);
+            }
+          }}
           className={cn(
             compact ? "max-w-[44rem]" : "mt-8 max-w-[44rem]",
             "[&_[aria-disabled=true]]:cursor-default [&_[aria-disabled=true]]:opacity-40 [&_[aria-disabled=true]]:hover:bg-transparent",
@@ -1896,6 +1930,11 @@ export function NoteEditor({
             active={editingBlock?.type ?? null}
             enabled={Boolean(editingBlock && isTextual(editingBlock.type))}
             onMark={(m) => editing && applyMark(editing, m)}
+            onReturn={() => {
+              if (!editing) return;
+              const held = toolbarSelection(editing);
+              focusBlock(editing, held ? { plain: held.from, to: held.to } : { plain: lastCaret.current?.id === editing ? lastCaret.current.plain : 0 });
+            }}
             onType={(t) => editing && applyType(editing, t)}
             onIndent={(delta) => {
               if (!editing) return;
