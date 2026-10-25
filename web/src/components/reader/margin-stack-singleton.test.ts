@@ -44,6 +44,7 @@ it("P12-21 leaves a fitting singleton host transparent", () => {
 
 it("P12-21 measures/observes a singleton, follows wraps and replaced editing surfaces, and disconnects on removal", () => {
   let toolbarHeight = 76;
+  let inactiveHeading = false;
   let currentText = { parentElement: null as unknown };
   const toolbar = { getBoundingClientRect: () => ({ height: toolbarHeight }) };
   const body = { parentElement: null as unknown, querySelector: () => currentText, querySelectorAll: () => [toolbar] };
@@ -51,7 +52,7 @@ it("P12-21 measures/observes a singleton, follows wraps and replaced editing sur
   const header = { getBoundingClientRect: () => ({ height: 45 }) };
   const card = { dataset: { marginCard: "sticky" }, firstElementChild: header, children: [header, body],
     querySelector: (selector: string) => selector === "[data-margin-fixed]" ? null : selector === "[data-margin-body]" ? body : null,
-    querySelectorAll: () => [currentText, toolbar],
+    querySelectorAll: (selector: string) => inactiveHeading && !selector.includes("[data-row] .cursor-text") ? [toolbar] : [currentText, toolbar],
   };
   body.parentElement = card;
   vi.stubGlobal("getComputedStyle", (node: unknown) => node === toolbar ? { marginTop: "0", marginBottom: "0" } : node === body ? { paddingTop: "13", paddingBottom: "24" } : { lineHeight: "26.4", fontSize: "16" });
@@ -66,7 +67,7 @@ it("P12-21 measures/observes a singleton, follows wraps and replaced editing sur
   expect(useWindows.getState().windows[0].minimum).toBe(187);
   expect(observed).toContain(toolbar); expect(observed).toContain(currentText);
   toolbarHeight = 112; resized(); expect(useWindows.getState().windows[0].minimum).toBe(223);
-  currentText = { parentElement: body }; mutated(); expect(observed).toContain(currentText);
+  inactiveHeading = true; currentText = { parentElement: body }; mutated(); expect(observed).toContain(currentText);
   toolbarHeight = 40; resized(); expect(useWindows.getState().windows[0].minimum).toBe(151);
   useWindows.getState().close("one"); cleanups.forEach((cleanup) => cleanup());
   expect(disconnect).toHaveBeenCalled(); expect(stopMutation).toHaveBeenCalledOnce();

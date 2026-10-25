@@ -29,7 +29,7 @@ export function setMarginLandmark(target: Pick<HTMLElement, "setAttribute" | "re
 export function measuredCardMinimum(element: HTMLElement): number {
   const header = (element.querySelector("[data-margin-fixed]") ?? element.firstElementChild)?.getBoundingClientRect().height ?? 40;
   const body = element.querySelector<HTMLElement>("[data-margin-body]") ?? element;
-  const text = body.querySelector<HTMLElement>(".reading-prose, .font-reading, [contenteditable], textarea") ?? body;
+  const text = body.querySelector<HTMLElement>(".reading-prose, .font-reading, [contenteditable], [data-row] .cursor-text, textarea") ?? body;
   const style = getComputedStyle(text);
   const line = parseFloat(style.lineHeight) || (parseFloat(style.fontSize) || 16) * 1.6;
   if (element.dataset.marginCompact) return Math.ceil(header + line + 16 + 2);
@@ -119,7 +119,7 @@ export function useMarginStack(id: string, element: RefObject<HTMLElement | null
       observer.disconnect();
       observer.observe(card);
       for (const child of card.children) observer.observe(child);
-      for (const child of card.querySelectorAll('.reading-prose, .font-reading, [contenteditable], textarea, [role="toolbar"]')) observer.observe(child);
+      for (const child of card.querySelectorAll('.reading-prose, .font-reading, [contenteditable], [data-row] .cursor-text, textarea, [role="toolbar"]')) observer.observe(child);
       measure();
     };
     observe();
