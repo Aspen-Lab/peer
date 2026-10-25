@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:            P12 preparation; both themes consecutive passes 0 / 2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-25T12:24:02.497Z; only writer of this file
-CURRENT ITEM:          15early8c69RETURNpostresizeRange/finalcorrection;19keyboardC;18noteApreflight;17boundedverified;earlynative40192566632;A0B0
-NEXT TURN:          C15stableancestrycorrection/refreeze/final108+postresizeHTTP;C19keyboardred/fix;A18boundedpreflight;managerownfinaldiff/mutations/nativebeforeFF
+HELD BY:          Codex manager, local desktop chat, 2026-10-25T12:29:26.181Z; only writer of this file
+CURRENT ITEM:          15stableancestryCcorrection;19keyboardC;18noteApreflight;17managerverified/FFheld;earlygates10843+3/2739x3;A0B0
+NEXT TURN:          C15finalstableancestry/realHTTP/refreeze;C19AltF10scopedselection/oldTabEscapechecks;A18finalboundedreport;managerfinalcombinedverificationbeforeFF
 STOPPED BECAUSE:          — active after eighth quota recovery; sameworkers/copies retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -946,6 +946,12 @@ CurrentC15earlycombinedpublicpatch measures76760Brotlibase64characters, beyond65
 
 Manager independently passes108position/cardtransitions/hash/0errors onfrozen8c69, butfreshactual groupedExplain sends3HTTP200before resizing andno4thafter. Workercontrolled actualSend comparator confirms enabledSend/inputfocus andsameconnectednodes are insufficient: native clonedRange endpoints retarget onancestorremoval. KeepC12's correctstale rejection andwireidentity unchanged. C15 may replace portal-reparent strategy with genuinelystablecentreancestorchain usingonlyalreadyownedReaderLayout/ReaderShell, existingnarrowclasses/furniture placement, withoutCSSfile/pane-budget/container/marginhost/clientexpansion. Preserve narrowdocumentorder/accessibility/no duplicatehiddenwords, activecommon/paper/input nodes, alloldkeepertests andboundedintervention rules. Newsource mustrepeat final108/selection/focus/ratios andactualcanonicalpostresizeHTTP plusmanagerownverification; earlygreenpositions/native cannotstandin. C19 runsdisjointnoteskeyboard;finalroundscountremainA0/B0.
 
+226. **§1h.226 — 2026-10-25: retain keyboard editing/close contracts while adding a real exit route — BINDING.**
+
+canIndent includes text/quote aswellaslists, so a guardusingcanIndent alone cannotremove theobserved focus limitation. Keep theirinheritedboundedTab/ShiftTabindent andcodeTabspaces; providea conventionaldiscoverableAltF10 editor↔Format path withretainedexactselection/scopedfocus, plusnativeTabfortruly nonindentingblocks. Escape onthetoolbar stillpropagatesstickyoldX; do notconsumeit asanewreturn-to-editor behavior. This clarifieshowA11andA10coexist, neverweakenskeyboardreach oroldeditingguards. Workerredtests mustassertthesecontracts, notdeleteoldscenarios.
+
+Exactearly15combinednative10843+3/2739x3 andfourmanagercoremutations2/3/1/1red/restored14green areboundedbankedevidence. keeperSHA6a5c1d352dc987a3d4496f1a7d311115a1b522e52d5c81d0a40238f913bc7026/helper878ba33312d9a513a287d7b681e46bb3811f59fbb8415f62e6ac1e4395cd82a5 restored. Final17testcoverage isgreen;15stillreturnedfornativeRangeancestry andnew19unverified. Do notcalltheseearlygates thefinalcombinedacceptance oraroundsuccess.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -1218,7 +1224,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-14 | PREPARATION_COMPLETE — picked897ebc44;79guards;zeroUI/score | P9/P10/P11guardinventory | P12-14-A-20261025T071832Z.md;218,220 | laterfreshlandedheadwalkbrief;blindreadersseparate | reportonly;noPDF/server |
 | P12-15 | RETURN_EARLY8c69 — own108positionpass butactualpostresizegroupedreplynoHTTP | samekeeper/layout/shell/reading-position;stableancestrycorrection | briefs/P12-15.md;219–225 | refreezefinalstableancestry;workerandmanageractualHTTP+108/fullgates | manager78757bbb/webc43ab805;resize-reply-results.json;noC12edit |
 | P12-16 | MANAGER_VERIFIED_PENDING_COMBINED_LANDING — exactdiff/5mutationfamilies/hashrestore;native10829+3green/2641x3 | 4legacyCSS/source testfilesONLY | briefs/P12-16.md;219–222 | holdwith07dependentcodeuntilC15/17verified | managerf6e64e03/webd32a9b66;run40173488648 |
-| P12-17 | MANAGER_BOUNDED_VERIFIED_PENDING_FINAL_GATES — own5x3/2redmutations/hashrestore | responsive-margin.test.ts only;20additions/5casesretained | briefs/P12-17.md;221–223 | finalcombinedtype/lint/native withC15;no separateUIclaim | manager4c2c7b1a/web93d1e782;worker998c5c84 |
+| P12-17 | MANAGER_VERIFIED_PENDING_FF — own5x3/2mutations/restored;earlycombinednative10843+3/2739x3green | responsive-margin.test.ts only;20additions/5casesretained | briefs/P12-17.md;221–226 | landonlywithfinalverified07/15combination | manager4c2c7b1a->78757bbb;worker998c5c84;no productedit |
 | P12-18 | IN_PROGRESS — independentAinnewlanded74387ea1copy/4217 | boundednoteactualUIpreflight,inventedonly | briefs/P12-18.md;222–223 | reportfailures/coverage;freshscoredroundstillaftercombinedlanding | originalA14resumednewitem;no score |
 | P12-19 | IN_PROGRESS — original04Cnewkeyboarditem/supportedfallback | note-editor/note-toolbar/wysiwyg+directtests | briefs/P12-19.md;224–225 | causalred/fix/keyboardUI/mutations/tests3 | newdetached72945f32;4218only |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
