@@ -94,13 +94,13 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-25T22:46:45.860Z
+AS OF        2026-10-25T22:51:43.751Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.241   NEXT RULING §1h.242   NEXT ITEM ID P12-25   NEXT FREE PORT 4224
+LAST RULING  §1h.242   NEXT RULING §1h.243   NEXT ITEM ID P12-25   NEXT FREE PORT 4224
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      final88acnativefull+3041x3green;managerUI390/headingoverflowpending;23/24AbriefsWAITverifiedland;clockACTIVE;A0B0
-THEN         verifyfinalcombinedsources,independentAand3blindreaders/theme;A0/B0
+RUNNING      all9implementationsverifiedFFda86379d/web88ac;A23/A24briefsreadydispatchparallel4222/4223;formalmediannoneA0B0;clockACTIVE
+THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
 ```
@@ -263,6 +263,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-25T22:45:25.893Z | parent 08041c12 (entry commit follows) | manager | P12-23-A-BRIEF-PREPARED: Preparecommonfresh-AcontractandThemeA23brief,port4222,separatereviewerafterverifiedLANDEDrelease. Frozenrubric/4inputs/19servedzoomcells/8steps/lightdark/allnotesformat/export/lifecycle/keyboard/minimumandprivacy/rawhash/legacyrequirementsnamed. No productionauthworkaround or initial-scrollwaiver;blockedchecksFAIL evidence. Score-freeprivatepack separateAverdict/report;threefreshblindreaderslater. No Aagent/walk/scorestartedbeforeland. | evidence: briefs/P12-R1-A-COMMON.md;briefs/P12-23.md;frozenP12-RUBRIC;P12-14inventory | next: PrepareThemeB24brief;finishmanager390/heading/overflowUI;exactverifiedlineageFFthenreleasefreshA23/A24parallel
 
 - 2026-10-25T22:46:45.860Z | parent a2f8f40f (entry commit follows) | manager | P12-24-A-BRIEF-PREPARED: PreparefreshThemeB24brief,own4223, explicitWAITverifiedLANDEDrelease. B1–12/full79guardchain,4inputs/servedmatrix/allsteps/theme/production+deploylimits,6cardorders/overcapacity/selectionandcanonicalHTTP/figureinventory/answersubmit/contrast/30cycles/privacyandwordhash allnamed. Read-onlyseparateA;noscore/noversdictprivateindex;3freshblindlater. A23/A24willparallelafterFF, no scorebeforeland. | evidence: briefs/P12-24.md;P12-R1-A-COMMON.md;P12-RUBRIC;P12-14guardinventory | next: Finishmanager390/heading/overflowUI;rebuildexact88acverifiedlineagefromapprovedhead/FF;spawnfreshA23/A24parallelthenblindreaders
+
+- 2026-10-25T22:51:43.751Z | parent da86379d (entry commit follows) | manager | P12-FINAL-IMPLEMENTATION-VERIFIED-FF-LANDED: FinishownactualUI:12widecells1440plus24rail-aware853/390cells=36 explicitwidth/height/theme/stepcells,3inactiveheadingcells,real68pxhost/189cardscroll/type/Delete,0pageerrors/exactpaperhashsame. Failedinitialscroll/hiddenrailhelperspreservedseparate;noallinitialstatewaiver. Own4294session35453stopped. ManagerreportP12-MANAGER-VERIFY-20261025.md written. Rebank64returnedcommitsontoapproved643337cc inownland-r1detachedcopy, excludeonlyalready-presentidenticalC19finalreport,include07finalreport52f281f3. Wholeappdiffquietvsverifiedb9fedc9b/exact88acnative; FFmain643337cc→da86379d,notmergePR. Native40240875208build/type/lint/test0/144warnings,10872pass3existing skip;158files3041tests3green. All9owner-itemimplementationsnowonbranch,butformalA/blindnone0/2. ReleasefreshA23/A24next;ownerPDFalreadyprovided,noaskagain. Neverpushmain/force/newbranch/rebase/reset/restore/amend. | evidence: P12-MANAGER-VERIFY-20261025.md;land-r1-prepared.json;verify-finalmanager-single-scrolled/railresults;CI40240875208/job121312173281;web88ac61222f469dd5d720f4e620cb7963f4a85cbf | next: SpawnfreshA23ThemeA4222/A24ThemeB4223onpushedlandedheadparallel;4inputs/79guards/productionlimits;then3freshblindreaders/theme/directoraudit
 
 ---
 
