@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:            P12 preparation; both themes consecutive passes 0 / 2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-25T01:54:07.615Z; only writer of this file
-CURRENT ITEM:          same04minimum/07/12Cs; manager08verification/04return;02/03+05+06+11landed
-NEXT TURN:          Independently verify04minimum correction,08 actualUI/fullgates,07 frozen finalmatrix and12client finalhandoff; integrate exacttrees then A andthreeblindreaders/theme
+HELD BY:          Codex manager, local desktop chat, 2026-10-25T01:57:42.717Z; only writer of this file
+CURRENT ITEM:          07/12Cs;13Bqueued; manager04minimum/08verification;02/03+05+06+11landed
+NEXT TURN:          Dispatch independentB13 on frozen07; manager04 ownminimum/Enter mutations,actualUI and exactnativegates;12client finishes;07 banks current finite evidence
 STOPPED BECAUSE:          — active after sixth quota recovery; same work resumed
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -895,6 +895,10 @@ Manager independent real ordinary-DEV invented upload on exact827304c7 webtree p
 ### §1h.214 — 2026-10-25: server range independently verified and landed; sixth recovery
 
 Manager freecopy35aed7bf read every C11 product/test change;444testsx3, own canonical-adjacency12red, occurrence-cache4red and homogeneous-source3red; saved bytes restored to helperf7ad0b34644259dfae1de8592b426bdeeae512fdd89e7bbbed79f140d3e6a0d4 androute00b9cdc1cea4a33f6d68a179917e1bd899496d3c7c1e503a23e57f7e7095a9b9, then444green. Actual-handler/invented-document path plus localtype0/lint0errors144warnings and exact native40133442566 build/tsc/lint/test0 (10737+3tests) justify backend-only FF acceptance35aed7bf, webtree0b4cf9ac72d195cb24a3a7dea05c9bd1f3b94381. Client metadata, actual UI, production authentication and scores remain unproved. Sixth quota recovery reuses same04/07/12 workers/copies.08 own1125x3/three mutations restored are checkpoint evidence, not final acceptance;04actualtoolbarminimum and07scaledbudget corrections remain independently unaccepted. Stopline unchangedA0/B0.
+
+### §1h.215 — 2026-10-25: independently investigate responsive reading-place regression
+
+07 final frozen598-view budget/figure matrix and90cycles do not establish B2 reading-place preservation. Separate same-anchor actual resize probe reports y79.94→−145.06→757.84→−145.06 while narrowing then widening. Freeze e65715ca source; separate read-only B13 verifies original steps, fixed-height controls and legal document-edge clamps on multiple anchors/long invented input, traces browser anchoring versus existing keep-place capture/restore and proposes three candidates. No repair policy or rubric exclusion is inferred from the first probe. Original07 may finish its finite current evidence/checkpoint but no product edit until B's cause and manager ruling. New B owns only report, own detached8992c964/port4212; no overlap with12client or04minimummeasurement. Stopline unchanged.
 
 ## §5. Durable work ledger — update in place, evidence append only
 

@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-25T01:54:07.615Z
+AS OF        2026-10-25T01:57:42.717Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.214   NEXT RULING §1h.215   NEXT ITEM ID P12-13   NEXT FREE PORT 4212
+LAST RULING  §1h.215   NEXT RULING §1h.216   NEXT ITEM ID P12-14   NEXT FREE PORT 4213
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      same04minimum/07/12Cs; manager08verification/04return;02/03+05+06+11landed
+RUNNING      07/12Cs;13Bqueued; manager04minimum/08verification;02/03+05+06+11landed
 THEN         verifyfinalcombinedsources,independentAand3blindreaders/theme;A0/B0
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -203,6 +203,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-24T21:13:59.554Z | parent 4b8e956e (entry commit follows) | manager | P12-04-TOOLBAR-MINIMUM-RETURN: Manager read native job120987796401: exact combined04+landed02/05/06 webtree827304c7ed141a7307818618e7c25ebaf8c91be3 build0/tsc0/lint0errors144warnings/test0;577passed3skipped files10730passed3skipped tests. Own actual UI16scale/theme cells plus30cycles and actual asymmetric Enter passed, but separate1024x480 probe found sticky Format toolbar76px over68px viewport fully occludes first26.4px text row. No04 landing. Return measurement-only minimum fix to original04 C in fresh combined detachedddd12342;07 host attrs frozen. C11 final694dd73a received (444testsx3/12ownmutations/worker gates0), manager verification pending. | evidence: verify-04/ui-results.json; ui-short-probe.json; manager-short-probe.png outsideGit; native run40132758476/job120987796401; briefs/P12-04.md; C11 checkpoint P12-11-C-20261024T210000Z.md | next: Original04 focused toolbar-minimum correction;07 frozen scaled-budget rerun and12client continue; manager08/11 independent diff/tests/mutations and combined verification
 
 - 2026-10-25T01:54:07.615Z | parent 35aed7bf (entry commit follows) | manager | P12-11-VERIFIED-LANDED-RECOVERY6: Recovered same04/07/12 after sixth quota interval, no duplicates. Read full C11 production and test diff in free verify-11/wt;444testsx3, own adjacency12red/occurrencecache4red/source3red, exact helperf7ad0b34 androute00b9cdc1 SHA restoration, restored444green; localtype0/lint0errors144warnings. Read actual native40133442566/job120989866230 webtree0b4cf9ac72d195cb24a3a7dea05c9bd1f3b94381:build0/tsc0/lint0/144/test0,576+3files10737+3tests. Fast-forward35aed7bf from1565746b, exactwebtree unchanged. Backend-only acceptance; no client/UI closure. Manager08 own1125x3 and ordered5red/atomic1red/staledeletion1red restored, fullgates/UI pending.04minimum correction1d321d1c/07e65715ca/12e2b4a12c banked, notaccepted. | evidence: P12-11-C-20261024T210000Z.md; verify-11/check-results.json; native40133442566/job120989866230; verify-08/check-results.json; originalworker detached copies | next: Independently verify04minimum correction,08 actualUI/fullgates,07 frozen finalmatrix and12client finalhandoff; integrate exacttrees then A andthreeblindreaders/theme
+
+- 2026-10-25T01:57:42.717Z | parent 07f8dac4 (entry commit follows) | manager | P12-13-KEEP-PLACE-BRIEF: 07 frozen scaled-budget rerun banked336Book+262enabledFit=598views,0budget/errors and90cycles, but separate actual same-anchor resize probe reports viewport offset79.94→-145.06→757.84→-145.06. Existing unitkeepers green does not prove actual B2. Freeze07 product e65715ca; write independentB13 read-only bounded reproduction/cause/candidates before focused original07 repair. Own detached Bcopy8992c964 prepared,port4212.04minimum final36b5019f received,manager388x3/fullnativecheck running; no04/07 landing. | evidence: briefs/P12-13.md; p12-07/h/place-focus.cjs,json,log outsideGit; P12-RUBRIC B2/B11;04 P12-04-C-20261025T015442Z.md | next: Dispatch independentB13 on frozen07; manager04 ownminimum/Enter mutations,actualUI and exactnativegates;12client finishes;07 banks current finite evidence
 
 ---
 
