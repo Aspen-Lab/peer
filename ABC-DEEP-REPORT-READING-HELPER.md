@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:            P12 preparation; both themes consecutive passes 0 / 2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-25T22:15:50.389Z; only writer of this file
-CURRENT ITEM:          15guardreturnc42managerverify;19UIgreenheld/native1legacyfail;21sameCresumedinactiveHeadingred/fix;17verifiedheld;A0B0
-NEXT TURN:          managerC15guardwholefile3/ownmutations/native;C21inactiveheadingcausalred/fix/finalgatesUI;combineverifythenFFandfreshA+blind
+HELD BY:          Codex manager, local desktop chat, 2026-10-25T22:17:29.041Z; only writer of this file
+CURRENT ITEM:          15guardmanager11x3/2mutationsgreen/nativeb6e98running;19UIgreenheld;21inactiverowfixfinalverification;17verifiedheld;A0B0
+NEXT TURN:          Readcorrectednative;C21finalfreeze/whole-diff/ownmutations/type/lint/actualUI/nativeallgroups21;FFverifiedexactwebthenAandblind
 STOPPED BECAUSE:          — active after ninth quota recovery; same15/19workers and copies retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -988,6 +988,10 @@ Nativefinal40217054907isfailed, notaccepted:exactlyoneoldglobals.css.reading-tex
 
 6of9owneritemslanded isonlya boundeditemcount;officialconsecutivethemesremain0/2eachandnative40217054907failed. Quota interruptionstoppedC15/C21turns;hourlyclockdoesnotbypasslimits. ReuseoriginalC21dirtyred/copy/serverownershipandpreservepre-correction72cellresultsseparately. ActualinactiveHeading191→160failureestablishesmissingrowselectorinsideapprovedmeasurement/observerfile;C21maybankredthenminimalrowtargetfix,neverchangeheading/editor/fontorclaimmultirowcentreharnessfailurewasentirecause. C15testonlyguardadaptationretainsalloldassertionsandstrengthenscommonwrapperpredicate;managerownwholefile/mutations/nativebeforeacceptance. No score,denominator,priceorstoplinechange.
 
+235. **§1h.235 — 2026-10-25: bank independent common-scale guard checks and repeat singleton families — BINDING.**
+
+Managerwhole11casefile3greenandownclass/stylemutations1/1redwithSHAidenticalrestorationcloseonlydirectguardverification. Exactwebb6e98nativegates/repetitionremainpending. Nativegroup21mayselectunchangedtrackedmargin-card/margin-stack/windowsdirecttestfamilies3timesafterfullgates;thischangesverificationselectiononly,nosource/assertion/timeout. C21minimalinactive-rowtargetcorrectionmustfreezeandreceivewholeindependentmanagerverificationbeforeFF. Preserveoverwrittenevidencelimit:originalinactiveheading-v2rawisnotavailable,oldobservationtoolcaptured;newUIcannotberelabelledoldraw. No officialscore/stoplinechange.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -1258,7 +1262,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-12 | IMPLEMENTED_PENDING_REVIEW — final826d1893/source9766;worker879x3;manager4mutations/restored74/fresh3HTTP200 | clientcanonicalranges/source/occurrencecache | P12-12-C-20261024T220000Z.md;211,219–220 | fullcombinednative/A;actualmixed/caption/long inputcoverage | excludes0075591c;notlanded |
 | P12-13 | B_COMPLETE — pickedreport e6f31cbc;52of108legalpositionlosses;107oldtestspass | responsivekeepercauses/candidates | P12-13-B-20261025T021000Z.md;219 | C15undermeasuredcandidate1 | reportonly;own4212stopped |
 | P12-14 | PREPARATION_COMPLETE — picked897ebc44;79guards;zeroUI/score | P9/P10/P11guardinventory | P12-14-A-20261025T071832Z.md;218,220 | laterfreshlandedheadwalkbrief;blindreadersseparate | reportonly;noPDF/server |
-| P12-15 | WORKER_RETURNED_NATIVE_ONE_DIRECTGUARD_REAIM — a6625942;manager108green/6mutationsgreen | keeper/reading-position/layout/shell/directtests;oneglobalsreadingguardonlyauthorized233 | briefs/P12-15.md;§1h.233;alloldscenariosretained | oldcommonkeyguardadaptation/nativefull+3/managerownmutationthenFF | native1legacyfailed591passed;worker598views/293x3/10redmutations;actualfollowuprepaired |
+| P12-15 | MANAGER_DIRECT_VERIFIED_NATIVE_RERUN — 0a810560;11x3/2additionalmutationsgreen | keeper/reading-position/layout/shell/directtests;exactcommonkeyguard | briefs/P12-15.md;§1h.233–235 | correctednativefull+3thencombinedFFafterC21verification | manager108transitions/6core-shapemutations+2scale;11x3;CIb6e98pending |
 | P12-16 | MANAGER_VERIFIED_PENDING_COMBINED_LANDING — exactdiff/5mutationfamilies/hashrestore;native10829+3green/2641x3 | 4legacyCSS/source testfilesONLY | briefs/P12-16.md;219–222 | holdwith07dependentcodeuntilC15/17verified | managerf6e64e03/webd32a9b66;run40173488648 |
 | P12-17 | MANAGER_VERIFIED_PENDING_FF — own5x3/2mutations/restored;earlycombinednative10843+3/2739x3green | responsive-margin.test.ts only;20additions/5casesretained | briefs/P12-17.md;221–226 | landonlywithfinalverified07/15combination | manager4c2c7b1a->78757bbb;worker998c5c84;no productedit |
 | P12-18 | BOUNDED_PREFLIGHT_COMPLETE — picked145ae869;20cells/60+3markers/actualexports/2mutations | inventedno-keynoteformat/list/lifecycle/export/marker;keyboardgapidentified | briefs/P12-18.md;222–227 | C19keyboardandB20geometry;laterfreshrealinputAwalk | report21b5d220;no score;own4217stopped |
