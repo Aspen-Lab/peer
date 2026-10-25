@@ -20,6 +20,7 @@ import { stagedRuntime } from "@/test-support/staged-runtime";
 import { createReflowPage } from "@/test-support/reflow-page";
 import { readReadingInteraction, restoreReadingInteraction, resolveTextPosition, textPosition } from "@/lib/reader/reading-position";
 import { ReaderLayout } from "./reader-layout";
+import { ReaderShell } from "./reader-shell";
 
 type ElementTree = ReactElement<Record<string, unknown>>;
 function elements(node: unknown): ElementTree[] {
@@ -93,6 +94,7 @@ function open(index = 32) {
   const owner = { querySelector: (selector: string) => selector === "[data-reader-centre-inner]" ? (spread ? page.column : null) : page.column };
   const parents = new Map<string, object>();
   const targets: unknown[][] = [];
+  const ancestry: Array<ElementTree | undefined> = [];
   const mounted = stagedRuntime.mount(() => ReaderLayout({ spread, plate: null, title: null, decision: null,
     common: "common", tabs: "tabs", tab: "digestion", words: "words", additions: "paper", next: "next" }), (tree) => {
     const all = elements(tree);
@@ -105,6 +107,7 @@ function open(index = 32) {
       }
     }
     targets.push(all.filter((el) => el.type === "test-portal").map((el) => el.props.target));
+    ancestry.push(all.find((el) => el.type === ReaderShell));
   });
   stagedRuntime.flush();
   const block = blocks.get(ids[index])!;
@@ -117,7 +120,7 @@ function open(index = 32) {
     fire("selectionchange");
     return readReadingInteraction(doc as unknown as Document).selection;
   };
-  return { page, doc, blocks, targets, select, selected, get field() { return field; }, starting,
+  return { page, doc, blocks, targets, ancestry, select, selected, get field() { return field; }, starting,
     current: () => glyph(blocks.get(ids[index])!.nodes[1], 20).top,
     focus() { doc.activeElement = field; fire("focusin"); },
     change(next: boolean, px: number, intervene?: () => void) {
@@ -132,6 +135,11 @@ function open(index = 32) {
 
 afterEach(() => { vi.unstubAllGlobals(); });
 describe("P12-15 ReaderLayout lifetime with reconstructed text and inputs", () => {
+  it("keeps the shell/centre ancestor chain mounted in both modes so captured native Ranges never lose their ancestors", () => {
+    const page = open(); page.change(false, 350); page.change(true, 646);
+    expect(page.ancestry.map((el) => el?.type)).toEqual([ReaderShell, ReaderShell, ReaderShell]);
+    page.stop();
+  });
   it.each([2, 32, 59])("keeps the logical glyph at long anchor%i across side/one-column/side and releases observers", (index) => {
     const page = open(index);
     for (const [side, width] of [[false, 350], [true, 646]] as const) {
