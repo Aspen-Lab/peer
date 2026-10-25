@@ -42,10 +42,10 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:            P12 preparation; both themes consecutive passes 0 / 2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-24T21:13:59.554Z; only writer of this file
-CURRENT ITEM:          07/12independentCs; original04 focusedminimumreturn; manager08/11review;02/03+05+06landed
-NEXT TURN:          Original04 focused toolbar-minimum correction;07 frozen scaled-budget rerun and12client continue; manager08/11 independent diff/tests/mutations and combined verification
-STOPPED BECAUSE:          — active after fifth quota recovery; same work resumed
+HELD BY:          Codex manager, local desktop chat, 2026-10-25T01:54:07.615Z; only writer of this file
+CURRENT ITEM:          same04minimum/07/12Cs; manager08verification/04return;02/03+05+06+11landed
+NEXT TURN:          Independently verify04minimum correction,08 actualUI/fullgates,07 frozen finalmatrix and12client finalhandoff; integrate exacttrees then A andthreeblindreaders/theme
+STOPPED BECAUSE:          — active after sixth quota recovery; same work resumed
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
 OWNER INPUT:      PDF supplied in chat attachment; use original attachment through upload UI only; no private path or text committed
@@ -891,6 +891,10 @@ Common constraints for every brief: verify the branch; preserve user edits; writ
 ### §1h.213 — 2026-10-24: actual sticky furniture blocks04 despite green combined gates
 
 Manager independent real ordinary-DEV invented upload on exact827304c7 webtree passed16scale/theme cells,30open/close cycles and asymmetric Enter; native full gates577+3files/10730+3tests all0. Separate1024×480 three-card probe measured each140px, sticky body viewport68px, sticky Format toolbar76px, first text line26.4px entirely occluded even after scrollIntoView (texty230.34–256.73 under toolbar209.34–285.34). Therefore194 actual header+required furniture+one text row is not satisfied. Return only measuredCardMinimum/its observation and direct tests to original04 C in fresh detachedddd12342 combined source; preserve oldcopy/evidence. Include inactive reading-prose and editable rows, actual wrappedtoolbar/padding; no note-editor/toolbar product edits, portal targets, hoststyles, pairmath or other rules.07 freezes hostattribute lines at e65715ca; eventual combined replay preserves those disjoint hunks. No landing or score from tests that omit the real toolbar. C11 final received separately, not manager accepted.
+
+### §1h.214 — 2026-10-25: server range independently verified and landed; sixth recovery
+
+Manager freecopy35aed7bf read every C11 product/test change;444testsx3, own canonical-adjacency12red, occurrence-cache4red and homogeneous-source3red; saved bytes restored to helperf7ad0b34644259dfae1de8592b426bdeeae512fdd89e7bbbed79f140d3e6a0d4 androute00b9cdc1cea4a33f6d68a179917e1bd899496d3c7c1e503a23e57f7e7095a9b9, then444green. Actual-handler/invented-document path plus localtype0/lint0errors144warnings and exact native40133442566 build/tsc/lint/test0 (10737+3tests) justify backend-only FF acceptance35aed7bf, webtree0b4cf9ac72d195cb24a3a7dea05c9bd1f3b94381. Client metadata, actual UI, production authentication and scores remain unproved. Sixth quota recovery reuses same04/07/12 workers/copies.08 own1125x3/three mutations restored are checkpoint evidence, not final acceptance;04actualtoolbarminimum and07scaledbudget corrections remain independently unaccepted. Stopline unchangedA0/B0.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
