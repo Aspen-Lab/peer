@@ -24,6 +24,30 @@ function assertSplit(rows: ReturnType<typeof stackLayout>, ids: string[], top: n
 
 const sticky = (n: number) => ({ id: `s${n}`, kind: "sticky" as const, title: `Note ${n}` });
 
+describe("P12-21 singleton actual furniture minimum", () => {
+  const note = (minimum: number): FloatingWindow => ({ id: "single", kind: "sticky", title: "Note", order: 1, minimum });
+  it("consumes the measured189 minimum and lifts only the29px deficit", () => {
+    expect(stackLayout([note(189)], { top: 280, bottom: 440, minTop: 48 })[0]).toMatchObject({ top: 251, height: 189 });
+  });
+  it("keeps feasible high selection alignment and the normal260 preference", () => {
+    expect(stackLayout([note(189)], { top: 180, bottom: 440, minTop: 48 })[0]).toMatchObject({ top: 180, height: 260 });
+    expect(stackLayout([note(189)], { top: 200, bottom: 440, minTop: 48 })[0]).toMatchObject({ top: 200, height: 240 });
+  });
+  it("does not cap actual furniture by preferred height and retains it past an undersized band", () => {
+    expect(stackLayout([note(300)], { top: 280, bottom: 440, minTop: 48 })[0]).toMatchObject({ top: 140, height: 300 });
+    expect(stackLayout([note(189)], { top: 350, bottom: 400, minTop: 300 })[0]).toMatchObject({ top: 300, height: 189 });
+  });
+  it("uses a new floor after wrapping/read replacement without storing changed geometry", () => {
+    const state = useWindows.getState(); state.open({ ...sticky(1), anchorTop: 280 });
+    state.setMinimum("s1", 189);
+    expect(stackLayout(useWindows.getState().windows, { top: 280, bottom: 440, minTop: 48 })[0].height).toBe(189);
+    state.setMinimum("s1", 225);
+    expect(stackLayout(useWindows.getState().windows, { top: 280, bottom: 440, minTop: 48 })[0]).toMatchObject({ top: 215, height: 225 });
+    state.close("s1"); state.setMinimum("s1", 225);
+    expect(useWindows.getState().windows).toEqual([]);
+  });
+});
+
 describe("useWindows", () => {
   beforeEach(() => useWindows.setState({ windows: [], clock: 0 }));
 
