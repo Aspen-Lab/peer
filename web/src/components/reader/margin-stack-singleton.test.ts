@@ -15,23 +15,25 @@ afterEach(() => { effects.length = 0; fixture.target = null; vi.unstubAllGlobals
 
 it("P12-21 bounds an oversized singleton in the existing shared track without calling it a split", () => {
   const spacer = { style: { height: "" } };
-  const target = { style: { cssText: "" }, dataset: {} as Record<string, string>, querySelector: () => spacer };
+  const target = { setAttribute: vi.fn(), removeAttribute: vi.fn(), style: { cssText: "" }, dataset: {} as Record<string, string>, querySelector: () => spacer };
   fixture.target = target;
   const result = useMarginStack("one", { current: null }, { left: 20, width: 350 }, true, {
     windows: [{ id: "one", kind: "sticky", title: "Note", order: 1, minimum: 189 }],
-    rect: { top: 300, bottom: 400, left: 20, width: 350 }, bottom: 400,
+    rect: { top: 300, bottom: 400, left: 20, width: 350, presentation: "bottom" }, bottom: 400,
   });
   effects.forEach((effect) => effect());
   expect(result.split).toBe(false); expect(result.scroll).toBe(true);
   expect(result.rows[0]).toMatchObject({ top: 300, height: 189 });
   expect(target.style.cssText).toContain("top:300px;height:100px");
   expect(target.style.cssText).toContain("overflow-y:auto");
+  expect(target.setAttribute).toHaveBeenCalledWith("role", "complementary");
+  expect(target.setAttribute).toHaveBeenCalledWith("aria-label", "Margin");
   expect(spacer.style.height).toBe("189px"); expect(target.dataset.split).toBe("false");
 });
 
 it("P12-21 leaves a fitting singleton host transparent", () => {
   const spacer = { style: { height: "" } };
-  const target = { style: { cssText: "" }, dataset: {}, querySelector: () => spacer };
+  const target = { setAttribute: vi.fn(), removeAttribute: vi.fn(), style: { cssText: "" }, dataset: {}, querySelector: () => spacer };
   fixture.target = target;
   const result = useMarginStack("one", { current: null }, null, true, {
     windows: [{ id: "one", kind: "sticky", title: "Note", order: 1, minimum: 189 }],
@@ -39,6 +41,8 @@ it("P12-21 leaves a fitting singleton host transparent", () => {
   });
   effects.forEach((effect) => effect());
   expect(result.split).toBe(false); expect(result.scroll).toBe(false);
+  expect(target.removeAttribute).toHaveBeenCalledWith("role");
+  expect(target.removeAttribute).toHaveBeenCalledWith("aria-label");
   expect(target.style.cssText).toBe("display:contents"); expect(spacer.style.height).toBe("0");
 });
 
