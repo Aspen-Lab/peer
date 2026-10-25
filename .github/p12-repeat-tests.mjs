@@ -10,7 +10,7 @@ const groups = {
   '12': (f) => /src\/components\/reader\/(explain-(box|thread)|paper-body)/.test(f) || /src\/lib\/reader\/explain-range/.test(f) || /src\/store\/explain-threads/.test(f) || /src\/app\/papers\/\[id\]\/page.explain/.test(f),
   '16': (f) => ['src/app/globals.css.reading-text.test.ts', 'src/app/globals.css.test.ts', 'src/components/reader/explain-dock.test.ts', 'src/components/reader/left-pane.fit-top.test.ts'].includes(f),
   '19': (f) => /src\/components\/notes\/(note-editor|note-toolbar|wysiwyg-field)[.-]/.test(f),
-  place: (f) => /keep-place|reading-position|reader-layout|responsive-margin/.test(f),
+  place: (f) => /keep-place|keep-selection|reading-position|reader-layout|responsive-margin/.test(f),
 };
 if (!requested.length || requested.some((id) => !Object.hasOwn(groups, id)) || new Set(requested).size !== requested.length) throw Error('Unknown or duplicate verification group');
 const tracked = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' }).split('\0').filter((f) => /\.test\.tsx?$/.test(f));

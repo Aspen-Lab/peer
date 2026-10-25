@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-25T17:17:37.413Z
+AS OF        2026-10-25T17:26:21.066Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.229   NEXT RULING §1h.230   NEXT ITEM ID P12-21   NEXT FREE PORT 4220
+LAST RULING  §1h.230   NEXT RULING §1h.231   NEXT ITEM ID P12-21   NEXT FREE PORT 4220
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      15finalstablecolumnC;19keyboardC/managerreview;20Bindependentactualminimum;18done;17verifiedheld;A0B0
+RUNNING      15final45UI/manager108running;19final7aaff31bworkerverification;20Bshortcardcandidates;17verifiedheld;A0B0
 THEN         verifyfinalcombinedsources,independentAand3blindreaders/theme;A0/B0
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -239,6 +239,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-25T17:14:55.158Z | parent ab6536ff (entry commit follows) | manager | P12-ATTRIBUTION-CORRECTION: Manager typedonewrongdigitin explicit author email ofab6536ff; displayedauthornamepeter14531453 anddirectingowner remainPeter. Addonepublicmailmapalias tocanonicalowneremail, verifygitcheck-mailmap; neverrewrite/amendhistory. CorrectsubsequentexplicitcommandsandincludeownerCo-authored-by onthiscorrection. No application/test/credential/private-data change. B20brief alreadycommitted, dispatch follows push. | evidence: .mailmap;gitshowab6536ffauthor;gitcheck-mailmap;HANDOFF-P12entry | next: PushcanonicalattributionrecordandB20brief;spawnindependentB20;continue15/19andmanagerverification
 
 - 2026-10-25T17:17:37.413Z | parent 9286fa20 (entry commit follows) | manager | P12-20-B-START-19-REVIEW-SCOPE: RequestedworkerUnknown thenseparatefreshsupportedfallbackB20startedinown569857accopy4219, notreusedA/C; readwholebrief/rules, actualsource trace/freshuploadpreparing. C19exactrectcorrectswhollyhiddenclaim: single1440x480card280..440h160/header45.34/toolbar76; afterendscroll26.39line has15pxoverlap/11.39pxexposed,centrecovered;853alsohitblocked. ManagerreadwholeC19productiondiffthrough23e55019 (3authorizedfiles only, scopedephemeralselection/focus/AltF10, oldTab/Escape preserved). Addnativegroup19 unchangednote-editor/note-toolbar/wysiwyg-familytests soallthree productfamilies repeat3 withfinalcombinedgates, nottimeout/assertion change. C15corrected108andpostresizeHTTP/Rangepassreported, initialnarrow target/listener regression causalredbankedaac3b57f; finalownedmarkupcorrectionongoing. No acceptance/score. | evidence: briefs/P12-20.md;agent/root/p12_20_single_sticky_b;C19ui-short-rects.json,ui-853-short-failure.json;C15aac3b57f;.github/p12-repeat-tests.mjs | next: Managerpick/verifyC19frozenkeyboardreturn;C15finalstablecolumn;B20causal3candidates;nativefinalgroups07/08/12/16/19/place thenFF/freshA
+
+- 2026-10-25T17:26:21.066Z | parent 157790d4 (entry commit follows) | manager | P12-19-MANAGER-MUTATIONS-SEMANTIC-BOUNDARY: ManagerreadwholeC19product/newtestdiffthrough23e55019 andpickedown03a66813. Own15directtests3green; AltF10entrydisabled6red,toolbarfocus-transferdisabled2red,externalclearingdisabled1red, byteidenticalrestoration then15green. Newfinalsource7aaff31b retainedforlaterverification,notcoveredbyoldcounts. C19found jsx-a11y rejectsaria-description,146warnings; replacewithsupportedtitle+aria-keyshortcuts,no suppression. ActualCodeblockprobe provesenabledinlineCodebuttonno-op; approve truthfuldisabledinline-markstateinliteralcode, retainingparagraphinlineCodeandcode→typeexit. Frozen7a17tests green/workerfinalverificationpending. Addexistingkeep-selectionfamilies tonativeplace3 repetitions because C15nowpreservesitsrealgeometrytargetacrossinitialnarrow/lifecycle. Ownfinal45source108andpostresizeUIrunninginnewversion-labelledfiles;no resultyet. | evidence: verify-integrated/manager-keyboard-check-results.json;C19code-noop.json;7aaff31b/7fe43e39;c69cfe5e;.github/p12-repeat-tests.mjs;C15aac3b57f/45da6c80 | next: Finishownfinal45UI thenpickfrozen19semanticdelta;own17tests3/mutations/type/lint/native07/08/12/16/19/place;B20finalcandidates→minimalC21;FFonlyafterverification
 
 ---
 
