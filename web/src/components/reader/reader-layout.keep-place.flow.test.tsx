@@ -125,6 +125,7 @@ afterEach(() => { vi.unstubAllGlobals(); });
 describe("P12-15 ReaderLayout lifetime with reconstructed text and inputs", () => {
   it("gives the existing selection keeper a stable real-geometry target even on a fresh one-column entry", () => {
     const page = open(); page.stop(); let target: ElementTree | undefined;
+    vi.stubGlobal("requestAnimationFrame", vi.fn());
     const mounted = stagedRuntime.mount(() => ReaderShell({ side: false, keepReadingPlace: false, left: { whole: null }, centre: "paper" }), (tree) => {
       const all = elements(tree);
       target = all.find((el) => el.props["data-reader-centre-inner"] !== undefined);

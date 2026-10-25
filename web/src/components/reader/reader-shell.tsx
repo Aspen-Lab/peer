@@ -342,7 +342,7 @@ export function ReaderShell({ left, centre, header, keepReadingPlace = true, sid
         <div className="reader-divider-rest" aria-hidden="true" />
       ) : null}
       <div key="centre" className={side ? "reader-centre" : undefined} id={CENTRE_ID} data-reader-centre={side ? "" : undefined} style={side ? undefined : { display: "contents" }}>
-        <div className={side ? "reader-centre-inner" : undefined} data-reader-centre-inner={side ? "" : undefined} style={side ? undefined : { display: "contents" }}>
+        <div className={side ? "reader-centre-inner" : undefined} data-reader-centre-inner="">
           {centre}
         </div>
       </div>
