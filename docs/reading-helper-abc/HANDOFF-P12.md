@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-25T07:11:24.041Z
+AS OF        2026-10-25T07:14:33.609Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.217   NEXT RULING §1h.218   NEXT ITEM ID P12-14   NEXT FREE PORT 4213
+LAST RULING  §1h.218   NEXT RULING §1h.219   NEXT ITEM ID P12-15   NEXT FREE PORT 4214
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      13B;manager07/08/12combinedverification;02/03+04+05+06+11landed
+RUNNING      13B;14Aprepqueued;manager07/08/12combinedverification;02/03+04+05+06+11landed
 THEN         verifyfinalcombinedsources,independentAand3blindreaders/theme;A0/B0
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -211,6 +211,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-25T07:04:32.085Z | parent 19b5c2e5 (entry commit follows) | manager | P12-13-B-START: Backfill completed dispatch after brief4adc41fe: requested worker choice Unknownmodel; separate supported same-generation fallback B13 started from frozen8992c964 in prepared own p12-13/wt,port4212. FirstPARTIAL52ac6e7d survives quota; sameworker resumed after laterinterval, no duplicate. It independently reproduced original same-input reading-place offsets and is measuring transient column width, browser anchoring/clamps and keeper remounts on longer invented input before any policy/fix. | evidence: briefs/P12-13.md; agent /root/p12_13_investigator; ownreport52ac6e7d; external geometry/event probes | next: B13 bounded cause/candidates; manager08/12 combined verification;07 final frozen evidence then focusedrepair after ruling
 
 - 2026-10-25T07:11:24.041Z | parent bf5e7399 (entry commit follows) | manager | P12-NATIVE-REPEAT-VERIFICATION: 07 finite worker report52f281f3 received:598finalviews/90cycles/9mutations,type/lint/build0, but unchanged Windows filesystem-source scans repeatedly hit5000ms and prevent worker3green claim. Extend existing branch-scoped nativeCI with optional approved test-group union repeated3times after unchanged fullgates;140tracked testfiles cover all57C07,68manager08 and49C12 filters. Combinedpublicpatch202224bytes gzipbase6472912 exceeds dispatch size; add built-inNode Brotli alongside existinggzip, same public-web-only path restrictions/expectedtree. No dependency,testtimeout/assertion,appsource,auth,secret ordeployment change. YAMLparse/Nodesyntax/listcoverage checked. Prepared independent combined96775f69 webtreee8135e3397a7a73d05ed5d8eb0fc2402a4481f24 fromlandedbf5+frozen07/08/final12;notlanded,actualkeep-place failure remainsopen. | evidence: .github/workflows/p12-gates.yml;.github/p12-repeat-tests.mjs; verify-integrated/wt; externalcheck-ci-groups.cjs;07finitecheckpoint52f281f3;12final826d1893 | next: Dispatch exactcombinednativefullgates and140testfilesx3; manager own12mutations/08+12freshUI;B13cause/candidates thenfocused07repair
+
+- 2026-10-25T07:14:33.609Z | parent 867644a4 (entry commit follows) | manager | P12-14-GUARD-PREP-BRIEF: Combined native run40171869164 started on exacte8135e3397a7a73d05ed5d8eb0fc2402a4481f24 using publicpatch Brotli roundtrip59812byte dispatch;140unchanged testfiles repeated3 afterfullgates pending. Write independentA14 preparation brief for required publicP9F01-F24/P10A1-A15B1-B16/P11A1-A12B1-B12 guard chain inventory before firstwalk. No score or actualwalk authorized on unlandedsource; own detached867644a4 prepared,4213reserved/no server/PDF. It will return coverage plan separately from later freshA walks/readers. | evidence: briefs/P12-14.md; .github/p12-repeat-tests.mjs; native40171869164; externalcombined07-08-12-dispatch-result.json | next: Dispatch separateA14guardinventory; manager12ownmutations/fresh08+12UI; B13finalcause/candidates thenfocusedresponsivefix; nativecombined result
 
 ---
 

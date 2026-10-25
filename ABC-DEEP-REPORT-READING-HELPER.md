@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:            P12 preparation; both themes consecutive passes 0 / 2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-25T07:11:24.041Z; only writer of this file
-CURRENT ITEM:          13B;manager07/08/12combinedverification;02/03+04+05+06+11landed
-NEXT TURN:          Dispatch exactcombinednativefullgates and140testfilesx3; manager own12mutations/08+12freshUI;B13cause/candidates thenfocused07repair
+HELD BY:          Codex manager, local desktop chat, 2026-10-25T07:14:33.609Z; only writer of this file
+CURRENT ITEM:          13B;14Aprepqueued;manager07/08/12combinedverification;02/03+04+05+06+11landed
+NEXT TURN:          Dispatch separateA14guardinventory; manager12ownmutations/fresh08+12UI; B13finalcause/candidates thenfocusedresponsivefix; nativecombined result
 STOPPED BECAUSE:          — active after seventh quota recovery; same workers/copies retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -907,6 +907,10 @@ Manager read full original04 plus205/207/213 corrections, ran388testsx3 and own 
 ### §1h.217 — 2026-10-25: native unchanged touched repetitions and bounded public patch transport
 
 07's repeated local filesystem-scan timeouts remain recorded as incomplete worker gates, never weakened or renamed a pass. Existing genuine nativeCI may repeat approved tracked test-group unions exactly3times after unchanged build/type/lint/fullsuite, with original timeouts/assertions and maxWorkers2. Manager selected140files covers the57/68/49 scoped sets, deduplicated. Combined publicly reviewable webpatch202224bytes exceeds dispatch limit undergzip (72912base64chars); built-inNode Brotli may transport the same exact bytes without a dependency. Keep gzip compatibility, approvedbranch-only runs, baseancestor test, strictweb-only/no-private/no-manifest restrictions and expectedwebtree equality. This is validation infrastructure, no appflag/auth/model/secret change and no product landing. Independent combined96775f69/e8135e3397a7a73d05ed5d8eb0fc2402a4481f24 contains already-landed final11 and04minimum plus frozen07/08/final12; actual reading-place failure still blocks07.
+
+### §1h.218 — 2026-10-25: inherited guard inventory before real walks
+
+Frozen P12 passrequirement5 requires each legacy guard denominator to be reconstructed from committed public sources before the first fresh walk. Separate independent A14 may prepare P9/P10/P11 guard inventory and concrete per-theme evidence plan in own detached867644a4, with no product edits, server, PDF, verdict or score. Actual A theme walks await final landed SHA and remain separate from implementers/investigators and fresh blindreaders. Public-source supersessions map to current tests, never exclusions from denominators. This preparation runs in parallel with manager exact-tree verification and B13 causal investigation; stopline unchangedA0/B0.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
