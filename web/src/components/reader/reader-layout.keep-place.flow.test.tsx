@@ -108,7 +108,7 @@ function open(index = 32) {
     fire("selectionchange");
     return readReadingInteraction(doc as unknown as Document).selection;
   };
-  return { page, doc, blocks, ancestry, select, selected, get field() { return field; }, starting,
+  return { page, doc, blocks, ancestry, listeners, select, selected, get field() { return field; }, starting,
     current: () => glyph(blocks.get(ids[index])!.nodes[1], 20).top,
     focus() { doc.activeElement = field; fire("focusin"); },
     change(next: boolean, px: number, intervene?: () => void) {
@@ -123,6 +123,20 @@ function open(index = 32) {
 
 afterEach(() => { vi.unstubAllGlobals(); });
 describe("P12-15 ReaderLayout lifetime with reconstructed text and inputs", () => {
+  it("gives the existing selection keeper a stable real-geometry target even on a fresh one-column entry", () => {
+    const page = open(); page.stop(); let target: ElementTree | undefined;
+    const mounted = stagedRuntime.mount(() => ReaderShell({ side: false, keepReadingPlace: false, left: { whole: null }, centre: "paper" }), (tree) => {
+      const all = elements(tree);
+      target = all.find((el) => el.props["data-reader-centre-inner"] !== undefined);
+      const root = tree as ElementTree;
+      (root.props.ref as { current: unknown }).current = { clientWidth: 350, querySelector: () => target ? page.page.column : null };
+    });
+    stagedRuntime.flush();
+    expect(target).toBeDefined();
+    expect((target?.props.style as { display?: string } | undefined)?.display).not.toBe("contents");
+    expect(page.listeners.get("pointerdown")?.size).toBeGreaterThan(0);
+    mounted.unmount();
+  });
   it("keeps the shell/centre ancestor chain mounted in both modes so captured native Ranges never lose their ancestors", () => {
     const page = open(); page.change(false, 350); page.change(true, 646);
     expect(page.ancestry.map((el) => el?.type)).toEqual([ReaderShell, ReaderShell, ReaderShell]);
