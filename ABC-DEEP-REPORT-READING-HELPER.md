@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:            P12 preparation; both themes consecutive passes 0 / 2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-25T07:33:34.023Z; only writer of this file
-CURRENT ITEM:          15keeperC;16finalreturned/managerverification;07/08/12combinedpending;Ainventoryready;02/03+04+05+06+11landed
-NEXT TURN:          managerexact16diff/mutations/nativefull+scoped3;C15continue;actualAwalksafterintegration
+HELD BY:          Codex manager, local desktop chat, 2026-10-25T07:40:25.604Z; only writer of this file
+CURRENT ITEM:          15keeperC;17captestqueued;manager07/08/12/16verification/native40173488648;Ainventoryready;02/03+04+05+06+11landed
+NEXT TURN:          StartC17disjointtestgap;C15keepercontinue;nativefull+scoped3;managerrestoredtests/type/lint;freshAafterlanding
 STOPPED BECAUSE:          — active after seventh quota recovery; same workers/copies retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -924,6 +924,10 @@ A14 reconstructs all79legacyguards, not79passes. Retain both noSearch-the-web ne
 
 Manager's newfreshcombinedordinaryDEVactualpointer checks5actionfamilies and3HTTP200Explain modes,stablecardnode/draft across3resizes, unchangedpaperwords and0pageerrors; these are bounded inventedinputchecks, notreadingplace/production/Aacceptance. Oldledger04/07/08/10status wasstale; backfill fromalreadycommittedrulings/checkpoints, retainA0/B0 andpendingcombinednative. Newdispatch/liveworkers are recorded explicitly to prevent duplicatework.
 
+221. **§1h.221 — 2026-10-25: surviving cap mutation returns a disjoint coverage gap — BINDING.**
+
+Manager bottomMarginRectOf420-to999 mutation survives the existing844px-high test because its55% height411.4 never reaches420. Preserve this failed verification rather than claiming eight mutationspassed. C17 owns onlyresponsive-margin.test.ts and owncheckpoint innewdetachedf6e64e03/port4216; add honest tall-bound andindependent55%/legend controls without productedit/newrequirement. C15 retains keeper/layout/shell/reading-position directtests; responsive-margin.test.ts reservedC17. Existing7managerred mutations andbyteidenticalrestorations remainbounded evidence; finalrestored/family3/native gates stillrequired. No scoring orlanding until measured readingplace andallcombinedchecks close.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -1195,7 +1199,8 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-13 | B_COMPLETE — pickedreport e6f31cbc;52of108legalpositionlosses;107oldtestspass | responsivekeepercauses/candidates | P12-13-B-20261025T021000Z.md;219 | C15undermeasuredcandidate1 | reportonly;own4212stopped |
 | P12-14 | PREPARATION_COMPLETE — picked897ebc44;79guards;zeroUI/score | P9/P10/P11guardinventory | P12-14-A-20261025T071832Z.md;218,220 | laterfreshlandedheadwalkbrief;blindreadersseparate | reportonly;noPDF/server |
 | P12-15 | IN_PROGRESS — originalresponsiveC innewdetached96775f69/port4214 | durablekeeper/layout/shell/ephemeraltokens | briefs/P12-15.md;219–220 | causalred/fix/mutation/108transitionproof;managerverification | /root/p12_07_implementer;excludesentirebase |
-| P12-16 | IMPLEMENTED_PENDING_REVIEW — finalc5675b78;6exacttestreaims;180pass3WindowsENOENTx3 | 4legacyCSS/source testfilesONLY | briefs/P12-16.md;219–220 | managerexactdiff/mutations/nativeallgreen | sourcebase96775f69;no productchange/server |
+| P12-16 | MANAGER_REVIEWED_PENDING_NATIVE — exact4testdiff;5ownmutationfamiliesred/restored;native40173488648running | 4legacyCSS/source testfilesONLY | briefs/P12-16.md;219–221 | fullnative+fourfilesx3;integratedlandingafterC15/17 | managerf6e64e03/webd32a9b66;no productchange |
+| P12-17 | QUEUED — cap999 survived manager mutation; tests-only return | responsive-margin.test.ts tall420/55%/legend bound | briefs/P12-17.md;221 | newdetachedf6e64e03;causalred/fix/mutations/tests3 | port4216reserved;no productfailureinferred |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
 | P11-26 | **DONE 21:0xZ 2026-10-20** — on the branch (§1h.128 (b)); was RUNNING (rules 4, 5 added §1h.127 (c)) since 09:1xZ 2026-10-20 — C, `briefs/P11-26.md`, `scratchpad/p11c26/wt`, port 4127: the explain card keeps its top at the selection (B3); a figure in front of the stack is never a thumbnail (X-3) | round 1 Theme B | §1h.122 (b) 1, 4 | C → the manager | — |
