@@ -11,11 +11,20 @@ on:
         type: string
         required: false
       patch:
-        description: Optional gzip/base64 manager-reviewed web-only verification patch
+        description: Optional compressed/base64 manager-reviewed web-only verification patch
         type: string
+        required: false
+      patch_encoding:
+        description: Compression for the public verification patch (gzip or br)
+        type: string
+        default: gzip
         required: false
       expected_web_tree:
         description: Required web tree SHA when verifying a patch
+        type: string
+        required: false
+      repeat_groups:
+        description: Optional approved test groups (07,08,12,place), unchanged tests three times
         type: string
         required: false
 
@@ -52,6 +61,7 @@ jobs:
         env:
           BASE_SHA: ${{ inputs.base }}
           PATCH_B64: ${{ inputs.patch }}
+          PATCH_ENCODING: ${{ inputs.patch_encoding }}
           EXPECTED_WEB_TREE: ${{ inputs.expected_web_tree }}
         run: |
           set -euo pipefail
@@ -65,7 +75,7 @@ jobs:
           cd peer
           if [ -n "$PATCH_B64" ]; then
             [[ "$EXPECTED_WEB_TREE" =~ ^[0-9a-f]{40}$ ]]
-            node -e 'const f=require("node:fs"),z=require("node:zlib");f.writeFileSync(process.env.RUNNER_TEMP+"/verify.patch",z.gunzipSync(Buffer.from(process.env.PATCH_B64,"base64")))'
+            node -e 'const f=require("node:fs"),z=require("node:zlib"),e=process.env.PATCH_ENCODING||"gzip";if(!["gzip","br"].includes(e))process.exit(1);const b=Buffer.from(process.env.PATCH_B64,"base64");f.writeFileSync(process.env.RUNNER_TEMP+"/verify.patch",e==="br"?z.brotliDecompressSync(b):z.gunzipSync(b))'
             git apply --check "$RUNNER_TEMP/verify.patch"
             git apply --index "$RUNNER_TEMP/verify.patch"
             node -e 'const c=require("node:child_process");const p=c.execFileSync("git",["diff","--cached","--name-only","-z"],{encoding:"utf8"}).split("\0").filter(Boolean);if(!p.length||p.some(x=>!x.startsWith("web/")||/(^|\/)(\.local-data|uploads|node_modules|\.env[^/]*)(\/|$)/.test(x)||/(^|\/)(package\.json|package-lock\.json)$/.test(x)))process.exit(1)'
@@ -113,3 +123,13 @@ jobs:
             [ "$v" -eq 0 ] || tail -n 100 "$L/test.log"
             exit 1
           fi
+      - name: Repeat selected unchanged tests three times
+        if: inputs.repeat_groups != ''
+        working-directory: peer/web
+        shell: bash
+        env:
+          P12_REPEAT_GROUPS: ${{ inputs.repeat_groups }}
+        run: |
+          set -euo pipefail
+          git show "$GITHUB_SHA:.github/p12-repeat-tests.mjs" > "$RUNNER_TEMP/p12-repeat-tests.mjs"
+          node "$RUNNER_TEMP/p12-repeat-tests.mjs"

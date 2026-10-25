@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:            P12 preparation; both themes consecutive passes 0 / 2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-25T07:04:32.085Z; only writer of this file
-CURRENT ITEM:          07finitehandoff/13B;manager08/12verification;02/03+04+05+06+11landed
-NEXT TURN:          B13 bounded cause/candidates; manager08/12 combined verification;07 final frozen evidence then focusedrepair after ruling
+HELD BY:          Codex manager, local desktop chat, 2026-10-25T07:11:24.041Z; only writer of this file
+CURRENT ITEM:          13B;manager07/08/12combinedverification;02/03+04+05+06+11landed
+NEXT TURN:          Dispatch exactcombinednativefullgates and140testfilesx3; manager own12mutations/08+12freshUI;B13cause/candidates thenfocused07repair
 STOPPED BECAUSE:          — active after seventh quota recovery; same workers/copies retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -903,6 +903,10 @@ Manager freecopy35aed7bf read every C11 product/test change;444testsx3, own cano
 ### §1h.216 — 2026-10-25: independent equal-card and actual-toolbar acceptance
 
 Manager read full original04 plus205/207/213 corrections, ran388testsx3 and own bodyvisibility/pairwrite/oldEnter/toolbar mutations; all meaningfulred then exact saved-byte restoration. Extra Enter3red and toolbar6red restore SHA725bab5105b9c9bbc9ccf4568674874ca67fc9bb09fc7b69390cbc56f043e132/e150bf83eab5162999b33438cba2af158f19563425dbda64ccf05f83a6286ba1. Localtype0/lint0errors144warnings and actual native40152522356 all0/10768+3tests on3251d071c204ba4bdf4e8087ddc7921f91b395f5. Own invented ordinaryDEV16scale/theme+30cycles+8short inactive/editable observations expose26.39px of26.4px row beneath toolbar;3equal189px cards use shared591px track in392px band.0pageerrors,paperwords/draftsretained,screenshotread,4293stopped. FF19b5c2e5 after rebuilt ancestry and exactwebdiffquiet; no07responsive/productionauth/A/score inference. Seventh quota recovery reuses sameworkers. C12final826d1893 is received, manager combined verification stillrequired. StoplineA0/B0.
+
+### §1h.217 — 2026-10-25: native unchanged touched repetitions and bounded public patch transport
+
+07's repeated local filesystem-scan timeouts remain recorded as incomplete worker gates, never weakened or renamed a pass. Existing genuine nativeCI may repeat approved tracked test-group unions exactly3times after unchanged build/type/lint/fullsuite, with original timeouts/assertions and maxWorkers2. Manager selected140files covers the57/68/49 scoped sets, deduplicated. Combined publicly reviewable webpatch202224bytes exceeds dispatch limit undergzip (72912base64chars); built-inNode Brotli may transport the same exact bytes without a dependency. Keep gzip compatibility, approvedbranch-only runs, baseancestor test, strictweb-only/no-private/no-manifest restrictions and expectedwebtree equality. This is validation infrastructure, no appflag/auth/model/secret change and no product landing. Independent combined96775f69/e8135e3397a7a73d05ed5d8eb0fc2402a4481f24 contains already-landed final11 and04minimum plus frozen07/08/final12; actual reading-place failure still blocks07.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
