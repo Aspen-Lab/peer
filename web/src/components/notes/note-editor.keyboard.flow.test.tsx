@@ -29,7 +29,7 @@ afterEach(() => vi.unstubAllGlobals());
 function mount(type: BlockType = "text") {
   const b = block(type, "alpha beta gamma");
   const note: Note = { id: "one", title: "n", blocks: [b], sources: {}, createdAt: "", updatedAt: "" };
-  const surface = { value: b.text, selectionStart: 6, selectionEnd: 10, setSelectionRange: (from: number, to: number) => { surface.selectionStart = from; surface.selectionEnd = to; }, selection: { from: 6, to: 10 }, focus: vi.fn(() => { active = surface; }), getBoundingClientRect: () => ({ top: 100, bottom: 130 }) };
+  const surface = { contains: (node: unknown) => node === surface, value: b.text, selectionStart: 6, selectionEnd: 10, setSelectionRange: (from: number, to: number) => { surface.selectionStart = from; surface.selectionEnd = to; }, selection: { from: 6, to: 10 }, focus: vi.fn(() => { active = surface; }), getBoundingClientRect: () => ({ top: 100, bottom: 130 }) };
   if (type === "code") Object.setPrototypeOf(surface, HTMLTextAreaElement.prototype);
   const button = { focus: vi.fn(() => { active = button; }), closest: () => toolbar };
   const toolbar = { contains: (node: unknown) => node === button, querySelector: () => button };
@@ -114,3 +114,14 @@ it("external focus clears Format ownership instead of applying a stale selection
   stagedRuntime.event(() => (h.toolbarProps().onMark as (mark: string) => void)("strong"));
   expect((h.row().block as { text: string }).text).toBe("alpha beta gamma"); expect(active).toBe(outside); h.run.unmount();
 });
+for (const method of ["pointer", "shortcut"] as const) {
+  it(`retains ${method} formatting of the current selection`, () => {
+    const h = mount();
+    stagedRuntime.event(() => {
+      if (method === "pointer") (h.toolbarProps().onMark as (mark: string) => void)("strong");
+      else h.api().key(h.event("b", { ctrlKey: true }), h.id);
+    });
+    expect((h.row().block as { text: string }).text).toBe("alpha **beta** gamma");
+    expect(active).toBe(h.surface); h.run.unmount();
+  });
+}

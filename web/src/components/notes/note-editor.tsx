@@ -1895,7 +1895,10 @@ export function NoteEditor({
         <div
           ref={columnRef}
           onBlurCapture={(e) => {
-            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+            const next = e.relatedTarget as Node | null;
+            const toolbar = e.currentTarget.querySelector('[role="toolbar"]');
+            const surface = editing ? areas.current.get(editing) : null;
+            if (!next || (!toolbar?.contains(next) && !surface?.contains(next))) {
               toolbarTarget.current = null;
               setEditing(null);
             }
