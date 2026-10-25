@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:            P12 preparation; both themes consecutive passes 0 / 2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-25T07:14:33.609Z; only writer of this file
-CURRENT ITEM:          13B;14Aprepqueued;manager07/08/12combinedverification;02/03+04+05+06+11landed
-NEXT TURN:          Dispatch separateA14guardinventory; manager12ownmutations/fresh08+12UI; B13finalcause/candidates thenfocusedresponsivefix; nativecombined result
+HELD BY:          Codex manager, local desktop chat, 2026-10-25T07:25:27.006Z; only writer of this file
+CURRENT ITEM:          14Aprep;15keeper/16testreaimqueued;manager07/08/12verification;02/03+04+05+06+11landed
+NEXT TURN:          StartC15durablekeeper anddisjointC16testreaims; managerfresh08/12ordinaryUI andfrozen07whole-diff review; A14guardinventory; exactnative rerunaftercorrections
 STOPPED BECAUSE:          — active after seventh quota recovery; same workers/copies retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -888,29 +888,35 @@ Common constraints for every brief: verify the branch; preserve user edits; writ
 
 212. **Client dispatch and bottom Margin landmark seam (2026-10-24) — BINDING.** Separate12started exactfrozen0075591c per211,requestedworkerunavailableagain/samegenerationfallback.07 actualsharedcardskeepstableFigure/Explaintextarea/draftthrough24resize transitions in6orders;thisisworkerevidence,notacceptance. Sourcehostin04 margin-stack-scroll.tsx isdivappendedtobodywithnolabel; narrowresponsiveplaceholderisaria-hidden,soactualbottomcardslackthe197complementaryMarginlandmark. Approve07onlyfocusedhostattributesanddirecttests: role=complementary/aria-label=Margin for registeredbottompresentation, removeattributeswhenreturningside; no portalhostreplacement,targetchange,style/stack/minimummath edits. EmptycardstatekeepsnoextraUI.12doesnotownthisfile. Testred→fix,meaningfulrole mutation/hashrestore andfinaltouchedgates;manageractualAT/DOMlandmarkcheck remains.
 
-### §1h.213 — 2026-10-24: actual sticky furniture blocks04 despite green combined gates
+213. **§1h.213 — 2026-10-24: actual sticky furniture blocks04 despite green combined gates — BINDING.**
 
 Manager independent real ordinary-DEV invented upload on exact827304c7 webtree passed16scale/theme cells,30open/close cycles and asymmetric Enter; native full gates577+3files/10730+3tests all0. Separate1024×480 three-card probe measured each140px, sticky body viewport68px, sticky Format toolbar76px, first text line26.4px entirely occluded even after scrollIntoView (texty230.34–256.73 under toolbar209.34–285.34). Therefore194 actual header+required furniture+one text row is not satisfied. Return only measuredCardMinimum/its observation and direct tests to original04 C in fresh detachedddd12342 combined source; preserve oldcopy/evidence. Include inactive reading-prose and editable rows, actual wrappedtoolbar/padding; no note-editor/toolbar product edits, portal targets, hoststyles, pairmath or other rules.07 freezes hostattribute lines at e65715ca; eventual combined replay preserves those disjoint hunks. No landing or score from tests that omit the real toolbar. C11 final received separately, not manager accepted.
 
-### §1h.214 — 2026-10-25: server range independently verified and landed; sixth recovery
+214. **§1h.214 — 2026-10-25: server range independently verified and landed; sixth recovery — BINDING.**
 
 Manager freecopy35aed7bf read every C11 product/test change;444testsx3, own canonical-adjacency12red, occurrence-cache4red and homogeneous-source3red; saved bytes restored to helperf7ad0b34644259dfae1de8592b426bdeeae512fdd89e7bbbed79f140d3e6a0d4 androute00b9cdc1cea4a33f6d68a179917e1bd899496d3c7c1e503a23e57f7e7095a9b9, then444green. Actual-handler/invented-document path plus localtype0/lint0errors144warnings and exact native40133442566 build/tsc/lint/test0 (10737+3tests) justify backend-only FF acceptance35aed7bf, webtree0b4cf9ac72d195cb24a3a7dea05c9bd1f3b94381. Client metadata, actual UI, production authentication and scores remain unproved. Sixth quota recovery reuses same04/07/12 workers/copies.08 own1125x3/three mutations restored are checkpoint evidence, not final acceptance;04actualtoolbarminimum and07scaledbudget corrections remain independently unaccepted. Stopline unchangedA0/B0.
 
-### §1h.215 — 2026-10-25: independently investigate responsive reading-place regression
+215. **§1h.215 — 2026-10-25: independently investigate responsive reading-place regression — BINDING.**
 
 07 final frozen598-view budget/figure matrix and90cycles do not establish B2 reading-place preservation. Separate same-anchor actual resize probe reports y79.94→−145.06→757.84→−145.06 while narrowing then widening. Freeze e65715ca source; separate read-only B13 verifies original steps, fixed-height controls and legal document-edge clamps on multiple anchors/long invented input, traces browser anchoring versus existing keep-place capture/restore and proposes three candidates. No repair policy or rubric exclusion is inferred from the first probe. Original07 may finish its finite current evidence/checkpoint but no product edit until B's cause and manager ruling. New B owns only report, own detached8992c964/port4212; no overlap with12client or04minimummeasurement. Stopline unchanged.
 
-### §1h.216 — 2026-10-25: independent equal-card and actual-toolbar acceptance
+216. **§1h.216 — 2026-10-25: independent equal-card and actual-toolbar acceptance — BINDING.**
 
 Manager read full original04 plus205/207/213 corrections, ran388testsx3 and own bodyvisibility/pairwrite/oldEnter/toolbar mutations; all meaningfulred then exact saved-byte restoration. Extra Enter3red and toolbar6red restore SHA725bab5105b9c9bbc9ccf4568674874ca67fc9bb09fc7b69390cbc56f043e132/e150bf83eab5162999b33438cba2af158f19563425dbda64ccf05f83a6286ba1. Localtype0/lint0errors144warnings and actual native40152522356 all0/10768+3tests on3251d071c204ba4bdf4e8087ddc7921f91b395f5. Own invented ordinaryDEV16scale/theme+30cycles+8short inactive/editable observations expose26.39px of26.4px row beneath toolbar;3equal189px cards use shared591px track in392px band.0pageerrors,paperwords/draftsretained,screenshotread,4293stopped. FF19b5c2e5 after rebuilt ancestry and exactwebdiffquiet; no07responsive/productionauth/A/score inference. Seventh quota recovery reuses sameworkers. C12final826d1893 is received, manager combined verification stillrequired. StoplineA0/B0.
 
-### §1h.217 — 2026-10-25: native unchanged touched repetitions and bounded public patch transport
+217. **§1h.217 — 2026-10-25: native unchanged touched repetitions and bounded public patch transport — BINDING.**
 
 07's repeated local filesystem-scan timeouts remain recorded as incomplete worker gates, never weakened or renamed a pass. Existing genuine nativeCI may repeat approved tracked test-group unions exactly3times after unchanged build/type/lint/fullsuite, with original timeouts/assertions and maxWorkers2. Manager selected140files covers the57/68/49 scoped sets, deduplicated. Combined publicly reviewable webpatch202224bytes exceeds dispatch limit undergzip (72912base64chars); built-inNode Brotli may transport the same exact bytes without a dependency. Keep gzip compatibility, approvedbranch-only runs, baseancestor test, strictweb-only/no-private/no-manifest restrictions and expectedwebtree equality. This is validation infrastructure, no appflag/auth/model/secret change and no product landing. Independent combined96775f69/e8135e3397a7a73d05ed5d8eb0fc2402a4481f24 contains already-landed final11 and04minimum plus frozen07/08/final12; actual reading-place failure still blocks07.
 
-### §1h.218 — 2026-10-25: inherited guard inventory before real walks
+218. **§1h.218 — 2026-10-25: inherited guard inventory before real walks — BINDING.**
 
 Frozen P12 passrequirement5 requires each legacy guard denominator to be reconstructed from committed public sources before the first fresh walk. Separate independent A14 may prepare P9/P10/P11 guard inventory and concrete per-theme evidence plan in own detached867644a4, with no product edits, server, PDF, verdict or score. Actual A theme walks await final landed SHA and remain separate from implementers/investigators and fresh blindreaders. Public-source supersessions map to current tests, never exclusions from denominators. This preparation runs in parallel with manager exact-tree verification and B13 causal investigation; stopline unchangedA0/B0.
+
+219. **§1h.219 — 2026-10-25: measured durable reading-position repair and six exact legacy test returns — BINDING.**
+
+B13 independently confirmed52/108 legal-position losses, transient shell width125→476 causing own correction then clamp-scroll misread, and ReaderLayout remount destroying paper/keeper/selection/question focus.107oldtests omit these sequences. Choose candidate1: last stable logical text token above mode changes and a bounded responsive transaction retaining it through transient geometry/clamps, respecting actual user interventions/trueedges; preserve selection,questionfocus/caret andstableportal editors, no persistent/sharedstate or everyrender correction. C15 may editkeeper,ReaderLayout/shell andfocusedtests/support plusonepureephemeral reading-position helper; preservebudgets/fonts/readingorder/C12staleguard. Prefer stableDOM wherecompatible; any remount seam that makes an existing groupedExplain follow-up invalid returns for scope before C12 edits. No ownerdesign tie.
+
+Exact combined native40171869164 build/type/lint0/144 but6legacyassertionsfail: scaled38em allowlist/cap,2pxline,registeredMargin dock,has-reader-shell16pxpadding parser/Fitmath. C16 owns only4namedtestfiles/6assertions; retain allscenarios/zoomheight tables andpreciseproperties, no weaken/delete/skip/timeout orproductchange. A realrendered mismatch returns instead of changingexpectations. Separate15/16copies from96775f69 exclude entirefoundation,ports4214/4215; no sourcefileoverlap. Manager ownfreshUI/fullgates and140unchangedfilesx3 remainrequired. Header normalization213–218 changesformatonly; gitshow867644a4 confirmed those bindingtexts werealreadycommitted. A14preparation is active, not a score.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
