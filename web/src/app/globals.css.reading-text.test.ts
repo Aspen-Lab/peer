@@ -119,7 +119,8 @@ describe("globals.css — the text steps scale the reading text inside the wrapp
   it("keeps the scale to the three wrappers of reader-layout.tsx (the left pane, the cards and the legend are outside)", () => {
     const layout = stripComments(read("../components/reader/reader-layout.tsx"));
     expect(layout.match(/className="reading-scaled[ "]/g) ?? []).toHaveLength(3);
-    expect(layout).toMatch(/<div id=\{COMMON_ID\} className="reading-scaled /);
+    // P12-15: the stable common key preserves native Range ancestry through resize.
+    expect(layout).toMatch(/<div key="common" id=\{COMMON_ID\} className="reading-scaled scroll-mt-20" style=\{readingScaleStyle\}>\{p\.common\}<\/div>/);
     expect(layout).toMatch(/<div className="reading-scaled" style=\{readingScaleStyle\}>\{p\.words\}<\/div>/);
     expect(layout).toMatch(/<div className="reading-scaled" style=\{readingScaleStyle\}>\{p\.additions\}<\/div>/);
   });
