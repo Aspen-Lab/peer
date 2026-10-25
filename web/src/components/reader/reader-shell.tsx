@@ -65,6 +65,8 @@ export interface ReaderShellProps {
   /** What stands in the left pane's header row after the pin and collapse button — the reading controls (P11-16 follow-up, ruling §1h.115
    *  item 2). The row wraps if the pane is too narrow for both, and the button keeps the left edge. Absent: the button alone, at the right. */
   header?: ReactNode;
+  /** ReaderLayout owns the durable controller across responsive branches. */
+  keepReadingPlace?: boolean;
 }
 
 export type LeftState = "pinned" | "rail" | "peek";
@@ -94,7 +96,7 @@ function SidebarGlyph() {
   );
 }
 
-export function ReaderShell({ left, centre, header }: ReaderShellProps) {
+export function ReaderShell({ left, centre, header, keepReadingPlace = true }: ReaderShellProps) {
   const grid = useRef<HTMLDivElement | null>(null);
   const cell = useRef<HTMLDivElement | null>(null);
   const pane = useRef<HTMLDivElement | null>(null);
@@ -143,7 +145,7 @@ export function ReaderShell({ left, centre, header }: ReaderShellProps) {
 
   // The reader's place survives a re-flow (P11-45, ruling §1h.146): the paragraph at the top stays at the top when the centre column changes width
   // (a divider dragged, a collapse or a pin, Fit, the window) — `lib/reader/keep-place.ts`.
-  useKeepPlace(grid);
+  useKeepPlace(grid, { enabled: keepReadingPlace });
 
   // A drag-select that began in the paper's text ends at the column's edge wherever it is released - over the margin, a card, the left pane, a separator, beyond the
   // window (P11-45b) - `lib/reader/keep-selection.ts`.

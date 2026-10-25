@@ -176,10 +176,12 @@ export function createReflowPage(options: SimOptions) {
       [...observers].filter((o) => target === undefined || o.targets.has(target)).forEach((o) => o.run());
     },
     /** The column takes a new width; the browser keeps the offset (clamped), and the observers are told. */
-    reflow(px: number) {
+    reflow(px: number, notify = true) {
       column = px;
       scrollY = Math.min(scrollY, maxScroll());
-      this.notify();
+      // P12-15: a native clamp may deliver its scroll before the observer.
+      // Old scenarios keep the original synchronous observer ordering.
+      if (notify) this.notify();
     },
     /** Fit (or the window's zoom) changes: everything painted scales; the offset stays. `only` tells that one target's observers and no other. */
     setZoom(z: number, only?: unknown) {

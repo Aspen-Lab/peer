@@ -557,12 +557,17 @@ describe("the shell's one call (its source)", () => {
   const source = readFileSync(resolve(process.cwd(), "src/components/reader/reader-shell.tsx"), "utf8");
   const code = source.replace(/\/\/.*$/gm, "");
 
-  it("imports the hook from lib/reader/keep-place and calls it once, with the grid, among the shell's hooks before it returns", () => {
+  it("P12-15: one owner above responsive branches; a standalone shell keeps its existing owner without duplicating ReaderLayout", () => {
     expect(code).toMatch(/import \{ useKeepPlace \} from "@\/lib\/reader\/keep-place";/);
     expect(code.match(/useKeepPlace\(/g)).toHaveLength(1);
-    expect(code).toMatch(/\n  useKeepPlace\(grid\);\n/);
-    expect(code.indexOf("useKeepPlace(grid)")).toBeGreaterThan(code.indexOf("export function ReaderShell"));
-    expect(code.indexOf("useKeepPlace(grid)")).toBeLessThan(code.indexOf("  return (\n    <div ref={grid}"));
+    expect(code).toMatch(/\n  useKeepPlace\(grid, \{ enabled: keepReadingPlace \}\);\n/);
+    expect(code.indexOf("useKeepPlace(grid,")).toBeGreaterThan(code.indexOf("export function ReaderShell"));
+    expect(code.indexOf("useKeepPlace(grid,")).toBeLessThan(code.indexOf("  return (\n    <div ref={grid}"));
+    const layout = readFileSync(resolve(process.cwd(), "src/components/reader/reader-layout.tsx"), "utf8");
+    expect(layout.match(/useKeepPlace\(/g)).toHaveLength(1);
+    expect(layout).toContain("useKeepPlace(owner, { responsive: true })");
+    expect(layout.indexOf("useKeepPlace(owner,")).toBeLessThan(layout.indexOf("if (!p.spread)"));
+    expect(layout).toMatch(/<ReaderShell\s+keepReadingPlace=\{false\}/);
   });
 
   it("leaves the dividers alone: a drag still writes the grid's variable once a frame, and the divider makes no scroll of its own at a pointer move", () => {

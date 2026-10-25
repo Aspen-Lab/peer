@@ -51,7 +51,9 @@
 // 64rem remounts the blocks (the authors toggle resets); a window resize
 // across the breakpoint is rare and gets no transition.
 
-import { useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { useMemo, useRef, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { useKeepPlace } from "@/lib/reader/keep-place";
 import { fitZoom, READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
 import { TABPANEL_ID, tabId } from "./reader-tabs";
 import { ReaderShell } from "./reader-shell";
@@ -174,6 +176,16 @@ export function usePageZoom(): number {
 const ZONE_INSET = "px-1.5";
 
 export function ReaderLayout(p: ReaderLayoutProps) {
+  // P12-15: the owner outlives both structures. Its last stable logical token
+  // survives CSS reflow, the temporary shell and native clamp event ordering.
+  const owner = useRef<HTMLDivElement | null>(null);
+  useKeepPlace(owner, { responsive: true });
+  const client = useSyncExternalStore(subscribeClient, () => true, () => false);
+  const hosts = useMemo(() => {
+    if (!client || typeof document.createElement !== "function") return null;
+    const make = () => document.createElement("div");
+    return { common: make(), panel: make(), next: make() };
+  }, [client]);
   // S15/S21: read here, not threaded as a prop from page.tsx — this file
   // already self-contains its other layout-affecting state (`useSpread`),
   // so the reading-size scale follows the same shape. Sets --reading-scale
@@ -199,17 +211,47 @@ export function ReaderLayout(p: ReaderLayoutProps) {
     </>
   );
 
+  const panel = tabbed ? (
+    <div role="tabpanel" id={TABPANEL_ID} aria-labelledby={p.tab ? tabId(p.tab) : undefined}
+      className={p.spread ? "scroll-mt-20 flex flex-col" : "scroll-mt-20 flow-root"}>{blocks}</div>
+  ) : blocks;
+  // Moving a stable portal CONTAINER preserves the actual paper/input nodes
+  // and C12's ephemeral captured-node guard. Only their placement changes.
+  const place = (name: "common" | "panel" | "next", fallback: ReactNode) => {
+    if (name === "common" && !p.common) return null;
+    return hosts ? (
+      <span data-reader-slot={name} style={{ display: "none" }} ref={(el) => {
+        if (!el?.parentElement) return;
+        const host = hosts[name];
+        if (name === "common") {
+          host.id = COMMON_ID;
+          host.className = "reading-scaled scroll-mt-20";
+          host.style.setProperty("--reading-scale", String(readingScale));
+        } else if (name === "panel") {
+          host.style.display = tabbed ? "" : "contents";
+          host.className = tabbed ? (p.spread ? "scroll-mt-20 flex flex-col" : "scroll-mt-20 flow-root") : "";
+          for (const [key, value] of Object.entries({ role: tabbed ? "tabpanel" : null, id: tabbed ? TABPANEL_ID : null,
+            "aria-labelledby": tabbed && p.tab ? tabId(p.tab) : null })) {
+            if (value === null) host.removeAttribute(key); else host.setAttribute(key, value);
+          }
+        } else host.style.display = "contents";
+        // The host itself is the original common/panel wrapper. Hidden markers
+        // add no extra content ancestor that could change first-block margins.
+        if (host.parentElement !== el.parentElement || host.nextSibling !== el) el.parentElement.insertBefore(host, el);
+      }} />
+    ) : fallback;
+  };
+  const wrap = (children: ReactNode) => (
+    <div data-reader-layout="" ref={owner} style={{ display: "contents" }}>
+      {hosts ? <>{createPortal(p.common, hosts.common, "common")}{createPortal(blocks, hosts.panel, "panel")}{createPortal(p.next, hosts.next, "next")}</> : null}
+      {children}
+    </div>
+  );
+
   if (!p.spread) {
     // One column: the blocks in reading order. `words` and `additions` each get
     // a thin scale wrapper of their own — the decision and the strip are not scaled.
-    const panel = tabbed ? (
-      // `flow-root`: the first block's own top gap (the map's 24px, a band's 48px) stays inside the panel
-      // instead of collapsing out through it, so the panel's box begins at the strip's foot (P9-04, X3).
-      <div role="tabpanel" id={TABPANEL_ID} aria-labelledby={p.tab ? tabId(p.tab) : undefined} className="scroll-mt-20 flow-root">{blocks}</div>
-    ) : (
-      blocks
-    );
-    return (
+    return wrap(
       <>
         <div data-reader-one-column="" className="mx-auto max-w-[760px] px-5 sm:px-6">
         {p.plate}
@@ -217,15 +259,15 @@ export function ReaderLayout(p: ReaderLayoutProps) {
         {p.decision}
         {p.details}
         {p.progress}
-        {common}
+        {place("common", common)}
         {/* P9-04 (X3): the strip stands directly above the panel it switches (`aria-controls`),
             after the blocks both tabs share — not four screens above it. */}
         {p.tabs}
         {/* P10-04 (review 3.1): the map, directly under the strip it stands with and above the panel it
             helps the reader move through; outside the panel, so it shows under both tabs. */}
         {p.map}
-        {panel}
-        {p.next}
+        {place("panel", panel)}
+        {place("next", p.next)}
         </div>
         <ResponsiveMargin side={false} />
       </>
@@ -233,14 +275,6 @@ export function ReaderLayout(p: ReaderLayoutProps) {
   }
 
   // The three panes (P11-16). The tabpanel is a flex column, as the old spread's was, so the first block's own top gap stays inside it.
-  const panel = tabbed ? (
-    <div role="tabpanel" id={TABPANEL_ID} aria-labelledby={p.tab ? tabId(p.tab) : undefined} className="scroll-mt-20 flex flex-col">
-      {blocks}
-    </div>
-  ) : (
-    blocks
-  );
-
   // The left pane. The shell's header row holds the pin and the collapse button, and the reading controls beside it (`header`); the fixed
   // zone is the title, the commands, the report's progress while one stands, and the strip. With nothing to float — no strip, no map — the pane scrolls as one.
   // The pane is a window high at most and the fixed zone must leave the map room, so the blocks' own gaps — made for a page — are
@@ -263,8 +297,9 @@ export function ReaderLayout(p: ReaderLayoutProps) {
     </>
   );
 
-  return (
+  return wrap(
     <><ReaderShell
+      keepReadingPlace={false}
       header={<ReadingControls spread />}
       left={
         tail
@@ -285,11 +320,13 @@ export function ReaderLayout(p: ReaderLayoutProps) {
         // A flex column, as the old reading column was; the first block's own top gap is dropped, so whatever opens the column — the claim's
         // band, the skim deck, a TL;DR — starts level with the top of the left pane.
         <div className="flex flex-col [&>:first-child>:first-child]:mt-0 [&>:first-child>:first-child>:first-child]:mt-0">
-          {common}
-          {panel}
-          <div>{p.next}</div>
+          {place("common", common)}
+          {place("panel", panel)}
+          <div>{place("next", p.next)}</div>
         </div>
       }
     /><ResponsiveMargin side /></>
   );
 }
+
+function subscribeClient() { return () => {}; }

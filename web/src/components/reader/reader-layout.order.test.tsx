@@ -365,7 +365,10 @@ describe("ReaderLayout, the map under the strip (P10-04, A8)", () => {
 });
 
 describe("reader-layout.tsx source (P7-14)", () => {
-  const source = readFileSync(resolve(process.cwd(), "src/components/reader/reader-layout.tsx"), "utf8");
+  // P12-15 re-aim: stable portal placements have the same slot order. Keep all
+  // existing order assertions; rendered SSR checks above remain unchanged too.
+  const source = readFileSync(resolve(process.cwd(), "src/components/reader/reader-layout.tsx"), "utf8")
+    .replace(/\{place\("(?:common|panel|next)", (common|panel|p\.next)\)\}/g, "{$1}");
   const body = source.slice(source.indexOf("export function ReaderLayout"));
   // P11-16, RE-AIMED: the one-column branch ends where the shell's begins (`<ReaderShell`, not the two-column grid).
   const stacked = body.slice(body.indexOf("if (!p.spread)"), body.indexOf("<ReaderShell"));
