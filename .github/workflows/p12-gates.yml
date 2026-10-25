@@ -19,6 +19,11 @@ on:
         type: string
         default: gzip
         required: false
+      patch_context:
+        description: Unified patch context (3 or 0), exact base and output tree still required
+        type: string
+        default: '3'
+        required: false
       expected_web_tree:
         description: Required web tree SHA when verifying a patch
         type: string
@@ -62,6 +67,7 @@ jobs:
           BASE_SHA: ${{ inputs.base }}
           PATCH_B64: ${{ inputs.patch }}
           PATCH_ENCODING: ${{ inputs.patch_encoding }}
+          PATCH_CONTEXT: ${{ inputs.patch_context }}
           EXPECTED_WEB_TREE: ${{ inputs.expected_web_tree }}
         run: |
           set -euo pipefail
@@ -76,8 +82,12 @@ jobs:
           if [ -n "$PATCH_B64" ]; then
             [[ "$EXPECTED_WEB_TREE" =~ ^[0-9a-f]{40}$ ]]
             node -e 'const f=require("node:fs"),z=require("node:zlib"),e=process.env.PATCH_ENCODING||"gzip";if(!["gzip","br"].includes(e))process.exit(1);const b=Buffer.from(process.env.PATCH_B64,"base64");f.writeFileSync(process.env.RUNNER_TEMP+"/verify.patch",e==="br"?z.brotliDecompressSync(b):z.gunzipSync(b))'
-            git apply --check "$RUNNER_TEMP/verify.patch"
-            git apply --index "$RUNNER_TEMP/verify.patch"
+            context="${PATCH_CONTEXT:-3}"
+            [[ "$context" = 3 || "$context" = 0 ]]
+            apply_args=()
+            if [ "$context" = 0 ]; then apply_args+=(--unidiff-zero); fi
+            git apply --check "${apply_args[@]}" "$RUNNER_TEMP/verify.patch"
+            git apply --index "${apply_args[@]}" "$RUNNER_TEMP/verify.patch"
             node -e 'const c=require("node:child_process");const p=c.execFileSync("git",["diff","--cached","--name-only","-z"],{encoding:"utf8"}).split("\0").filter(Boolean);if(!p.length||p.some(x=>!x.startsWith("web/")||/(^|\/)(\.local-data|uploads|node_modules|\.env[^/]*)(\/|$)/.test(x)||/(^|\/)(package\.json|package-lock\.json)$/.test(x)))process.exit(1)'
             tree="$(git write-tree)"
             actual="$(git rev-parse "$tree:web")"
