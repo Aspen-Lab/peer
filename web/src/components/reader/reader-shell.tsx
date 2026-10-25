@@ -67,6 +67,8 @@ export interface ReaderShellProps {
   header?: ReactNode;
   /** ReaderLayout owns the durable controller across responsive branches. */
   keepReadingPlace?: boolean;
+  /** The centre ancestry remains mounted when side furniture gives way to one column. */
+  side?: boolean;
 }
 
 export type LeftState = "pinned" | "rail" | "peek";
@@ -96,7 +98,7 @@ function SidebarGlyph() {
   );
 }
 
-export function ReaderShell({ left, centre, header, keepReadingPlace = true }: ReaderShellProps) {
+export function ReaderShell({ left, centre, header, keepReadingPlace = true, side = true }: ReaderShellProps) {
   const grid = useRef<HTMLDivElement | null>(null);
   const cell = useRef<HTMLDivElement | null>(null);
   const pane = useRef<HTMLDivElement | null>(null);
@@ -139,9 +141,10 @@ export function ReaderShell({ left, centre, header, keepReadingPlace = true }: R
 
   // The shell's margin is where the cards stand: the measured rect, for as long as the shell is mounted.
   useEffect(() => {
+    if (!side) return;
     const el = margin.current;
     return el ? registerMargin(el) : undefined;
-  }, []);
+  }, [side]);
 
   // The reader's place survives a re-flow (P11-45, ruling §1h.146): the paragraph at the top stays at the top when the centre column changes width
   // (a divider dragged, a collapse or a pin, Fit, the window) — `lib/reader/keep-place.ts`.
@@ -255,8 +258,10 @@ export function ReaderShell({ left, centre, header, keepReadingPlace = true }: R
   const style = { "--left-pane-w": `${fit.left}px`, "--margin-w": `${fit.margin}px` } as CSSProperties;
 
   return (
-    <div ref={grid} className="reader-shell" data-reader-shell="" data-left-state={state} style={style}>
-      <div ref={cell} className="reader-left-cell" data-reader-left-cell="" onPointerEnter={onCellEnter} onPointerLeave={onCellLeave}>
+    <div ref={grid} className={side ? "reader-shell" : "mx-auto max-w-[760px] px-5 sm:px-6"}
+      data-reader-shell={side ? "" : undefined} data-reader-one-column={side ? undefined : ""}
+      data-left-state={side ? state : undefined} style={side ? style : undefined}>
+      {side ? <div key="left" ref={cell} className="reader-left-cell" data-reader-left-cell="" onPointerEnter={onCellEnter} onPointerLeave={onCellLeave}>
         <button
           ref={rail}
           type="button"
@@ -321,8 +326,8 @@ export function ReaderShell({ left, centre, header, keepReadingPlace = true }: R
             </>
           )}
         </div>
-      </div>
-      {fit.pinned ? (
+      </div> : null}
+      {side ? fit.pinned ? (
         <PaneDivider
           pane="left"
           value={fit.left}
@@ -335,13 +340,13 @@ export function ReaderShell({ left, centre, header, keepReadingPlace = true }: R
         />
       ) : (
         <div className="reader-divider-rest" aria-hidden="true" />
-      )}
-      <div className="reader-centre" id={CENTRE_ID} data-reader-centre="">
-        <div className="reader-centre-inner" data-reader-centre-inner="">
+      ) : null}
+      <div key="centre" className={side ? "reader-centre" : undefined} id={CENTRE_ID} data-reader-centre={side ? "" : undefined} style={side ? undefined : { display: "contents" }}>
+        <div className={side ? "reader-centre-inner" : undefined} data-reader-centre-inner={side ? "" : undefined} style={side ? undefined : { display: "contents" }}>
           {centre}
         </div>
       </div>
-      <PaneDivider
+      {side ? <PaneDivider
         pane="margin"
         value={fit.margin}
         room={{ viewport, other: fit.leftTrack, centreMinimum }}
@@ -350,8 +355,8 @@ export function ReaderShell({ left, centre, header, keepReadingPlace = true }: R
         label="Resize margin"
         controls={MARGIN_ID}
         onCommit={(width) => useReaderPanesStore.getState().setMarginWidth(width)}
-      />
-      <aside ref={margin} id={MARGIN_ID} className="reader-margin" data-reader-margin="" aria-label="Margin" />
+      /> : null}
+      {side ? <aside ref={margin} id={MARGIN_ID} className="reader-margin" data-reader-margin="" aria-label="Margin" /> : null}
     </div>
   );
 }

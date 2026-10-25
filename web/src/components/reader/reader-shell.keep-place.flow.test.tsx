@@ -566,8 +566,8 @@ describe("the shell's one call (its source)", () => {
     const layout = readFileSync(resolve(process.cwd(), "src/components/reader/reader-layout.tsx"), "utf8");
     expect(layout.match(/useKeepPlace\(/g)).toHaveLength(1);
     expect(layout).toContain("useKeepPlace(owner, { responsive: true })");
-    expect(layout.indexOf("useKeepPlace(owner,")).toBeLessThan(layout.indexOf("if (!p.spread)"));
-    expect(layout).toMatch(/<ReaderShell\s+keepReadingPlace=\{false\}/);
+    expect(layout.indexOf("useKeepPlace(owner,")).toBeLessThan(layout.indexOf("const common ="));
+    expect(layout).toMatch(/<ReaderShell\s+side=\{p.spread\}\s+keepReadingPlace=\{false\}/);
   });
 
   it("leaves the dividers alone: a drag still writes the grid's variable once a frame, and the divider makes no scroll of its own at a pointer move", () => {

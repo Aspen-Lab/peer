@@ -4,6 +4,8 @@
 // 476px text budget plus the rail, margin and real centre insets. Below that
 // budget the one-column reader keeps a registered complementary bottom margin.
 // The historical P11 layout notes below describe the former1024px boundary.
+// P12-15: the shell's centre ancestry now stays mounted in both modes. Only
+// side furniture and narrow preamble/navigation change; native Ranges survive.
 
 // Arranges the reader's blocks — it renders none of them. Below 1024 css px the children come back as a fragment, in one column; from it
 // they are placed in the three-pane shell (`reader-shell.tsx`, P11-10): the left pane (the reading controls in its header row beside the pin
@@ -51,8 +53,7 @@
 // 64rem remounts the blocks (the authors toggle resets); a window resize
 // across the breakpoint is rare and gets no transition.
 
-import { useMemo, useRef, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { Fragment, useRef, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { useKeepPlace } from "@/lib/reader/keep-place";
 import { fitZoom, READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
 import { TABPANEL_ID, tabId } from "./reader-tabs";
@@ -180,12 +181,6 @@ export function ReaderLayout(p: ReaderLayoutProps) {
   // survives CSS reflow, the temporary shell and native clamp event ordering.
   const owner = useRef<HTMLDivElement | null>(null);
   useKeepPlace(owner, { responsive: true });
-  const client = useSyncExternalStore(subscribeClient, () => true, () => false);
-  const hosts = useMemo(() => {
-    if (!client || typeof document.createElement !== "function") return null;
-    const make = () => document.createElement("div");
-    return { common: make(), panel: make(), next: make() };
-  }, [client]);
   // S15/S21: read here, not threaded as a prop from page.tsx — this file
   // already self-contains its other layout-affecting state (`useSpread`),
   // so the reading-size scale follows the same shape. Sets --reading-scale
@@ -202,77 +197,41 @@ export function ReaderLayout(p: ReaderLayoutProps) {
   const tail = tabbed || (p.map !== undefined && p.map !== null);
   // Built from the slot alone — the tab is not read here, on purpose (see the header).
   const common = p.common ? (
-    <div id={COMMON_ID} className="reading-scaled scroll-mt-20" style={readingScaleStyle}>{p.common}</div>
+    <div key="common" id={COMMON_ID} className="reading-scaled scroll-mt-20" style={readingScaleStyle}>{p.common}</div>
   ) : null;
   const blocks = (
-    <>
+    <Fragment key="panel">
       <div className="reading-scaled" style={readingScaleStyle}>{p.words}</div>
       <div className="reading-scaled" style={readingScaleStyle}>{p.additions}</div>
-    </>
+    </Fragment>
   );
 
   const panel = tabbed ? (
-    <div role="tabpanel" id={TABPANEL_ID} aria-labelledby={p.tab ? tabId(p.tab) : undefined}
+    <div key="panel" role="tabpanel" id={TABPANEL_ID} aria-labelledby={p.tab ? tabId(p.tab) : undefined}
       className={p.spread ? "scroll-mt-20 flex flex-col" : "scroll-mt-20 flow-root"}>{blocks}</div>
   ) : blocks;
-  // Moving a stable portal CONTAINER preserves the actual paper/input nodes
-  // and C12's ephemeral captured-node guard. Only their placement changes.
-  const place = (name: "common" | "panel" | "next", fallback: ReactNode) => {
-    if (name === "common" && !p.common) return null;
-    return hosts ? (
-      <span data-reader-slot={name} style={{ display: "none" }} ref={(el) => {
-        if (!el?.parentElement) return;
-        const host = hosts[name];
-        if (name === "common") {
-          host.id = COMMON_ID;
-          host.className = "reading-scaled scroll-mt-20";
-          host.style.setProperty("--reading-scale", String(readingScale));
-        } else if (name === "panel") {
-          host.style.display = tabbed ? "" : "contents";
-          host.className = tabbed ? (p.spread ? "scroll-mt-20 flex flex-col" : "scroll-mt-20 flow-root") : "";
-          for (const [key, value] of Object.entries({ role: tabbed ? "tabpanel" : null, id: tabbed ? TABPANEL_ID : null,
-            "aria-labelledby": tabbed && p.tab ? tabId(p.tab) : null })) {
-            if (value === null) host.removeAttribute(key); else host.setAttribute(key, value);
-          }
-        } else host.style.display = "contents";
-        // The host itself is the original common/panel wrapper. Hidden markers
-        // add no extra content ancestor that could change first-block margins.
-        if (host.parentElement !== el.parentElement || host.nextSibling !== el) el.parentElement.insertBefore(host, el);
-      }} />
-    ) : fallback;
-  };
   const wrap = (children: ReactNode) => (
     <div data-reader-layout="" ref={owner} style={{ display: "contents" }}>
-      {hosts ? <>{createPortal(p.common, hosts.common, "common")}{createPortal(blocks, hosts.panel, "panel")}{createPortal(p.next, hosts.next, "next")}</> : null}
       {children}
     </div>
   );
-
-  if (!p.spread) {
-    // One column: the blocks in reading order. `words` and `additions` each get
-    // a thin scale wrapper of their own — the decision and the strip are not scaled.
-    return wrap(
-      <>
-        <div data-reader-one-column="" className="mx-auto max-w-[760px] px-5 sm:px-6">
+  // P12-15: the SAME keyed centre ancestry stands in both modes. Removing or
+  // reparenting it changes native Range endpoints even when text nodes survive.
+  const preamble = (
+    <>
         {p.plate}
         {p.title}
         {p.decision}
         {p.details}
         {p.progress}
-        {place("common", common)}
-        {/* P9-04 (X3): the strip stands directly above the panel it switches (`aria-controls`),
-            after the blocks both tabs share — not four screens above it. */}
+    </>
+  );
+  const navigation = (
+    <>
         {p.tabs}
-        {/* P10-04 (review 3.1): the map, directly under the strip it stands with and above the panel it
-            helps the reader move through; outside the panel, so it shows under both tabs. */}
         {p.map}
-        {place("panel", panel)}
-        {place("next", p.next)}
-        </div>
-        <ResponsiveMargin side={false} />
-      </>
-    );
-  }
+    </>
+  );
 
   // The three panes (P11-16). The tabpanel is a flex column, as the old spread's was, so the first block's own top gap stays inside it.
   // The left pane. The shell's header row holds the pin and the collapse button, and the reading controls beside it (`header`); the fixed
@@ -299,6 +258,7 @@ export function ReaderLayout(p: ReaderLayoutProps) {
 
   return wrap(
     <><ReaderShell
+      side={p.spread}
       keepReadingPlace={false}
       header={<ReadingControls spread />}
       left={
@@ -319,14 +279,15 @@ export function ReaderLayout(p: ReaderLayoutProps) {
       centre={
         // A flex column, as the old reading column was; the first block's own top gap is dropped, so whatever opens the column — the claim's
         // band, the skim deck, a TL;DR — starts level with the top of the left pane.
-        <div className="flex flex-col [&>:first-child>:first-child]:mt-0 [&>:first-child>:first-child>:first-child]:mt-0">
-          {place("common", common)}
-          {place("panel", panel)}
-          <div>{place("next", p.next)}</div>
+        <div key="reading-content" className={p.spread ? "flex flex-col [&>:first-child>:first-child]:mt-0 [&>:first-child>:first-child>:first-child]:mt-0" : undefined}>
+          {!p.spread ? <Fragment key="preamble">{preamble}</Fragment> : null}
+          {common}
+          {!p.spread ? <Fragment key="navigation">{navigation}</Fragment> : null}
+          {panel}
+          <div key="next">{p.next}</div>
         </div>
       }
-    /><ResponsiveMargin side /></>
+    /><ResponsiveMargin side={p.spread} /></>
   );
 }
 
-function subscribeClient() { return () => {}; }

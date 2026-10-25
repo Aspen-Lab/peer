@@ -5,17 +5,13 @@ vi.mock("react", async (original) => {
   return { ...react, ...stagedRuntime.hooks,
     useSyncExternalStore: <T,>(_subscribe: unknown, read: () => T) => read() };
 });
-vi.mock("react-dom", async () => {
-  const { createElement } = await import("react");
-  return { createPortal: (children: unknown, target: unknown, key: string) => createElement("test-portal", { target, key }, children as ReactNode) };
-});
 vi.mock("@/store/reading-prefs", async (original) => {
   const actual = await original<typeof import("@/store/reading-prefs")>();
   const read = <T,>(select: (state: ReturnType<typeof actual.useReadingPrefsStore.getState>) => T) => select(actual.useReadingPrefsStore.getState());
   return { ...actual, useReadingPrefsStore: Object.assign(read, actual.useReadingPrefsStore) };
 });
 
-import { type ReactElement, type ReactNode } from "react";
+import { type ReactElement } from "react";
 import { stagedRuntime } from "@/test-support/staged-runtime";
 import { createReflowPage } from "@/test-support/reflow-page";
 import { readReadingInteraction, restoreReadingInteraction, resolveTextPosition, textPosition } from "@/lib/reader/reading-position";
@@ -92,21 +88,13 @@ function open(index = 32) {
   vi.stubGlobal("performance", { now: () => page.clock.now });
   let spread = true;
   const owner = { querySelector: (selector: string) => selector === "[data-reader-centre-inner]" ? (spread ? page.column : null) : page.column };
-  const parents = new Map<string, object>();
-  const targets: unknown[][] = [];
   const ancestry: Array<ElementTree | undefined> = [];
   const mounted = stagedRuntime.mount(() => ReaderLayout({ spread, plate: null, title: null, decision: null,
     common: "common", tabs: "tabs", tab: "digestion", words: "words", additions: "paper", next: "next" }), (tree) => {
     const all = elements(tree);
     for (const el of all) {
       if (el.props["data-reader-layout"] !== undefined) (el.props.ref as { current: unknown }).current = owner;
-      if (el.props["data-reader-slot"] !== undefined) {
-        const name = `${spread}:${el.props["data-reader-slot"]}`;
-        if (!parents.has(name)) parents.set(name, { insertBefore(host: { parentElement: object; nextSibling: object }, marker: object) { host.parentElement = this; host.nextSibling = marker; } });
-        (el.props.ref as (node: unknown) => void)({ parentElement: parents.get(name) });
-      }
     }
-    targets.push(all.filter((el) => el.type === "test-portal").map((el) => el.props.target));
     ancestry.push(all.find((el) => el.type === ReaderShell));
   });
   stagedRuntime.flush();
@@ -120,7 +108,7 @@ function open(index = 32) {
     fire("selectionchange");
     return readReadingInteraction(doc as unknown as Document).selection;
   };
-  return { page, doc, blocks, targets, ancestry, select, selected, get field() { return field; }, starting,
+  return { page, doc, blocks, ancestry, select, selected, get field() { return field; }, starting,
     current: () => glyph(blocks.get(ids[index])!.nodes[1], 20).top,
     focus() { doc.activeElement = field; fire("focusin"); },
     change(next: boolean, px: number, intervene?: () => void) {
@@ -146,8 +134,8 @@ describe("P12-15 ReaderLayout lifetime with reconstructed text and inputs", () =
       page.change(side, width);
       expect(Math.abs(page.current() - page.starting)).toBeLessThanOrEqual(1);
     }
-    expect(page.targets).toHaveLength(3);
-    expect(page.targets[1]).toEqual(page.targets[0]); expect(page.targets[2]).toEqual(page.targets[0]);
+    expect(page.ancestry).toHaveLength(3);
+    expect(page.ancestry.map((el) => (el?.props.centre as ReactElement).key)).toEqual(["reading-content", "reading-content", "reading-content"]);
     const calls = page.page.calls.length;
     page.page.notify(); page.page.notify(); expect(page.page.calls).toHaveLength(calls);
     page.stop(); expect(page.page.scrollListeners()).toBe(0); expect(page.page.observed()).toHaveLength(0);
