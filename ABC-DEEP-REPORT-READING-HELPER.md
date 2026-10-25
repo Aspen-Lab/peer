@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:            P12 preparation; both themes consecutive passes 0 / 2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-25T17:13:57.673Z; only writer of this file
+HELD BY:          Codex manager, local desktop chat, 2026-10-25T17:14:55.158Z; only writer of this file
 CURRENT ITEM:          15finalselection/lifecycleC;19keyboardC/standalonegeometryblocked;20Bqueued;18boundedreportpicked;manager569857ac4HTTPpass;A0B0
-NEXT TURN:          SpawnB20independentstandalonemin/placementinvestigation;C15finalnewselection/108/range/fullgates;C19keyboardfinishwithoutgeometryedit;managerexactfinalverification/FFthenfreshrounds
+NEXT TURN:          PushcanonicalattributionrecordandB20brief;spawnindependentB20;continue15/19andmanagerverification
 STOPPED BECAUSE:          — active after ninth quota recovery; same15/19workers and copies retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -957,6 +957,10 @@ Exactearly15combinednative10843+3/2739x3 andfourmanagercoremutations2/3/1/1red/r
 A18report21b5d220 isbounded no-keyinventedordinaryDEV, not79guardpasses orofficialround. Its30toolbarhitchecks neverestablish acontentrow. C19actualsingle-sticky1440x480rowclick isinterceptedbyFormat; retainfailure, forbid C19fromhidingtoolbar orwideninggeometryscope. Separate B20 innewdetached569857ac/4219 measures singlecardplacement/minimum, actualheader/toolbar/line/scroll/hitgeometry, short/tallcontrols and3candidate rules; managerselects minimaldisjointCaftercause. No ownerquestionbeforemeasuredrealdesign tie. Existingmulti-card213/216acceptance doesnotprove singlecardfloor.
 
 CorrectedC15c447 nowpasses manageractualpostresize4HTTP200, butinitialnarrowselectionwatcherlifecycle/zero-boxrisk needs realnewdragchecks; source alone isnotafailureorpass. Fullfinal108/coremutation/family3/native stillrequired. Early8c69rawJSON wasoverwrittenbylaterprobe; labelcorrectedpasshonestly, retainexplicitexec-derivedfailedsummary andindependentrawcomparator. Do notclaimreconstructedsummary israw capture. Finalrubric/stopline unchangedA0/B0.
+
+228. **§1h.228 — 2026-10-25: preserve truthful ownership after an author-email typo — BINDING.**
+
+Doccommitab6536ffwasdirectedbyPeterandcorrectlynamedpeter14531453, butmanager'sexplicitcommandmistypedoneemaildigit. Public.mailmap maps onlythattypo tocanonical274981268+peter14531453@users.noreply.github.com; subsequentauthorcommandsusecanonicaladdress. Thisrecordsactualownershipwithoutforbiddenamend/rebase/historyrewrite. No productscope,dependency,privatecontent,credential orscorechange. ThiscorrectioncommitalsonamesPeterinCo-authored-by andendswithactualmodeltrailer.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
