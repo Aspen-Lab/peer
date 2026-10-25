@@ -131,7 +131,18 @@ it("advertises Format only on a surface whose owner supplies that toolbar", () =
     const api = { current: { register: vi.fn(), input: vi.fn(), key: vi.fn(), paste: vi.fn(), caret: vi.fn(), blur: vi.fn(), typing: () => false } satisfies SurfaceApi };
     const run = stagedRuntime.mount(() => Surface({ id: "field", text: "", sources: {}, api, label: "Text", placeholder: "", formatShortcut }));
     expect(run.value.props["aria-keyshortcuts"]).toBe(formatShortcut ? "Alt+F10" : undefined);
-    expect(run.value.props["aria-description"]).toBe(formatShortcut ? "Alt+F10 moves between this block and Format." : undefined);
+    expect(run.value.props.title).toBe(formatShortcut ? "Alt+F10 moves between this block and Format." : undefined);
     run.unmount();
+  }
+});
+it("disables inapplicable inline marks on literal code, retaining text marks and code type changes", () => {
+  for (const active of ["code", "text"] as const) {
+    const buttons = nodes(NoteToolbarView({ active, enabled: true, onMark: vi.fn(), onType: vi.fn() })).filter(el => el.type === "button");
+    for (const label of ["Bold", "Italic", "Underline", "Highlight", "Code"]) {
+      expect(buttons.find(el => el.props["aria-label"] === label)!.props.disabled).toBe(active === "code");
+    }
+    for (const label of ["Heading", "Bulleted list", "Numbered list"]) {
+      expect(buttons.find(el => el.props["aria-label"] === label)!.props.disabled).toBe(false);
+    }
   }
 });
