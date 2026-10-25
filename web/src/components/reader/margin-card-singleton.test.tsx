@@ -21,4 +21,3 @@ it("P12-21 retains supplied selection geometry when the singleton minimum fits",
   const out = MarginCard({ id: "one", kind: "sticky", title: "Note", front: true, top: 183, height: 257, z: 60 }) as ReactElement<{ children: [ReactElement<Record<string, unknown>>, boolean] }>;
   expect(out.props.children[0].props).toMatchObject({ top: 183, height: 257, split: false });
 });
-

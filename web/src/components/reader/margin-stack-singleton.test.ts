@@ -77,4 +77,3 @@ it("P12-21 measures/observes a singleton, follows wraps and replaced editing sur
   expect(disconnect).toHaveBeenCalled(); expect(stopMutation).toHaveBeenCalledOnce();
   resized(); expect(useWindows.getState().windows).toEqual([]);
 });
-
