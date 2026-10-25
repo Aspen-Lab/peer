@@ -340,7 +340,7 @@ const Row = memo(function Row({ block: b, first, number, editing, sources, dragg
         onSelect={(e) => api.current.caret(b.id, e.currentTarget)}
         onBlur={(e) => api.current.blur(b.id, e.relatedTarget)}
         aria-keyshortcuts="Alt+F10"
-        aria-description="Alt+F10 moves between this block and Format."
+        title="Alt+F10 moves between this block and Format."
         className={cn(
           cls,
           "block w-full resize-none overflow-hidden bg-transparent p-0 outline-none placeholder:text-text-faint/70",

@@ -67,7 +67,7 @@ export function NoteToolbarView({
         if (e.key === "F10" && e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && onReturn) { e.preventDefault(); onReturn(); }
       }} className={cn("flex flex-wrap items-center gap-1", className)}>
       {TOOLBAR_ITEMS.map((item, i) => {
-        const disabled = !enabled || (item.kind === "mark" && active === "code" && item.mark !== "code");
+        const disabled = !enabled || (item.kind === "mark" && active === "code");
         return (
           <span key={item.id} className="contents">
             {i === 5 && <span aria-hidden className="mx-1 h-4 w-px bg-border-strong" />}

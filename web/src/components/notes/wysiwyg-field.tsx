@@ -201,7 +201,7 @@ export function Surface({
       onSelect={(e) => api.current.caret(id, e.currentTarget)}
       onBlur={(e) => api.current.blur(id, e.relatedTarget)}
       aria-keyshortcuts={formatShortcut ? "Alt+F10" : undefined}
-      aria-description={formatShortcut ? "Alt+F10 moves between this block and Format." : undefined}
+      title={formatShortcut ? "Alt+F10 moves between this block and Format." : undefined}
       className={cn(
         className,
         "block min-h-[1lh] w-full whitespace-pre-wrap break-words bg-transparent p-0 outline-none",
