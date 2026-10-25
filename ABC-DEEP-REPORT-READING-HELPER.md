@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:            P12 preparation; both themes consecutive passes 0 / 2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-25T17:31:03.215Z; only writer of this file
-CURRENT ITEM:          15final45+keytestworkerverification/manager108green;19final7aaff31bworkerverification;21singleminimumCdispatch;17verifiedheld;A0B0
-NEXT TURN:          C21causalred/minimumfix;managerfinal19and15mutations/type/lint/nativecombined;FFonlyverifiedthenfreshAandblindrounds
+HELD BY:          Codex manager, local desktop chat, 2026-10-25T17:37:02.977Z; only writer of this file
+CURRENT ITEM:          15workerfinalreportpending/manager108+6mutationsgreen;19manager17x3+5mutations/type/lint/native+UIrunning;21Cminimumfix;17verifiedheld;A0B0
+NEXT TURN:          FinishownkeyboardUI/nativeexacttree;C15finalworkerreport;C21actualminimumUI/mutations;managerverifyC21thenFFcombinedbeforefreshA/blind
 STOPPED BECAUSE:          — active after ninth quota recovery; same15/19workers and copies retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -976,6 +976,10 @@ Manager'searlier15x3/entry6red/transfer2red/external1red/restored15green areboun
 
 B20fresh36cells identify legacy160 singletonfloor versus actual189 wrappedtoolbar/header/text minimum, while3cardsalreadyconsume189. Measuredcandidate1 preservesfeasibleorigin/preferred260 andlifts onlydeficit; selectedwithoutownerquestion. Single measurement+consumptionmustbothwork. Whenminimumcannotfitband, retainminimumandreacheveryrowusingboundedexistingoverflow;neverclipatlegend/shrinktype/dropcontrols. C21owns onlywindows.ts,margin-stack-scroll.tsx,margin-card.tsxifneeded,directtests/report;C15/C19scopesremainseparate. Cmustbankcausalred,ownmutations/3runs/fullgates/actualUI;managerindependentverificationbeforeFF. B's97greenunchangedtestsand9diagnosticclicksarenotacceptance. No-keyordinarywordExplainabsenceintentional;thatcomparisonunperformed. No stopline/scoringchange.
 
+232. **§1h.232 — 2026-10-25: independent final-source keyboard and ancestry checks banked — BINDING.**
+
+Manager's17directtests3greenand5ownredmutations(6/2/1/1/1),C15structuralmutations(1/1)byteidenticalrestoration/type0/lint0/144 areboundedverificationoncombinedweb2cd7fe0b. Earlier4C15coremutationsremainapplicableonlybecausekeeperandreading-positionexactSHAunchanged. C19combinededitorhashdiffersfromisolatedworkerbecauseverifiedC08highlightintegrationispresent;nevermisstatehashidentity. Nativefullgates/selectedtests3andactualmanagerkeyboardUIremainpending;C21short-cardminimumstillopen. Neitherpassingdirectchecks norworker's771x3authorizeFFuntilremainingchecksclose. OfficialA/blindcountsremain0/0.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -1250,7 +1254,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-16 | MANAGER_VERIFIED_PENDING_COMBINED_LANDING — exactdiff/5mutationfamilies/hashrestore;native10829+3green/2641x3 | 4legacyCSS/source testfilesONLY | briefs/P12-16.md;219–222 | holdwith07dependentcodeuntilC15/17verified | managerf6e64e03/webd32a9b66;run40173488648 |
 | P12-17 | MANAGER_VERIFIED_PENDING_FF — own5x3/2mutations/restored;earlycombinednative10843+3/2739x3green | responsive-margin.test.ts only;20additions/5casesretained | briefs/P12-17.md;221–226 | landonlywithfinalverified07/15combination | manager4c2c7b1a->78757bbb;worker998c5c84;no productedit |
 | P12-18 | BOUNDED_PREFLIGHT_COMPLETE — picked145ae869;20cells/60+3markers/actualexports/2mutations | inventedno-keynoteformat/list/lifecycle/export/marker;keyboardgapidentified | briefs/P12-18.md;222–227 | C19keyboardandB20geometry;laterfreshrealinputAwalk | report21b5d220;no score;own4217stopped |
-| P12-19 | FINAL_SOURCE_PENDING_REVIEW — frozen7aaff31b;oldmanager15x3/3mutationsbanked;new17caseverificationpending | 3ownednotefiles/directtests;titlehint/Formatownership/truthfulcodeapplicability | briefs/P12-19.md;224–230 | workerfinal771x3/type/lint/UI;managerfinalchecks/native;shortgeometryB20 | no sticky/hostedit;C19actualCode-noopbeforefix;notlanded |
+| P12-19 | WORKER_RETURNED_MANAGER_PARTLY_VERIFIED — final7e73bf5d;manager17x3/5mutations/type/lintgreen | 3notefiles/directtests;combinedC08integrationpreserved | briefs/P12-19.md;rulings224–232 | manageractualkeyboardUI/native3;C21geometryintegration;FFonlyafterchecks | wholefinalreportread;worker771x3/7mutations;manager6/2/1/1/1redrestored;short480open |
 | P12-20 | B_RETURNED — reportonly0b8b97a8/6fad2f9d;boundedcauseconfirmed | singlefloor/observerread-only36cells/3candidates | briefs/P12-20.md;reportlimitsretained | C21measuredminimumimplementation | 16/18shortfail18/18tallpass;97tests;3card189;finalhashsame;Explainunperformed |
 | P12-21 | DISPATCHING — independentC;port4220 | windows/minimumobserver/boundedcardhost/directtests | briefs/P12-21.md;§1h.231 | causalredthenminimumfix/ownchecks/managerverification | B20report;candidate1authorized;noownerdesigntie |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |

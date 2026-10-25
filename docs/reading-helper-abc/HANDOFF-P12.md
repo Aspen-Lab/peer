@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-25T17:31:03.215Z
+AS OF        2026-10-25T17:37:02.977Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.231   NEXT RULING §1h.232   NEXT ITEM ID P12-22   NEXT FREE PORT 4221
+LAST RULING  §1h.232   NEXT RULING §1h.233   NEXT ITEM ID P12-22   NEXT FREE PORT 4221
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      15final45+keytestworkerverification/manager108green;19final7aaff31bworkerverification;21singleminimumCdispatch;17verifiedheld;A0B0
+RUNNING      15workerfinalreportpending/manager108+6mutationsgreen;19manager17x3+5mutations/type/lint/native+UIrunning;21Cminimumfix;17verifiedheld;A0B0
 THEN         verifyfinalcombinedsources,independentAand3blindreaders/theme;A0/B0
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -243,6 +243,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-25T17:26:21.066Z | parent 157790d4 (entry commit follows) | manager | P12-19-MANAGER-MUTATIONS-SEMANTIC-BOUNDARY: ManagerreadwholeC19product/newtestdiffthrough23e55019 andpickedown03a66813. Own15directtests3green; AltF10entrydisabled6red,toolbarfocus-transferdisabled2red,externalclearingdisabled1red, byteidenticalrestoration then15green. Newfinalsource7aaff31b retainedforlaterverification,notcoveredbyoldcounts. C19found jsx-a11y rejectsaria-description,146warnings; replacewithsupportedtitle+aria-keyshortcuts,no suppression. ActualCodeblockprobe provesenabledinlineCodebuttonno-op; approve truthfuldisabledinline-markstateinliteralcode, retainingparagraphinlineCodeandcode→typeexit. Frozen7a17tests green/workerfinalverificationpending. Addexistingkeep-selectionfamilies tonativeplace3 repetitions because C15nowpreservesitsrealgeometrytargetacrossinitialnarrow/lifecycle. Ownfinal45source108andpostresizeUIrunninginnewversion-labelledfiles;no resultyet. | evidence: verify-integrated/manager-keyboard-check-results.json;C19code-noop.json;7aaff31b/7fe43e39;c69cfe5e;.github/p12-repeat-tests.mjs;C15aac3b57f/45da6c80 | next: Finishownfinal45UI thenpickfrozen19semanticdelta;own17tests3/mutations/type/lint/native07/08/12/16/19/place;B20finalcandidates→minimalC21;FFonlyafterverification
 
 - 2026-10-25T17:31:03.215Z | parent 6fad2f9d (entry commit follows) | manager | P12-20-B-RETURN-AND-C21: ReadwholeB20finalreport8993511b/b4af0954,pickedreportonly0b8b97a8/6fad2f9d. Fresh36cells16/18shortfails18/18tallworks; actualsingle160vswrappedminimum189;3cardcontrol189;97unchangedtests green. Candidate1measuredminimum/deficitlift chosen;boundedoverflow onlywhenfloorcannotfit. Explainno-keyordinarywordnotoffered,comparisonunperformed,honestlimitsretained. AuthorizeindependentC21disjointwindows/margin-stack/card/directtests,port4220. Managerownfinal45place108transitions0losses/missing/cardloss/pageerrors and6familyresizeUI/4HTTP200banked,notfullC15verification. | evidence: P12-20-B-20261025T171700Z.md;briefs/P12-21.md;verify-integrated/final45-place.json;final45-resize-reply-results.json | next: C21causalred/minimumfix;managerfinal19and15mutations/type/lint/nativecombined;FFonlyverifiedthenfreshAandblindrounds
+
+- 2026-10-25T17:37:02.977Z | parent 3a0d3c96 (entry commit follows) | manager | P12-15-19-MANAGER-FINAL-DIRECT-CHECKS: C19finalreport7e73bf5dreadwhole/pickedreportonly. Worker'sfinal43files771tests3green/7redmutations/type0/lint0/144; short480honestlyseparateC21. ManagerwholelateC19diffread/picked8179120ccombinedweb2cd7fe0b87b8b1754cf75986f93ac42ab5ece86f. Own17tests3green;5ownmutations6/2/1/1/1red;exactbytesrestoredthen17green. CombinededitorSHAf7e172dc8eacb6c74dceab1ed3e0f3af150e1c531ceaa5d991a5b5a748e0f43a includespriorC08integration,notworker'sisolatedhash. OwnC15remountandfreshnarrowtargetmutations1/1red,restored11green;earlier4keepermutationsstillapplyunchangedkeeper/helperhashes6a5c1d35/878ba333. Managercombinedtype0/lint0/144. Nativeexactweb40217054907/job121240368231running07/08/12/16/19/place3;actualkeyboardownUIrunning. NoFF/noacceptance/roundyet. | evidence: P12-19-C-20261025T173101Z.md;verify-integrated/manager-final19-check-results.json;manager-final15-shape-results.json;manager-final15-19-type.log;manager-final15-19-lint.log;CI40217054907 | next: FinishownkeyboardUI/nativeexacttree;C15finalworkerreport;C21actualminimumUI/mutations;managerverifyC21thenFFcombinedbeforefreshA/blind
 
 ---
 
