@@ -11,11 +11,11 @@ on:
         type: string
         required: false
       patch:
-        description: Optional compressed/base64 manager-reviewed web-only verification patch
+        description: Optional compressed manager-reviewed web-only verification patch
         type: string
         required: false
       patch_encoding:
-        description: Compression for the public verification patch (gzip or br)
+        description: Public patch transport (gzip/base64, br/base64, or br85)
         type: string
         default: gzip
         required: false
@@ -29,7 +29,7 @@ on:
         type: string
         required: false
       repeat_groups:
-        description: Optional approved test groups (07,08,12,16,19,place), unchanged tests three times
+        description: Optional approved test groups (07,08,12,16,19,21,place), unchanged tests three times
         type: string
         required: false
 
@@ -81,7 +81,8 @@ jobs:
           cd peer
           if [ -n "$PATCH_B64" ]; then
             [[ "$EXPECTED_WEB_TREE" =~ ^[0-9a-f]{40}$ ]]
-            node -e 'const f=require("node:fs"),z=require("node:zlib"),e=process.env.PATCH_ENCODING||"gzip";if(!["gzip","br"].includes(e))process.exit(1);const b=Buffer.from(process.env.PATCH_B64,"base64");f.writeFileSync(process.env.RUNNER_TEMP+"/verify.patch",e==="br"?z.brotliDecompressSync(b):z.gunzipSync(b))'
+            git show "$GITHUB_SHA:.github/p12-patch-codec.cjs" > "$RUNNER_TEMP/p12-patch-codec.cjs"
+            node -e 'const f=require("node:fs"),z=require("node:zlib"),e=process.env.PATCH_ENCODING||"gzip";if(!["gzip","br","br85"].includes(e))process.exit(1);const b=e==="br85"?require(process.env.RUNNER_TEMP+"/p12-patch-codec.cjs").decode85(process.env.PATCH_B64):Buffer.from(process.env.PATCH_B64,"base64");f.writeFileSync(process.env.RUNNER_TEMP+"/verify.patch",e==="gzip"?z.gunzipSync(b):z.brotliDecompressSync(b))'
             context="${PATCH_CONTEXT:-3}"
             [[ "$context" = 3 || "$context" = 0 ]]
             apply_args=()
