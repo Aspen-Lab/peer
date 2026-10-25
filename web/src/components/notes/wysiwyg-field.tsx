@@ -82,6 +82,7 @@ export function Surface({
   placeholder,
   className,
   autoFocus = false,
+  formatShortcut = false,
 }: {
   id: string;
   text: string;
@@ -91,6 +92,8 @@ export function Surface({
   placeholder: string;
   className?: string;
   autoFocus?: boolean;
+  /** Only the block editor supplies a Format toolbar; plain fields do not. */
+  formatShortcut?: boolean;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   /** The source the DOM was last drawn from, or last wrote. */
@@ -197,8 +200,8 @@ export function Surface({
       onPaste={(e) => api.current.paste(e, id)}
       onSelect={(e) => api.current.caret(id, e.currentTarget)}
       onBlur={(e) => api.current.blur(id, e.relatedTarget)}
-      aria-keyshortcuts="Alt+F10"
-      aria-description="Alt+F10 moves between this block and Format."
+      aria-keyshortcuts={formatShortcut ? "Alt+F10" : undefined}
+      aria-description={formatShortcut ? "Alt+F10 moves between this block and Format." : undefined}
       className={cn(
         className,
         "block min-h-[1lh] w-full whitespace-pre-wrap break-words bg-transparent p-0 outline-none",

@@ -10,6 +10,7 @@ import { NoteEditor } from "./note-editor";
 import { NoteToolbar, NoteToolbarView } from "./note-toolbar";
 import { block } from "@/lib/notes/blocks";
 import type { BlockType, Note } from "@/lib/notes/types";
+import { Surface, type SurfaceApi } from "./wysiwyg-field";
 
 type Props = Record<string, unknown>;
 function nodes(tree: unknown): ReactElement<Props>[] {
@@ -125,3 +126,12 @@ for (const method of ["pointer", "shortcut"] as const) {
     expect(active).toBe(h.surface); h.run.unmount();
   });
 }
+it("advertises Format only on a surface whose owner supplies that toolbar", () => {
+  for (const formatShortcut of [false, true]) {
+    const api = { current: { register: vi.fn(), input: vi.fn(), key: vi.fn(), paste: vi.fn(), caret: vi.fn(), blur: vi.fn(), typing: () => false } satisfies SurfaceApi };
+    const run = stagedRuntime.mount(() => Surface({ id: "field", text: "", sources: {}, api, label: "Text", placeholder: "", formatShortcut }));
+    expect(run.value.props["aria-keyshortcuts"]).toBe(formatShortcut ? "Alt+F10" : undefined);
+    expect(run.value.props["aria-description"]).toBe(formatShortcut ? "Alt+F10 moves between this block and Format." : undefined);
+    run.unmount();
+  }
+});

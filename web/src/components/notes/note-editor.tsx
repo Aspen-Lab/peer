@@ -352,6 +352,7 @@ const Row = memo(function Row({ block: b, first, number, editing, sources, dragg
     content = (
       <Surface
         id={b.id}
+        formatShortcut
         text={b.text}
         sources={sources}
         api={api}
