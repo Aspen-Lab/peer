@@ -138,10 +138,10 @@ describe("no empty window stands (P10-08; replaces P8-06's rule for it, whose pi
 
   // P11-14 (re-aimed, §1c): was "the page's width is kept clear only by `reserveDock`, which the box calls when a passage opens the dock"
   // (`box.match(/reserveDock\(/g)).toHaveLength(1)`). Nothing is reserved now; the dock's mode is still decided in that one place.
-  it("the dock stands from a window of 1024 px while a passage is open, decided in one place, and the box reserves nothing", () => {
+  it("the dock stands in a registered margin or from 1024 px while a passage is open, decided in one place, and the box reserves nothing", () => {
     const box = read("src/components/reader/explain-box.tsx");
 
-    expect(box).toContain("const docked = open !== null && viewport.width >= DOCK_MIN_VIEWPORT_PX;");
+    expect(box).toContain("const docked = open !== null && (stack.rect !== null || viewport.width >= DOCK_MIN_VIEWPORT_PX);");
     expect(box.match(/const docked =/g)).toHaveLength(1);
     expect(box).not.toContain("reserveDock");
   });

@@ -70,9 +70,9 @@ const painted = (expr: string | null, zoom: number, vh = 1080) => {
 };
 
 const mastheadPx = Number(/sticky top-0[^"]*\bh-(\d+)\b/.exec(MASTHEAD)?.[1]) * 4;
-/** The paper's container top padding from lg (`compoundVariants` for width reader): a Tailwind step (x zoom) or a calc(). */
-const padding = /rhythm:\s*"reader",\s*class:\s*"lg:pt-(?:(\d+)|\[([^\]]+)\])/.exec(CONTAINER);
-const staticTop = (zoom: number) => mastheadPx + (padding?.[1] ? zoom * Number(padding[1]) * 4 : painted(padding?.[2] ?? "0px", zoom));
+/** Explicit reader-shell padding in the reader compound variant, painted x Fit zoom. */
+const padding = /width:\s*"reader",\s*rhythm:\s*"reader",\s*class:\s*"has-\[\.reader-shell\]:pt-(\d+)"/.exec(CONTAINER);
+const staticTop = (zoom: number) => mastheadPx + zoom * Number(padding?.[1]) * 4;
 
 const ZOOMS = [1, 1.2142857, 1.6190476, 2.5];
 const PANE = rule(".reader-left");
@@ -82,7 +82,8 @@ const legendPainted = (zoom: number) => zoom * Number(/--legend-h:\s*([\d.]+)rem
 describe("the left pane under Fit's zoom (B P11-36, E3; BACKLOG-105)", () => {
   it("reads the masthead's height and the container's top padding", () => {
     expect(mastheadPx).toBe(48);
-    expect(padding, "the reader container has a top padding from lg").not.toBeNull();
+    expect(padding, "the reader container explicitly pads its shell").not.toBeNull();
+    expect(Number(padding?.[1]) * 4).toBe(16);
   });
 
   // The static position of the pane at scroll 0 is the masthead (unzoomed) plus the container's padding (painted x zoom). A `top` that is not that
