@@ -42,7 +42,7 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T18:23:49.588Z; only writer of this file
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T18:23:53.135Z; only writer of this file
 CURRENT ITEM:          A23/A24/B27active;B27wrongfigurecauseconfirmedguide→C28;A23completed660pendingbank;A26PARTIALqueued;blindnotstarted;A0B0;clockACTIVE
 NEXT TURN:          B27final producingpath/cacheguide→separateC28; sameA23/A24 finiteguardwork; bankA23completed660andexplicitmodecorrection; blindnotstarted
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
@@ -1351,6 +1351,10 @@ Read entireB27report andactual77inventory/provenance;143targets66opens/closes65E
 ### §1h.325 — 2026-10-26 — P12-27-NORMAL-UI-EXECUTION-BANKED
 
 FreshnormalUIupload once, v1 38candidates19deliveredclick/viewer/closes7detachedscrollerrors12undelivered,10HTTP200/33HTTP404,0pageerrors. Absenttab/shiftedviewportlimits retained. Read the actual report delta before banking. Preserve all adverse observations and exact scope; these facts neither waive missing production/authentication evidence nor create a score. Manager verifies any later C independently before landing.
+
+### §1h.326 — 2026-10-26 — P12-27-WRONG-FIGURE-REGIONS-CONFIRMED
+
+Read sourcecomparison+UIstableanchors andview actualsourcepage5/deliveredFigure4/5:bothwrongtablecrops confirmed. Unchangedengineprobe reproduces duplicatecaption/toporder andsize/crosscolumnmechanisms; directprobeiscausal,notUIclosure. Fullproducingpath/cacheguide pendingseparateC. Read the actual report delta before banking. Preserve all adverse observations and exact scope; these facts neither waive missing production/authentication evidence nor create a score. Manager verifies any later C independently before landing.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
