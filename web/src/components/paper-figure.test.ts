@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+const figureRevision = vi.hoisted(() => ({ FIGURE_EXTRACTION_REVISION: "invented-old-engine" }));
+vi.mock("@/lib/figures/figure-revision", () => figureRevision);
 
 // P0-10: the request tests below run `useResolvedFigure`'s effect on the
 // minimal hook runtime (no DOM here); the key tests are pure and unaffected.
@@ -70,6 +72,20 @@ describe("useResolvedFigure — the figure request (P0-10)", () => {
     opened.unmount();
     return opened.value;
   }
+
+  it("P12-28: a revision invalidates the settled resolver and its public edge URL, then reuses the current result", async () => {
+    const args = { itemId: "arxiv:2610.00228", figureIndex: 0 };
+    figureRevision.FIGURE_EXTRACTION_REVISION = "invented-old-engine";
+    await resolve(args);
+    expect(calls).toHaveLength(1);
+    const oldUrl = calls[0].url;
+    figureRevision.FIGURE_EXTRACTION_REVISION = "invented-new-engine";
+    await resolve(args);
+    expect(calls).toHaveLength(2);
+    expect(calls[1].url).not.toBe(oldUrl);
+    await resolve(args);
+    expect(calls).toHaveLength(2);
+  });
 
   it("posts an upload's request, with no report text or title in the URL and no title in the body", async () => {
     const figure = await resolve({

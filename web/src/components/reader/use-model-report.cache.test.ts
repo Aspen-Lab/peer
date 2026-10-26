@@ -183,6 +183,15 @@ afterEach(() => {
 // ── rule 1 ────────────────────────────────────────────────────────────
 
 describe("the report cache holds no figure by value (P9-48 rule 1)", () => {
+  it("P12-28: an old persisted report cannot reopen a stale derived figure URL; the normal request refreshes it once", async () => {
+    const old = report("old-engine", { proposal: "/api/papers/arxiv%3A2610.00001/figure-image?page=1&fig=4" });
+    localStorage.setItem("peer-paper-report-v7", JSON.stringify({ [keyFor()]: { report: old, savedAt: Date.now() } }));
+    await open();
+    expect(net.streamCalls).toHaveLength(1);
+    await open();
+    expect(net.streamCalls).toHaveLength(1);
+  });
+
   it("stores no data: URL — the proposal's, a result's, or a figure two places share", () => {
     const shared = dataUrl(300_000);
     rememberReport(keyFor(), report("r", { proposal: shared, results: [shared, dataUrl(200_000), null] }));

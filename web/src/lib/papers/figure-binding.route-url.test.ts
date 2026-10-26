@@ -116,6 +116,15 @@ describe("rule 1 — a bound figure of a PDF is the figure-image route's URL", (
     expect(proposalUrl(bound)).toBe("/api/papers/arxiv%3A2610.00007/figure-image?page=5&fig=2");
   });
 
+  it("P12-28: newly bound image resources differ from pre-revision public edge URLs while preserving page and number", async () => {
+    const bound = await bind({ id: PAPER_ID });
+    const url = new URL(proposalUrl(bound)!, "https://example.org");
+    expect(url.searchParams.get("page")).toBe("5");
+    expect(url.searchParams.get("fig")).toBe("2");
+    expect(proposalUrl(bound)).not.toBe("/api/papers/arxiv%3A2610.00007/figure-image?page=5&fig=2");
+    expect(resultUrl(bound)).not.toBe("/api/papers/arxiv%3A2610.00007/figure-image?page=3&fig=1");
+  });
+
   it("carries no figure by value: the report is a few KB, not two megabytes", async () => {
     // What a real pool holds: a megabyte of base64 a figure.
     const megabyte = (c: string) => `data:image/png;base64,${c.repeat(1_081_000)}`;

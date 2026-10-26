@@ -106,6 +106,19 @@ describe("useReading with effects running — one reading request across two ope
     expect(fetches).toHaveLength(2);
   });
 
+  it("P12-28: reopening an existing upload misses a reading with stale figure references, then reuses the refreshed reading", async () => {
+    const { buildReadingKey } = await import("./use-reading");
+    const key = buildReadingKey(standalone.id, undefined, standalone.revision);
+    const oldReading = { ...buildReading(standalone, null), version: 14 };
+    localStorage.setItem("peer-reading-v2", JSON.stringify({ [key]: { reading: oldReading, ts: Date.now() } }));
+    serveReading("pdf");
+    expect((await open(standalone)).reading?.provenance.fullText).toBe("pdf");
+    expect(fetches).toHaveLength(1);
+    expect(fetches[0]).not.toContain("?v=14");
+    await open(standalone);
+    expect(fetches).toHaveLength(1);
+  });
+
   // P8-04: the route answers a public paper with `public, s-maxage=86400`, and the URL was the same for every
   // version of the reading, so a shared cache went on serving a body of the old shape to a client that
   // refuses it (and the reader got the abstract alone). The version in the URL changes the cache's key
