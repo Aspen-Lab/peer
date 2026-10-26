@@ -6,7 +6,7 @@
 // boxes within a pixel or two. P9-25 (B) measured it on the owner's paper (12
 // regions, 12 of 12 captions identical to the helper's); P9-28 (C) built it.
 //
-// What a figure is here — the helper's own rules, unchanged:
+// What a figure is here (P12-28 updates caption pairing; size floors stay):
 //   * an embedded raster at least 120 x 120 pt and 20,000 pt^2 is a figure,
 //     with a caption if one sits within 220 pt below it or 110 pt above;
 //   * a cluster of vector drawing (axes, bars, curves, within 3 pt of each
@@ -107,6 +107,7 @@ export const EXTRACTION_BUDGET_MS = 25_000;
 const MAX_DRAWING_RECTS = 12_000;
 
 const CAPTION_RE = /^\s*fig(?:ure)?\.?\s*(\d+[a-z]?)\b/i;
+const OTHER_CAPTION_RE = /^\s*(?:table|scheme|chart)\.?\s*\d+[a-z]?\b/i;
 const LABEL_RE = /^\s*(?:fig(?:ure)?\.?\s*)?(\d+[a-z]?)\s*$/i;
 const MIN_WIDTH = 120;
 const MIN_HEIGHT = 120;
@@ -192,6 +193,7 @@ const normalizeText = (text: string) => text.replace(/\s+/g, " ").trim();
 interface TextBlock {
   rect: Rect;
   text: string;
+  blockId: number;
 }
 
 interface ImageBlock {
@@ -208,27 +210,19 @@ function readPageStructure(page: Page): { texts: TextBlock[]; images: ImageBlock
   const images: ImageBlock[] = [];
   const structured = page.toStructuredText("preserve-ligatures,preserve-whitespace,clip,preserve-images");
   try {
-    let bbox: Rect = [0, 0, 0, 0];
-    let lines: string[] = [];
+    let blockId = 0;
+    let lineRect: Rect = [0, 0, 0, 0];
     let line: string[] = [];
     structured.walk({
-      beginTextBlock(rect) {
-        bbox = rect;
-        lines = [];
-      },
-      beginLine() {
-        line = [];
-      },
+      beginTextBlock() { blockId++; },
+      beginLine(rect) { lineRect = rect; line = []; },
       onChar(character, _origin, font) {
         line.push(character);
         font.destroy(); // MuPDF.js wraps a font for every character it walks
       },
       endLine() {
-        lines.push(line.join(""));
-      },
-      endTextBlock() {
-        const text = normalizeText(lines.join("\n"));
-        if (text) texts.push({ rect: bbox, text });
+        const text = normalizeText(line.join(""));
+        if (text) texts.push({ rect: lineRect, text, blockId });
       },
       onImageBlock(rect, transform, image: Image) {
         try {
@@ -254,18 +248,19 @@ function readPageStructure(page: Page): { texts: TextBlock[]; images: ImageBlock
 
 // ── Captions ─────────────────────────────────────────────────────────────
 
-/** Distance from a region to a block as a caption candidate, or null when it
- *  is too far. Below the region counts as it is; above costs 30 more. */
+/** An above or below caption's actual gap. Text inside the drawing is not a
+ * caption; another column is not a caption, however close its y coordinate. */
 function captionDistance(region: Rect, block: TextBlock): number | null {
+  if (horizontalPenalty(region, block) > 0) return null;
   if (block.rect[1] >= region[3]) {
     const distance = block.rect[1] - region[3];
     return distance > MAX_CAPTION_DISTANCE_BELOW ? null : distance;
   }
   if (block.rect[3] <= region[1]) {
     const distance = region[1] - block.rect[3];
-    return distance > MAX_CAPTION_DISTANCE_ABOVE ? null : distance + 30;
+    return distance > MAX_CAPTION_DISTANCE_ABOVE ? null : distance;
   }
-  return 0;
+  return null;
 }
 
 function horizontalPenalty(region: Rect, block: TextBlock): number {
@@ -276,12 +271,16 @@ function horizontalPenalty(region: Rect, block: TextBlock): number {
 
 /** The caption block and the lines that continue it (each within 28 pt of the
  *  last and horizontally overlapping it), up to 500 characters. */
-function mergeCaptionLines(blocks: TextBlock[], start: number): string {
+export function mergeCaptionLines(blocks: TextBlock[], start: number): string {
   const parts = [blocks[start].text];
+  const originalBlock = blocks[start].blockId;
   let anchor = blocks[start];
   for (const next of blocks.slice(start + 1)) {
-    if (next.rect[1] - anchor.rect[3] > 28) break;
-    if (horizontalPenalty(anchor.rect, next) > 0) break;
+    // Original block lines were joined before spatial checks. A distant other
+    // block must not prevent a later line from that same original block.
+    if (next.blockId !== originalBlock && next.rect[1] - anchor.rect[3] > 28) continue;
+    if (horizontalPenalty(anchor.rect, next) > 0 || next.rect[1] < anchor.rect[3]) continue;
+    if (CAPTION_RE.test(next.text) || OTHER_CAPTION_RE.test(next.text)) break;
     parts.push(next.text);
     anchor = next;
     if (parts.join(" ").length >= MAX_FIGURE_TEXT_CHARS) break;
@@ -289,22 +288,36 @@ function mergeCaptionLines(blocks: TextBlock[], start: number): string {
   return normalizeText(parts.join(" ")).slice(0, MAX_FIGURE_TEXT_CHARS);
 }
 
-function bestCaptionForRegion(region: Rect, blocks: TextBlock[]): { caption: string | null; explicit: boolean } {
-  let bestExplicit: { score: number; index: number } | null = null;
+interface CaptionMatch {
+  caption: string | null;
+  explicit: boolean;
+  excluded: boolean;
+  distance: number;
+}
+
+function bestCaptionForRegion(region: Rect, blocks: TextBlock[]): CaptionMatch {
+  let bestTyped: { score: number; index: number } | null = null;
+  let ambiguous = false;
   let bestGeneric: { score: number; index: number } | null = null;
   for (const [index, block] of blocks.entries()) {
     const distance = captionDistance(region, block);
     if (distance === null) continue;
-    const score = distance + horizontalPenalty(region, block);
-    if (CAPTION_RE.test(block.text)) {
-      if (bestExplicit === null || score < bestExplicit.score) bestExplicit = { score, index };
+    const score = distance;
+    if (CAPTION_RE.test(block.text) || OTHER_CAPTION_RE.test(block.text)) {
+      if (bestTyped === null || score < bestTyped.score) {
+        bestTyped = { score, index };
+        ambiguous = false;
+      } else if (score === bestTyped.score) ambiguous = true;
     } else if (bestGeneric === null || score < bestGeneric.score) {
       bestGeneric = { score, index };
     }
   }
-  if (bestExplicit) return { caption: mergeCaptionLines(blocks, bestExplicit.index), explicit: true };
-  if (bestGeneric) return { caption: blocks[bestGeneric.index].text.slice(0, MAX_FIGURE_TEXT_CHARS), explicit: false };
-  return { caption: null, explicit: false };
+  if (bestTyped) {
+    const explicit = CAPTION_RE.test(blocks[bestTyped.index].text);
+    return { caption: mergeCaptionLines(blocks, bestTyped.index), explicit, excluded: ambiguous || !explicit, distance: bestTyped.score };
+  }
+  if (bestGeneric) return { caption: blocks[bestGeneric.index].text.slice(0, MAX_FIGURE_TEXT_CHARS), explicit: false, excluded: false, distance: bestGeneric.score };
+  return { caption: null, explicit: false, excluded: false, distance: Infinity };
 }
 
 // ── Stretched rasters ────────────────────────────────────────────────────
@@ -482,6 +495,7 @@ interface Candidate {
   kind: "image" | "drawing";
   caption: string | null;
   explicit: boolean;
+  captionDistance: number;
   stretch: number;
 }
 
@@ -492,17 +506,18 @@ function candidateRegions(mupdf: Mupdf, page: Page, pageRect: Rect, texts: TextB
   for (const image of images) {
     const rect = image.bbox;
     if (width(rect) < MIN_WIDTH || height(rect) < MIN_HEIGHT || area(rect) < MIN_AREA) continue;
-    const { caption, explicit } = bestCaptionForRegion(rect, texts);
-    candidates.push({ rect, kind: "image", caption, explicit, stretch: 1 });
+    const { caption, explicit, excluded, distance } = bestCaptionForRegion(rect, texts);
+    if (excluded) continue;
+    candidates.push({ rect, kind: "image", caption, explicit, captionDistance: distance, stretch: 1 });
   }
 
   const { boxes, overflow } = collectDrawingBoxes(mupdf, page);
   const clusters = overflow ? null : clusterDrawings(boxes, pageRect);
   for (const rect of clusters ?? []) {
     if (width(rect) < MIN_WIDTH || height(rect) < MIN_HEIGHT || area(rect) < MIN_AREA) continue;
-    const { caption, explicit } = bestCaptionForRegion(rect, texts);
-    if (!explicit) continue;
-    candidates.push({ rect, kind: "drawing", caption, explicit: true, stretch: 1 });
+    const { caption, explicit, excluded, distance } = bestCaptionForRegion(rect, texts);
+    if (!explicit || excluded) continue;
+    candidates.push({ rect, kind: "drawing", caption, explicit: true, captionDistance: distance, stretch: 1 });
   }
 
   candidates.sort((a, b) => a.rect[1] - b.rect[1] || a.rect[0] - b.rect[0] || Number(!a.explicit) - Number(!b.explicit));
@@ -526,8 +541,18 @@ function candidateRegions(mupdf: Mupdf, page: Page, pageRect: Rect, texts: TextB
     }
     if (keep) kept.push(candidate);
   }
-  for (const candidate of kept) candidate.stretch = regionStretch(candidate.rect, placed);
-  return kept;
+  // A caption naming one figure cannot justify every earlier drawing on the
+  // page. Resolve competing regions after overlap dedupe, so the raster and
+  // vector views of one picture do not masquerade as two disjoint choices.
+  const defensible = kept.filter((candidate) => {
+    const key = captionKey(candidate.caption);
+    if (key === null) return true;
+    const competitors = kept.filter((other) => captionKey(other.caption) === key);
+    const nearest = Math.min(...competitors.map((other) => other.captionDistance));
+    return candidate.captionDistance === nearest && competitors.filter((other) => other.captionDistance === nearest).length === 1;
+  });
+  for (const candidate of defensible) candidate.stretch = regionStretch(candidate.rect, placed);
+  return defensible;
 }
 
 // ── Rendering a region ───────────────────────────────────────────────────
