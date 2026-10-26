@@ -42,7 +42,7 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T13:30:31.126Z; only writer of this file
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T13:30:35.719Z; only writer of this file
 CURRENT ITEM:          sameA23/A24active;A26livegeometrycheckpointforB27slot;22geometrycellsbanked;B27figureinvestigationplanned;blindnotstarted;A0B0;clockACTIVE
 NEXT TURN:          sameA23/A24finish actual guards and production; A26 checkpoint livegeometry then B27 independent figure investigation; frozenpacks before blind scoring
 STOPPED BECAUSE:          — recovery13 at2026-10-26T13:12UTC; sameA23/A24/A26 resumed; existing geometrybatch finished22cells, no duplicate
@@ -1307,6 +1307,10 @@ Six actual lifecycle sequences/input including emptyEscape/emptySave/pendingwrit
 ### §1h.314 — 2026-10-26 — P12-23-THIRTY-DELIVERED-CYCLES-BANKED
 
 Actual30/30source-note/editor/keyboardSave cycles at1440index2Book; sourcehashpreserves scientificsup/sub except noteUI. Zeroattempt hydrationfailure retained. Otherwidth jobs remain separate. Read the actual report delta before banking. Keep failed helpers and exact denominators; no source/test change, no new exemption or formal score. The independent manager entry attempt on4294 failed before upload with upload-availability404; retained externally. Ordinary same-copy server restart returned200; one separately named follow-up probe is pending, never a substitute for independent review.
+
+### §1h.315 — 2026-10-26 — P12-24-INHERITED-LEDGER-FAILURES-BANKED
+
+79exactcontracts individuallyindexed,47boundedfacts/32none, everyfullGuardEvidenceComplete false. PublicB143targets66opens77normalactiontimeouts, original79/73/6,0pageerrors; independent B planned, no inferred permanentfailure. Read the actual report delta before banking. Keep failed helpers and exact denominators; no source/test change, no new exemption or formal score. The independent manager entry attempt on4294 failed before upload with upload-availability404; retained externally. Ordinary same-copy server restart returned200; one separately named follow-up probe is pending, never a substitute for independent review.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
