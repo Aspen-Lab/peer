@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T04:31:10.895Z; only writer of this file
-CURRENT ITEM:          A24invented600cycles+canonical4HTTPbanked/full79+figuresprodowed;A23remainingmatrix;B25ninecasestimed/finaldiagnostic;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          A24 stablefigure/actions/full79guards/production;A23remainingmatrix;B25finalcause; possibleindependentpublicThemeAhelperafterBslotfree; curatedpacks→blind
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T04:34:27.835Z; only writer of this file
+CURRENT ITEM:          A23originalfullmatrix;A24themeBfullwalk;B25finaldiagnostic;A26public/inventedbriefqueued4225(capacity);blindnotstarted;A0B0;clockACTIVE
+NEXT TURN:          FinishB25diagnostic/report, thenfreshA26own4225; continue originalA23/A24; freezecompletefactualpacks→3blind/theme
 STOPPED BECAUSE:          — recovered at2026-10-26T04:07UTC from both A quota errors; same workers/copies resumed
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1107,6 +1107,10 @@ Read and bank B25's first bounded actual pending/delivered click observation aft
 ### §1h.264 — 2026-10-26 — Bounded cycle, canonical-request and byte-scan evidence
 
 Read and bank A24's complete cumulative checkpoint, including the14-section correction. Its600 invented no-key selection/n/Delete cycles,18 multi-card sequences and four real canonical Explain requests are named bounded families, not all-input/all-theme/Fit/minimum/guard closure. The nonexistent threadMessages capture stays null and cannot prove wire thread length. The final byte-stream privacy scan removes earlier extension/30MB limitations and includes operational caches/logs/generated artifacts without a compile exception; retain its10-probe scope and explicit authorized-private-evidence/scoped-store exclusions, not universal privacy proof. Pending-image and original/PublicB helper failures remain preserved and B7 open. No score, requirement or price change.
+
+### §1h.265 — 2026-10-26 — Parallel factual note supplement, formal reviewer unchanged
+
+Prepare a fresh independent read-only measurement helper for publicA/publicB/stable invented note actions/matrix in its own detached checkout/port4225. It must not access the owner's original or existing reviewer profiles/stores/reports, diagnose, change code or score. A23 retains the original input, its independent walk, final Theme A scoring and reconciliation; fresh supplemental raw page evidence is labelled by its own provenance and cannot inherit A23/C conclusions. A23 identified the isolated remaining subset. Queue the helper only because root+two A+B currently fill all four runtime slots; release it after B25 finishes. This parallelizes outstanding input coverage without replacing any formal A, blind reader or frozen rubric requirement.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
