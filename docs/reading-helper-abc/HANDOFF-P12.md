@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T18:28:58.616Z
+AS OF        2026-10-26T18:29:03.708Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.352   NEXT RULING §1h.353   NEXT ITEM ID P12-28   NEXT FREE PORT 4227
+LAST RULING  §1h.353   NEXT RULING §1h.354   NEXT ITEM ID P12-28   NEXT FREE PORT 4227
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
 RUNNING      A23/A24/B27active;A23cyclecheckpointbanking;B27wrongregionguide→C28;A26PARTIALqueued;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
@@ -485,6 +485,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T18:28:54.158Z | parent b35982ed (entry commit follows) | manager | P12-23-CYCLE-CHECKPOINT-6A9E8405: Cellm21 has30completed/30attempted; preserve failures and actual recorded preferences. | evidence: docs/reading-helper-abc/P12-23-A-20261025T230000Z.md; source6a9e8405; external actual raw and manager-cycle-audit-20261026.json | next: B27finalguide→separateC28; sameA23/A24guards; all22cyclecounts neverreplacefullmatrix or blindscore
 
 - 2026-10-26T18:28:58.616Z | parent 71591051 (entry commit follows) | manager | P12-23-CYCLE-CHECKPOINT-E245B145: Cellm22 has30completed/30attempted; preserve failures and actual recorded preferences. | evidence: docs/reading-helper-abc/P12-23-A-20261025T230000Z.md; sourcee245b145; external actual raw and manager-cycle-audit-20261026.json | next: B27finalguide→separateC28; sameA23/A24guards; all22cyclecounts neverreplacefullmatrix or blindscore
+
+- 2026-10-26T18:29:03.708Z | parent a46aed7e (entry commit follows) | manager | P12-23-CYCLE-CHECKPOINT-6CD45924: Final22widths30each=660delivered, originalm09countedonce; pendingeditreload/navigation/Delete sequencebounded, pagehidebranchunobserved. | evidence: docs/reading-helper-abc/P12-23-A-20261025T230000Z.md; source6cd45924; external actual raw and manager-cycle-audit-20261026.json | next: B27finalguide→separateC28; sameA23/A24guards; all22cyclecounts neverreplacefullmatrix or blindscore
 
 ---
 
