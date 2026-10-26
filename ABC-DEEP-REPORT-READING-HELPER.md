@@ -42,8 +42,8 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T13:17:05.705Z; only writer of this file
-CURRENT ITEM:          sameA23/A24/A26active;A23m01–m22finished,m01–m17banked;A24sourceUIclassification/guards/production;A26matrix/exports;blindnotstarted;A0B0;clockACTIVE
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T13:17:09.434Z; only writer of this file
+CURRENT ITEM:          sameA23/A24/A26active;A23m01–m22finished,m01–m18banked;A24sourceUIclassification/guards/production;A26matrix/exports;blindnotstarted;A0B0;clockACTIVE
 NEXT TURN:          bank next already-finished width; same A23/A24/A26 continue independent actions/guards/packs
 STOPPED BECAUSE:          — recovery13 at2026-10-26T13:12UTC; sameA23/A24/A26 resumed; existing geometrybatch finished22cells, no duplicate
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
@@ -1247,6 +1247,10 @@ Bank m16 only after reading its report delta and independently counting actual r
 ### §1h.299 — 2026-10-26 — P12-23-REQUIRED-M17-GEOMETRY-BANKED
 
 Bank m17 only after reading its report delta and independently counting actual raw cells, observations, disabled Fit requests and errors. Preserve viewport emulation versus physical zoom distinction and original unadjusted measurements. These finite geometry facts do not certify editing, lifecycle, export, return, privacy, inherited guards or a score; those stay with independent reviewers.
+
+### §1h.300 — 2026-10-26 — P12-23-REQUIRED-M18-GEOMETRY-BANKED
+
+Bank m18 only after reading its report delta and independently counting actual raw cells, observations, disabled Fit requests and errors. Preserve viewport emulation versus physical zoom distinction and original unadjusted measurements. These finite geometry facts do not certify editing, lifecycle, export, return, privacy, inherited guards or a score; those stay with independent reviewers.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
