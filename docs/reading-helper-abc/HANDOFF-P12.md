@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T04:24:24.705Z
+AS OF        2026-10-26T04:25:09.742Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.260   NEXT RULING §1h.261   NEXT ITEM ID P12-26   NEXT FREE PORT 4225
+LAST RULING  §1h.261   NEXT RULING §1h.262   NEXT ITEM ID P12-26   NEXT FREE PORT 4225
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      B25entrypartial/normalresumeapproved4224;A23squarematrix;A24fullmatrix/actions/guards;blindnotstarted;A0B0;clockACTIVE
+RUNNING      A23square1440banked/cliphit+remainingwidths;A24fullwalk/guards;B25normalresume/loadingmeasure;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -301,6 +301,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T04:21:54.667Z | parent a719aa95 (entry commit follows) | manager | P12-BODY-REFERENCE-COUNT-CORRECTION: Manager directly read actual A24body-only metadata:73608chars/10506recordedwords/14sections,not15. PriorA24report and ruling255 copied15; append correction ratherthan silentlyeditinghistory. A24 notified verify selector/normalization andcorrectnextcheckpoint. Manager own Unicodefourword tokenizer11375tokens is a different stated tokenizer, not contradiction with recorded10506words; no quotation/outputcontent. A23rawsectiontext73541chars usescloned textContent+namednote-control-supremoval; do not comparescope/normalization hashes as thoughsame. No product/score change. | evidence: private original-paper-body-normalized-v1.json; A23group-export-20261026T0415.cjs; ruling255 | next: A24 verify metadata scope/count andbank correction; bothA continue;B25cause; finalnormalized/privacyreferences beforeblind
 
 - 2026-10-26T04:24:24.705Z | parent 21bd33cf (entry commit follows) | manager | P12-25-ENTRY-PARTIAL-RESUME-RULING: Read wholeB25ebb7d640/pickreportonly. Exactown4224/web88ac/no-keySkip, first wronglabelbeforeuploadfailure, correctedonepublicAchooserconsentupload succeeded butsingularURLwaitloststate-save. No affectedimageobservation. Rule normalfreshprofilemayvisitonlyexactownroutealreadyobservedthroughitsUI/log; no session/cookiefabrication/credentials. If routeunavailable/rejected, allowONEadditionalnormalUI publicAupload after helperURL fix, explicitlyattempt2/duplicatepublicsource andpriorattemptpreserved. NotownerPDF, notauthbypass; no forcedaccess or rejectedmethod. | evidence: P12-25-B-20261026T043000Z.md@ebb7d640; briefs/P12-25.md; B25 ownrawhelpers | next: B25 resume normalownreader or bounded secondnormalpublicupload, then9timedimagecases/3candidates; originaltwoAcontinue
+
+- 2026-10-26T04:25:09.742Z | parent 020807d2 (entry commit follows) | manager | P12-23-1440-SQUARE-GEOMETRY-BANKED: Read completecumulativeA23 report/37f5c212append andpickreportonly.32actual1440x900cells8steps×lightdark×BookFit, enabledFitnormalUI; actualaggregate/page/Back andrealwheel phases.1024squareobservations:side/font0px,height/font0px,glyphcentre≤0.25px; correspondingfonts17.5/13.5constantacrossreaderprefs, equalitynottypographygrowth.0pageerrors/64screenshots. Viewportonly828of1024 doesnotmeasureancestorclip/hit/reach; furtherwidths/stressowed.4inventednoteprivacyprobes0repo/generated/DEVloghits bounded; captured14section4wordscan report/index0notwholePDFproof. Failedoptionalprefsprobesretained/noinjection. | evidence: P12-23-A-20261025T230000Z.md@37f5c212; privategeometry1440-20261026T0437/summary/privacyraw | next: A23 clip/hit/reach andremainingwidths/inputs/lifecycleprivacy;A24fullwalk;B25loadingcause; curatedpacks/3blindthemeafterfreeze
 
 ---
 

@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T04:24:24.705Z; only writer of this file
-CURRENT ITEM:          B25entrypartial/normalresumeapproved4224;A23squarematrix;A24fullmatrix/actions/guards;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          B25 resume normalownreader or bounded secondnormalpublicupload, then9timedimagecases/3candidates; originaltwoAcontinue
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T04:25:09.742Z; only writer of this file
+CURRENT ITEM:          A23square1440banked/cliphit+remainingwidths;A24fullwalk/guards;B25normalresume/loadingmeasure;blindnotstarted;A0B0;clockACTIVE
+NEXT TURN:          A23 clip/hit/reach andremainingwidths/inputs/lifecycleprivacy;A24fullwalk;B25loadingcause; curatedpacks/3blindthemeafterfreeze
 STOPPED BECAUSE:          — recovered at2026-10-26T04:07UTC from both A quota errors; same workers/copies resumed
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1092,6 +1092,10 @@ Manager directly reads A24's private body-only reference metadata:73608 characte
 
 Read the complete B25 early report. Its single publicA consent upload succeeded, but an incorrect singular reader-URL wait placed browser-state capture after the failure. No image observation is banked. Continue with a fresh normal no-key browser visiting only the exact own reader route already observed from its legitimate UI/operational log, without credential/session/cookie fabrication. If that normal route is unavailable or rejected, permit one additional ordinary chooser/consent upload of publicA after correcting the helper, explicitly recording attempt2 and preserving attempt1; this supersedes the brief's one-upload preference only for this public-input harness recovery. It does not authorize an owner-PDF duplicate, access-control workaround, synthetic auth, forced access or previously rejected method. No product change, finding or score follows.
 
+### §1h.261 — 2026-10-26 — Square equality is separate from clip/hit reachability
+
+Bank A23's32 actual1440×900 preference/theme/Book/Fit cells and1024 square/font/glyph measurements. Equality is observed at each actual state even though note-font sizes remain constant; do not claim reader preference enlarged note typography. The helper's828/1024 viewport-contained samples omit ancestor clipping and pointer hit, so neither offscreen samples nor viewport containment alone prove accessibility or its failure. Require separate actual scroll/clip/hit evidence, retaining initial and scrolled observations. Four note-only privacy probes and captured-section four-word scan remain bounded, with remaining privacy/input/width/guard requirements owed. No score, unit closure or requirement change.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -1370,7 +1374,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-20 | B_RETURNED — reportonly0b8b97a8/6fad2f9d;boundedcauseconfirmed | singlefloor/observerread-only36cells/3candidates | briefs/P12-20.md;reportlimitsretained | C21measuredminimumimplementation | 16/18shortfail18/18tallpass;97tests;3card189;finalhashsame;Explainunperformed |
 | P12-21 | MANAGER_VERIFIED_LANDED — integrated530918cc;FFda86379d/web88ac | 3singletongeometryfiles/directtests;C07landmarkpreserved | brief21;§1h.242 | freshAinitial/scrolled/longnotes/fullactionmatrix | own124x3/6redmutations/exactrestore/type/lint/native10872+3/3041x3;36actualcells+3headings+68hostoverflow;rawlimitsretained |
 | P12-22 | VERIFIED_LANDED_TRANSPORT — 233c04b0;actualbr85dispatch/nativepassed | codec/workflowonly;publicsamebytes/unchangedgates | briefs/P12-22.md;§1h.237–239 | no furthertransportworkunlessnewfailure | 61639payload;exact88acdecoder/index;native40240875208allgreen |
-| P12-23 | PARTIAL | R1 Theme A fresh A, resumed samecopy4222;82fe23db/web88ac | Original reloadBold+actualTXT/MD/Word/clipboard banked;2note8toolbar actions bounded; hierarchy/lifecycle/matrix/guards/privacy owed | Measured lists/lifecycle/export plus remaininginputmatrix; factualpack then3freshblind | P12-23-A-20261025T230000Z.md@240d4961; original private action/export artifacts |
+| P12-23 | PARTIAL | R1ThemeA own4222/web88ac; originalno-key | Lifecycle/listbounds/groupedexport+32actual1440geometrycells/1024metrics banked;fullcliphit/widths/otherinputs/guard/privacy owed | Clip/hit actualreach/fullwidthinputmatrix/lifecycleprivacy; curatedpack then3blind | P12-23-A-20261025T230000Z.md@37f5c212;uniqueprivateartifacts |
 | P12-24 | PARTIAL | R1 Theme B fresh independent A;4223;82fe23db/web88ac | Four distinct actual no-key consent entries banked; pageerrors0/4; full geometry/figures79guards/production/privacy/score owed | Complete matrix/action/production/guards factualpack then3freshblind | P12-24-A-20261025T230500Z.md@aad8c123; private per-input artifacts |
 | P12-25 | PARTIAL | Independent B9 publicA pre-click loading cases; own4224/web88ac | Setup/one normal publicupload banked; wrongURLhelper lostsavepoint; no targetimage measurement yet | Normalownroute recovery or oneexplicit secondpublicUIupload;9timedcases/3candidates | P12-25-B-20261026T043000Z.md@ebb7d640; ruling260 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
