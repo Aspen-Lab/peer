@@ -42,7 +42,7 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T13:29:48.367Z; only writer of this file
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T13:29:52.616Z; only writer of this file
 CURRENT ITEM:          sameA23/A24active;A26livegeometrycheckpointforB27slot;22geometrycellsbanked;B27figureinvestigationplanned;blindnotstarted;A0B0;clockACTIVE
 NEXT TURN:          sameA23/A24finish actual guards and production; A26 checkpoint livegeometry then B27 independent figure investigation; frozenpacks before blind scoring
 STOPPED BECAUSE:          — recovery13 at2026-10-26T13:12UTC; sameA23/A24/A26 resumed; existing geometrybatch finished22cells, no duplicate
@@ -1271,6 +1271,10 @@ Bank m22 only after reading its report delta and independently counting actual r
 ### §1h.305 — 2026-10-26 — P12-23-FORMAT-PERSISTENCE-BANKED
 
 Five selected inline formats persist immediate/Save/reload/reopen in one1440cell; actual TXT/MD/Word/Copy exclude sticky sourcequote. Read actual decoded artifact, no full-unit inference. Read the actual report delta before banking. Keep failed helpers and exact denominators; no source/test change, no new exemption or formal score. The independent manager entry attempt on4294 failed before upload with upload-availability404; retained externally. Ordinary same-copy server restart returned200; one separately named follow-up probe is pending, never a substitute for independent review.
+
+### §1h.306 — 2026-10-26 — P12-23-PRINT-RETURNS-BANKED
+
+Actual beforeprint iframe6071bytes; six1440paper/Summary returns glyphdeltas0–0.2094px. Preserve initial selector failure; nativePDFbytes/narrow/Saved/reflow still unperformed. Read the actual report delta before banking. Keep failed helpers and exact denominators; no source/test change, no new exemption or formal score. The independent manager entry attempt on4294 failed before upload with upload-availability404; retained externally. Ordinary same-copy server restart returned200; one separately named follow-up probe is pending, never a substitute for independent review.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
