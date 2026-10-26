@@ -42,7 +42,7 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T13:30:00.504Z; only writer of this file
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T13:30:04.937Z; only writer of this file
 CURRENT ITEM:          sameA23/A24active;A26livegeometrycheckpointforB27slot;22geometrycellsbanked;B27figureinvestigationplanned;blindnotstarted;A0B0;clockACTIVE
 NEXT TURN:          sameA23/A24finish actual guards and production; A26 checkpoint livegeometry then B27 independent figure investigation; frozenpacks before blind scoring
 STOPPED BECAUSE:          — recovery13 at2026-10-26T13:12UTC; sameA23/A24/A26 resumed; existing geometrybatch finished22cells, no duplicate
@@ -1283,6 +1283,10 @@ Exact18label/defaultstepBook aggregate family540cycles/input,1620total; failed r
 ### §1h.308 — 2026-10-26 — P12-26-SCOPED-LIFECYCLE-EXPORTS-BANKED
 
 Scoped sourcehashes preserve scientific sup/sub except explicit noteannotations; manager reran actual-export decoding and checked35segment/route observations count1/order. Default measured lifecycle family only; no PDFfile or fullnesting claim. Read the actual report delta before banking. Keep failed helpers and exact denominators; no source/test change, no new exemption or formal score. The independent manager entry attempt on4294 failed before upload with upload-availability404; retained externally. Ordinary same-copy server restart returned200; one separately named follow-up probe is pending, never a substitute for independent review.
+
+### §1h.309 — 2026-10-26 — P12-26-INCREMENTAL-PACK-AUDITED
+
+Manager read arraymanifest and literal dot/@ filenames, corrected own parser then independentlyaudited209refs/209byteSHAentries0missing/mismatch/links/verdict/model/owner4wordhits. Initial parser errors retained; evolving snapshot not frozen. Read the actual report delta before banking. Keep failed helpers and exact denominators; no source/test change, no new exemption or formal score. The independent manager entry attempt on4294 failed before upload with upload-availability404; retained externally. Ordinary same-copy server restart returned200; one separately named follow-up probe is pending, never a substitute for independent review.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
