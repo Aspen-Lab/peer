@@ -25,6 +25,14 @@ describe("P12-28: defensible typed caption pairing", () => {
     expect(await boxes(neighbors)).toEqual([[90, 280, 450, 430]]);
   });
 
+  it("excludes a raster with a nearby Table caption rather than treating it as an uncaptioned image", async () => {
+    const page: FigurePage = {
+      text: [["Table 1. Invented raster rows.", 90, 268, 9], ["Figure 4. Invented chart.", 90, 448, 9]],
+      shapes: [{ kind: "image", x: 90, top: 100, w: 360, h: 150 }, ...panel(90, 280, 360, 150)],
+    };
+    expect(await boxes(page)).toEqual([[90, 280, 450, 430]]);
+  });
+
   it("the requested label with maxFigures 1 returns the chart, never the earlier table", async () => {
     expect(await boxes(neighbors, "Figure 4")).toEqual([[90, 280, 450, 430]]);
   });
