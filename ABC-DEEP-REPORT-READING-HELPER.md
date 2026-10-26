@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T07:21:39.098Z; only writer of this file
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T07:21:44.251Z; only writer of this file
 CURRENT ITEM:          A23requiredoriginalmatrix/853supplementbanked;A24remainingguards/figures/publiccycles+bodyscope;A26public/inventedsetupbanked4225;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          A26 firstthreeownnormalUIinputs/actions;A23originalrequiredmatrix;A24guards/figures/prod; finalpacks thenblind
+NEXT TURN:          A23 fullrequiredwidth/short/undersized/actionreturnprivacy;A24guard/figure/prod;A26publicinputwalks
 STOPPED BECAUSE:          — recovery12 at2026-10-26T07:12UTC; sameA23/A24 resumed after quota; B25 complete
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1144,6 +1144,10 @@ Bank A24's exact recovered input/cell/action counts without importing unperforme
 
 Bank the helper's setup-only checkpoint without a page outcome. Its accidental filename-only discovery is recorded transparently; no out-of-scope content or reviewer outcome was opened, and future access stays in its own assigned scope. It remains a factual supplement, never a blind reader or the formal A score.
 
+### §1h.274 — 2026-10-26 — P12-23-853-SUPPLEMENT-REACH-BANKED
+
+Bank the actual supplemental853×900 marker-reach matrix with explicit22 completed versus10 disabled states and carried-source provenance. All markers become ancestor-clipped-visible and centre-hit through actual scrolling in each measured surface/cell, not simultaneously. This is neither the required853×480 cell nor proof every note action at every setting. For future wide Fit, preserve raw BCR/local computed font and ancestor zoom/transform measurements so CSS1em and rendered glyph comparisons are both assessable; never normalize away an actual mismatch. No rubric or threshold change.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -1422,7 +1426,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-20 | B_RETURNED — reportonly0b8b97a8/6fad2f9d;boundedcauseconfirmed | singlefloor/observerread-only36cells/3candidates | briefs/P12-20.md;reportlimitsretained | C21measuredminimumimplementation | 16/18shortfail18/18tallpass;97tests;3card189;finalhashsame;Explainunperformed |
 | P12-21 | MANAGER_VERIFIED_LANDED — integrated530918cc;FFda86379d/web88ac | 3singletongeometryfiles/directtests;C07landmarkpreserved | brief21;§1h.242 | freshAinitial/scrolled/longnotes/fullactionmatrix | own124x3/6redmutations/exactrestore/type/lint/native10872+3/3041x3;36actualcells+3headings+68hostoverflow;rawlimitsretained |
 | P12-22 | VERIFIED_LANDED_TRANSPORT — 233c04b0;actualbr85dispatch/nativepassed | codec/workflowonly;publicsamebytes/unchangedgates | briefs/P12-22.md;§1h.237–239 | no furthertransportworkunlessnewfailure | 61639payload;exact88acdecoder/index;native40240875208allgreen |
-| P12-23 | PARTIAL | R1ThemeA own4222/web88ac; originalno-key | Lifecycle/listbounds/groupedexport+32actual1440geometrycells/1024metrics banked;fullcliphit/widths/otherinputs/guard/privacy owed | Clip/hit actualreach/fullwidthinputmatrix/lifecycleprivacy; curatedpack then3blind | P12-23-A-20261025T230000Z.md@37f5c212;uniqueprivateartifacts |
+| P12-23 | PARTIAL | FormalThemeAoriginalown4222/web88ac | 1440matrix32cells+853x900supplement22/10disabled markerreachbanked;requiredremainingwidth/short/action/guards/privacy/prodowed | RequiredCSSmatrix/shortnotecontrolactions/return/lifecycleprivacy;reconcileA26facts thenfinalpack | P12-23-A-20261025T230000Z.md@eff52f6f; uniquegeometry/clip/hitraw |
 | P12-24 | PARTIAL | R1ThemeB own4223/web88ac;4inputs/no-key+stub | 600inventedcycles/18compositions/4canonicalHTTP200/byteprivacyv3banked;full79guards/stablefigures/production/remainingactionsowed | Completeallguards/actualfigures/normalproduction+privacy/factualcuration then3blind | P12-24-A-20261025T230500Z.md@975b232b; uniqueprivate raw |
 | P12-25 | INVESTIGATION_COMPLETE | Independent B ninepublicAloading cases; own4224stopped/web88ac | 9stabletimedcases/all200by10s;5pending+8deliveredopens;separatepeekvisibleclick;3candidates; no productfix justified, historicalA gapsremain | A24 freshstableidentity/progressiveobservations; A26starts freedslot; formalround remainsopen | P12-25-B-20261026T043000Z.md@03127840; summary/historicalgeometry/25filemanifest |
 | P12-26 | PARTIAL | Freshpublic/inventednote factualhelper;own4225/web88ac | Setup/lockedbytes/serverreadyonly; no input/action/scoreyet; scopebounded | ActualUI3inputs thenformat/lifecycle/export/matrix/cycles/curation | P12-26-A-20261026T072000Z.md@383b5084 |
