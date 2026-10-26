@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T04:11:46.751Z; only writer of this file
-CURRENT ITEM:          A23lifecycle/hierarchyexports;A24correctedmatrix/figures/questions/normalproduction;curatedblindpackcontractready/readersnotstarted;A0B0;clockACTIVE
-NEXT TURN:          A23/A24 continue originalfinitewalks; curator/factual/privacy/referenceaudit aftercompletepack; threefreshblind/theme only after freeze
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T04:12:48.061Z; only writer of this file
+CURRENT ITEM:          A23lifecyclebanked/group-exportcheckpointnext;A24correctedmatrix/actionruns;blindnotstarted;A0B0;clockACTIVE
+NEXT TURN:          A23 pending/stalewriter/navigation and fullgroup/hierarchy exports; A24 correctedgeometry/figures/production; packs thenblind
 STOPPED BECAUSE:          — recovered at2026-10-26T04:07UTC from both A quota errors; same workers/copies resumed
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1059,6 +1059,10 @@ Read and bank the complete A23 list/keyboard checkpoint. Actual actions and read
 ### §1h.252 — 2026-10-26 — Curated blind-pack boundary, no evidence waiver
 
 Before any blind reader starts, require a frozen curated evidence-only directory and manifest with explicit literal index references. Raw pack roots currently include legitimate product-scoped upload storage or browser-profile artifacts; these must remain preserved in place and be excluded from the reader snapshot, with no new copy of the owner's original PDF. Give readers only index-cited measurements, screenshots/DOM, export/request/privacy evidence and relevant scripts. Missing evidence remains missing; curation cannot remove adverse observations or original failed-attempt references. A read-only inventory found no score/verdict/model-prose lines or symlinks in the current two index snapshots, but this is not a completeness/privacy pass: body-only four-word overlap references are still owed. Clarify actual model naming only in commit trailers. Both existing A reviewers received this requirement. No rubric, denominator, price, stop line or pass requirement changes.
+
+### §1h.253 — 2026-10-26 — P12-23-LIFECYCLE-BOUNDARY-BANKED
+
+Bank the bounded nine-state A23 lifecycle record. Its92ms sample begins after fill returns and cannot establish last-input ordering or stale-writer safety; retain those gates as owed. Empty and written Escape match the named old-close contract only in this observed cell. No full unit, matrix or round closure.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
