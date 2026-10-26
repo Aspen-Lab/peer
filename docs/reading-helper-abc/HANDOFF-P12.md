@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T04:18:49.848Z
+AS OF        2026-10-26T04:19:26.874Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.257   NEXT RULING §1h.258   NEXT ITEM ID P12-26   NEXT FREE PORT 4225
+LAST RULING  §1h.258   NEXT RULING §1h.259   NEXT ITEM ID P12-26   NEXT FREE PORT 4225
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      A23notegeometry/fullinputwalk;A24matrix/figures/questions/guards;B25readonlyimagecause4224;allweb88ac;blindnotstarted;A0B0;clockACTIVE
+RUNNING      A23longgroup/pageentrybanked/squarematrixnext;A24fullmatrix/actions/guards;B25readonlyimagecause;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -295,6 +295,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T04:17:49.688Z | parent b05ebbe5 (entry commit follows) | manager | P12-25-IMAGE-DELIVERY-B-BRIEF: Write independent readonlyB25brief for9publicA pre-clickcompletefalse/natural0 records, own4224/sameweb88ac. Scope stabletarget/source/loading/network/realvisibility/hit/click at300ms/1/3/10s, threecandidates/costs, no productedit or authenticationworkaround. It tests manager timing suspicion ratherthan inheriting it. ExistingA23/A24 continue; fourthslot permits parallelcausework. No Bstartedbeforecommit. | evidence: briefs/P12-25.md; A24v2 ninepreclick records; ruling255 | next: Spawn freshB25 owncopy4224 afterbriefpushed; existingA23/A24 continue; completepacks→blind
 
 - 2026-10-26T04:18:49.848Z | parent d3e1341b (entry commit follows) | manager | P12-25-B-STARTED: Liveagents checked twoAonly. Requestedworker fornewB25 Unknownmodel; fresh supported samegeneration fallback B25started fork-none. Own detached d3e1341b/web88ac p12-25/wt,4224/publicAonly, readonlycause/threecandidates/reportonly. SourcePDF original/privateAstate not assigned. ExistingA23/A24 continue samefrozenapp, no productchange or score. | evidence: briefs/P12-25.md; agent/root/p12_25_image_delivery_b; pushed d3e1341b | next: B25 earlyPARTIAL/loading measurements; A23/A24 fullwalk/checkpoints; readreports/freeze factualpacks thenblind
+
+- 2026-10-26T04:19:26.874Z | parent c7c5d172 (entry commit follows) | manager | P12-23-LONG-GROUP-PAGE-ENTRY-BANKED: Read whole cumulative A23checkpoint0e1ce5f2/pickedreportonly. Native doubleclick+2CtrlShiftDown3429raw/3427normalizedchars→3segments2080/1331/14, selected/storedjoinedhash1e5204c7501b7a6acdd91a48f61d1215cbbd0cfbed92e4378670fcd5f2ad2011 equal; actualMDfullsegmentsonce/order486/2571/3907. Literal joinedstringfalse remains; separatelynamed segment comparison documents separators, notallformat-proof. Tripleclick10char andwheel-drag0failedattempts preserved. ActualnotespageBack1/squares6 aftercorrectcoldroute/visible-rowhelpers, allfailedattemptsunique. No injectedRange/actions. Originalonly/default1440; fullmatrix/privacy/otherinputs/return/productionowed. | evidence: P12-23-A-20261025T230000Z.md@0e1ce5f2; private longhighlight/segment-export/notes-page-entry artifacts | next: A23 allstep/theme squaregeometry bothsurfaces/remaining3inputs/cycles/return/privacy; A24 fullwalk; B25imagecause; curatepacks thenblind
 
 ---
 
