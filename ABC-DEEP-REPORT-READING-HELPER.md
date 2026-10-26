@@ -42,10 +42,10 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T13:37:07.432Z; only writer of this file
-CURRENT ITEM:          A23/A24/B27active;A26PARTIALretainedjobs4225;manager4294probecompletedandstopped;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          sameA23/A24/B27 continue; preservehistorical30hashfailures; bankA26PARTIAL and correct storedFit wording
-STOPPED BECAUSE:          — recovery13 at2026-10-26T13:12UTC; sameA23/A24/A26 resumed; existing geometrybatch finished22cells, no duplicate
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T18:20:07.395Z; only writer of this file
+CURRENT ITEM:          A23/A24/B27activeafterquota;A26PARTIALjobsnotliveat18:18,incompletegeometryretained;B27wrongregioncausepriority;blindnotstarted;A0B0;clockACTIVE
+NEXT TURN:          B27wrongregionproducingpath→separateC28; sameA23/A24finishfiniteguards; A26sameagentqueued for corrected actualcontent measurements
+STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
 OWNER INPUT:      PDF supplied in chat attachment; use original attachment through upload UI only; no private path or text committed
@@ -1327,6 +1327,10 @@ The requested worker platform was rejected as Unknown model; start a fresh same-
 ### §1h.319 — 2026-10-26 — P12-MANAGER-INDEPENDENT-TEXT-PHASES
 
 Independently rederive one publicB case in a free manager copy through normal upload/consent and physical selection, keyboard note and ordinary Delete. Record the17character addition before the note action separately from unchanged scientific-text-preserving section hashes during/after it. This bounded new replay does not certify or replace historical30 failed rows, extraction correctness or production access. Preserve the initial404 entry and ordinary restart result; no authentication or cache alteration. Stop only verified owned process groups and verify4294 listener gone.
+
+### §1h.320 — 2026-10-26 — P12-26-RECOLOUR-CALIBRATION-PARTIAL-BANKED
+
+Preserve8de83222 and its exact interim scope. The affected aggregate row-font/glyph measurement selected gutter content, so raw square/clip/hit facts remain but cannot establish actual-text1em or first-line alignment; no silent normalization. Independently audit251snapshotentries and all literal references before reporting integrity, with no verdict or original-paper4word overlap in index. After the repeated usage-limit interruption, resume the same three active roles at18:18UTC, leaving A26 queued with its incomplete raw jobs, not replaced. Hourly heartbeat remains ACTIVE and cannot bypass quota; no schedule slowdown or duplicate automation.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
