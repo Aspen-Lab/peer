@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T18:33:09.398Z
+AS OF        2026-10-26T18:34:53.243Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.355   NEXT RULING §1h.356   NEXT ITEM ID P12-28   NEXT FREE PORT 4227
+LAST RULING  §1h.356   NEXT RULING §1h.357   NEXT ITEM ID P12-29   NEXT FREE PORT 4228
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      A23/A24active;B27FINALbanked;C28captionfreshnessbriefnext;A26PARTIAL1860missing30;B29pageidentityqueued;blindnotstarted;A0B0;clockACTIVE
+RUNNING      A23/A24active;C28briefcommittedown4227next;A26PARTIAL1860missing30;B29pageidentityqueued;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -491,6 +491,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T18:31:25.549Z | parent bb57e719 (entry commit follows) | manager | P12-26-REPETITION-DENOMINATOR-CORRECTED: Independent manager rawv4/v6 merge-by-label audit confirms publicA630/publicB630/invented600=1860, not1890. Invented1280x720@1.25 attempted0/completed0/helpererror1. v4 subtotal1590 not1620. PublicBv6 broad-scoped before/after hashes unequal3/3, not sourcewordloss norunchangedproof. Preserveallraw; sameA26 mustlatercontinueonlymissing30. | evidence: external manager-a26-cycle-denominator-audit-20261026.json; actual6cycleJSONfiles; A23authorizedreconciliation; rootpriorrulings307/312 corrected | next: bankB27finalguide, briefC28 narrowcaption+freshness; retainA26missing30 and scientific-preserving lifecycles separate
 
 - 2026-10-26T18:33:09.398Z | parent 9fc4ead1 (entry commit follows) | manager | P12-27-FINAL-GUIDE-RULED: Readfa77d5bb whole andmanager source/servedimages:55deliveredattempts119imageHTTPresponses no browserpageerrors;8browserPNGbodySHA matchengine. Choosecandidate2 nearestspatialtypedcaption/ranking withfloorsunchanged plusfullfigurefreshnesswiring; candidate1measurementcorrectionretained; rejectcandidate3partialFigure3. WrongFigure6page needsseparateB. | evidence: docs/reading-helper-abc/P12-27-B-20261026T134000Z.md; sourcefa77d5bb; private sourcepages/browserPNGs/engineprobe/cachepath | next: commit C28 brief own4227 for caption/ranking+derivedcachefreshness; separateB29 for outlinepageidentity when slotfree; Manager/Arealinputregressions
+
+- 2026-10-26T18:34:53.243Z | parent 83596a2c (entry commit follows) | manager | P12-28-CAPTION-FRESHNESS-BRIEF: Commit C28 narrow caption/ranking+all derivedfigurefreshness cluster; sizefloors unchanged, no outlinepagefix/viewer/auth/notes changes. Testsredonbase/inventedonly/mutationperrule and Manager/Arealinputregressions required. | evidence: docs/reading-helper-abc/briefs/P12-28.md; B27finalsourcefa77d5bb; ruling355 | next: createown detachedC28copy4227, tryrequestedplatformthenrecordfallback; B29pageidentity queueduntilslotfree
 
 ---
 
