@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T07:26:46.785Z; only writer of this file
-CURRENT ITEM:          A23livewidthbatch/readmatrix-progressfirst;A24publicBhashcorrection/guards/figures/prod;A26threeinputsbanked/notes4225;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          InspectA23livebatchbeforeanyrestart;A24appendquestioncorrection/body-scopeevidence+79guards;A26independentnotes; completepacks thenblind
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T07:35:16.732Z; only writer of this file
+CURRENT ITEM:          A23modelcapacity/batchlive/readmatrix-progressfirst;A24guard/figure/publiccycles+curated319snapshot;A26notes/matrix4225;blindnotstarted;A0B0;clockACTIVE
+NEXT TURN:          A24remainingguards/publiccycles/figures/prod;A23livebatch/supplementcuration;A26ownnotes
 STOPPED BECAUSE:          — recovery12 at2026-10-26T07:12UTC; sameA23/A24 resumed after quota; B25 complete
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1155,6 +1155,10 @@ Bank the complete three-input entry checkpoint. Independent real chooser/consent
 ### §1h.276 — 2026-10-26 — P12-LIVE-MATRIX-AND-QUESTION-COUNT-CORRECTION
 
 Correct the all-four one-body-hash statement in ruling272 and the earlier A24 checkpoint: all four13-state probes have zero pageerrors, but publicB has three whole-tabpanel hashes. Await its own preserved-state comparison or fresh scoped evidence; a separate replay's figure-label additions cannot retroactively explain missing historical captures. No paper-word-loss or no-change conclusion follows from hashes alone. Preserve failed cycle rows and fresh resumption separately. A23's live owned width batch must be inspected via matrix-progress before any resumed job is started. A24 receives only permitted cited factual note/export raw evidence from the curated A23 view, never another reviewer's verdict/score; missing return/PDF/concurrency parts remain open. No product, rubric, price or requirement change.
+
+### §1h.277 — 2026-10-26 — P12-24-QUESTION-HASH-LEGACY-FACTS-BANKED
+
+Bank the complete A24 correction/legacy-facts checkpoint while retaining all failed/redundant attempts and distinct denominators. A single Figure-label replay does not certify historical question/cycle hashes. Manager corrects its own unverified common-facts link: the segment comparison is absent from the supplied curated view, so it remains missing until the actual artifact and manifest are verified. Do not search adjacent private storage or infer a pass. No source, score or requirement change.
 
 ## §5. Durable work ledger — update in place, evidence append only
 

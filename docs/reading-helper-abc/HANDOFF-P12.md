@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T07:26:46.785Z
+AS OF        2026-10-26T07:35:16.732Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.276   NEXT RULING §1h.277   NEXT ITEM ID P12-27   NEXT FREE PORT 4226
+LAST RULING  §1h.277   NEXT RULING §1h.278   NEXT ITEM ID P12-27   NEXT FREE PORT 4226
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      A23livewidthbatch/readmatrix-progressfirst;A24publicBhashcorrection/guards/figures/prod;A26threeinputsbanked/notes4225;blindnotstarted;A0B0;clockACTIVE
+RUNNING      A23modelcapacity/batchlive/readmatrix-progressfirst;A24guard/figure/publiccycles+curated319snapshot;A26notes/matrix4225;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -333,6 +333,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T07:26:42.276Z | parent 3f2283b2 (entry commit follows) | manager | P12-26-THREE-INPUT-ENTRY-BANKED: ReadWHOLEA26ec5db89d/pickedreportonly. Independentfreshnormalchooserconsent onceeachpublicA/publicB/invented, disabled3of3, timings15935/4122/3432ms inclsettle,0pageerrors/input. PDFsignatures/hash/bytes/requestpurposemetadataexternal; no ownerinput. EarlierexactSkiplabelhelperfailedbeforeuploadretained. No note/export/matrix proof fromcontrolpresence. ClockactualsavedACTIVEevery1hour/samechatreconfirmed/no duplicate. | evidence: P12-26-A-20261026T072000Z.md@ec5db89d; threeownentryartifacts; actualpeer-p12automation.toml | next: A26fullnotes/exports/matrix/cycles;A23liveownmatrixbatch;A24remainingguards/figures/prod; finalpacks thenblind
 
 - 2026-10-26T07:26:46.785Z | parent cc15f008 (entry commit follows) | manager | P12-LIVE-MATRIX-AND-QUESTION-COUNT-CORRECTION: Correctknownreportingclaiminruling272/A24checkpoint: all4questionprobes13states/0errors, butpublicB3whole-tabpanelhashes,others1each; doNOTclaimall4onehash. A24willappendactualsourcecorrection; separatefreshpublicBreplay2figurelabelsuffixesdoesnotretroactivelyexplainquestionstates. Originalfailedcyclehashrowsuncertified; freshsettledv2ongoing. A23live externalgeometry-matrix-manager-20261026.cjs/session84991 waits m01/session53103 then exact22cells; read matrix-progress-20261026.json beforeanyresume, no duplicatebatch. SharedonlycitedcuratedA23notelist/lifecycle/export/group rawpaths withA24,noverdict/score; return-position/PDF/stalewritermissing notwaived. | evidence: A24actualquestionmetadata/forthcomingcorrection; A23matrix-progress-20261026.json/liveownedbatch; permittedcuratedcommonraw | next: InspectA23livebatchbeforeanyrestart;A24appendquestioncorrection/body-scopeevidence+79guards;A26independentnotes; completepacks thenblind
+
+- 2026-10-26T07:35:16.732Z | parent bcded1f3 (entry commit follows) | manager | P12-24-QUESTION-HASH-LEGACY-FACTS-BANKED: Readfullcumulativebc592051/pickreportonly. PublicB3tabpanelhashcorrectionexplicit; onefreshreplay34064→34098 only2Figureprefixappend17each, no oldrowretroclosure; settledv2ongoing101reportednotfull. PublicA7redundantattempts6openskeptrepeatnotunique; separateEscapepeek→rail→centreFigure3works. Legacy4inputentrysweeps0errors/feed1idle1Refresh2/Profiletruefalse true/privacyusage factsnot79closure. PublicB18bodyfigurefailures/4plate853timeouts preserved. Managerunverifiedsegment-export-check.json link absentcuratedview; notifyA23curateactualraworstateunavailable, A24 correctlydidnotsearchadjacent. Sharedpaths mustbeexists/hashverifiedbeforefuture release. | evidence: P12-24-A-20261025T230500Z.md@bc592051; namedprivate raw/snapshot/progress artifacts | next: A24remainingguards/publiccycles/figures/prod;A23livebatch/supplementcuration;A26ownnotes
 
 ---
 
