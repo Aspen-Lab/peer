@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T07:18:39.806Z; only writer of this file
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T07:18:44.485Z; only writer of this file
 CURRENT ITEM:          A23original853dark/fullmatrix;A24remainingguards/figures/publiccycles+bodyscope;A26freshpublic/invented4225;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          SameA23resumeatfirstunfinishedcell/no replay; banknextfrozenprogress
+NEXT TURN:          SameA23dark/fullwidth/return/privacy;A24guards/actions;A26publicsupplement
 STOPPED BECAUSE:          — recovery12 at2026-10-26T07:12UTC; sameA23/A24 resumed after quota; B25 complete
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1131,6 +1131,10 @@ Import the read report-only delta as a new canonical-owner commit because its ra
 ### §1h.270 — 2026-10-26 — P12-23-ATTRIBUTION-RESUME-LIMIT-BANKED
 
 Bank the worker's canonical correction and precise failed-resumption accounting. Carried measurements cannot become new completed cells, and a script parse/setup failure does not establish a product defect. No history rewrite or score change.
+
+### §1h.271 — 2026-10-26 — P12-23-853-LIGHT-PROGRESS-BANKED
+
+Bank the frozen16-state light progress snapshot: eleven completed cells and five disabled Fit requests are distinct. The six carried cells remain original observations; only five are new. Dark-half live attempts and later control-reveal retries cannot be inferred as finished. No forced disabled control, upload reset or score.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
