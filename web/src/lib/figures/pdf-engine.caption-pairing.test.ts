@@ -53,7 +53,10 @@ describe("P12-28: defensible typed caption pairing", () => {
 
   it("equally supported disjoint same-label candidates are honestly absent", async () => {
     const page: FigurePage = {
-      text: [["Figure 4. Equal support leaves the region ambiguous.", 40, 268, 9]],
+      // P12-28 fixture correction: at 9pt the line ended before the right
+      // region. At 12pt its actual bounds overlap BOTH regions, so the
+      // equal vertical relation really is ambiguous (no assertion relaxed).
+      text: [["Figure 4. Equal support leaves the region ambiguous.", 40, 268, 12]],
       shapes: [...panel(40, 100, 180, 150), ...panel(260, 100, 180, 150)],
     };
     expect(await boxes(page, "Figure 4")).toEqual([]);
