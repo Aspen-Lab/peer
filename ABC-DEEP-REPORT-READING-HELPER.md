@@ -42,7 +42,7 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T18:28:12.555Z; only writer of this file
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T18:28:16.845Z; only writer of this file
 CURRENT ITEM:          A23/A24/B27active;A23cyclecheckpointbanking;B27wrongregionguide→C28;A26PARTIALqueued;blindnotstarted;A0B0;clockACTIVE
 NEXT TURN:          B27finalguide→separateC28; sameA23/A24guards; all22cyclecounts neverreplacefullmatrix or blindscore
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
@@ -1415,6 +1415,10 @@ Cellm12 has30completed/30attempted; preserve failures and actual recorded prefer
 ### §1h.341 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-ADD76FED
 
 Cellm13 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.342 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-64715AC5
+
+Cellm14 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
