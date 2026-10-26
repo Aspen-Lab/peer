@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T18:35:58.602Z; only writer of this file
-CURRENT ITEM:          A23/A24/C28active;C28own4227captionfreshness;Managerfreeverify28next;A26PARTIAL1860missing30;B29pageidentityqueued;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          C28testred/fix/inventedchecks; Managerseedoldderivedartifacts in ownfreecopy and independentlyverify; A23/A24finiteguards
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T18:39:49.010Z; only writer of this file
+CURRENT ITEM:          A24/C28active;A23PARTIAL5081queued;B29briefown4228next;A26PARTIAL1860missing30;Managerverify28baseline;blindnotstarted;A0B0;clockACTIVE
+NEXT TURN:          freshB29owncopy4228; C28continues4227; A24controls/guards; Managerbaselinecacheverification
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1479,6 +1479,10 @@ C28 owns the shared caption producer and derived figure freshness paths listed i
 ### §1h.357 — 2026-10-26 — P12-28-INDEPENDENT-C-STARTED
 
 The requested worker platform is again unavailable (Unknown model); start a fresh same-generation fallback and attribute its actual model. C28 owns one detached copy/port4227 with invented inputs only. Manager will use an independent free copy for actual public-input/cache-reopen checks, touchedtests×3, independent mutations with byte-identical restore and full exact-tree gates. No C fix is landed or closed on its own report.
+
+### §1h.358 — 2026-10-26 — P12-29-CAPTION-PAGE-BRIEF
+
+Use A23's released slot for a separate B on the wrong source-page/label identity, fixed at the released web tree. Do not inherit the body-reference hypothesis without replaying the entire source→outline→reading path. Engine cropping/freshness remains C28; B29 is read-only and must identify any later file overlap before a new C is briefed. No other-page image fallback or numeric whitelist conceals an unproved identity. A23 remains the same resumable reviewer with its completed evidence and retained owned server.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
