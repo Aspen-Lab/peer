@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T18:27:39.572Z
+AS OF        2026-10-26T18:27:43.709Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.333   NEXT RULING §1h.334   NEXT ITEM ID P12-28   NEXT FREE PORT 4227
+LAST RULING  §1h.334   NEXT RULING §1h.335   NEXT ITEM ID P12-28   NEXT FREE PORT 4227
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
 RUNNING      A23/A24/B27active;A23cyclecheckpointbanking;B27wrongregionguide→C28;A26PARTIALqueued;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
@@ -447,6 +447,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T18:27:35.336Z | parent 1f56b19e (entry commit follows) | manager | P12-23-CYCLE-CHECKPOINT-8904F09E: Cellm06 has30completed/30attempted; preserve failures and actual recorded preferences. | evidence: docs/reading-helper-abc/P12-23-A-20261025T230000Z.md; source8904f09e; external actual raw and manager-cycle-audit-20261026.json | next: B27finalguide→separateC28; sameA23/A24guards; all22cyclecounts neverreplacefullmatrix or blindscore
 
 - 2026-10-26T18:27:39.572Z | parent db5c35e0 (entry commit follows) | manager | P12-23-CYCLE-CHECKPOINT-5C31E958: Cellm07 has30completed/30attempted; preserve failures and actual recorded preferences. | evidence: docs/reading-helper-abc/P12-23-A-20261025T230000Z.md; source5c31e958; external actual raw and manager-cycle-audit-20261026.json | next: B27finalguide→separateC28; sameA23/A24guards; all22cyclecounts neverreplacefullmatrix or blindscore
+
+- 2026-10-26T18:27:43.709Z | parent eb9d677d (entry commit follows) | manager | P12-23-CYCLE-CHECKPOINT-E5F38C91: Cellm08 has30completed/30attempted; preserve failures and actual recorded preferences. | evidence: docs/reading-helper-abc/P12-23-A-20261025T230000Z.md; sourcee5f38c91; external actual raw and manager-cycle-audit-20261026.json | next: B27finalguide→separateC28; sameA23/A24guards; all22cyclecounts neverreplacefullmatrix or blindscore
 
 ---
 
