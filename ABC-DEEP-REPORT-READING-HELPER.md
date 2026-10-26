@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T04:19:26.874Z; only writer of this file
-CURRENT ITEM:          A23longgroup/pageentrybanked/squarematrixnext;A24fullmatrix/actions/guards;B25readonlyimagecause;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          A23 allstep/theme squaregeometry bothsurfaces/remaining3inputs/cycles/return/privacy; A24 fullwalk; B25imagecause; curatepacks thenblind
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T04:21:54.667Z; only writer of this file
+CURRENT ITEM:          A23squaregeometry/fullwalk;A24matrix/actions/guards+bodycountcorrection;B25imagecause4224;blindnotstarted;A0B0;clockACTIVE
+NEXT TURN:          A24 verify metadata scope/count andbank correction; bothA continue;B25cause; finalnormalized/privacyreferences beforeblind
 STOPPED BECAUSE:          — recovered at2026-10-26T04:07UTC from both A quota errors; same workers/copies resumed
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1083,6 +1083,10 @@ After the new item's requested worker was unavailable, start a fresh independent
 ### §1h.258 — 2026-10-26 — Long group and actual notes-page entry boundary
 
 Read the complete cumulative A23 checkpoint. The native3429-character selection/three stored segments and actual Markdown segmentwise completeness/order are bounded action evidence. Preserve the literal joined-string false result and the separately named format-aware comparison; no automatic conversion of failed checks into all-format success. Short triple-click, zero wheel-drag selection and pre-navigation/hidden-row helpers remain distinct retained attempts. Actual notes-page entry is observed, but all-scale square geometry, return position and remaining input/privacy/production requirements remain owed. No unit or round score and no rubric change.
+
+### §1h.259 — 2026-10-26 — Correct body-reference section count from actual metadata
+
+Manager directly reads A24's private body-only reference metadata:73608 characters,10506 recorded words,14 sections. Correct the15-section figure repeated in the A24 checkpoint and ruling255; retain the earlier record as history and ask the worker to append its selector/count correction. Manager's overlap checker uses a separately stated Unicode tokenizer yielding11375 tokens, so do not present that as an equal-definition comparison with the reference's10506 words. A23's73541-character cloned textContent measurement has a different documented normalization/scope; differing hashes alone are not a route-word-change finding. No source content is printed, no extraction/visibility closure or score follows, and no requirement changes.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
