@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T20:36:09.610Z
+AS OF        2026-10-26T20:38:19.597Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.362   NEXT RULING §1h.363   NEXT ITEM ID P12-31   NEXT FREE PORT 4230
+LAST RULING  §1h.363   NEXT RULING §1h.364   NEXT ITEM ID P12-31   NEXT FREE PORT 4230
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      requested-platformC28freshnessactive;B30PARTIALguidependingnarrowrule;B29FINALa46ffready;oldSolwritersnotresumed;A23/A24/A26queued;Managerbaselinecompletedpendingbank;blindnotstarted;A0B0;clockACTIVE
+RUNNING      C28TerraPARTIALfreshness/versionfixtures;B30PARTIALneedsnarrowrule;B29FINALa46ffready;A23/A24/A26queued;Managerbaselinecompletedpendingbank;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -505,6 +505,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T19:23:16.327Z | parent 5ec2e7df (entry commit follows) | manager | P12-30-MERGED-CAPTION-LINES-BRIEF: C28escapeclauseretainsmeaningfulsamebaselinecolumnpositive andfrozenproposal; B30independentlyreplaysstructuredblock/line/span/continuation with3generalrules. OldSolworkerserroredquota,noduplicatelivemodels; newlyavailablecorrectTerraidentifierwillbeusedfornewB/resumptions. | evidence: docs/reading-helper-abc/briefs/P12-30.md; C28tests881a57c4/report5f22253e; frozenproposalSHA256d25f5... | next: ownB30copy4229/newTerra; controlledTerraresumeC28freshnessonly andB29normalUIrecovery inexistingcopies afterprocessinspection; Managerbaselinebank
 
 - 2026-10-26T20:36:09.610Z | parent 918b3fa5 (entry commit follows) | manager | P12-28-DERIVED-VERSION-SCOPE-RULED: Controlledrequested-platformB30/C28/B29resumptions afteroldquota/no livewriters; allowonly note-tags.tsx PaperReadingconstructor versiontofollowcurrentcentralreadingversion and3staleexpectationtestupdates. No note storage/behavior change. Preservewindowspermissionfailures/allcontracts; no furtherfullrunsuntilsourcefrozen. | evidence: C28typecheck note-tags.tsx:331; owned version15derivedreading; paper-body.plain.test.tsx/paper-body.test.tsx/question-box.flow.test.tsx; controlledroles | next: C28minimalderivedversionwiring/testexpectations, captionstillSTOPpendingnarrowline-guide; B30measuredprovenancefollowup; bankbaselineandworkerreports
+
+- 2026-10-26T20:38:19.597Z | parent 5238f2a9 (entry commit follows) | manager | P12-28-NOTE-VERSION-FIXTURE-SCOPE: Authorizeonlynote-tags.blocks.test.ts andnote-tags.lost.test.tsx current-versionfixtures tofollowapprovedconsumer; preserveexplicitoldversionrejection/allbehaviorassertions. No productionbeyondruling362, no testweaken/skip. | evidence: C28ruling362-target.log59passed/4fixturefailures; source5d0c0f43/checkpoint1d8804d3 | next: C28reaimtwofixtures/targetedchecks only; B30narrowobservableprovenance direction; managerbaseline/reportbank
 
 ---
 

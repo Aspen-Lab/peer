@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T20:36:09.610Z; only writer of this file
-CURRENT ITEM:          requested-platformC28freshnessactive;B30PARTIALguidependingnarrowrule;B29FINALa46ffready;oldSolwritersnotresumed;A23/A24/A26queued;Managerbaselinecompletedpendingbank;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          C28minimalderivedversionwiring/testexpectations, captionstillSTOPpendingnarrowline-guide; B30measuredprovenancefollowup; bankbaselineandworkerreports
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T20:38:19.597Z; only writer of this file
+CURRENT ITEM:          C28TerraPARTIALfreshness/versionfixtures;B30PARTIALneedsnarrowrule;B29FINALa46ffready;A23/A24/A26queued;Managerbaselinecompletedpendingbank;A0B0;clockACTIVE
+NEXT TURN:          C28reaimtwofixtures/targetedchecks only; B30narrowobservableprovenance direction; managerbaseline/reportbank
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1499,6 +1499,10 @@ Honor C28's escape clause: preserve the genuine two-column positive and freeze i
 ### §1h.362 — 2026-10-26 — P12-28-DERIVED-VERSION-SCOPE-RULED
 
 After confirming old model writers stopped on quota, requested-platform resumptions own the existing C28/B29 copies; B30 remains an independent investigator. Allow exactly web/src/components/notes/note-tags.tsx to use the current shared PaperReading artifact version in its existing constructor (or minimal equivalent literal update), without changing note storage, fields or interaction. Permit existing paper-body.plain.test.tsx, paper-body.test.tsx and question-box.flow.test.tsx expectations to follow the deliberately versioned derived URL/report key, retaining all substantive assertions and naming each re-aim. These are unavoidable consumers of the approved figure freshness migration, not new feature scope. Preserve the Windows0666/0600 adverse result. Freeze source while any gate runs; do not repeat broad gates until the final caption source is ready. Remove the prior accidental exact model identifier from ruling361 prose; actual attribution remains in trailers.
+
+### §1h.363 — 2026-10-26 — P12-28-NOTE-VERSION-FIXTURE-SCOPE
+
+Allow web/src/components/notes/note-tags.blocks.test.ts and note-tags.lost.test.tsx to distinguish the newly current derived reading version from stale version fixtures after the already approved note-tags constructor change. Keep the older-version rejection case and every ownership/navigation/content assertion; changing current-version fixture metadata is not permission to relax behavior. No additional production file is authorized. Run the affected tests and retain four prior failures; do not repeat broad gates before the caption tree is ready.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
