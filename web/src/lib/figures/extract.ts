@@ -2,6 +2,7 @@ import { extractPdfCandidatesFromPath, tryPdfCandidates } from "./pdf-extract";
 import { classifyHardAccessStatus } from "@/lib/papers/paywall-status";
 import { bareUploadId, claimsUploadId, withUploadPdfFile } from "@/lib/papers/upload-store";
 import { ownedUpload } from "@/lib/papers/upload-access";
+import { FIGURE_EXTRACTION_REVISION } from "./figure-revision";
 
 const FETCH_TIMEOUT_MS = 7_000;
 const MAX_BODY_BYTES = 2_500_000;
@@ -143,7 +144,7 @@ async function timedFetch(url: string, init?: RequestInit): Promise<Response | n
       redirect: "follow",
       headers: {
         "User-Agent": BROWSER_UA,
-        "X-Peer-Figure-Version": FETCH_VERSION,
+        "X-Peer-Figure-Version": `${FETCH_VERSION}-${FIGURE_EXTRACTION_REVISION}`,
         Accept: "text/html,application/xhtml+xml,application/json",
         ...(init?.headers ?? {}),
       },
@@ -1266,7 +1267,7 @@ const EMPTY_POOL_CACHE_TTL_MS = 10 * 60 * 1000;
 const candidatePoolCache = new Map<string, CachedPool | Promise<CachedPool>>();
 
 function poolCacheKey(input: FigureSourceInput): string {
-  return [FETCH_VERSION, input.itemId, input.url ?? "", input.doi ?? ""].join("|");
+  return [FETCH_VERSION, FIGURE_EXTRACTION_REVISION, input.itemId, input.url ?? "", input.doi ?? ""].join("|");
 }
 
 async function buildCandidatePool(input: FigureSourceInput): Promise<CachedPool> {

@@ -23,6 +23,7 @@ import path from "node:path";
 import type { Paper, PreferenceConcept } from "@/types";
 import type { ExtractedDocument } from "./html-text";
 import { createSignedUploadTicket, UPLOAD_DIR, uploadBackend } from "./upload-backend";
+import { FIGURE_EXTRACTION_REVISION } from "@/lib/figures/figure-revision";
 
 // P0-03: `resolveWebRoot` is anchored on the web app's own `next.config.ts`
 // (it was the Python text helper, deleted when uploads moved to pdf.js); it
@@ -345,7 +346,7 @@ export async function attachedUploadHash(ownerKey: string, paperId: string): Pro
 // renamed into place; an object upload replaces the object whole), and removed
 // with the upload by `deleteUpload`, the purge job and the operator's takedown.
 //
-// The cache key is `owner|hash16|revision|extractionVersion`. The file holds
+// The cache key is `owner|hash16|revision|extractionVersion|figureRevision`. The file holds
 // a digest of that key, never the owner key itself, and a read under any
 // other key — another revision, a newer extractor, another owner — misses.
 // Callers look it up only after the owner check has passed
@@ -361,7 +362,7 @@ export function uploadDocKey(
   revision: number | undefined,
   extractionVersion: number,
 ): string {
-  return `${ownerKey}|${hash16}|${revision ?? ""}|${extractionVersion}`;
+  return `${ownerKey}|${hash16}|${revision ?? ""}|${extractionVersion}|figures:${FIGURE_EXTRACTION_REVISION}`;
 }
 
 function keyDigest(key: string): string {

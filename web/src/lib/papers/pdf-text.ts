@@ -27,6 +27,7 @@ import { buildOutline, gutterPrior, linesOfPageWith, type PdfOutline, type PdfPa
 import { dropStrayHeadings, withSectionIds } from "./html-text";
 import type { ExtractedDocument, ExtractedSection, ExtractedFigureCaption } from "./html-text";
 import { pictureNumber } from "./reading";
+import { FIGURE_EXTRACTION_REVISION } from "@/lib/figures/figure-revision";
 
 const FETCH_TIMEOUT_MS = 12_000;
 const MAX_PDF_BYTES = 18_000_000;
@@ -243,7 +244,7 @@ export async function withFigureSizes(doc: ExtractedDocument, bytes: Uint8Array)
   const targets = doc.figureCaptions.filter((cap) => typeof cap.page === "number" && pictureNumber(cap.label) !== null);
   if (targets.length === 0) return doc;
   try {
-    const sizes = measuredFor(createHash("sha256").update(bytes).digest("hex"));
+    const sizes = measuredFor(`${FIGURE_EXTRACTION_REVISION}|${createHash("sha256").update(bytes).digest("hex")}`);
     const missing = targets.slice(0, MEASURE_MAX).filter((cap) => !sizes.has(`${cap.page}/${pictureNumber(cap.label)}`));
     if (missing.length > 0) {
       const { measurePdfFigure } = await import("@/lib/figures/pdf-engine");

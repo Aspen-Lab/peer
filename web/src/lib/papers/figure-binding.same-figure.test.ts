@@ -167,8 +167,8 @@ describe("the route draws the figure the pool had", () => {
 
     expect(bound.whatItProposes.figureLabel).toBe("Figure 4");
     expect(bound.resultsAndSignificance.keyResults[0].figureLabel).toBe("Figure 3");
-    expect(proposal).toBe("/api/papers/arxiv%3A2610.00001/figure-image?page=2&fig=4");
-    expect(result).toBe("/api/papers/arxiv%3A2610.00001/figure-image?page=2&fig=3");
+    expect(proposal).toBe("/api/papers/arxiv%3A2610.00001/figure-image?page=2&fig=4&v=2");
+    expect(result).toBe("/api/papers/arxiv%3A2610.00001/figure-image?page=2&fig=3&v=2");
 
     const narrow = await fetchRoute(proposal);
     const wide = await fetchRoute(result);

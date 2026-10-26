@@ -14,6 +14,7 @@
 // Decision block shows. Nothing else on the page hand-writes a status string.
 
 import type { Paper } from "@/types";
+import { FIGURE_EXTRACTION_REVISION } from "@/lib/figures/figure-revision";
 import type { ExtractedFigureCaption } from "./html-text";
 import type { ExtractedDocument } from "./html-text";
 import type { FullTextResult } from "./full-text";
@@ -152,7 +153,8 @@ export interface PaperReading {
    * 13 → 14 (P10-42): a sentence cut by a page break or a floating figure is one paragraph
    * again, so a reading cached under 13 can hold it in two. Read again once.
    */
-  version: 14;
+  // P12-28: discard derived figure URLs and dimensions made by the old caption pairing.
+  version: 15;
   paperId: string;
   builtAt: string;
   provenance: ReadingProvenance;
@@ -619,7 +621,7 @@ function readableBody(sections: ReturnType<typeof readableSections>): ReadingSec
  *  is the origin that built it. It answers a public paper's PDF to anyone and
  *  an upload's to its owner only (P9-29). */
 export function pdfFigureUrl(paperId: string, page: number, fig: number): string {
-  return `/api/papers/${encodeURIComponent(paperId)}/figure-image?page=${page}&fig=${fig}`;
+  return `/api/papers/${encodeURIComponent(paperId)}/figure-image?page=${page}&fig=${fig}&v=${FIGURE_EXTRACTION_REVISION}`;
 }
 
 /** A picture's width or height: a positive whole number of pixels, nothing else. */
@@ -803,7 +805,7 @@ export function buildReading(
   omitted.push({ block: "nextStep", reason: "needs_key" });
 
   return {
-    version: 14,
+    version: 15,
     paperId: paper.id,
     builtAt: now.toISOString(),
     provenance,

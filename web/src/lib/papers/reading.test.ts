@@ -301,7 +301,7 @@ describe("buildReading", () => {
     // P8-04 for HTML), so a reading cached under 6 is read again.
     // P9: 7 -> 8 — no field added; the PDF text and the cleaner changed
     // (P9-08 / P9-09 / P9-10), so a reading cached under 7 is read again.
-    expect(reading.version).toBe(14);
+    expect(reading.version).toBe(15);
     expect(reading.paperId).toBe("openalex:W7204479535");
     expect(reading.builtAt).toBe("2026-09-06T12:00:00.000Z");
     expect(reading.provenance).toEqual({
@@ -857,10 +857,10 @@ describe("placeFigures", () => {
       { paperId: "openalex:W1" },
     );
     const byLabel = Object.fromEntries((placed[0].figures ?? []).map((f) => [f.label, f]));
-    expect(byLabel["Figure 1"].imageUrl).toBe("/api/papers/openalex%3AW1/figure-image?page=3&fig=1");
+    expect(byLabel["Figure 1"].imageUrl).toBe("/api/papers/openalex%3AW1/figure-image?page=3&fig=1&v=2");
     expect(byLabel["Figure 1"].page).toBe(3);
-    expect(byLabel["Figure 2"].imageUrl).toBe("/api/papers/openalex%3AW1/figure-image?page=5&fig=2");
-    expect(byLabel["Figure 3"].imageUrl).toBe("/api/papers/openalex%3AW1/figure-image?page=5&fig=3");
+    expect(byLabel["Figure 2"].imageUrl).toBe("/api/papers/openalex%3AW1/figure-image?page=5&fig=2&v=2");
+    expect(byLabel["Figure 3"].imageUrl).toBe("/api/papers/openalex%3AW1/figure-image?page=5&fig=3&v=2");
   });
 
   it("gives two captions on one page each their own URL (P9-29)", () => {
@@ -872,8 +872,8 @@ describe("placeFigures", () => {
     const figures = placed[0].figures ?? [];
     expect(figures.map((f) => f.label)).toEqual(["Figure 7", "Figure 8"]);
     expect(figures.map((f) => f.imageUrl)).toEqual([
-      "/api/papers/arxiv%3A2610.00001/figure-image?page=6&fig=7",
-      "/api/papers/arxiv%3A2610.00001/figure-image?page=6&fig=8",
+      "/api/papers/arxiv%3A2610.00001/figure-image?page=6&fig=7&v=2",
+      "/api/papers/arxiv%3A2610.00001/figure-image?page=6&fig=8&v=2",
     ]);
   });
 
@@ -890,7 +890,7 @@ describe("placeFigures", () => {
       { paperId: "openalex:W1" },
     );
     const byLabel = Object.fromEntries((placed[0].figures ?? []).map((f) => [f.label, f]));
-    expect(byLabel["Fig 2"].imageUrl).toBe("/api/papers/openalex%3AW1/figure-image?page=2&fig=2");
+    expect(byLabel["Fig 2"].imageUrl).toBe("/api/papers/openalex%3AW1/figure-image?page=2&fig=2&v=2");
     expect(byLabel["Figure 4"].imageUrl).toBeUndefined();
     expect(byLabel["Figure IV"].imageUrl).toBeUndefined();
     expect(byLabel["Figure S3"].imageUrl).toBeUndefined();
@@ -898,8 +898,8 @@ describe("placeFigures", () => {
   });
 
   it("writes the figure route's URL as the id percent-encoded, then the page, then the figure number (P9-29)", () => {
-    expect(pdfFigureUrl("upload:0123456789abcdef", 5, 3)).toBe("/api/papers/upload%3A0123456789abcdef/figure-image?page=5&fig=3");
-    expect(pdfFigureUrl("openalex:W1", 12, 10)).toBe("/api/papers/openalex%3AW1/figure-image?page=12&fig=10");
+    expect(pdfFigureUrl("upload:0123456789abcdef", 5, 3)).toBe("/api/papers/upload%3A0123456789abcdef/figure-image?page=5&fig=3&v=2");
+    expect(pdfFigureUrl("openalex:W1", 12, 10)).toBe("/api/papers/openalex%3AW1/figure-image?page=12&fig=10&v=2");
   });
 
   it("offers a figure from a paper with no PDF behind it no picture URL (P9-29)", () => {
@@ -925,7 +925,7 @@ describe("placeFigures", () => {
     const figure = uploaded.body[0].figures?.[0];
 
     expect(figure).toMatchObject({ label: "Figure 1", caption: "Creep rate against boundary density.", page: 2 });
-    expect(figure?.imageUrl).toBe("/api/papers/upload%3A0123456789abcdef/figure-image?page=2&fig=1");
+    expect(figure?.imageUrl).toBe("/api/papers/upload%3A0123456789abcdef/figure-image?page=2&fig=1&v=2");
 
     // Directly: an upload id gets its URL; so does a public paper's PDF.
     const placed = placeFigures(
@@ -933,9 +933,9 @@ describe("placeFigures", () => {
       [cap(1, { page: 2 })],
       { paperId: "upload:0123456789abcdef" },
     );
-    expect(placed[0].figures?.[0].imageUrl).toBe("/api/papers/upload%3A0123456789abcdef/figure-image?page=2&fig=1");
+    expect(placed[0].figures?.[0].imageUrl).toBe("/api/papers/upload%3A0123456789abcdef/figure-image?page=2&fig=1&v=2");
     expect(placeFigures([section("A", "Figure 1 is here.")], [cap(1, { page: 2 })], { paperId: "openalex:W1" })[0].figures?.[0].imageUrl)
-      .toBe("/api/papers/openalex%3AW1/figure-image?page=2&fig=1");
+      .toBe("/api/papers/openalex%3AW1/figure-image?page=2&fig=1&v=2");
   });
 
   it("gives an upload's Figure 3 caption on page 5 the figure-image URL for page 5, figure 3 (P9-29)", () => {
@@ -944,7 +944,7 @@ describe("placeFigures", () => {
       [cap(3, { page: 5 })],
       { paperId: "upload:0123456789abcdef" },
     );
-    expect(placed[0].figures?.[0].imageUrl).toBe("/api/papers/upload%3A0123456789abcdef/figure-image?page=5&fig=3");
+    expect(placed[0].figures?.[0].imageUrl).toBe("/api/papers/upload%3A0123456789abcdef/figure-image?page=5&fig=3&v=2");
   });
 
   it("gives an upload's two figures on one page each their own URL, and the caption text and order stay as they were (P9-29)", () => {
@@ -959,8 +959,8 @@ describe("placeFigures", () => {
       ["Figure 4", "caption 4", 1, 5],
     ]);
     expect(figures.map((f) => f.imageUrl)).toEqual([
-      "/api/papers/upload%3A0123456789abcdef/figure-image?page=5&fig=3",
-      "/api/papers/upload%3A0123456789abcdef/figure-image?page=5&fig=4",
+      "/api/papers/upload%3A0123456789abcdef/figure-image?page=5&fig=3&v=2",
+      "/api/papers/upload%3A0123456789abcdef/figure-image?page=5&fig=4&v=2",
     ]);
   });
 
@@ -1014,8 +1014,8 @@ describe("placeFigures", () => {
 describe("buildReading — where the figure pictures are drawn from (P9-42)", () => {
   const UPLOAD = "upload:0123456789abcdef";
   const ATTACHED_LINK = { url: "/api/papers/upload/0123456789abcdef/file", kind: "pdf" as const, label: "upload" as const, rank: 0 };
-  const PUBLIC_URL = "/api/papers/openalex%3AW7204479535/figure-image?page=3&fig=2";
-  const UPLOAD_URL = "/api/papers/upload%3A0123456789abcdef/figure-image?page=3&fig=2";
+  const PUBLIC_URL = "/api/papers/openalex%3AW7204479535/figure-image?page=3&fig=2&v=2";
+  const UPLOAD_URL = "/api/papers/upload%3A0123456789abcdef/figure-image?page=3&fig=2&v=2";
 
   /** The text of the attached PDF: a "Figure 2" caption on page 3. */
   const attachedText = (source: ExtractedDocument["source"] = "pdf"): FullTextResult =>

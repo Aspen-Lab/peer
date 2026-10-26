@@ -113,7 +113,7 @@ describe("rule 1 — a bound figure of a PDF is the figure-image route's URL", (
     expect(proposalUrl(bound)).toBe(pdfFigureUrl(PAPER_ID, 5, 2));
     expect(bound.resultsAndSignificance.keyResults[0].figureLabel).toBe("Figure 1");
     expect(resultUrl(bound)).toBe(pdfFigureUrl(PAPER_ID, 3, 1));
-    expect(proposalUrl(bound)).toBe("/api/papers/arxiv%3A2610.00007/figure-image?page=5&fig=2");
+    expect(proposalUrl(bound)).toBe("/api/papers/arxiv%3A2610.00007/figure-image?page=5&fig=2&v=2");
   });
 
   it("P12-28: newly bound image resources differ from pre-revision public edge URLs while preserving page and number", async () => {
@@ -143,15 +143,15 @@ describe("rule 1 — a bound figure of a PDF is the figure-image route's URL", (
   it("names an upload by its id, so the route answers its owner only (the stream never carries the upload's bytes)", async () => {
     const bound = await bind({ id: UPLOAD_ID });
 
-    expect(proposalUrl(bound)).toBe("/api/papers/upload%3A0123456789abcdef/figure-image?page=5&fig=2");
-    expect(resultUrl(bound)).toBe("/api/papers/upload%3A0123456789abcdef/figure-image?page=3&fig=1");
+    expect(proposalUrl(bound)).toBe("/api/papers/upload%3A0123456789abcdef/figure-image?page=5&fig=2&v=2");
+    expect(resultUrl(bound)).toBe("/api/papers/upload%3A0123456789abcdef/figure-image?page=3&fig=1&v=2");
     expect(JSON.stringify(bound)).not.toContain("data:");
   });
 
   it("answers an OpenAlex paper's route too", async () => {
     const bound = await bind({ id: "openalex:W4400000001" });
 
-    expect(resultUrl(bound)).toBe("/api/papers/openalex%3AW4400000001/figure-image?page=3&fig=1");
+    expect(resultUrl(bound)).toBe("/api/papers/openalex%3AW4400000001/figure-image?page=3&fig=1&v=2");
   });
 
   it.each([
