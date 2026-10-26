@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T18:39:49.010Z
+AS OF        2026-10-26T18:41:47.495Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.358   NEXT RULING §1h.359   NEXT ITEM ID P12-30   NEXT FREE PORT 4229
+LAST RULING  §1h.359   NEXT RULING §1h.360   NEXT ITEM ID P12-30   NEXT FREE PORT 4229
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      A24/C28active;A23PARTIAL5081queued;B29briefown4228next;A26PARTIAL1860missing30;Managerverify28baseline;blindnotstarted;A0B0;clockACTIVE
+RUNNING      A24/C28/B29active;A23PARTIAL5081queued;C28own4227,B29own4228;A26PARTIAL1860missing30;Managerverify28baseline;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -497,6 +497,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T18:35:58.602Z | parent 69933fd9 (entry commit follows) | manager | P12-28-INDEPENDENT-C-STARTED: Requested workerplatform rejectedUnknown model; freshsamegenerationfallback C28 started in own69933fd9 detachedcopy/4227. Onlynamedproducer/freshnessfiles, inventedtests redonbase; Manager prepares freeverificationcopy, no landingbeforeown gates/mutations. | evidence: docs/reading-helper-abc/briefs/P12-28.md; /root/p12_28_caption_c; detachedp12-28/wt | next: C28testred/fix/inventedchecks; Managerseedoldderivedartifacts in ownfreecopy and independentlyverify; A23/A24finiteguards
 
 - 2026-10-26T18:39:49.010Z | parent a4cfd453 (entry commit follows) | manager | P12-29-CAPTION-PAGE-BRIEF: SeparateB29 for actualFigure6page7request/sourcepage8 identity mismatch; source→outline→reading duplicates path, threegeneralrules/collateral, fixedbaseline and own4228. No C28engine/freshness edits; A23PARTIALslotreleasednojob/profileduplication. | evidence: docs/reading-helper-abc/briefs/P12-29.md; B27finalguide; A23PARTIAL5081b09c | next: freshB29owncopy4228; C28continues4227; A24controls/guards; Managerbaselinecacheverification
+
+- 2026-10-26T18:41:47.495Z | parent b3044fed (entry commit follows) | manager | P12-29-INDEPENDENT-B-STARTED: RequestedworkerplatformUnknownmodel; freshsamegenerationfallbackB29 started ownb3044fed/web88ac detachedcopy4228. C28parallel4227producerfreshness; A23PARTIALretainedsamereviewer; no duplicate profile or upload. | evidence: docs/reading-helper-abc/briefs/P12-29.md; /root/p12_29_page_b; ownp12-29/wt | next: B29normalUIandunchangedoutline/reading identity replay; C28redtests/fix; Managerbaselineoldcache then independentcandidateverification; bankA23/A24finitecheckpoints
 
 ---
 
