@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-25T23:04:03.862Z
+AS OF        2026-10-26T04:07:55.223Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.248   NEXT RULING §1h.249   NEXT ITEM ID P12-25   NEXT FREE PORT 4224
+LAST RULING  §1h.249   NEXT RULING §1h.250   NEXT ITEM ID P12-25   NEXT FREE PORT 4224
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      A23aggregate/format/lifecycle/export;A24fourinputbanked/20CSSgeometry+publicAfigures+separateprodbuild;both82fe23db/web88ac;blindnotstarted;A0B0;clockACTIVE
+RUNNING      QuotaRecovery11:sameA23export/list/lifecycle;A24retainedgeometry/figures/prodbuildinspect;82fe23db/web88ac;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -277,6 +277,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-25T23:01:42.916Z | parent fb19539c (entry commit follows) | manager | P12-23-FIRST-ACTIONS-PARTIAL-BANKED: Read whole A23 finite checkpoint053be683; picked report-only. Corrected prose attribution in current report. Original uploaded once via chooser/consent; disabled-before-consent sampled. Actual no-key1440x900 physical selection→Take notes, invented words/nativeCtrlA/AltF10→Bold/Enter, Save→solecardclosed/nonmodalconfirmation,0pageerrors. Preserve singular-URL wait/blank-profile/home-anchor/shortcut helper failures separately; no full providerledger/persistence/export/reload/ownership proof yet. All missing checks remain owed; no unit/round score. | evidence: P12-23-A-20261025T230000Z.md@053be683; private owner-entry-facts/owner-action-corrected artifacts | next: A23 aggregate/reopen/format/list/lifecycle/export families; A24 fourinput/matrix checkpoint; manager raw/factual/privacy audit; blind only after pack frozen
 
 - 2026-10-25T23:04:03.862Z | parent 0ffe068f (entry commit follows) | manager | P12-24-FOUR-INPUT-PARTIAL-BANKED: Read whole A24 checkpointaad8c123 and picked report-only. Four unique no-key actual chooser/consent uploads onceeach: original6495ms/75723bodychars/12APIrequests;publicA6391/28272/13;publicB5874/37509/13;invented10222/11759/11; consentdisabled4of4/pageerrors0of4. Productextraction/figures/integrity not inferred. Admin200; normalproductionwelcome0upload beforehomefollowthrough, previewVercellogin, revisionunknown. Separate exactprod-buildcopy underway, not productionUI proof.20labelledCSS-cell geometry/publicAfigure runs still incremental. Manager read both current score-free indices and directly inspected A23 saved-closure screenshot; no unit/round verdict from it. | evidence: P12-24-A-20261025T230500Z.md@aad8c123; both private index.md; A23 owner-action-corrected.png | next: Same A23/A24 continue finite format/lifecycle/export and geometry/figures/guards; complete production normal access and privacy; freeze factualpacks then3freshblind/theme
+
+- 2026-10-26T04:07:55.223Z | parent 9dfee0d4 (entry commit follows) | manager | P12-RECOVERY11-A23-EXPORT-CHECKPOINT: After hourly wakeups23:04–04:06UTC and both original A quota errors, inspect same clean main67455e95 and same A copies, no duplicate. Read whole A23checkpoint240d4961 and picked report-only. Original no-key1440 aggregate reload retained one first-note phrase+Bold; actual TXT158B/MD223B/Word1298B/clipboard163chars include invented words. Second physical10charselection→sticky,8format controls/Enter/TabShiftTab/Save, one occurrence each invented phrase,0pageerrors. Indent attr probe null is selectorlimit, not functional claim. Two corrected helpers overwrote failureJSON; original scripts/tooloutputs survive, exact limitation retained. Resume sameA23/A24 workers/copies after quota; A24 ongoing320geometry/publicAfigures/prodbuild sessions to inspect before replay. No units/round accepted. | evidence: P12-23-A-20261025T230000Z.md@240d4961; existingA23/A24; heartbeat04:06; mainweb88ac | next: A23 measured lists/lifecycle/export/fullinputmatrix; A24 inspect retained jobs and bank completed geometry/figures/build; factualpacks then3freshblind/theme
 
 ---
 
