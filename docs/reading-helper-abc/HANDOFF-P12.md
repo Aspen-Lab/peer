@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T07:44:05.037Z
+AS OF        2026-10-26T07:44:10.745Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.282   NEXT RULING §1h.283   NEXT ITEM ID P12-27   NEXT FREE PORT 4226
+LAST RULING  §1h.283   NEXT RULING §1h.284   NEXT ITEM ID P12-27   NEXT FREE PORT 4226
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
 RUNNING      A23modelcapacity/livewidthbatch m01–m04banked;A24guard/figure/place/publiccycles;A26modelcapacity/ownedmatrixjobs4225;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
@@ -345,6 +345,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T07:43:58.626Z | parent a6983110 (entry commit follows) | manager | P12-COMMON-REFERENCE-BASENAME-CORRECTED: Managerfilename-onlysearchownA23rootfoundactualexistingraw+curated long-highlight-keys-20261026T0429-segment-export-check.json,notshortalias. Readsafe numericfacts258B/SHA9d3c40724453bcdc7dcae140435d9e505480fd302efc288b31d0f181ff3c620e equals149manifest;3segments2080/1331/14 count1 eachindices486/2571/3907 MD3923. Correctedfullpath/hashsuppliedA24; itindependentlyverified/copiedonlycitedfile. No historicartifact recreation, no originalfalsejoinedcheckdeletion. CancelunneededA23curationcopyrequest; batchuntouched. | evidence: verifiedA23curatedfullfilename/SHA9d3c4072...; rootruling277correction | next: A24 independentlyreconcileactualsegmentfacts/79guards;A23batch;A26scopedwordhash/exports
 
 - 2026-10-26T07:44:05.037Z | parent 1cd4eaac (entry commit follows) | manager | P12-26-GROUP-EXPORT-PRINT-DOCUMENT-BANKED: Readcomplete034dappend/pickreportonly. Actual3inputshighlightDOM+canonical2/3/2segments→1aggregateroweach;4realclipboard/TXT/MD/Word outputs each. Textwholegrouponce/clipboardnormalizedonce;MDWordcombinedrawsearch0becauseformatdiff, persegmentdecodedorderstillowed. ActualPDFmenuiframeinsertion/beforeafterprintdocumentbytes2147/2115/1820captured; no nativePDFdialog/filebytes. Existingallsuphashscopebounded/newsourcepreservingproofowed. Earlierwrongroles/peek/selectionhelpersretained,no completedmatrix/30cycleclaims. | evidence: P12-26-A-20261026T072000Z.md@034d47b5; uniqueprivate raw/provenance artifacts | next: A26newsourcepreservinghash/persegmentformat/actualmatrixcycles;A23batch;A24guard/production
+
+- 2026-10-26T07:44:10.745Z | parent 5f94e60c (entry commit follows) | manager | P12-23-REQUIRED-M02-GEOMETRY-BANKED: Readwholecumulative m02append/pickreportonly. Screen1280x720/110CSS1164x655emulation32requested32complete0Fitdisabled0errors;4608squaremetricscalibratedsidefont0. Finitegeometry/routes only; fullactions/lifecycle/exports/legacy/privacy notclosed. Ownedbatchcontinuesnextwidth; no duplicate. | evidence: P12-23-A-20261025T230000Z.md@1d72921b; uniqueprivate raw/provenance artifacts | next: OwnedA23batchnextwidth/progressfirst;A24fullguard;A26publicnotes
 
 ---
 
