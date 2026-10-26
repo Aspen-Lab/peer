@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T13:34:45.795Z
+AS OF        2026-10-26T13:37:07.432Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.318   NEXT RULING §1h.319   NEXT ITEM ID P12-28   NEXT FREE PORT 4227
+LAST RULING  §1h.319   NEXT RULING §1h.320   NEXT ITEM ID P12-28   NEXT FREE PORT 4227
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      A23/A24/B27active;A26PARTIALretainedjobs4225;B27own4226figurecauses;blindnotstarted;A0B0;clockACTIVE
+RUNNING      A23/A24/B27active;A26PARTIALretainedjobs4225;manager4294probecompletedandstopped;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -417,6 +417,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T13:33:11.918Z | parent 03b47a25 (entry commit follows) | manager | P12-27-FIGURE-INVESTIGATION-BRIEF: Commit finite independentB27 brief for publicB77actionerrors; separate targetexistence/delivery/clipping/physicalhit/viewer with normal UI and three candidate rules. A26 releases modelslot while retaining own external jobs; no duplicate profile or sweep. | evidence: docs/reading-helper-abc/briefs/P12-27.md; corrected A24 report/sourcee96a5f2c | next: fresh detachedB27copy4226; tryrequestedworkerplatform then documented samegenerationfallback; sameA23/A24 continue
 
 - 2026-10-26T13:34:45.795Z | parent 9d82f75a (entry commit follows) | manager | P12-27-INDEPENDENT-B-STARTED: Requested workerplatform rejected Unknown model; fresh samegenerationfallback started existing B27 detachedcopy9d82f75a/web88ac own4226. No duplicate worker/profile. A26sameagent PARTIAL withretained rawjobs; managerindependentpublicB replay completed separately. | evidence: docs/reading-helper-abc/briefs/P12-27.md; /root/p12_27_figure_b; detached p12-27/wt | next: B27inventory/reproduction/threecandidates; A23/A24continue; bank manager source/UIreplay and A26PARTIAL, correct modewording
+
+- 2026-10-26T13:37:07.432Z | parent e22c657f (entry commit follows) | manager | P12-MANAGER-INDEPENDENT-TEXT-PHASES: Manager own768x1024/publicB normalUI replay: scroll adds17chars/0deletion in1of29sections before note; subsequentselection/n/Delete source29texts/order/hash unchanged, panelannotationchangesseparate,0pageerrors. Firstentry404failure retained; ordinaryrestart200/noauth/cache/sourcechange, owned4294listenergone. | evidence: docs/reading-helper-abc/P12-MANAGER-TEXT-SCOPE-20261026.md; external manager attempt2/probe-results.json and manager-phase-classification.json | next: sameA23/A24/B27 continue; preservehistorical30hashfailures; bankA26PARTIAL and correct storedFit wording
 
 ---
 
