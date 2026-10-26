@@ -2,7 +2,7 @@
 // including the one-region route shape, rather than a caption helper alone.
 import { describe, expect, it } from "vitest";
 import { figurePdf, panel, pngInfo, type FigurePage } from "./figure-pdf.test-helper";
-import { extractPdfFigures } from "./pdf-engine";
+import { extractPdfFigures, mergeCaptionLines } from "./pdf-engine";
 
 const options = { maxPages: 24, maxFigures: 12 };
 const boxes = async (page: FigurePage, label?: string) => {
@@ -76,6 +76,48 @@ describe("P12-28: defensible typed caption pairing", () => {
       shapes: [...panel(40, 100, 180, 150), { kind: "image", x: 340, top: 100, w: 180, h: 150 }],
     };
     expect(await boxes(page)).toEqual([[40, 100, 220, 250], [340, 100, 520, 250]]);
+  });
+
+  it("keeps column labels and continuation when another column interrupts the sorted lines", async () => {
+    const page: FigurePage = {
+      text: [["Figure 1. Left start.", 40, 268, 9], ["Figure 2. Right start.", 340, 268, 9], ["Left continuation words.", 40, 282, 9]],
+      shapes: [...panel(40, 100, 180, 150), { kind: "image", x: 340, top: 100, w: 180, h: 150 }],
+    };
+    const pdf = figurePdf([page]);
+    const pick = async (label?: string) => (await extractPdfFigures(pdf, { ...options, measureOnly: true, ...(label ? { onlyPage: 1, label, maxFigures: 1 } : {}) })).figures.map(({ box, caption }) => ({ box, caption }));
+    const expected = [
+      { box: [40, 100, 220, 250], caption: "Figure 1. Left start. Left continuation words." },
+      { box: [340, 100, 520, 250], caption: "Figure 2. Right start." },
+    ];
+    expect(await pick()).toEqual(expected);
+    expect(await pick("Figure 1")).toEqual([expected[0]]);
+    expect(await pick("Figure 2")).toEqual([expected[1]]);
+  });
+
+  it("retains a later original-block line despite an intervening distant block", () => {
+    expect(mergeCaptionLines([
+      { rect: [40, 260, 140, 270], text: "Figure 1. Start.", blockId: 1 },
+      { rect: [40, 310, 140, 320], text: "Distant unrelated block.", blockId: 2 },
+      { rect: [40, 350, 140, 360], text: "Original block continuation.", blockId: 1 },
+    ], 0)).toBe("Figure 1. Start. Original block continuation.");
+  });
+
+  it("stops a caption before the next typed caption in its column", async () => {
+    const page: FigurePage = { text: [["Figure 1. First caption.", 40, 268, 9], ["Table 2. Following table.", 40, 282, 9]], shapes: panel(40, 100, 180, 150) };
+    const result = await extractPdfFigures(figurePdf([page]), { ...options, onlyPage: 1, label: "Figure 1", maxFigures: 1, measureOnly: true });
+    expect(result.figures.map(({ box, caption }) => ({ box, caption }))).toEqual([{ box: [40, 100, 220, 250], caption: "Figure 1. First caption." }]);
+  });
+
+  it("retains the known close-body over-join instead of claiming semantic separation", async () => {
+    const page: FigurePage = { text: [["Figure 1. Complete caption.", 40, 268, 9], ["The body references Figure 1.", 40, 282, 9]], shapes: panel(40, 100, 180, 150) };
+    const result = await extractPdfFigures(figurePdf([page]), { ...options, onlyPage: 1, label: "Figure 1", maxFigures: 1, measureOnly: true });
+    expect(result.figures[0]?.caption).toBe("Figure 1. Complete caption. The body references Figure 1.");
+  });
+
+  it("does not split an inline Figure mention into a new supported label", async () => {
+    const page: FigurePage = { text: [["Figure 1. Left.     Figure 2. Right.", 40, 268, 9]], shapes: [...panel(40, 100, 180, 150), ...panel(260, 100, 180, 150)] };
+    const result = await extractPdfFigures(figurePdf([page]), { ...options, onlyPage: 1, label: "Figure 2", maxFigures: 1, measureOnly: true });
+    expect(result.figures).toEqual([]);
   });
 
   it("does not turn prose cross references or uncaptioned decorative vectors into labelled figures", async () => {
