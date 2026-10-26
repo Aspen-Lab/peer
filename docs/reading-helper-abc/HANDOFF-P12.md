@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T04:28:36.132Z
+AS OF        2026-10-26T04:31:10.895Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.263   NEXT RULING §1h.264   NEXT ITEM ID P12-26   NEXT FREE PORT 4225
+LAST RULING  §1h.264   NEXT RULING §1h.265   NEXT ITEM ID P12-26   NEXT FREE PORT 4225
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      B25firstpendingclickbanked/remaining8+identity;A23cliphit/fullmatrix;A24stablefigures/fullguards;blindnotstarted;A0B0;clockACTIVE
+RUNNING      A24invented600cycles+canonical4HTTPbanked/full79+figuresprodowed;A23remainingmatrix;B25ninecasestimed/finaldiagnostic;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -307,6 +307,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T04:27:41.758Z | parent cdc066d1 (entry commit follows) | manager | P12-23-CURATED-VIEW-AUDITED: Read cumulativeA23report42bc73bd/pickedreportonly. Inprogress evidence-only view149copiedartifacts+index/manifest=151files, excludesprofiles/browserstate/runtimepaths/uploadstore/sourcePDF, originalsintact. Managerindependentread-onlyaudit149literalrefs0missing,149manifestbytes/SHA0mismatch/app82fe/web88ac,0symlinks/scoreverdict/modelproselines,0normalized4wordoverlapagainstprivatebodyreference. This is evolvingcurationonly, notcoverage/score/readyblindpack; remaining19CSS/input/cliphit/cycles/guards/privacy/productionowed. | evidence: P12-23-A-20261025T230000Z.md@42bc73bd; privateevidence-only/index/manifest; externalmanager audit-evidence-pack.cjs | next: A23 completecoverageandrefreshview;A24fullwalk;B25remaining9cases; freezecompletefactualpack then3freshblindtheme
 
 - 2026-10-26T04:28:36.132Z | parent c8d2b04c (entry commit follows) | manager | P12-25-FIRST-PENDING-CLICK-BANKED: Read completeB25firstcausalappend4d13bda5/pickedreportonly. Ruling260normalownroutefreshprofile no body; ONEpublicAduplicateUIuploadattempt2entry1127ms savedstatefinally, no owner/privateauth. StableFigure3/page13fig3 at1024x576 incomplete/natural0 at324/1031/3019ms then1135x667by10015ms. Actualpendingcentre-hit/click opensonefigure; afterdeliverycaption/canvas/Zoom150/Fit100/close works. Historicalnth3identityinferredviaaspect/controlinventory, notprovenhistoriclabel. Remaining8/time/network/candidatesowed. A24 notifiednewcapturesstablelabel/anchor/resourceidentity/no oldrawrelabel. No productfix or score. | evidence: P12-25-B-20261026T043000Z.md@4d13bda5; private timed-v1.json; ruling260 | next: B25remaining8stablecases/network/3candidates;A23fullmatrix;A24stablecapture/guards; freezecompletepacks thenblind
+
+- 2026-10-26T04:31:10.895Z | parent 3e8e3498 (entry commit follows) | manager | P12-24-CYCLES-CANONICAL-PRIVACY-BANKED: Read fullcumulative975b232b/pickedreportonly. Bodycount14correction+normalizationscope explicit. OriginalBook320geometryrows/20cells/8steps/2actualthemes0errors; publicA320reportednext. Inventedno-key600cycles30per20cells selection-n-Delete samebodyhash0errors; onlythatfamily/defaultstep. Composition18sequences/180rows6orders×1440/853/390, fullminimumauditowed. Canonical4actualHTTP200,1196prefix7/7/7/8descriptors,postresizeEnter/draft33/sameinputnodesurvive,secondoccurrencep10vs0; oldthreadMessagesnullnotthread-lengthproof. Privacyv3alltypes/sizes6781files798038660B/10probes0hits0errors,explicitoperationalcache/logs/Nextincluded/no compileexception; scopedstore/authorizedraw/browser/depsGitexcluded; boundednotuniversal. Original/publicB helper/predeliveryfailurespreserved. No formal score. | evidence: P12-24-A-20261025T230500Z.md@975b232b; private cycles/canonical/composition/privacyv1-v3/figure raw | next: A24 stablefigure/actions/full79guards/production;A23remainingmatrix;B25finalcause; possibleindependentpublicThemeAhelperafterBslotfree; curatedpacks→blind
 
 ---
 
