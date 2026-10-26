@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T20:38:19.597Z; only writer of this file
-CURRENT ITEM:          C28TerraPARTIALfreshness/versionfixtures;B30PARTIALneedsnarrowrule;B29FINALa46ffready;A23/A24/A26queued;Managerbaselinecompletedpendingbank;A0B0;clockACTIVE
-NEXT TURN:          C28reaimtwofixtures/targetedchecks only; B30narrowobservableprovenance direction; managerbaseline/reportbank
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T20:39:42.970Z; only writer of this file
+CURRENT ITEM:          B30requested-platformnarrowfollowup;C28PARTIALaac5f63testsreadycaptionSTOP;B29FINALa46ffready;A23/A24/A26queued;Managerbaselinecompletedpendingbank;blindnotstarted;A0B0;clockACTIVE
+NEXT TURN:          sameB30measure3concreteobservablealternatives onallinventedcases+existingpositives underNode22; guide/ruling beforeC28captionresume
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1503,6 +1503,10 @@ After confirming old model writers stopped on quota, requested-platform resumpti
 ### §1h.363 — 2026-10-26 — P12-28-NOTE-VERSION-FIXTURE-SCOPE
 
 Allow web/src/components/notes/note-tags.blocks.test.ts and note-tags.lost.test.tsx to distinguish the newly current derived reading version from stale version fixtures after the already approved note-tags constructor change. Keep the older-version rejection case and every ownership/navigation/content assertion; changing current-version fixture metadata is not permission to relax behavior. No additional production file is authorized. Run the affected tests and retain four prior failures; do not repeat broad gates before the caption tree is ready.
+
+### §1h.364 — 2026-10-26 — P12-30-OBSERVABLE-CAPTION-SCOPE
+
+The new semantic-intent distinction is not encoded by spacing alone and is not permission to add an open-ended word classifier. B30 must compare concrete observable rules under the required Node22: retain separate typed line identities and original text-block/column provenance, stop another typed caption from being appended, and preserve existing continuation eligibility/positive contracts rather than invent a new universal gap threshold. Compare conservative alternatives and record where identical observable geometry cannot distinguish untyped continuation from adjacent prose; preserve the bodyclose evidence and do not claim it excluded or fixed. A must still count any real-input caption over-join/misassociation and price it normally; no rubric unit, denominator, price or pass requirement changes. C28 caption work stays stopped until a measured guide and further ruling. Its disjoint freshness/current-version tests are checkpointed, not landable as a whole.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
