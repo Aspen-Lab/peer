@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T04:12:48.061Z
+AS OF        2026-10-26T04:12:52.192Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.253   NEXT RULING §1h.254   NEXT ITEM ID P12-25   NEXT FREE PORT 4224
+LAST RULING  §1h.254   NEXT RULING §1h.255   NEXT ITEM ID P12-25   NEXT FREE PORT 4224
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      A23lifecyclebanked/group-exportcheckpointnext;A24correctedmatrix/actionruns;blindnotstarted;A0B0;clockACTIVE
+RUNNING      A23group/nestedexportbanked/remaininginputmatrix;A24correctedmatrix/figures/questions/prod;curatedpack/finalprivacyowed;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -287,6 +287,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T04:11:46.751Z | parent c4bddf96 (entry commit follows) | manager | P12-R1-PACK-BOUNDARY-CLARIFIED: Manager external read-only pack inventory inspected two evolvingindices: no verdict/modelproselines, no symlinks; A23 shorthandreference ambiguous, A24 product-scoped uploads reside inside rawroot. These are not completeness/privacy-PASS claims; paper-only overlapreference notyetavailable. Clarify final curated evidence-only readerdirectory/manifest/literalrefs, exclude browserprofile/session/storage/upload-store/sourcePDFs, preserve originalrawinplace, nevercopyownerPDF. ExistingA23/A24 notified; uniform readercontract updated before anyreader. Exactweb88ac unchanged. | evidence: briefs/P12-R1-A-COMMON.md; briefs/P12-R1-reader.md; external audit-evidence-pack.cjs/current private indices | next: A23/A24 continue originalfinitewalks; curator/factual/privacy/referenceaudit aftercompletepack; threefreshblind/theme only after freeze
 
 - 2026-10-26T04:12:48.061Z | parent 3267c3e3 (entry commit follows) | manager | P12-23-LIFECYCLE-BOUNDARY-BANKED: Read whole A23append through17054939; pick lifecycleba70a2cd. Nineactual1440original/no-key observations: baseline1/2/3;empty4Escape removes4;written5outsidekeepscard/23chars thenEscape/reloadretains5closed;emptySave6survivesreload;keyboardDelete7removes7/no modal,retains1/2/3/5/6throughreload.0pageerrors/dialogs.92ms fillreturn→deletecompletion not precise last-input/debounce proof; navigation/pagehide/concurrentstale writer stillowed. | evidence: P12-23-A-20261025T230000Z.md@ba70a2cd; private unique raw artifacts | next: A23 pending/stalewriter/navigation and fullgroup/hierarchy exports; A24 correctedgeometry/figures/production; packs thenblind
+
+- 2026-10-26T04:12:52.192Z | parent 9debb930 (entry commit follows) | manager | P12-23-GROUP-HIERARCHY-BOUNDARY-BANKED: Read whole/pick17054939. Actual adjacentparagraphdrag52rawchars→1persistedhighlight/2segments→reload1aggregaterow. Primarylegacyquote27 notwholegroup; fullsegment/exportcomparison owed. ActualsectionDOM73541chars/SHAf7a73b0789c44453818636ebef03d72d0bc01ac2d97f6db34e4fd2bcc7c4814d unchanged afterhighlight/reload, onlyOpen-note-control superscripts removed. ChildTabpersistindent1;actualTXT378/MD483/Word1877B childonce/MD2spaces.0errors. Manager own currenttwoindex auditsagainstA24body-only11375wordreference foundzero4wordmatches/scoreverdict/modelproselines; temporaryshorthandrefs stillunresolved. Not fullprivacy/extraction/packcompletion. | evidence: P12-23-A-20261025T230000Z.md@17054939; private unique raw artifacts | next: A23 fullsegmentwords/quoteexclusion/CopyPDF/recolourremove and allinputs/matrix; A24 correctedfullmatrix/guards; curate/freeze then3blind/theme
 
 ---
 
