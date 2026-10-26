@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T07:18:44.485Z
+AS OF        2026-10-26T07:18:49.126Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.271   NEXT RULING §1h.272   NEXT ITEM ID P12-27   NEXT FREE PORT 4226
+LAST RULING  §1h.272   NEXT RULING §1h.273   NEXT ITEM ID P12-27   NEXT FREE PORT 4226
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
 RUNNING      A23original853dark/fullmatrix;A24remainingguards/figures/publiccycles+bodyscope;A26freshpublic/invented4225;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
@@ -323,6 +323,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T07:18:39.806Z | parent 656d256e (entry commit follows) | manager | P12-23-ATTRIBUTION-RESUME-LIMIT-BANKED: Readfd9canonicalcorrection/fullappend,pickreportonly. Workeracknowledgesfd80mistypedemail/nohistoryrewrite; rootnewcanonicalimportalreadydone.0434resumption0newcells/carried6notnew;0438startupPowerShellparseerrorbeforebrowserstatechange thenliteraldispatchpending. Preserveuniqueallfailures, no newproductdefect/waiver. | evidence: P12-23-A-20261025T230000Z.md@fd9c46aa; private unique raw references | next: SameA23resumeatfirstunfinishedcell/no replay; banknextfrozenprogress
 
 - 2026-10-26T07:18:44.485Z | parent 4df2193b (entry commit follows) | manager | P12-23-853-LIGHT-PROGRESS-BANKED: Readwhole2e7progressappend/pickreportonly. Samefd9/web88ac/live4222PID57880,no upload/profile/serverreset.0438zero new duecontrolhiddenbetweenmodechecks preserved. Frozen0714progress16requestedlightstates:11completed(6carried+5new),5app-disabledFit,0pageerrors;all8Book+3enabledFit.Clip/hit+8wheels/surface/Backrecorded. Dark livecontinuationnotfinished; laterhiddenSmallerretryreportedbutnotcompletedclaim. | evidence: P12-23-A-20261025T230000Z.md@2e7e5ea5; private unique raw references | next: SameA23dark/fullwidth/return/privacy;A24guards/actions;A26publicsupplement
+
+- 2026-10-26T07:18:49.126Z | parent ce3dbf15 (entry commit follows) | manager | P12-24-FOUR-INPUT-GEOMETRY-RECOVERY-BANKED: ReadfullA24recovery1a0append/pickreportonly. Fourinputs each320Bookgeometry20CSS×8step×2actualthemes (inventedreconstructedportions),0errors. Original+invented600cycleseach/samebodyhash0errors;3inputs18compositionseq180rowseach0failedrows(errors0). All4questionprobes13statesonehash0errors. Answeronlycells0–2/48rows/96cycles,peek-helperfailuresretained. NewstablepublicA13attempts12opens1deliveredcentrepeektimeout, notold9denominator; otherguards/Fit/production/fullfiguresstillowed. PublicBbodyhashscopequestionreportedaftercheckpointnotyetreviewed/closed. | evidence: P12-24-A-20261025T230500Z.md@1a0f8eaa; private unique raw references | next: A24remaininganswers/stablefigures/79guards/publiccycles/body-scopecheck/production;A23darkmatrix;A26setup; frozenpacks thenblind
 
 ---
 
