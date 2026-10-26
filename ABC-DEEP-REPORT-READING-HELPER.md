@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T13:33:11.918Z; only writer of this file
-CURRENT ITEM:          A23/A24active;A26PARTIALlivejobs4225;B27briefcommittedown4226next;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          fresh detachedB27copy4226; tryrequestedworkerplatform then documented samegenerationfallback; sameA23/A24 continue
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T13:34:45.795Z; only writer of this file
+CURRENT ITEM:          A23/A24/B27active;A26PARTIALretainedjobs4225;B27own4226figurecauses;blindnotstarted;A0B0;clockACTIVE
+NEXT TURN:          B27inventory/reproduction/threecandidates; A23/A24continue; bank manager source/UIreplay and A26PARTIAL, correct modewording
 STOPPED BECAUSE:          — recovery13 at2026-10-26T13:12UTC; sameA23/A24/A26 resumed; existing geometrybatch finished22cells, no duplicate
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1319,6 +1319,10 @@ Correct the earlier all-timeouts description explicitly:77actionerrors=65Error+1
 ### §1h.317 — 2026-10-26 — P12-27-FIGURE-INVESTIGATION-BRIEF
 
 Use the now-free worker slot for an independent B on the measured publicB figure failures. A26 keeps its own live raw geometry jobs, without a second profile or replacement worker. B27 receives only named publicB artifacts, its own fresh upload/copy and a finite reproduction matrix; zero dimensions and historical nth indices do not establish cause. Compare three remedies including no product change when evidence supports that choice. No previous failure is retrospectively passed.
+
+### §1h.318 — 2026-10-26 — P12-27-INDEPENDENT-B-STARTED
+
+The requested worker platform was rejected as Unknown model; start a fresh same-generation fallback under the skill rule and record actual attribution. Reuse no other worker profile or raw jobs. B27 owns detached9d82f75a/web88ac and4226, with exact publicB-only evidence permissions. A26 remains resumable in its own retained jobs, rather than being replaced. No new dependency, branch, product change, score or acceptance.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
