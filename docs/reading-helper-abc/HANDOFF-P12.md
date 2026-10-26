@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T20:54:22.426Z
+AS OF        2026-10-26T20:58:59.586Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.366   NEXT RULING §1h.367   NEXT ITEM ID P12-31   NEXT FREE PORT 4230
+LAST RULING  §1h.367   NEXT RULING §1h.368   NEXT ITEM ID P12-31   NEXT FREE PORT 4230
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      C28PARTIAL17561clean/frozensource;Managerindependentverify28next;B30Node22guide/B29FINAL/A23-A24factsbankpending;A26PARTIAL1860missing30;blindnotstarted;A0B0;clockACTIVE
+RUNNING      C28Terraawaittightleadingcorrection;B30fivecheckpointsbanked;Managerindependentverificationholdsregressingtree;B29FINAL/A23-A24newfactsbankpending;A26PARTIAL1860missing30;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -513,6 +513,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T20:44:47.176Z | parent b7bc2763 (entry commit follows) | manager | P12-28-MEASURED-LINE-IDENTITY-GUIDE-RULED: ReadB30Node22guide7bb398d3:thirdline/columncandidatealonepreservestwo labels+continuation,typedTableboundary,tieandexisting6fixtureoutputs. AuthorizeC28narrowlineidentity/provenance+columnsubstream, no newsemanticclassifier/floors/page/fallbackchanges. Requireearlybreak/longgap-originalblockprotectivecase; bodyoverjoinunresolvednormallypricedbyA. | evidence: P12-30-B-20261026T193000Z.md source7bb398d3 externalNode22compare12shapes6fixtures; C28correctedtests | next: sameC28resumecaptionimplementationwithtestedguide/protectivecases; finalsourcefreeze→ownmutations/gates→Managerindependentrealinputreopen/freshupload/touchedtests×3/nativegates
 
 - 2026-10-26T20:54:22.426Z | parent 05a91f6d (entry commit follows) | manager | P12-28-PROVENANCE-REPRESENTATION-CLARIFIED: Approvedrepresentationisoriginalblockidentity+actualtypedlinegeometryneededforpairing/continuation. Unusedparentblockrectangle/characterquads are not independentlyrequiredwithoutobservablecounterexample; no newsourceeditsolelymetadata. C28sourcefrozen32e2/17561checkpoint,tsc0lint0/144build0full10failpreserved; Managerindependentgates/UI stillowed. | evidence: C28sourcea516a04b/teste8ac291b/frozen32e2d5ba/checkpoint17561b2c; B30Node22guide7bb398d3 | next: ManagerreadentireCdiff, integrateexactfrozencandidateinfreecopy, ownmutations/touched×3/nativefullgates plusallowedbrowserUI existing/freshupload; no mainproductlandbeforeproof
+
+- 2026-10-26T20:58:59.586Z | parent 1d291547 (entry commit follows) | manager | P12-30-TIGHT-LEADING-REGRESSION-BANKED: ReadandbankB30fivecheckpoints3f1fdf43/fb9efe03/89faed07/7bb398d3/01ff5a6b. Managerdifflead independentlyconfirmedNode22C28sameblock10ptleading/9ptglyphbboxoverlapdropscontinuation. Baselinecomplete/Cpartial;14ptandcolumnscontrols retained. C28mustfixsameblockalignedlater-start eligibility, addexactpool/requestcaptionregression, no thresholds/fontclassifier orweakenedassertions. | evidence: docs/reading-helper-abc/P12-30-B-20261026T193000Z.md; source01ff5a6b; privateprotect-leading-node22.json sourcehashd1b7043d | next: sameC28minimumsameblocklaterlinefix+regression/typedboundary/columnscontrols→newfrozenwebtree/gates; Managerdoesnotverify/landoldregressingcandidate
 
 ---
 

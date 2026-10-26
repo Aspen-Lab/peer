@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T20:54:22.426Z; only writer of this file
-CURRENT ITEM:          C28PARTIAL17561clean/frozensource;Managerindependentverify28next;B30Node22guide/B29FINAL/A23-A24factsbankpending;A26PARTIAL1860missing30;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          ManagerreadentireCdiff, integrateexactfrozencandidateinfreecopy, ownmutations/touched×3/nativefullgates plusallowedbrowserUI existing/freshupload; no mainproductlandbeforeproof
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T20:58:59.586Z; only writer of this file
+CURRENT ITEM:          C28Terraawaittightleadingcorrection;B30fivecheckpointsbanked;Managerindependentverificationholdsregressingtree;B29FINAL/A23-A24newfactsbankpending;A26PARTIAL1860missing30;blindnotstarted;A0B0;clockACTIVE
+NEXT TURN:          sameC28minimumsameblocklaterlinefix+regression/typedboundary/columnscontrols→newfrozenwebtree/gates; Managerdoesnotverify/landoldregressingcandidate
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1515,6 +1515,10 @@ Choose B30's third measured Node22 alternative for the narrow merged-column defe
 ### §1h.366 — 2026-10-26 — P12-28-PROVENANCE-REPRESENTATION-CLARIFIED
 
 The required observable provenance is the original text-block identity and actual typed start/continuation line geometry used to keep columns/labels distinct and retain eligible continuation. An unused original block rectangle or per-character quad is not separately required when no observable counterexample calls for it; do not edit a frozen tree merely to store unused metadata. Preserve the unsupported inline-start ambiguity limitation and all protective tests. Worker17561b2c records tsc0/lint0with144warnings/build0 but10full-suite failures and no successful invented normal UI; these are not accepted as a full gate. Manager must read the actual complete change, independently execute exact-tree tests/mutations/native gates and actual authorized browser checks, explicitly distinguishing its compensation from a worker UI success. No product landing or acceptance yet.
+
+### §1h.367 — 2026-10-26 — P12-30-TIGHT-LEADING-REGRESSION-BANKED
+
+The manager's actual diff read identified an unverified preservation risk; independent B30 executed the exact committed C28 engine under Node22 and confirmed it. At9pt font/baselines268and278, two lines in one original block overlap glyph boxes by2.366pt; baseline retains the full caption while C28drops its continuation. Fourteen-point and same-baseline other-column controls bound the cause. Permit the narrow same-original-block/same-column/genuinely-later-line-start eligibility correction, preserving typed boundaries, ambiguity, resource floors and every positive; add exact full caption+region pool/request/max1 regressions and re-run final-source gates. No numeric gap expansion or font-specific/semantic classifier. The old candidate is not landable despite its prior focused tests. Preserve all five B30 checkpoints and failed shapes; Manager independently verifies the corrected new tree.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
