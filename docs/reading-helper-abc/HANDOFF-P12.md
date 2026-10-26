@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T13:30:20.837Z
+AS OF        2026-10-26T13:30:25.980Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.312   NEXT RULING §1h.313   NEXT ITEM ID P12-27   NEXT FREE PORT 4226
+LAST RULING  §1h.313   NEXT RULING §1h.314   NEXT ITEM ID P12-27   NEXT FREE PORT 4226
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
 RUNNING      sameA23/A24active;A26livegeometrycheckpointforB27slot;22geometrycellsbanked;B27figureinvestigationplanned;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
@@ -405,6 +405,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T13:30:14.769Z | parent 5f36380b (entry commit follows) | manager | P12-24-DEPARTURE-CLAMPS-BANKED: Instrumented actualdeparture/return glyph+scroll equal4inputs, earliercommandscroll retained. Neighborclamps33rows/input bounded default2cards. Actualcontrol144rows contrast minima recorded, no outline/fullmatrix closure. | evidence: docs/reading-helper-abc/P12-24-A-20261025T230500Z.md; sourceb9dbf8fc; external factual artifacts | next: sameA23/A24finish actual guards and production; A26 checkpoint livegeometry then B27 independent figure investigation; frozenpacks before blind scoring
 
 - 2026-10-26T13:30:20.837Z | parent 0485a14f (entry commit follows) | manager | P12-26-CYCLES-PRIVACY-GUARD-CORRECTION: Bank630cycles/input/1890total and bounded3121file630153798byte5probeprivacy0hits/errors. Import explicit semantic correction with guardindex: exact P12-14 contracts remain authoritative; incomplete guards never passed by shorthand. | evidence: docs/reading-helper-abc/P12-26-A-20261026T072000Z.md; sourcebf3617da,b590e1f3,0234935f; external factual artifacts | next: sameA23/A24finish actual guards and production; A26 checkpoint livegeometry then B27 independent figure investigation; frozenpacks before blind scoring
+
+- 2026-10-26T13:30:25.980Z | parent 43755705 (entry commit follows) | manager | P12-26-ADDITIONAL-LIFECYCLES-BANKED: Six actual lifecycle sequences/input including emptyEscape/emptySave/pendingwrittenEscape/outsidepress/fullreplacementrace/DeleteReload,0pageerrors. Specific laterstickyreplacement retained, no general concurrentmerge verdict. | evidence: docs/reading-helper-abc/P12-26-A-20261026T072000Z.md; sourcef418c5b6; external factual artifacts | next: sameA23/A24finish actual guards and production; A26 checkpoint livegeometry then B27 independent figure investigation; frozenpacks before blind scoring
 
 ---
 
