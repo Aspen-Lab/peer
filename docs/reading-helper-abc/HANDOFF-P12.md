@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T18:23:41.967Z
+AS OF        2026-10-26T18:23:45.721Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.323   NEXT RULING §1h.324   NEXT ITEM ID P12-28   NEXT FREE PORT 4227
+LAST RULING  §1h.324   NEXT RULING §1h.325   NEXT ITEM ID P12-28   NEXT FREE PORT 4227
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
 RUNNING      A23/A24/B27active;B27wrongfigurecauseconfirmedguide→C28;A23completed660pendingbank;A26PARTIALqueued;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
@@ -427,6 +427,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T18:23:38.196Z | parent c3986281 (entry commit follows) | manager | P12-24-MAP-QUESTION-CAP-BANKED: Actualallrowmaptoggle4inputs/summarywords/targets;2originalstrictprefixdifferences retained. Invented499/500/501→499/500/500 at3widths18rows0pageerrors; defaultsetting only. | evidence: docs/reading-helper-abc/P12-24-A-20261025T230500Z.md; source6d680939; external factual artifacts | next: B27final producingpath/cacheguide→separateC28; sameA23/A24 finiteguardwork; bankA23completed660andexplicitmodecorrection; blindnotstarted
 
 - 2026-10-26T18:23:41.967Z | parent b4028b1d (entry commit follows) | manager | P12-24-CONTROLS-NORMAL-PRODUCTION-BANKED: 320actualcontrols20CSSx8stepsx2themes; representative6viewers, boundedcontrasts. Separateexactreleaseproductionbuild0, normalanonymousavailabilityfalse/noentry,feed503 retained. Noauth/NODE_ENV/cachealteration; productionpaperwalk remainsunperformed, notPASS. Cell17pre-scrolltimingcorrected. | evidence: docs/reading-helper-abc/P12-24-A-20261025T230500Z.md; source3f6e19e4; external factual artifacts | next: B27final producingpath/cacheguide→separateC28; sameA23/A24 finiteguardwork; bankA23completed660andexplicitmodecorrection; blindnotstarted
+
+- 2026-10-26T18:23:45.721Z | parent 4e752e3c (entry commit follows) | manager | P12-27-PRIOR-FAILURE-INVENTORY-BANKED: Read entireB27report andactual77inventory/provenance;143targets66opens/closes65Error12Timeout0pageerrors. Historicalerrorhasheslimitstageinference; no retrocertification. | evidence: docs/reading-helper-abc/P12-27-B-20261026T134000Z.md; source6b009878; external factual artifacts | next: B27final producingpath/cacheguide→separateC28; sameA23/A24 finiteguardwork; bankA23completed660andexplicitmodecorrection; blindnotstarted
 
 ---
 
