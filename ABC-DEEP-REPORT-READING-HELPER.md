@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T18:46:25.534Z; only writer of this file
-CURRENT ITEM:          C28captionSTOPnewshape,freshnessonly;B29oneUIrecoveryauthorized;A24PARTIALcheckpointforB30;A23queued;A26PARTIAL1860missing30;Managerverify28baselinecompletedpendingbank;A0B0;clockACTIVE
-NEXT TURN:          B29exactlyonefreshnormalUIrecovery thenfinitecausalreport; C28captionstoppedatnewshape/freshnessonly; A24checkpointreleasesB30slot; Managerbaselinebank
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T19:23:16.327Z; only writer of this file
+CURRENT ITEM:          oldSolA24/C28/B29erroredquota;B30briefown4229next;Terraresumptionspendingnoduplicates;C28captionSTOP/freshnessonly;A23queued;A26PARTIAL1860missing30;Managerbaselinecompletedpendingbank;A0B0;clockACTIVE
+NEXT TURN:          ownB30copy4229/newTerra; controlledTerraresumeC28freshnessonly andB29normalUIrecovery inexistingcopies afterprocessinspection; Managerbaselinebank
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1491,6 +1491,10 @@ Try the requested worker platform at this new item; runtime rejects it as Unknow
 ### §1h.360 — 2026-10-26 — P12-29-ONE-NORMAL-UI-RECOVERY-RULED
 
 B29's first normal publicB POST succeeded200; its helper waited for singular/paper/ although the app uses plural/papers/. An actual success is not erased because the helper lost its post-upload state. Permit exactly one replacement normal chooser/consent/upload in a fresh own context, correct the route wait and save genuine browser capability promptly. Preserve both attempts and explicit two-upload history, never manufacture/reconstruct authentication or touch another profile; no third upload is authorized. This is a public-input harness recovery under manager authority, no user approval or new product exclusion.
+
+### §1h.361 — 2026-10-26 — P12-30-MERGED-CAPTION-LINES-BRIEF
+
+Honor C28's escape clause: preserve the genuine two-column positive and freeze its proposal; investigate structured line/span geometry independently before any caption-rule expansion. The prior ambiguity fixture had an invalid overlap premise, so retain its old bytes and explicit correction without weakening the intendedabsence contract. Current runtime now offers gpt-6.1-terra; prior workers are confirmed errored on quota, not live model writers. New assignments/resumptions may use the requested model with controlled ownership transfer after checking existing jobs, never duplicating a live profile/server.
 
 ## §5. Durable work ledger — update in place, evidence append only
 

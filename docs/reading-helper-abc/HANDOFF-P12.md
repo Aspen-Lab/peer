@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T18:46:25.534Z
+AS OF        2026-10-26T19:23:16.327Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.360   NEXT RULING §1h.361   NEXT ITEM ID P12-30   NEXT FREE PORT 4229
+LAST RULING  §1h.361   NEXT RULING §1h.362   NEXT ITEM ID P12-31   NEXT FREE PORT 4230
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      C28captionSTOPnewshape,freshnessonly;B29oneUIrecoveryauthorized;A24PARTIALcheckpointforB30;A23queued;A26PARTIAL1860missing30;Managerverify28baselinecompletedpendingbank;A0B0;clockACTIVE
+RUNNING      oldSolA24/C28/B29erroredquota;B30briefown4229next;Terraresumptionspendingnoduplicates;C28captionSTOP/freshnessonly;A23queued;A26PARTIAL1860missing30;Managerbaselinecompletedpendingbank;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -501,6 +501,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T18:41:47.495Z | parent b3044fed (entry commit follows) | manager | P12-29-INDEPENDENT-B-STARTED: RequestedworkerplatformUnknownmodel; freshsamegenerationfallbackB29 started ownb3044fed/web88ac detachedcopy4228. C28parallel4227producerfreshness; A23PARTIALretainedsamereviewer; no duplicate profile or upload. | evidence: docs/reading-helper-abc/briefs/P12-29.md; /root/p12_29_page_b; ownp12-29/wt | next: B29normalUIandunchangedoutline/reading identity replay; C28redtests/fix; Managerbaselineoldcache then independentcandidateverification; bankA23/A24finitecheckpoints
 
 - 2026-10-26T18:46:25.534Z | parent 8329d8b3 (entry commit follows) | manager | P12-29-ONE-NORMAL-UI-RECOVERY-RULED: B29successfullypostedpublicB200 butwaitedincorrectsingular/paper/route andmayclosebeforestoringactualnormalcapability. Authorize exactlyone replacementnormalchooser/consent/upload in its ownfreshcontext, correctedplural/papers/wait andearlyactualstatesave. Oldsuccess/failurekept, no syntheticcapability or thirdattempt. | evidence: docs/reading-helper-abc/briefs/P12-29.md; B29owned actualPOST200/route-wait failure | next: B29exactlyonefreshnormalUIrecovery thenfinitecausalreport; C28captionstoppedatnewshape/freshnessonly; A24checkpointreleasesB30slot; Managerbaselinebank
+
+- 2026-10-26T19:23:16.327Z | parent 5ec2e7df (entry commit follows) | manager | P12-30-MERGED-CAPTION-LINES-BRIEF: C28escapeclauseretainsmeaningfulsamebaselinecolumnpositive andfrozenproposal; B30independentlyreplaysstructuredblock/line/span/continuation with3generalrules. OldSolworkerserroredquota,noduplicatelivemodels; newlyavailablecorrectTerraidentifierwillbeusedfornewB/resumptions. | evidence: docs/reading-helper-abc/briefs/P12-30.md; C28tests881a57c4/report5f22253e; frozenproposalSHA256d25f5... | next: ownB30copy4229/newTerra; controlledTerraresumeC28freshnessonly andB29normalUIrecovery inexistingcopies afterprocessinspection; Managerbaselinebank
 
 ---
 
