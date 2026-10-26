@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T07:16:10.248Z
+AS OF        2026-10-26T07:18:29.005Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.267   NEXT RULING §1h.268   NEXT ITEM ID P12-27   NEXT FREE PORT 4226
+LAST RULING  §1h.268   NEXT RULING §1h.269   NEXT ITEM ID P12-27   NEXT FREE PORT 4226
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      A23originalwalk+pendingcheckpointbank;A24themeBfullwalk;A26freshpublic/invented4225started;B25complete;blindnotstarted;A0B0;clockACTIVE
+RUNNING      A23original853dark/fullmatrix;A24remainingguards/figures/publiccycles+bodyscope;A26freshpublic/invented4225;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -315,6 +315,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T07:14:51.165Z | parent 6431277b (entry commit follows) | manager | P12-25-FINAL-CAUSE-BANKED: Read WHOLEfinalB25reportthrough03127840, summary/historicalgeometryraw; pick42a671ea+03127840reportonly. Nineownstabletargets exacthistoricrect9of9,5pending300ms/8delivered1s/9by10s,allresource200/0requestfailed/pageerrors. Pendingactualclick5opens;delivered8usableviewers,1centrewithheldduefocusedpeek; visiblepointx517normalclickopens/Escapecloses inindependentrailprobe. Zoom/Fit/pan/captionwheel0→93/focusbounded. HistoricA24labels/post350msremainunresolved, noretroactiveclicks. Choosecandidate2stableidentity+progressivesnapshots(15.346s sampledvs90s fixed) plusseparateeligiblependingclick; no productCjustified. Own4224gone/webunchanged88ac;25fileexternalmanifest. ResumeoriginalAworkersafterquota, no duplicate. | evidence: P12-25-B-20261026T043000Z.md@42a671ea/03127840; private summary/historical-geometry-comparison/timed/rail/caption/manifest | next: Startfreshpublic/inventedA26helper4225 nowBslotfree; sameA23/A24finishwalks/earlycheckpoints; completecuratedpacks→3blind/theme
 
 - 2026-10-26T07:16:10.248Z | parent 6403255d (entry commit follows) | manager | P12-26-FACTUAL-HELPER-STARTED: AfterB25completed/own4224stopped, freshA26readonlyfactualhelperstarted fork-none frompushed6403255d/web88ac, ownp12-26/wt4225. Requestedworker Unknownmodel then supported samegenerationfallback, actualattributiononlytrailer. TwoexistingA23/A24 recovered samecopies afterquota; no duplicateoldworkers. A26only2fixedpublic+invented/nooriginal/A23state/reports; no productedit orscore. Manager alonefinalreconcile/threeblindtheme remain. | evidence: briefs/P12-26.md; agent/root/p12_26_public_note_a;6403255d; liveoriginalA23/A24 | next: A26earlysetup/inputPARTIAL;A23remainingoriginalmatrix;A24full79guards/stablefigures/production;bankpendingcheckpoints; freezecompletepacks→blind
+
+- 2026-10-26T07:18:29.005Z | parent 9c9cc18b (entry commit follows) | manager | P12-23-DEPLOYMENT-ACCESS-BANKED: Read wholecumulativeA23freshdeploy53c76c6b,pickreportonly. Actual04:30UTC anonymousproduction200welcome/normalSkip0uploadbuttons/inputs;previewVercellogin2SSOnodes/0upload.0pageerrors/revisionunknown/no privateupload/login/authworkaround. Adminwebsource inaccessible, notstaleclaim. Missingdeployedinput/matrix remainsopen. | evidence: P12-23-A-20261025T230000Z.md@53c76c6b; private unique raw references | next: SameA23originalmatrix/returnprivacy;A24fullguard/normalproduction;A26publicsetup; finalpacks thenblind
 
 ---
 
