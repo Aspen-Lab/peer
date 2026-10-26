@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T04:07:55.223Z; only writer of this file
-CURRENT ITEM:          QuotaRecovery11:sameA23export/list/lifecycle;A24retainedgeometry/figures/prodbuildinspect;82fe23db/web88ac;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          A23 measured lists/lifecycle/export/fullinputmatrix; A24 inspect retained jobs and bank completed geometry/figures/build; factualpacks then3freshblind/theme
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T04:09:39.311Z; only writer of this file
+CURRENT ITEM:          A24correcttheme/provenance;resume18figurecells;prod-build0notUI;A23list/lifecycle;blindnotstarted;A0B0;clockACTIVE
+NEXT TURN:          A24 unique corrected theme/figures/question/nativeproduction normalaccess; A23 lifecycle; completepack thenblind
 STOPPED BECAUSE:          — recovered at2026-10-26T04:07UTC from both A quota errors; same workers/copies resumed
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1047,6 +1047,10 @@ Read the full four-input A24 checkpoint and bank its separate per-input timings/
 ### §1h.249 — 2026-10-26 — Resume same independent A reviewers after quota; bank export boundary
 
 The actual hourly heartbeat triggered again after both A workers reported the same quota failure. Inspect main and both original detached copies, retain their input state and ongoing raw artifacts, resume the same workers rather than spawning replacements. Read and pick A23's finite aggregate/export checkpoint: actual outputs and reload Bold retention are bounded evidence, not all-format/hierarchy/lifecycle closure. The invalid indentation selector and overwritten original failure JSONs remain explicit limitations, with original scripts/tool output preserved; future raw paths must be unique per attempt. A24's pre-stall incremental geometry/figure/build results must be inspected before replay. Formal scores remain none and consecutive passes0/2 each. No rubric, threshold, requirement, authentication or source change.
+
+### §1h.250 — 2026-10-26 — P12-24-RECOVERY-MATRIX-LIMIT-BANKED
+
+Read and bank the complete A24 recovery checkpoint. A successful production build is not production page proof. The original320-row geometry attempt has an unreliable effective-light label after dark and cannot supply complete light/dark coverage; preserve it and correct only missing evidence with actual effective-mode samples. Delivered figure actions and pre-action locator failures remain separate denominators. No price, requirement or stop-line change.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
