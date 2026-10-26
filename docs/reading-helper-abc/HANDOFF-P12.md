@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T13:29:52.616Z
+AS OF        2026-10-26T13:29:56.405Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.306   NEXT RULING §1h.307   NEXT ITEM ID P12-27   NEXT FREE PORT 4226
+LAST RULING  §1h.307   NEXT RULING §1h.308   NEXT ITEM ID P12-27   NEXT FREE PORT 4226
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
 RUNNING      sameA23/A24active;A26livegeometrycheckpointforB27slot;22geometrycellsbanked;B27figureinvestigationplanned;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
@@ -393,6 +393,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T13:29:48.367Z | parent 3d63062f (entry commit follows) | manager | P12-23-FORMAT-PERSISTENCE-BANKED: Five selected inline formats persist immediate/Save/reload/reopen in one1440cell; actual TXT/MD/Word/Copy exclude sticky sourcequote. Read actual decoded artifact, no full-unit inference. | evidence: docs/reading-helper-abc/P12-23-A-20261025T230000Z.md; source36cb0563; external factual artifacts | next: sameA23/A24finish actual guards and production; A26 checkpoint livegeometry then B27 independent figure investigation; frozenpacks before blind scoring
 
 - 2026-10-26T13:29:52.616Z | parent f0ab4e77 (entry commit follows) | manager | P12-23-PRINT-RETURNS-BANKED: Actual beforeprint iframe6071bytes; six1440paper/Summary returns glyphdeltas0–0.2094px. Preserve initial selector failure; nativePDFbytes/narrow/Saved/reflow still unperformed. | evidence: docs/reading-helper-abc/P12-23-A-20261025T230000Z.md; source80f93dca; external factual artifacts | next: sameA23/A24finish actual guards and production; A26 checkpoint livegeometry then B27 independent figure investigation; frozenpacks before blind scoring
+
+- 2026-10-26T13:29:56.405Z | parent 9a552126 (entry commit follows) | manager | P12-26-EXACT-REPETITIONS-BANKED: Exact18label/defaultstepBook aggregate family540cycles/input,1620total; failed remaining3cells preserved, not inferred from desktop. | evidence: docs/reading-helper-abc/P12-26-A-20261026T072000Z.md; source89d4b07d; external factual artifacts | next: sameA23/A24finish actual guards and production; A26 checkpoint livegeometry then B27 independent figure investigation; frozenpacks before blind scoring
 
 ---
 
