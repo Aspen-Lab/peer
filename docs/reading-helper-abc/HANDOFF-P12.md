@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T07:21:44.251Z
+AS OF        2026-10-26T07:26:42.276Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.274   NEXT RULING §1h.275   NEXT ITEM ID P12-27   NEXT FREE PORT 4226
+LAST RULING  §1h.275   NEXT RULING §1h.276   NEXT ITEM ID P12-27   NEXT FREE PORT 4226
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      A23requiredoriginalmatrix/853supplementbanked;A24remainingguards/figures/publiccycles+bodyscope;A26public/inventedsetupbanked4225;blindnotstarted;A0B0;clockACTIVE
+RUNNING      A23livewidthbatch/readmatrix-progressfirst;A24publicBhashcorrection/guards/figures/prod;A26threeinputsbanked/notes4225;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -329,6 +329,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T07:21:39.098Z | parent 59652af3 (entry commit follows) | manager | P12-26-SETUP-PARTIAL-BANKED: Read WHOLEA26setup383b5084/pickreportonly. Own6403255d/web88ac/4225directDEVready5.5s/lockedactualbytescopy/no newdependency. Firstworktreecommandwrongprimaryrepoinvalidrefcreatednothing; correctedmanagerrepoownwt. Broadfilename-onlydiscoverylistedA24privatehelpernames, nocontent/report/profile/storeopened; furthersearchlimitedownroot/alloweddeps. No input/noteactioncountedyet. No score/formalA replacement. | evidence: P12-26-A-20261026T072000Z.md@383b5084; uniqueprivate raw references | next: A26 firstthreeownnormalUIinputs/actions;A23originalrequiredmatrix;A24guards/figures/prod; finalpacks thenblind
 
 - 2026-10-26T07:21:44.251Z | parent 52b4956f (entry commit follows) | manager | P12-23-853-SUPPLEMENT-REACH-BANKED: Read cumulativeeff52f6f/pickreportonly. Supplemental853x900 requested32:22complete/10higherFitappdisabled,6carryprovenanceexplicit; 3168squaremetrics0pxsidefont/≤0.25glyphcentre;2366ancestorclip+centrehits, all8markersreachableacrossinitial/eight150pxwheels in44surfacecells,0missingindices/pageerrors. Notrequired853x480orfullactionmatrix. FuturewideFitrecordsancestorzoom+rawBCR/localCSSfont, preserveunadjustedvalues/no mismatchnormalizingaway. No score. | evidence: P12-23-A-20261025T230000Z.md@eff52f6f; uniqueprivate raw references | next: A23 fullrequiredwidth/short/undersized/actionreturnprivacy;A24guard/figure/prod;A26publicinputwalks
+
+- 2026-10-26T07:26:42.276Z | parent 3f2283b2 (entry commit follows) | manager | P12-26-THREE-INPUT-ENTRY-BANKED: ReadWHOLEA26ec5db89d/pickedreportonly. Independentfreshnormalchooserconsent onceeachpublicA/publicB/invented, disabled3of3, timings15935/4122/3432ms inclsettle,0pageerrors/input. PDFsignatures/hash/bytes/requestpurposemetadataexternal; no ownerinput. EarlierexactSkiplabelhelperfailedbeforeuploadretained. No note/export/matrix proof fromcontrolpresence. ClockactualsavedACTIVEevery1hour/samechatreconfirmed/no duplicate. | evidence: P12-26-A-20261026T072000Z.md@ec5db89d; threeownentryartifacts; actualpeer-p12automation.toml | next: A26fullnotes/exports/matrix/cycles;A23liveownmatrixbatch;A24remainingguards/figures/prod; finalpacks thenblind
 
 ---
 
