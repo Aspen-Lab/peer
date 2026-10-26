@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T04:25:09.742Z; only writer of this file
-CURRENT ITEM:          A23square1440banked/cliphit+remainingwidths;A24fullwalk/guards;B25normalresume/loadingmeasure;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          A23 clip/hit/reach andremainingwidths/inputs/lifecycleprivacy;A24fullwalk;B25loadingcause; curatedpacks/3blindthemeafterfreeze
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T04:27:41.758Z; only writer of this file
+CURRENT ITEM:          A23curated149refs/hashaudited/notfinal;A24fullwalk;B25firstpendingimageopens/remainingcases;blindnotstarted;A0B0;clockACTIVE
+NEXT TURN:          A23 completecoverageandrefreshview;A24fullwalk;B25remaining9cases; freezecompletefactualpack then3freshblindtheme
 STOPPED BECAUSE:          — recovered at2026-10-26T04:07UTC from both A quota errors; same workers/copies resumed
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1095,6 +1095,10 @@ Read the complete B25 early report. Its single publicA consent upload succeeded,
 ### §1h.261 — 2026-10-26 — Square equality is separate from clip/hit reachability
 
 Bank A23's32 actual1440×900 preference/theme/Book/Fit cells and1024 square/font/glyph measurements. Equality is observed at each actual state even though note-font sizes remain constant; do not claim reader preference enlarged note typography. The helper's828/1024 viewport-contained samples omit ancestor clipping and pointer hit, so neither offscreen samples nor viewport containment alone prove accessibility or its failure. Require separate actual scroll/clip/hit evidence, retaining initial and scrolled observations. Four note-only privacy probes and captured-section four-word scan remain bounded, with remaining privacy/input/width/guard requirements owed. No score, unit closure or requirement change.
+
+### §1h.262 — 2026-10-26 — Curated view integrity checked, coverage still incomplete
+
+Read and bank A23's evidence-view checkpoint. Manager independently checks all149 literal index references and149 manifest byte/hash entries against app82fe23db/web88ac, with no missing references or mismatches, and finds no symlink/score/verdict/model-prose lines or normalized four-word index overlap against the private body reference. The151-file directory includes its index/manifest in addition to149 copied artifacts. This is an evolving curated view, not a frozen complete blind pack; remaining checks cannot inherit a PASS from packaging integrity. Refresh manifests/privacy scans after future additions. No score or requirement change.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
