@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T18:22:12.932Z
+AS OF        2026-10-26T18:23:38.196Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.321   NEXT RULING §1h.322   NEXT ITEM ID P12-28   NEXT FREE PORT 4227
+LAST RULING  §1h.322   NEXT RULING §1h.323   NEXT ITEM ID P12-28   NEXT FREE PORT 4227
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      A23/A24/B27active;A23completed660pendingbank,storedFitcorrection;A26PARTIALqueued;B27wrongregionguide→C28;blindnotstarted;A0B0;clockACTIVE
+RUNNING      A23/A24/B27active;B27wrongfigurecauseconfirmedguide→C28;A23completed660pendingbank;A26PARTIALqueued;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -423,6 +423,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T18:20:07.395Z | parent ed45aa52 (entry commit follows) | manager | P12-26-RECOLOUR-CALIBRATION-PARTIAL-BANKED: Read/bank8de83222:36presetobservationsmincontrast8.7224; geometryrowfont/firstglyph maytargetgutter and cannotclosealignment/1em. Audit251artifact snapshot0missing/hashmismatch/4wordhits. At18:18 manager checks rawaggregate314/300/333 rows andsticky148/136/156 rows with7/7/8helperfailures,0pageerrors; priorPIDsabsent, nofullmatrixclaim. SameA23/A24/B27resumedafterquota, no duplicate. | evidence: docs/reading-helper-abc/P12-26-A-20261026T072000Z.md; source8de83222; external manager packaudit and raw checkpoint metadata | next: B27wrongregionproducingpath→separateC28; sameA23/A24finishfiniteguards; A26sameagentqueued for corrected actualcontent measurements
 
 - 2026-10-26T18:22:12.932Z | parent 92c9129d (entry commit follows) | manager | P12-23-STORED-MODE-CORRECTION: Correct previouslybanked0745/ruling314 Book wording: actualrawprior1440andnewcycles store scaleIndex2 fit:true. Book layout label offersleavingFit, notcurrentmode. No additionalBook/effectiveFit-at-everywidth coverage inferred; worker explicitcorrectione2f33560 willbeimportedwithfinitebatch. | evidence: docs/reading-helper-abc/P12-23-A-20261025T230000Z.md; externalcycles1440-attempt2-20261026T1234.json; sourcee2f33560 pendingbatch | next: bank actualA24 controls/production and independent B27 finalguide; separateC28 wrongfigurefix; retainA23completed660withoutmodeinflation
+
+- 2026-10-26T18:23:38.196Z | parent c3986281 (entry commit follows) | manager | P12-24-MAP-QUESTION-CAP-BANKED: Actualallrowmaptoggle4inputs/summarywords/targets;2originalstrictprefixdifferences retained. Invented499/500/501→499/500/500 at3widths18rows0pageerrors; defaultsetting only. | evidence: docs/reading-helper-abc/P12-24-A-20261025T230500Z.md; source6d680939; external factual artifacts | next: B27final producingpath/cacheguide→separateC28; sameA23/A24 finiteguardwork; bankA23completed660andexplicitmodecorrection; blindnotstarted
 
 ---
 
