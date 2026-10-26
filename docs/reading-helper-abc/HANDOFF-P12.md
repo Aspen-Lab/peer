@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T07:18:29.005Z
+AS OF        2026-10-26T07:18:35.160Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.268   NEXT RULING §1h.269   NEXT ITEM ID P12-27   NEXT FREE PORT 4226
+LAST RULING  §1h.269   NEXT RULING §1h.270   NEXT ITEM ID P12-27   NEXT FREE PORT 4226
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
 RUNNING      A23original853dark/fullmatrix;A24remainingguards/figures/publiccycles+bodyscope;A26freshpublic/invented4225;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
@@ -317,6 +317,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T07:16:10.248Z | parent 6403255d (entry commit follows) | manager | P12-26-FACTUAL-HELPER-STARTED: AfterB25completed/own4224stopped, freshA26readonlyfactualhelperstarted fork-none frompushed6403255d/web88ac, ownp12-26/wt4225. Requestedworker Unknownmodel then supported samegenerationfallback, actualattributiononlytrailer. TwoexistingA23/A24 recovered samecopies afterquota; no duplicateoldworkers. A26only2fixedpublic+invented/nooriginal/A23state/reports; no productedit orscore. Manager alonefinalreconcile/threeblindtheme remain. | evidence: briefs/P12-26.md; agent/root/p12_26_public_note_a;6403255d; liveoriginalA23/A24 | next: A26earlysetup/inputPARTIAL;A23remainingoriginalmatrix;A24full79guards/stablefigures/production;bankpendingcheckpoints; freezecompletepacks→blind
 
 - 2026-10-26T07:18:29.005Z | parent 9c9cc18b (entry commit follows) | manager | P12-23-DEPLOYMENT-ACCESS-BANKED: Read wholecumulativeA23freshdeploy53c76c6b,pickreportonly. Actual04:30UTC anonymousproduction200welcome/normalSkip0uploadbuttons/inputs;previewVercellogin2SSOnodes/0upload.0pageerrors/revisionunknown/no privateupload/login/authworkaround. Adminwebsource inaccessible, notstaleclaim. Missingdeployedinput/matrix remainsopen. | evidence: P12-23-A-20261025T230000Z.md@53c76c6b; private unique raw references | next: SameA23originalmatrix/returnprivacy;A24fullguard/normalproduction;A26publicsetup; finalpacks thenblind
+
+- 2026-10-26T07:18:35.160Z | parent 95076a71 (entry commit follows) | manager | P12-23-853-FIRST-CELLS-CANONICAL-IMPORT: Read completefd80reportappend. Rawsourceauthor emailmisspellsowner(peter14531353suffix), canonicalnamecorrect. Import report-onlydelta withcherry-pick-no-commit thenNEWcanonicalPetercommit; sourcehistoryuntouched/noamend. Sixcompleted853light0.85/0.925/1BookFit cells haveclip/hit+8actual150pxwheels/surface/Back0errors. Next1.1Book failedbecause storedFittrue/toggledisabled; noforcedclick/injection, notcompleted. Originalhiddenrail/failures preserved; resumptionnotyetfullresult. | evidence: P12-23-A-20261025T230000Z.md@fd80b54c; private unique raw references | next: Bankcanonicalcorrectionandactualresumptioncounts; sameA23unfinisheddark/widthmatrix
 
 ---
 
