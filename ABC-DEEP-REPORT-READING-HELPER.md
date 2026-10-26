@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T04:17:49.688Z; only writer of this file
-CURRENT ITEM:          A23/A24unchangedfreshwalks;B25briefcommitted/4224reserved/notstarted;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          Spawn freshB25 owncopy4224 afterbriefpushed; existingA23/A24 continue; completepacks→blind
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T04:18:49.848Z; only writer of this file
+CURRENT ITEM:          A23notegeometry/fullinputwalk;A24matrix/figures/questions/guards;B25readonlyimagecause4224;allweb88ac;blindnotstarted;A0B0;clockACTIVE
+NEXT TURN:          B25 earlyPARTIAL/loading measurements; A23/A24 fullwalk/checkpoints; readreports/freeze factualpacks thenblind
 STOPPED BECAUSE:          — recovered at2026-10-26T04:07UTC from both A quota errors; same workers/copies resumed
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1075,6 +1075,10 @@ Read the complete A24 finite checkpoint and its corrected portions. Reconstruct 
 ### §1h.256 — 2026-10-26 — Independent image-delivery B25 brief
 
 Prepare a separate read-only investigator on the unchanged landed app in its own detached checkout/port4224, using publicA only. It must reproduce the nine pre-click image snapshots with stable identities, actual network/loading/visibility/hit observations and physical click outcomes over a bounded time budget, then supply three measured candidate rules. Manager's timing hypothesis is explicitly unverified. No product fix, test change, auth workaround or round score is authorized. Parallelism is independent of the two ongoing frozen A walks. Next implementation item remains unassigned until causal evidence returns.
+
+### §1h.257 — 2026-10-26 — B25 starts alongside the two A walks
+
+After the new item's requested worker was unavailable, start a fresh independent supported fallback B25 with no inherited conversation, its own detached checkout/port4224 and publicA only. It investigates cause/candidates without product edits or scoring; the original two A reviewers remain live on their unchanged frozen app. Raw A24 public figure records are read-only references, not permission to use its server/profile/store. Early checkpoints remain required; no closure inferred from dispatch.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
