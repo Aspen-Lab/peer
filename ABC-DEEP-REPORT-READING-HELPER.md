@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T07:35:24.286Z; only writer of this file
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T07:35:30.858Z; only writer of this file
 CURRENT ITEM:          A23modelcapacity/batchlive/readmatrix-progressfirst;A24guard/figure/publiccycles+curated319snapshot;A26notes/matrix4225;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          InspectA23matrix-progress/livebatch;A24fullguard;A26publicmatrix; completepacks thenblind
+NEXT TURN:          A24 finishfull79/action/production/factualpack;A23matrixbatch;A26fullnotes; freezecompletepacks before3blind
 STOPPED BECAUSE:          — recovery12 at2026-10-26T07:12UTC; sameA23/A24 resumed after quota; B25 complete
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1163,6 +1163,10 @@ Bank the complete A24 correction/legacy-facts checkpoint while retaining all fai
 ### §1h.278 — 2026-10-26 — P12-23-REQUIRED-M01-GEOMETRY-BANKED
 
 Bank required m01's finite geometry and actual preference/routes only. The manager directly inspected its notes-page screenshot, while full action/lifecycle/legacy/privacy coverage remains separate. A model-capacity interruption must not restart a live owned measurement batch; read the external progress first. No score or full-unit closure.
+
+### §1h.279 — 2026-10-26 — P12-24-INCREMENTAL-SNAPSHOT-AUDITED
+
+Bank the incremental frozen319-artifact snapshot and manager's independent reference/hash/index checks. Packaging integrity is not coverage or acceptance. Keep all old errors/redundant attempts and missing work explicit; final additions require a new refreshed snapshot/audit. Missing common references remain missing. No score, price or requirement change.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
