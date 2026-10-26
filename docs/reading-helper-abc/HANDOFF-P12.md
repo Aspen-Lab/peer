@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T18:28:20.714Z
+AS OF        2026-10-26T18:28:24.706Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.343   NEXT RULING §1h.344   NEXT ITEM ID P12-28   NEXT FREE PORT 4227
+LAST RULING  §1h.344   NEXT RULING §1h.345   NEXT ITEM ID P12-28   NEXT FREE PORT 4227
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
 RUNNING      A23/A24/B27active;A23cyclecheckpointbanking;B27wrongregionguide→C28;A26PARTIALqueued;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
@@ -467,6 +467,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T18:28:16.845Z | parent 9f1f0ed1 (entry commit follows) | manager | P12-23-CYCLE-CHECKPOINT-64715AC5: Cellm14 has30completed/30attempted; preserve failures and actual recorded preferences. | evidence: docs/reading-helper-abc/P12-23-A-20261025T230000Z.md; source64715ac5; external actual raw and manager-cycle-audit-20261026.json | next: B27finalguide→separateC28; sameA23/A24guards; all22cyclecounts neverreplacefullmatrix or blindscore
 
 - 2026-10-26T18:28:20.714Z | parent 5e2a2f13 (entry commit follows) | manager | P12-23-CYCLE-CHECKPOINT-9660AD54: Cellm15 has30completed/30attempted; preserve failures and actual recorded preferences. | evidence: docs/reading-helper-abc/P12-23-A-20261025T230000Z.md; source9660ad54; external actual raw and manager-cycle-audit-20261026.json | next: B27finalguide→separateC28; sameA23/A24guards; all22cyclecounts neverreplacefullmatrix or blindscore
+
+- 2026-10-26T18:28:24.706Z | parent 0538470a (entry commit follows) | manager | P12-23-CYCLE-CHECKPOINT-88298DDF: Cellm16 has30completed/30attempted; preserve failures and actual recorded preferences. | evidence: docs/reading-helper-abc/P12-23-A-20261025T230000Z.md; source88298ddf; external actual raw and manager-cycle-audit-20261026.json | next: B27finalguide→separateC28; sameA23/A24guards; all22cyclecounts neverreplacefullmatrix or blindscore
 
 ---
 
