@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T04:34:27.835Z
+AS OF        2026-10-26T07:14:51.165Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.265   NEXT RULING §1h.266   NEXT ITEM ID P12-27   NEXT FREE PORT 4226
+LAST RULING  §1h.266   NEXT RULING §1h.267   NEXT ITEM ID P12-27   NEXT FREE PORT 4226
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      A23originalfullmatrix;A24themeBfullwalk;B25finaldiagnostic;A26public/inventedbriefqueued4225(capacity);blindnotstarted;A0B0;clockACTIVE
+RUNNING      QuotaRecovery12:sameA23/A24continue;B25complete/4224stopped;A26ready4225slotfree;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -311,6 +311,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T04:31:10.895Z | parent 3e8e3498 (entry commit follows) | manager | P12-24-CYCLES-CANONICAL-PRIVACY-BANKED: Read fullcumulative975b232b/pickedreportonly. Bodycount14correction+normalizationscope explicit. OriginalBook320geometryrows/20cells/8steps/2actualthemes0errors; publicA320reportednext. Inventedno-key600cycles30per20cells selection-n-Delete samebodyhash0errors; onlythatfamily/defaultstep. Composition18sequences/180rows6orders×1440/853/390, fullminimumauditowed. Canonical4actualHTTP200,1196prefix7/7/7/8descriptors,postresizeEnter/draft33/sameinputnodesurvive,secondoccurrencep10vs0; oldthreadMessagesnullnotthread-lengthproof. Privacyv3alltypes/sizes6781files798038660B/10probes0hits0errors,explicitoperationalcache/logs/Nextincluded/no compileexception; scopedstore/authorizedraw/browser/depsGitexcluded; boundednotuniversal. Original/publicB helper/predeliveryfailurespreserved. No formal score. | evidence: P12-24-A-20261025T230500Z.md@975b232b; private cycles/canonical/composition/privacyv1-v3/figure raw | next: A24 stablefigure/actions/full79guards/production;A23remainingmatrix;B25finalcause; possibleindependentpublicThemeAhelperafterBslotfree; curatedpacks→blind
 
 - 2026-10-26T04:34:27.835Z | parent 0d8bbfb2 (entry commit follows) | manager | P12-26-PUBLIC-NOTE-SUPPLEMENT-BRIEF: Prepare freshreadonlyA26factualsupplement own4225/same88ac for2fixedpublic+inventedonly, no ownerPDF/A23state/reports. A23retainsoriginal/finalThemeAreview/score/reconciliation. Newhelper owns fullnoteactions/exports/matrix/cliphit/cycles/inheritedfactualrefs/curation, no scoreorcode; no weakening. QueueuntilB25finishes because4slots=root+2A+B. Roleadditionsprovidefreshactualraw, nothistoricCproof orblindreaderreuse. ExistingA23recommendedisolatedsubset/artifacts; no helperstarted. | evidence: briefs/P12-26.md; A23 independent-subset coordination; frozenP12-RUBRIC/commoncontract | next: FinishB25diagnostic/report, thenfreshA26own4225; continue originalA23/A24; freezecompletefactualpacks→3blind/theme
+
+- 2026-10-26T07:14:51.165Z | parent 6431277b (entry commit follows) | manager | P12-25-FINAL-CAUSE-BANKED: Read WHOLEfinalB25reportthrough03127840, summary/historicalgeometryraw; pick42a671ea+03127840reportonly. Nineownstabletargets exacthistoricrect9of9,5pending300ms/8delivered1s/9by10s,allresource200/0requestfailed/pageerrors. Pendingactualclick5opens;delivered8usableviewers,1centrewithheldduefocusedpeek; visiblepointx517normalclickopens/Escapecloses inindependentrailprobe. Zoom/Fit/pan/captionwheel0→93/focusbounded. HistoricA24labels/post350msremainunresolved, noretroactiveclicks. Choosecandidate2stableidentity+progressivesnapshots(15.346s sampledvs90s fixed) plusseparateeligiblependingclick; no productCjustified. Own4224gone/webunchanged88ac;25fileexternalmanifest. ResumeoriginalAworkersafterquota, no duplicate. | evidence: P12-25-B-20261026T043000Z.md@42a671ea/03127840; private summary/historical-geometry-comparison/timed/rail/caption/manifest | next: Startfreshpublic/inventedA26helper4225 nowBslotfree; sameA23/A24finishwalks/earlycheckpoints; completecuratedpacks→3blind/theme
 
 ---
 
