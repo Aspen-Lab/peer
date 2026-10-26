@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T20:39:42.970Z; only writer of this file
-CURRENT ITEM:          B30requested-platformnarrowfollowup;C28PARTIALaac5f63testsreadycaptionSTOP;B29FINALa46ffready;A23/A24/A26queued;Managerbaselinecompletedpendingbank;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          sameB30measure3concreteobservablealternatives onallinventedcases+existingpositives underNode22; guide/ruling beforeC28captionresume
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T20:44:47.176Z; only writer of this file
+CURRENT ITEM:          C28Terraresumeapprovedlineguide+freshness;B30PARTIALNode22guidebankready;A23/A24Terrafiniteguardsnext;B29FINALready;A26PARTIAL1860missing30;Managerbaselinecompletedpendingbank;A0B0;clockACTIVE
+NEXT TURN:          sameC28resumecaptionimplementationwithtestedguide/protectivecases; finalsourcefreeze→ownmutations/gates→Managerindependentrealinputreopen/freshupload/touchedtests×3/nativegates
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1507,6 +1507,10 @@ Allow web/src/components/notes/note-tags.blocks.test.ts and note-tags.lost.test.
 ### §1h.364 — 2026-10-26 — P12-30-OBSERVABLE-CAPTION-SCOPE
 
 The new semantic-intent distinction is not encoded by spacing alone and is not permission to add an open-ended word classifier. B30 must compare concrete observable rules under the required Node22: retain separate typed line identities and original text-block/column provenance, stop another typed caption from being appended, and preserve existing continuation eligibility/positive contracts rather than invent a new universal gap threshold. Compare conservative alternatives and record where identical observable geometry cannot distinguish untyped continuation from adjacent prose; preserve the bodyclose evidence and do not claim it excluded or fixed. A must still count any real-input caption over-join/misassociation and price it normally; no rubric unit, denominator, price or pass requirement changes. C28 caption work stays stopped until a measured guide and further ruling. Its disjoint freshness/current-version tests are checkpointed, not landable as a whole.
+
+### §1h.365 — 2026-10-26 — P12-28-MEASURED-LINE-IDENTITY-GUIDE-RULED
+
+Choose B30's third measured Node22 alternative for the narrow merged-column defect: preserve typed start-line identity and original block/line geometry, assemble a column-aware continuation substream without an unrelated column prematurely terminating it, stop another leading typed caption in the same column, and retain original continuation eligibility/500-character cap. The compared first-line-only rule loses required continuation; legacy loses labels. Keep nearest typed veto and ambiguous competing-region rejection after overlap dedup. C must add the untested early-break/original-block long-gap protective case and retain every corrected positive; stop on an indefensible counterexample rather than widen a cutoff. Inline multiple typed mentions are not blindly split, and the observed nearby untyped body over-join remains unresolved, must be documented and tallied/priced by A on real inputs normally. No semantic classifier, new exclusion, changed price/denominator, floor relaxation, other-page fallback or unrelated source classification is authorized. Function comparisons are not actual UI/final gates; Manager verification remains required before landing.
 
 ## §5. Durable work ledger — update in place, evidence append only
 

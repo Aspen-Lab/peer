@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T20:39:42.970Z
+AS OF        2026-10-26T20:44:47.176Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.364   NEXT RULING §1h.365   NEXT ITEM ID P12-31   NEXT FREE PORT 4230
+LAST RULING  §1h.365   NEXT RULING §1h.366   NEXT ITEM ID P12-31   NEXT FREE PORT 4230
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      B30requested-platformnarrowfollowup;C28PARTIALaac5f63testsreadycaptionSTOP;B29FINALa46ffready;A23/A24/A26queued;Managerbaselinecompletedpendingbank;blindnotstarted;A0B0;clockACTIVE
+RUNNING      C28Terraresumeapprovedlineguide+freshness;B30PARTIALNode22guidebankready;A23/A24Terrafiniteguardsnext;B29FINALready;A26PARTIAL1860missing30;Managerbaselinecompletedpendingbank;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -509,6 +509,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T20:38:19.597Z | parent 5238f2a9 (entry commit follows) | manager | P12-28-NOTE-VERSION-FIXTURE-SCOPE: Authorizeonlynote-tags.blocks.test.ts andnote-tags.lost.test.tsx current-versionfixtures tofollowapprovedconsumer; preserveexplicitoldversionrejection/allbehaviorassertions. No productionbeyondruling362, no testweaken/skip. | evidence: C28ruling362-target.log59passed/4fixturefailures; source5d0c0f43/checkpoint1d8804d3 | next: C28reaimtwofixtures/targetedchecks only; B30narrowobservableprovenance direction; managerbaseline/reportbank
 
 - 2026-10-26T20:39:42.970Z | parent ca9e7f06 (entry commit follows) | manager | P12-30-OBSERVABLE-CAPTION-SCOPE: B30partialrevealsgeometry-onlycannotinfersemanticcaption/bodyintent. RequireNode22finitecomparison of lineidentity+originalblock/columnprovenance/typedboundaries withlegacycontinuationeligibility, notnewlexicalclassifier/universalintentpromise. Keepoldpositives/correctambiguity andalladversebodycloseobservations; no rubricscore/exclusion change. | evidence: B30report89faed07; C28frozenproposal/tests; Node24causalreplaymustrerunNode22 | next: sameB30measure3concreteobservablealternatives onallinventedcases+existingpositives underNode22; guide/ruling beforeC28captionresume
+
+- 2026-10-26T20:44:47.176Z | parent b7bc2763 (entry commit follows) | manager | P12-28-MEASURED-LINE-IDENTITY-GUIDE-RULED: ReadB30Node22guide7bb398d3:thirdline/columncandidatealonepreservestwo labels+continuation,typedTableboundary,tieandexisting6fixtureoutputs. AuthorizeC28narrowlineidentity/provenance+columnsubstream, no newsemanticclassifier/floors/page/fallbackchanges. Requireearlybreak/longgap-originalblockprotectivecase; bodyoverjoinunresolvednormallypricedbyA. | evidence: P12-30-B-20261026T193000Z.md source7bb398d3 externalNode22compare12shapes6fixtures; C28correctedtests | next: sameC28resumecaptionimplementationwithtestedguide/protectivecases; finalsourcefreeze→ownmutations/gates→Managerindependentrealinputreopen/freshupload/touchedtests×3/nativegates
 
 ---
 
