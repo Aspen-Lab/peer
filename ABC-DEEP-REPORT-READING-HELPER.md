@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T20:44:47.176Z; only writer of this file
-CURRENT ITEM:          C28Terraresumeapprovedlineguide+freshness;B30PARTIALNode22guidebankready;A23/A24Terrafiniteguardsnext;B29FINALready;A26PARTIAL1860missing30;Managerbaselinecompletedpendingbank;A0B0;clockACTIVE
-NEXT TURN:          sameC28resumecaptionimplementationwithtestedguide/protectivecases; finalsourcefreeze→ownmutations/gates→Managerindependentrealinputreopen/freshupload/touchedtests×3/nativegates
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T20:54:22.426Z; only writer of this file
+CURRENT ITEM:          C28PARTIAL17561clean/frozensource;Managerindependentverify28next;B30Node22guide/B29FINAL/A23-A24factsbankpending;A26PARTIAL1860missing30;blindnotstarted;A0B0;clockACTIVE
+NEXT TURN:          ManagerreadentireCdiff, integrateexactfrozencandidateinfreecopy, ownmutations/touched×3/nativefullgates plusallowedbrowserUI existing/freshupload; no mainproductlandbeforeproof
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1511,6 +1511,10 @@ The new semantic-intent distinction is not encoded by spacing alone and is not p
 ### §1h.365 — 2026-10-26 — P12-28-MEASURED-LINE-IDENTITY-GUIDE-RULED
 
 Choose B30's third measured Node22 alternative for the narrow merged-column defect: preserve typed start-line identity and original block/line geometry, assemble a column-aware continuation substream without an unrelated column prematurely terminating it, stop another leading typed caption in the same column, and retain original continuation eligibility/500-character cap. The compared first-line-only rule loses required continuation; legacy loses labels. Keep nearest typed veto and ambiguous competing-region rejection after overlap dedup. C must add the untested early-break/original-block long-gap protective case and retain every corrected positive; stop on an indefensible counterexample rather than widen a cutoff. Inline multiple typed mentions are not blindly split, and the observed nearby untyped body over-join remains unresolved, must be documented and tallied/priced by A on real inputs normally. No semantic classifier, new exclusion, changed price/denominator, floor relaxation, other-page fallback or unrelated source classification is authorized. Function comparisons are not actual UI/final gates; Manager verification remains required before landing.
+
+### §1h.366 — 2026-10-26 — P12-28-PROVENANCE-REPRESENTATION-CLARIFIED
+
+The required observable provenance is the original text-block identity and actual typed start/continuation line geometry used to keep columns/labels distinct and retain eligible continuation. An unused original block rectangle or per-character quad is not separately required when no observable counterexample calls for it; do not edit a frozen tree merely to store unused metadata. Preserve the unsupported inline-start ambiguity limitation and all protective tests. Worker17561b2c records tsc0/lint0with144warnings/build0 but10full-suite failures and no successful invented normal UI; these are not accepted as a full gate. Manager must read the actual complete change, independently execute exact-tree tests/mutations/native gates and actual authorized browser checks, explicitly distinguishing its compensation from a worker UI success. No product landing or acceptance yet.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
