@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T13:30:35.719Z
+AS OF        2026-10-26T13:31:39.513Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.315   NEXT RULING §1h.316   NEXT ITEM ID P12-27   NEXT FREE PORT 4226
+LAST RULING  §1h.316   NEXT RULING §1h.317   NEXT ITEM ID P12-27   NEXT FREE PORT 4226
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      sameA23/A24active;A26livegeometrycheckpointforB27slot;22geometrycellsbanked;B27figureinvestigationplanned;blindnotstarted;A0B0;clockACTIVE
+RUNNING      A23/A24active;A26PARTIALwithlivejobs4225;B27figurebriefnext;22geometrybanked;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -411,6 +411,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T13:30:31.126Z | parent 0ec07c94 (entry commit follows) | manager | P12-23-THIRTY-DELIVERED-CYCLES-BANKED: Actual30/30source-note/editor/keyboardSave cycles at1440index2Book; sourcehashpreserves scientificsup/sub except noteUI. Zeroattempt hydrationfailure retained. Otherwidth jobs remain separate. | evidence: docs/reading-helper-abc/P12-23-A-20261025T230000Z.md; source0745b6e4; external factual artifacts | next: sameA23/A24finish actual guards and production; A26 checkpoint livegeometry then B27 independent figure investigation; frozenpacks before blind scoring
 
 - 2026-10-26T13:30:35.719Z | parent a7bc035b (entry commit follows) | manager | P12-24-INHERITED-LEDGER-FAILURES-BANKED: 79exactcontracts individuallyindexed,47boundedfacts/32none, everyfullGuardEvidenceComplete false. PublicB143targets66opens77normalactiontimeouts, original79/73/6,0pageerrors; independent B planned, no inferred permanentfailure. | evidence: docs/reading-helper-abc/P12-24-A-20261025T230500Z.md; sourced737c5b8; external factual artifacts | next: sameA23/A24finish actual guards and production; A26 checkpoint livegeometry then B27 independent figure investigation; frozenpacks before blind scoring
+
+- 2026-10-26T13:31:39.513Z | parent 0a59def5 (entry commit follows) | manager | P12-24-ACTION-ERROR-TAXONOMY-CORRECTED: Read and bank e96a5f2c:77actionerrors comprise65Error+12TimeoutError, not77timeouts. Preserve143records66opens and77literal failure screenshots. Earlier imprecise wording remains historical; independent B will diagnose actual observations. | evidence: docs/reading-helper-abc/P12-24-A-20261025T230500Z.md; sourcee96a5f2c; external publicB-figure-failure-artifact-list-v1.json | next: write and commit B27 publicB figure investigation brief, then fresh detached worker; no duplicate A figure sweep
 
 ---
 

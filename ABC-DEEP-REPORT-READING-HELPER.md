@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T13:30:35.719Z; only writer of this file
-CURRENT ITEM:          sameA23/A24active;A26livegeometrycheckpointforB27slot;22geometrycellsbanked;B27figureinvestigationplanned;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          sameA23/A24finish actual guards and production; A26 checkpoint livegeometry then B27 independent figure investigation; frozenpacks before blind scoring
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T13:31:39.513Z; only writer of this file
+CURRENT ITEM:          A23/A24active;A26PARTIALwithlivejobs4225;B27figurebriefnext;22geometrybanked;blindnotstarted;A0B0;clockACTIVE
+NEXT TURN:          write and commit B27 publicB figure investigation brief, then fresh detached worker; no duplicate A figure sweep
 STOPPED BECAUSE:          — recovery13 at2026-10-26T13:12UTC; sameA23/A24/A26 resumed; existing geometrybatch finished22cells, no duplicate
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1311,6 +1311,10 @@ Actual30/30source-note/editor/keyboardSave cycles at1440index2Book; sourcehashpr
 ### §1h.315 — 2026-10-26 — P12-24-INHERITED-LEDGER-FAILURES-BANKED
 
 79exactcontracts individuallyindexed,47boundedfacts/32none, everyfullGuardEvidenceComplete false. PublicB143targets66opens77normalactiontimeouts, original79/73/6,0pageerrors; independent B planned, no inferred permanentfailure. Read the actual report delta before banking. Keep failed helpers and exact denominators; no source/test change, no new exemption or formal score. The independent manager entry attempt on4294 failed before upload with upload-availability404; retained externally. Ordinary same-copy server restart returned200; one separately named follow-up probe is pending, never a substitute for independent review.
+
+### §1h.316 — 2026-10-26 — P12-24-ACTION-ERROR-TAXONOMY-CORRECTED
+
+Correct the earlier all-timeouts description explicitly:77actionerrors=65Error+12TimeoutError. Zero target/image dimensions are measurements at that instant, not a diagnosis of resource or binding failure. B27 is authorized to read only the named publicB evidence and independently measure normal UI behavior in its own fresh copy; no prior failure is erased or certified by a new success.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
