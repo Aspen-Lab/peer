@@ -279,7 +279,10 @@ export function mergeCaptionLines(blocks: TextBlock[], start: number): string {
     // Original block lines were joined before spatial checks. A distant other
     // block must not prevent a later line from that same original block.
     if (next.blockId !== originalBlock && next.rect[1] - anchor.rect[3] > 28) continue;
-    if (horizontalPenalty(anchor.rect, next) > 0 || next.rect[1] < anchor.rect[3]) continue;
+    if (horizontalPenalty(anchor.rect, next) > 0) continue;
+    // Lines in one original block may have overlapping glyph rectangles even
+    // when their starts are distinct and later. Same-baseline lines stay apart.
+    if (next.blockId === originalBlock ? next.rect[1] <= anchor.rect[1] : next.rect[1] < anchor.rect[3]) continue;
     if (CAPTION_RE.test(next.text) || OTHER_CAPTION_RE.test(next.text)) break;
     parts.push(next.text);
     anchor = next;
