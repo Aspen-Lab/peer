@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T04:09:43.591Z
+AS OF        2026-10-26T04:11:46.751Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.251   NEXT RULING §1h.252   NEXT ITEM ID P12-25   NEXT FREE PORT 4224
+LAST RULING  §1h.252   NEXT RULING §1h.253   NEXT ITEM ID P12-25   NEXT FREE PORT 4224
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      A23listboundsbanked/lifecycleexportsnext;A24correctmatrix/figures/questions/normalproduction;both82fe23db/web88ac;blindnotstarted;A0B0;clockACTIVE
+RUNNING      A23lifecycle/hierarchyexports;A24correctedmatrix/figures/questions/normalproduction;curatedblindpackcontractready/readersnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -283,6 +283,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T04:09:39.311Z | parent 6d5901a1 (entry commit follows) | manager | P12-24-RECOVERY-MATRIX-LIMIT-BANKED: Read whole5b1f6eee,report-onlypicked. Same4223DEVlistener64904 verified; separate prod-buildexit0(notUIproof). Original invented320rows/20cells/0pageerrors but nonexistentDaylabel means light-labelled rows afterfirstdark unreliable; no full lightdarkclaim. Fonts14.875..28 across8steps. PublicA12delivered/12opens/12closes in2cells0errors; cell2hiddenraillookup timeout beforeaction. Originalquestioninitialonly then aria-disabledlocator refusal, notphysicalclickproof. Preserve allrawfailures; correctmeasurement/resumeunfinishedcells only. | evidence: P12-24-A-20261025T230500Z.md@5b1f6eee; private unique raw references | next: A24 unique corrected theme/figures/question/nativeproduction normalaccess; A23 lifecycle; completepack thenblind
 
 - 2026-10-26T04:09:43.591Z | parent 56992d4d (entry commit follows) | manager | P12-23-MEASURED-LIST-BOUNDARY-BANKED: Read whole d4a39d1b and picked report-only. Same4222livePID57880/no restart/upload. Third actualsticky child0→Tab1→Outdent0→Indent1→sevenTabs4→sevenShiftTabs0,parent0; read-onlybrowserrecords types/indents/lengths after350ms. EmptybulletEnter leaveslist. AltF10/ShiftTab reachesDelete3thenSave3/Entercloses,0pageerrors. Unique raw list-20261026T0409 artifacts. Single original1440cell only; lifecycle/fullmatrix stillowed. | evidence: P12-23-A-20261025T230000Z.md@d4a39d1b; private unique raw references | next: A23 lifecycle ownership/races/nestedexports and remaininginputs/matrix; A24 correctedmeasurements; frozenpacks then3freshblind/theme
+
+- 2026-10-26T04:11:46.751Z | parent c4bddf96 (entry commit follows) | manager | P12-R1-PACK-BOUNDARY-CLARIFIED: Manager external read-only pack inventory inspected two evolvingindices: no verdict/modelproselines, no symlinks; A23 shorthandreference ambiguous, A24 product-scoped uploads reside inside rawroot. These are not completeness/privacy-PASS claims; paper-only overlapreference notyetavailable. Clarify final curated evidence-only readerdirectory/manifest/literalrefs, exclude browserprofile/session/storage/upload-store/sourcePDFs, preserve originalrawinplace, nevercopyownerPDF. ExistingA23/A24 notified; uniform readercontract updated before anyreader. Exactweb88ac unchanged. | evidence: briefs/P12-R1-A-COMMON.md; briefs/P12-R1-reader.md; external audit-evidence-pack.cjs/current private indices | next: A23/A24 continue originalfinitewalks; curator/factual/privacy/referenceaudit aftercompletepack; threefreshblind/theme only after freeze
 
 ---
 
