@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T13:17:09.434Z
+AS OF        2026-10-26T13:17:13.163Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.300   NEXT RULING §1h.301   NEXT ITEM ID P12-27   NEXT FREE PORT 4226
+LAST RULING  §1h.301   NEXT RULING §1h.302   NEXT ITEM ID P12-27   NEXT FREE PORT 4226
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      sameA23/A24/A26active;A23m01–m22finished,m01–m18banked;A24sourceUIclassification/guards/production;A26matrix/exports;blindnotstarted;A0B0;clockACTIVE
+RUNNING      sameA23/A24/A26active;A23m01–m22finished,m01–m19banked;A24sourceUIclassification/guards/production;A26matrix/exports;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -381,6 +381,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T13:17:05.705Z | parent 76b7f9a8 (entry commit follows) | manager | P12-23-REQUIRED-M17-GEOMETRY-BANKED: Read report and independently count raw m17 CSS1024x768: 28complete/4app-disabled Fit/4032observations/0errors; raw calibratedside-font maximum0. Geometry only, no action/lifecycle/guard closure. | evidence: docs/reading-helper-abc/P12-23-A-20261025T230000Z.md; source827e0610; external raw geometry-m17-attempt1-20261026.json and manager geometry audit | next: bank next already-finished width; same A23/A24/A26 continue independent actions/guards/packs
 
 - 2026-10-26T13:17:09.434Z | parent 9b3d5780 (entry commit follows) | manager | P12-23-REQUIRED-M18-GEOMETRY-BANKED: Read report and independently count raw m18 CSS768x1024: 16complete/16app-disabled Fit/2304observations/0errors; raw calibratedside-font maximum0. Geometry only, no action/lifecycle/guard closure. | evidence: docs/reading-helper-abc/P12-23-A-20261025T230000Z.md; sourcefea841f4; external raw geometry-m18-attempt1-20261026.json and manager geometry audit | next: bank next already-finished width; same A23/A24/A26 continue independent actions/guards/packs
+
+- 2026-10-26T13:17:13.163Z | parent de2661cf (entry commit follows) | manager | P12-23-REQUIRED-M19-GEOMETRY-BANKED: Read report and independently count raw m19 CSS390x844: 16complete/16app-disabled Fit/1152observations/0errors; raw calibratedside-font maximum0. Geometry only, no action/lifecycle/guard closure. | evidence: docs/reading-helper-abc/P12-23-A-20261025T230000Z.md; sourced0725b82; external raw geometry-m19-attempt1-20261026.json and manager geometry audit | next: bank next already-finished width; same A23/A24/A26 continue independent actions/guards/packs
 
 ---
 
