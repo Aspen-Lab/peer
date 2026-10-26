@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T18:23:53.135Z; only writer of this file
-CURRENT ITEM:          A23/A24/B27active;B27wrongfigurecauseconfirmedguide→C28;A23completed660pendingbank;A26PARTIALqueued;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          B27final producingpath/cacheguide→separateC28; sameA23/A24 finiteguardwork; bankA23completed660andexplicitmodecorrection; blindnotstarted
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T18:27:11.439Z; only writer of this file
+CURRENT ITEM:          A23/A24/B27active;A23cyclecheckpointbanking;B27wrongregionguide→C28;A26PARTIALqueued;blindnotstarted;A0B0;clockACTIVE
+NEXT TURN:          B27finalguide→separateC28; sameA23/A24guards; all22cyclecounts neverreplacefullmatrix or blindscore
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1355,6 +1355,10 @@ FreshnormalUIupload once, v1 38candidates19deliveredclick/viewer/closes7detached
 ### §1h.326 — 2026-10-26 — P12-27-WRONG-FIGURE-REGIONS-CONFIRMED
 
 Read sourcecomparison+UIstableanchors andview actualsourcepage5/deliveredFigure4/5:bothwrongtablecrops confirmed. Unchangedengineprobe reproduces duplicatecaption/toporder andsize/crosscolumnmechanisms; directprobeiscausal,notUIclosure. Fullproducingpath/cacheguide pendingseparateC. Read the actual report delta before banking. Preserve all adverse observations and exact scope; these facts neither waive missing production/authentication evidence nor create a score. Manager verifies any later C independently before landing.
+
+### §1h.327 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-B11026F1
+
+Cellm01 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
