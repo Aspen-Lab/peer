@@ -102,6 +102,25 @@ describe("P12-28: defensible typed caption pairing", () => {
     expect(await pick("Figure 2")).toEqual([expected[1]]);
   });
 
+  it.each([10, 14])("preserves complete caption text at %ipt baseline spacing in the pool and requested route", async (spacing) => {
+    const page: FigurePage = {
+      text: [["Figure 1. A first line", 40, 268, 9], ["continues with detail.", 40, 268 + spacing, 9]],
+      shapes: panel(40, 100, 180, 150),
+    };
+    const pdf = figurePdf([page]);
+    const expected = [{ box: [40, 100, 220, 250], caption: "Figure 1. A first line continues with detail." }];
+    const pick = async (label?: string) => (await extractPdfFigures(pdf, { ...options, measureOnly: true, ...(label ? { onlyPage: 1, label, maxFigures: 1 } : {}) })).figures.map(({ box, caption }) => ({ box, caption }));
+    expect(await pick()).toEqual(expected);
+    expect(await pick("Figure 1")).toEqual(expected);
+  });
+
+  it("stops at a later typed caption even when original-block line bounds overlap", () => {
+    expect(mergeCaptionLines([
+      { rect: [40, 258, 140, 271], text: "Figure 1. Start.", blockId: 1 },
+      { rect: [40, 268, 140, 281], text: "Table 2. Next.", blockId: 1 },
+    ], 0)).toBe("Figure 1. Start.");
+  });
+
   it("retains a later original-block line despite an intervening distant block", () => {
     expect(mergeCaptionLines([
       { rect: [40, 260, 140, 270], text: "Figure 1. Start.", blockId: 1 },
