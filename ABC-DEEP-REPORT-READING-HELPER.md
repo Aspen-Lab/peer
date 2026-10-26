@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T18:31:25.549Z; only writer of this file
-CURRENT ITEM:          A23/A24active;B27FINALready→C28;A23completed660banked;A26PARTIAL1860not1890missing30;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          bankB27finalguide, briefC28 narrowcaption+freshness; retainA26missing30 and scientific-preserving lifecycles separate
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T18:33:09.398Z; only writer of this file
+CURRENT ITEM:          A23/A24active;B27FINALbanked;C28captionfreshnessbriefnext;A26PARTIAL1860missing30;B29pageidentityqueued;blindnotstarted;A0B0;clockACTIVE
+NEXT TURN:          commit C28 brief own4227 for caption/ranking+derivedcachefreshness; separateB29 for outlinepageidentity when slotfree; Manager/Arealinputregressions
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1467,6 +1467,10 @@ Final22widths30each=660delivered, originalm09countedonce; pendingeditreload/navi
 ### §1h.354 — 2026-10-26 — P12-26-REPETITION-DENOMINATOR-CORRECTED
 
 A23's independent authorized reconciliation exposed a missing invented-input cell. Manager re-read actual v4/v6 raw files, merged labels without double counting, and confirmed630+630+600=1860, not the prior1890; v4 alone is1590, not1620. The missing invented1280x720@1.25 has0attempts/0completed and1helpererror. Correct prior root307/312 summaries explicitly; retain worker report history and do not infer completion from requested cells. PublicBv6 broad all-sup/button-removal hashes differ in all3stresscells and cannot prove full-source equality or by themselves prove word loss. Later resume only the missing30 in the same A26 role; no completedcell replay or acceptance.
+
+### §1h.355 — 2026-10-26 — P12-27-FINAL-GUIDE-RULED
+
+Choose the lowest sufficient confirmed-defect rule: spatially compatible nearest typed captions with nearer Table veto/competing-label ranking, preserving existing region floors/resource limits. Candidate2's numeric exemplar is not a global cutoff; C must protect above/below, full-width, columns, multipanel, raster/vector and ambiguity or stop for B. Candidate1 improves measurement but leaves wrong tables; candidate3 makes a partial scientific figure and is rejected. Engine plus every derived figure-cache/reference path is one overlapping producer cluster for C28. Do not incidentally change pdf-outline page/reference classification: independently replay that separate mechanism in B29. Missing figures remain open facts, not a new exclusion; production access and all-input regressions remain distinct. B27 stopped only its owned4226server and verified listener gone.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
