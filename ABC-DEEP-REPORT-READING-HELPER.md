@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T13:14:04.444Z; only writer of this file
-CURRENT ITEM:          sameA23/A24/A26active;A23m01–m22finished,m01–m04banked;A24cell17scope/guards/production;A26matrix/exports;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          same A23/A24/A26 finish actual actions/guards and factual packs; bank finished A23m05–m22; independent publicB source/UI scope replay
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T13:16:15.723Z; only writer of this file
+CURRENT ITEM:          sameA23/A24/A26active;A23m01–m22finished,m01–m05banked;A24sourceUIclassification/guards/production;A26matrix/exports;blindnotstarted;A0B0;clockACTIVE
+NEXT TURN:          bank next already-finished width; same A23/A24/A26 continue independent actions/guards/packs
 STOPPED BECAUSE:          — recovery13 at2026-10-26T13:12UTC; sameA23/A24/A26 resumed; existing geometrybatch finished22cells, no duplicate
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1195,6 +1195,10 @@ Bank the actual required853×480 cell separately from the earlier853×900 supple
 ### §1h.286 — 2026-10-26 — P12-24-RETAINED-MEASUREMENTS-BANKED
 
 Read the actual report delta before importing9b99621a. Preserve all30 publicB whole-panel hash failures and earlier failed rows; neither a successful new replay nor geometry alone retrospectively certifies them. Classify actual ordered source text separately from UI additions, retaining scientific sup/sub. Responsive placement is assessed against its measured line height, while bottom-constrained baselines cannot establish reading-top preservation. Existing independent reviewers resumed in their own copies; no duplicate batch or reader and no score. Hourly clock remains ACTIVE.
+
+### §1h.287 — 2026-10-26 — P12-23-REQUIRED-M05-GEOMETRY-BANKED
+
+Bank m05 only after reading its report delta and independently counting actual raw cells, observations, disabled Fit requests and errors. Preserve viewport emulation versus physical zoom distinction and original unadjusted measurements. These finite geometry facts do not certify editing, lifecycle, export, return, privacy, inherited guards or a score; those stay with independent reviewers.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
