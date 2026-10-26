@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T07:44:10.745Z; only writer of this file
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T07:44:15.970Z; only writer of this file
 CURRENT ITEM:          A23modelcapacity/livewidthbatch m01–m04banked;A24guard/figure/place/publiccycles;A26modelcapacity/ownedmatrixjobs4225;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          OwnedA23batchnextwidth/progressfirst;A24fullguard;A26publicnotes
+NEXT TURN:          A23batchnextwidth;A24guards/place-ratios;A26independentpublicnotes
 STOPPED BECAUSE:          — recovery12 at2026-10-26T07:12UTC; sameA23/A24 resumed after quota; B25 complete
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1183,6 +1183,10 @@ Bank actual group/export/print-route observations without converting representat
 ### §1h.283 — 2026-10-26 — P12-23-REQUIRED-M02-GEOMETRY-BANKED
 
 Bank m02 as finite viewport-emulated geometry/routes only, with exact32 completed states and no disabled Fit requests. It does not supply full action/lifecycle/export/legacy/privacy closure or a score.
+
+### §1h.284 — 2026-10-26 — P12-23-REQUIRED-M03-GEOMETRY-BANKED
+
+Bank m03's28 completed and four app-disabled Fit states separately. Geometry/routes do not imply disabled actions were executed, nor full functional or privacy closure. No threshold/requirement change.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
