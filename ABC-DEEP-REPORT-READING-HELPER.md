@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T04:16:45.977Z; only writer of this file
-CURRENT ITEM:          A23remainingnote/inputs/matrix;A24correctedBook/115figureopens/9preclickpending+questions;B25briefnext;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          Continue existingA23/A24; independentBnext on9preclickdelivery cases beforeanyfix; remainingmatrix/79guards/privacy/production; packs then3freshblind
+HELD BY:          Codex manager, local desktop chat, 2026-10-26T04:17:49.688Z; only writer of this file
+CURRENT ITEM:          A23/A24unchangedfreshwalks;B25briefcommitted/4224reserved/notstarted;blindnotstarted;A0B0;clockACTIVE
+NEXT TURN:          Spawn freshB25 owncopy4224 afterbriefpushed; existingA23/A24 continue; completepacks→blind
 STOPPED BECAUSE:          — recovered at2026-10-26T04:07UTC from both A quota errors; same workers/copies resumed
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1071,6 +1071,10 @@ Bank the real cross-paragraph and nested-export observations without treating le
 ### §1h.255 — 2026-10-26 — Corrected geometry and nine undelivered figure targets
 
 Read the complete A24 finite checkpoint and its corrected portions. Reconstruct Book geometry only from160 original dark+8 first valid light+152 corrected light rows. Do not relabel all original rows. PublicA's115 delivered image opens/closes and nine pre-click delivery failures remain separate. Manager raw inspection finds incomplete images with zero natural dimensions at those nine snapshots; this is not yet a product click failure or an image-network diagnosis. Authorize an independent B investigation in the free slot, on the same unchanged app, to distinguish loading/measurement timing from actual delivery/routing failure before any C or accepted-cost decision. Physical question states are bounded no-key evidence; production build/deployed entry do not close authenticated production page requirements. No score or rubric change.
+
+### §1h.256 — 2026-10-26 — Independent image-delivery B25 brief
+
+Prepare a separate read-only investigator on the unchanged landed app in its own detached checkout/port4224, using publicA only. It must reproduce the nine pre-click image snapshots with stable identities, actual network/loading/visibility/hit observations and physical click outcomes over a bounded time budget, then supply three measured candidate rules. Manager's timing hypothesis is explicitly unverified. No product fix, test change, auth workaround or round score is authorized. Parallelism is independent of the two ongoing frozen A walks. Next implementation item remains unassigned until causal evidence returns.
 
 ## §5. Durable work ledger — update in place, evidence append only
 

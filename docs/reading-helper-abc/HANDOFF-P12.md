@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-26T04:16:45.977Z
+AS OF        2026-10-26T04:17:49.688Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.255   NEXT RULING §1h.256   NEXT ITEM ID P12-25   NEXT FREE PORT 4224
+LAST RULING  §1h.256   NEXT RULING §1h.257   NEXT ITEM ID P12-26   NEXT FREE PORT 4225
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      A23remainingnote/inputs/matrix;A24correctedBook/115figureopens/9preclickpending+questions;B25briefnext;blindnotstarted;A0B0;clockACTIVE
+RUNNING      A23/A24unchangedfreshwalks;B25briefcommitted/4224reserved/notstarted;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -291,6 +291,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T04:12:52.192Z | parent 9debb930 (entry commit follows) | manager | P12-23-GROUP-HIERARCHY-BOUNDARY-BANKED: Read whole/pick17054939. Actual adjacentparagraphdrag52rawchars→1persistedhighlight/2segments→reload1aggregaterow. Primarylegacyquote27 notwholegroup; fullsegment/exportcomparison owed. ActualsectionDOM73541chars/SHAf7a73b0789c44453818636ebef03d72d0bc01ac2d97f6db34e4fd2bcc7c4814d unchanged afterhighlight/reload, onlyOpen-note-control superscripts removed. ChildTabpersistindent1;actualTXT378/MD483/Word1877B childonce/MD2spaces.0errors. Manager own currenttwoindex auditsagainstA24body-only11375wordreference foundzero4wordmatches/scoreverdict/modelproselines; temporaryshorthandrefs stillunresolved. Not fullprivacy/extraction/packcompletion. | evidence: P12-23-A-20261025T230000Z.md@17054939; private unique raw artifacts | next: A23 fullsegmentwords/quoteexclusion/CopyPDF/recolourremove and allinputs/matrix; A24 correctedfullmatrix/guards; curate/freeze then3blind/theme
 
 - 2026-10-26T04:16:45.977Z | parent 984182fb (entry commit follows) | manager | P12-24-CORRECTED-FINITE-UNITS-BANKED: Read whole02339b7a/pickreportonly. Missinglight152rows settledactualbody250/0errors; combineonlyoriginaldark160+firstlight8+v2light152 for20x8x2Book geometry. PublicA124targets/115deliveredopenclose/9preclickdeliveryfailures; managerrawread9completefalse/natural0, includes7sameindex3 and2shortcellotherindices; cannot callallfiguresgreen. Actualphysicalquestions13states/onebodyhash/0errors/duplicateempty0newAPIrequests; IME/refit/allscaleowed. NormaldeployedhomeSkiproot0uploads/revisionunknown. Separateprodbuild0notUI. First2inventedcyclecells30eachonly. Body-onlynormalizedprivate73608chars/15sections supportsmanagerindexaudits, notPDF-extractionclosure. | evidence: P12-24-A-20261025T230500Z.md@02339b7a; private publicA-figures-v2.json/correctedlight/questions/body-only artifacts | next: Continue existingA23/A24; independentBnext on9preclickdelivery cases beforeanyfix; remainingmatrix/79guards/privacy/production; packs then3freshblind
+
+- 2026-10-26T04:17:49.688Z | parent b05ebbe5 (entry commit follows) | manager | P12-25-IMAGE-DELIVERY-B-BRIEF: Write independent readonlyB25brief for9publicA pre-clickcompletefalse/natural0 records, own4224/sameweb88ac. Scope stabletarget/source/loading/network/realvisibility/hit/click at300ms/1/3/10s, threecandidates/costs, no productedit or authenticationworkaround. It tests manager timing suspicion ratherthan inheriting it. ExistingA23/A24 continue; fourthslot permits parallelcausework. No Bstartedbeforecommit. | evidence: briefs/P12-25.md; A24v2 ninepreclick records; ruling255 | next: Spawn freshB25 owncopy4224 afterbriefpushed; existingA23/A24 continue; completepacks→blind
 
 ---
 
