@@ -42,7 +42,7 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T05:48:28.485Z; only writer of this file
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T05:48:32.468Z; only writer of this file
 CURRENT ITEM:          C28enginefrozenclipguidepending/web444freshnesspartial;B31/B32reportsbanked;R1sixblindmediansA0/B0director0/0;consecutiveA0B0;clockACTIVE
 NEXT TURN:          Narrow measured fill-clipping repair with existing stroke contract preserved;continue finite captionidentityprovenance;fresh independent candidate gates/UI;next A round closes named gaps
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
@@ -1597,6 +1597,11 @@ Approve the measured conservative active-clip-aware path collection direction in
 ### §1h.383 — 2026-10-27 — P12-PARTIAL-HOURLY-QUOTA-RESUMED
 
 PARTIAL usage stall recovered through same hourly thread;clockACTIVEhourlyunchanged;no live duplicateworker. C28 resumed samecopy clean7f7ff6a9 then checkpointafc6474a;engine74be80frozen,web444b8247 freshness3/16/v9,tsc0lint0/144,284pass1Windowsmodefail+separate30pass;newclipfix/fullgatesUIstillowed. Evidence: C28source5883df1f/0691385e/8b85b4d6/7f7ff6a9/afc6474a;p12-28/private;hourlypeer-p12. No missing fact is a product-wide defect finding; no test/guard/price/stop-line waiver.
+
+
+### §1h.384 — 2026-10-27 — P12-31-STROKE-SUPPORT-LIMITS-BANKED
+
+B31 finite stroke pixels prove fixed10ptpaddinglosesthick/miter/transformedink;nativeboundsfalsevetomiter andchangefloorsemantic;centerline-onlyclipcanerase8000pixels. No universaldualboundsguideapproved;fillclipcause54/135remainsseparatefrompreexistingstrokebounds. Evidence: P12-31-B-20261027T011000Z.md through315a58f8;p12-31/private/stroke-measure.json. No missing fact is a product-wide defect finding; no test/guard/price/stop-line waiver.
 
 
 ## §5. Durable work ledger — update in place, evidence append only
