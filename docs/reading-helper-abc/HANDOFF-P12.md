@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T05:48:32.468Z
+AS OF        2026-10-27T05:48:37.221Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.384   NEXT RULING §1h.385   NEXT ITEM ID P12-33   NEXT FREE PORT 4232
+LAST RULING  §1h.385   NEXT RULING §1h.386   NEXT ITEM ID P12-33   NEXT FREE PORT 4232
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
 RUNNING      C28enginefrozenclipguidepending/web444freshnesspartial;B31/B32reportsbanked;R1sixblindmediansA0/B0director0/0;consecutiveA0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
@@ -549,6 +549,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T05:48:28.485Z | parent a3b5cabc (entry commit follows) | manager | P12-PARTIAL-HOURLY-QUOTA-RESUMED: PARTIAL usage stall recovered through same hourly thread;clockACTIVEhourlyunchanged;no live duplicateworker. C28 resumed samecopy clean7f7ff6a9 then checkpointafc6474a;engine74be80frozen,web444b8247 freshness3/16/v9,tsc0lint0/144,284pass1Windowsmodefail+separate30pass;newclipfix/fullgatesUIstillowed | evidence: C28source5883df1f/0691385e/8b85b4d6/7f7ff6a9/afc6474a;p12-28/private;hourlypeer-p12 | next: Narrow measured fill-clipping repair with existing stroke contract preserved;continue finite captionidentityprovenance;fresh independent candidate gates/UI;next A round closes named gaps
 
 - 2026-10-27T05:48:32.468Z | parent 92400ad8 (entry commit follows) | manager | P12-31-STROKE-SUPPORT-LIMITS-BANKED: B31 finite stroke pixels prove fixed10ptpaddinglosesthick/miter/transformedink;nativeboundsfalsevetomiter andchangefloorsemantic;centerline-onlyclipcanerase8000pixels. No universaldualboundsguideapproved;fillclipcause54/135remainsseparatefrompreexistingstrokebounds | evidence: P12-31-B-20261027T011000Z.md through315a58f8;p12-31/private/stroke-measure.json | next: Narrow measured fill-clipping repair with existing stroke contract preserved;continue finite captionidentityprovenance;fresh independent candidate gates/UI;next A round closes named gaps
+
+- 2026-10-27T05:48:37.221Z | parent b8a5d078 (entry commit follows) | manager | P12-32-IDENTITY-MATRIX-PARTIAL-BANKED: B32 15inventedPDFcausalmeasurement banked;punctuation/stylebothfalsepositiveandnegative,aliasesduplicated/exactsamedupesuppressed;twocolumnmerged/crosspageunmeasured,nosafeclassifierguide. Earlyda9bd4a5traileromissionretainedsourceSHA;appliedreportwithnewcorrectlyattributedintegrationcommit,norewriteororiginalbadcommitlanding | evidence: P12-32-B-20261027T012000Z.md;da9bd4a5/af231924;p12-32/private | next: Narrow measured fill-clipping repair with existing stroke contract preserved;continue finite captionidentityprovenance;fresh independent candidate gates/UI;next A round closes named gaps
 
 ---
 

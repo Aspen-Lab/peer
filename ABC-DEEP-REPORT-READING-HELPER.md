@@ -42,7 +42,7 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T05:48:32.468Z; only writer of this file
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T05:48:37.221Z; only writer of this file
 CURRENT ITEM:          C28enginefrozenclipguidepending/web444freshnesspartial;B31/B32reportsbanked;R1sixblindmediansA0/B0director0/0;consecutiveA0B0;clockACTIVE
 NEXT TURN:          Narrow measured fill-clipping repair with existing stroke contract preserved;continue finite captionidentityprovenance;fresh independent candidate gates/UI;next A round closes named gaps
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
@@ -1602,6 +1602,11 @@ PARTIAL usage stall recovered through same hourly thread;clockACTIVEhourlyunchan
 ### §1h.384 — 2026-10-27 — P12-31-STROKE-SUPPORT-LIMITS-BANKED
 
 B31 finite stroke pixels prove fixed10ptpaddinglosesthick/miter/transformedink;nativeboundsfalsevetomiter andchangefloorsemantic;centerline-onlyclipcanerase8000pixels. No universaldualboundsguideapproved;fillclipcause54/135remainsseparatefrompreexistingstrokebounds. Evidence: P12-31-B-20261027T011000Z.md through315a58f8;p12-31/private/stroke-measure.json. No missing fact is a product-wide defect finding; no test/guard/price/stop-line waiver.
+
+
+### §1h.385 — 2026-10-27 — P12-32-IDENTITY-MATRIX-PARTIAL-BANKED
+
+B32 15inventedPDFcausalmeasurement banked;punctuation/stylebothfalsepositiveandnegative,aliasesduplicated/exactsamedupesuppressed;twocolumnmerged/crosspageunmeasured,nosafeclassifierguide. Earlyda9bd4a5traileromissionretainedsourceSHA;appliedreportwithnewcorrectlyattributedintegrationcommit,norewriteororiginalbadcommitlanding. Evidence: P12-32-B-20261027T012000Z.md;da9bd4a5/af231924;p12-32/private. No missing fact is a product-wide defect finding; no test/guard/price/stop-line waiver.
 
 
 ## §5. Durable work ledger — update in place, evidence append only
