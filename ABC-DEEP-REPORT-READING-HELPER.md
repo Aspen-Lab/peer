@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T06:30:45.468Z; only writer of this file
-CURRENT ITEM:          C28web28cfgates+520x3+own4mutationsPASS;UIoldmetadata404PARTIALgenuinebaselineplanned;R1mediansA0B0counts0/0;clockACTIVE
-NEXT TURN:          Genuineold-sourcebrowserbaseline→normal28cfupgrade;existing/freshUIthenFFlanding;noauthinjection
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T06:40:57.877Z; only writer of this file
+CURRENT ITEM:          C28web28cfgates10919+520x3+own4mutationsPASS;genuineold-to-new/freshinventedUIpass;public+ownerfinalUIpending;R1mediansA0B0counts0/0;clockACTIVE
+NEXT TURN:          Finalpublic/owneractualUI+sourcebyteaudit→FFverified28cf→freshA;controlledinventedupgrade/freshpassed
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1657,6 +1657,11 @@ Separate managerfreecopy581e13c4cherry-picksC28rangea5db..e0;exactweb28cf74ea90e
 ### §1h.395 — 2026-10-27 — P12-28-FINAL-GATES-MUTATIONS-UI-PARTIAL
 
 Record exact28cf native596files10919tests and24files520tests three times;managerown4mutationsred/restored,localtype/lintpass andWindowsmodefailuresretained. B31postfixfinitefactsbanked. Existinguploadmetadata404afterrestart/quotainterval is a failed authorized reopen, not cached-migration proof or deleted-source proof. Establish one genuinely uploaded released-source baseline and ordinary corrected-source reopen; never copy/inject cookie, capability, owner or session. Candidate stays unlanded until independent actual proof. No rule/score/security waiver.
+
+
+### §1h.396 — 2026-10-27 — P12-28-GENUINE-UPGRADE-FRESH-INVENTED-VERIFIED
+
+Controlled old-source normal chooser/consent baseline and same-tab normal corrected-source reopen passed at identical input route, with changed unversioned→v3 image resource, visually corrected chart and identical four source arrays. A distinct fresh invented PDF also passed. No cookie/capability/session fabrication or cache deletion; old404 remains a failed separate attempt. This is scoped migration/fresh-input proof, not all-real-input or final acceptance. See P12-MANAGER-P28-VERIFY-20261026.md.
 
 
 ## §5. Durable work ledger — update in place, evidence append only
