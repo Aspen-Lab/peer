@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T01:12:28.760Z; only writer of this file
-CURRENT ITEM:          C28clipguideapprovedunlanded;B32matrixactive;6blindreturned0finaleachdirectorPending;A23A24scores0;A0B0;clockACTIVE
-NEXT TURN:          C28clip-guideimplementation;B32sourceidentitymatrix;directorbaselineaudit
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T05:48:28.485Z; only writer of this file
+CURRENT ITEM:          C28enginefrozenclipguidepending/web444freshnesspartial;B31/B32reportsbanked;R1sixblindmediansA0/B0director0/0;consecutiveA0B0;clockACTIVE
+NEXT TURN:          Narrow measured fill-clipping repair with existing stroke contract preserved;continue finite captionidentityprovenance;fresh independent candidate gates/UI;next A round closes named gaps
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1592,6 +1592,11 @@ Separate B32 finite invented identity/source-word matrix brief committed;pdf-out
 ### §1h.382 — 2026-10-27 — P12-28-CLIPPED-PATH-GUIDE-RULED
 
 Approve the measured conservative active-clip-aware path collection direction in the P12-28 supplement after B31 provenance/raster checks and manager source/crop inspection. No numeric caption-overlap relaxation, size-floor reduction, neighbor grouping or classifier change. New persisted manager candidate data require normal figure3/reading16/reportv9 invalidation; named exact-version fixtures may follow while every rejection/ownership/interaction assertion stays. Unsupported graphics states stop conservatively. Prior gates remain historical; repeat manager independent verification on the new exact web tree.
+
+
+### §1h.383 — 2026-10-27 — P12-PARTIAL-HOURLY-QUOTA-RESUMED
+
+PARTIAL usage stall recovered through same hourly thread;clockACTIVEhourlyunchanged;no live duplicateworker. C28 resumed samecopy clean7f7ff6a9 then checkpointafc6474a;engine74be80frozen,web444b8247 freshness3/16/v9,tsc0lint0/144,284pass1Windowsmodefail+separate30pass;newclipfix/fullgatesUIstillowed. Evidence: C28source5883df1f/0691385e/8b85b4d6/7f7ff6a9/afc6474a;p12-28/private;hourlypeer-p12. No missing fact is a product-wide defect finding; no test/guard/price/stop-line waiver.
 
 
 ## §5. Durable work ledger — update in place, evidence append only
