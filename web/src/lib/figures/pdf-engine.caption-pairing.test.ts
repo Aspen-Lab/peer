@@ -194,6 +194,22 @@ describe("P12-28: defensible typed caption pairing", () => {
     expect(await boxes(page, "Figure 1")).toEqual([]);
   });
 
+  it("restores a known outer clip after an unsupported inner text clip", async () => {
+    const page: FigurePage = {
+      text: [["Figure 1. Invented panel.", 90, 268, 9]],
+      drawingOps: ["q 90 542 360 150 re W n q BT /F1 9 Tf 7 Tr 90 600 Td (clip) Tj ET Q 90 490 360 202 re f Q"],
+    };
+    expect(await boxes(page, "Figure 1")).toEqual([[90, 100, 450, 250]]);
+  });
+
+  it("keeps original fill support when clip nesting exceeds the retained-state limit", async () => {
+    const page: FigurePage = {
+      text: [["Figure 1. Invented interior label.", 90, 268, 9]],
+      drawingOps: [...Array(129).fill("q 90 542 360 150 re W n"), "90 490 360 202 re f", ...Array(129).fill("Q")],
+    };
+    expect(await boxes(page, "Figure 1")).toEqual([]);
+  });
+
   it("does not pair a truly painted extension through its caption", async () => {
     const page: FigurePage = { text: [["Figure 4. Invented interior label.", 90, 268, 9]], drawingOps: ["90 490 360 202 re f"] };
     expect(await boxes(page, "Figure 4")).toEqual([]);
