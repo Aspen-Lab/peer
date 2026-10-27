@@ -42,7 +42,7 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T06:14:22.623Z; only writer of this file
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T06:14:26.247Z; only writer of this file
 CURRENT ITEM:          ManagerverifyC28web28cf/pinned581e13c4;B31postfixactualsources;normalproductionpublicHTMLfigureworks/privatestillblocked;R1mediansA0B0counts0/0;clockACTIVE
 NEXT TURN:          Managerexact28cf sourcegates+touched24x3+ownmutations+normal existing/freshUI;B31independentpostfixsourcechecks;landonlyafterproof then freshA
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
@@ -1647,6 +1647,11 @@ Authorizeonlymeasured drawn-vs-unusedfill-subpath distinction and attemptedpathw
 ### §1h.393 — 2026-10-27 — P12-MANAGER-NORMAL-PRODUCTION-PUBLIC-ENTRY
 
 ManageractualordinaryproductionOpenAlexreaderopensbutfigureloadfails,exactresourceJSONNoPDF;source-supportedarxivreaderHTMLfigure1520x2239deliveredtwice/closed,22orderedsectionparagrapharrayssame;initiallazyattemptretained. Noauthbypass/sourcecompleteness/allmatrix/deployedrevisionclaim. B33publicdeterministicroutegatesclarified.. Evidence: P12-MANAGER-PRODUCTION-ENTRY-20261027.md;B33through3937cf82;privatecua-production-entry-results.json. Missing/failed checks remain explicit; no final score, branch landing, security change or complete-image claim.
+
+
+### §1h.394 — 2026-10-27 — P12-28-FINAL-INDEPENDENT-VERIFICATION-STARTED
+
+Separate managerfreecopy581e13c4cherry-picksC28rangea5db..e0;exactweb28cf74ea90ebc67ec3bbc56f30fa178b1681517f equalworker. Owned4294Next81284/70404verifiedstoppedbefore sourceupdate. Nativeunchangedtestgroupnowincludesnewwork-budgetfile;noassertionchange. Newsourceindependentgates/mutations/UIstart;priorcandidatepassesnotinherited.. Evidence: verify-p28/wt581e13c4;e0e2ff67;.github/p12-repeat-tests.mjs;P12-28workercheckpoint. Missing/failed checks remain explicit; no final score, branch landing, security change or complete-image claim.
 
 
 ## §5. Durable work ledger — update in place, evidence append only

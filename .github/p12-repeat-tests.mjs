@@ -18,6 +18,7 @@ const captionAndFreshness = new Set([
   'src/components/reader/use-reading.effects.test.ts',
   'src/lib/figures/extract.test.ts',
   'src/lib/figures/pdf-engine.caption-pairing.test.ts',
+  'src/lib/figures/pdf-engine.work-budget.test.ts',
   'src/lib/papers/figure-binding.route-url.test.ts',
   'src/lib/papers/figure-binding.same-figure.test.ts',
   'src/lib/papers/full-text.test.ts',

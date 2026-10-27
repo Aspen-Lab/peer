@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T06:14:22.623Z
+AS OF        2026-10-27T06:14:26.247Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.393   NEXT RULING §1h.394   NEXT ITEM ID P12-34   NEXT FREE PORT 4233
+LAST RULING  §1h.394   NEXT RULING §1h.395   NEXT ITEM ID P12-34   NEXT FREE PORT 4233
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
 RUNNING      ManagerverifyC28web28cf/pinned581e13c4;B31postfixactualsources;normalproductionpublicHTMLfigureworks/privatestillblocked;R1mediansA0B0counts0/0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
@@ -567,6 +567,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T06:00:29.966Z | parent a550cfb5 (entry commit follows) | manager | P12-28-DRAWN-SUBPATH-WORK-CAP-GUIDE: Authorizeonlymeasured drawn-vs-unusedfill-subpath distinction and attemptedpathworkcapbeforeclipfilter;redfirstactualPDFtests,retained/rasterfallbackandbudgetdiagnosticguards;stroke/floorsunchanged. Current3/16/v9unpublishedprofileversionretained;newsourceown+managergates/UIrequired. | evidence: briefs/P12-28.mdRuling392;B31through748c2de0 | next: C28two-measuredcorrections→newexactsourcegates/UI;managerordinaryproductionpublicentryperB33;R1scores0/0recorded, fresh nextAafterlanding
 
 - 2026-10-27T06:14:22.623Z | parent 56600f7a (entry commit follows) | manager | P12-MANAGER-NORMAL-PRODUCTION-PUBLIC-ENTRY: ManageractualordinaryproductionOpenAlexreaderopensbutfigureloadfails,exactresourceJSONNoPDF;source-supportedarxivreaderHTMLfigure1520x2239deliveredtwice/closed,22orderedsectionparagrapharrayssame;initiallazyattemptretained. Noauthbypass/sourcecompleteness/allmatrix/deployedrevisionclaim. B33publicdeterministicroutegatesclarified. | evidence: P12-MANAGER-PRODUCTION-ENTRY-20261027.md;B33through3937cf82;privatecua-production-entry-results.json | next: Managerexact28cf sourcegates+touched24x3+ownmutations+normal existing/freshUI;B31independentpostfixsourcechecks;landonlyafterproof then freshA
+
+- 2026-10-27T06:14:26.247Z | parent ba87236f (entry commit follows) | manager | P12-28-FINAL-INDEPENDENT-VERIFICATION-STARTED: Separate managerfreecopy581e13c4cherry-picksC28rangea5db..e0;exactweb28cf74ea90ebc67ec3bbc56f30fa178b1681517f equalworker. Owned4294Next81284/70404verifiedstoppedbefore sourceupdate. Nativeunchangedtestgroupnowincludesnewwork-budgetfile;noassertionchange. Newsourceindependentgates/mutations/UIstart;priorcandidatepassesnotinherited. | evidence: verify-p28/wt581e13c4;e0e2ff67;.github/p12-repeat-tests.mjs;P12-28workercheckpoint | next: Managerexact28cf sourcegates+touched24x3+ownmutations+normal existing/freshUI;B31independentpostfixsourcechecks;landonlyafterproof then freshA
 
 ---
 
