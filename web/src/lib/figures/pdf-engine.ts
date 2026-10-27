@@ -117,9 +117,24 @@ export const MAX_CONCURRENT_EXTRACTIONS = 2;
  *  or figure is started. The helper's own 25 s. */
 export const EXTRACTION_BUDGET_MS = 25_000;
 /** Distinct vector-path boxes on one page past which the page's vector analysis
- *  is skipped: clustering grows with the square of the count (12,000 is
- *  well under a second). Its rasters are still found. */
-const MAX_DRAWING_RECTS = 12_000;
+ *  is skipped (P12-55: 12,000 to 80,000, now that a grid keeps clustering near
+ *  linear, so a scatter plot's data markers no longer switch the page off). Its
+ *  rasters are still found. */
+const MAX_DRAWING_RECTS = 80_000;
+/** Path operations walked on one page past which the rest are not collected and
+ *  the page's vector analysis is skipped (P12-55: 60,000 to 400,000, five for
+ *  every distinct box the bound above lets through). */
+const MAX_DRAWING_WALKS = MAX_DRAWING_RECTS * 5;
+/** Grid cell entries made and looked at while clustering one page, past which
+ *  the page counts as over the drawing limit like one with too many boxes: the
+ *  bound that keeps a page of many large overlapping boxes, each in many cells,
+ *  from costing more than a plain page of the same count. (Invented dense pages
+ *  of 60,000 to 80,000 boxes use 0.2 to 0.3 million; 5 million is about 17 times
+ *  the most of them and holds the cell lists to some 40 MB.) */
+const MAX_CLUSTER_WORK = 5_000_000;
+const MIN_GRID_CELL = 4;
+const MAX_GRID_CELL = 48;
+const MAX_GRID_SIDE = 512;
 
 const CAPTION_RE = /^\s*fig(?:ure)?\.?\s*(\d+[a-z]?)\b/i;
 const OTHER_CAPTION_RE = /^\s*(?:table|scheme|chart)\.?\s*\d+[a-z]?\b/i;
@@ -523,7 +538,7 @@ function collectDrawingBoxes(mupdf: Mupdf, page: Page): { boxes: Rect[]; overflo
     clips.push(box);
   };
   const keep = (path: Path, ctm: Matrix, fill: boolean) => {
-    if (pathWalks >= MAX_DRAWING_RECTS * 5) { overflow = true; return; }
+    if (pathWalks >= MAX_DRAWING_WALKS) { overflow = true; return; }
     pathWalks++;
     let box = pathBox(path, ctm, fill);
     if (!box) return;
@@ -574,8 +589,17 @@ function collectDrawingBoxes(mupdf: Mupdf, page: Page): { boxes: Rect[]; overflo
 /** PyMuPDF's `cluster_drawings`: boxes within 3 pt of a growing union join it,
  *  until none is left; the unions wider and taller than 3 pt are the figures.
  *  (The helper's re-sort-and-dedupe after every cluster is done once, up front:
- *  a duplicate of a joined box is joined with it, so the result is the same.) */
-function clusterDrawings(boxes: Rect[], pageRect: Rect): Rect[] | null {
+ *  a duplicate of a joined box is joined with it, so the result is the same.)
+ *
+ *  P12-55: the boxes are kept in a uniform grid and only the cells a growing
+ *  union newly reaches are looked at, so the work follows the box count instead
+ *  of its square. A cluster is the least fixed point of "join every box within
+ *  3 pt of the union" from its seed, so it does not depend on the order boxes
+ *  are found in, and the seeds are taken in the sorted order of the loop it
+ *  replaces: the clusters are exactly that loop's. Null when the page has more
+ *  boxes than `MAX_DRAWING_RECTS` or the grid's work passes `MAX_CLUSTER_WORK`.
+ *  Exported for the tests. */
+export function clusterDrawings(boxes: Rect[], pageRect: Rect): Rect[] | null {
   const tolerance = CLUSTER_TOLERANCE;
   const bySortKey = (a: Rect, b: Rect) => a[3] - b[3] || a[0] - b[0];
   const distinct = (list: Rect[]) => {
@@ -591,27 +615,95 @@ function clusterDrawings(boxes: Rect[], pageRect: Rect): Rect[] | null {
       .map((r): Rect => [Math.min(r[0], r[2]), Math.min(r[1], r[3]), Math.max(r[0], r[2]), Math.max(r[1], r[3])])
       .filter((r) => r[0] >= pageRect[0] && r[2] <= pageRect[2] && r[1] >= pageRect[1] && r[3] <= pageRect[3]),
   );
-  if (remaining.length > MAX_DRAWING_RECTS) return null;
+  const count = remaining.length;
+  if (count > MAX_DRAWING_RECTS) return null;
 
+  // The grid: cells about three boxes' pitch wide for an evenly spread page, never
+  // under 4 pt, over 48 pt or more than 512 to a side; a box is listed in every
+  // cell it touches. `column` and `row` clamp, so a search past the page is fine.
+  const pageWidth = Math.max(width(pageRect), 0);
+  const pageHeight = Math.max(height(pageRect), 0);
+  const cell = Math.max(
+    MIN_GRID_CELL,
+    Math.min(MAX_GRID_CELL, 3 * Math.sqrt((pageWidth * pageHeight) / Math.max(count, 1))),
+    Math.max(pageWidth, pageHeight) / MAX_GRID_SIDE,
+  );
+  const columns = Math.floor(pageWidth / cell) + 1;
+  const rows = Math.floor(pageHeight / cell) + 1;
+  const column = (x: number) => Math.min(columns - 1, Math.max(0, Math.floor((x - pageRect[0]) / cell)));
+  const row = (y: number) => Math.min(rows - 1, Math.max(0, Math.floor((y - pageRect[1]) / cell)));
+  const cells = new Array<number[] | undefined>(columns * rows);
+  let work = 0;
+  for (let id = 0; id < count; id++) {
+    const box = remaining[id];
+    const c0 = column(box[0]);
+    const c1 = column(box[2]);
+    const r0 = row(box[1]);
+    const r1 = row(box[3]);
+    work += (c1 - c0 + 1) * (r1 - r0 + 1);
+    if (work > MAX_CLUSTER_WORK) return null;
+    for (let r = r0; r <= r1; r++) {
+      for (let c = c0; c <= c1; c++) (cells[r * columns + c] ??= []).push(id);
+    }
+  }
+
+  const joined = new Uint8Array(count);
+  const looked = new Int32Array(count); // the search that last tested the box
+  let search = 0;
   const clusters: Rect[] = [];
-  while (remaining.length) {
-    const union: Rect = [...remaining[0]];
-    let repeat = true;
-    while (repeat) {
-      repeat = false;
-      for (let i = remaining.length - 1; i > 0; i--) {
-        if (neighbors(remaining[i], union)) {
-          union[0] = Math.min(union[0], remaining[i][0]);
-          union[1] = Math.min(union[1], remaining[i][1]);
-          union[2] = Math.max(union[2], remaining[i][2]);
-          union[3] = Math.max(union[3], remaining[i][3]);
-          remaining.splice(i, 1);
-          repeat = true;
+  for (let seed = 0; seed < count; seed++) {
+    if (joined[seed]) continue;
+    joined[seed] = 1;
+    const union: Rect = [...remaining[seed]];
+    let searched: Rect | null = null; // the union's reach at the last look, already emptied
+    for (;;) {
+      const reach: Rect = [union[0] - tolerance, union[1] - tolerance, union[2] + tolerance, union[3] + tolerance];
+      // What the reach covers now and the last look did not: the whole reach the
+      // first time, else the strips between the two rectangles.
+      const parts: Rect[] = [];
+      if (searched === null) parts.push(reach);
+      else {
+        if (reach[1] < searched[1]) parts.push([reach[0], reach[1], reach[2], searched[1]]);
+        if (reach[3] > searched[3]) parts.push([reach[0], searched[3], reach[2], reach[3]]);
+        if (reach[0] < searched[0]) parts.push([reach[0], searched[1], searched[0], searched[3]]);
+        if (reach[2] > searched[2]) parts.push([searched[2], searched[1], reach[2], searched[3]]);
+      }
+      const found: number[] = [];
+      search++;
+      for (const part of parts) {
+        const c1 = column(part[2]);
+        const r1 = row(part[3]);
+        for (let r = row(part[1]); r <= r1; r++) {
+          for (let c = column(part[0]); c <= c1; c++) {
+            const list = cells[r * columns + c];
+            work++;
+            if (!list) continue;
+            let live = 0;
+            for (const id of list) {
+              if (joined[id]) continue; // dropped from the cell for good
+              list[live++] = id;
+              if (looked[id] === search) continue;
+              looked[id] = search;
+              work++;
+              if (neighbors(remaining[id], union)) found.push(id);
+            }
+            list.length = live;
+          }
         }
       }
+      if (work > MAX_CLUSTER_WORK) return null;
+      if (found.length === 0) break;
+      for (const id of found) {
+        joined[id] = 1;
+        const box = remaining[id];
+        union[0] = Math.min(union[0], box[0]);
+        union[1] = Math.min(union[1], box[1]);
+        union[2] = Math.max(union[2], box[2]);
+        union[3] = Math.max(union[3], box[3]);
+      }
+      searched = reach;
     }
     clusters.push(union);
-    remaining.shift();
   }
   return distinct(clusters).filter((r) => width(r) > tolerance && height(r) > tolerance);
 }
