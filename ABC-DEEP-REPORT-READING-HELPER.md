@@ -42,7 +42,7 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T06:00:23.490Z; only writer of this file
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T06:00:26.906Z; only writer of this file
 CURRENT ITEM:          C28correctionguide392ready/source2cHELD;B31/B32/B33finiteguidesbanked;managerproductionpublicentrynext;R1mediansA0B0counts0/0;clockACTIVE
 NEXT TURN:          C28two-measuredcorrections→newexactsourcegates/UI;managerordinaryproductionpublicentryperB33;R1scores0/0recorded, fresh nextAafterlanding
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
@@ -1632,6 +1632,11 @@ SeparateB33started/completedreadonlysourceguide:uploadavailabilitypredicatevsacc
 ### §1h.390 — 2026-10-27 — P12-32-CROSSPAGE-COLUMNS-BANKED
 
 B32five2pageinventedfixtures416/416exactorderedlines,390outlinebody/26relocated;typedTableoverjoins8ordinarylines;aliaspagesretainbothandexactsamelabeldropssecond. Firstfailedfixturehistoryretained. No semantics/imageassociation proof or universalclassifierauthorized.. Evidence: P12-32-B-20261027T012000Z.md;576a5c15;p12-32/private. No full-source loss, current deployment revision, universal classifier, green final candidate or score waiver is inferred.
+
+
+### §1h.391 — 2026-10-27 — P12-31-MANAGER-COUNTEREXAMPLES-CONFIRMED
+
+ManagerindependentreviewtwoquestionsconfirmedbyseparateB31onexact2c204c03:unusedtrailingmoveidenticalrasterbutmissingfigure;65002callbacksold60000walksoverflowtruevsnew65002walksoverflowfalse. Timingnotperformancetrend. Ccandidatehelddespitetype/buildpasses.. Evidence: P12-31-B-20261027T011000Z.md;748c2de0;move-trace.json;budget-65001.json;workerf19b2b5c. No full-source loss, current deployment revision, universal classifier, green final candidate or score waiver is inferred.
 
 
 ## §5. Durable work ledger — update in place, evidence append only

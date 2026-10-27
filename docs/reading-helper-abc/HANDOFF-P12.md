@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T06:00:23.490Z
+AS OF        2026-10-27T06:00:26.906Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.390   NEXT RULING §1h.391   NEXT ITEM ID P12-34   NEXT FREE PORT 4233
+LAST RULING  §1h.391   NEXT RULING §1h.392   NEXT ITEM ID P12-34   NEXT FREE PORT 4233
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
 RUNNING      C28correctionguide392ready/source2cHELD;B31/B32/B33finiteguidesbanked;managerproductionpublicentrynext;R1mediansA0B0counts0/0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
@@ -561,6 +561,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T06:00:19.777Z | parent 78e9a7da (entry commit follows) | manager | P12-33-NORMAL-ENTRY-FINITE-GUIDE-BANKED: SeparateB33started/completedreadonlysourceguide:uploadavailabilitypredicatevsaccountseparate;3ordinarysupportedroutes;publicsearch/priorobservedpubliclinkpossiblebutcurrentexecutionunproved;503multiplecausesstatusalonenoattribution. Noauth/configbypass,UIreplayorownerrequest. | evidence: P12-33-B-20261027T055000Z.md;2f66cfaa | next: C28two-measuredcorrections→newexactsourcegates/UI;managerordinaryproductionpublicentryperB33;R1scores0/0recorded, fresh nextAafterlanding
 
 - 2026-10-27T06:00:23.490Z | parent af26b04c (entry commit follows) | manager | P12-32-CROSSPAGE-COLUMNS-BANKED: B32five2pageinventedfixtures416/416exactorderedlines,390outlinebody/26relocated;typedTableoverjoins8ordinarylines;aliaspagesretainbothandexactsamelabeldropssecond. Firstfailedfixturehistoryretained. No semantics/imageassociation proof or universalclassifierauthorized. | evidence: P12-32-B-20261027T012000Z.md;576a5c15;p12-32/private | next: C28two-measuredcorrections→newexactsourcegates/UI;managerordinaryproductionpublicentryperB33;R1scores0/0recorded, fresh nextAafterlanding
+
+- 2026-10-27T06:00:26.906Z | parent dba7ed10 (entry commit follows) | manager | P12-31-MANAGER-COUNTEREXAMPLES-CONFIRMED: ManagerindependentreviewtwoquestionsconfirmedbyseparateB31onexact2c204c03:unusedtrailingmoveidenticalrasterbutmissingfigure;65002callbacksold60000walksoverflowtruevsnew65002walksoverflowfalse. Timingnotperformancetrend. Ccandidatehelddespitetype/buildpasses. | evidence: P12-31-B-20261027T011000Z.md;748c2de0;move-trace.json;budget-65001.json;workerf19b2b5c | next: C28two-measuredcorrections→newexactsourcegates/UI;managerordinaryproductionpublicentryperB33;R1scores0/0recorded, fresh nextAafterlanding
 
 ---
 
