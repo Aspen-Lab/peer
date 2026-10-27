@@ -12,6 +12,9 @@ function sentencesOf(text) {
 }
 function kindOf(user) {
   const o = user.outputSchema || {};
+  // P12-53: the structure review (and its second look) first - a piggybacked prompt would carry `gists` too.
+  if (o.corrections) return "structure";
+  if (o.verdict) return "structure_look";
   if (o.questionRelevant) return "pass1q";
   if (o.noveltyClaims) return "pass1";
   if (o.skim || o.whatItProposes) return "pass2";
@@ -40,7 +43,27 @@ const pick = (pool, frag) => {
   const ok = pool.filter((p) => p.s.length >= 60 && p.s.length <= 300);
   return ok.length ? ok[hash(frag) % ok.length] : undefined;
 };
+// P12-53: the structure review. PLUMBING only (ruling 1h.424 (c)): the stub cannot judge whether a structure is right. It reads the
+// draft's lines ("<k> <from>-<to> <role> <conf> <tags>") and, by stub-control.json `structure`, returns: none (default) a valid empty
+// answer; move / role / split one correction of that kind; invalid an answer the sanitizer refuses; (garbage, empty, hang are in the
+// fetch wrapper below). `look` is the second look's verdict ("draft" by default).
+const STRUCTURE_ROLES = ["setup", "method", "evidence", "interpretation", "apparatus"];
+function structureAnswer(user) {
+  const mode = control().structure || "none";
+  const parts = (((user.draft || {}).parts) || []).map((l) => { const [k, range, role] = String(l).split(" "); const [from, to] = range.split("-").map(Number); return { k: +k, from, to, role }; });
+  const next = (role) => STRUCTURE_ROLES[(STRUCTURE_ROLES.indexOf(role) + 1) % STRUCTURE_ROLES.length];
+  if (mode === "move" && parts[1] && parts[1].to > parts[1].from) return { corrections: [{ op: "move_start", part: 1, toParagraph: parts[1].from + 1 }], unsure: [] };
+  if (mode === "role" && parts[1]) return { corrections: [{ op: "set_role", part: 1, role: next(parts[1].role) }], unsure: [] };
+  if (mode === "split") {
+    const big = parts.slice().sort((a, b) => (b.to - b.from) - (a.to - a.from))[0];
+    if (big && big.to - big.from >= 2) return { corrections: [{ op: "split", part: big.k, atParagraph: big.from + ((big.to - big.from) >> 1) + 1, role: next(big.role) }], unsure: [] };
+  }
+  if (mode === "invalid") return { corrections: [{ op: "move_start", part: 99, toParagraph: 99999 }, { op: "set_role", part: 1, role: "banana" }], unsure: [] };
+  return { corrections: [], unsure: [] };
+}
 function answer(kind, user) {
+  if (kind === "structure") return structureAnswer(user);
+  if (kind === "structure_look") return { verdict: control().look || "draft" };
   if (kind === "pass1") {
     const pool = poolOf(user);
     const f = (frag) => { const p = pick(pool, frag); return p ? [{ text: p.s, sectionId: p.id }] : []; };
@@ -139,7 +162,11 @@ globalThis.fetch = async function stubFetch(input, init) {
     const base = { kind, userLen: usr.length, sysLen: sys.length, authBearer: /^Bearer /.test(auth), authLen: auth.length, nQuestions: Array.isArray(user.questions) ? user.questions.length : Array.isArray(user.readerQuestions) ? user.readerQuestions.length : 0 };
     let content; try { content = answer(kind, user); } catch (e) { log({ ...base, stubError: String(e && e.message).slice(0, 60) }); content = {}; }
     log(base);
-    const text = JSON.stringify(content);
+    // P12-53: the structure review's failure shapes - a reply that is not JSON, an empty reply (the provider raises "empty content"),
+    // and one that never comes in time (the provider's own 15 s abort fires).
+    const failure = kind === "structure" ? control().structure : undefined;
+    if (failure === "hang") await new Promise((r) => setTimeout(r, 20000));
+    const text = failure === "garbage" ? "I cannot help with that." : failure === "empty" ? "" : JSON.stringify(content);
     return new Response(JSON.stringify({ choices: [{ message: { content: text } }], usage: { prompt_tokens: Math.ceil(usr.length / 4), completion_tokens: Math.ceil(text.length / 4) } }), { status: 200, headers: { "content-type": "application/json" } });
   }
   log({ refused: true, host: u.hostname });
