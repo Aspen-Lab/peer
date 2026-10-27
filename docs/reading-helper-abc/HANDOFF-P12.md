@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T11:20:18.112Z
+AS OF        2026-10-27T11:20:21.702Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.414   NEXT RULING §1h.415   NEXT ITEM ID P12-37   NEXT FREE PORT 4236
+LAST RULING  §1h.415   NEXT RULING §1h.416   NEXT ITEM ID P12-37   NEXT FREE PORT 4236
 RUBRIC       P12-RUBRIC.md frozen; formal R1 A0.00/B0.00; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
 RUNNING      A35actualR2families4234continue;A34samecopycheckpointinterfaceunavailableawaitcontinuation;B36finiteguideDONE;web28cf;R1medians0/0counts0/0;clockACTIVE
 THEN         parallelfreshR2AThemeA/B→3freshblindreaders/theme→director→mechanismB/Cfixes→nextscoredround;stop97.9twoconsecutive
@@ -609,6 +609,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T11:20:14.320Z | parent f19527a5 (entry commit follows) | manager | P12-35-PUBLIC-B-ATTEMPTS-PRESERVED: PublicB1zero-boxpre-deliverytimeoutnotclick;loadedB4target512x182semantic/physicalattemptsnomargincard. Causeunknown;laterbroaderinteractionfailure/recoveryrecordedseparately,no pointercauseassumed. | evidence: P12-35-A-20261027T-PARTIAL.md;sourcea2d6d19e | next: A35continuesactualR2families;A34resumeonlyfirstunfinishedpartwithsupportedCUA;B36guideawaitsrealUIorderingbeforeanyC;clockACTIVE
 
 - 2026-10-27T11:20:18.112Z | parent dfcd1df0 (entry commit follows) | manager | P12-35-FIXTURE-QUESTION-AND-CLOSE-CORRECTION: Inventedonequestionsubmit/editlightgrey5.08/orange6.53contrastsaftersettle;nodark/dedupe/fullmatrixclaim. PublicAfifthinitialcloseconfirmedbeforeownerupload(total5);laterseparateA1openclose+Briefingworks;priorB/chooserfailsretained. | evidence: P12-35-A-20261027T-PARTIAL.md;sourcea09c7c1d | next: A35continuesactualR2families;A34resumeonlyfirstunfinishedpartwithsupportedCUA;B36guideawaitsrealUIorderingbeforeanyC;clockACTIVE
+
+- 2026-10-27T11:20:21.702Z | parent e10d68d9 (entry commit follows) | manager | P12-35-SINGLE-DRAWABLE-HIGHLIGHT-BANKED: OneactualforwardbodylinedragoffersTakeNotes/Highlight;Highlightproducesmark+colour/remove,notesopensExport/Remove. Notcrossblock/Explain/reload/export/sourceparityproof. | evidence: P12-35-A-20261027T-PARTIAL.md;sourcedc029d8b | next: A35continuesactualR2families;A34resumeonlyfirstunfinishedpartwithsupportedCUA;B36guideawaitsrealUIorderingbeforeanyC;clockACTIVE
 
 ---
 
