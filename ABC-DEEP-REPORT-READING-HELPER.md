@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T06:40:57.877Z; only writer of this file
-CURRENT ITEM:          C28web28cfgates10919+520x3+own4mutationsPASS;genuineold-to-new/freshinventedUIpass;public+ownerfinalUIpending;R1mediansA0B0counts0/0;clockACTIVE
-NEXT TURN:          Finalpublic/owneractualUI+sourcebyteaudit→FFverified28cf→freshA;controlledinventedupgrade/freshpassed
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T11:04:11.048Z; only writer of this file
+CURRENT ITEM:          C28independentverificationCOMPLETE10919+520x3+4mutations+genuineupgrade/fresh/publicUI+5/5byteaudit;FFlandingnext;R1medians0/0counts0/0;clockACTIVE
+NEXT TURN:          FFlandexactverifiedC28web28cf→parallelfreshR2AThemeA/B;formalR1medians0/0;counts0/0
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1664,6 +1664,11 @@ Record exact28cf native596files10919tests and24files520tests three times;manager
 Controlled old-source normal chooser/consent baseline and same-tab normal corrected-source reopen passed at identical input route, with changed unversioned→v3 image resource, visually corrected chart and identical four source arrays. A distinct fresh invented PDF also passed. No cookie/capability/session fabrication or cache deletion; old404 remains a failed separate attempt. This is scoped migration/fresh-input proof, not all-real-input or final acceptance. See P12-MANAGER-P28-VERIFY-20261026.md.
 
 
+### §1h.397 — 2026-10-27 — P12-28-FINAL-MANAGER-VERIFICATION-COMPLETE
+
+Independent exact-source C28 verification is complete at web28cf74ea90ebc67ec3bbc56f30fa178b1681517f. Actual publicA all5 figures open/close and23 source arrays agree; publicB4 correct charts and5 honest absence with29 arrays agree; root inspected actual A4/5 andB4 images. Five canonical inputs have byte-identical stored PDF matches. Combined with native10919/full build/type/lint,24files520tests×3 and four own red/restored mutations, approve scoped integration by fresh detached chronological cherry-pick and main fast-forward with silent verified-web diff. This is not a formal round2 score, original-owner walkthrough, whole-source completeness or resolution of known crop/stroke/alias limitations. R1medians and counts remain0/0; inherited/common gates remain binding.
+
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -1946,7 +1951,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-24 | PARTIAL | R1ThemeB own4223/web88ac;4inputs/no-key+stub | 600inventedcycles/18compositions/4canonicalHTTP200/byteprivacyv3banked;full79guards/stablefigures/production/remainingactionsowed | Completeallguards/actualfigures/normalproduction+privacy/factualcuration then3blind | P12-24-A-20261025T230500Z.md@975b232b; uniqueprivate raw |
 | P12-25 | INVESTIGATION_COMPLETE | Independent B ninepublicAloading cases; own4224stopped/web88ac | 9stabletimedcases/all200by10s;5pending+8deliveredopens;separatepeekvisibleclick;3candidates; no productfix justified, historicalA gapsremain | A24 freshstableidentity/progressiveobservations; A26starts freedslot; formalround remainsopen | P12-25-B-20261026T043000Z.md@03127840; summary/historicalgeometry/25filemanifest |
 | P12-26 | PARTIAL | FreshpublicA/publicB/invented factualnotehelper own4225/web88ac | 3normalUIentriesonceeach/consent3of3/0errors banked;functional/matrix/exports/cycles/guardsowed | Noteformat/list/lifecycle/export/cliphit/matrix/cycles/privacy/curatedfacts | P12-26-A-20261026T072000Z.md@ec5db89d; threeprivateentryartifacts |
-| P12-28 | PARTIAL | Caption/freshness/fillclip/subpath/workcap;independentmanagerverification | Exact28cfnative10919+520x3,own4mutationspass;existingbrowserreopen404notPASS;unlanded | Genuineoldbaseline→normalupgradeUI,actualsourcechecks→FFonly | P12-MANAGER-P28-VERIFY-20261026.md;CI40460023376 |
+| P12-28 | VERIFIED / LANDING | Typed-caption graphic association and measured fill clipping; derived freshness3/16/v9 | Exactweb28cf native10919+520x3;4ownred/restoremuts;genuineupgrade/fresh/publicUI;5/5sourcebytes | FreshdetachedCP and exact-tree main fast-forward; new formal A round; known source/crop limits remain | e0e2ff67;P12-MANAGER-P28-VERIFY-20261026.md;CI40460023376 |
 | P12-31 | DONE | Finitecaptionregion/path/stroke/subpath/workcausals+postfixreplay | Boundedfacts,knownpartialraster/strokepaddinglimitsopen;noUIoruniversalclaim | ManageractualUI;Acountremainingnormally | P12-31-B-20261027T011000Z.md through5e2635f8 |
 | P12-32 | DONE | 15onepage+5twopagecaptionidentity/sourcewordmatrix | 416orderedlineschecked;semanticassociationunresolved;noclassifierauthorized | Managerrepresentationdecisioniflaterbriefneeded | P12-32-B-20261027T012000Z.md through576a5c15 |
 | P12-33 | DONE | Ordinaryproductionentry/publicroutegates/source-backedchoices | Sourceguideonly;managernormalpublicHTMLfigureactual,originalupload/fullmatrixopen | Keepnormalaccessprerequisites/servedrevisionexplicit | P12-33-B-20261027T055000Z.md through3937cf82;managerproductionreport |

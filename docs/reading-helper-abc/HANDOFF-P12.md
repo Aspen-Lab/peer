@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T06:40:57.877Z
+AS OF        2026-10-27T11:04:11.048Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.396   NEXT RULING §1h.397   NEXT ITEM ID P12-34   NEXT FREE PORT 4233
+LAST RULING  §1h.397   NEXT RULING §1h.398   NEXT ITEM ID P12-34   NEXT FREE PORT 4233
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      C28web28cfgates10919+520x3+own4mutationsPASS;genuineold-to-new/freshinventedUIpass;public+ownerfinalUIpending;R1mediansA0B0counts0/0;clockACTIVE
+RUNNING      C28independentverificationCOMPLETE10919+520x3+4mutations+genuineupgrade/fresh/publicUI+5/5byteaudit;FFlandingnext;R1medians0/0counts0/0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -573,6 +573,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T06:30:45.468Z | parent 1e5f8f03 (entry commit follows) | manager | P12-28-FINAL-GATES-MUTATIONS-UI-PARTIAL: Managerexactweb28cf native596files10919tests+520tests24filesx3pass,build/tsc0lint0/144;localtsc0lint0three518pass2Windowsmodefails. Fourmanagerownmutationsred/restoredexactSHA. B31postfixboundedsourcechecksbanked. Actualexistinguploadmetadata404afterrestart/quotainterval;store5PDFsstillpresent,authcauseunknown,nofabrication,nolanding. Onegenuineold-sourceUIbaselinewilltestnormalupgrade. | evidence: P12-MANAGER-P28-VERIFY-20261026.md;CI40460023376/job122042141418;B31through5e2635f8;verify-p28/private | next: Ownoldfreecopygenuinechooserbaseline→samecontextnormalfinalcandidate-reopen/freshinputs;source/viewercomparisons;landonlyafterproof
 
 - 2026-10-27T06:40:57.877Z | parent 68b48ef0 (entry commit follows) | manager | P12-28-GENUINE-UPGRADE-FRESH-INVENTED-VERIFIED: Controlled normal oldweb88ac chooser/consent baseline on same4294/store and actualtab:wrongtable1064x476. Verifiedoldserverstopped,final28cfstarted;SAMEtabnormalreopen/noreuploaddeliversv3correctcoloredchart,same4orderedsections,fig5honestabsence. DistinctfreshEOFfixture/actual81a4upload alsocorrect,same4sections. Earlier404 remainsfailed/unknowncause;noauth/cachefabrication. | evidence: P12-MANAGER-P28-VERIFY-20261026.md;privatecua-genuine-old-invented-before/cua-genuine-upgrade-invented/cua-final-fresh-invented | next: Actual final publicAall5/publicBcorrectchart+honestrange and source comparisons;sourcePDFbyte audit;FFlandonlyverifiedweb28cf then freshA
+
+- 2026-10-27T11:04:11.048Z | parent d473165b (entry commit follows) | manager | P12-28-FINAL-MANAGER-VERIFICATION-COMPLETE: Exactweb28cf actualpublicA5opens5closes sizes670x960/394x574/1133x620/1126x1339/1117x1272;23sourcearraysequal. PublicB4correct1249x444charts/close,5honestabsence,29sourcearraysequal. RootviewedA4/5+B4. Scoped6PDFaudit5/5canonicalbyteidentitiespreserved. Native10919+520x3and4ownmutationspreviouslypass. ApproveonlyscopedC28integration;knownlimits/R2commongatesremain. | evidence: P12-MANAGER-P28-VERIFY-20261026.md;verify-p28/private/cua-final-public-{a,b}-results.json;source-byte-audit.json;CI40460023376 | next: Freshdetachedlandingcopyfromcurrentmain;CP69933fd9..e0e2ff67;exactweb28cf+silentdiffvs581e13c4;mainFFonly,logpush;parallelfreshR2AseparateThemeA/B
 
 ---
 
