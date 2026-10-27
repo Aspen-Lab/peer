@@ -26,6 +26,7 @@ vi.mock("@/lib/papers/upload-store", async (importOriginal) => {
 });
 
 import { GET } from "./route";
+import { FIGURE_EXTRACTION_REVISION } from "@/lib/figures/figure-revision";
 
 vi.mock("@/lib/papers/upload-access", async (original) => ({
   ...await original<typeof import("@/lib/papers/upload-access")>(), ownedUpload: mocks.readUploadMeta,
@@ -415,7 +416,7 @@ describe("GET /api/papers/[id]/reading — P9-42 (§1h.67): a supplement's figur
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toContain("no-store");
     const body = await res.json();
-    expect(figureUrls(body)).toEqual(["/api/papers/upload%3A0000000000000008/figure-image?page=3&fig=2&v=3"]);
+    expect(figureUrls(body)).toEqual(["/api/papers/upload%3A0000000000000008/figure-image?page=3&fig=2&v=" + FIGURE_EXTRACTION_REVISION + ""]);
     expect(JSON.stringify(body)).not.toContain("openalex%3AW7208807247/figure-image");
     // Still the public paper's reading: its id, and the captions read from the attached text.
     expect(body.paperId).toBe("openalex:W7208807247");
@@ -429,7 +430,7 @@ describe("GET /api/papers/[id]/reading — P9-42 (§1h.67): a supplement's figur
     const res = await call("openalex:W7208807247");
 
     expect(res.status).toBe(200);
-    expect(figureUrls(await res.json())).toEqual(["/api/papers/openalex%3AW7208807247/figure-image?page=3&fig=2&v=3"]);
+    expect(figureUrls(await res.json())).toEqual(["/api/papers/openalex%3AW7208807247/figure-image?page=3&fig=2&v=" + FIGURE_EXTRACTION_REVISION + ""]);
   });
 
   it("keeps an upload's own reading naming itself", async () => {
@@ -439,6 +440,6 @@ describe("GET /api/papers/[id]/reading — P9-42 (§1h.67): a supplement's figur
     const res = await call("upload:0000000000000009");
 
     expect(res.status).toBe(200);
-    expect(figureUrls(await res.json())).toEqual(["/api/papers/upload%3A0000000000000009/figure-image?page=3&fig=2&v=3"]);
+    expect(figureUrls(await res.json())).toEqual(["/api/papers/upload%3A0000000000000009/figure-image?page=3&fig=2&v=" + FIGURE_EXTRACTION_REVISION + ""]);
   });
 });
