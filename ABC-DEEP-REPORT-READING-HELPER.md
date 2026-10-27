@@ -42,7 +42,7 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round2 preparation; formal round1 medians A0.00/B0.00; consecutive passes A0/2 B0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T11:19:41.460Z; only writer of this file
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T11:19:45.520Z; only writer of this file
 CURRENT ITEM:          A35actualR2families4234continue;A34samecopycheckpointinterfaceunavailableawaitcontinuation;B36finiteguideDONE;web28cf;R1medians0/0counts0/0;clockACTIVE
 NEXT TURN:          A35continuesactualR2families;A34resumeonlyfirstunfinishedpartwithsupportedCUA;B36guideawaitsrealUIorderingbeforeanyC;clockACTIVE
 STOPPED BECAUSE:          — active; prior quota interruptions preserved in log; C28 independently verified and landed
@@ -1707,6 +1707,11 @@ Read A34 capability checkpoint in full: actual documented background IAB and ord
 ### §1h.405 — 2026-10-27 — P12-36-FINITE-WRITER-GUIDE-BANKED
 
 Eleveninventedfunctionprobes;3existing suites31/31. Completedaggregate reconciliation preservessticky;olderpendingstickycanoverwrite neweraggregate atlateflush,storelacksactionordering. No mountedReact/reload/persistenceproof,lockedtoolchainlackscomponentDOMruntime. Threegeneralcandidates with costs,noneauthorized. No formal round2 score, common-gate waiver or product change. Prior failures remain. P12-36-B-20261027T000000Z.md.
+
+
+### §1h.406 — 2026-10-27 — P12-34-FOUR-INPUT-NOTE-BASELINE-BANKED
+
+Allfourinputsnormalchooser/consent;oneinventedboldnoteeachretainsstrongafterclose/reopen;publicAalsoreload+AltF10roundtrip. No completeformat/lifecycle/matrix/privacy/exportclosure. No formal round2 score, common-gate waiver or product change. Prior failures remain. P12-34-A-20261027T111042Z.md.
 
 
 ## §5. Durable work ledger — update in place, evidence append only
