@@ -42,7 +42,7 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T00:53:41.550Z; only writer of this file
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T00:53:44.724Z; only writer of this file
 CURRENT ITEM:          C28managerverifyd2f89f8/nativeCI40428712922+local;A23A24scores0evidence;3ThemeAreaderslive3ThemeBqueued;A26PARTIAL1860missing30;A0B0;clockACTIVE
 NEXT TURN:          Finish C28 independent exact-tree native full gates/touched3/mutations and real existing/fresh-upload UI; complete six blind readers and director baseline; preserve failures
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
@@ -1557,6 +1557,11 @@ A23 independent adverse baseline score0.00;12unitFAIL(evidence),sixcommongatesun
 ### §1h.375 — 2026-10-27 — P12-R1-A24-ADVERSE-BASELINE-SCORE
 
 A24 independent adverse baseline score0.00;12unitFAIL(evidence),sixcommongatesunestablished,0substantiatedextras;frozen610-artifactmanifest378da67a;notreader median or closure. Evidence: P12-24-A-20261025T230500Z.md;19917ecb;frozenThemeBpack. No threshold, price, denominator, guard or production-access requirement waived.
+
+
+### §1h.376 — 2026-10-27 — P12-R1-THREE-THEME-A-BLIND-READERS-STARTED
+
+Three fresh independent requested-platform readers dispatched separately against exact same frozenThemeApack/rubric/owneronly;noA/directorscores/code/stateprovided;ThemeBreadersqueuedonlybecause4runtime slotsinclude manager. Evidence: briefs/P12-R1-reader.md;privateblind-round1;agentsp12_r1_theme_a_reader_1/2/3. No threshold, price, denominator, guard or production-access requirement waived.
 
 
 ## §5. Durable work ledger — update in place, evidence append only
