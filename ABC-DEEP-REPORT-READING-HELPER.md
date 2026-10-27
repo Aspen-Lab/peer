@@ -40,7 +40,7 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ## §1. CURRENT STATE
 
 ```text
-ROUND:          P12 round 2 (first under §1h.420 / §1h.422): inputs the owner's papers P1 (Lin 2025) and P2 (Sederholm 2026), scored per paper; stop: Theme A and Theme B each ≥97.25 on both papers in two consecutive rounds; counts 0/2
+ROUND:          P12 round 2 (first under §1h.420–§1h.423): inputs the owner's papers P1 (Lin 2025), P2 (Sederholm 2026), P3 (Zahiri 2021); Themes A, B, C scored per paper (nine scores); stop: all nine ≥97.25 in two consecutive rounds; counts 0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
 HELD BY:          Claude (Opus), cloud session session_017DGPdGJqr95t3pMMcspXjE, 2026-10-27T14:47Z (§1h.419); only writer of this file
 CURRENT ITEM:          A P12-37 (Theme A, 4240) and A P12-38 (Theme B, 4241) walking round 2 on the dev server with the stub (§1h.421)
@@ -48,7 +48,7 @@ NEXT TURN:          three blind readers per theme on each pack; director; score;
 STOPPED BECAUSE:          — (the Codex manager stood down at the owner's word, §1h.419)
 GATE BASELINE:          GREEN on a16cbe48 (Claude, p504/wt, 2026-10-27 14:46–14:53Z, TZ=America/Chicago): build 0; tsc 0; lint 0 errors / 144 warnings; 596 test files + 3 skipped, 10,919 tests + 3 skipped, 0 failed. (Codex native baseline on 220ca9e1 retained in the log.)
 CLOCK:            trig_01MkdKP21BdT8TbcyZpB4umB ENABLED (Haiku, 20 * * * *, P12 prompt; wakes session_017DGPdGJqr95t3pMMcspXjE only when idle)
-OWNER INPUT:      P1 Lin 2025 and P2 Sederholm 2026 (the owner's uploads, §1h.422; upload UI only, never committed or quoted)
+OWNER INPUT:      P1 Lin 2025, P2 Sederholm 2026, P3 Zahiri 2021 (the owner's uploads, §1h.422 / §1h.423; upload UI only, never committed or quoted)
 ```
 
 ### §1a. BINDING — user decisions 2026-10-05 (from the chat replies on the blueprint)
@@ -1823,6 +1823,23 @@ The owner, 2026-10-27 (chat, verbatim), attaching two PDFs: "chatgpt停了。我
 
 (e) Round 2's walks P12-37 and P12-38 switch to P1 and P2 by the manager's message; their worktrees and ports stay.
 
+### §1h.423 — 2026-10-27 — P3 ADDED; THEME C, THE PAPER'S STRUCTURE; NINE SCORES
+
+The owner, 2026-10-27 (chat, verbatim), attaching a third PDF: "加一篇这个 ，这个是nature的，没有固定的文章结构，正好用这个测试一下peer可不可以自己区分出来什么是result, discussion, experiment, introduction etc".
+
+(a) **P3 joins the scored inputs:** Zahiri et al. 2021 (11 pages; sha256 8d7ca92bb604ce6a…), the owner's supplied file under the same rules as P1 and P2 (§1h.422 (b)): upload UI only, never copied into a worktree, committed or quoted, no run of four of its words in an index or deliverable. Themes A and B are scored on P3 as on P1 and P2 (§1h.422 (c)–(d)).
+
+(b) **Theme C — the paper's structure** (new; the owner's request). Does Peer tell, on its own, which part of a paper is the introduction, the methods / experiment, the results, the discussion / conclusion and the back matter — also when the headings do not say so (P3's journal prints descriptive headings and an unheaded introduction). Scored **per paper on P1, P2 and P3**, on the profile with **no key** (Tier 0), from the reading map at W1 1440×900, default step, light.
+- **Units:** one per **part** of the paper as ruled by the manager from the PDF (the ground truth, below): the introduction (headed or not); each results section; the discussion and / or conclusion; the methods / experimental section; the back matter (references, acknowledgements, data and author statements) as one unit. N_p = the number of ruled parts of paper p.
+- **PASS** when the map has a row that starts where the part starts (its first paragraph is the row's first paragraph; a part merged into another row or split across rows fails) **and** the role the page shows on that row is the ruled role — introduction → setup; methods / experimental → method; results → evidence; discussion, conclusion, limitations → interpretation; back matter → apparatus (the app's own five roles, `web/src/lib/papers/reading-map.ts`). A row with no role tag (`body`) for a part that has a ruled role is FAIL.
+- **Extras:** a map row for something that is not a part of the paper (a caption, a running head, a journal or licence line) 0.5 (misleading); a sub-row whose role contradicts its part's 0.5; a role shown in words a reader would misread 0.25.
+- **Score** per paper: `max(0, 100 × (Σ PASS − Σ extras) / N_p)`; the pass requirements of the rubric apply (Tier 0 above all).
+- **Ground truth:** proposed by an independent read-only B (P12-40) from each PDF — the parts with their page, their first paragraph's locator, the proposed role and the PDF's own evidence for it — and **ruled by the manager before the first Theme C score**. The committed ruling names parts by ordinal, page and role only (no heading words); the full private list stays in the manager's scratch.
+
+(c) **§1f.2's "no positional guessing" is superseded** for parts whose heading names no role: the owner now asks Peer to work the role out itself. The role must still come **from the document's own evidence** (where the part stands relative to parts the page can name, such as the methods and the references; the unheaded text before the first heading; the paper's own signposting), never from a model in Tier 0. Whether the page marks an inferred role differently from a named one is a design question the B answers with candidates and the manager rules.
+
+(d) **The stop line now has nine scores:** Theme A, Theme B and Theme C, each on P1, P2 and P3 — **all nine ≥ 97.25 in two consecutive scored rounds**. Round 2's walks P12-37 / P12-38 add P3 by the manager's message; Theme C is first scored in round 2 if its ground truth is ruled in time, otherwise from round 3.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2116,6 +2133,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-37 | IN_PROGRESS — A (Sonnet), round 2 Theme A, port 4240, scratch p12/r2/a37 | Theme A A1–A12 under §1h.420 / §1h.421 | the rubric's units and pass requirements over the finite matrix | walk, pack, deliverable P12-37-A-<UTC>.md | briefs/P12-37.md; §1h.421 |
 | P12-38 | IN_PROGRESS — A (Sonnet), round 2 Theme B, port 4241, scratch p12/r2/a38 | Theme B B1–B12 under §1h.420 / §1h.421 | the rubric's units and pass requirements over the finite matrix | walk, pack, deliverable P12-38-A-<UTC>.md | briefs/P12-38.md; §1h.421 |
 | P12-39 | IN_PROGRESS — B (Sonnet), read-only, scratch p12/b39 | the figure engine on P1 / P2, figure by figure against the PDF pages | per-paper table RIGHT / WRONG REGION / MISSING …; mechanisms with file:line; three candidate rules each | report P12-39-B-<UTC>.md | briefs/P12-39.md |
+| P12-40 | IN_PROGRESS — B (Sonnet), read-only, scratch p12/b40 | Theme C ground truth for P1 / P2 / P3; the map's roles today; Tier-0 role inference candidates | proposed parts with page, locator, role and evidence; current rows; mechanisms; three rule sets | report P12-40-B-<UTC>.md; the manager rules the ground truth | briefs/P12-40.md; §1h.423 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
 | P11-26 | **DONE 21:0xZ 2026-10-20** — on the branch (§1h.128 (b)); was RUNNING (rules 4, 5 added §1h.127 (c)) since 09:1xZ 2026-10-20 — C, `briefs/P11-26.md`, `scratchpad/p11c26/wt`, port 4127: the explain card keeps its top at the selection (B3); a figure in front of the stack is never a thumbnail (X-3) | round 1 Theme B | §1h.122 (b) 1, 4 | C → the manager | — |

@@ -94,14 +94,14 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T15:07Z
+AS OF        2026-10-27T15:12Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
-LAST RULING  §1h.422   NEXT RULING §1h.423   NEXT ITEM ID P12-40   NEXT FREE PORT 4242
-RUBRIC       P12-RUBRIC.md + §1h.420 matrix + §1h.421 dev server + §1h.422 inputs P1/P2 scored per paper; stop: A and B ≥97.25 on both papers, two consecutive rounds; counts 0/0
-RUNNING      A P12-37 (Theme A, 4240) ∥ A P12-38 (Theme B, 4241) on P1 / P2, dev server + stub; B P12-39 (figure engine on P1 / P2, read-only)
+LAST RULING  §1h.423   NEXT RULING §1h.424   NEXT ITEM ID P12-41   NEXT FREE PORT 4242
+RUBRIC       P12-RUBRIC.md + §1h.420 matrix + §1h.421 dev server + §1h.422 per-paper scores + §1h.423 P3 and Theme C; stop: Themes A, B, C on P1, P2, P3 (nine scores) ≥97.25 in two consecutive rounds; counts 0/0
+RUNNING      A P12-37 (Theme A, 4240) ∥ A P12-38 (Theme B, 4241) on P1 / P2 / P3; B P12-39 (figure engine on P1 / P2); B P12-40 (Theme C ground truth and role inference)
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
-OWNER'S PDFS P1 Lin 2025, P2 Sederholm 2026 (uploads in the manager's session); upload UI only; never commit or quote
+OWNER'S PDFS P1 Lin 2025, P2 Sederholm 2026, P3 Zahiri 2021 (uploads in the manager's session); upload UI only; never commit or quote
 CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB ENABLED (Haiku, hourly at :20)
 ```
 
@@ -627,6 +627,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T15:08Z | manager (Claude) | BASELINE a16cbe48 GREEN: build 0, tsc 0, lint 0/144, 596+3 files, 10,919+3 tests, 0 failed (p504/wt) | evidence: scratch p12/gates/base-a16cbe48.txt | next: the two walks
 
 - 2026-10-27T15:09Z | manager (Claude) | P12-39 dispatched: a read-only B on the figure engine's output for P1 / P2 against the PDF pages, in parallel with the walks, so a figure fix can start before they end | evidence: briefs/P12-39.md | next: the walks and B39
+
+- 2026-10-27T15:12Z | manager (Claude) | §1h.423: P3 (Zahiri 2021) added; Theme C (the paper's structure: does Peer tell introduction / methods / results / discussion / back matter apart, also without role-naming headings) scored per paper; nine scores; §1f.2's no-positional-guessing superseded for unnamed parts; B P12-40 dispatched for the ground truth and the inference rules; A37 / A38 add P3 | evidence: P12-RUBRIC.md amendment; briefs/P12-40.md | next: B40's ground truth → the manager's ruling → C
 
 ---
 
