@@ -1,6 +1,7 @@
 // P12-47 (B P12-39 M2 / M3 / M4 / M5 / M8): what a figure's region takes in and where its picture ends. Every PDF
 // is invented and built here with `figurePdf`; the owner's papers are never a fixture. The rules, one block each:
-//   R2a  sub-floor satellites join an accepted, captioned region (the floors themselves do not move)
+//   R9a + R10a  a Figure caption below its figure takes in the pieces of its band (the floors themselves do not
+//        move); they replace R2a's satellites, ruling §1h.429
 //   R3a  short figure-text lines within 6 pt join it too (a body paragraph's last line does not)
 //   R5a  the padded clip stops at a caption that sits inside the padding
 //   R8a  a caption ends at a pitch jump
@@ -14,35 +15,32 @@ const figuresOf = async (page: FigurePage, extra: Record<string, unknown> = {}) 
   (await extractPdfFigures(figurePdf([page]), { ...options, measureOnly: true, ...extra })).figures;
 const boxesOf = async (page: FigurePage) => (await figuresOf(page)).map((figure) => figure.box);
 
-// ── R2a: satellites ──────────────────────────────────────────────────────
+// ── R9a + R10a: the caption's band (these replace R2a's satellites, ruling §1h.429) ─
 
-describe("P12-47 R2a: sub-floor satellites join an accepted, captioned region", () => {
+describe("P12-47 R9a + R10a: a Figure caption below its figure takes in the pieces of its band", () => {
   // A long caption line, so it sits under the panel beside the raster as well.
   const CAPTION = "Figure 1. An invented raster with a thin strip above it and a small panel beside it, all one figure.";
   /** The figure: a raster 240 x 180 pt, over the 120 / 120 / 20,000 floors. */
   const HOST: Shape = { kind: "image", x: 60, top: 150, w: 240, h: 180 };
   /** A raster strip 70 pt tall (under the 120 pt floor), 4 pt above the figure. */
   const STRIP: Shape = { kind: "image", x: 60, top: 76, w: 240, h: 70 };
-  /** A vector cluster 100 x 120 pt = 12,000 pt2: under the 120 pt width floor, over half the floors. */
+  /** A vector cluster 100 x 120 pt = 12,000 pt2: under the 120 pt width floor. */
   const SIDE_PANEL: Shape = { kind: "rect", x: 330, top: 190, w: 100, h: 120 };
   const page = (...shapes: Shape[]): FigurePage => ({ text: [[CAPTION, 60, 345, 9]], shapes: [HOST, ...shapes] });
+  const strip = (top: number, h: number): Shape => ({ kind: "image", x: 60, top, w: 240, h });
+  const mark = (w: number, h: number): Shape => ({ kind: "rect", x: 330, top: 190, w, h });
 
   it("takes the raster strip above it and the vector cluster beside it", async () => {
     expect(await boxesOf(page())).toEqual([[60, 150, 300, 330]]);
     expect(await boxesOf(page(STRIP, SIDE_PANEL))).toEqual([[60, 76, 430, 330]]);
   });
 
-  it("takes each satellite alone", async () => {
+  it("takes each piece alone", async () => {
     expect(await boxesOf(page(STRIP))).toEqual([[60, 76, 300, 330]]);
     expect(await boxesOf(page(SIDE_PANEL))).toEqual([[60, 150, 430, 330]]);
   });
 
-  it("repeats until stable: a strip that touches only the first strip joins after it", async () => {
-    const second: Shape = { kind: "image", x: 60, top: 30, w: 240, h: 42 };
-    expect(await boxesOf(page(STRIP, second))).toEqual([[60, 30, 300, 330]]);
-  });
-
-  it("makes no figure of a sub-floor raster or cluster of its own, with a caption or without", async () => {
+  it("makes no figure of two sub-floor pieces, with a caption or without", async () => {
     const alone: Shape[] = [{ kind: "image", x: 60, top: 150, w: 240, h: 70 }, SIDE_PANEL];
     for (const text of [[], [[CAPTION, 60, 345, 9]]] as FigurePage["text"][]) {
       const result = await extractPdfFigures(figurePdf([{ text, shapes: alone }]), options);
@@ -51,27 +49,67 @@ describe("P12-47 R2a: sub-floor satellites join an accepted, captioned region", 
     }
   });
 
-  it("takes a raster at a gap of 8 pt and leaves one at 8.5 pt", async () => {
-    expect(await boxesOf(page({ kind: "image", x: 60, top: 72, w: 240, h: 70 }))).toEqual([[60, 72, 300, 330]]);
-    expect(await boxesOf(page({ kind: "image", x: 60, top: 71.5, w: 240, h: 70 }))).toEqual([[60, 150, 300, 330]]);
+  // Re-aimed from R2a's "takes a raster at a gap of 8 pt and leaves one at 8.5 pt": the same two strips, and now
+  // both are taken, as is one 30 pt away. A band has no gap limit.
+  it("has no gap limit: strips 8, 8.5 and 30 pt from the region are all taken", async () => {
+    expect(await boxesOf(page(strip(72, 70)))).toEqual([[60, 72, 300, 330]]);
+    expect(await boxesOf(page(strip(71.5, 70)))).toEqual([[60, 71.5, 300, 330]]);
+    expect(await boxesOf(page(strip(50, 70)))).toEqual([[60, 50, 300, 330]]);
   });
 
-  it("leaves a raster that shares less than half of its width with the region", async () => {
-    // 100 pt wide, 20 pt of it above the region: 20 < 50.
-    expect(await boxesOf(page({ kind: "image", x: 280, top: 76, w: 100, h: 70 }))).toEqual([[60, 150, 300, 330]]);
+  // Re-aimed from R2a's "leaves a raster that shares less than half of its width with the region": the same
+  // raster, 100 pt wide with 20 pt of it over the region, is a piece in the band and is taken.
+  it("takes a piece that shares little of the region's width", async () => {
+    expect(await boxesOf(page({ kind: "image", x: 280, top: 76, w: 100, h: 70 }))).toEqual([[60, 76, 380, 330]]);
   });
 
-  it("leaves a vector cluster under half the floors, and one that shares under half of the region's height", async () => {
-    // 55 x 100 = 5,500 pt2: under 60 pt wide and under 10,000 pt2, though it shares 100 of the 180 pt.
-    expect(await boxesOf(page({ kind: "rect", x: 330, top: 190, w: 55, h: 100 }))).toEqual([[60, 150, 300, 330]]);
-    // 170 x 60 = 10,200 pt2 is big enough in area, but shares 60 of the region's 180 pt (half is 90).
-    expect(await boxesOf(page({ kind: "rect", x: 330, top: 200, w: 170, h: 60 }))).toEqual([[60, 150, 300, 330]]);
+  // Re-aimed from R2a's "repeats until stable": the second strip of that test, 30 pt from the page's top edge,
+  // lies in the furniture band (the top 46 pt) and is a running head, not a piece. The band is the limit, not a chain.
+  it("leaves what lies in the page's top 46 pt, and takes a piece that starts at 45", async () => {
+    expect(await boxesOf(page(STRIP, strip(30, 42)))).toEqual([[60, 76, 300, 330]]);
+    expect(await boxesOf(page(strip(45, 40)))).toEqual([[60, 45, 300, 330]]);
+    expect(await boxesOf(page(strip(44.5, 40)))).toEqual([[60, 150, 300, 330]]);
   });
 
-  it("leaves a vector cluster whose own nearest caption is another line", async () => {
-    // A table caption directly under the panel is the panel's nearest typed line, and a table is no figure.
-    const withTable: FigurePage = { text: [[CAPTION, 60, 345, 9], ["Table 1. Invented rows.", 340, 322, 9]], shapes: [HOST, STRIP, SIDE_PANEL] };
-    expect(await boxesOf(withTable)).toEqual([[60, 76, 300, 330]]);
+  it("stops at a body-like line above the caption: a line of 70 characters and 100 pt", async () => {
+    const body: TextRun = ["The invented body paragraph line runs on well past seventy characters so it is body-like.", 60, 105, 10];
+    const far = strip(52, 40);
+    const near = strip(112, 34);
+    expect(await boxesOf({ text: [[CAPTION, 60, 345, 9]], shapes: [HOST, far, near] })).toEqual([[60, 52, 300, 330]]);
+    expect(await boxesOf({ text: [[CAPTION, 60, 345, 9], body], shapes: [HOST, far, near] })).toEqual([[60, 112, 300, 330]]);
+    // A shorter line, or a narrower one, is not body-like.
+    const short: TextRun = ["A short label of under seventy characters, not body text.", 60, 105, 10];
+    expect(await boxesOf({ text: [[CAPTION, 60, 345, 9], short], shapes: [HOST, far, near] })).toEqual([[60, 52, 300, 330]]);
+  });
+
+  it("stops at another typed caption above it", async () => {
+    const table: TextRun = ["Table 1. Invented rows.", 60, 105, 9];
+    expect(await boxesOf({ text: [[CAPTION, 60, 345, 9], table], shapes: [HOST, strip(52, 40), strip(112, 34)] })).toEqual([[60, 112, 300, 330]]);
+  });
+
+  it("takes a piece of 3,000 pt2 and 30 pt on both sides, and leaves a smaller one", async () => {
+    // [width, height, taken]: the 44 x 44 mark of the engine's panel fixtures is 1,936 pt2.
+    const cases: Array<[number, number, boolean]> = [[44, 44, false], [59, 50, false], [60, 50, true], [29, 110, false], [30, 110, true], [100, 28, false]];
+    for (const [w, h, taken] of cases) {
+      expect(await boxesOf(page(mark(w, h))), `${w} x ${h}`).toEqual([[60, 150, taken ? 330 + w : 300, 330]]);
+    }
+  });
+
+  // Re-aimed from R2a's "leaves a vector cluster under half the floors, and one that shares under half of the
+  // region's height": those two clusters, 55 x 100 and 170 x 60, are over 3,000 pt2 and 30 pt, so both are taken.
+  it("takes the 55 x 100 and 170 x 60 clusters R2a had left", async () => {
+    expect(await boxesOf(page(mark(55, 100)))).toEqual([[60, 150, 385, 330]]);
+    expect(await boxesOf(page({ kind: "rect", x: 330, top: 200, w: 170, h: 60 }))).toEqual([[60, 150, 500, 330]]);
+  });
+
+  // R2a's "leaves a vector cluster whose own nearest caption is another line", same fixture and same box. R2a left the
+  // panel because its nearest caption was the table's; a band does not pair a piece, it leaves this panel because
+  // taking it would put the table's caption line inside the region. Beyond the line's reach the panel is taken: a
+  // band does not ask a piece which caption is nearest to it, and that is recorded here as the limit it is.
+  it("leaves a panel that would put a table caption line inside the region, and takes one that would not", async () => {
+    const withTable = (x: number): FigurePage => ({ text: [[CAPTION, 60, 345, 9], ["Table 1. Invented rows.", x, 322, 9]], shapes: [HOST, STRIP, SIDE_PANEL] });
+    expect(await boxesOf(withTable(340))).toEqual([[60, 76, 300, 330]]);
+    expect(await boxesOf(withTable(440))).toEqual([[60, 76, 430, 330]]);
   });
 
   it("never grows across a caption", async () => {
@@ -85,12 +123,73 @@ describe("P12-47 R2a: sub-floor satellites join an accepted, captioned region", 
       shapes: [
         { kind: "image", x: 60, top: 150, w: 180, h: 150 },
         { kind: "image", x: 240, top: 150, w: 180, h: 150 },
-        // 4 pt above both, 70 pt of its 100 over the left one: it qualifies for the left raster, but joining
-        // it would put 30 pt of the right raster inside the left one.
+        // 4 pt above both, 70 pt of its 100 over the left one: it is a piece in the band of either caption, but
+        // taking it would put 30 pt of the other raster inside the region.
         { kind: "image", x: 170, top: 100, w: 100, h: 46 },
       ],
     };
     expect(await boxesOf(twoRasters)).toEqual([[60, 150, 240, 300], [240, 150, 420, 300]]);
+  });
+
+  it("reads a page of two typed captions in columns: the other column's piece stays out", async () => {
+    const right: Shape = { kind: "image", x: 400, top: 190, w: 120, h: 100 };
+    const twoColumns = (text: FigurePage["text"]): FigurePage => ({ text, shapes: [{ kind: "image", x: 40, top: 150, w: 180, h: 180 }, right] });
+    expect(await boxesOf(twoColumns([["Figure 1. Left.", 40, 345, 9], ["Table 1. Right.", 340, 345, 9]]))).toEqual([[40, 150, 220, 330]]);
+    // The same piece on a page of one typed caption, which is read whole: it is taken.
+    expect(await boxesOf(twoColumns([["Figure 1. Left.", 40, 345, 9]]))).toEqual([[40, 150, 520, 330]]);
+  });
+
+  it("grows only a caption below its figure", async () => {
+    const above: FigurePage = { text: [["Figure 1. Caption above.", 60, 140, 9]], shapes: [HOST, SIDE_PANEL] };
+    expect(await boxesOf(above)).toEqual([[60, 150, 300, 330]]);
+  });
+
+  describe("an orphan caption (no region of its own)", () => {
+    const pieceAt = (x: number, top: number): Shape => ({ kind: "image", x, top, w: 100, h: 70 });
+    const FOUR = [pieceAt(60, 150), pieceAt(170, 150), pieceAt(60, 230), pieceAt(170, 230)];
+    const orphan = (shapes: Shape[], caption = "Figure 1. Four small panels, none over the floors."): FigurePage => ({ text: [[caption, 60, 320, 9]], shapes });
+
+    it("starts a region on four sub-floor pieces whose union passes the floors", async () => {
+      const figures = await figuresOf(orphan(FOUR));
+      expect(figures.map((figure) => [figure.box, figure.kind])).toEqual([[[60, 150, 270, 300], "drawing"]]);
+      expect(figures[0].caption).toMatch(/^Figure 1\./);
+    });
+
+    it("needs three pieces: three are enough, two are not", async () => {
+      expect((await figuresOf(orphan(FOUR.slice(0, 3)))).map((figure) => figure.box)).toEqual([[60, 150, 270, 300]]);
+      expect(await figuresOf(orphan(FOUR.slice(0, 2)))).toEqual([]);
+    });
+
+    it("needs the union to pass the floors: a row of three pieces 70 pt tall does not", async () => {
+      expect(await figuresOf(orphan([pieceAt(60, 150), pieceAt(170, 150), pieceAt(280, 150)]))).toEqual([]);
+    });
+
+    it("needs a Figure caption below the pieces", async () => {
+      expect(await figuresOf({ text: [], shapes: FOUR })).toEqual([]);
+      expect(await figuresOf(orphan(FOUR, "Table 1. Four small panels, none over the floors."))).toEqual([]);
+      expect(await figuresOf({ text: [["Figure 1. Caption above.", 60, 130, 9]], shapes: FOUR })).toEqual([]);
+    });
+
+    it("seeds on a piece within 220 pt of the caption", async () => {
+      const far: FigurePage = { text: [["Figure 1. Four small panels.", 60, 560, 9]], shapes: FOUR };
+      expect(await figuresOf(far)).toEqual([]);
+    });
+  });
+
+  describe("R10a: an above-floor piece with no typed caption of its own", () => {
+    // A short caption that the raster beside the figure cannot see: no horizontal overlap with it.
+    const SIBLING: Shape = { kind: "image", x: 330, top: 150, w: 180, h: 180 };
+
+    it("is taken, and is no figure of its own any more", async () => {
+      const before: FigurePage = { text: [["Figure 1. Short.", 60, 345, 9]], shapes: [HOST] };
+      expect(await boxesOf(before)).toEqual([[60, 150, 300, 330]]);
+      expect(await boxesOf({ ...before, shapes: [HOST, SIBLING] })).toEqual([[60, 150, 510, 330]]);
+    });
+
+    it("is left alone when it carries a typed caption of its own", async () => {
+      const both: FigurePage = { text: [["Figure 1. Short.", 60, 345, 9], ["Figure 2. Other.", 330, 345, 9]], shapes: [HOST, SIBLING] };
+      expect(await boxesOf(both)).toEqual([[60, 150, 300, 330], [330, 150, 510, 330]]);
+    });
   });
 });
 

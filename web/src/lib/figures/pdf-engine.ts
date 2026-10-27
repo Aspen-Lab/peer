@@ -13,9 +13,11 @@
 //     other) of that size is a figure only with an explicit "Figure N" caption;
 //   * two regions that mostly overlap are one; a raster the page printed
 //     stretched is rendered back to its own shape;
-//   * a region that passed those floors and has a "Figure N" caption also takes
-//     in the sub-floor rasters and vector clusters next to it (P12-47): the
-//     floors themselves stay, and nothing below one is a figure of its own;
+//   * a "Figure N" caption below its figure takes in the pieces in its band
+//     (P12-47): sub-floor rasters and clusters of 3,000 pt^2 and more, and
+//     above-floor ones with no caption of their own. The floors stay, and
+//     nothing below one is a figure of its own; a caption with no region at
+//     all needs three such pieces whose union passes them;
 //   * the short figure-text lines within 6 pt of such a region (an axis title,
 //     a panel letter) join it too; the last line of a body paragraph does not;
 //   * a figure is the region plus 10 pt (less, where its caption starts inside
@@ -609,92 +611,131 @@ interface Candidate {
   captionIndex: number;
 }
 
-// ── Satellites: what an accepted, captioned region takes in (P12-47, R2a) ─
+// ── Caption-bounded band growth: what a "Figure N" caption takes in (P12-47, R9a + R10a) ─
 //
-// B P12-39 M2 / M4: a figure's panels can be a raster strip or a vector cluster below the size floors (P3 Fig. 2
-// panels a-c, Fig. 5 panels e-f), and each was judged alone and dropped. The floors stay exactly as they are:
-// nothing below a floor becomes a figure of its own. A region that already passed them, with a typed "Figure N"
-// caption, grows by the sub-floor items next to it, until none is left; it never grows across another region or
-// across a caption line.
+// B P12-41 M9 / M10 (and B P12-39 M2 / M4): a figure is often a composite of small plots, photographs and renders of
+// which none passes the size floors (M9), or one does and the rest do not (M2), or a panel passes them but sits where
+// the caption cannot see it (M10). The floors stay exactly as they are for a candidate, and nothing below a floor
+// becomes a figure on its own. What grows is the region of a typed "Figure N" caption that lies below its figure.
+// The caption's band runs from the nearest body-like line above it (at least 70 characters and 100 pt wide, or
+// another typed caption) down to the caption, or from the page's top furniture band when there is none. The seed is
+// the region the caption has; a caption with none (an orphan) seeds on the nearest piece within 220 pt. Every piece
+// in the band is then taken, with no gap limit: sub-floor pieces of at least 3,000 pt2 and 30 pt on both sides (R9a),
+// and above-floor pieces that carry no typed caption of their own (R10a). An orphan needs three pieces and a union
+// that passes the floors. A piece is not taken if taking it would put another captioned region or a caption line
+// inside the region. On a page of two or more typed captions the band is read in columns (as B measured it): a
+// body-like line bounds the band only if it spans the caption's left edge, and a piece must reach the caption's
+// column, which is at least half a page wide.
 
-/** The most a sub-floor raster may be from the region it joins, in points. */
-const SATELLITE_GAP = 8;
-/** The share of the other axis a raster must have in common with the region, and the share of the region's height
- *  a vector cluster must have in common with it (the height the region had when it passed the floors, so that the
- *  order in which satellites are met does not decide which of them join). */
-const SATELLITE_SHARE = 0.5;
-
-interface Satellite {
-  rect: Rect;
-  kind: "image" | "drawing";
-  /** A drawing's own caption pairing: the page text line it would be captioned by (-1 for a raster, which has none). */
-  caption: number;
-}
+/** The page's top furniture band, in points: a piece above it is a running head, not a part of the figure. */
+const BAND_FURNITURE = 46;
+/** A body-like line: at least this many characters and this wide, in points. */
+const BODY_LINE_CHARS = 70;
+const BODY_LINE_WIDTH = 100;
+/** The least a sub-floor piece may be: area in pt2 and the shorter side in points (a 44 x 44 pt mark is neither). */
+const PIECE_MIN_AREA = 3_000;
+const PIECE_MIN_SIDE = 30;
+/** Pieces an orphan caption needs, and how far its columns reach past the caption's own extent. */
+const ORPHAN_MIN_PIECES = 3;
+const COLUMN_MARGIN = 15;
+const COLUMN_MIN_SHARE = 0.5;
+/** A raster wider than this share of the page is its background, not a piece. */
+const BACKGROUND_SHARE = 0.9;
 
 const isTypedCaption = (text: string) => CAPTION_RE.test(text) || OTHER_CAPTION_RE.test(text);
 const failsFloors = (r: Rect) => width(r) < MIN_WIDTH || height(r) < MIN_HEIGHT || area(r) < MIN_AREA;
 const unionOf = (a: Rect, b: Rect): Rect => [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])];
-const sharedLength = (a0: number, a1: number, b0: number, b1: number) => Math.max(0, Math.min(a1, b1) - Math.max(a0, b0));
 const gapBetween = (a0: number, a1: number, b0: number, b1: number) => Math.max(a0 - b1, b0 - a1, 0);
 /** How much of `barrier` the rectangle `after` covers beyond what `before` already did. */
 const coverageGain = (before: Rect, after: Rect, barrier: Rect) => area(intersect(after, barrier)) - area(intersect(before, barrier));
+const isSubPiece = (r: Rect) => failsFloors(r) && area(r) >= PIECE_MIN_AREA && Math.min(width(r), height(r)) >= PIECE_MIN_SIDE;
 
-/** The sub-floor rasters of a page, and its vector clusters of at least half the floors that a typed caption
- *  would caption (the line is kept: a cluster joins only the region that line captions). */
-function collectSatellites(images: ImageBlock[], clusters: Rect[] | null, texts: TextBlock[]): Satellite[] {
-  const found: Satellite[] = [];
+/** The rasters and vector clusters of a page: what a figure is made of. */
+function collectPieces(images: ImageBlock[], clusters: Rect[] | null, pageRect: Rect): Rect[] {
+  const pieces: Rect[] = [];
   for (const image of images) {
-    if (!isEmpty(image.bbox) && failsFloors(image.bbox)) found.push({ rect: image.bbox, kind: "image", caption: -1 });
+    if (!isEmpty(image.bbox) && width(image.bbox) <= BACKGROUND_SHARE * width(pageRect)) pieces.push(image.bbox);
   }
-  for (const rect of clusters ?? []) {
-    if (!failsFloors(rect)) continue;
-    if (width(rect) < MIN_WIDTH / 2 || height(rect) < MIN_HEIGHT / 2 || area(rect) < MIN_AREA / 2) continue;
-    const { explicit, excluded, index } = bestCaptionForRegion(rect, texts);
-    if (explicit && !excluded) found.push({ rect, kind: "drawing", caption: index });
-  }
-  return found;
+  for (const cluster of clusters ?? []) pieces.push(cluster);
+  return pieces;
 }
 
-/** A raster next to the region: at most 8 pt away on one axis and sharing at least half of the smaller side on the other. */
-function adjacentRaster(region: Rect, raster: Rect): boolean {
-  const gapX = gapBetween(region[0], region[2], raster[0], raster[2]);
-  const gapY = gapBetween(region[1], region[3], raster[1], raster[3]);
-  const sharedX = sharedLength(region[0], region[2], raster[0], raster[2]) >= SATELLITE_SHARE * Math.min(width(region), width(raster));
-  const sharedY = sharedLength(region[1], region[3], raster[1], raster[3]) >= SATELLITE_SHARE * Math.min(height(region), height(raster));
-  return (gapY <= SATELLITE_GAP && gapX === 0 && sharedX) || (gapX <= SATELLITE_GAP && gapY === 0 && sharedY);
+/** Does a typed caption, a figure's or a table's, already claim this piece as its own? */
+function carriesTypedCaption(piece: Rect, texts: TextBlock[]): boolean {
+  const match = bestCaptionForRegion(piece, texts);
+  return match.explicit || match.excluded;
 }
 
-/** `accepted` is the region as it passed the floors; `host.rect` is what it has grown to since. */
-function joinsRegion(host: Candidate, accepted: Rect, satellite: Satellite): boolean {
-  if (satellite.kind === "image") return adjacentRaster(host.rect, satellite.rect);
-  return (
-    satellite.caption === host.captionIndex &&
-    sharedLength(accepted[1], accepted[3], satellite.rect[1], satellite.rect[3]) >= SATELLITE_SHARE * height(accepted)
-  );
-}
-
-/** Grows each accepted, captioned region by the satellites that join it; true when any region changed. */
-function growWithSatellites(candidates: Candidate[], texts: TextBlock[], satellites: Satellite[]): boolean {
-  const hosts = candidates.filter((candidate) => candidate.explicit && candidate.captionIndex >= 0);
-  const accepted = new Map(hosts.map((host) => [host, host.rect] as const));
-  const captionLines = texts.filter((line) => isTypedCaption(line.text)).map((line) => line.rect);
-  const crosses = (host: Candidate, grown: Rect) =>
-    candidates.some((other) => other !== host && coverageGain(host.rect, grown, other.rect) > 0.01) ||
-    captionLines.some((line) => coverageGain(host.rect, grown, line) > 0.01);
-  const pool = [...satellites];
+/** Grows each "Figure N" caption's region by the pieces in its band, and starts a region for an orphan caption;
+ *  true when the candidates changed. */
+function growFromCaptions(candidates: Candidate[], texts: TextBlock[], pieces: Rect[], pageRect: Rect): boolean {
+  if (!pieces.length) return false;
+  const typedLines = texts.filter((line) => isTypedCaption(line.text));
+  const inColumns = typedLines.length >= 2;
   let changed = false;
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (const host of hosts) {
-      for (let i = 0; i < pool.length; i++) {
-        if (!joinsRegion(host, accepted.get(host)!, pool[i])) continue;
-        const grown = unionOf(host.rect, pool[i].rect);
-        if (crosses(host, grown)) continue;
-        if (grown.some((value, side) => value !== host.rect[side])) grew = changed = true;
-        host.rect = grown;
-        pool.splice(i--, 1);
-      }
+  for (const [index, caption] of texts.entries()) {
+    if (!CAPTION_RE.test(caption.text)) continue;
+    const seed = candidates.find((candidate) => candidate.explicit && candidate.captionIndex === index) ?? null;
+    if (seed && seed.rect[3] > caption.rect[1] + 5) continue; // its caption is above it: the band is for a caption below
+    if (!seed && candidates.some((candidate) => captionKey(candidate.caption) === captionKey(caption.text))) continue;
+
+    let bandTop = BAND_FURNITURE;
+    for (const line of texts) {
+      if (line === caption || line.rect[3] > caption.rect[1] + 0.5) continue;
+      const bodyLike = (line.text.length >= BODY_LINE_CHARS && width(line.rect) >= BODY_LINE_WIDTH) || isTypedCaption(line.text);
+      if (!bodyLike || (inColumns && horizontalPenalty([caption.rect[0], 0, caption.rect[0] + 1, 1], line) > 0)) continue;
+      bandTop = Math.max(bandTop, line.rect[3]);
+    }
+    const columnLeft = inColumns ? caption.rect[0] - COLUMN_MARGIN : -Infinity;
+    const columnRight = inColumns ? Math.max(caption.rect[2], caption.rect[0] + COLUMN_MIN_SHARE * width(pageRect)) + COLUMN_MARGIN : Infinity;
+    const pool = pieces.filter(
+      (piece) =>
+        piece[1] >= bandTop - 1 &&
+        piece[3] <= caption.rect[1] + 2 &&
+        piece[2] > columnLeft &&
+        piece[0] < columnRight &&
+        (isSubPiece(piece) || (!failsFloors(piece) && !carriesTypedCaption(piece, texts))) &&
+        candidates.every((other) => other === seed || !other.explicit || area(intersect(piece, other.rect)) <= 0.01),
+    );
+    const blocked = (before: Rect, after: Rect) =>
+      candidates.some((other) => other !== seed && other.explicit && coverageGain(before, after, other.rect) > 0.01) ||
+      typedLines.some((line) => line !== caption && coverageGain(before, after, line.rect) > 0.01);
+
+    let region: Rect;
+    let taken = 0;
+    let seedPiece = -1;
+    if (seed) region = seed.rect;
+    else {
+      let nearestGap = Infinity;
+      pool.forEach((piece, i) => {
+        const gap = caption.rect[1] - piece[3];
+        if (gap < nearestGap) [seedPiece, nearestGap] = [i, gap];
+      });
+      if (seedPiece < 0 || nearestGap > MAX_CAPTION_DISTANCE_BELOW) continue;
+      region = pool[seedPiece];
+      taken = 1;
+    }
+    for (const [i, piece] of pool.entries()) {
+      if (i === seedPiece) continue;
+      const grown = unionOf(region, piece);
+      if (blocked(region, grown)) continue;
+      region = grown;
+      taken++;
+    }
+
+    if (seed) {
+      if (!region.some((value, side) => value !== seed.rect[side])) continue;
+      seed.rect = region;
+    } else {
+      if (taken < ORPHAN_MIN_PIECES || failsFloors(region)) continue;
+      const match = bestCaptionForRegion(region, texts);
+      if (!match.explicit || match.excluded || match.index !== index) continue;
+      candidates.push({ rect: region, kind: "drawing", caption: match.caption, explicit: true, captionDistance: match.distance, stretch: 1, captionIndex: index });
+    }
+    changed = true;
+    // What the region took in is no figure of its own (an uncaptioned raster that was a piece of it).
+    for (let i = candidates.length - 1; i >= 0; i--) {
+      if (!candidates[i].explicit && overlapRatio(candidates[i].rect, region) >= OVERLAP_DUPLICATE) candidates.splice(i, 1);
     }
   }
   return changed;
@@ -796,12 +837,11 @@ function candidateRegions(mupdf: Mupdf, page: Page, pageRect: Rect, texts: TextB
     const nearest = Math.min(...competitors.map((other) => other.captionDistance));
     return candidate.captionDistance === nearest && competitors.filter((other) => other.captionDistance === nearest).length === 1;
   });
-  // P12-47 R2a, then R3a: with the regions settled, an accepted, captioned one takes in the sub-floor items next
-  // to it, and then the short figure-text lines around what it has become.
-  if (defensible.some((candidate) => candidate.explicit && candidate.captionIndex >= 0)) {
-    const withSatellites = growWithSatellites(defensible, texts, collectSatellites(images, clusters, texts));
-    if (absorbFigureText(defensible, texts) || withSatellites) defensible.sort(byPlace);
-  }
+  // P12-47 R9a + R10a, then R3a: with the regions settled, each "Figure N" caption below its figure takes in the
+  // pieces of its band (an orphan caption starts a region of its own), and then the short figure-text lines around
+  // what the region has become.
+  const withBands = growFromCaptions(defensible, texts, collectPieces(images, clusters, pageRect), pageRect);
+  if (absorbFigureText(defensible, texts) || withBands) defensible.sort(byPlace);
   for (const candidate of defensible) candidate.stretch = regionStretch(candidate.rect, placed);
   return { candidates: defensible, drawingLimit: overflow || clusters === null };
 }
