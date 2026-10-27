@@ -22,6 +22,7 @@ import { headingNumber, numbersHeading, type ExtractedDocument, type ExtractedEq
 // Type only: erased at runtime, so `reading.ts` can import this module
 // without the two importing each other.
 import type { ReadingEquation } from "./reading";
+import { inferRoles, unheadedTrunk } from "./reading-roles";
 import { isBoilerplate, scoreSentence, splitSentences } from "./skim";
 
 // ── The body's sections and paragraphs (§1f.1; moved from reading.ts in P1-04) ──
@@ -148,7 +149,9 @@ export interface ReadingMap {
   totalMinutes: number;
 }
 
-/** §1f.2: the bucket, renamed for a reader. No positional guessing. */
+/** §1f.2: the bucket, renamed for a reader. A heading that names no role stays `body` here; P12-48 (§1h.423 (c),
+ *  which supersedes §1f.2's "no positional guessing") works a role out for such a part from where it stands
+ *  against the parts the page can name, in `reading-roles.ts`, once the rows are made (`readingMapOf`). */
 const ROLE: Readonly<Record<string, ReadingRole>> = {
   introduction: "setup",
   related_work: "setup",
@@ -296,7 +299,10 @@ export function readingMapOf(rendered: readonly ReadableSection[]): ReadingMap {
       ...(parentId !== undefined ? { parentId } : {}),
     };
   });
-  return { sections, totalMinutes: Math.ceil(totalWords / WORDS_PER_MINUTE) };
+  // P12-48: the roles of the parts whose heading names none (`reading-roles.ts`), once, so the map, the route's
+  // weights, the gist tiers and the explain route all read the same ones. A named role is never overridden.
+  const trunk = unheadedTrunk(rendered.map(({ id, section, paragraphs }) => ({ id, canonical: section.canonical, paragraphs })));
+  return { sections: inferRoles(sections, trunk?.sectionId ?? null), totalMinutes: Math.ceil(totalWords / WORDS_PER_MINUTE) };
 }
 
 /** P10-04: a heading's level — the parts of its number ("2." 1, "2.1" 2, "2.1.1" 3, deeper 3); no number, 1. */

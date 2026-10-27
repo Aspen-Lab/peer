@@ -33,6 +33,7 @@
 
 import { MAP } from "@/components/reader/copy";
 import { GIST_QUESTION, gistRoute, routeByQuestions, type ReadingMap, type ReadingMapSection, type ReadingRole, type RouteSection, type RouteTier } from "./reading-map";
+import { unheadedTrunk } from "./reading-roles";
 
 /** The five parts a model may name. `experimental` is materials, instruments, procedures,
  *  data processing and statistics, wherever in the section they stand. */
@@ -60,67 +61,10 @@ export interface GuidePartition {
   parts: GuidePart[];
 }
 
-/** The section a model may partition: its id, its place among the sections it was found in, and its size. */
-export interface Trunk {
-  sectionId: string;
-  sectionIndex: number;
-  paragraphCount: number;
-}
-
-/**
- * The rule's three numbers (B P10-05 §1.3). `share`: the trunk holds at least this fraction of all
- * the words — set by reasoning (a Nature-style article's Methods can be near half of the words, so
- * 0.7 would miss the real thing); nothing headed in the fixtures goes above 10 %. `paragraphs`:
- * fewer cannot make two parts of more than a paragraph or two. `placedRows`: a paper with three
- * recognised headings is mapped by its own headings; the partition is for the text they do not cover.
- */
-export const TRUNK = { share: 0.5, paragraphs: 8, placedRows: 2 } as const;
-
-/** Buckets that are not "placed" for the rule: nothing recognised, or end matter. */
-const NOT_PLACED = new Set(["body", "abstract", "references", "acknowledgments", "supplementary"]);
-
-/** The map's own count (`wordCount` in `reading-map.ts`, §1f.3). */
-function wordsOf(paragraphs: readonly string[]): number {
-  let words = 0;
-  for (const paragraph of paragraphs) words += paragraph.split(/\s+/).length;
-  return words;
-}
-
-/**
- * The section a model may partition, or null. `sections` is `readableSections(doc)` (its `id`,
- * `section.canonical` and `paragraphs`) on the server and `reading.body` in the browser.
- *
- * The trunk is the `body` section with the most words (the earlier on a tie). The paper is
- * unheaded when the trunk holds at least half of all the words and at least eight paragraphs, and
- * at most two other sections have a placed bucket. A paper with headings of its own — even six
- * unplaced sub-headings among fifteen rows — has no such section, and is mapped by them.
- */
-export function unheadedTrunk(
-  sections: ReadonlyArray<{ id: string; canonical: string; paragraphs: readonly string[] }>,
-): Trunk | null {
-  let all = 0;
-  let placed = 0;
-  let best = -1;
-  let bestWords = -1;
-  sections.forEach((section, index) => {
-    const words = wordsOf(section.paragraphs);
-    all += words;
-    if (section.canonical === "body") {
-      if (words > bestWords) {
-        best = index;
-        bestWords = words;
-      }
-    } else if (!NOT_PLACED.has(section.canonical)) {
-      placed += 1;
-    }
-  });
-  if (best < 0) return null;
-  const trunk = sections[best];
-  if (trunk.paragraphs.length < TRUNK.paragraphs) return null;
-  if (bestWords < TRUNK.share * all) return null;
-  if (placed > TRUNK.placedRows) return null;
-  return { sectionId: trunk.id, sectionIndex: best, paragraphCount: trunk.paragraphs.length };
-}
+// P12-48: the rule and its three numbers moved to `reading-roles.ts` (the module `readingMapOf` calls, which asks
+// it whether a paper is one large unheaded section without importing this one, which imports the map). They are
+// the same rule with the same numbers; the partition reads and re-exports them.
+export { TRUNK, unheadedTrunk, type Trunk } from "./reading-roles";
 
 // ── The sanitizer ──────────────────────────────────────────────────────
 
