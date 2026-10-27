@@ -881,8 +881,8 @@ describe("closingPartition — the closing of a paper that names no discussion o
   });
 
   it("looks only at the last four paragraphs of the row", () => {
-    // Five paragraphs from the end: not looked at. Four from the end: looked at.
-    expect(splitOf(natureStyle([SUMMARY, ...plain(4)])).partition).toBeNull();
+    // Five paragraphs from the end (index 2 of 7): not looked at. Four from the end (index 2 of 6): looked at.
+    expect(splitOf(natureStyle([...plain(2), SUMMARY, ...plain(4)])).partition).toBeNull();
     expect(splitOf(natureStyle([...plain(2), SUMMARY, ...plain(3)])).partition?.parts[1].fromParagraph).toBe(2);
   });
 
@@ -966,17 +966,18 @@ describe("closingPartition — the closing of a paper that names no discussion o
   });
 
   it("is not done to a row that has rows under it", () => {
+    // The last evidence row is "2 …", which holds the cue; the row under it is the methods, so it is the last evidence row.
     const doc = shore([
       ["1 Introduction", plain(3)],
       ["2 " + SNAILS, [...plain(3), SUMMARY, OUTLOOK]],
-      ["2.1 Counts by site", plain(2)],
-      ["3 Methods", plain(2)],
+      ["2.1 Methods used on the shore", plain(2)],
     ]);
     const { map, partition } = splitOf(doc);
 
-    // The last evidence row is the sub-row 2.1, which holds no cue; the parent, which does, has a child.
-    expect(map.sections[2].role).toBe("evidence");
+    expect(map.sections.map((row) => [row.role, row.parentId ?? null])).toEqual([["setup", null], ["evidence", null], ["method", "s1"]]);
     expect(partition).toBeNull();
+    // Without the row under it, the same part is divided.
+    expect(splitOf(shore([["1 Introduction", plain(3)], ["2 " + SNAILS, [...plain(3), SUMMARY, OUTLOOK]], ["3 Methods", plain(2)]])).partition?.sectionId).toBe("s1");
   });
 
   it("gives up when the body is not the map's", () => {
@@ -1010,7 +1011,7 @@ describe("partitionedMap on a closing partition — drawn only where the map bea
 
   it("does not apply a model's partition (no closing flag) to a headed paper: its behaviour is the unheaded rule's", () => {
     const { map, body, partition } = splitOf(natureStyle());
-    const { closing: _closing, ...asModel } = partition!;
+    const asModel: GuidePartition = { sectionId: partition!.sectionId, parts: partition!.parts };
 
     expect(partitionedMap(map, body, asModel)).toBe(map);
   });

@@ -189,6 +189,13 @@ describe("A2 — the unnamed parts between the introduction and the first named 
     expect(rolesOf(doc).map(([, r]) => r)).toEqual(["setup", "evidence", "evidence", role]);
   });
 
+  it("ends at the first back-matter row: a part two rows after it is not evidence", () => {
+    const doc = paper([["1 Introduction", 3], [SNAILS, 4], ["Acknowledgements", 1], ["Notes on the survey", 1], [STORMS, 2]]);
+
+    // The part right after the acknowledgements continues them (A3); the one after that is untagged.
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "apparatus", "apparatus", "body"]);
+  });
+
   it("does not go on past a named discussion: the parts that follow it stay untagged (A3 continues only methods and back matter)", () => {
     const doc = paper([["1 Introduction", 3], [SNAILS, 4], ["Discussion", 3], [SHELLS, 4], ["Methods", 2]]);
 
