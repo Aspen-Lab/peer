@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T11:20:01.817Z
+AS OF        2026-10-27T11:20:05.913Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.410   NEXT RULING §1h.411   NEXT ITEM ID P12-37   NEXT FREE PORT 4236
+LAST RULING  §1h.411   NEXT RULING §1h.412   NEXT ITEM ID P12-37   NEXT FREE PORT 4236
 RUBRIC       P12-RUBRIC.md frozen; formal R1 A0.00/B0.00; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
 RUNNING      A35actualR2families4234continue;A34samecopycheckpointinterfaceunavailableawaitcontinuation;B36finiteguideDONE;web28cf;R1medians0/0counts0/0;clockACTIVE
 THEN         parallelfreshR2AThemeA/B→3freshblindreaders/theme→director→mechanismB/Cfixes→nextscoredround;stop97.9twoconsecutive
@@ -601,6 +601,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T11:19:57.713Z | parent 9062960e (entry commit follows) | manager | P12-34-RESUME-INTERFACE-LIMIT-BANKED: Sameworker/samecopyresumed;actualbrowserinventoryempty,documentedIABcreation unavailable. NofreshUIresult,noalternatestack. Own4233stopped/listenerabsent. Awaitnewindependentcontinuationfromsamecheckpoint. | evidence: P12-34-A-20261027T111042Z.md;source5f5d54b6 | next: A35continuesactualR2families;A34resumeonlyfirstunfinishedpartwithsupportedCUA;B36guideawaitsrealUIorderingbeforeanyC;clockACTIVE
 
 - 2026-10-27T11:20:01.817Z | parent cbf8c56f (entry commit follows) | manager | P12-35-PUBLIC-ENTRY-PARTIAL-BANKED: ActualbackgroundIAB/4234normalpublicAupload ticket+upload200/reader. Visibility/pre-server/navigationfailuresretainedsetup;stubblockedfeed;profileisolationnotestablished;no score. | evidence: P12-35-A-20261027T-PARTIAL.md;sourceea6acfbb | next: A35continuesactualR2families;A34resumeonlyfirstunfinishedpartwithsupportedCUA;B36guideawaitsrealUIorderingbeforeanyC;clockACTIVE
+
+- 2026-10-27T11:20:05.913Z | parent 6717d799 (entry commit follows) | manager | P12-35-PUBLIC-A-FIVE-FIGURES-BANKED: PublicAactual5bodyclicks/5canvasesand4closesatthischeckpoint;laterfifthclosewillberecordedseparately. OneoldAXindexfailureisnotclick. Oneviewport/notcrop/fullmatrixproof. | evidence: P12-35-A-20261027T-PARTIAL.md;sourceb43e4673 | next: A35continuesactualR2families;A34resumeonlyfirstunfinishedpartwithsupportedCUA;B36guideawaitsrealUIorderingbeforeanyC;clockACTIVE
 
 ---
 
