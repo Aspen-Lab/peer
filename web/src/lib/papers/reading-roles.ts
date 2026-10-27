@@ -141,12 +141,26 @@ export function inferRoles(rows: readonly ReadingMapSection[], trunkId: string |
   const anchor = anchorOf(top, trunkId);
   if (!anchor) return rows.slice();
 
+  // A2: the evidence run ends at the first named method / discussion / conclusion / back-matter row after the
+  // introduction — or at the paper's end, when it names none.
+  const boundary = top.findIndex(
+    (row, t) => t > anchor.at && (row.role === "method" || row.role === "interpretation" || row.role === "apparatus"),
+  );
+  const evidenceEnd = boundary < 0 ? top.length : boundary;
+
   const patches = new Map<string, Partial<ReadingMapSection>>();
   top.forEach((row, t) => {
     if (row.role !== "body") return;
+    // A1.
     if (anchor.front && t === 0) {
       patches.set(row.id, { heading: INTRODUCTION_LABEL, canonical: "introduction", role: "setup" as ReadingRole });
+      return;
     }
+    if (t <= anchor.at) return;
+    // A2: an unnamed row directly before a references row is back matter; the others, up to the boundary, are the
+    // paper's evidence.
+    if (top[t + 1]?.canonical === "references") patches.set(row.id, { role: "apparatus" });
+    else if (t < evidenceEnd) patches.set(row.id, { role: "evidence" });
   });
   return rows.map((row) => {
     const patch = patches.get(row.id);

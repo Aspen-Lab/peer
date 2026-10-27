@@ -146,6 +146,111 @@ describe("A1 — the front text of a paper that names no introduction is the int
   });
 });
 
+// Descriptive headings: none of them names a role, so each is `body` to `canonicalizeHeading`.
+const SNAILS = "Snail density rises with wave exposure";
+const SHELLS = "Shell thickness follows crab predation";
+const STORMS = "Recovery after storm scouring";
+
+describe("A2 — the unnamed parts between the introduction and the first named later part are evidence", () => {
+  it("reads three descriptive results under a front text, up to the methods", () => {
+    const doc = paper([["Body", 3], [SNAILS, 4], [SHELLS, 4], [STORMS, 3], ["Methods", 3], ["References", 2]]);
+
+    expect(rolesOf(doc)).toEqual([
+      ["Introduction", "setup"],
+      [SNAILS, "evidence"],
+      [SHELLS, "evidence"],
+      [STORMS, "evidence"],
+      ["Methods", "method"],
+      ["References", "apparatus"],
+    ]);
+  });
+
+  it("keeps the heading the paper printed and its bucket: only the role is worked out", () => {
+    const row = buildReadingMap(paper([["1 Introduction", 3], [SNAILS, 4], ["Methods", 3]])).sections[1];
+
+    expect(row).toMatchObject({ heading: SNAILS, canonical: "body", role: "evidence" });
+  });
+
+  it("starts at a named introduction, and leaves what stands above it", () => {
+    const doc = paper([["Notes on the survey", 1], ["1 Introduction", 3], [SNAILS, 4], ["Methods", 3]]);
+
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["body", "setup", "evidence", "method"]);
+  });
+
+  it.each([
+    ["a named method row", "2 Methods", "method"],
+    ["a named discussion row", "Discussion", "interpretation"],
+    ["a named conclusion row", "Conclusions", "interpretation"],
+    ["a named limitations row", "Limitations", "interpretation"],
+    ["a named acknowledgements row", "Acknowledgements", "apparatus"],
+  ])("ends at %s", (_name, heading, role) => {
+    const doc = paper([["1 Introduction", 3], [SNAILS, 4], [SHELLS, 4], [heading, 2]]);
+
+    expect(rolesOf(doc).map(([, r]) => r)).toEqual(["setup", "evidence", "evidence", role]);
+  });
+
+  it("does not go on past a named discussion: the parts that follow it stay untagged (A3 continues only methods and back matter)", () => {
+    const doc = paper([["1 Introduction", 3], [SNAILS, 4], ["Discussion", 3], [SHELLS, 4], ["Methods", 2]]);
+
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "interpretation", "body", "method"]);
+  });
+
+  it("runs to the paper's end when it names no later part", () => {
+    const doc = paper([["1 Introduction", 3], [SNAILS, 4], [SHELLS, 4]]);
+
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "evidence"]);
+  });
+
+  it("reads an unnamed part directly before a references row as back matter", () => {
+    const doc = paper([["1 Introduction", 3], [SNAILS, 4], [SHELLS, 4], ["Notes on the survey", 1], ["References", 2]]);
+
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "evidence", "apparatus", "apparatus"]);
+  });
+
+  it("reads an unnamed part directly before the references as back matter even after a named discussion", () => {
+    const doc = paper([["1 Introduction", 3], [SNAILS, 4], ["Discussion", 3], ["Notes on the survey", 1], ["References", 2]]);
+
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "interpretation", "apparatus", "apparatus"]);
+  });
+
+  it("never overrides a named part, and counts only the unnamed ones", () => {
+    const doc = paper([
+      ["1 Introduction", 3],
+      ["Related work", 2],
+      [SNAILS, 4],
+      ["Results", 3],
+      [SHELLS, 4],
+      ["Methods", 2],
+    ]);
+
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "setup", "evidence", "evidence", "evidence", "method"]);
+  });
+
+  it("looks at top-level parts only: a named sub-heading does not end the run", () => {
+    const doc = paper([["1 Introduction", 3], ["2 " + SNAILS, 4], ["2.1 Methods used on the shore", 2], ["3 " + SHELLS, 3], ["4 Discussion", 2]]);
+
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "method", "evidence", "interpretation"]);
+  });
+
+  it("(d) is not done in a paper with no introduction to stand on: a descriptive heading stays untagged", () => {
+    const doc = paper([[SNAILS, 4], [SHELLS, 4], ["Methods", 3], ["References", 2]]);
+
+    expect(rolesOf(doc)).toEqual([
+      [SNAILS, "body"],
+      [SHELLS, "body"],
+      ["Methods", "method"],
+      ["References", "apparatus"],
+    ]);
+  });
+
+  it("is the role the gist tiers read: an evidence part is read first, where an untagged one was passed over", () => {
+    const map = buildReadingMap(paper([["1 Introduction", 3], [SNAILS, 4], ["Methods", 3]]));
+    const tiers = gistRoute(map).byQuestion[0].sections;
+
+    expect(tiers[map.sections[1].id].tier).toBe("strong");
+  });
+});
+
 describe("a paper that names every part is not touched", () => {
   it("(b) numbered: every row keeps the role its heading gave it, and is the very row it was", () => {
     const doc = paper([
