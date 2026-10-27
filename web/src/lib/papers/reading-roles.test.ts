@@ -251,6 +251,84 @@ describe("A2 — the unnamed parts between the introduction and the first named 
   });
 });
 
+describe("A3 — the unnamed parts after the references are back matter, and a part right after a named method or back-matter part continues it", () => {
+  it("reads the unnamed parts after a references row as back matter, however many follow", () => {
+    const doc = paper([["1 Introduction", 3], [SNAILS, 4], ["Discussion", 3], ["References", 2], ["Notes on the survey", 1], [STORMS, 1], [SHELLS, 1]]);
+
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "interpretation", "apparatus", "apparatus", "apparatus", "apparatus"]);
+  });
+
+  it("(a) Nature-style: the Methods after the references stays method, and the unnamed part right after it continues it", () => {
+    const doc = paper([
+      ["Body", 3],
+      [SNAILS, 4],
+      [SHELLS, 4],
+      [STORMS, 3],
+      ["References", 3],
+      ["Methods", 3],
+      ["Field sampling", 2],
+      ["Data availability", 1],
+      ["Notes on the survey", 1],
+    ]);
+
+    expect(rolesOf(doc)).toEqual([
+      ["Introduction", "setup"],
+      [SNAILS, "evidence"],
+      [SHELLS, "evidence"],
+      [STORMS, "apparatus"], // directly before the references (A2)
+      ["References", "apparatus"],
+      ["Methods", "method"],
+      ["Field sampling", "method"],
+      ["Data availability", "apparatus"],
+      ["Notes on the survey", "apparatus"],
+    ]);
+  });
+
+  it("continues a named method row by one part: the row right after it, not every row after that", () => {
+    const doc = paper([["1 Introduction", 3], [SNAILS, 4], ["Methods", 3], ["Field sampling", 2], ["Lab work", 2]]);
+
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "method", "method", "body"]);
+  });
+
+  it("continues a named back-matter row: a part right after the acknowledgements is back matter, with no references in the paper", () => {
+    const doc = paper([["1 Introduction", 3], [SNAILS, 4], ["Discussion", 3], ["Acknowledgements", 1], ["Notes on the survey", 1]]);
+
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "interpretation", "apparatus", "apparatus"]);
+  });
+
+  it("continues the method role before it reads the part as the one before the references", () => {
+    const doc = paper([["1 Introduction", 3], [SNAILS, 4], ["Methods", 3], ["Field sampling", 2], ["References", 2]]);
+
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "method", "method", "apparatus"]);
+  });
+
+  it("does not hand on a discussion, a conclusion or a results role: the part after one is untagged", () => {
+    for (const heading of ["Discussion", "Conclusions", "Results"]) {
+      const doc = paper([["1 Introduction", 3], [SNAILS, 4], ["Methods", 2], [heading, 3], ["Notes on the survey", 1]]);
+
+      expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "method", roleOf(canonicalizeHeading(heading)), "body"]);
+    }
+  });
+
+  it("never overrides a named part after the references", () => {
+    const doc = paper([["1 Introduction", 3], [SNAILS, 4], ["References", 2], ["Methods", 3], ["Results", 2], ["Conclusions", 1]]);
+
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "apparatus", "apparatus", "method", "evidence", "interpretation"]);
+  });
+
+  it("is not done before the introduction: a part above it stays untagged whatever follows the references", () => {
+    const doc = paper([["Notes on the survey", 1], ["1 Introduction", 3], [SNAILS, 4], ["References", 2]]);
+
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["body", "setup", "apparatus", "apparatus"]);
+  });
+
+  it("(d) is not done in a paper with no introduction to stand on", () => {
+    const doc = paper([[SNAILS, 4], ["References", 2], ["Notes on the survey", 1]]);
+
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["body", "apparatus", "body"]);
+  });
+});
+
 describe("a paper that names every part is not touched", () => {
   it("(b) numbered: every row keeps the role its heading gave it, and is the very row it was", () => {
     const doc = paper([

@@ -147,6 +147,7 @@ export function inferRoles(rows: readonly ReadingMapSection[], trunkId: string |
     (row, t) => t > anchor.at && (row.role === "method" || row.role === "interpretation" || row.role === "apparatus"),
   );
   const evidenceEnd = boundary < 0 ? top.length : boundary;
+  const firstReferences = top.findIndex((row) => row.canonical === "references");
 
   const patches = new Map<string, Partial<ReadingMapSection>>();
   top.forEach((row, t) => {
@@ -157,9 +158,14 @@ export function inferRoles(rows: readonly ReadingMapSection[], trunkId: string |
       return;
     }
     if (t <= anchor.at) return;
+    // A3: an unnamed row right after a named method or back-matter row continues that role.
+    const before = top[t - 1];
+    if (before.role === "method" || before.role === "apparatus") patches.set(row.id, { role: before.role });
     // A2: an unnamed row directly before a references row is back matter; the others, up to the boundary, are the
     // paper's evidence.
-    if (top[t + 1]?.canonical === "references") patches.set(row.id, { role: "apparatus" });
+    else if (top[t + 1]?.canonical === "references") patches.set(row.id, { role: "apparatus" });
+    // A3: the unnamed rows after a references row are back matter.
+    else if (firstReferences >= 0 && t > firstReferences) patches.set(row.id, { role: "apparatus" });
     else if (t < evidenceEnd) patches.set(row.id, { role: "evidence" });
   });
   return rows.map((row) => {

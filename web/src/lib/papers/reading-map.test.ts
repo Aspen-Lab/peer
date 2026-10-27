@@ -260,10 +260,16 @@ describe("buildReadingMap — openings (§1f.21, P1-10)", () => {
 });
 
 describe("buildReadingMap — sections, roles, words and minutes (§1f.1–3)", () => {
-  it("maps every bucket to its role, and an unplaced heading to body", () => {
+  // P12-48 (re-aimed; B P12-40 §5 "What each changes"; rubric Theme C): this test asserted that an unplaced heading is
+  // `body` and put that row last, after the references. §1h.423 (c) supersedes §1f.2's "no positional guessing": an
+  // unplaced top-level part after the references is now back matter (A3), so the row would be apparatus. It is now put
+  // between the introduction and the methods, where an unplaced heading is evidence (A2), and a paper with no anchored
+  // introduction keeps its unplaced heading `body`. Every named bucket's role is asserted as before.
+  it("maps every bucket to its role; an unplaced heading is evidence between the introduction and the methods, and body where no introduction is anchored", () => {
     const buckets: Array<[string, string]> = [
       ["introduction", "setup"],
       ["related_work", "setup"],
+      ["body", "evidence"],
       ["methods", "method"],
       ["results", "evidence"],
       ["discussion", "interpretation"],
@@ -272,11 +278,20 @@ describe("buildReadingMap — sections, roles, words and minutes (§1f.1–3)", 
       ["references", "apparatus"],
       ["acknowledgments", "apparatus"],
       ["supplementary", "apparatus"],
-      ["body", "body"],
     ];
     const map = buildReadingMap(doc(buckets.map(([canonical]) => ({ canonical, text: `Text of the ${canonical} section.` }))));
 
     expect(map.sections.map((s) => [s.canonical, s.role])).toEqual(buckets);
+
+    // No introduction anchored: the unplaced heading is untagged, as it always was.
+    const unanchored: Array<[string, string]> = [
+      ["body", "body"],
+      ["methods", "method"],
+      ["references", "apparatus"],
+    ];
+    const bare = buildReadingMap(doc(unanchored.map(([canonical]) => ({ canonical, text: `Text of the ${canonical} section.` }))));
+
+    expect(bare.sections.map((s) => [s.canonical, s.role])).toEqual(unanchored);
   });
 
   it("leaves the abstract out, and keeps each section's own id and page", () => {
