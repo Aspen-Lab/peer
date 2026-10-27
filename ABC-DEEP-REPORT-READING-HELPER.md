@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T05:48:40.673Z; only writer of this file
-CURRENT ITEM:          C28enginefrozenclipguidepending/web444freshnesspartial;B31/B32reportsbanked;R1sixblindmediansA0/B0director0/0;consecutiveA0B0;clockACTIVE
-NEXT TURN:          Narrow measured fill-clipping repair with existing stroke contract preserved;continue finite captionidentityprovenance;fresh independent candidate gates/UI;next A round closes named gaps
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T05:49:57.824Z; only writer of this file
+CURRENT ITEM:          C28fillonlyclipguideapproved/freshnessweb444partial;B32column-crosspagepending;R1mediansA0/B0A0B0;clockACTIVE
+NEXT TURN:          C28fillclipimplementation;B32column/crosspage measurement;R1medians0/0recorded;repeatindependentgates/UIonnewcandidate
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1612,6 +1612,11 @@ B32 15inventedPDFcausalmeasurement banked;punctuation/stylebothfalsepositiveandn
 ### §1h.386 — 2026-10-27 — P12-R1-SIX-BLIND-MEDIANS-DIRECTOR-RECORDED
 
 Formal R1baseline recorded atweb88ac:threefreshreaders/theme final0/0/0 each;mediansA0.00/B0.00,A23A24each0,director0/0. Director independentlyhashes1795+610artifacts0mismatch,auditsdisputes;A9/B9boundedPASS,preoverride8.333each,commongatesoverride0;prices/denominator/stoplineunchanged,consecutive0/2each. Evidence: P12-R1-DIRECTOR-20261027.md;P12-RUBRIC.mdScores;privateblind-round1outputs/audits. No missing fact is a product-wide defect finding; no test/guard/price/stop-line waiver.
+
+
+### §1h.387 — 2026-10-27 — P12-28-MEASURED-FILL-CLIP-SCOPE
+
+Use the measured fill-only clip-bound correction after B31 stroke counterexamples. Preserve the established stroke collector/geometry/floors/report/render and every existing test. Conservative active-clip fill bounds must retain genuine support and bounded graphics state; no unproved tighter clip, caption-overlap widening, whole-page recall regression or universal stroke claim. Larger pre-existing stroke/raster grouping limitations remain open and count normally in A. This implementation scope clarification changes no rubric price, input, pass requirement or stop line. Evidence: P12-28 ruling387 supplement; B31through315a58f8; C28 red tests5883df1f and freshnessafc6474a.
 
 
 ## §5. Durable work ledger — update in place, evidence append only
