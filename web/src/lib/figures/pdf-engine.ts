@@ -386,16 +386,24 @@ function pathBox(path: Path, ctm: Matrix, allMoves = false): Rect | null {
     }
   };
   let moved = false;
+  let pendingMove: [number, number] | null = null;
+  const beginDrawnSubpath = () => {
+    if (pendingMove) include(pendingMove[0], pendingMove[1]);
+    pendingMove = null;
+  };
   path.walk({
     moveTo(x, y) {
-      if (!moved || allMoves) include(x, y); // fills include every subpath; strokes retain legacy bounds
+      if (allMoves) pendingMove = [x, y];
+      else if (!moved) include(x, y); // strokes retain legacy bounds
       moved = true;
     },
     lineTo(x, y) {
+      beginDrawnSubpath();
       include(x, y);
       drawn = true;
     },
     curveTo(x1, y1, x2, y2, x3, y3) {
+      beginDrawnSubpath();
       include(x1, y1);
       include(x2, y2);
       include(x3, y3);
@@ -417,6 +425,7 @@ function collectDrawingBoxes(mupdf: Mupdf, page: Page): { boxes: Rect[]; overflo
   let uncertain = false;
   let badStack = false;
   let overflow = false;
+  let pathWalks = 0;
   const push = (box: Rect | null) => {
     if (excessDepth || clips.length >= MAX_CLIP_DEPTH) { excessDepth++; uncertain = true; return; }
     if (box && (!box.every(Number.isFinite) || box[0] > box[2] || box[1] > box[3])) box = null;
@@ -424,7 +433,8 @@ function collectDrawingBoxes(mupdf: Mupdf, page: Page): { boxes: Rect[]; overflo
     clips.push(box);
   };
   const keep = (path: Path, ctm: Matrix, fill: boolean) => {
-    if (boxes.length >= MAX_DRAWING_RECTS * 5) { overflow = true; return; }
+    if (pathWalks >= MAX_DRAWING_RECTS * 5) { overflow = true; return; }
+    pathWalks++;
     let box = pathBox(path, ctm, fill);
     if (!box) return;
     // Unknown nesting and pattern/mask painting keep original support, which
@@ -527,7 +537,7 @@ interface Candidate {
   stretch: number;
 }
 
-function candidateRegions(mupdf: Mupdf, page: Page, pageRect: Rect, texts: TextBlock[], images: ImageBlock[]): Candidate[] {
+function candidateRegions(mupdf: Mupdf, page: Page, pageRect: Rect, texts: TextBlock[], images: ImageBlock[]): { candidates: Candidate[]; drawingLimit: boolean } {
   const candidates: Candidate[] = [];
   const placed = images.map(placedImage).filter((image): image is PlacedImage => image !== null);
 
@@ -580,7 +590,7 @@ function candidateRegions(mupdf: Mupdf, page: Page, pageRect: Rect, texts: TextB
     return candidate.captionDistance === nearest && competitors.filter((other) => other.captionDistance === nearest).length === 1;
   });
   for (const candidate of defensible) candidate.stretch = regionStretch(candidate.rect, placed);
-  return defensible;
+  return { candidates: defensible, drawingLimit: overflow || clusters === null };
 }
 
 // ── Rendering a region ───────────────────────────────────────────────────
@@ -710,6 +720,7 @@ async function readDocument(
   const figures: PdfEngineFigure[] = [];
   let failure: unknown = null;
   let outOfTime = false;
+  let drawingLimit = false;
 
   let doc: Document;
   // The Buffer is made here, not by openDocument, so that it is destroyed on a
@@ -743,6 +754,7 @@ async function readDocument(
         const found = readPage(mupdf, doc.loadPage(pageIndex), pageIndex, wanted, opts.maxFigures - figures.length, deadline, opts.measureOnly === true);
         for (const figure of found.figures) figures.push({ ...figure, ordinal: figures.length });
         if (found.outOfTime) outOfTime = true;
+        if (found.drawingLimit) drawingLimit = true;
       } catch (error) {
         failure = error; // one unreadable page does not cost the pages after it
       }
@@ -765,6 +777,7 @@ async function readDocument(
         : `Peer stopped reading this PDF after ${seconds} s without finding a figure.`,
     };
   }
+  if (drawingLimit) return { figures, reason: "Peer reached the drawing analysis limit; vector figures may be missing." };
   if (figures.length) return { figures, reason: null };
   if (failure) return { figures, reason: `PDF figure extraction failed: ${errorMessage(failure)}` };
   if (wanted !== null) {
@@ -783,16 +796,17 @@ function readPage(
   room: number,
   deadline: number,
   measureOnly: boolean,
-): { figures: Omit<PdfEngineFigure, "ordinal">[]; outOfTime: boolean } {
+): { figures: Omit<PdfEngineFigure, "ordinal">[]; outOfTime: boolean; drawingLimit: boolean } {
   const figures: Omit<PdfEngineFigure, "ordinal">[] = [];
   try {
     const bounds = page.getBounds();
     const pageRect: Rect = [bounds[0], bounds[1], bounds[2], bounds[3]];
     const { texts, images } = readPageStructure(page);
-    for (const candidate of candidateRegions(mupdf, page, pageRect, texts, images)) {
+    const { candidates, drawingLimit } = candidateRegions(mupdf, page, pageRect, texts, images);
+    for (const candidate of candidates) {
       if (figures.length >= room) break;
       if (wanted !== null && captionKey(candidate.caption) !== wanted) continue;
-      if (performance.now() > deadline) return { figures, outOfTime: true };
+      if (performance.now() > deadline) return { figures, outOfTime: true, drawingLimit };
       let rendered: ReturnType<typeof renderRegion> = null;
       try {
         rendered = renderRegion(mupdf, page, pageRect, candidate.rect, candidate.stretch, measureOnly);
@@ -810,7 +824,7 @@ function readPage(
         box: [roundTo(candidate.rect[0]), roundTo(candidate.rect[1]), roundTo(candidate.rect[2]), roundTo(candidate.rect[3])],
       });
     }
-    return { figures, outOfTime: false };
+    return { figures, outOfTime: false, drawingLimit };
   } finally {
     page.destroy();
   }
