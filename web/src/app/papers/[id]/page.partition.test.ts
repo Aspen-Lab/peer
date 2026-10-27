@@ -52,8 +52,10 @@ function partitionProblems(raw: string): string[] {
   if (!text.includes("termScopeKey(routeTermScope(mergedRoute))")) problems.push("the terms scope no longer reads the merged route");
 
   const map = /<ReadingMapView [^>]*\/>/.exec(text)?.[0] ?? "";
-  if (!map.includes("map={shownMap}") || !map.includes("route={route}")) problems.push("the map is not handed the overlay and the folded route");
-  if (!/hasBody && shownMap \?/.test(text)) problems.push("the map is no longer mounted only where there is a body and a map");
+  // Re-aimed (P12-53): the map the view is handed is `reviewedMap` — the overlay (`shownMap`) with the model's structure review laid over it
+  // (`page.structure.test.ts` holds that join); the overlay itself is still pinned above.
+  if (!map.includes("map={reviewedMap}") || !map.includes("route={route}")) problems.push("the map is not handed the overlay and the folded route");
+  if (!/hasBody && reviewedMap \?/.test(text)) problems.push("the map is no longer mounted only where there is a body and a map");
   // Re-aimed (P11-17b, rule 2): the tag now carries an arrow function (`onHighlightClick`), whose `=>` ends a `[^>]*`; it ends at the first `/>`.
   const body = /<PaperBody [\s\S]*?\/>/.exec(text)?.[0] ?? "";
   if (!body.includes("reading={reading}") || !body.includes("route={route}")) problems.push("the body no longer reads the one route");
@@ -68,7 +70,7 @@ describe("the page's partition wiring (P10-07b)", () => {
   });
 
   it("would notice the overlay not made, or handed the unpartitioned map", () => {
-    expect(partitionProblems(source.replace("map={shownMap}", "map={reading.map}"))).toContain("the map is not handed the overlay and the folded route");
+    expect(partitionProblems(source.replace("map={reviewedMap}", "map={reading.map}"))).toContain("the map is not handed the overlay and the folded route");
     expect(partitionProblems(source.replace("partitionedMap(reading.map, reading.body, overlayPartition)", "reading.map"))).toContain(
       "the map's overlay is not `partitionedMap(reading.map, reading.body, overlayPartition)`, memoised on the reading and the partition",
     );

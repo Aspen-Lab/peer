@@ -105,12 +105,14 @@ import { THUMB_BAR_PX, THUMB_BAR_QUERY } from "@/components/shell/thumb-bar";
 import { PAGE_CLASS, SPREAD_GRID } from "@/components/reader/spread";
 import { sentencesWhileWaiting, useReading } from "@/components/reader/use-reading";
 import { useParagraphGuide } from "@/components/reader/use-paragraph-guide";
+import { useStructureReview } from "@/components/reader/use-structure-review";
 import { PaperNotes } from "@/components/notes/paper-notes";
 import { NotesButton } from "@/components/notes/notes-button";
 import { PAPER_BODY_ID } from "@/components/reader/paper-body";
 import { QuestionField, focusFirstEmptyQuestion } from "@/components/reader/question-field";
 import { ReadingMapView, readingRoute } from "@/components/reader/reading-map";
 import { closingPartition, partitionedMap, withPartitionMarks } from "@/lib/papers/reading-partition";
+import { applyStructureReview, structureDraftOf } from "@/lib/papers/structure-review";
 import { useDebouncedQuestions } from "@/components/reader/use-debounced-questions";
 import { SectionLinks } from "@/components/reader/evidence-quote";
 import { ReaderTabs } from "@/components/reader/reader-tabs";
@@ -842,6 +844,23 @@ function Reader({
     () => withPartitionMarks(mergedRoute, reading?.map, reading?.body, overlayPartition),
     [mergedRoute, reading?.map, reading?.body, overlayPartition],
   );
+  // P12-53 (§1h.428; B P12-42): the structure the rules drew is checked by the model, once per paper, whenever the
+  // reader has a model (`providerConfigured` — not the deep-report switch). The rules' draft is made here, in the
+  // browser, from the reading's map and body; the model returns corrections to it (indices and roles), which are
+  // laid over the map right after the partition overlay. The rules' map stands until they arrive and for good if
+  // they never do (a refusal, a timeout, no model); a corrected role is shown exactly like a named one (§1h.424 (a)).
+  const structureDraft = useMemo(() => structureDraftOf(reading?.map, reading?.body), [reading?.map, reading?.body]);
+  const structureReview = useStructureReview({
+    paper: ready ? paper : undefined,
+    hasBody,
+    draftDigest: structureDraft?.digest,
+    enabled: providerConfigured,
+    llmOverride: explainLlmOverride(profile),
+  });
+  const reviewedMap = useMemo(
+    () => (shownMap && structureDraft ? applyStructureReview(shownMap, structureDraft, structureReview) : shownMap),
+    [shownMap, structureDraft, structureReview],
+  );
   const projectText = useMemo(
     () => [profile.currentProject, profile.currentChallenges].filter(Boolean).join("\n"),
     [profile.currentProject, profile.currentChallenges],
@@ -1533,7 +1552,7 @@ function Reader({
         // P10-04 (review 3.1): the map (P1-04, §1f.12: from the reading the server built, absent without a body)
         // stands directly under the strip and floats with it, under both tabs; it is the paper's one contents
         // list (R5). A row clicked under "Summary" brings the body in first (`reveal`).
-        map={hasBody && shownMap ? <ReadingMapView key={`map:${paper.id}`} map={shownMap} route={route} gists={paragraphGists} reveal={reveal} source={reading.provenance.sourceLabel} /> : undefined}
+        map={hasBody && reviewedMap ? <ReadingMapView key={`map:${paper.id}`} map={reviewedMap} route={route} gists={paragraphGists} reveal={reveal} source={reading.provenance.sourceLabel} /> : undefined}
         // The blocks both tabs share (Q6): the question field (P1-03, §1f.10 — only where Peer has
         // the paper's text; without it there is nothing to point a question at, and the Decision
         // block already says why; one field per paper) and the answers. ONE element each, built here

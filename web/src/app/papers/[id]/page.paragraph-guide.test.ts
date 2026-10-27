@@ -55,7 +55,8 @@ function guideProblems(source: string): string[] {
   else {
     if (!map.includes("gists={paragraphGists}")) problems.push("the map is no longer handed Peer's gists");
     // P10-07b: the map is the partition's overlay of the reading's map (`shownMap`), and the route is the folded one.
-    if (!map.includes("route={route}") || !map.includes("map={shownMap}")) problems.push("the map lost its reading or its route");
+    // Re-aimed (P12-53): the view is handed the overlay with the structure review laid over it, `reviewedMap` (`page.structure.test.ts`).
+    if (!map.includes("route={route}") || !map.includes("map={reviewedMap}")) problems.push("the map lost its reading or its route");
   }
   return problems;
 }
