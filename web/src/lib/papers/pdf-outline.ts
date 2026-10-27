@@ -1427,10 +1427,12 @@ function sectionNumberOf(text: string): RegExpMatchArray | null {
   return numbered && !/^(?:0\.\d|\d{4,})/.test(numbered[1]) ? numbered : null;
 }
 
-// ── What is not a numbered heading: an address, an entry of a reference list (P12-49) ──────────────────────
+// ── What is not a heading: an address, an entry of a reference list, a drop cap, a run-in lead-in (P12-49) ──
 //
 // O3: a line that starts with a number and a capital was a numbered heading whatever it was set in — a street
-// address in an affiliation block, an entry of the reference list.
+// address in an affiliation block, an entry of the reference list. O7: with the body size right, a drop cap (a
+// large letter, welded to the first line it stands beside) and a bold lead-in ("Battery cycling." then the
+// paragraph's first words on the same line) read as headings holding a whole line of prose.
 
 /** A capitalised word of a name or an address: "Quarry", "O'Neil", "St.". */
 const CAP_WORD = String.raw`\p{Lu}[\p{L}'’.-]*`;
@@ -1457,6 +1459,35 @@ const ENTRY_AUTHORS = new RegExp(
   "u",
 );
 
+/** A drop cap is set at least this many times the body's size (it stands beside two lines or more). */
+const DROP_CAP_RATIO = 1.8;
+
+/**
+ * Whether this line is a drop cap: the large first letter (or two) of a paragraph, alone on its row or with the
+ * first words of the paragraph that the row carries beside it (so the longest run, and the face, are the
+ * body's). It is no heading; it belongs to the word it starts.
+ */
+export function isDropCap(line: PdfLine, body: { size: number; font: string }): boolean {
+  if (line.size < body.size * DROP_CAP_RATIO) return false;
+  const text = line.text.trim();
+  return /^\p{L}{1,2}$/u.test(text) || (line.font === body.font && /^\p{Lu}/u.test(text));
+}
+
+/** A lead-in is the first sentence of the line, ending with a period; a line of a larger size is a heading. */
+const LEAD_IN = /^([^.!?]{3,80}?)\.\s+(?=[\p{Lu}\d(\[])/u;
+const LEAD_IN_MAX_RATIO = 1.25;
+/** The words a period follows without ending a sentence. */
+const ABBREVIATION = /^(?:figs?|eqs?|refs?|vol|sec|etc|resp|approx|inc|ltd|mrs|prof)$/i;
+
+/**
+ * Whether the line opens with a run-in lead-in: a phrase ending with a period, with more text on the same line
+ * — "Battery cycling. Cells were assembled in an argon-". A heading is a phrase; it has no sentence after it.
+ */
+function opensWithLeadIn(text: string): boolean {
+  const word = LEAD_IN.exec(text)?.[1].match(/(\p{L}+)$/u)?.[1];
+  return !!word && word.length >= 3 && !ABBREVIATION.test(word);
+}
+
 /** Whether the line is set apart from the body by its size or its face. */
 function isSetApart(line: PdfLine, body: { size: number; font: string }): boolean {
   return line.size >= body.size * HEADING_SIZE_RATIO || (line.font !== body.font && line.size >= body.size * 0.95);
@@ -1467,6 +1498,7 @@ function candidateOf(line: PdfLine, body: { size: number; font: string }): strin
   const text = line.text.trim();
   if (text.length === 0 || text.length > HEADING_MAX) return null;
   if (CAPTION.test(text)) return null;
+  if (isDropCap(line, body)) return null;
   const numbered = sectionNumberOf(text);
   // A sentence that happens to be short is still a sentence.
   if (/[.;,]$/.test(text) && !numbered) return null;
@@ -1493,6 +1525,8 @@ function candidateOf(line: PdfLine, body: { size: number; font: string }): strin
   // symbols set in the maths face ("qe,ic0,1 ka,ic0,iqe,1") is an equation
   // the page happens to set apart.
   if (!/[A-Za-z]{4}/.test(text)) return null;
+  // A phrase in another face with a sentence after it on the line is a paragraph's lead-in, not a heading.
+  if (line.size < body.size * LEAD_IN_MAX_RATIO && opensWithLeadIn(text)) return null;
   return text;
 }
 

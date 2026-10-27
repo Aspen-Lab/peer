@@ -4,6 +4,7 @@ import {
   buildOutline,
   furnitureOf,
   headingOf,
+  isDropCap,
   isFurniture,
   type PdfLine,
   type PdfPageText,
@@ -490,5 +491,107 @@ describe("furnitureOf — a running head repeats in the top or bottom band, what
 
   it("keeps a running head from becoming a heading: three pages whose heads sit a point apart", () => {
     expect(headingsOf(runningHeadsPaper())).toEqual(["1 Introduction"]);
+  });
+});
+
+/** The first page of the invented paper the drop-cap and lead-in fixtures share. */
+const firstPage = (): PdfPageText =>
+  pageOf(1, [
+    ["Quillwort Cathodes Under Strain", { height: 17 }],
+    ["Abstract", { height: 12 }],
+    ["Quillwort cathodes fade through chemistry and strain together."],
+    ["1 Introduction", { fontName: "display" }],
+    ["Quillwort cathodes are an important class of cathode materials for cells."],
+    ["They are used in cells of every size, from watches to grid stores."],
+    ["2 Methods", { fontName: "display" }],
+    ["Cells were assembled in an argon filled glovebox with less than one part."],
+  ]);
+
+/** (d) A section on page 2 that opens with a drop cap: the letter 28 pt large, the rest of its word flush behind it
+ *  on the cap's baseline. */
+function dropCapPaper(): PdfPageText[] {
+  const second: PdfPageText = {
+    page: 2,
+    items: [
+      item("3 Results", { y: 700, fontName: "display" }),
+      item("S", { y: 660, height: 28, width: 16, x: 100 }),
+      item("tarting from the observation that cells fade", { y: 660, x: 116 }),
+      item("under strain, the series was cycled again and again.", { y: 648 }),
+      item("The fade followed one curve for every film of the series.", { y: 636 }),
+      item("Each curve was fitted with a single rate constant, as shown.", { y: 624 }),
+    ],
+  };
+  return [firstPage(), second];
+}
+
+/** (d) A section whose heading is followed by a bold lead-in: one row, whose longest run is the bold phrase. */
+function leadInPaper(): PdfPageText[] {
+  const y = 700;
+  const lead = "Battery cycling and electrochemical characterisation.";
+  const second: PdfPageText = {
+    page: 2,
+    items: [
+      item("Cycling", { y: y + 12, fontName: "bold" }),
+      item(lead, { y, fontName: "bold" }),
+      item(" Cells were", { y, x: 100 + lead.length * 4.6 }),
+      item("assembled in an argon filled glovebox with less than one part.", { y: y - 12 }),
+      item("They were cycled at twenty five degrees at the rate given.", { y: y - 24 }),
+    ],
+  };
+  return [firstPage(), second];
+}
+
+// ── Rule 4 (O7): a drop cap and a run-in lead-in are no heading ──────────────────────────────────────────
+
+describe("a drop cap is no heading (P12-49, O7)", () => {
+  it("is the large first letter of a paragraph with the words the row carries beside it", () => {
+    expect(isDropCap(line("Starting from the observation that", { size: 28 }), BODY)).toBe(true);
+    expect(isDropCap(line("S", { size: 28, font: "display" }), BODY)).toBe(true);
+    expect(isDropCap(line("In", { size: 24, font: "display" }), BODY)).toBe(true);
+  });
+
+  it("is not a heading, welded to its first line or alone", () => {
+    expect(headingOf(line("Starting from the observation that", { size: 28 }), BODY)).toBeNull();
+    expect(headingOf(line("S tarting from the observation that cells", { size: 28 }), BODY)).toBeNull();
+    expect(headingOf(line("S", { size: 28, font: "display" }), BODY)).toBeNull();
+  });
+
+  it("is not a heading a title or a heading set larger would be", () => {
+    // a heading in the body's face a half as large again, or a large heading in a face of its own
+    expect(isDropCap(line("Discussion", { size: 15 }), BODY)).toBe(false);
+    expect(headingOf(line("Discussion", { size: 15 }), BODY)).toBe("Discussion");
+    expect(isDropCap(line("Quillwort Cathodes Under Strain", { size: 28, font: "display" }), BODY)).toBe(false);
+    expect(isDropCap(line("starting lower case", { size: 28 }), BODY)).toBe(false);
+  });
+
+  it("leaves the paragraph it starts whole: the cap and the rest of its word are one string", () => {
+    const outline = buildOutline(dropCapPaper());
+    expect(outline.sections?.map((s) => s.heading)).toEqual(["Abstract", "1 Introduction", "2 Methods", "3 Results"]);
+    expect(outline.sections?.[3].text).toMatch(/^Starting from the observation that cells fade/);
+  });
+});
+
+describe("a run-in lead-in is no heading (P12-49, O7)", () => {
+  const bold = { font: "bold" };
+
+  it("is a phrase in another face ending with a period, with text after it on the same line", () => {
+    expect(headingOf(line("Battery cycling. Cells were assembled in an argon-", bold), BODY)).toBeNull();
+    expect(headingOf(line("Calculations of ionic conductivity. All energies were", bold), BODY)).toBeNull();
+    expect(headingOf(line("Statistics. Each cell was cycled five times and the", bold), BODY)).toBeNull();
+  });
+
+  it("is not welded to the heading it sits under: it stays at the start of its paragraph", () => {
+    const outline = buildOutline(leadInPaper());
+    expect(outline.sections?.map((s) => s.heading)).toEqual(["Abstract", "1 Introduction", "2 Methods", "Cycling"]);
+    expect(outline.sections?.[3].text).toMatch(/^Battery cycling and electrochemical characterisation\. Cells were assembled/);
+  });
+
+  it("is not a heading a phrase alone, an abbreviation or a larger line would be", () => {
+    // the phrase alone (nothing after it) is a heading, as ever
+    expect(headingOf(line("Battery cycling", bold), BODY)).toBe("Battery cycling");
+    // a period that ends an abbreviation, not a sentence
+    expect(headingOf(line("Vol. 3 Methods and Materials", bold), BODY)).toBe("Vol. 3 Methods and Materials");
+    // set clearly larger, a line is a heading
+    expect(headingOf(line("Cycling Results. Part One of the Series", { ...bold, size: 14 }), BODY)).toBe("Cycling Results. Part One of the Series");
   });
 });
