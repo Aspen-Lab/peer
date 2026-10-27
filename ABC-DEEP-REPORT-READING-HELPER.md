@@ -40,7 +40,7 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ## §1. CURRENT STATE
 
 ```text
-ROUND:          P12 round 2 (first under §1h.420–§1h.423): inputs the owner's papers P1 (Lin 2025), P2 (Sederholm 2026), P3 (Zahiri 2021); Themes A, B, C scored per paper (nine scores); stop: all nine ≥97.25 in two consecutive rounds; counts 0/2
+ROUND:          P12 round 2 (§1h.420–§1h.424): Themes A, B on P1–P3 and Theme C0 on P1–P6 (P4–P6 held out until the rules land), twelve scores ≥97.25 in two consecutive rounds; C1 (with a key, 100%) once the owner supplies a key; counts 0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
 HELD BY:          Claude (Opus), cloud session session_017DGPdGJqr95t3pMMcspXjE, 2026-10-27T14:47Z (§1h.419); only writer of this file
 CURRENT ITEM:          A P12-37 (Theme A, 4240) and A P12-38 (Theme B, 4241) walking round 2 on the dev server with the stub (§1h.421)
@@ -48,7 +48,7 @@ NEXT TURN:          three blind readers per theme on each pack; director; score;
 STOPPED BECAUSE:          — (the Codex manager stood down at the owner's word, §1h.419)
 GATE BASELINE:          GREEN on a16cbe48 (Claude, p504/wt, 2026-10-27 14:46–14:53Z, TZ=America/Chicago): build 0; tsc 0; lint 0 errors / 144 warnings; 596 test files + 3 skipped, 10,919 tests + 3 skipped, 0 failed. (Codex native baseline on 220ca9e1 retained in the log.)
 CLOCK:            trig_01MkdKP21BdT8TbcyZpB4umB ENABLED (Haiku, 20 * * * *, P12 prompt; wakes session_017DGPdGJqr95t3pMMcspXjE only when idle)
-OWNER INPUT:      P1 Lin 2025, P2 Sederholm 2026, P3 Zahiri 2021 (the owner's uploads, §1h.422 / §1h.423; upload UI only, never committed or quoted)
+OWNER INPUT:      P1 Lin 2025, P2 Sederholm 2026, P3 Zahiri 2021, P4 Nat. Commun. 2026, P5 Nature 2024, P6 Nature 2026 (the owner's uploads; upload UI only, never committed or quoted); a model key for C1 not supplied
 ```
 
 ### §1a. BINDING — user decisions 2026-10-05 (from the chat replies on the blueprint)
@@ -1839,6 +1839,20 @@ The owner, 2026-10-27 (chat, verbatim), attaching a third PDF: "加一篇这个 
 (c) **§1f.2's "no positional guessing" is superseded** for parts whose heading names no role: the owner now asks Peer to work the role out itself. The role must still come **from the document's own evidence** (where the part stands relative to parts the page can name, such as the methods and the references; the unheaded text before the first heading; the paper's own signposting), never from a model in Tier 0. Whether the page marks an inferred role differently from a named one is a design question the B answers with candidates and the manager rules.
 
 (d) **The stop line now has nine scores:** Theme A, Theme B and Theme C, each on P1, P2 and P3 — **all nine ≥ 97.25 in two consecutive scored rounds**. Round 2's walks P12-37 / P12-38 add P3 by the manager's message; Theme C is first scored in round 2 if its ground truth is ruled in time, otherwise from round 3.
+
+### §1h.424 — 2026-10-27 — NO INFERRED MARK; THE MODEL REVIEWS THE RULES' STRUCTURE; P4–P6 HELD OUT FOR ADAPTATION
+
+The owner, 2026-10-27 (chat, verbatim), answering the manager's two open questions and attaching three PDFs: on the model's part — "有key的时候，最终的结果任然是药100%准确的，规则的使用是为了节省token的使用。所以最后ai还是要参与进来，但是需要想方法节省ai的使用。比如说先用规则分出一个结果，然后让ai去审阅一下进行纠错，这样就能节省ai读整篇文章的token量。你在思考一下这部分看该怎么完善"; on marking an inferred role — "先不标"; on the PDFs — "用这两个文章再进行训练。目的是看看peer在遇到不同的文章的时候是否可以很好的adapt".
+
+(a) **No "inferred" mark.** An inferred role is shown exactly like a named one (the owner's "先不标").
+
+(b) **With a key, the structure must be right — the rules save tokens, the model checks.** Tier 1 adds a **structure review**: the rules (Tier 0) produce the parts, their roles and, per part, a confidence and the evidence used; with a key, the model receives **a compact skeleton, not the paper** — the headings, each paragraph's position and short head, and per paragraph the counts the rules use (figure and table references, citations, numbers with units, procedural wording) — together with the rules' draft, and returns **only corrections** in a fixed schema (a part's start moved to an existing paragraph index; a role from the five). Requirements: the answer is validated (schema, indices in range, roles from the set) and an invalid or failed answer leaves the rules' draft in place (Tier 0 never breaks); a disputed part may get a second, targeted look at that part's text only; the reviewed structure is cached per paper version (private for uploads) so a paper is reviewed once; where the reading pipeline already sends the paper to the model, the review rides on that call if it saves tokens. The token cost is measured against sending the whole text and reported to the owner. B P12-40 adds this design to its report; a C builds it after the Tier-0 rules.
+
+(c) **Scoring.** Theme C is scored **without a key** (C0: the rules, the rubric's formula, ≥ 97.25 per paper) and **with a key** (C1: every part right and no extra — 100 % — per paper, the owner's "100%准确"). The model stub cannot judge a paper's structure, so **C1 can be measured only with a real model key supplied by the owner for testing** (held in the test server's environment only; never printed, logged or committed); until then C1 is reported as unmeasured and is not yet part of the stop line.
+
+(d) **Three more papers, for adaptation:** **P4** (Nature Communications 2026, 12 pages, sha256 bbd9677e67e0ca89…), **P5** (Nature 2024, 21 pages, 25.6 MB — just under the upload limit of 25 MiB, sha256 6ce63dc1cb39c37f…), **P6** (Nature 2026, 11 pages, sha256 bd234ebef830bf3c…); the owner's files under the same rules as P1–P3. To measure adaptation honestly they are a **held-out set**: the Tier-0 rules are developed on P1–P3 and invented fixtures only; once they land, P4–P6 are measured **first-sight** (that score is reported to the owner as the adaptation measure), and only then may they inform further rules. Theme C (C0) is scored on P4–P6 and joins the stop line; their figures are checked by the engine and defects are fixed, but Themes A and B are scored on P1–P3 only.
+
+(e) **The stop line:** Themes A and B on P1–P3 (six scores) and Theme C0 on P1–P6 (six scores), all ≥ 97.25 in two consecutive scored rounds; C1 joins as 100 % per paper once a key is supplied.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
