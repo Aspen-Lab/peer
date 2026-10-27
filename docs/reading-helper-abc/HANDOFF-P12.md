@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T20:47Z
+AS OF        2026-10-27T20:51Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
-LAST RULING  §1h.431   NEXT RULING §1h.432   NEXT ITEM ID P12-58   NEXT FREE PORT 4245
+LAST RULING  §1h.432   NEXT RULING §1h.433   NEXT ITEM ID P12-60   NEXT FREE PORT 4245
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
-RUNNING      A P12-37 (4240) ∥ A P12-38 (4241) ∥ A-smoke P12-44 (4242) ∥ C P12-47 (R2a/R3a/R5a/R8a) ∥ C P12-48 (roles) ∥ C P12-49 (headings) ∥ C P12-50 (gutter) ∥ C P12-51 (assembly) ∥ B P12-52 (same-note writers, 4243) ∥ C P12-53 (Tier 1) ∥ C P12-55 (ceilings, clip) ∥ A P12-57 (C1 keyed harness, 4244) ∥ C P12-56 (Extended Data, R6b, R15a)
+RUNNING      A P12-37 (4240) ∥ A P12-38 (4241) ∥ C P12-47 (R2a/R3a/R5a/R8a) ∥ C P12-48 (roles) ∥ C P12-49 (headings) ∥ C P12-50 (gutter) ∥ C P12-51 (assembly) ∥ B P12-52 (same-note writers, 4243) ∥ C P12-53 (Tier 1) ∥ C P12-55 (ceilings, clip) ∥ A P12-57 (C1 keyed harness, 4244) ∥ C P12-56 (Extended Data, R6b, R15a) ∥ C P12-58 (body arrives) ∥ B P12-59 (55 s, memory, titles)
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
 OWNER'S PDFS P1–P6 (uploads in the manager's session; P4–P6 held out); upload UI only; never commit or quote
 CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB, Haiku, "20 * * * *", enabled, read back 17:02Z; prompt now says workaholic mode: resume usage-limited agents and refill the frontier
@@ -649,6 +649,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T20:35Z | manager (Claude) | §1h.430: the owner says use the test key; PEER_TEST_GEMINI_API_KEY answers 200 (value printed nowhere); C1 joins the stop line once measured; A P12-57 dispatched (phase 1 the keyed harness on P1, phase 2 the arms after C P12-53 and Tier 0) | evidence: briefs/P12-57.md | next: verify Cs as they report
 
 - 2026-10-27T20:47Z | manager (Claude) | C P12-46 and C P12-54 reported; both in the free copy with the revision set to 5 (C P12-45 holds 4); verification running; C P12-56 dispatched from C P12-46's head (§1h.431) | evidence: briefs/P12-56.md | next: land C46 + C54
+
+- 2026-10-27T20:51Z | manager (Claude) | §1h.432: A-smoke P12-44 landed (all six accepted; the first reading is abstract-only and never retried — P5 never gets its body; P5 drives the dev server to 2.3 GB; two wrong titles); C P12-58 and B P12-59 dispatched (no dev servers: the 15 GB container is at its limit, 4 dev servers running) | evidence: P12-44 report; briefs/P12-58..59.md | next: land C46 + C54
 
 ---
 
