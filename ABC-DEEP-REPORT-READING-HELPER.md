@@ -42,7 +42,7 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round2 preparation; formal round1 medians A0.00/B0.00; consecutive passes A0/2 B0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T11:19:53.445Z; only writer of this file
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T11:19:57.713Z; only writer of this file
 CURRENT ITEM:          A35actualR2families4234continue;A34samecopycheckpointinterfaceunavailableawaitcontinuation;B36finiteguideDONE;web28cf;R1medians0/0counts0/0;clockACTIVE
 NEXT TURN:          A35continuesactualR2families;A34resumeonlyfirstunfinishedpartwithsupportedCUA;B36guideawaitsrealUIorderingbeforeanyC;clockACTIVE
 STOPPED BECAUSE:          — active; prior quota interruptions preserved in log; C28 independently verified and landed
@@ -1724,6 +1724,11 @@ Actualclipboardandtxt/md/docdownloads inspectedforoneboldinventedparagraph;hiera
 Afterprintactionselection/navigationtimeouts/nochange;causeunknown. Own4233stopped/listenerabsent. Read500missingSupabaseordinaryDEVseparate,notprod. Noerrorattribution/score. No formal round2 score, common-gate waiver or product change. Prior failures remain. P12-34-A-20261027T111042Z.md.
 
 
+### §1h.409 — 2026-10-27 — P12-34-RESUME-INTERFACE-LIMIT-BANKED
+
+Sameworker/samecopyresumed;actualbrowserinventoryempty,documentedIABcreation unavailable. NofreshUIresult,noalternatestack. Own4233stopped/listenerabsent. Awaitnewindependentcontinuationfromsamecheckpoint. No formal round2 score, common-gate waiver or product change. Prior failures remain. P12-34-A-20261027T111042Z.md.
+
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2011,7 +2016,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-32 | DONE | 15onepage+5twopagecaptionidentity/sourcewordmatrix | 416orderedlineschecked;semanticassociationunresolved;noclassifierauthorized | Managerrepresentationdecisioniflaterbriefneeded | P12-32-B-20261027T012000Z.md through576a5c15 |
 | P12-33 | DONE | Ordinaryproductionentry/publicroutegates/source-backedchoices | Sourceguideonly;managernormalpublicHTMLfigureactual,originalupload/fullmatrixopen | Keepnormalaccessprerequisites/servedrevisionexplicit | P12-33-B-20261027T055000Z.md through3937cf82;managerproductionreport |
 | P12-R1 | SCORED | TwoA+threefreshblindreaders/theme+directoraudit | MediansA0.00/B0.00commongatesunestablished;counts0/2each | Mechanismfixes+freshnextA/readerround | P12-R1-DIRECTOR-20261027.md;P12-RUBRIC.md |
-| P12-34 | RUNNING | Fresh round2 ThemeA independent A at66656b33/web28cf;4233 | ActualUIcapability→inputbaselines→allnote/portable/common/inheritedfacts→frozenpack+score | First finite capability/baseline checkpoint; no old observation inheritance | agentp12_34_r2_theme_a;briefs/P12-34.md |
+| P12-34 | PARTIAL / RESUME OWED | FreshR2A34same66656b33/web28cfcopy4233;4inputboldbaseline+inventedexports | Capability/entry/boundednote/exportfactsbanked;afterresumeIABunavailable;ownserverstopped | Sameitemfirstunfinishednote/action/matrix/privacy/guardpartthroughsupportedCUA;nodefaultPASS | P12-34-A-20261027T111042Z.md;through5f5d54b6 |
 | P12-35 | RUNNING | Fresh round2 ThemeB independent A at66656b33/web28cf;4234 | ActualUIcapability→inputbaselines→full79guards+6commongates+all12units→frozenpack+score | First finite capability/baseline checkpoint; no old crop/CI substituted for page | agentp12_35_r2_theme_b;briefs/P12-35.md |
 | P12-36 | DONE / BOUNDED | 11inventedfunctionprobes+producer/export/persistencepathtrace | 31/31existingtests;3generalcandidaterules;actualReact/UI/reloadlinknotproved | Actualsame-notewriterorderingneededbeforemanagerCauthorization;nocausalclosure | P12-36-B-20261027T000000Z.md;throughf779613f |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
