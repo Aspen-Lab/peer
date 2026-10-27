@@ -347,6 +347,20 @@ describe("getFullText — P0-02, an upload is extracted once and cached for its 
     expect(mocks.extractPdfTextFromBytes).toHaveBeenCalledTimes(1);
   });
 
+  it("P12-28: a revision-2 sidecar misses once after geometry changes and remains owner-isolated", async () => {
+    const hash16 = "00000000000000c9";
+    const { UPLOAD_CONCEPT_EXTRACTION_VERSION } = await import("@/lib/preferences/upload-concepts");
+    const oldKey = `owner-a|${hash16}|1|${UPLOAD_CONCEPT_EXTRACTION_VERSION}|figures:2`;
+    const stale = { ...doc, figureCaptions: [{ ordinal: 0, label: "Figure 4", caption: "Invented old geometry.", page: 1, width: 999, height: 555 }] };
+    await writeFile(sidecar(hash16), JSON.stringify({ key: createHash("sha256").update(oldKey).digest("hex"), doc: stale }));
+    expect((await getFullText({ paperId: `upload:${hash16}` })).doc).toEqual(doc);
+    expect(mocks.extractPdfTextFromBytes).toHaveBeenCalledTimes(1);
+    expect((await getFullText({ paperId: `upload:${hash16}` })).doc).toEqual(doc);
+    expect(mocks.extractPdfTextFromBytes).toHaveBeenCalledTimes(1);
+    mocks.ownedUpload.mockImplementation(async () => null);
+    expect((await getFullText({ paperId: `upload:${hash16}` })).status).toBe("source_unavailable");
+  });
+
   it("reads the PDF again for a new revision, and for a different owner key", async () => {
     await getFullText({ paperId: "upload:00000000000000a4" });
     mocks.ownedUpload.mockImplementation(owner("owner-a", 2));

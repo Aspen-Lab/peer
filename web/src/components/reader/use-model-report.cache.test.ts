@@ -192,6 +192,15 @@ describe("the report cache holds no figure by value (P9-48 rule 1)", () => {
     expect(net.streamCalls).toHaveLength(1);
   });
 
+  it("P12-28: a version 8 report refreshes once after figure geometry changes", async () => {
+    const old = report("old-geometry", { proposal: "/api/papers/arxiv%3A2610.00001/figure-image?page=1&fig=4&v=2" });
+    localStorage.setItem("peer-paper-report-v8", JSON.stringify({ [keyFor()]: { report: old, savedAt: Date.now() } }));
+    await open();
+    expect(net.streamCalls).toHaveLength(1);
+    await open();
+    expect(net.streamCalls).toHaveLength(1);
+  });
+
   it("stores no data: URL — the proposal's, a result's, or a figure two places share", () => {
     const shared = dataUrl(300_000);
     rememberReport(keyFor(), report("r", { proposal: shared, results: [shared, dataUrl(200_000), null] }));
