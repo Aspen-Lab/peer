@@ -186,6 +186,14 @@ describe("P12-28: defensible typed caption pairing", () => {
     expect(await boxes(page, "Figure 1")).toEqual([[90, 100, 450, 250]]);
   });
 
+  it("does not invent a tight rectangle for an unsupported text clip", async () => {
+    const page: FigurePage = {
+      text: [["Figure 1. Invented interior label.", 90, 268, 9]],
+      drawingOps: ["q BT /F1 9 Tf 7 Tr 90 600 Td (clip) Tj ET 90 490 360 202 re f Q"],
+    };
+    expect(await boxes(page, "Figure 1")).toEqual([]);
+  });
+
   it("does not pair a truly painted extension through its caption", async () => {
     const page: FigurePage = { text: [["Figure 4. Invented interior label.", 90, 268, 9]], drawingOps: ["90 490 360 202 re f"] };
     expect(await boxes(page, "Figure 4")).toEqual([]);
