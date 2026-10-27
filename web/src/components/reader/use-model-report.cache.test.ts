@@ -52,7 +52,7 @@ import { defaultProfile, type Paper, type UserProfile } from "@/types";
 import { emptyReport, type PaperReport } from "@/lib/papers/report";
 import { buildReportKey, REPORT_CACHE_BUDGET_CHARS, rememberReport, useModelReport, withoutFigureData } from "./use-model-report";
 
-const STORAGE_KEY = "peer-paper-report-v8";
+const STORAGE_KEY = "peer-paper-report-v9";
 /** The ceiling the brief names for the cache's budget (rule 2: "≤ 1.5 M characters"). */
 const CEILING = 1_500_000;
 /** The origin's quota in the stub: A's P9-W3 measured 5.24 M characters in its browser. */

@@ -154,7 +154,7 @@ export interface PaperReading {
    * again, so a reading cached under 13 can hold it in two. Read again once.
    */
   // P12-28: discard derived figure URLs and dimensions made by the old caption pairing.
-  version: 15;
+  version: 16;
   paperId: string;
   builtAt: string;
   provenance: ReadingProvenance;
@@ -805,7 +805,7 @@ export function buildReading(
   omitted.push({ block: "nextStep", reason: "needs_key" });
 
   return {
-    version: 15,
+    version: 16,
     paperId: paper.id,
     builtAt: now.toISOString(),
     provenance,

@@ -251,7 +251,7 @@ const FIVE = [
   "Synthetic question five about x?",
 ];
 const settledOf = () => useReadingQuestionsStore.getState().byPaper[paper.id]?.settled;
-const cachedKeys = () => Object.keys(JSON.parse(localStorage.getItem("peer-paper-report-v8") ?? "{}") as Record<string, unknown>);
+const cachedKeys = () => Object.keys(JSON.parse(localStorage.getItem("peer-paper-report-v9") ?? "{}") as Record<string, unknown>);
 
 describe("the question box and the deep report (P2-08b, §1g.18)", () => {
   beforeEach(() => {

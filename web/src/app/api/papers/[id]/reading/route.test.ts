@@ -92,7 +92,7 @@ describe("GET /api/papers/[id]/reading", () => {
     // (section ids and the reading map). P8-04: 6 -> 7 (the extractors'
     // sections and buckets changed; see reading.test.ts's note).
     // P9: 7 -> 8 (the PDF text and the cleaner changed: P9-08 / P9-09 / P9-10).
-    expect(body.version).toBe(15);
+    expect(body.version).toBe(16);
     expect(body.paperId).toBe("openalex:W7208807247");
     expect(body.provenance.fullText).toBe("pdf");
     expect(body.provenance.pageCount).toBe(5);
@@ -415,7 +415,7 @@ describe("GET /api/papers/[id]/reading — P9-42 (§1h.67): a supplement's figur
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toContain("no-store");
     const body = await res.json();
-    expect(figureUrls(body)).toEqual(["/api/papers/upload%3A0000000000000008/figure-image?page=3&fig=2&v=2"]);
+    expect(figureUrls(body)).toEqual(["/api/papers/upload%3A0000000000000008/figure-image?page=3&fig=2&v=3"]);
     expect(JSON.stringify(body)).not.toContain("openalex%3AW7208807247/figure-image");
     // Still the public paper's reading: its id, and the captions read from the attached text.
     expect(body.paperId).toBe("openalex:W7208807247");
@@ -429,7 +429,7 @@ describe("GET /api/papers/[id]/reading — P9-42 (§1h.67): a supplement's figur
     const res = await call("openalex:W7208807247");
 
     expect(res.status).toBe(200);
-    expect(figureUrls(await res.json())).toEqual(["/api/papers/openalex%3AW7208807247/figure-image?page=3&fig=2&v=2"]);
+    expect(figureUrls(await res.json())).toEqual(["/api/papers/openalex%3AW7208807247/figure-image?page=3&fig=2&v=3"]);
   });
 
   it("keeps an upload's own reading naming itself", async () => {
@@ -439,6 +439,6 @@ describe("GET /api/papers/[id]/reading — P9-42 (§1h.67): a supplement's figur
     const res = await call("upload:0000000000000009");
 
     expect(res.status).toBe(200);
-    expect(figureUrls(await res.json())).toEqual(["/api/papers/upload%3A0000000000000009/figure-image?page=3&fig=2&v=2"]);
+    expect(figureUrls(await res.json())).toEqual(["/api/papers/upload%3A0000000000000009/figure-image?page=3&fig=2&v=3"]);
   });
 });
