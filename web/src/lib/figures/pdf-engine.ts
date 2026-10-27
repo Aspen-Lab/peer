@@ -45,7 +45,7 @@
 // Licence: `mupdf` is AGPL-3.0-or-later (Artifex dual licence, the same terms
 // as PyMuPDF). It is loaded here, lazily, and nowhere else.
 
-import type { Device, Document, Image, Matrix, Page, Path, Rect } from "mupdf";
+import type { Device, Document, Image, Matrix, Page, Path, Rect, StrokeState } from "mupdf";
 
 type Mupdf = typeof import("mupdf");
 
@@ -370,7 +370,7 @@ function regionStretch(region: Rect, images: PlacedImage[]): number {
  *  stroke's width not — and null for a path with no line or curve in it. (MuPDF's
  *  own `getBounds` widens a stroke by up to its miter limit, which made a
  *  crop up to 10 pt roomier than the helper's.) */
-function pathBox(path: Path, ctm: Matrix): Rect | null {
+function pathBox(path: Path, ctm: Matrix, allMoves = false): Rect | null {
   const [a, b, c, d, e, f] = ctm;
   let box: Rect | null = null;
   let drawn = false;
@@ -388,7 +388,7 @@ function pathBox(path: Path, ctm: Matrix): Rect | null {
   let moved = false;
   path.walk({
     moveTo(x, y) {
-      if (!moved) include(x, y); // only a path's first move is part of its box
+      if (!moved || allMoves) include(x, y); // fills include every subpath; strokes retain legacy bounds
       moved = true;
     },
     lineTo(x, y) {
@@ -409,40 +409,65 @@ function pathBox(path: Path, ctm: Matrix): Rect | null {
  *  holds more than a plausible figure's worth and the rest was not collected. */
 function collectDrawingBoxes(mupdf: Mupdf, page: Page): { boxes: Rect[]; overflow: boolean } {
   const boxes: Rect[] = [];
+  // null represents an unsupported clip, never a guessed smaller rectangle.
+  const clips: Array<Rect | null> = [];
+  const MAX_CLIP_DEPTH = 128;
+  let excessDepth = 0;
+  let specialDepth = 0;
+  let uncertain = false;
+  let badStack = false;
   let overflow = false;
-  const keep = (path: Path, ctm: Matrix) => {
-    if (boxes.length >= MAX_DRAWING_RECTS * 5) {
-      overflow = true;
-      return;
+  const push = (box: Rect | null) => {
+    if (excessDepth || clips.length >= MAX_CLIP_DEPTH) { excessDepth++; uncertain = true; return; }
+    if (box && (!box.every(Number.isFinite) || box[0] > box[2] || box[1] > box[3])) box = null;
+    if (!box) uncertain = true;
+    clips.push(box);
+  };
+  const keep = (path: Path, ctm: Matrix, fill: boolean) => {
+    if (boxes.length >= MAX_DRAWING_RECTS * 5) { overflow = true; return; }
+    let box = pathBox(path, ctm, fill);
+    if (!box) return;
+    // Unknown nesting and pattern/mask painting keep original support, which
+    // is conservative; strokes always keep the pre-existing centerline box.
+    if (fill && !excessDepth && !specialDepth && !badStack) {
+      for (const clip of clips) {
+        if (!clip) continue;
+        box = [Math.max(box[0], clip[0]), Math.max(box[1], clip[1]), Math.min(box[2], clip[2]), Math.min(box[3], clip[3])];
+        if (box[0] > box[2] || box[1] > box[3]) return;
+      }
     }
-    const box = pathBox(path, ctm);
-    if (box) boxes.push(box);
+    boxes.push(box);
   };
   const device: Device = new mupdf.Device({
     fillPath(path, _evenOdd, ctm, colorspace) {
-      try {
-        keep(path, ctm);
-      } finally {
-        path.destroy();
-        colorspace.destroy();
-      }
+      try { keep(path, ctm, true); } finally { path.destroy(); colorspace.destroy(); }
     },
     strokePath(path, stroke, ctm, colorspace) {
-      try {
-        keep(path, ctm);
-      } finally {
-        path.destroy();
-        stroke.destroy();
-        colorspace.destroy();
-      }
+      try { keep(path, ctm, false); } finally { path.destroy(); stroke.destroy(); colorspace.destroy(); }
     },
+    clipPath(path, _evenOdd, ctm) {
+      try {
+        let box: Rect | null = null;
+        try { box = path.getBounds(null as unknown as StrokeState, ctm); } catch { uncertain = true; }
+        push(box);
+      } finally { path.destroy(); }
+    },
+    clipStrokePath(path, stroke) { path.destroy(); stroke.destroy(); push(null); },
+    clipText(text) { text.destroy(); push(null); },
+    clipStrokeText(text, stroke) { text.destroy(); stroke.destroy(); push(null); },
+    clipImageMask(image) { image.destroy(); push(null); },
+    popClip() {
+      if (excessDepth) excessDepth--;
+      else if (clips.length) clips.pop();
+      else { uncertain = true; badStack = true; }
+    },
+    beginMask(_area, _luminosity, colorspace) { colorspace.destroy(); specialDepth++; uncertain = true; },
+    endMask() { if (specialDepth) specialDepth--; else { uncertain = true; badStack = true; } push(null); },
+    beginTile() { specialDepth++; uncertain = true; return 0; },
+    endTile() { if (specialDepth) specialDepth--; else { uncertain = true; badStack = true; } },
   });
-  try {
-    page.run(device, mupdf.Matrix.identity);
-    device.close();
-  } finally {
-    device.destroy();
-  }
+  try { page.run(device, mupdf.Matrix.identity); device.close(); } finally { device.destroy(); }
+  if (uncertain) console.warn("[figures/pdf-engine] unsupported or excessive clipping retained conservative fill bounds");
   return { boxes, overflow };
 }
 
