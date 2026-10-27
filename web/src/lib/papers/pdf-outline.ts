@@ -1801,6 +1801,80 @@ function titleOf(lines: PdfLine[], body: { size: number }): string | null {
   return title.length >= 6 ? title : null;
 }
 
+// ── The opening of a paper that names no abstract or introduction (P12-51, O6) ────────────────────────────
+//
+// The paper starts at its first named part, and the cover above it is cut. A paper that names neither
+// (a journal that prints a summary paragraph and goes straight on, with no heading over its introduction)
+// had no such part to start at: the cover stayed, every name and affiliation read as a heading of its own,
+// and the introduction fell under the last of them. Its prose is found by its style instead: the first
+// run of lines set in the body's size and face. What stands above the run is the cover, and the run is the
+// paper's opening, which the first heading after it closes as a section with no heading of its own.
+
+/** A line is in the body's style when it is set in the body's face within this many points of its size. */
+const OPENING_SIZE_SLACK = 0.6;
+/** The opening is a run of at least this many such lines: a name, a date or a note is not one. */
+const OPENING_RUN_LINES = 3;
+/** A line of this many characters or fewer, between the opening's lines, is a drop cap or a mark, not a break. */
+const OPENING_MARK_MAX = 2;
+/** The lines above the opening that are all headings, at least this many, are a paragraph set apart (a
+ *  summary in another face), not a heading with prose under it. */
+const COVER_HEADING_STACK = 3;
+
+/**
+ * Where the paper's opening starts, as an index into `lines`, or 0 when there is nothing to cut: no run of
+ * body-style lines on the first page that has text, no cover above it, or a real heading standing directly
+ * over it (then the prose belongs to that heading, and the paper is read as it always was). Furniture,
+ * margin print and the dated box are not lines here, as they are not in the reading itself.
+ */
+function openingStart(
+  lines: PdfLine[],
+  body: { size: number; font: string },
+  furniture: Set<string>,
+  isMarginPrint: (line: PdfLine) => boolean,
+): number {
+  const dated = lines.map((line) => PUBLICATION_DATE.test(line.text.trim()));
+  const live: number[] = [];
+  lines.forEach((line, i) => {
+    const inBox = dated[i] && (dated[i - 1] === true || dated[i + 1] === true);
+    if (!isFurniture(line, furniture) && !isMarginPrint(line) && !inBox) live.push(i);
+  });
+  if (live.length === 0) return 0;
+  const firstPage = lines[live[0]].page;
+  const isProse = (i: number): boolean => {
+    const line = lines[i];
+    return (
+      line.page === firstPage &&
+      !line.block &&
+      line.font === body.font &&
+      Math.abs(line.size - body.size) <= OPENING_SIZE_SLACK &&
+      !captionOf(line) &&
+      headingOf(line, body) === null
+    );
+  };
+  let at = -1;
+  for (let k = 0; k < live.length && lines[live[k]].page === firstPage; k++) {
+    if (!isProse(live[k])) continue;
+    let end = k;
+    while (end + 1 < live.length && isProse(live[end + 1])) end++;
+    if (end - k + 1 >= OPENING_RUN_LINES) {
+      at = k;
+      break;
+    }
+    k = end;
+  }
+  if (at < 0) return 0;
+  // A drop cap sits between the first lines of the opening and the rest; the lines before it are the opening's.
+  while (at > 0 && (isProse(live[at - 1]) || lines[live[at - 1]].text.trim().length <= OPENING_MARK_MAX)) at--;
+  if (at === 0) return 0;
+  const above = lines[live[at - 1]];
+  if (headingOf(above, body) !== null) {
+    let stack = 0;
+    for (let k = at - 1; k >= 0 && headingOf(lines[live[k]], body) !== null; k--) stack++;
+    if (stack < COVER_HEADING_STACK) return 0;
+  }
+  return live[at];
+}
+
 /**
  * The whole reading: pages of text items in, a document out. `reason` is set
  * — and everything else left empty — when the PDF carries no text to read.
@@ -1826,14 +1900,18 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
     const head = headingOf(line, body);
     return head !== null && FRONT_MATTER_END.has(canonicalizeHeading(head));
   });
-  const read = firstNamed > 0 ? lines.slice(firstNamed) : lines;
+  const isMarginPrint = marginPrintOf(lines, body);
+  // P12-51 (O6): a paper that names neither starts at its opening, found by its style; what stands above
+  // it is the cover. The opening is read as text before the first heading, a section with no heading.
+  const start = firstNamed > 0 ? firstNamed : firstNamed < 0 ? openingStart(lines, body, furniture, isMarginPrint) : 0;
+  const read = start > 0 ? lines.slice(start) : lines;
 
   const sections: OutlineSection[] = [];
   const figureCaptions: OutlineCaption[] = [];
   const equations: OutlineEquation[] = [];
   let heading: string | null = null;
   let canonical = "body";
-  let page = pages[0]?.page ?? 1;
+  let page = (firstNamed < 0 && start > 0 ? read[0]?.page : undefined) ?? pages[0]?.page ?? 1;
   let held: PdfLine[] = [];
   // P12-51 (O5): the first end-matter heading closes the argument (`tail`) and the text under it is not
   // read (`reading`); what follows is read by what each heading names (`tailPartOf`). `resumed`: the
@@ -1873,7 +1951,6 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
   // one block — so a caption's second line can be told from the prose that
   // resumes under the figure by the space above it.
   const pitch = linePitch(read);
-  const isMarginPrint = marginPrintOf(lines, body);
   // The Received / Revised / Accepted / Published box: two or more consecutive
   // lines that each open with one of those words and a date are the journal's
   // furniture, wherever they stand (on the owner's paper, inside the

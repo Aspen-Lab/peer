@@ -20,6 +20,7 @@ type Kind =
   | "affil" //    the affiliation print (8.5 pt, the body face)
   | "summary" //  a summary paragraph set in the other face (10.5 pt)
   | "italic" //   a line in an italic face (an affiliation block)
+  | "dropcap" //  a drop cap: one large letter on a baseline of its own (30 pt)
   | "panel"; //   a line of figure text, set small (7 pt)
 interface Row {
   text: string;
@@ -42,6 +43,7 @@ const STYLE: Record<Kind, Partial<PdfTextItem>> = {
   affil: { height: 8.5 },
   summary: { height: 10.5, fontName: "display" },
   italic: { fontName: "italic" },
+  dropcap: { height: 30 },
   panel: { height: 7 },
 };
 
@@ -319,5 +321,190 @@ describe("an end-matter heading no longer ends the outline (P12-51, O5)", () => 
       pageCount: 1,
       reason: null,
     });
+  });
+});
+
+// ── O6: the opening of a paper that names no abstract or introduction ───────────────────────────────────────
+
+const COVER: Row[] = [
+  r("Slow Annealing Keeps Quillwort Films Whole", "title"),
+  r("Ada Fenwick and Boris Lund", "author", 20),
+  r("Department of Films, University of Tarn", "affil"),
+  r("Institute of Cells, Port Merrow", "affil"),
+];
+const SUMMARY: Row[] = [
+  r("Quillwort cathodes keep their capacity when the films are cooled slowly after growth", "summary", 20),
+  r("and lose it when they are not, because the edges of the grains are spared the strain.", "summary"),
+];
+const OPENING_ONE = [
+  "The work below tests that reading on forty films grown in one furnace over a single week.",
+  "It reports the capacity of each film and the state of its grain edges after the last cycle.",
+  "Nothing is claimed here about films grown in any other way than the one described.",
+];
+
+/** (b) A cover (title, authors, affiliations, a summary in another face), the paper's body-style opening in two
+ *  paragraphs, then a descriptive heading: no part of it is called an abstract or an introduction. */
+const unheadedOpening = (): PdfPageText[] => [
+  page(1, [
+    ...COVER,
+    ...SUMMARY,
+    ...INTRO.map((text, i) => r(text, "body", i === 0 ? 20 : undefined)),
+    ...para(...OPENING_ONE),
+    r("Slow cooling spares the grain edges", "head", 24),
+    ...prose(...RESULTS),
+  ]),
+];
+
+/** The same cover, but the paper names its introduction. */
+const namedIntroduction = (): PdfPageText[] => [
+  page(1, [
+    ...COVER,
+    ...SUMMARY,
+    r("Introduction", "head", 24),
+    ...prose(...INTRO),
+    r("Slow cooling spares the grain edges", "head", 24),
+    ...prose(...RESULTS),
+  ]),
+];
+
+/** A paper with a title and prose and no heading at all. */
+const headlessPaper = (): PdfPageText[] => [
+  page(1, [r("A Survey of Quillwort Films", "title"), ...prose(...INTRO), ...para(...RESULTS), ...para(...METHODS_ONE)]),
+];
+
+/** A cover, then a real section heading directly over the first prose: nothing there is an opening. */
+const coverThenHeading = (): PdfPageText[] => [
+  page(1, [
+    r("Slow Annealing Keeps Quillwort Films Whole", "title"),
+    r("Ada Fenwick and Boris Lund", "author", 20),
+    r("Department of Films, University of Tarn", "affil"),
+    r("Slow cooling spares the grain edges", "head", 24),
+    ...prose(...RESULTS),
+    r("Discussion", "head", 24),
+    ...prose(...METHODS_ONE),
+  ]),
+];
+
+/** The opening starts with a drop cap: its first line, the large letter on a baseline of its own, the rest. */
+const openingWithDropCap = (): PdfPageText[] => [
+  page(1, [
+    ...COVER,
+    ...SUMMARY,
+    r(INTRO[0], "body", 20),
+    r("S", "dropcap", 12),
+    r(INTRO[1]),
+    r(INTRO[2]),
+    ...para(...OPENING_ONE),
+    r("Slow cooling spares the grain edges", "head", 24),
+    ...prose(...RESULTS),
+  ]),
+];
+
+/** The summary's last line has no full stop, so every line of the summary reads as a heading. */
+const summaryWithoutFullStop = (): PdfPageText[] => [
+  page(1, [
+    ...COVER,
+    r("Quillwort cathodes keep their capacity when the films are cooled slowly after growth", "summary", 20),
+    r("and lose it when they are not, because the edges of the grains are spared the", "summary"),
+    r("strain of the cooling that the quick films are put through", "summary"),
+    ...INTRO.map((text, i) => r(text, "body", i === 0 ? 20 : undefined)),
+    r("Slow cooling spares the grain edges", "head", 24),
+    ...prose(...RESULTS),
+  ]),
+];
+
+/** A real heading that wraps over two lines stands over the first prose. */
+const wrappedHeadingOverProse = (): PdfPageText[] => [
+  page(1, [
+    r("Slow Annealing Keeps Quillwort Films Whole", "title"),
+    r("Ada Fenwick and Boris Lund", "author", 20),
+    r("Department of Films, University of Tarn", "affil"),
+    r("Why Slow Cooling Spares the Grain Edges of the", "head", 24),
+    r("Quillwort Films", "head", 14),
+    ...prose(...RESULTS),
+  ]),
+];
+
+/** Two body-style lines under the cover are a note, not an opening. */
+const twoLinesOfProse = (): PdfPageText[] => [
+  page(1, [
+    ...COVER,
+    ...SUMMARY,
+    ...prose(INTRO[0], INTRO[1]),
+    r("Slow cooling spares the grain edges", "head", 24),
+    ...prose(...RESULTS),
+  ]),
+];
+
+describe("a paper that names no abstract or introduction opens with its unheaded prose (P12-51, O6)", () => {
+  it("emits the body-style paragraphs before the first heading as the first section, with no heading", () => {
+    // Before: a row for the author line, one for the summary (as a heading) holding the introduction, and the third.
+    const sections = sectionsOf(unheadedOpening());
+    expect(sections).toEqual([
+      { heading: undefined, canonical: "body", page: 1, text: `${INTRO.join(" ")}\n\n${OPENING_ONE.join(" ")}` },
+      section("Slow cooling spares the grain edges", "body", RESULTS.join(" ")),
+    ]);
+    // The interface C P12-48's rule A1 reads: the first section, no heading, the bucket body.
+    expect(sections[0].heading).toBeUndefined();
+    expect(sections[0].canonical).toBe("body");
+  });
+
+  it("cuts the cover: the title, the authors, the affiliations and the summary are in no section", () => {
+    const text = textOf(unheadedOpening());
+    const headings = headingsOf(unheadedOpening()).join(" ");
+    for (const cover of ["Fenwick", "Department of Films", "Institute of Cells", "Quillwort cathodes keep their capacity", "and lose it when they are not"]) {
+      expect(text).not.toContain(cover);
+      expect(headings).not.toContain(cover);
+    }
+  });
+
+  it("keeps the first lines of the opening when a drop cap stands between them and the rest", () => {
+    const sections = sectionsOf(openingWithDropCap());
+    expect(sections[0].heading).toBeUndefined();
+    expect(sections[0].text?.startsWith(INTRO[0])).toBe(true);
+    expect(sections[0].text).toContain(INTRO[2]);
+    expect(sections[0].text).not.toContain("Fenwick");
+  });
+
+  it("reads a summary of three heading lines as the cover, not as the heading of the opening", () => {
+    const sections = sectionsOf(summaryWithoutFullStop());
+    expect(sections[0].heading).toBeUndefined();
+    expect(sections[0].text).toBe(INTRO.join(" "));
+    expect(sections.map((s) => s.heading)).toEqual([undefined, "Slow cooling spares the grain edges"]);
+  });
+
+  it("leaves a paper that names its introduction exactly as it was", () => {
+    // Byte-identical to the outline before P12-51: the introduction is the first named part and the cover above it is cut.
+    expect(buildOutline(namedIntroduction())).toEqual({
+      title: "Slow Annealing Keeps Quillwort Films Whole",
+      sections: [
+        section("Introduction", "introduction", INTRO.join(" ")),
+        section("Slow cooling spares the grain edges", "body", RESULTS.join(" ")),
+      ],
+      figureCaptions: [],
+      pageCount: 1,
+      reason: null,
+    });
+  });
+
+  it("leaves a paper with a title and no heading, and a real heading over the first prose, as they were", () => {
+    expect(buildOutline(headlessPaper()).sections).toEqual([
+      section("A Survey of Quillwort Films", "body", `${INTRO.join(" ")}\n\n${RESULTS.join(" ")}\n\n${METHODS_ONE.join(" ")}`),
+    ]);
+    expect(buildOutline(coverThenHeading()).sections).toEqual([
+      section("Ada Fenwick and Boris Lund", "body", "Department of Films, University of Tarn"),
+      section("Slow cooling spares the grain edges", "body", RESULTS.join(" ")),
+      section("Discussion", "discussion", METHODS_ONE.join(" ")),
+    ]);
+  });
+
+  it("does not take a heading of two lines for a cover, or two lines of prose for an opening", () => {
+    const wrapped = sectionsOf(wrappedHeadingOverProse());
+    expect(wrapped.map((s) => s.heading)).toEqual([
+      "Ada Fenwick and Boris Lund",
+      "Why Slow Cooling Spares the Grain Edges of the Quillwort Films",
+    ]);
+    expect(wrapped[1].text).toBe(RESULTS.join(" "));
+    expect(sectionsOf(twoLinesOfProse()).every((s) => s.heading !== undefined)).toBe(true);
   });
 });
