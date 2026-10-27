@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T00:53:38.067Z
+AS OF        2026-10-27T00:53:41.550Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.374   NEXT RULING §1h.375   NEXT ITEM ID P12-31   NEXT FREE PORT 4230
+LAST RULING  §1h.375   NEXT RULING §1h.376   NEXT ITEM ID P12-31   NEXT FREE PORT 4230
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
 RUNNING      C28managerverifyd2f89f8/nativeCI40428712922+local;A23A24scores0evidence;3ThemeAreaderslive3ThemeBqueued;A26PARTIAL1860missing30;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
@@ -529,6 +529,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T00:50:41.270Z | parent cf92d20e (entry commit follows) | manager | P12-30-CORRECTED-CAPTION-REVIEW-BANKED: B30 corrected-engine bounded review banked:overlapping mixed-font typed Table stops correctly;hanging-indent omission exists in both baseline/candidate; no new regression established by these finite probes; same-block distant helper case remains synthetic | evidence: P12-30-B-20261026T193000Z.md;source24d5a571 | next: Finish independent C28 gates/mutations/normal existing/fresh-upload UI; freeze round1 evidence and score missing evidence explicitly; no landing or closure until verified
 
 - 2026-10-27T00:53:38.067Z | parent 9443d628 (entry commit follows) | manager | P12-R1-A23-ADVERSE-BASELINE-SCORE: A23 independent adverse baseline score0.00;12unitFAIL(evidence),sixcommongatesunestablished,0substantiatedextras;frozen1795-artifactmanifest998dc74d;notreader median or feature-wide malfunction claim | evidence: P12-23-A-20261025T230000Z.md;f5de90a5;frozenThemeApack | next: Finish C28 independent exact-tree native full gates/touched3/mutations and real existing/fresh-upload UI; complete six blind readers and director baseline; preserve failures
+
+- 2026-10-27T00:53:41.550Z | parent 5f2a9a5f (entry commit follows) | manager | P12-R1-A24-ADVERSE-BASELINE-SCORE: A24 independent adverse baseline score0.00;12unitFAIL(evidence),sixcommongatesunestablished,0substantiatedextras;frozen610-artifactmanifest378da67a;notreader median or closure | evidence: P12-24-A-20261025T230500Z.md;19917ecb;frozenThemeBpack | next: Finish C28 independent exact-tree native full gates/touched3/mutations and real existing/fresh-upload UI; complete six blind readers and director baseline; preserve failures
 
 ---
 
