@@ -18,8 +18,10 @@
 //     floors themselves stay, and nothing below one is a figure of its own;
 //   * the short figure-text lines within 6 pt of such a region (an axis title,
 //     a panel letter) join it too; the last line of a body paragraph does not;
-//   * a figure is the region plus 10 pt, rendered at 2.8x (about 200 DPI),
-//     stepped down by 0.2 to stay at or under 4.5 megapixels.
+//   * a figure is the region plus 10 pt (less, where its caption starts inside
+//     that padding: the clip then stops half a point short of the caption),
+//     rendered at 2.8x (about 200 DPI), stepped down by 0.2 to stay at or
+//     under 4.5 megapixels.
 //
 // The timeout design (chosen, measured, and why). The helper was killed at 25
 // s by `execFile`. In-process there is no kill switch for a call already inside
@@ -122,6 +124,8 @@ const MIN_WIDTH = 120;
 const MIN_HEIGHT = 120;
 const MIN_AREA = 20_000;
 const CLIP_PADDING = 10;
+/** P12-47 R5a: how far short of a caption inside the padding the clip stops, in points. */
+const CAPTION_CLEARANCE = 0.5;
 const MAX_CAPTION_DISTANCE_BELOW = 220;
 const MAX_CAPTION_DISTANCE_ABOVE = 110;
 const MAX_FIGURE_TEXT_CHARS = 500;
@@ -820,6 +824,7 @@ function renderRegion(
   rect: Rect,
   stretch: number,
   measureOnly = false,
+  captionRect: Rect | null = null,
 ): { png: Uint8Array; width: number; height: number } | null {
   const clip: Rect = [
     Math.max(pageRect[0], rect[0] - CLIP_PADDING),
@@ -827,6 +832,15 @@ function renderRegion(
     Math.min(pageRect[2], rect[2] + CLIP_PADDING),
     Math.min(pageRect[3], rect[3] + CLIP_PADDING),
   ];
+  // P12-47 R5a (B P12-39 M5): the padding is for breathing room, not for the caption. When the caption's first line
+  // starts inside it, the clip ends 0.5 pt short of the line (and never inside the region); otherwise the 10 pt stay.
+  if (captionRect) {
+    if (captionRect[1] + captionRect[3] > rect[1] + rect[3]) {
+      if (captionRect[1] < clip[3]) clip[3] = Math.max(rect[3], captionRect[1] - CAPTION_CLEARANCE);
+    } else if (captionRect[3] > clip[1]) {
+      clip[1] = Math.min(rect[1], captionRect[3] + CAPTION_CLEARANCE);
+    }
+  }
   if (isEmpty(clip) || width(clip) <= 1 || height(clip) <= 1) return null;
 
   // Un-stretching lengthens the squeezed side rather than shortening the
@@ -1018,7 +1032,8 @@ function readPage(
       if (performance.now() > deadline) return { figures, outOfTime: true, drawingLimit };
       let rendered: ReturnType<typeof renderRegion> = null;
       try {
-        rendered = renderRegion(mupdf, page, pageRect, candidate.rect, candidate.stretch, measureOnly);
+        const captionRect = candidate.captionIndex >= 0 ? texts[candidate.captionIndex].rect : null;
+        rendered = renderRegion(mupdf, page, pageRect, candidate.rect, candidate.stretch, measureOnly, captionRect);
       } catch (error) {
         console.warn("[figures/pdf-engine] a region would not render:", error);
       }

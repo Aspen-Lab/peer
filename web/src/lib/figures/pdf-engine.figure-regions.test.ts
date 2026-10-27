@@ -4,8 +4,9 @@
 //   R3a  short figure-text lines within 6 pt join it too (a body paragraph's last line does not)
 //   R5a  the padded clip stops at a caption that sits inside the padding
 //   R8a  a caption ends at a pitch jump
+import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
-import { barChart, figurePdf, type FigurePage, type Shape, type TextRun } from "./figure-pdf.test-helper";
+import { barChart, figurePdf, pngInfo, type FigurePage, type Shape, type TextRun } from "./figure-pdf.test-helper";
 import { extractPdfFigures } from "./pdf-engine";
 
 const options = { maxPages: 24, maxFigures: 12 };
@@ -188,5 +189,112 @@ describe("P12-47 R3a: short figure-text lines within 6 pt join the region", () =
   it("leaves a page's lines alone when no region has a typed caption", async () => {
     const result = await extractPdfFigures(figurePdf([{ text: [["No caption here.", 110, 215, 9], belowChart("Time (s)", 4, 215)], shapes: CHART }]), options);
     expect(result.figures).toEqual([]);
+  });
+});
+
+// ── R5a: the clip stops at a caption inside the padding ──────────────────
+
+/** The pixels of an 8-bit RGB or RGBA PNG as rows of [r, g, b] (enough of a decoder for the engine's own output). */
+function pngRows(png: Uint8Array): { width: number; height: number; rows: number[][][] } {
+  const bytes = Buffer.from(png);
+  let width = 0;
+  let height = 0;
+  let channels = 0;
+  const data: Buffer[] = [];
+  for (let at = 8; at < bytes.length; ) {
+    const length = bytes.readUInt32BE(at);
+    const type = bytes.toString("latin1", at + 4, at + 8);
+    const body = bytes.subarray(at + 8, at + 8 + length);
+    if (type === "IHDR") {
+      width = body.readUInt32BE(0);
+      height = body.readUInt32BE(4);
+      expect(body[8]).toBe(8);
+      channels = body[9] === 6 ? 4 : body[9] === 2 ? 3 : 0;
+      expect(channels).toBeGreaterThan(0);
+    } else if (type === "IDAT") data.push(body);
+    at += 12 + length;
+  }
+  const raw = inflateSync(Buffer.concat(data));
+  const stride = width * channels;
+  const pixels = Buffer.alloc(height * stride);
+  for (let y = 0; y < height; y++) {
+    const filter = raw[y * (stride + 1)];
+    for (let x = 0; x < stride; x++) {
+      const value = raw[y * (stride + 1) + 1 + x];
+      const left = x >= channels ? pixels[y * stride + x - channels] : 0;
+      const up = y > 0 ? pixels[(y - 1) * stride + x] : 0;
+      const upLeft = y > 0 && x >= channels ? pixels[(y - 1) * stride + x - channels] : 0;
+      const paeth = () => {
+        const p = left + up - upLeft;
+        const [pa, pb, pc] = [Math.abs(p - left), Math.abs(p - up), Math.abs(p - upLeft)];
+        return pa <= pb && pa <= pc ? left : pb <= pc ? up : upLeft;
+      };
+      const predicted = [0, left, up, (left + up) >> 1, paeth()][filter];
+      pixels[y * stride + x] = (value + predicted) & 255;
+    }
+  }
+  const rows = Array.from({ length: height }, (_, y) =>
+    Array.from({ length: width }, (_, x) => [0, 1, 2].map((c) => pixels[y * stride + x * channels + c])),
+  );
+  return { width, height, rows };
+}
+/** Is any pixel of these rows dark (every channel under 128)? The raster's own gradient has a blue channel of 128. */
+const hasInk = (rows: number[][][]) => rows.some((row) => row.some((pixel) => pixel.every((channel) => channel < 128)));
+
+describe("P12-47 R5a: the padded clip stops at a caption that sits inside the padding", () => {
+  const SCALE = 2.8;
+  /** The raster [100, 150, 300, 350] of the engine's own fixtures, and a caption line whose box starts `gap` below it. */
+  const raster: Shape = { kind: "image", x: 100, top: 150, w: 200, h: 200 };
+  const captionBelow = (gap: number, label = "Figure 1. A synthetic raster drawn into a box."): TextRun => [label, 100, 350 + gap + 1.0744 * 9, 9];
+  const render = async (page: FigurePage) => {
+    const result = await extractPdfFigures(figurePdf([page]), options);
+    expect(result.figures).toHaveLength(1);
+    const [figure] = result.figures;
+    expect(pngInfo(figure.png)).toMatchObject({ signature: true, width: figure.width, height: figure.height });
+    return figure;
+  };
+  const near = (actual: number, expected: number, tolerance = 1) => expect(Math.abs(actual - expected)).toBeLessThanOrEqual(tolerance);
+
+  it("ends the clip 0.5 pt above a caption 5 pt under the picture, and shows none of its ink", async () => {
+    const figure = await render({ text: [captionBelow(5)], shapes: [raster] });
+    expect(figure.box).toEqual([100, 150, 300, 350]);
+    // The clip is [90, 140, 310, 354.5] at 2.8 (and not 360, the box plus 10 pt: 616 px).
+    near(figure.width, 220 * SCALE);
+    near(figure.height, (354.5 - 140) * SCALE);
+    // Everything under the picture's own edge (row 588) is white page.
+    expect(hasInk(pngRows(figure.png).rows.slice(Math.round(210 * SCALE)))).toBe(false);
+  });
+
+  it("keeps the full 10 pt padding for a caption 12 pt away, and the ink check sees a mark in that band", async () => {
+    const far = await render({ text: [captionBelow(12)], shapes: [raster] });
+    near(far.height, 220 * SCALE);
+    // Control for the ink check above: a rule 3 pt under the picture is inside the clip, so the same check finds it.
+    const ruled = await render({ text: [captionBelow(5)], shapes: [raster, { kind: "line", x1: 100, top1: 353, x2: 300, top2: 353 }] });
+    expect(hasInk(pngRows(ruled.png).rows.slice(Math.round(210 * SCALE)))).toBe(true);
+  });
+
+  it("ends the clip at the picture's own edge for a caption closer than 0.5 pt", async () => {
+    const figure = await render({ text: [captionBelow(0.2)], shapes: [raster] });
+    near(figure.height, 210 * SCALE);
+  });
+
+  it("ends the clip 0.5 pt under a caption above the picture, when it sits inside the padding", async () => {
+    // The caption's box ends 5 pt over the picture: its descenders are inside a 10 pt padding.
+    const above: FigurePage = { text: [["Figure 1. A synthetic raster drawn into a box.", 100, 145 - 0.2989 * 9, 9]], shapes: [raster] };
+    const figure = await render(above);
+    expect(figure.box).toEqual([100, 150, 300, 350]);
+    near(figure.height, (360 - 145.5) * SCALE);
+    // Rows over the picture's top edge (150): row (150 - 145.5) * 2.8 = 12.6 and above are white page.
+    expect(hasInk(pngRows(figure.png).rows.slice(0, Math.floor(4.5 * SCALE)))).toBe(false);
+  });
+
+  it("stops at the nearest text line under a raster that has no typed caption", async () => {
+    const figure = await render({ text: [captionBelow(5, "A line of text that is not a caption.")], shapes: [raster] });
+    near(figure.height, (354.5 - 140) * SCALE);
+  });
+
+  it("keeps the 10 pt padding when the caption's first line is outside it", async () => {
+    // 10.3 pt under the picture, as the engine's paper fixture has it.
+    near((await render({ text: [captionBelow(10.3)], shapes: [raster] })).height, 220 * SCALE);
   });
 });
