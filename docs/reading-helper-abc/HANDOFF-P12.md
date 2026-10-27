@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T11:19:45.520Z
+AS OF        2026-10-27T11:19:49.377Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.406   NEXT RULING §1h.407   NEXT ITEM ID P12-37   NEXT FREE PORT 4236
+LAST RULING  §1h.407   NEXT RULING §1h.408   NEXT ITEM ID P12-37   NEXT FREE PORT 4236
 RUBRIC       P12-RUBRIC.md frozen; formal R1 A0.00/B0.00; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
 RUNNING      A35actualR2families4234continue;A34samecopycheckpointinterfaceunavailableawaitcontinuation;B36finiteguideDONE;web28cf;R1medians0/0counts0/0;clockACTIVE
 THEN         parallelfreshR2AThemeA/B→3freshblindreaders/theme→director→mechanismB/Cfixes→nextscoredround;stop97.9twoconsecutive
@@ -593,6 +593,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T11:19:41.460Z | parent 001852e0 (entry commit follows) | manager | P12-36-FINITE-WRITER-GUIDE-BANKED: Eleveninventedfunctionprobes;3existing suites31/31. Completedaggregate reconciliation preservessticky;olderpendingstickycanoverwrite neweraggregate atlateflush,storelacksactionordering. No mountedReact/reload/persistenceproof,lockedtoolchainlackscomponentDOMruntime. Threegeneralcandidates with costs,noneauthorized. | evidence: P12-36-B-20261027T000000Z.md;source4fd68b73/f779613f | next: A35continuesactualR2families;A34resumeonlyfirstunfinishedpartwithsupportedCUA;B36guideawaitsrealUIorderingbeforeanyC;clockACTIVE
 
 - 2026-10-27T11:19:45.520Z | parent 4c1aac70 (entry commit follows) | manager | P12-34-FOUR-INPUT-NOTE-BASELINE-BANKED: Allfourinputsnormalchooser/consent;oneinventedboldnoteeachretainsstrongafterclose/reopen;publicAalsoreload+AltF10roundtrip. No completeformat/lifecycle/matrix/privacy/exportclosure. | evidence: P12-34-A-20261027T111042Z.md;source2fc6a93d | next: A35continuesactualR2families;A34resumeonlyfirstunfinishedpartwithsupportedCUA;B36guideawaitsrealUIorderingbeforeanyC;clockACTIVE
+
+- 2026-10-27T11:19:49.377Z | parent ceff6178 (entry commit follows) | manager | P12-34-INVENTED-PORTABLE-OUTPUTS-BANKED: Actualclipboardandtxt/md/docdownloads inspectedforoneboldinventedparagraph;hierarchy/nesting/highlight/quotationexclusionnotclosed. Printinvokedbutnodocument/windowobserved;outputgateopen. | evidence: P12-34-A-20261027T111042Z.md;source3c1aca77 | next: A35continuesactualR2families;A34resumeonlyfirstunfinishedpartwithsupportedCUA;B36guideawaitsrealUIorderingbeforeanyC;clockACTIVE
 
 ---
 
