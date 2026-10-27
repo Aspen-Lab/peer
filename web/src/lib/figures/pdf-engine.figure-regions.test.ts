@@ -5,7 +5,7 @@
 //   R5a  the padded clip stops at a caption that sits inside the padding
 //   R8a  a caption ends at a pitch jump
 import { describe, expect, it } from "vitest";
-import { figurePdf, type FigurePage, type Shape } from "./figure-pdf.test-helper";
+import { barChart, figurePdf, type FigurePage, type Shape, type TextRun } from "./figure-pdf.test-helper";
 import { extractPdfFigures } from "./pdf-engine";
 
 const options = { maxPages: 24, maxFigures: 12 };
@@ -90,5 +90,103 @@ describe("P12-47 R2a: sub-floor satellites join an accepted, captioned region", 
       ],
     };
     expect(await boxesOf(twoRasters)).toEqual([[60, 150, 240, 300], [240, 150, 420, 300]]);
+  });
+});
+
+// ── R3a: figure text ─────────────────────────────────────────────────────
+
+describe("P12-47 R3a: short figure-text lines within 6 pt join the region", () => {
+  // barChart(110, 250): its drawn extent is [110, 240, 380, 400] (the curve's control point sits 10 pt above the axis).
+  const CHART = barChart(110, 250);
+  const CAPTION = "Figure 1. An invented bar chart with its axis title, and a paragraph above it.";
+  /** Helvetica's line box: from `ascent` above the baseline to `descent` below it, per point of size. */
+  const ASCENT = 1.0744;
+  const DESCENT = 0.2989;
+  /** The width of "Time (s)" at 9 pt in Helvetica: T 0.611, i 0.222, m 0.833, e 0.556, space 0.278, ( 0.333, s 0.5, ) 0.333. */
+  const TIME_WIDTH = (0.611 + 0.222 + 0.833 + 0.556 + 0.278 + 0.333 + 0.5 + 0.333) * 9;
+  /** A text run whose line box starts `gap` below (or ends `gap` above) the chart's edge: baselines worked out here. */
+  const belowChart = (text: string, gap: number, x: number, size = 9): TextRun => [text, x, 400 + gap + ASCENT * size, size];
+  const aboveChart = (text: string, gap: number, x: number, size = 10): TextRun => [text, x, 240 - gap - DESCENT * size, size];
+  const page = (...text: TextRun[]): FigurePage => ({ text: [[CAPTION, 110, 445, 9], ...text], shapes: CHART });
+  const closeTo = (actual: number[], expected: number[], tolerance = 0.15) => {
+    expect(actual).toHaveLength(expected.length);
+    expected.forEach((value, i) => expect(Math.abs(actual[i] - value), `side ${i} of ${actual}`).toBeLessThanOrEqual(tolerance));
+  };
+  const boxOf = async (...text: TextRun[]) => {
+    const figures = await figuresOf(page(...text));
+    expect(figures).toHaveLength(1);
+    return figures[0].box!;
+  };
+  /** A paragraph's lines, over sixty characters each but the last, 13 pt apart, ending `gap` above the chart. */
+  const paragraph = (gap: number, last: string): TextRun[] => {
+    const lastRun = aboveChart(last, gap, 110);
+    return [
+      ["The invented paragraph runs on for a long while, well past sixty characters in all.", 110, lastRun[2] - 26, 10],
+      ["It carries on in the same way for one more line, which is also longer than sixty.", 110, lastRun[2] - 13, 10],
+      lastRun,
+    ];
+  };
+
+  it("takes an axis title 4 pt under the drawing, and not the last line of a body paragraph 5.5 pt over it", async () => {
+    // The title is a block of one short line. The paragraph's block has two lines over 60 characters: body text.
+    closeTo(await boxOf(), [110, 240, 380, 400]);
+    closeTo(await boxOf(belowChart("Time (s)", 4, 215)), [110, 240, 380, 416.36]);
+    closeTo(await boxOf(belowChart("Time (s)", 4, 215), ...paragraph(5.5, "which closes it.")), [110, 240, 380, 416.36]);
+  });
+
+  it("would have taken that last line had its block held no line over 60 characters", async () => {
+    // The control for the test above: the same short line, in the same place, alone.
+    closeTo(await boxOf(aboveChart("which closes it.", 5.5, 110)), [110, 240 - 5.5 - 13.74, 380, 400]);
+  });
+
+  it("takes a line of 60 characters and leaves one of 61", async () => {
+    const sixty = "Elapsed time since the run began, in seconds (log scale) abc".slice(0, 60);
+    expect(sixty).toHaveLength(60);
+    closeTo(await boxOf(belowChart(sixty, 4, 112, 8)), [110, 240, 380, 400 + 4 + (ASCENT + DESCENT) * 8]);
+    closeTo(await boxOf(belowChart(`${sixty}d`, 4, 112, 8)), [110, 240, 380, 400]);
+  });
+
+  it("takes a line 6 pt away and leaves one 6.5 pt away", async () => {
+    closeTo(await boxOf(belowChart("Time (s)", 6, 215)), [110, 240, 380, 400 + 6 + (ASCENT + DESCENT) * 9]);
+    closeTo(await boxOf(belowChart("Time (s)", 6.5, 215)), [110, 240, 380, 400]);
+  });
+
+  it("repeats: a line within 6 pt of the first line it took joins too", async () => {
+    // 4 pt under the drawing, then a second title 5 pt under that one.
+    const first = 400 + 4 + (ASCENT + DESCENT) * 9;
+    closeTo(await boxOf(belowChart("Time (s)", 4, 215), belowChart("Arbitrary units", first - 400 + 5, 215)), [110, 240, 380, first + 5 + (ASCENT + DESCENT) * 9]);
+  });
+
+  it("stays inside the region's width widened by 6 pt", async () => {
+    // All 4 pt under the drawing. One starting 8 pt left of it, or ending 8 pt right of it, is out; one 5 pt left
+    // is in, and the region grows to hold the whole line.
+    const bottom = 400 + 4 + (ASCENT + DESCENT) * 9;
+    closeTo(await boxOf(belowChart("Time (s)", 4, 102)), [110, 240, 380, 400]);
+    closeTo(await boxOf(belowChart("Time (s)", 4, 105)), [105, 240, 380, bottom]);
+    closeTo(await boxOf(belowChart("Time (s)", 4, 395 - TIME_WIDTH)), [110, 240, 380, 400]);
+    closeTo(await boxOf(belowChart("Time (s)", 4, 385 - TIME_WIDTH)), [110, 240, 385, bottom]);
+  });
+
+  it("leaves a line level with the caption, and the caption's own line", async () => {
+    // Beside the caption, 4 pt under the drawing: not above the caption.
+    const page2: FigurePage = {
+      text: [["Figure 1. Short.", 110, 400 + 4 + ASCENT * 9, 9], ["Panel note", 330, 400 + 4 + ASCENT * 9, 9]],
+      shapes: CHART,
+    };
+    const figures = await figuresOf(page2);
+    expect(figures).toHaveLength(1);
+    closeTo(figures[0].box!, [110, 240, 380, 400]);
+  });
+
+  it("takes figure text under a drawing whose caption is above it", async () => {
+    const above: FigurePage = { text: [[CAPTION, 110, 215, 9], belowChart("Time (s)", 4, 215)], shapes: CHART };
+    const figures = await figuresOf(above);
+    expect(figures).toHaveLength(1);
+    closeTo(figures[0].box!, [110, 240, 380, 416.36]);
+  });
+
+  it("leaves a page's lines alone when no region has a typed caption", async () => {
+    const result = await extractPdfFigures(figurePdf([{ text: [["No caption here.", 110, 215, 9], belowChart("Time (s)", 4, 215)], shapes: CHART }]), options);
+    expect(result.figures).toEqual([]);
   });
 });

@@ -16,6 +16,8 @@
 //   * a region that passed those floors and has a "Figure N" caption also takes
 //     in the sub-floor rasters and vector clusters next to it (P12-47): the
 //     floors themselves stay, and nothing below one is a figure of its own;
+//   * the short figure-text lines within 6 pt of such a region (an axis title,
+//     a panel letter) join it too; the last line of a body paragraph does not;
 //   * a figure is the region plus 10 pt, rendered at 2.8x (about 200 DPI),
 //     stepped down by 0.2 to stay at or under 4.5 megapixels.
 //
@@ -625,6 +627,7 @@ interface Satellite {
   caption: number;
 }
 
+const isTypedCaption = (text: string) => CAPTION_RE.test(text) || OTHER_CAPTION_RE.test(text);
 const failsFloors = (r: Rect) => width(r) < MIN_WIDTH || height(r) < MIN_HEIGHT || area(r) < MIN_AREA;
 const unionOf = (a: Rect, b: Rect): Rect => [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])];
 const sharedLength = (a0: number, a1: number, b0: number, b1: number) => Math.max(0, Math.min(a1, b1) - Math.max(a0, b0));
@@ -670,7 +673,7 @@ function joinsRegion(host: Candidate, accepted: Rect, satellite: Satellite): boo
 function growWithSatellites(candidates: Candidate[], texts: TextBlock[], satellites: Satellite[]): boolean {
   const hosts = candidates.filter((candidate) => candidate.explicit && candidate.captionIndex >= 0);
   const accepted = new Map(hosts.map((host) => [host, host.rect] as const));
-  const captionLines = texts.filter((line) => CAPTION_RE.test(line.text) || OTHER_CAPTION_RE.test(line.text)).map((line) => line.rect);
+  const captionLines = texts.filter((line) => isTypedCaption(line.text)).map((line) => line.rect);
   const crosses = (host: Candidate, grown: Rect) =>
     candidates.some((other) => other !== host && coverageGain(host.rect, grown, other.rect) > 0.01) ||
     captionLines.some((line) => coverageGain(host.rect, grown, line) > 0.01);
@@ -687,6 +690,49 @@ function growWithSatellites(candidates: Candidate[], texts: TextBlock[], satelli
         if (grown.some((value, side) => value !== host.rect[side])) grew = changed = true;
         host.rect = grown;
         pool.splice(i--, 1);
+      }
+    }
+  }
+  return changed;
+}
+
+// ── Figure text: the short lines a captioned region takes in (P12-47, R3a) ─
+//
+// B P12-39 M3: a drawing's region is its path boxes, so an axis title just past the last axis line, or a panel
+// letter, falls outside the crop. A short line of text within 6 pt of an accepted, captioned region joins it, and
+// then whatever is within 6 pt of the grown region, until none is left. A line is figure text and not body text
+// when it is at most 60 characters, is not a typed caption or a line of the caption's own block, sits on the
+// figure's side of the caption (above it, for a caption below), lies inside the region's width widened by 6 pt,
+// and does not share its block with a line over 60 characters (the short last line of a paragraph is body).
+
+/** How near a line must be to the region, in points, on each axis; also how far past its sides it may reach. */
+const FIGURE_TEXT_REACH = 6;
+/** The longest line, in characters, that is figure text; a block holding a longer line is body text. */
+const FIGURE_TEXT_CHARS = 60;
+
+/** Grows each accepted, captioned region by the figure-text lines around it; true when any region changed. */
+function absorbFigureText(candidates: Candidate[], texts: TextBlock[]): boolean {
+  const bodyBlocks = new Set(texts.filter((line) => line.text.length > FIGURE_TEXT_CHARS).map((line) => line.blockId));
+  let changed = false;
+  for (const host of candidates) {
+    if (!host.explicit || host.captionIndex < 0) continue;
+    const caption = texts[host.captionIndex];
+    const captionIsBelow = caption.rect[1] + caption.rect[3] > host.rect[1] + host.rect[3];
+    const onFigureSide = (line: TextBlock) => (captionIsBelow ? line.rect[1] < caption.rect[1] - 1 : line.rect[3] > caption.rect[3] + 1);
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const line of texts) {
+        if (line.text.length > FIGURE_TEXT_CHARS || bodyBlocks.has(line.blockId) || isTypedCaption(line.text)) continue;
+        if (line.blockId === caption.blockId || !onFigureSide(line)) continue;
+        const near =
+          gapBetween(host.rect[0], host.rect[2], line.rect[0], line.rect[2]) <= FIGURE_TEXT_REACH &&
+          gapBetween(host.rect[1], host.rect[3], line.rect[1], line.rect[3]) <= FIGURE_TEXT_REACH;
+        const withinWidth = line.rect[0] >= host.rect[0] - FIGURE_TEXT_REACH && line.rect[2] <= host.rect[2] + FIGURE_TEXT_REACH;
+        const inside = line.rect[0] >= host.rect[0] && line.rect[2] <= host.rect[2] && line.rect[1] >= host.rect[1] && line.rect[3] <= host.rect[3];
+        if (!near || !withinWidth || inside) continue;
+        host.rect = unionOf(host.rect, line.rect);
+        grew = changed = true;
       }
     }
   }
@@ -746,9 +792,11 @@ function candidateRegions(mupdf: Mupdf, page: Page, pageRect: Rect, texts: TextB
     const nearest = Math.min(...competitors.map((other) => other.captionDistance));
     return candidate.captionDistance === nearest && competitors.filter((other) => other.captionDistance === nearest).length === 1;
   });
-  // P12-47 R2a: with the regions settled, an accepted, captioned one takes in the sub-floor items next to it.
+  // P12-47 R2a, then R3a: with the regions settled, an accepted, captioned one takes in the sub-floor items next
+  // to it, and then the short figure-text lines around what it has become.
   if (defensible.some((candidate) => candidate.explicit && candidate.captionIndex >= 0)) {
-    if (growWithSatellites(defensible, texts, collectSatellites(images, clusters, texts))) defensible.sort(byPlace);
+    const withSatellites = growWithSatellites(defensible, texts, collectSatellites(images, clusters, texts));
+    if (absorbFigureText(defensible, texts) || withSatellites) defensible.sort(byPlace);
   }
   for (const candidate of defensible) candidate.stretch = regionStretch(candidate.rect, placed);
   return { candidates: defensible, drawingLimit: overflow || clusters === null };
