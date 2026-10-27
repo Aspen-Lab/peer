@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T11:05:35.479Z
+AS OF        2026-10-27T11:08:15.681Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.398   NEXT RULING §1h.399   NEXT ITEM ID P12-34   NEXT FREE PORT 4233
+LAST RULING  §1h.399   NEXT RULING §1h.400   NEXT ITEM ID P12-37   NEXT FREE PORT 4236
 RUBRIC       P12-RUBRIC.md frozen; formal R1 A0.00/B0.00; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      C28web28cfVERIFIED+LANDEDc4955144;freshR2ThemeA/Bbriefsnext;R1medians0/0counts0/0;clockACTIVE
+RUNNING      C28web28cfLANDED;freshA34/A35+B36briefscommittedawaitspawn;R1medians0/0counts0/0;clockACTIVE
 THEN         parallelfreshR2AThemeA/B→3freshblindreaders/theme→director→mechanismB/Cfixes→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -577,6 +577,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T11:04:11.048Z | parent d473165b (entry commit follows) | manager | P12-28-FINAL-MANAGER-VERIFICATION-COMPLETE: Exactweb28cf actualpublicA5opens5closes sizes670x960/394x574/1133x620/1126x1339/1117x1272;23sourcearraysequal. PublicB4correct1249x444charts/close,5honestabsence,29sourcearraysequal. RootviewedA4/5+B4. Scoped6PDFaudit5/5canonicalbyteidentitiespreserved. Native10919+520x3and4ownmutationspreviouslypass. ApproveonlyscopedC28integration;knownlimits/R2commongatesremain. | evidence: P12-MANAGER-P28-VERIFY-20261026.md;verify-p28/private/cua-final-public-{a,b}-results.json;source-byte-audit.json;CI40460023376 | next: Freshdetachedlandingcopyfromcurrentmain;CP69933fd9..e0e2ff67;exactweb28cf+silentdiffvs581e13c4;mainFFonly,logpush;parallelfreshR2AseparateThemeA/B
 
 - 2026-10-27T11:05:35.479Z | parent c4955144 (entry commit follows) | manager | P12-28-VERIFIED-FAST-FORWARD-LANDED: Freshdetachedlandingcopye2c97b2fCP33chronological69933fd9..e0e2ff67→c4955144;mainfast-forwardonly. Landedweb28cf74ea90ebc67ec3bbc56f30fa178b1681517f exactworker/managerverified581e13c4;silentwebdiff;clean. NoPRmerge/newbranch/testweakening. FinalCverificationcomplete,formalR2notyetstarted. | evidence: p12-28-land/wtc4955144;verify-p28/private/landing-result.json;P12-MANAGER-P28-VERIFY-20261026.md;P12-28-C-20261026T190000Z.md | next: WritefreshR2ThemeA/Bbriefswithfull79guard/common-gateactionplan,releaseexactlandedSHAandparallelseparateAreviewers4233/4234;freshblindscoreafterpacksfreeze
+
+- 2026-10-27T11:08:15.681Z | parent 921c4e01 (entry commit follows) | manager | P12-R2-FRESH-A-AND-WRITER-BRIEFS: CommittedfreshR2common+A34ThemeA4233+A35ThemeB4234andseparateB36same-notewriter4235briefs. Preservefrozenrubric/full79guards;finitecheckpointparts;exactfactualwidthcontractinnewpack;onlydocumentedcuaUI;nohiddenstate/auth/cacheworkaround. R1A23/A24closedscoredadversebaseline,notlivePARTIALworkers. | evidence: briefs/P12-R2-A-COMMON.md;briefs/P12-34.md;briefs/P12-35.md;briefs/P12-36.md;P12-R1-DIRECTOR-20261027.md | next: Releaseexactbrief-containingapprovedSHAweb28cf;spawnseparatefreshA34/A35andB36inparallel;manageronlysharedstatewriter;bankeachfinitepart
 
 ---
 
