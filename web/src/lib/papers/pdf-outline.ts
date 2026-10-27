@@ -1144,9 +1144,10 @@ const FURNITURE_MIN_PAGES = 3;
  *  journal line, an author line above them: three. Wording mid-page, or the fifth row down, is the body's. */
 const FURNITURE_BAND_ROWS = 3;
 
-/** Whether a line stands in the top or bottom band of its page (`FURNITURE_BAND_ROWS` rows from an edge, rows
- *  being the page's distinct baselines to the nearest 3 points, so two columns' lines share one). */
-function bandOf(lines: PdfLine[]): (line: PdfLine) => boolean {
+/** Which band of its page a line stands in — the top one or the bottom one (`FURNITURE_BAND_ROWS` rows from an
+ *  edge, rows being the page's distinct baselines to the nearest 3 points, so two columns' lines share one) —
+ *  or neither. */
+function bandOf(lines: PdfLine[]): (line: PdfLine) => "top" | "bottom" | null {
   const rows = new Map<number, number[]>();
   for (const { page, y } of lines) {
     const row = Math.round(y / 3);
@@ -1157,33 +1158,99 @@ function bandOf(lines: PdfLine[]): (line: PdfLine) => boolean {
   for (const known of rows.values()) known.sort((a, b) => b - a);
   return (line) => {
     const known = rows.get(line.page);
-    if (!known) return false;
+    if (!known) return null;
     const at = known.indexOf(Math.round(line.y / 3));
-    return at < FURNITURE_BAND_ROWS || at >= known.length - FURNITURE_BAND_ROWS;
+    if (at >= FURNITURE_BAND_ROWS && at < known.length - FURNITURE_BAND_ROWS) return null;
+    return at < known.length / 2 ? "top" : "bottom";
   };
 }
 
-/** Lines that repeat across pages at the same height, in the page's top or bottom band, on at least three
- *  pages (and 40% of them): running heads, folios, preprint stamps. They are the page's furniture, not the
- *  paper's words. */
-export function furnitureOf(lines: PdfLine[], pageCount: number): Set<string> {
-  const seen = new Map<string, Set<number>>();
-  const inBand = bandOf(lines);
-  for (const line of lines) {
-    if (line.text.length > 120 || !inBand(line)) continue;
-    const key = `${Math.round(line.y / 6)}:${line.text.replace(/\d+/g, "#").toLowerCase()}`;
-    seen.set(key, (seen.get(key) ?? new Set()).add(line.page));
+/** A running head by its words alone: the digits (a folio, a volume) and the case are not part of it. */
+const headKey = (text: string): string => text.replace(/\d+/g, "#").replace(/\s+/g, " ").trim().toLowerCase();
+
+/** A head stands within this many points of a height it was seen at (P12-49, O4): the pages of a paper do not
+ *  set it on one baseline to the hundredth, and a row of two columns' heads has two. */
+const HEAD_REACH = 12;
+/** A head that is only part of a longer one, or a line made of several heads, has at least this many characters:
+ *  a word or two of a head are not it. */
+const HEAD_PART_MIN = 8;
+
+/**
+ * The running heads `furnitureOf` found: a Set of their keys (the band they stand in, then their words, so `has`
+ * and `size` read as they always did), and where each of them stood on the pages it was seen on.
+ */
+class RunningHeads extends Set<string> {
+  /** Each head's words, and the heights (baselines) it was seen at. */
+  readonly stands = new Map<string, { words: string; heights: number[] }>();
+
+  /** Whether `words`, a line's words at height `y`, are one of the heads, or one of two heads a row holds in two
+   *  columns, or the two of them set as one line. */
+  covers(words: string, y: number): boolean {
+    const near = (heights: number[]) => heights.some((h) => Math.abs(h - y) <= HEAD_REACH);
+    for (const band of ["top", "bottom"]) {
+      const own = this.stands.get(`${band}:${words}`);
+      if (own && near(own.heights)) return true;
+    }
+    if (words.length < HEAD_PART_MIN) return false;
+    // A row of two columns' heads is one line on a page whose gutter is not found and two on another: each of the
+    // two is furniture where the whole row is, and the whole row where each of the two is.
+    let rest = words;
+    for (const head of this.stands.values()) {
+      if (head.words.length < HEAD_PART_MIN || !near(head.heights)) continue;
+      if (head.words !== words && wholeWords(head.words, words)) return true;
+      rest = rest.split(head.words).join(" ");
+    }
+    return rest !== words && !/[\p{L}\p{N}]/u.test(rest.replace(/#/g, ""));
   }
-  const repeated = new Set<string>();
+}
+
+/** Whether `part` stands in `whole` as whole words. */
+function wholeWords(whole: string, part: string): boolean {
+  for (let at = whole.indexOf(part); at >= 0; at = whole.indexOf(part, at + 1)) {
+    const before = whole[at - 1];
+    const after = whole[at + part.length];
+    if ((before === undefined || before === " ") && (after === undefined || after === " ")) return true;
+  }
+  return false;
+}
+
+/** Lines that repeat across pages in the page's top or bottom band, on at least three pages (and 40% of them):
+ *  running heads, folios, preprint stamps. They are the page's furniture, not the paper's words.
+ *
+ *  P12-49 (O4): a head is known by its normalised words and the band it stands in, **whatever its column or its
+ *  exact height**. It was keyed by its words and its height rounded to 6 pt, so a head that two pages set a point
+ *  apart across a rounding edge, and a row of two heads in two columns that one page splits into two lines and
+ *  another welds into one, were never found on enough pages — and the running head read as a heading. */
+export function furnitureOf(lines: PdfLine[], pageCount: number): Set<string> {
+  const seen = new Map<string, { words: string; pages: Set<number>; heights: number[] }>();
+  const bandIn = bandOf(lines);
+  for (const line of lines) {
+    const band = line.text.length > 120 ? null : bandIn(line);
+    if (band === null) continue;
+    const words = headKey(line.text);
+    const key = `${band}:${words}`;
+    const entry = seen.get(key) ?? { words, pages: new Set<number>(), heights: [] };
+    entry.pages.add(line.page);
+    entry.heights.push(line.y);
+    seen.set(key, entry);
+  }
+  const repeated = new RunningHeads();
   const threshold = Math.max(FURNITURE_MIN_PAGES, Math.ceil(pageCount * 0.4));
-  for (const [key, pages] of seen) if (pages.size >= threshold) repeated.add(key);
+  for (const [key, { words, pages, heights }] of seen) {
+    if (pages.size < threshold) continue;
+    repeated.add(key);
+    repeated.stands.set(key, { words, heights });
+  }
   return repeated;
 }
 
-function isFurniture(line: PdfLine, furniture: Set<string>): boolean {
+/** Whether this line is the page's furniture: a folio, or one of the running heads `furnitureOf` found (or one of
+ *  the two heads a row holds in two columns, or the two of them set as one line). */
+export function isFurniture(line: PdfLine, furniture: Set<string>): boolean {
   if (FOLIO.test(line.text)) return true;
-  const key = `${Math.round(line.y / 6)}:${line.text.replace(/\d+/g, "#").toLowerCase()}`;
-  return furniture.has(key);
+  const words = headKey(line.text);
+  // A Set that is not `furnitureOf`'s knows the words only.
+  return furniture instanceof RunningHeads ? furniture.covers(words, line.y) : furniture.has(words);
 }
 
 /** Small print beyond a page's text is a footer or a stamp up to this many rows (3 pt apart); past it, it is a

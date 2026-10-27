@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   bodyStyle,
   buildOutline,
+  furnitureOf,
   headingOf,
+  isFurniture,
   type PdfLine,
   type PdfPageText,
   type PdfTextItem,
@@ -31,6 +33,7 @@ const pageOf = (n: number, rows: Row[], top = 780, pitch = 12): PdfPageText => (
   items: rows.map(([text, at], i) => item(text, { y: top - i * pitch, ...at })),
 });
 
+const headingsOf = (pages: PdfPageText[]) => (buildOutline(pages).sections ?? []).map((s) => s.heading);
 const textOf = (pages: PdfPageText[]) => (buildOutline(pages).sections ?? []).map((s) => s.text).join(" ");
 
 /** The rule the body size followed before P12-49: the size with the most characters, the face with the most. */
@@ -399,5 +402,93 @@ describe("the whole reading — an affiliation and a reference list are no secti
     expect(text).toContain("Department of Materials Science");
     expect(text).toContain("62704");
     expect(text).toContain("Zhang Q, Li W, Wu H");
+  });
+});
+
+/** (c) Three pages whose running heads (two, on one row in two columns, set in another face) sit a point apart. */
+function runningHeadsPaper(): PdfPageText[] {
+  const height = [771.4, 770.6, 771.2];
+  return [1, 2, 3].map((n) => ({
+    page: n,
+    items: [
+      item("Quillwort Cathode Letters", { x: 60, y: height[n - 1], fontName: "display" }),
+      item("Annealing Schedules", { x: 330, y: height[n - 1], fontName: "display" }),
+      ...Array.from({ length: 10 }, (_, i) =>
+        item(n === 1 && i === 0 ? "1 Introduction" : `Line ${i} of page ${n} reads on and on and on and on and on and on.`, { y: 740 - i * 12 }),
+      ),
+    ],
+  }));
+}
+
+// ── Rule 3 (O4): a running head is furniture whatever its column and its exact height ───────────────────
+
+describe("furnitureOf — a running head repeats in the top or bottom band, whatever its column or height (P12-49, O4)", () => {
+  /** A page of body lines, so the band has something to be the edge of. */
+  const bodyOn = (page: number): PdfLine[] =>
+    [700, 660, 620, 580, 540, 500, 460, 420, 380, 340].map((y, i) => line(`Body line ${"abcdefghij"[page]}${"abcdefghij"[i]} reads on.`, { page, y }));
+
+  it("takes both heads of a row of two columns, though no two pages set them at one height", () => {
+    // Heights a point apart that straddle the 6 pt rounding edge the heads used to be keyed by.
+    const lines = [1, 2, 3].flatMap(bodyOn);
+    for (const [page, y] of [[1, 771.4], [2, 770.6], [3, 771.2]] as const) {
+      lines.push(line("Quillwort Cathode Letters", { page, y, x: 60 }), line("Annealing Schedules, Volume 12", { page, y: y - 1.5, x: 330 }));
+    }
+    const furniture = furnitureOf(lines, 3);
+    expect(furniture.size).toBe(2);
+    for (const l of lines.filter((l) => l.y > 700 && l.text.length > 20)) expect(isFurniture(l, furniture), l.text).toBe(true);
+    expect(isFurniture(line("Body line aa reads on.", { page: 1, y: 700 }), furniture)).toBe(false);
+  });
+
+  it("takes a head whose digits differ and whose case differs", () => {
+    const lines = [1, 2, 3, 4].flatMap(bodyOn);
+    for (const page of [1, 2, 3, 4]) lines.push(line(page % 2 ? `JOURNAL OF INVENTED RESULTS ${page}` : `Journal of Invented Results ${page}`, { page, y: 780 + page }));
+    expect(furnitureOf(lines, 4).size).toBe(1);
+  });
+
+  it("takes the two heads of a row that one page splits into two lines and the others weld into one", () => {
+    // Pages 1 to 3 print "Elmstead Journal of Cathodes" and "Fenwick Cathode Letters" as one line; pages 4 and 5,
+    // which have a gutter, as two lines. Neither alone is on enough pages, and each is on the row of the whole.
+    const lines = [1, 2, 3, 4, 5].flatMap(bodyOn);
+    for (const page of [1, 2, 3]) lines.push(line("Elmstead Journal of Cathodes Fenwick Cathode Letters", { page, y: 780 }));
+    for (const page of [4, 5]) lines.push(line("Elmstead Journal of Cathodes", { page, y: 780, x: 60 }), line("Fenwick Cathode Letters", { page, y: 780, x: 330 }));
+    const furniture = furnitureOf(lines, 5);
+    expect(lines.filter((l) => l.y === 780 && isFurniture(l, furniture))).toHaveLength(7);
+  });
+
+  it("takes the welded row where the two heads are the ones repeated", () => {
+    const lines = [1, 2, 3, 4].flatMap(bodyOn);
+    for (const page of [1, 2, 3]) lines.push(line("Elmstead Journal of Cathodes", { page, y: 780, x: 60 }), line("Fenwick Cathode Letters", { page, y: 780, x: 330 }));
+    lines.push(line("Elmstead Journal of Cathodes Fenwick Cathode Letters", { page: 4, y: 780 }));
+    const furniture = furnitureOf(lines, 4);
+    expect(isFurniture(lines[lines.length - 1], furniture)).toBe(true);
+  });
+
+  it("does not take a one-off line, a line of two pages in a paper of five, or one mid-page", () => {
+    const lines = [1, 2, 3, 4, 5].flatMap(bodyOn);
+    lines.push(line("Quillwort Cathode Letters", { page: 1, y: 780 }));
+    for (const page of [2, 3]) lines.push(line("Preprint, under review at an invented journal", { page, y: 780 }));
+    for (const page of [1, 2, 3, 4, 5]) lines.push(line("Table of invented counts continues here", { page, y: 481 }));
+    const furniture = furnitureOf(lines, 5);
+    expect(furniture.size).toBe(0);
+    expect(lines.some((l) => isFurniture(l, furniture))).toBe(false);
+  });
+
+  it("does not take a body line for a head because it has the head's words, away from the head's height", () => {
+    const lines = [1, 2, 3].flatMap(bodyOn);
+    for (const page of [1, 2, 3]) lines.push(line("Annealing Schedules", { page, y: 780 }));
+    const furniture = furnitureOf(lines, 3);
+    expect(isFurniture(line("Annealing Schedules", { page: 2, y: 780 }), furniture)).toBe(true);
+    expect(isFurniture(line("Annealing Schedules", { page: 2, y: 481 }), furniture)).toBe(false);
+  });
+
+  it("does not take the same words at the top of two pages and the bottom of a third for a head", () => {
+    const lines = [1, 2, 3].flatMap(bodyOn);
+    for (const page of [1, 2]) lines.push(line("Quillwort Cathode Letters", { page, y: 780 }));
+    lines.push(line("Quillwort Cathode Letters", { page: 3, y: 90 }));
+    expect(furnitureOf(lines, 3).size).toBe(0);
+  });
+
+  it("keeps a running head from becoming a heading: three pages whose heads sit a point apart", () => {
+    expect(headingsOf(runningHeadsPaper())).toEqual(["1 Introduction"]);
   });
 });
