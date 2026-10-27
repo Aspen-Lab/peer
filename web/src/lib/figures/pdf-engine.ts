@@ -13,6 +13,9 @@
 //     other) of that size is a figure only with an explicit "Figure N" caption;
 //   * two regions that mostly overlap are one; a raster the page printed
 //     stretched is rendered back to its own shape;
+//   * a region that passed those floors and has a "Figure N" caption also takes
+//     in the sub-floor rasters and vector clusters next to it (P12-47): the
+//     floors themselves stay, and nothing below one is a figure of its own;
 //   * a figure is the region plus 10 pt, rendered at 2.8x (about 200 DPI),
 //     stepped down by 0.2 to stay at or under 4.5 megapixels.
 //
@@ -355,6 +358,8 @@ interface CaptionMatch {
   explicit: boolean;
   excluded: boolean;
   distance: number;
+  /** The caption line's place in the page's text list; -1 when no line was paired. */
+  index: number;
 }
 
 function bestCaptionForRegion(region: Rect, blocks: TextBlock[]): CaptionMatch {
@@ -376,10 +381,10 @@ function bestCaptionForRegion(region: Rect, blocks: TextBlock[]): CaptionMatch {
   }
   if (bestTyped) {
     const explicit = CAPTION_RE.test(blocks[bestTyped.index].text);
-    return { caption: mergeCaptionLines(blocks, bestTyped.index), explicit, excluded: ambiguous || !explicit, distance: bestTyped.score };
+    return { caption: mergeCaptionLines(blocks, bestTyped.index), explicit, excluded: ambiguous || !explicit, distance: bestTyped.score, index: bestTyped.index };
   }
-  if (bestGeneric) return { caption: blocks[bestGeneric.index].text.slice(0, MAX_FIGURE_TEXT_CHARS), explicit: false, excluded: false, distance: bestGeneric.score };
-  return { caption: null, explicit: false, excluded: false, distance: Infinity };
+  if (bestGeneric) return { caption: blocks[bestGeneric.index].text.slice(0, MAX_FIGURE_TEXT_CHARS), explicit: false, excluded: false, distance: bestGeneric.score, index: bestGeneric.index };
+  return { caption: null, explicit: false, excluded: false, distance: Infinity, index: -1 };
 }
 
 // ── Stretched rasters ────────────────────────────────────────────────────
@@ -594,6 +599,98 @@ interface Candidate {
   explicit: boolean;
   captionDistance: number;
   stretch: number;
+  /** The paired caption line's place in the page's text list; -1 when there is none. */
+  captionIndex: number;
+}
+
+// ── Satellites: what an accepted, captioned region takes in (P12-47, R2a) ─
+//
+// B P12-39 M2 / M4: a figure's panels can be a raster strip or a vector cluster below the size floors (P3 Fig. 2
+// panels a-c, Fig. 5 panels e-f), and each was judged alone and dropped. The floors stay exactly as they are:
+// nothing below a floor becomes a figure of its own. A region that already passed them, with a typed "Figure N"
+// caption, grows by the sub-floor items next to it, until none is left; it never grows across another region or
+// across a caption line.
+
+/** The most a sub-floor raster may be from the region it joins, in points. */
+const SATELLITE_GAP = 8;
+/** The share of the other axis a raster must have in common with the region, and the share of the region's height
+ *  a vector cluster must have in common with it (the height the region had when it passed the floors, so that the
+ *  order in which satellites are met does not decide which of them join). */
+const SATELLITE_SHARE = 0.5;
+
+interface Satellite {
+  rect: Rect;
+  kind: "image" | "drawing";
+  /** A drawing's own caption pairing: the page text line it would be captioned by (-1 for a raster, which has none). */
+  caption: number;
+}
+
+const failsFloors = (r: Rect) => width(r) < MIN_WIDTH || height(r) < MIN_HEIGHT || area(r) < MIN_AREA;
+const unionOf = (a: Rect, b: Rect): Rect => [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])];
+const sharedLength = (a0: number, a1: number, b0: number, b1: number) => Math.max(0, Math.min(a1, b1) - Math.max(a0, b0));
+const gapBetween = (a0: number, a1: number, b0: number, b1: number) => Math.max(a0 - b1, b0 - a1, 0);
+/** How much of `barrier` the rectangle `after` covers beyond what `before` already did. */
+const coverageGain = (before: Rect, after: Rect, barrier: Rect) => area(intersect(after, barrier)) - area(intersect(before, barrier));
+
+/** The sub-floor rasters of a page, and its vector clusters of at least half the floors that a typed caption
+ *  would caption (the line is kept: a cluster joins only the region that line captions). */
+function collectSatellites(images: ImageBlock[], clusters: Rect[] | null, texts: TextBlock[]): Satellite[] {
+  const found: Satellite[] = [];
+  for (const image of images) {
+    if (!isEmpty(image.bbox) && failsFloors(image.bbox)) found.push({ rect: image.bbox, kind: "image", caption: -1 });
+  }
+  for (const rect of clusters ?? []) {
+    if (!failsFloors(rect)) continue;
+    if (width(rect) < MIN_WIDTH / 2 || height(rect) < MIN_HEIGHT / 2 || area(rect) < MIN_AREA / 2) continue;
+    const { explicit, excluded, index } = bestCaptionForRegion(rect, texts);
+    if (explicit && !excluded) found.push({ rect, kind: "drawing", caption: index });
+  }
+  return found;
+}
+
+/** A raster next to the region: at most 8 pt away on one axis and sharing at least half of the smaller side on the other. */
+function adjacentRaster(region: Rect, raster: Rect): boolean {
+  const gapX = gapBetween(region[0], region[2], raster[0], raster[2]);
+  const gapY = gapBetween(region[1], region[3], raster[1], raster[3]);
+  const sharedX = sharedLength(region[0], region[2], raster[0], raster[2]) >= SATELLITE_SHARE * Math.min(width(region), width(raster));
+  const sharedY = sharedLength(region[1], region[3], raster[1], raster[3]) >= SATELLITE_SHARE * Math.min(height(region), height(raster));
+  return (gapY <= SATELLITE_GAP && gapX === 0 && sharedX) || (gapX <= SATELLITE_GAP && gapY === 0 && sharedY);
+}
+
+/** `accepted` is the region as it passed the floors; `host.rect` is what it has grown to since. */
+function joinsRegion(host: Candidate, accepted: Rect, satellite: Satellite): boolean {
+  if (satellite.kind === "image") return adjacentRaster(host.rect, satellite.rect);
+  return (
+    satellite.caption === host.captionIndex &&
+    sharedLength(accepted[1], accepted[3], satellite.rect[1], satellite.rect[3]) >= SATELLITE_SHARE * height(accepted)
+  );
+}
+
+/** Grows each accepted, captioned region by the satellites that join it; true when any region changed. */
+function growWithSatellites(candidates: Candidate[], texts: TextBlock[], satellites: Satellite[]): boolean {
+  const hosts = candidates.filter((candidate) => candidate.explicit && candidate.captionIndex >= 0);
+  const accepted = new Map(hosts.map((host) => [host, host.rect] as const));
+  const captionLines = texts.filter((line) => CAPTION_RE.test(line.text) || OTHER_CAPTION_RE.test(line.text)).map((line) => line.rect);
+  const crosses = (host: Candidate, grown: Rect) =>
+    candidates.some((other) => other !== host && coverageGain(host.rect, grown, other.rect) > 0.01) ||
+    captionLines.some((line) => coverageGain(host.rect, grown, line) > 0.01);
+  const pool = [...satellites];
+  let changed = false;
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const host of hosts) {
+      for (let i = 0; i < pool.length; i++) {
+        if (!joinsRegion(host, accepted.get(host)!, pool[i])) continue;
+        const grown = unionOf(host.rect, pool[i].rect);
+        if (crosses(host, grown)) continue;
+        if (grown.some((value, side) => value !== host.rect[side])) grew = changed = true;
+        host.rect = grown;
+        pool.splice(i--, 1);
+      }
+    }
+  }
+  return changed;
 }
 
 function candidateRegions(mupdf: Mupdf, page: Page, pageRect: Rect, texts: TextBlock[], images: ImageBlock[]): { candidates: Candidate[]; drawingLimit: boolean } {
@@ -603,21 +700,22 @@ function candidateRegions(mupdf: Mupdf, page: Page, pageRect: Rect, texts: TextB
   for (const image of images) {
     const rect = image.bbox;
     if (width(rect) < MIN_WIDTH || height(rect) < MIN_HEIGHT || area(rect) < MIN_AREA) continue;
-    const { caption, explicit, excluded, distance } = bestCaptionForRegion(rect, texts);
+    const { caption, explicit, excluded, distance, index } = bestCaptionForRegion(rect, texts);
     if (excluded) continue;
-    candidates.push({ rect, kind: "image", caption, explicit, captionDistance: distance, stretch: 1 });
+    candidates.push({ rect, kind: "image", caption, explicit, captionDistance: distance, stretch: 1, captionIndex: index });
   }
 
   const { boxes, overflow } = collectDrawingBoxes(mupdf, page);
   const clusters = overflow ? null : clusterDrawings(boxes, pageRect);
   for (const rect of clusters ?? []) {
     if (width(rect) < MIN_WIDTH || height(rect) < MIN_HEIGHT || area(rect) < MIN_AREA) continue;
-    const { caption, explicit, excluded, distance } = bestCaptionForRegion(rect, texts);
+    const { caption, explicit, excluded, distance, index } = bestCaptionForRegion(rect, texts);
     if (!explicit || excluded) continue;
-    candidates.push({ rect, kind: "drawing", caption, explicit: true, captionDistance: distance, stretch: 1 });
+    candidates.push({ rect, kind: "drawing", caption, explicit: true, captionDistance: distance, stretch: 1, captionIndex: index });
   }
 
-  candidates.sort((a, b) => a.rect[1] - b.rect[1] || a.rect[0] - b.rect[0] || Number(!a.explicit) - Number(!b.explicit));
+  const byPlace = (a: Candidate, b: Candidate) => a.rect[1] - b.rect[1] || a.rect[0] - b.rect[0] || Number(!a.explicit) - Number(!b.explicit);
+  candidates.sort(byPlace);
 
   const kept: Candidate[] = [];
   for (const candidate of candidates) {
@@ -648,6 +746,10 @@ function candidateRegions(mupdf: Mupdf, page: Page, pageRect: Rect, texts: TextB
     const nearest = Math.min(...competitors.map((other) => other.captionDistance));
     return candidate.captionDistance === nearest && competitors.filter((other) => other.captionDistance === nearest).length === 1;
   });
+  // P12-47 R2a: with the regions settled, an accepted, captioned one takes in the sub-floor items next to it.
+  if (defensible.some((candidate) => candidate.explicit && candidate.captionIndex >= 0)) {
+    if (growWithSatellites(defensible, texts, collectSatellites(images, clusters, texts))) defensible.sort(byPlace);
+  }
   for (const candidate of defensible) candidate.stretch = regionStretch(candidate.rect, placed);
   return { candidates: defensible, drawingLimit: overflow || clusters === null };
 }
