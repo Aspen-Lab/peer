@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T01:09:04.510Z
+AS OF        2026-10-27T01:12:28.760Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.381   NEXT RULING §1h.382   NEXT ITEM ID P12-33   NEXT FREE PORT 4232
+LAST RULING  §1h.382   NEXT RULING §1h.383   NEXT ITEM ID P12-33   NEXT FREE PORT 4232
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      B31pathprovenanceactive/B32briefready;C28heldUIpublicA4+5regression;6blindreturned0finaleachdirectorPending;A23A24scores0;A0B0;clockACTIVE
+RUNNING      C28clipguideapprovedunlanded;B32matrixactive;6blindreturned0finaleachdirectorPending;A23A24scores0;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -543,6 +543,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T01:09:01.300Z | parent dbba18e4 (entry commit follows) | manager | P12-31-PUBLIC-PRESERVATION-REGRESSIONS-BANKED: B31 independently confirms new loss of publicA4/5 caused by typed-caption overlap rejection before competition;old2alreadyrightpanelonly,floorsunchanged;3numeric-overlapcandidatesunsafelyattachinteriorlabelsormissanalogue;continue finitepathprovenance/render-footprint measurement,noCauthorized | evidence: P12-31-B-20261027T011000Z.md;1d7c0078;p12-31/private;cua-public-a-results.json | next: B31pathprovenance + B32inventedidentitymatrix in parallel;director audit six returned blind readers;C28held until independent real preservation verification
 
 - 2026-10-27T01:09:04.510Z | parent 8f78d91d (entry commit follows) | manager | P12-32-CAPTION-IDENTITY-MATRIX-BRIEF: Separate B32 finite invented identity/source-word matrix brief committed;pdf-outline/aliasclassification investigation independent of B31graphicregions;no sourcechange or chosenclassifier;work remains parallel in owncopy | evidence: briefs/P12-32.md;P12-29-B-20261026T190500Z.md | next: B31pathprovenance + B32inventedidentitymatrix in parallel;director audit six returned blind readers;C28held until independent real preservation verification
+
+- 2026-10-27T01:12:28.760Z | parent 5bd9a013 (entry commit follows) | manager | P12-28-CLIPPED-PATH-GUIDE-RULED: B31 exactpathprovenance shows54/135offendingfillsclipped11.128ptbeforecaption and0paintedpixelsinband;manager source/crop visualcheck agrees. Approve bounded active-clip-aware path collection, conservative graphics/resource guards and invented red-first tests, NOT numeric caption-overlap relaxation or neighbor grouping. Normalderivedrevision3/reading16/reportv9 refresh authorized with named fixture-only reaims. | evidence: P12-31-B-20261027T011000Z.md through9c2e5f25;briefs/P12-28.md supplement;p12-31/private/path-trace.json/paths-pixels.json | next: Resume separate C28 on measuredclipguide;B32identitymatrix parallel;director audits sixreader baseline;new candidate requires fresh independent gates/UI
 
 ---
 

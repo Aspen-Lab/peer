@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T01:09:04.510Z; only writer of this file
-CURRENT ITEM:          B31pathprovenanceactive/B32briefready;C28heldUIpublicA4+5regression;6blindreturned0finaleachdirectorPending;A23A24scores0;A0B0;clockACTIVE
-NEXT TURN:          B31pathprovenance + B32inventedidentitymatrix in parallel;director audit six returned blind readers;C28held until independent real preservation verification
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T01:12:28.760Z; only writer of this file
+CURRENT ITEM:          C28clipguideapprovedunlanded;B32matrixactive;6blindreturned0finaleachdirectorPending;A23A24scores0;A0B0;clockACTIVE
+NEXT TURN:          C28clip-guideimplementation;B32sourceidentitymatrix;directorbaselineaudit
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1587,6 +1587,11 @@ B31 independently confirms new loss of publicA4/5 caused by typed-caption overla
 ### §1h.381 — 2026-10-27 — P12-32-CAPTION-IDENTITY-MATRIX-BRIEF
 
 Separate B32 finite invented identity/source-word matrix brief committed;pdf-outline/aliasclassification investigation independent of B31graphicregions;no sourcechange or chosenclassifier;work remains parallel in owncopy. Evidence: briefs/P12-32.md;P12-29-B-20261026T190500Z.md. No safe rule inferred from a small sample; no threshold/guard/score change.
+
+
+### §1h.382 — 2026-10-27 — P12-28-CLIPPED-PATH-GUIDE-RULED
+
+Approve the measured conservative active-clip-aware path collection direction in the P12-28 supplement after B31 provenance/raster checks and manager source/crop inspection. No numeric caption-overlap relaxation, size-floor reduction, neighbor grouping or classifier change. New persisted manager candidate data require normal figure3/reading16/reportv9 invalidation; named exact-version fixtures may follow while every rejection/ownership/interaction assertion stays. Unsupported graphics states stop conservatively. Prior gates remain historical; repeat manager independent verification on the new exact web tree.
 
 
 ## §5. Durable work ledger — update in place, evidence append only
