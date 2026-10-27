@@ -110,6 +110,55 @@ describe("canonicalizeHeading — experimental methods (L1)", () => {
   });
 });
 
+// P12-48 (rule L2; B P12-40 R3, Theme C): the notes a journal prints after the argument are apparatus. They had
+// no word of their own: "Reporting summary" was read as a conclusion, and "Online content" and "Additional
+// information" were `body`, with no role tag on the map.
+describe("canonicalizeHeading — end-matter notes (L2)", () => {
+  it.each([
+    "Online content",
+    "Online Content",
+    "Additional information",
+    "Additional information and declarations",
+    "9. Additional information",
+    "Reporting summary",
+    "Reporting Summaries",
+    "Nature Portfolio reporting summary",
+    "Peer review information",
+    "Peer review file",
+    "Reprints and permissions",
+    "Reprints & permissions",
+    "Rights and permissions",
+    "Keywords",
+    "Key words:",
+    "Code availability",
+    "Software availability",
+    "Data and code availability",
+    "Data and materials availability",
+    "Availability of data and materials",
+    "Author contributions",
+    "Competing interests",
+    "Data availability",
+  ])("%s → acknowledgments, the apparatus bucket", (heading) => {
+    expect(canonicalizeHeading(heading)).toBe("acknowledgments");
+  });
+
+  it("does not take a body heading that only contains the words", () => {
+    expect(canonicalizeHeading("Online content moderation")).toBe("body");
+    expect(canonicalizeHeading("Keyword extraction")).toBe("body");
+    expect(canonicalizeHeading("Additional information retrieval")).toBe("body");
+    expect(canonicalizeHeading("Peer review")).toBe("body");
+    expect(canonicalizeHeading("Reprints")).toBe("body");
+  });
+
+  it("leaves the headings that were something else before as they were", () => {
+    expect(canonicalizeHeading("Summary")).toBe("conclusion");
+    expect(canonicalizeHeading("Summary of results")).toBe("conclusion");
+    expect(canonicalizeHeading("Supplementary information")).toBe("supplementary");
+    expect(canonicalizeHeading("Online methods")).toBe("methods");
+    expect(canonicalizeHeading("References")).toBe("references");
+  });
+});
+
 describe("withInheritedBuckets", () => {
   const section = (heading: string, canonical: string) => ({ heading, canonical, text: "x" });
 

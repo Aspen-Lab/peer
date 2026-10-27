@@ -167,6 +167,17 @@ function oneLine(text: string): string {
 }
 
 /**
+ * P12-48 (L2, B P12-40 R3): the notes a journal prints after the argument — "Online content", "Additional
+ * information", "Reporting summary", "Peer review information", "Reprints and permissions", "Keywords". They are
+ * apparatus, and are filed under the bucket the other back-matter notes (acknowledgements, data availability,
+ * competing interests) already have, so every reader that drops or ignores end matter drops these too. The whole
+ * heading must be the note: "Online content moderation" and "Keyword extraction" are body headings that only
+ * contain the words.
+ */
+const END_MATTER_NOTE =
+  /^(?:online content|additional information(?: and declarations)?|(?:nature (?:portfolio|research) )?reporting summar(?:y|ies)|peer review (?:information|files?)|reprints? (?:and|&) permissions?|rights and permissions|key ?words?)\s*[.:]?$/;
+
+/**
  * Map a heading to the bucket the readers downstream understand.
  *
  * Numbering is stripped in every shape LaTeXML, JATS and PDF text produce
@@ -192,6 +203,8 @@ export function canonicalizeHeading(heading: string): string {
   if (/material.*method|experimental (?:and \w+ )?(?:section|setup|design|details?|procedures?|methods?|protocols?|techniques?)|methodolog/.test(lower)) {
     return "methods";
   }
+  // Before the lines below, which would read "Reporting summary" as a conclusion.
+  if (END_MATTER_NOTE.test(lower)) return "acknowledgments";
   if (/result.*discussion/.test(lower)) return "results";
   if (/^result|^finding|^evaluation|^experiment|^empirical|^performance|^ablation/.test(lower)) {
     return "results";
@@ -207,7 +220,8 @@ export function canonicalizeHeading(heading: string): string {
   if (/conclusion|summary|future work/.test(lower)) return "conclusion";
   if (/\bresults?\b/.test(lower)) return "results";
   if (/reference|bibliograph/.test(lower)) return "references";
-  if (/acknowledg|funding|author contribution|competing interest|conflict of interest|data availability|ethic/.test(lower)) {
+  // P12-48 (L2): the availability statements of code, software and materials sit with data availability.
+  if (/acknowledg|funding|author contribution|competing interest|conflict of interest|(?:data|code|software|materials?)(?: and (?:data|code|software|materials?))? availability|availability of (?:data|code|software|materials?)|ethic/.test(lower)) {
     return "acknowledgments";
   }
   if (/supplement|supporting|appendix/.test(lower)) return "supplementary";
