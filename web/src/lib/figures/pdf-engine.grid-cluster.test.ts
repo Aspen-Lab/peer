@@ -3,7 +3,8 @@ import { figurePdf, type FigurePage } from "./figure-pdf.test-helper";
 import { clusterDrawings, extractPdfFigures } from "./pdf-engine";
 
 // P12-55. R11a: the walk and distinct-box ceilings are higher (400,000 walks, 80,000 boxes) and the
-// union-rect clustering uses a uniform grid, so it stays near-linear. Every input here is invented.
+// union-rect clustering uses a uniform grid, so it stays near-linear. R12a: a stroke's box is clipped
+// by the clip stack, as a fill's is. Every input here is invented.
 
 type Rect = [number, number, number, number];
 const PAGE: Rect = [0, 0, 612, 792];
@@ -227,4 +228,47 @@ describe("P12-55 R11a dense vector pages keep their figure", () => {
       expect(result.reason).toBeNull();
     } finally { spy.mockRestore(); clock.mockRestore(); }
   }, 120_000);
+});
+
+describe("P12-55 R12a strokes honour the clip stack like fills", () => {
+  const opts = { maxPages: 1, maxFigures: 1, onlyPage: 1, label: "Figure 1", measureOnly: true };
+  // The panel is the PDF rectangle 90 542 360 150: x 90..450, y 100..250 from the top of the page.
+  const FRAME = "90 542 360 150 re S";
+  const boxes = async (page: FigurePage) => (await extractPdfFigures(figurePdf([page]), opts)).figures.map((figure) => figure.box);
+
+  it("stops a clipped stroked trace at its clip when the trace overshoots to the top of the page", async () => {
+    // The trace runs up to y 12 from the top, 88 pt above the panel, in the page's running head;
+    // the clip hides it there, so the figure is the panel.
+    const page: FigurePage = {
+      text: [["Figure 1. Invented clipped trace.", 90, 268, 9]],
+      drawingOps: [FRAME, "q 90 542 360 150 re W n 1 w 100 560 m 300 780 l 440 600 l S Q"],
+    };
+    expect(await boxes(page)).toEqual([[90, 100, 450, 250]]);
+  });
+
+  it("stops a stroke clipped through a transformed clip where the clip ends, below the panel too", async () => {
+    // Local y 0..150 is the panel; the line leaves through the bottom to y -45, 45 pt under the
+    // panel and through the caption's line (top 268).
+    const page: FigurePage = {
+      text: [["Figure 1. Invented clipped trace.", 90, 268, 9]],
+      drawingOps: [FRAME, "q 1 0 0 1 90 542 cm 0 0 360 150 re W n 1 w 180 75 m 180 -45 l S Q"],
+    };
+    expect(await boxes(page)).toEqual([[90, 100, 450, 250]]);
+  });
+
+  it("drops a stroke wholly outside its clip, even 2.5 pt from the panel where it would join the cluster", async () => {
+    const page: FigurePage = {
+      text: [["Figure 1. Invented clipped trace.", 90, 268, 9]],
+      drawingOps: [FRAME, "q 90 542 360 150 re W n 2 w 200 539.5 m 300 538.5 l S Q"],
+    };
+    expect(await boxes(page)).toEqual([[90, 100, 450, 250]]);
+  });
+
+  it("still takes a stroke inside its clip whole", async () => {
+    const page: FigurePage = {
+      text: [["Figure 1. Invented clipped trace.", 90, 268, 9]],
+      drawingOps: [FRAME, "q 90 500 360 192 re W n 1 w 200 539.5 m 300 538.5 l S Q"],
+    };
+    expect(await boxes(page)).toEqual([[90, 100, 450, 253.5]]);
+  });
 });

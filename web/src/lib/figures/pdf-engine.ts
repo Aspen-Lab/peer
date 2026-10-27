@@ -543,8 +543,10 @@ function collectDrawingBoxes(mupdf: Mupdf, page: Page): { boxes: Rect[]; overflo
     let box = pathBox(path, ctm, fill);
     if (!box) return;
     // Unknown nesting and pattern/mask painting keep original support, which
-    // is conservative; strokes always keep the pre-existing centerline box.
-    if (fill && !excessDepth && !specialDepth && !badStack) {
+    // is conservative. A stroke's centerline box is clipped like a fill's
+    // (P12-55): a trace clipped inside its plot no longer reaches the page's
+    // top edge and the running head with the part the clip hides.
+    if (!excessDepth && !specialDepth && !badStack) {
       for (const clip of clips) {
         if (!clip) continue;
         box = [Math.max(box[0], clip[0]), Math.max(box[1], clip[1]), Math.min(box[2], clip[2]), Math.min(box[3], clip[3])];
