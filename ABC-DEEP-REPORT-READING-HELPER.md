@@ -42,7 +42,7 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round2 preparation; formal round1 medians A0.00/B0.00; consecutive passes A0/2 B0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T11:20:10.167Z; only writer of this file
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T11:20:14.320Z; only writer of this file
 CURRENT ITEM:          A35actualR2families4234continue;A34samecopycheckpointinterfaceunavailableawaitcontinuation;B36finiteguideDONE;web28cf;R1medians0/0counts0/0;clockACTIVE
 NEXT TURN:          A35continuesactualR2families;A34resumeonlyfirstunfinishedpartwithsupportedCUA;B36guideawaitsrealUIorderingbeforeanyC;clockACTIVE
 STOPPED BECAUSE:          — active; prior quota interruptions preserved in log; C28 independently verified and landed
@@ -1742,6 +1742,11 @@ PublicAactual5bodyclicks/5canvasesand4closesatthischeckpoint;laterfifthclosewill
 ### §1h.412 — 2026-10-27 — P12-35-ORIGINAL-TEN-FIGURES-BANKED
 
 Normaloriginalchooser/consentat1280x720:10numberedbodyopens/10canvases/10closes,tenthdelayed. Two12pxcol-resizesplitters;contrast/drag/keys/crop/fullmatrixunmeasured. No formal round2 score, common-gate waiver or product change. Prior failures remain. P12-35-A-20261027T-PARTIAL.md.
+
+
+### §1h.413 — 2026-10-27 — P12-35-PUBLIC-B-ATTEMPTS-PRESERVED
+
+PublicB1zero-boxpre-deliverytimeoutnotclick;loadedB4target512x182semantic/physicalattemptsnomargincard. Causeunknown;laterbroaderinteractionfailure/recoveryrecordedseparately,no pointercauseassumed. No formal round2 score, common-gate waiver or product change. Prior failures remain. P12-35-A-20261027T-PARTIAL.md.
 
 
 ## §5. Durable work ledger — update in place, evidence append only
