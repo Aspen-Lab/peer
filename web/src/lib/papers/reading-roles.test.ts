@@ -371,7 +371,29 @@ describe("A4 — a sub-row takes its part's role", () => {
     expect(rolesOf(none).map(([, role]) => role)).toEqual(["body", "body", "method"]);
   });
 
-  it("gives a sub-row of a named part the part's role where the bucket did not reach it", () => {
+  it("leaves the sub-headings of a part that names its role to the extractors' bucket inheritance", () => {
+    const row = (id: string, heading: string, canonical: string, role: ReadingMapSection["role"], extra: Partial<ReadingMapSection> = {}): ReadingMapSection => ({
+      id,
+      heading,
+      canonical,
+      role,
+      words: 30,
+      minutes: 1,
+      paragraphs: [{ index: 0, opening: "x" }],
+      level: 1,
+      ...extra,
+    });
+    // A map read before the inheritor existed (the committed fixtures): a named part, an untagged sub-heading.
+    const rows = [
+      row("a", "1 Introduction", "introduction", "setup"),
+      row("b", "2 Methods", "methods", "method"),
+      row("c", "2.1 Field work", "body", "body", { level: 2, parentId: "b" }),
+    ];
+
+    expect(inferRoles(rows, null).every((r, k) => r === rows[k])).toBe(true);
+  });
+
+  it("gives a sub-row the role of a part worked out above, however it was worked out", () => {
     const row = (id: string, heading: string, canonical: string, role: ReadingMapSection["role"], extra: Partial<ReadingMapSection> = {}): ReadingMapSection => ({
       id,
       heading,
@@ -385,13 +407,15 @@ describe("A4 — a sub-row takes its part's role", () => {
     });
     const rows = [
       row("a", "1 Introduction", "introduction", "setup"),
-      row("b", "2 Methods", "methods", "method"),
-      row("c", "2.1 Field work", "body", "body", { level: 2, parentId: "b" }),
+      row("b", "2 Counts by site", "body", "body"),
+      row("c", "2.1 Rocky shore", "body", "body", { level: 2, parentId: "b" }),
+      row("d", "2.1.1 Low tide", "body", "body", { level: 3, parentId: "c" }),
+      row("e", "3 Methods", "methods", "method"),
     ];
 
-    expect(inferRoles(rows, null).map((r) => r.role)).toEqual(["setup", "method", "method"]);
+    expect(inferRoles(rows, null).map((r) => r.role)).toEqual(["setup", "evidence", "evidence", "evidence", "method"]);
     // Without an introduction to stand on, nothing is inferred.
-    expect(inferRoles(rows.slice(1), null).map((r) => r.role)).toEqual(["method", "body"]);
+    expect(inferRoles(rows.slice(1), null).map((r) => r.role)).toEqual(["body", "body", "body", "method"]);
   });
 });
 

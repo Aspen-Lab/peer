@@ -17,7 +17,8 @@
 //       back-matter row are evidence; an unnamed row directly before a references row is apparatus;
 //   A3. unnamed top-level rows after a references row are apparatus; an unnamed row right after a named method
 //       or apparatus row continues that role;
-//   A4. sub-rows take their part's role.
+//   A4. sub-rows take their part's role (a part whose role was worked out here; the sub-headings of a part that
+//       names its role already have its bucket from the extractors' inheritor).
 //
 // Never overridden: a row whose heading names a role (its `role` is not `body`). Never applied to a paper with
 // no introduction to stand on: one that names none and whose first section is not the front text of a paper
@@ -169,15 +170,19 @@ export function inferRoles(rows: readonly ReadingMapSection[], trunkId: string |
     else if (t < evidenceEnd) patches.set(row.id, { role: "evidence" });
   });
 
-  // A4: a sub-row whose heading names no role takes its part's: the role of the row it hangs under, as that row
-  // ends up (a parent comes before its children, so it is settled first).
+  // A4: a sub-row whose heading names no role takes the role of the part it hangs under, when that role was worked
+  // out above (a parent comes before its children, so it is settled first). The sub-headings of a part that names its
+  // role already have its bucket - the extractors' inheritor (`bucketInheritor`) gives them it - and are not touched.
+  const worked = new Set(patches.keys());
   const ends = new Map<string, ReadingRole>();
   for (const row of rows) {
     let role = patches.get(row.id)?.role ?? row.role;
-    const above = row.parentId === undefined ? undefined : ends.get(row.parentId);
-    if (role === "body" && above !== undefined && above !== "body") {
+    const parent = row.parentId;
+    const above = parent === undefined ? undefined : ends.get(parent);
+    if (role === "body" && parent !== undefined && worked.has(parent) && above !== undefined && above !== "body") {
       role = above;
       patches.set(row.id, { ...patches.get(row.id), role });
+      worked.add(row.id);
     }
     ends.set(row.id, role);
   }
