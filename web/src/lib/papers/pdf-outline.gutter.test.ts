@@ -6,10 +6,14 @@
 // had no gutter on any page, so each page's two columns were read welded at one height: a heading welded to
 // the other column's line, the first paragraphs welded.
 //
+// Rule 2 — `gutterPrior` clusters the pages' gutters by position (about 6pt, or half an em) and takes the
+// cluster with the most pages. It used to vote on `Math.round(b / 3)`, so gutters at 305.9 and 309.9 fell into
+// two buckets, two votes of one, no prior, and every page that shows no gutter of its own was read welded.
+//
 // Every page here is invented: runs placed by the test (`PdfTextItem`), or a PDF built by `minimalPdf`.
 import { describe, expect, it } from "vitest";
 import { minimalPdf, type Run } from "./minimal-pdf.test-helper";
-import { gutterOf, linesOfPage, type PdfTextItem } from "./pdf-outline";
+import { gutterOf, gutterPrior, linesOfPage, linesOfPageWith, type PdfPageText, type PdfTextItem } from "./pdf-outline";
 import { extractPdfTextFromBytes, readPages } from "./pdf-text";
 
 const BODY = 9.3;
@@ -170,6 +174,8 @@ const LINE_WORDS = "alpha bravo charlie delta echo foxtrot golf";
 /** Every line of a column is as wide as its neighbours: a digit is as wide as another in Helvetica. */
 const lineText = (page: number, side: "L" | "R", n: number, word = "") =>
   `P${page}${side}${String(n + 1).padStart(2, "0")} ${LINE_WORDS}${word && ` ${word}`}`;
+/** A word of a page's own at the end of its lines: lines that repeat from page to page are a running head, and dropped. */
+const PAGE_WORD = ["", "india", "juliet", "kilo", "lima", "mike", "november", "oscar"];
 const MENTION = /P([1-9])([LR])(\d\d)/g;
 const mentionsOf = (text: string) => [...text.matchAll(MENTION)].map((m) => `P${m[1]}${m[2]}${m[3]}`);
 const tokens = (page: number, side: "L" | "R", from: number, to: number) =>
@@ -219,3 +225,107 @@ describe("a two-column PDF set with an 11pt gutter at 9.3pt is read in columns (
     expect(result.doc?.sections.map((s) => [s.heading, s.page])).toEqual([[HEADING, 1], [SECOND, 1]]);
   });
 });
+
+// ── Rule 2 ───────────────────────────────────────────────────────────────────────────────────────
+
+describe("the paper's gutter is the position most pages agree on (P12-50, rule 2)", () => {
+  const sheet = (n: number, items: PdfTextItem[]): PdfPageText => ({ page: n, items });
+  /** A full page of two columns with a gutter 20pt wide whose right column starts at `b`. */
+  const full = (n: number, b: number) => sheet(n, columns(20, gutterAt(b, 20), String(n)));
+  /** Six rows of each column: too few lines to show a gutter of its own. */
+  const sparse = (n: number, b: number) => sheet(n, columns(6, gutterAt(b, 20), String(n)));
+  /** Twenty rows, a line across both columns after every fourth pair: no run of 8 clear rows. */
+  const broken = (n: number, b: number) =>
+    sheet(n, page(Array.from({ length: 20 }, (_, r): RowKind => (r % 5 === 4 ? "full" : "pair")), gutterAt(b, 20), String(n)));
+
+  const pages = [full(1, 305.9), full(2, 309.9), sparse(3, 307.9), sparse(4, 307.9), sparse(5, 307.9), broken(6, 307.9), broken(7, 307.9)];
+
+  it("sees a gutter on the two full pages and on none of the other five", () => {
+    expect(pages.map((p) => gutterOf(p.items.filter((i) => i.str), BODY) !== null)).toEqual([true, true, false, false, false, false, false]);
+  });
+
+  it("takes gutters at 305.9 and 309.9 for one: a prior, lying between them", () => {
+    const prior = gutterPrior(pages);
+    expect(prior).not.toBeNull();
+    expect(prior!.b).toBeGreaterThanOrEqual(305.9);
+    expect(prior!.b).toBeLessThanOrEqual(309.9);
+    expect(prior!.a).toBeLessThanOrEqual(289.9);
+  });
+
+  it("reads the five pages that show none in two columns with it, and welded without it", () => {
+    const prior = gutterPrior(pages);
+    for (const p of pages.slice(2, 5)) {
+      expect(linesOfPageWith(p, prior), `page ${p.page}`).toHaveLength(12);
+      expect(labels(linesOfPageWith(p, prior))).toEqual([...sequence("L", 0, 5, String(p.page)), ...sequence("R", 0, 5, String(p.page))]);
+      expect(linesOfPageWith(p, null), `page ${p.page}, no prior`).toHaveLength(6);
+    }
+    for (const p of pages.slice(5)) {
+      // 16 pairs and 4 lines across both columns
+      expect(linesOfPageWith(p, prior), `page ${p.page}`).toHaveLength(36);
+      expect(linesOfPageWith(p, null), `page ${p.page}, no prior`).toHaveLength(20);
+    }
+  });
+
+  it("takes the cluster with the most pages, not the first position reached", () => {
+    // two pages at one position, then three that stand 2.5pt and 4pt apart (the old rounding buckets split these three
+    // into one of two and one of one, tied with the first two, and the first position reached won the tie)
+    const prior = gutterPrior([full(1, 280), full(2, 279.5), full(3, 305.9), full(4, 308.4), full(5, 309.9)]);
+    expect(prior!.b).toBeGreaterThanOrEqual(305.9);
+    expect(prior!.b).toBeLessThanOrEqual(309.9);
+  });
+
+  it("is a gutter two pages or more agree on within about 6pt, not within more", () => {
+    expect(gutterPrior([full(1, 305), full(2, 310)])).not.toBeNull();
+    expect(gutterPrior([full(1, 305), full(2, 313)])).toBeNull();
+    expect(gutterPrior([full(1, 305), full(2, 320)])).toBeNull();
+    // three pages in a row, each 4pt from the next, but the first and the last 8pt apart: two of them agree with the middle one
+    expect(gutterPrior([full(1, 305), full(2, 309), full(3, 313)])).not.toBeNull();
+    // one page alone is no prior, nor is none
+    expect(gutterPrior([full(1, 305), sparse(2, 305)])).toBeNull();
+    expect(gutterPrior([sparse(1, 305)])).toBeNull();
+  });
+
+  it("allows half an em where the type is large: gutters 7.5pt apart agree at 16pt, not at 9.3pt", () => {
+    const large = (n: number, b: number) =>
+      sheet(n, columns(20, { left: 50, a: b - 50, b, right: b + 200, body: 16 }, String(n)));
+    expect(gutterPrior([large(1, 300), large(2, 307.5)])).not.toBeNull();
+    expect(gutterPrior([full(1, 300), full(2, 307.5)])).toBeNull();
+  });
+
+  it("keeps the old agreement: pages with the same gutter, and the left edge that overhangs the least", () => {
+    expect(gutterPrior([sparse(1, 314), full(2, 314), full(3, 314)])).toEqual({ a: 294, b: 314 });
+    // the left column's edge moves with an overhang: the prior keeps the narrowest-left, the steady right edge
+    const overhang = sheet(3, columns(20, { left: 50, a: 300, b: 314, right: 554 }, "3"));
+    expect(gutterPrior([full(1, 314), full(2, 314), overhang])).toEqual({ a: 294, b: 314 });
+  });
+});
+
+describe("a paper whose pages' gutters stand at 305.9 and 309.9 is read in columns on every page (P12-50, rule 2)", () => {
+  // Two full pages with a gutter of 4pt apart, then five of six lines to a column: only the prior reads those in columns.
+  const bytes = minimalPdf([
+    pdfPage(1, 24, 305.9, PAGE_WORD[1]),
+    pdfPage(2, 24, 309.9, PAGE_WORD[2]),
+    ...[3, 4, 5, 6, 7].map((n) => pdfPage(n, 6, 307.9, PAGE_WORD[n])),
+  ]);
+
+  it("reads the five pages of few lines column by column, the left before the right", async () => {
+    const result = await extractPdfTextFromBytes(bytes);
+    expect(result.ok).toBe(true);
+    const text = (result.doc?.sections ?? []).map((s) => s.text).join("\n\n");
+    expect(mentionsOf(text)).toEqual([
+      ...tokens(1, "L", 0, 23),
+      ...tokens(1, "R", 0, 23),
+      ...tokens(2, "L", 0, 23),
+      ...tokens(2, "R", 0, 23),
+      ...[3, 4, 5, 6, 7].flatMap((n) => [...tokens(n, "L", 0, 5), ...tokens(n, "R", 0, 5)]),
+    ]);
+  });
+
+  it("finds the prior in the file itself", async () => {
+    const prior = gutterPrior(await readPages(bytes));
+    expect(prior).not.toBeNull();
+    expect(prior!.b).toBeGreaterThanOrEqual(305.9);
+    expect(prior!.b).toBeLessThanOrEqual(309.9);
+  });
+});
+

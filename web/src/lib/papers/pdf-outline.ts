@@ -424,6 +424,10 @@ const GUTTER_EM = 2;
 const GUTTER_NARROW_EM = 1;
 /** The middle of the text's width: a narrow gutter's centre lies between these shares of it. */
 const GUTTER_MIDDLE: readonly [number, number] = [1 / 3, 2 / 3];
+/** Two pages' gutters are one position when their right columns' left edges stand within this many points (P12-50)... */
+const GUTTER_SAME_PT = 6;
+/** ...or this share of an em, whichever is more. */
+const GUTTER_SAME_EM = 0.5;
 /** The gutter is looked for in the middle of the text's width: between these
  *  shares of it. */
 const GUTTER_SEARCH: readonly [number, number] = [0.35, 0.65];
@@ -968,22 +972,29 @@ function gutterIn(rows: Row[], starts: number[], width: number, span: number): G
 
 /**
  * The gutter most pages of a paper agree on: what a page that shows none of
- * its own (a page of figures, a page of few lines) is set in. Null when fewer
- * than two pages agree.
+ * its own (a page of figures, a page of few lines) is set in. The pages'
+ * gutters are grouped by position — the right column's left edge, within about
+ * 6pt or half an em (P12-50), for the same journal's gutter falls a few points
+ * either side from page to page — and the group with the most pages is the
+ * paper's. Null when fewer than two pages agree.
  */
 export function gutterPrior(pages: PdfPageText[]): Gutter | null {
-  const votes = new Map<number, Gutter & { n: number }>();
+  const found: (Gutter & { reach: number })[] = [];
   for (const { items: all } of pages) {
     const items = all.filter((i) => i.str);
-    const gutter = gutterOf(items, usualHeight(items));
-    if (!gutter) continue;
-    const key = Math.round(gutter.b / 3);
-    const vote = votes.get(key);
-    // The right column's left edge is the steady one; the left edge moves with an overhang.
-    votes.set(key, { a: vote ? Math.min(vote.a, gutter.a) : gutter.a, b: gutter.b, n: (vote?.n ?? 0) + 1 });
+    const text = usualHeight(items);
+    const gutter = gutterOf(items, text);
+    if (gutter) found.push({ ...gutter, reach: Math.max(GUTTER_SAME_PT, GUTTER_SAME_EM * text) });
   }
-  const top = [...votes.values()].sort((x, y) => y.n - x.n)[0];
-  return top && top.n >= 2 ? { a: top.a, b: top.b } : null;
+  // Each gutter is tried as the group's centre; the first of the largest groups wins a tie.
+  let top: typeof found = [];
+  for (const centre of found) {
+    const group = found.filter((g) => Math.abs(g.b - centre.b) <= Math.max(g.reach, centre.reach));
+    if (group.length > top.length) top = group;
+  }
+  if (top.length < 2) return null;
+  // The right column's left edge is the steady one; the left edge moves with an overhang.
+  return { a: Math.min(...top.map((g) => g.a)), b: median(top.map((g) => g.b)) };
 }
 
 /** Whether a row's text runs unbroken across the gutter — a title, a caption,
