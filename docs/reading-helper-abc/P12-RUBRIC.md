@@ -122,3 +122,15 @@ Dated clarification, ruling §1h.194 (2026-10-23): for B3–B5, multiple cards u
 The blind readers score from the pack against this matrix; the director voids a mark only on evidence (§1h.184's rules for voids unchanged).
 
 **Environment amended by §1h.421 (2026-10-27):** the walks run on **the dev server with the model stub** (the Next CLI directly), because a local production server refuses every upload without a signed-in account and this environment cannot fetch arxiv.org; the production build is still built and gated at every landing. A unit's "production-build evidence" is read as this dev-server evidence; a defect only production could show is an evidence limit named to the owner.
+
+## Dated amendment, ruling §1h.422 (2026-10-27): the owner's two papers; a score per paper
+
+(a) **The Codex manager has stopped** (the owner's word); §1h.419 (a) is complete. No Codex writer remains on the branch.
+
+(b) **The scored inputs are the owner's two papers**, replacing R1, R2, R3 and S of §1h.420: **P1** Lin et al. 2025 (10 pages; sha256 32d7e6b4c5c2face…) and **P2** Sederholm et al. 2026 (10 pages; sha256 0153251d92847dfd…). Both are the owner's supplied files: they enter only through the upload UI, are never copied into a worktree, committed or quoted, and no run of four of their words appears in an index or a deliverable. The earlier inputs (the owner's earlier paper, the two public papers, the invented PDF) leave the scoring; a C still tests on invented input only.
+
+(c) **A score per paper.** Each theme is scored **separately on each paper**: its 12 units are judged on that paper's cells only, and an extra is charged to the paper whose evidence shows it (a mechanism shown on both papers is charged to both). Each round therefore gives four numbers — Theme A on P1, Theme A on P2, Theme B on P1, Theme B on P2 — each by the formula `max(0, 100 × (Σ PASS − Σ extras) / 12)`; the pass requirements are judged per paper (a failed one makes that paper's theme 0). **The loop ends when all four are ≥ 97.25 in two consecutive scored rounds.**
+
+(d) **The matrix, per paper** (§1h.420's widths, steps and themes unchanged): core cells {W1, W2, W3} × default step × light; stress cells W1 × {smallest, largest} × light and W1 × largest × dark; phone cells W4 × default. Unit-specific, on each paper: A5 one structured note through every export route, the notes page and "Open your notes"; A6 / A7 that paper's note rows at every reading step, light and dark at default, a long multi-line row included; B6 the five selection kinds at W1, W2, W3 (inside a paragraph also at W4); B7 every visible figure at W1 and at W3, three figures at W4, each compared with its figure on the PDF page; B8–B10 every step at W1 light, default dark, W3 default; B11 the P11 guard lines A1–A12 and B1–B12 one evidence line each at W1; B12 30 action cycles at W1 and 30 at W3, and the paper's entry at W1 with no key.
+
+(e) Round 2's walks P12-37 and P12-38 switch to P1 and P2 by the manager's message; their worktrees and ports stay.

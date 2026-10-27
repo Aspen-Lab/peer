@@ -40,7 +40,7 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ## §1. CURRENT STATE
 
 ```text
-ROUND:          P12 round 2 (first under §1h.420's finite matrix); round 1 under the original reading scored 0.00 / 0.00 (§1h.419 (d)); stop ≥97.25 per theme, two consecutive rounds; counts A 0/2, B 0/2
+ROUND:          P12 round 2 (first under §1h.420 / §1h.422): inputs the owner's papers P1 (Lin 2025) and P2 (Sederholm 2026), scored per paper; stop: Theme A and Theme B each ≥97.25 on both papers in two consecutive rounds; counts 0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
 HELD BY:          Claude (Opus), cloud session session_017DGPdGJqr95t3pMMcspXjE, 2026-10-27T14:47Z (§1h.419); only writer of this file
 CURRENT ITEM:          A P12-37 (Theme A, 4240) and A P12-38 (Theme B, 4241) walking round 2 on the dev server with the stub (§1h.421)
@@ -48,7 +48,7 @@ NEXT TURN:          three blind readers per theme on each pack; director; score;
 STOPPED BECAUSE:          — (the Codex manager stood down at the owner's word, §1h.419)
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            trig_01MkdKP21BdT8TbcyZpB4umB ENABLED (Haiku, 20 * * * *, P12 prompt; wakes session_017DGPdGJqr95t3pMMcspXjE only when idle)
-OWNER INPUT:      the owner's PDF in the manager's scratch (upload UI only; never committed or quoted); public inputs per §1h.420
+OWNER INPUT:      P1 Lin 2025 and P2 Sederholm 2026 (the owner's uploads, §1h.422; upload UI only, never committed or quoted)
 ```
 
 ### §1a. BINDING — user decisions 2026-10-05 (from the chat replies on the blueprint)
@@ -1808,6 +1808,20 @@ The blind readers score from the pack against this matrix; the director voids a 
 (a) **Why not the production build.** A local `next start` refuses every upload unless a Supabase account is signed in: `uploadOwner()` returns null whenever `NODE_ENV` is production (`web/src/lib/papers/upload-access.ts`, the Codex B33 report `P12-33-B-20261027T055000Z.md`), and the public arXiv routes cannot fetch from this environment (arxiv.org is refused). The rubric's inputs all enter through the upload UI, so the round-2 walks run on **the dev server with the model stub** — what every P11 walk used — started with the Next CLI directly (`npx next dev`, never `npm run dev`, whose `predev` kills other dev servers). §1h.420's "Environment: the production build" is amended to this. The production build is still built and gated at every landing (Appendix A); a defect that only production could show is out of reach here and is named as an evidence limit to the owner, whose own look at the deployed site remains the acceptance above the rubric.
 
 (b) **Round 2 dispatched.** Head: the commit that carries this ruling. A **P12-37** walks Theme A (`briefs/P12-37.md`, port 4240) and A **P12-38** walks Theme B (`briefs/P12-38.md`, port 4241), at once, both from `briefs/P12-R2-CLAUDE-COMMON.md`; Sonnet; read-only; each writes an evidence pack for three blind readers and its own score. The invented input S is `invented-stress.pdf` (sha256 e8f1d37a0b9c…, made by a Chromium print of an invented page, 7 pages, 6 figures, a table, an unbroken 100-character token).
+
+### §1h.422 — 2026-10-27 — THE OWNER'S TWO PAPERS ARE THE TEST INPUTS; A SCORE PER PAPER
+
+The owner, 2026-10-27 (chat, verbatim), attaching two PDFs: "chatgpt停了。我需要你用这两个pdf来作为测试对象，他们必须都要达到review cycling的97.25%分数或以上".
+
+(a) **The Codex manager has stopped** (the owner's word); §1h.419 (a) is complete. No Codex writer remains on the branch.
+
+(b) **The scored inputs are the owner's two papers**, replacing R1, R2, R3 and S of §1h.420: **P1** Lin et al. 2025 (10 pages; sha256 32d7e6b4c5c2face…) and **P2** Sederholm et al. 2026 (10 pages; sha256 0153251d92847dfd…). Both are the owner's supplied files: they enter only through the upload UI, are never copied into a worktree, committed or quoted, and no run of four of their words appears in an index or a deliverable. The earlier inputs (the owner's earlier paper, the two public papers, the invented PDF) leave the scoring; a C still tests on invented input only.
+
+(c) **A score per paper.** Each theme is scored **separately on each paper**: its 12 units are judged on that paper's cells only, and an extra is charged to the paper whose evidence shows it (a mechanism shown on both papers is charged to both). Each round therefore gives four numbers — Theme A on P1, Theme A on P2, Theme B on P1, Theme B on P2 — each by the formula `max(0, 100 × (Σ PASS − Σ extras) / 12)`; the pass requirements are judged per paper (a failed one makes that paper's theme 0). **The loop ends when all four are ≥ 97.25 in two consecutive scored rounds.**
+
+(d) **The matrix, per paper** (§1h.420's widths, steps and themes unchanged): core cells {W1, W2, W3} × default step × light; stress cells W1 × {smallest, largest} × light and W1 × largest × dark; phone cells W4 × default. Unit-specific, on each paper: A5 one structured note through every export route, the notes page and "Open your notes"; A6 / A7 that paper's note rows at every reading step, light and dark at default, a long multi-line row included; B6 the five selection kinds at W1, W2, W3 (inside a paragraph also at W4); B7 every visible figure at W1 and at W3, three figures at W4, each compared with its figure on the PDF page; B8–B10 every step at W1 light, default dark, W3 default; B11 the P11 guard lines A1–A12 and B1–B12 one evidence line each at W1; B12 30 action cycles at W1 and 30 at W3, and the paper's entry at W1 with no key.
+
+(e) Round 2's walks P12-37 and P12-38 switch to P1 and P2 by the manager's message; their worktrees and ports stay.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
