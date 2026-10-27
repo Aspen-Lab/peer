@@ -232,7 +232,9 @@ const anyCase = (word: string): string => [...word].map((c) => `[${c.toLowerCase
  * capital letter ("Table 1 Scores of …"); or by nothing, the label standing alone on its line with its
  * words on the next. A body line that opens with a citation does not have one: "Fig. 8) is consistent
  * with …", "Fig. 3, left, …", "Fig. 2; the …", "Figure 3 shows …" (a small letter after the space).
- * The groups are `CAPTION`'s: label, number, words; the words are cut from the line as they always were.
+ * The groups are `CAPTION`'s: label, number, words; the words are cut from the line as they always were,
+ * except that a bar is cut with the full stop and the colon (P12-56, R15a): Nature sets "Fig. 1 | Title",
+ * and the bar is the separator, not the first word of the title.
  * `CAPTION` itself stays as it was: `headingOf` uses it to keep a line that opens with a figure's label
  * out of the headings, caption or not.
  */
@@ -240,7 +242,7 @@ const CAPTION_SEPARATED = new RegExp(
   `^(${anyCase("fig")}(?:${anyCase("ure")})?|${anyCase("table")}|${anyCase("scheme")}|${anyCase("chart")})` +
     String.raw`\s*\.?\s*(\d{1,3}|[IVXLivxl]{1,5})\b` +
     String.raw`(?=\s*(?:$|[.:|\u2010-\u2015\u2212-])|\s+\p{Lu})` +
-    String.raw`\s*[.:—–-]?\s*(.*)$`,
+    String.raw`\s*[.:|—–-]?\s*(.*)$`,
   "u",
 );
 const NUMBERED_HEADING = /^(\d+(?:\.\d+)*)\s*[.)]?\s+(\S.*)$/;
