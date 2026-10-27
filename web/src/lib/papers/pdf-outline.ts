@@ -1794,9 +1794,12 @@ export function joinProse(lines: readonly FlowLine[], options: JoinOptions = {})
  */
 const STAMP = /^(?:arXiv:\d{4}\.\d{4,5}|10\.\d{4,9}\/|https?:\/\/)/i;
 
-/** The paper's title: the largest words on its first page, above the body. */
+/** The paper's title: the largest words on its first page, above the body. P12-51: a drop cap (one large
+ *  letter or two, on a baseline of its own) is the largest type on the page and is no title. */
 function titleOf(lines: PdfLine[], body: { size: number }): string | null {
-  const first = lines.filter((line) => line.page === 1 && line.size > body.size * 1.25 && !STAMP.test(line.text));
+  const first = lines.filter(
+    (line) => line.page === 1 && line.size > body.size * 1.25 && !STAMP.test(line.text) && line.text.trim().length > OPENING_MARK_MAX,
+  );
   if (first.length === 0) return null;
   const biggest = Math.max(...first.map((line) => line.size));
   const title = first

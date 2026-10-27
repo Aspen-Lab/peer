@@ -466,6 +466,12 @@ describe("a paper that names no abstract or introduction opens with its unheaded
     expect(sections[0].text).not.toContain("Fenwick");
   });
 
+  it("reads the paper's title past a drop cap, the largest type on the page", () => {
+    // Before: the drop cap's "S" was the largest type, too short to be a title, and the paper had none.
+    expect(buildOutline(openingWithDropCap()).title).toBe("Slow Annealing Keeps Quillwort Films Whole");
+    expect(buildOutline(unheadedOpening()).title).toBe("Slow Annealing Keeps Quillwort Films Whole");
+  });
+
   it("reads a summary of three heading lines as the cover, not as the heading of the opening", () => {
     const sections = sectionsOf(summaryWithoutFullStop());
     expect(sections[0].heading).toBeUndefined();
