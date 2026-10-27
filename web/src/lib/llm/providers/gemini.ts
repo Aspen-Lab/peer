@@ -22,7 +22,7 @@ export type ModelTarget = {
   tier: ModelTier;
 };
 
-// The server's own Vertex project. Global endpoint only, by the founder's
+// The server's own Vertex project. Global endpoint only, by the owner's
 // call (2026-09-14): Gemini 3 is served from nowhere else — measured on this
 // project, every 3.x id answered 404 on us-central1 and 200 on global — and
 // the retired 2.5 family is not kept as a regional fallback. Small before

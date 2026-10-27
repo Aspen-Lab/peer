@@ -4,7 +4,7 @@
 // rewrite, set in the reader's own vocabulary.
 //
 // The rewrite kept the report's evidence discipline and dropped four things
-// the founder asked for back: what is new (the proposal's novelty and each
+// the owner asked for back: what is new (the proposal's novelty and each
 // result's), the proposal itself, why the paper is on this reader's page,
 // and the paper's figures under the sections they belong to — plus a review's
 // contents, a glance and today's related papers. They are here, in the old

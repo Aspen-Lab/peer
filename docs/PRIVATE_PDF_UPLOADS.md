@@ -148,8 +148,9 @@ itself.** In particular:
   ([copyright.gov — Section 512](https://www.copyright.gov/512/)) and the statute itself
   ([17 U.S.C. § 512](https://uscode.house.gov/view.xhtml?req=%28title%3A17+section%3A512+edition%3Aprelim%29)).
 - **The PDF text/figure extractor depends on PyMuPDF**, which is dual-licensed under the GNU
-  AGPL and a commercial license. This repository's own MIT license does not, by itself, resolve
-  PyMuPDF's own licensing obligations for how this project builds, integrates, or distributes it.
+  AGPL and a commercial license. This repository is itself licensed under AGPL-3.0-only, which
+  takes PyMuPDF under its AGPL option; that does not, by itself, settle every obligation for how
+  this project builds, integrates, or distributes it.
   See PyMuPDF's own repository and package listing:
   [github.com/pymupdf/PyMuPDF](https://github.com/pymupdf/PyMuPDF) and
   [pypi.org/project/pymupdf](https://pypi.org/project/pymupdf/).

@@ -1,6 +1,6 @@
 # 三层渐进增强架构 — Peer Three-Tier Architecture
 
-> **Source of truth:** https://hermes-admin-eta.vercel.app — the founders' own blueprint site. This doc mirrors it for in-repo reference. If the two ever diverge, the admin site wins.
+> **Source of truth:** https://hermes-admin-eta.vercel.app — the owners' own blueprint site. This doc mirrors it for in-repo reference. If the two ever diverge, the admin site wins.
 
 Every LLM-using feature in Peer must respect this doctrine. The app must work end-to-end with **zero API keys**, and tier up gracefully when keys are added.
 
@@ -53,7 +53,7 @@ Steps 1, 3, 5 are identical regardless of tier.
 
 ---
 
-## Product principles (founders' words)
+## Product principles (owners' words)
 
 - **时间效率 > 信息量** — Ten precise items beat 100 noisy ones. *Time efficiency over information volume.*
 - **用户意志声明** — User explicitly declares identity and interests via profile/YAML.

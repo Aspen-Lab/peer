@@ -70,4 +70,4 @@ reviewing-cycle/
 
 ## Licence
 
-MIT (`LICENSE`).
+AGPL-3.0-only, as part of Peer — see the `LICENSE` at the repository root.
