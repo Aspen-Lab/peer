@@ -96,6 +96,10 @@ export interface PdfEngineResult {
 
 /** The byte ceiling for a PDF the engine will open. */
 export const MAX_PDF_BYTES = 18_000_000;
+/** P12-54 (R13b): the ceiling for a one-page call (`onlyPage` set: the margin's figure image and the sizing), which
+ *  reads one page and not the whole document. The upload limit (25 MiB, 26,214,400) plus a margin, so a PDF the
+ *  upload route accepted can be read page by page; the whole-document call keeps `MAX_PDF_BYTES`. */
+export const MAX_ONE_PAGE_PDF_BYTES = 27_000_000;
 /** Extractions allowed to run at once in one instance; the rest wait. */
 export const MAX_CONCURRENT_EXTRACTIONS = 2;
 /** Time from the call, waiting for a slot included, after which no further page
@@ -745,7 +749,7 @@ export async function extractPdfFigures(bytes: Uint8Array, opts: PdfEngineOption
   const nothing = (reason: string): PdfEngineResult => ({ figures: [], reason });
 
   if (bytes.byteLength === 0) return nothing("The PDF is empty.");
-  if (bytes.byteLength > MAX_PDF_BYTES) {
+  if (bytes.byteLength > (opts.onlyPage === undefined ? MAX_PDF_BYTES : MAX_ONE_PAGE_PDF_BYTES)) {
     return nothing("The PDF is too large for Peer to extract its figures safely.");
   }
   const wanted = opts.label === undefined ? null : labelKey(opts.label);
