@@ -417,8 +417,13 @@ const SCRIPT_RATIO = 0.75;
 const SCRIPT_RISE = 7.5;
 /** ...or this far below it (a subscript). */
 const SCRIPT_DROP = 3.5;
-/** A gutter is at least this many ems wide. */
+/** A gutter is at least this many ems wide... */
 const GUTTER_EM = 2;
+/** ...or this many when it lies in the middle of the text's width (P12-50): a journal that sets 9.3pt type 11pt
+ *  apart has a gutter of 1.2 em, and no page of it showed a gutter of 2. */
+const GUTTER_NARROW_EM = 1;
+/** The middle of the text's width: a narrow gutter's centre lies between these shares of it. */
+const GUTTER_MIDDLE: readonly [number, number] = [1 / 3, 2 / 3];
 /** The gutter is looked for in the middle of the text's width: between these
  *  shares of it. */
 const GUTTER_SEARCH: readonly [number, number] = [0.35, 0.65];
@@ -893,9 +898,12 @@ function longestClearRun(rows: Row[], x0: number, width: number): Row[] {
  * sides in at least that many of them, each side spans a good share of the
  * page's text and its median line fills it. Rows that cross the band — a
  * title, a figure caption — end a run but do not stop the page from being
- * two columns. A page of fewer than twice `GUTTER_MIN_ROWS` baselines has too
- * little text to show a gutter of its own; it takes the paper's
- * (`gutterPrior`). `text` is the page's usual text height; scripts are not ink.
+ * two columns. Where no 2-em band is a gutter, a band of 1 em whose centre
+ * lies in the middle third of the text's width is tried the same way (P12-50):
+ * a journal can set its columns 1.2 em apart. A page of fewer than twice
+ * `GUTTER_MIN_ROWS` baselines has too little text to show a gutter of its own;
+ * it takes the paper's (`gutterPrior`). `text` is the page's usual text
+ * height; scripts are not ink.
  */
 export function gutterOf(items: PdfTextItem[], text: number): Gutter | null {
   const ink = items.filter((i) => i.str.trim() && i.width > 0 && i.height >= text * SCRIPT_RATIO);
@@ -904,10 +912,32 @@ export function gutterOf(items: PdfTextItem[], text: number): Gutter | null {
   const lo = Math.min(...ink.map((i) => i.x));
   const hi = Math.max(...ink.map((i) => i.x + i.width));
   const span = hi - lo;
-  const width = GUTTER_EM * text;
 
+  const width = GUTTER_EM * text;
+  const slid: number[] = [];
+  for (let x0 = lo + span * GUTTER_SEARCH[0]; x0 + width <= lo + span * GUTTER_SEARCH[1]; x0 += 1) slid.push(x0);
+  const narrow = GUTTER_NARROW_EM * text;
+  return (
+    gutterIn(rows, slid, width, span) ??
+    gutterIn(rows, narrowStarts(ink, lo + span * GUTTER_MIDDLE[0] - narrow / 2, lo + span * GUTTER_MIDDLE[1] - narrow / 2), narrow, span)
+  );
+}
+
+/**
+ * Where a band of a narrow gutter's width is worth trying, from `from` to `to`: where the window opens and
+ * wherever an item ends inside it. A clear band slid left stays clear until it meets the end of an item, so
+ * these places are all the bands there are — a one-point slide can step over a gutter 1.05 em wide.
+ */
+function narrowStarts(ink: PdfTextItem[], from: number, to: number): number[] {
+  const starts = new Set([from]);
+  for (const i of ink) if (i.x + i.width > from && i.x + i.width <= to) starts.add(i.x + i.width);
+  return [...starts].sort((x, y) => x - y);
+}
+
+/** The gutter of `rows` that a band of `width` starting at one of `starts` makes, or null: the rule `gutterOf` explains. */
+function gutterIn(rows: Row[], starts: number[], width: number, span: number): Gutter | null {
   let best: { x0: number; run: Row[] } | null = null;
-  for (let x0 = lo + span * GUTTER_SEARCH[0]; x0 + width <= lo + span * GUTTER_SEARCH[1]; x0 += 1) {
+  for (const x0 of starts) {
     const run = longestClearRun(rows, x0, width);
     if (run.length < GUTTER_MIN_ROWS || (best && run.length <= best.run.length)) continue;
     // A column can be mostly a figure (a page of one column of text and one of
