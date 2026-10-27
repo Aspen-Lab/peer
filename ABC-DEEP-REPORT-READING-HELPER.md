@@ -46,7 +46,7 @@ HELD BY:          Claude (Opus), cloud session session_017DGPdGJqr95t3pMMcspXjE,
 CURRENT ITEM:          A P12-37 (Theme A, 4240) and A P12-38 (Theme B, 4241) walking round 2 on the dev server with the stub (§1h.421)
 NEXT TURN:          three blind readers per theme on each pack; director; score; B/C by mechanism
 STOPPED BECAUSE:          — (the Codex manager stood down at the owner's word, §1h.419)
-GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
+GATE BASELINE:          GREEN on a16cbe48 (Claude, p504/wt, 2026-10-27 14:46–14:53Z, TZ=America/Chicago): build 0; tsc 0; lint 0 errors / 144 warnings; 596 test files + 3 skipped, 10,919 tests + 3 skipped, 0 failed. (Codex native baseline on 220ca9e1 retained in the log.)
 CLOCK:            trig_01MkdKP21BdT8TbcyZpB4umB ENABLED (Haiku, 20 * * * *, P12 prompt; wakes session_017DGPdGJqr95t3pMMcspXjE only when idle)
 OWNER INPUT:      P1 Lin 2025 and P2 Sederholm 2026 (the owner's uploads, §1h.422; upload UI only, never committed or quoted)
 ```

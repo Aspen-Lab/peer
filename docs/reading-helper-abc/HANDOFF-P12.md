@@ -99,7 +99,7 @@ BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkou
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
 LAST RULING  §1h.422   NEXT RULING §1h.423   NEXT ITEM ID P12-39   NEXT FREE PORT 4242
 RUBRIC       P12-RUBRIC.md + §1h.420 matrix + §1h.421 dev server + §1h.422 inputs P1/P2 scored per paper; stop: A and B ≥97.25 on both papers, two consecutive rounds; counts 0/0
-RUNNING      A P12-37 (Theme A, 4240) ∥ A P12-38 (Theme B, 4241), dev server + stub (§1h.421); baseline gates on a16cbe48
+RUNNING      A P12-37 (Theme A, 4240) ∥ A P12-38 (Theme B, 4241) on P1 / P2, dev server + stub (§1h.421 / §1h.422)
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
 OWNER'S PDFS P1 Lin 2025, P2 Sederholm 2026 (uploads in the manager's session); upload UI only; never commit or quote
 CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB ENABLED (Haiku, hourly at :20)
@@ -623,6 +623,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T14:51Z | manager (Claude) | R2-DISPATCH §1h.421: the walks run on the dev server with the stub (a local production server refuses uploads without an account); A P12-37 (Theme A) and A P12-38 (Theme B) spawned at once from briefs/P12-R2-CLAUDE-COMMON.md | evidence: briefs/P12-37.md, P12-38.md, P12-R2-CLAUDE-COMMON.md | next: packs → three blind readers per theme
 
 - 2026-10-27T15:07Z | manager (Claude) | §1h.422: the owner's two papers P1 (Lin 2025) and P2 (Sederholm 2026) are the scored inputs; each theme scored per paper; the loop ends at four scores ≥97.25 in two consecutive rounds; the Codex manager has stopped | evidence: P12-RUBRIC.md amendment | next: P12-37 / P12-38 switched to P1 / P2 by message
+
+- 2026-10-27T15:08Z | manager (Claude) | BASELINE a16cbe48 GREEN: build 0, tsc 0, lint 0/144, 596+3 files, 10,919+3 tests, 0 failed (p504/wt) | evidence: scratch p12/gates/base-a16cbe48.txt | next: the two walks
 
 ---
 
