@@ -40,15 +40,15 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ## §1. CURRENT STATE
 
 ```text
-ROUND:          P12 round2 preparation; formal round1 medians A0.00/B0.00; consecutive passes A0/2 B0/2
+ROUND:          P12 round 2 (first under §1h.420's finite matrix); round 1 under the original reading scored 0.00 / 0.00 (§1h.419 (d)); stop ≥97.25 per theme, two consecutive rounds; counts A 0/2, B 0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T11:24:29.650Z; only writer of this file
-CURRENT ITEM:          A34independentcontinuationSAMEcopy4233;A35freshR2production/remainingfamilies4234;B36boundedDONE;R1medians0/0counts0/0;clockACTIVE
-NEXT TURN:          ContinuationA34actualCUA+firstunfinishedstickyfamily;A35production/remainingfamilies;managerbanksreturnedparts
-STOPPED BECAUSE:          — active; prior quota interruptions preserved in log; C28 independently verified and landed
+HELD BY:          Claude (Opus), cloud session session_017DGPdGJqr95t3pMMcspXjE, 2026-10-27T14:47Z (§1h.419); only writer of this file
+CURRENT ITEM:          takeover §1h.419–§1h.420; baseline gates on a16cbe48; next A P12-37 (Theme A) and A P12-38 (Theme B) round-2 walks on the production build
+NEXT TURN:          spawn P12-37 / P12-38 in parallel; then three blind readers per theme; director; score
+STOPPED BECAUSE:          — (the Codex manager stood down at the owner's word, §1h.419)
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
-CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
-OWNER INPUT:      PDF supplied in chat attachment; use original attachment through upload UI only; no private path or text committed
+CLOCK:            trig_01MkdKP21BdT8TbcyZpB4umB ENABLED (Haiku, 20 * * * *, P12 prompt; wakes session_017DGPdGJqr95t3pMMcspXjE only when idle)
+OWNER INPUT:      the owner's PDF in the manager's scratch (upload UI only; never committed or quoted); public inputs per §1h.420
 ```
 
 ### §1a. BINDING — user decisions 2026-10-05 (from the chat replies on the blueprint)
@@ -1772,6 +1772,36 @@ A34 old reviewer is stopped, own4233listener absent, checkpoint5f5d54b6. Its lat
 ### §1h.418 — 2026-10-27 — P12-34-INDEPENDENT-CONTINUATION-STARTED
 
 Dispatch the separate continuation reviewer under417 into the SAME clean detached A34 checkpoint5f5d54b6, web28cf and own4233. Prior worker is completed/listener absent; no duplicate. Completed families remain evidence, not redo. Browser capability must be real/documented and actual sticky family remains first. No score/waiver, product/source/config/auth change or alternate UI stack.
+
+### §1h.419 — 2026-10-27 — MANAGER HANDOVER TO CLAUDE; STOP LINE 97.25
+
+The owner, 2026-10-27 (chat, verbatim): "take over chatgpt的工作，你这边自己开工吧，然后记得开启和之前一样的模式，review cycling, subagent group, hourly clock, accuracy bar=97.25%".
+
+(a) **Manager.** The manager role passes from the Codex manager (last HELD BY 2026-10-27T11:24:29.650Z, ruling §1h.418) to Claude, cloud session `session_017DGPdGJqr95t3pMMcspXjE` (the P11 manager). The Codex manager stands down. Its work that never reached the repository — the round-2 walks A34 / A35 in progress on its desktop, the blind readers' private outputs, the private evidence packs and harness copies — is not inherited; everything committed stands as recorded. Any Codex commit that arrives after this ruling is merged (never force-pushed over) and recorded.
+
+(b) **Stop line.** Every theme ≥ **97.25** (the unrounded score) in **two consecutive scored rounds**. This replaces §1h.163's 97.9 with one 0.25 allowed (carried into P12 by §1h.184). With 12 units: all PASS and one 0.25 extra = 97.92 (passes); two 0.25 or one 0.5 = 95.83 (fails); any FAIL unit = at most 91.67 (fails); a failed pass requirement makes the theme 0. Both consecutive counts restart at 0 / 0.
+
+(c) **Method, unchanged.** reviewing-cycle on abc: the manager (Claude Opus) is the only writer of the state file, the rubric and the briefs; A / B / C workers and the blind readers are separate Sonnet agents; independent items run in parallel in their own detached worktrees; the manager verifies every C itself (diff, tsc, lint ≤ 144 warnings, touched tests ×3, its own mutation red then byte-identical, full gates) before a fast-forward land. The hourly resume clock `trig_01MkdKP21BdT8TbcyZpB4umB` (Haiku, 20 past each hour) is re-enabled with a P12 prompt: it only wakes this session when it is idle.
+
+(d) **Round 1 under the original reading** stands as the Codex manager recorded it (P12-RUBRIC Scores row 1; `P12-R1-DIRECTOR-20261027.md`): readers' median, A and director 0.00 for both themes, every unit "FAIL (evidence)", 0.00 extras charged. C28 (figure regions) was verified and landed by the Codex manager before this ruling (§1h.418 and before). The next scored round is round 2, walked fresh under §1h.420.
+
+### §1h.420 — 2026-10-27 — RUBRIC: A FINITE EVIDENCE MATRIX; THE INPUTS
+
+**Why.** Under the frozen rubric's reading — every input × every width × every step × every action family, absent evidence = FAIL — both themes scored 0.00 in round 1 while not one unit failed on a defect: A24 charged "0.00 on the evidence available" and marked B1–B12 "FAIL (evidence)", A23 likewise A1–A12. A number that cannot move with the page cannot measure the owner's 97.25 bar. reviewing-cycle lets a rubric line be amended by a dated ruling when the old reading cannot be met by the input; both numbers are then recorded and the owner may restore the old line.
+
+**What changes.** Only the evidence scope: each unit's "every …" is read as the finite matrix below. Unchanged: the units, the prices, the formula, the pass requirements, "an unperformed cell is FAIL (evidence)" **within** the matrix, and that **every defect observed anywhere — inside or outside the matrix — is costed** by its kind. While the old reading stays computable from a pack, the A records it beside the new score.
+
+**Inputs (the same every round).** R1 the owner's PDF (the manager's scratch copy; never copied into a worktree, committed or quoted; upload UI only). R2 public A, arXiv 1706.03762v7 (15 pages; sha256 b7d72988fd81…; fetched from a public mirror because this environment's network policy refuses arxiv.org). R3 public B′, "Trace-based Just-in-Time Type Specialization for Dynamic Languages" (PLDI 2009; pdf.js's public demo file; 14 pages, two columns, figures and tables; sha256 3662ff519e48…) — it **replaces arXiv 1512.03385**, which this environment cannot fetch. S an invented stress PDF made by a script in the walk's scratch (its sha256 recorded by the first walk, the same file reused every round).
+
+**Environment.** The production build (`npm run build` then `next start`) with the model stub; a profile with no key first, the stub profile for the model-optional paths; Chromium only (named in every deliverable). The deployed site is not required by any unit (its previews need a login); its served revision is recorded when reachable, otherwise "unresolved".
+
+**The matrix.** Widths (CSS viewport): W1 1440×900; W2 1024×576 (a 1280×720 screen at 125 %); W3 853×480 (1280×720 at 150 %); W4 390×844. Reading steps: the smallest, the default and the largest the app offers (named in the pack). Light everywhere; dark at W1 default and W1 largest.
+- **Core cells (every unit):** {R1, R2} × {W1, W2, W3} × default step × light.
+- **Stress cells (every unit whose subject scales):** R1 × W1 × {smallest, largest} × light, and R1 × W1 × largest × dark.
+- **Phone cells:** R1 × W4 × default, for every unit whose control the phone page offers.
+- **Unit-specific:** A5 — one structured note (bold, italic, underline, a two-level bullet list) on R1 through every export route the app offers, the notes page and "Open your notes". A6 / A7 — the notes page and the notes window at every reading step, light and dark at default, a long multi-line row included. B6 — a selection inside a paragraph, across two paragraphs, in a heading or caption, in the Summary and in an answer, on R1 and R2 at W1, W2, W3 (inside a paragraph also at W4). B7 — every visible figure of R1, R2 and R3 at W1; every figure of R1 at W3; three figures of R1 at W4. B8 / B9 / B10 — every reading step at W1 light, the default step dark, W3 default. B11 — the P11 rubric's A1–A12 and B1–B12, one evidence line each on R1 at W1 (the P11 pattern); the P10 / P9 chains of pass requirement 5 are carried by the full test suite on the head together with these P11 lines, not walked ID by ID. B12 — 30 action cycles (open and close each card kind, select, highlight, resize a divider) at W1 and at W3 on R1, and the entry of all four inputs at W1. S is walked at W1 default for A1–A4, A8, A9, B3–B7.
+
+The blind readers score from the pack against this matrix; the director voids a mark only on evidence (§1h.184's rules for voids unchanged).
 
 
 ## §5. Durable work ledger — update in place, evidence append only

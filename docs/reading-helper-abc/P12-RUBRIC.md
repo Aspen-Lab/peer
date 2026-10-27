@@ -2,7 +2,9 @@
 
 Frozen 2026-10-23 by ruling §1h.184, before any round-1 brief. Spec: `P12-OWNER-2026-10-23.md` (the owner's nine items and binding reading), `HANDOFF-P12.md` §4. Pattern: repository reviewing-cycle template and P11 rubric. A later change requires a dated numbered ruling, both old and new scores where applicable, and notification to the owner.
 
-**Target: every theme ≥97.9 in two consecutive rounds; each theme may carry at most one extra priced 0.25 per round.** Both consecutive counts start at zero. The owner controls the stop line. No FAIL unit, missing evidence, 0.5 extra, or failed pass requirement can count as a pass.
+**Target: every theme ≥97.9 in two consecutive rounds; each theme may carry at most one extra priced 0.25 per round.**
+
+> **Amended 2026-10-27 by §1h.419: every theme ≥ 97.25 (unrounded) in two consecutive scored rounds** (replaces the line above; one 0.25 extra on 12 PASS units = 97.92 passes, two 0.25 or one 0.5 = 95.83 fails). **Evidence scope amended by §1h.420** — see the section at the end of this file. Both consecutive counts start at zero. The owner controls the stop line. No FAIL unit, missing evidence, 0.5 extra, or failed pass requirement can count as a pass.
 
 Two themes, **12 units each**. Each unit is PASS (1) only when the fresh real-page walk supplies the required evidence; otherwise FAIL (0). An unperformed or blocked check is not inferred from code and cannot be marked PASS.
 
@@ -100,3 +102,21 @@ The loop's end is the manager's measure; **the owner's own look at the surface i
 
 
 Dated clarification, ruling §1h.194 (2026-10-23): for B3–B5, multiple cards use a fixed labelled header with full quotation/content/controls inside each independently scrolling body. Actual header plus one content-row minimum includes padding/borders. When an unbounded number of existing cards cannot physically fit, one shared margin track scrolls vertically and retains equal initial shares at the largest required minimum; bodies remain mounted and reachable regardless of active state, with opening order stable. Record the score under the original simultaneous-fit reading alongside this clarification if an overcapacity case differs. No unit, price, stop threshold or pass requirement changes.
+
+## Dated amendment, ruling §1h.420 (2026-10-27): the finite evidence matrix
+
+**Why.** Under the frozen rubric's reading — every input × every width × every step × every action family, absent evidence = FAIL — both themes scored 0.00 in round 1 while not one unit failed on a defect: A24 charged "0.00 on the evidence available" and marked B1–B12 "FAIL (evidence)", A23 likewise A1–A12. A number that cannot move with the page cannot measure the owner's 97.25 bar. reviewing-cycle lets a rubric line be amended by a dated ruling when the old reading cannot be met by the input; both numbers are then recorded and the owner may restore the old line.
+
+**What changes.** Only the evidence scope: each unit's "every …" is read as the finite matrix below. Unchanged: the units, the prices, the formula, the pass requirements, "an unperformed cell is FAIL (evidence)" **within** the matrix, and that **every defect observed anywhere — inside or outside the matrix — is costed** by its kind. While the old reading stays computable from a pack, the A records it beside the new score.
+
+**Inputs (the same every round).** R1 the owner's PDF (the manager's scratch copy; never copied into a worktree, committed or quoted; upload UI only). R2 public A, arXiv 1706.03762v7 (15 pages; sha256 b7d72988fd81…; fetched from a public mirror because this environment's network policy refuses arxiv.org). R3 public B′, "Trace-based Just-in-Time Type Specialization for Dynamic Languages" (PLDI 2009; pdf.js's public demo file; 14 pages, two columns, figures and tables; sha256 3662ff519e48…) — it **replaces arXiv 1512.03385**, which this environment cannot fetch. S an invented stress PDF made by a script in the walk's scratch (its sha256 recorded by the first walk, the same file reused every round).
+
+**Environment.** The production build (`npm run build` then `next start`) with the model stub; a profile with no key first, the stub profile for the model-optional paths; Chromium only (named in every deliverable). The deployed site is not required by any unit (its previews need a login); its served revision is recorded when reachable, otherwise "unresolved".
+
+**The matrix.** Widths (CSS viewport): W1 1440×900; W2 1024×576 (a 1280×720 screen at 125 %); W3 853×480 (1280×720 at 150 %); W4 390×844. Reading steps: the smallest, the default and the largest the app offers (named in the pack). Light everywhere; dark at W1 default and W1 largest.
+- **Core cells (every unit):** {R1, R2} × {W1, W2, W3} × default step × light.
+- **Stress cells (every unit whose subject scales):** R1 × W1 × {smallest, largest} × light, and R1 × W1 × largest × dark.
+- **Phone cells:** R1 × W4 × default, for every unit whose control the phone page offers.
+- **Unit-specific:** A5 — one structured note (bold, italic, underline, a two-level bullet list) on R1 through every export route the app offers, the notes page and "Open your notes". A6 / A7 — the notes page and the notes window at every reading step, light and dark at default, a long multi-line row included. B6 — a selection inside a paragraph, across two paragraphs, in a heading or caption, in the Summary and in an answer, on R1 and R2 at W1, W2, W3 (inside a paragraph also at W4). B7 — every visible figure of R1, R2 and R3 at W1; every figure of R1 at W3; three figures of R1 at W4. B8 / B9 / B10 — every reading step at W1 light, the default step dark, W3 default. B11 — the P11 rubric's A1–A12 and B1–B12, one evidence line each on R1 at W1 (the P11 pattern); the P10 / P9 chains of pass requirement 5 are carried by the full test suite on the head together with these P11 lines, not walked ID by ID. B12 — 30 action cycles (open and close each card kind, select, highlight, resize a divider) at W1 and at W3 on R1, and the entry of all four inputs at W1. S is walked at W1 default for A1–A4, A8, A9, B3–B7.
+
+The blind readers score from the pack against this matrix; the director voids a mark only on evidence (§1h.184's rules for voids unchanged).

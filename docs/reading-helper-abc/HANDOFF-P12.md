@@ -94,15 +94,15 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T11:24:29.650Z
-BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
-HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.418   NEXT RULING §1h.419   NEXT ITEM ID P12-37   NEXT FREE PORT 4236
-RUBRIC       P12-RUBRIC.md frozen; formal R1 A0.00/B0.00; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      A34independentcontinuationSAMEcopy4233;A35freshR2production/remainingfamilies4234;B36boundedDONE;R1medians0/0counts0/0;clockACTIVE
-THEN         parallelfreshR2AThemeA/B→3freshblindreaders/theme→director→mechanismB/Cfixes→nextscoredround;stop97.9twoconsecutive
-OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
-CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
+AS OF        2026-10-27T14:47Z
+BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
+HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
+LAST RULING  §1h.420   NEXT RULING §1h.421   NEXT ITEM ID P12-37   NEXT FREE PORT 4240
+RUBRIC       P12-RUBRIC.md + §1h.420 finite matrix; stop ≥97.25 per theme, two consecutive rounds (§1h.419); R1 original reading 0.00/0.00; counts A0/B0
+RUNNING      baseline gates on a16cbe48 (p504/wt)
+THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
+OWNER'S PDF  in the manager's scratch; upload UI only; never commit or quote
+CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB ENABLED (Haiku, hourly at :20)
 ```
 
 ---
@@ -617,6 +617,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T11:22:17.407Z | parent 556a9569 (entry commit follows) | manager | P12-34-SAME-ITEM-CONTINUATION-RULED: OldA34stopped/released4233after5f5d54b6anddocumentedIABunavailable. ApprovenewindependentcontinuationreviewerSAMEitem/copy/port/web28cf;readpriorrawfacts,neverredoentry/aggregatebold/inventedoutputs. Firstunfinishedactualsticky/structuredlifecycleandcommonmatrix. SameCUAonly,printtemporarilyunresolved/norepeatduringconcurrentwalk;nocause/gatewaiver. | evidence: briefs/P12-34.mdcontinuationsupplement;P12-34-A-20261027T111042Z.mdthrough5f5d54b6 | next: DispatchnewindependentA34continuationatclean5f5d54b6withmainbriefsupplement;actualCUAcapabilityfirst;A35keepsfullR2families
 
 - 2026-10-27T11:24:29.650Z | parent d9d16c99 (entry commit follows) | manager | P12-34-INDEPENDENT-CONTINUATION-STARTED: FreshindependentcontinuationagentdispatchedforSAMEA34item/round/copy5f5d54b6/web28cf/4233. Oldreviewercompletedandlistenerabsent;noduplicateliveworker. Managerbriefsupplementatd9d16c99readprivately;priorrawfactsretained,actualstickyfamilynext,documentedCUAcapabilityfirst. | evidence: briefs/P12-34.mdRuling417;agentp12_34_r2_theme_a_continuation;oldreport5f5d54b6 | next: ContinuationA34actualCUA+firstunfinishedstickyfamily;A35production/remainingfamilies;managerbanksreturnedparts
+
+- 2026-10-27T14:47Z | manager (Claude) | TAKEOVER §1h.419–§1h.420: the owner's word of 2026-10-27 hands the manager role to Claude; stop line 97.25 per theme, two consecutive rounds; the hourly clock re-enabled; the rubric's evidence scope read as a finite matrix (the units, prices, formula and pass requirements unchanged); R3 replaced by TraceMonkey PLDI 2009 because arxiv.org is refused by this environment | evidence: ABC-DEEP-REPORT-READING-HELPER.md §1h.419–420; P12-RUBRIC.md amendment | next: baseline gates, then P12-37 / P12-38 in parallel
 
 ---
 
