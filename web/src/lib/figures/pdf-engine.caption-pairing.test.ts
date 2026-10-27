@@ -210,6 +210,24 @@ describe("P12-28: defensible typed caption pairing", () => {
     expect(await boxes(page, "Figure 1")).toEqual([]);
   });
 
+  it("ignores an unpainted trailing move without changing the region or rendered pixels", async () => {
+    const make = (trailing: boolean) => figurePdf([{ text: [["Figure 1. Invented panel.", 100, 318, 9]], drawingOps: [`100 492 300 200 re ${trailing ? "500 92 m " : ""}f`] }]);
+    const pick = async (pdf: Buffer) => (await extractPdfFigures(pdf, { ...options, onlyPage: 1, label: "Figure 1", maxFigures: 1 })).figures;
+    const plain = await pick(make(false));
+    const withMove = await pick(make(true));
+    expect(plain.map(({ box, caption }) => ({ box, caption }))).toEqual([{ box: [100, 100, 400, 300], caption: "Figure 1. Invented panel." }]);
+    expect(withMove.map(({ box, caption }) => ({ box, caption }))).toEqual(plain.map(({ box, caption }) => ({ box, caption })));
+    expect(withMove[0].png).toEqual(plain[0].png);
+  });
+
+  it("keeps a genuinely drawn later subpath start under transform and clip", async () => {
+    const page: FigurePage = {
+      text: [["Figure 1. Invented two-part panel.", 100, 318, 9]],
+      drawingOps: ["q 1 0 0 1 10 0 cm 90 492 470 200 re W n 90 492 300 200 re 550 692 m 510 692 l 510 492 l f Q"],
+    };
+    expect(await boxes(page, "Figure 1")).toEqual([[100, 100, 560, 300]]);
+  });
+
   it("does not pair a truly painted extension through its caption", async () => {
     const page: FigurePage = { text: [["Figure 4. Invented interior label.", 90, 268, 9]], drawingOps: ["90 490 360 202 re f"] };
     expect(await boxes(page, "Figure 4")).toEqual([]);
