@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T15:44Z
+AS OF        2026-10-27T15:50Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
-LAST RULING  §1h.426   NEXT RULING §1h.427   NEXT ITEM ID P12-52   NEXT FREE PORT 4243
+LAST RULING  §1h.427   NEXT RULING §1h.428   NEXT ITEM ID P12-53   NEXT FREE PORT 4244
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
-RUNNING      A P12-37 (4240) ∥ A P12-38 (4241) ∥ B P12-41 (figures P4–P6) ∥ B P12-42 (Tier 1) ∥ B P12-43 (sealed P4–P6) ∥ A-smoke P12-44 (4242) ∥ C P12-45 (R1a) ∥ C P12-46 (R6a/R7a) ∥ C P12-47 (R2a/R3a/R5a/R8a) ∥ C P12-48 (roles) ∥ C P12-49 (headings) ∥ C P12-50 (gutter) ∥ C P12-51 (assembly)
+RUNNING      A P12-37 (4240) ∥ A P12-38 (4241) ∥ B P12-41 (figures P4–P6) ∥ B P12-42 (Tier 1) ∥ A-smoke P12-44 (4242) ∥ C P12-45 (R1a) ∥ C P12-46 (R6a/R7a) ∥ C P12-47 (R2a/R3a/R5a/R8a) ∥ C P12-48 (roles) ∥ C P12-49 (headings) ∥ C P12-50 (gutter) ∥ C P12-51 (assembly) ∥ B P12-52 (same-note writers, 4243)
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
 OWNER'S PDFS P1–P6 (uploads in the manager's session; P4–P6 held out); upload UI only; never commit or quote
 CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB ENABLED (Haiku, hourly at :20)
@@ -635,6 +635,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T15:32Z | manager (Claude) | §1h.425: the owner — every available agent at once; B P12-39 landed (7291f0a8: P1 0/6 found, a regression of 19dd2cab; P2 6/6; P3 2/6 right); decisions on its rules; seven more items dispatched together (B41 figures P4–P6, B42 Tier 1, B43 sealed P4–P6 truth, A44 upload smoke, C45 R1a, C46 R6a/R7a, C47 R2a/R3a/R5a/R8a); ten workers | evidence: briefs/P12-41..47.md | next: verify each C as it reports
 
 - 2026-10-27T15:44Z | manager (Claude) | §1h.426: B P12-40 landed (Theme C today 0.00 on P1, P2, P3; mechanisms R1–R4, O1–O8); ground truth ruled (P1 5, P2 5, P3 8 parts); four parallel Cs dispatched (P12-48 roles, P12-49 headings, P12-50 gutter, P12-51 assembly); thirteen workers | evidence: P12-40 report; briefs/P12-48..51.md | next: verify and combine the outline Cs, then measure Theme C on P1–P3
+
+- 2026-10-27T15:50Z | manager (Claude) | §1h.427: B P12-43 landed sealed (held-out P4 / P5 / P6 all 0 before the rules; pipeline fine, P5 2.4 % under the cap); judgement calls by principle (N 5 / 9 / 9); B P12-52 dispatched on the same-note writers (port 4243) | evidence: P12-43 report; briefs/P12-52.md | next: Cs as they report
 
 ---
 
