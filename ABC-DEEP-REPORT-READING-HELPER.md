@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round2 preparation; formal round1 medians A0.00/B0.00; consecutive passes A0/2 B0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T11:09:49.716Z; only writer of this file
-CURRENT ITEM:          FreshA34ThemeA4233+A35ThemeB4234+B36writer4235runningat66656b33/web28cf;R1medians0/0counts0/0;clockACTIVE
-NEXT TURN:          B36finitecausalguidewhilefreshA34/A35measure;managerreadactualreportsandrulebeforeanyC;clockunchanged
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T11:11:33.831Z; only writer of this file
+CURRENT ITEM:          A34/A35actualCUAavailableown4233/4234baselinesrunning;B36sourcePARTIALbankedexecnext;web28cf;R1medians0/0counts0/0;clockACTIVE
+NEXT TURN:          B36execfinitewriterorder/debounce/isolationmatrixand3candidates;A34/A35independentrealUIcontinue
 STOPPED BECAUSE:          — active; prior quota interruptions preserved in log; C28 independently verified and landed
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1692,6 +1692,11 @@ A35 is a fresh independent reviewer at66656b33, own detached copy/4234, parallel
 ### §1h.402 — 2026-10-27 — P12-36-SAME-NOTE-WRITER-B-STARTED
 
 B36 independently investigates the observed same-note aggregate/sticky writer question at66656b33, own detached copy and reserved4235. Finite invented matrix and all producing paths must confirm or correct the manager hypothesis; foreign-note deletion success is not same-note precedence evidence. Three general candidate rules and adversarial/risk facts precede a manager implementation ruling. No product fix or new acceptance rule is authorized by dispatch; A34/A35 continue independent actual walks.
+
+
+### §1h.403 — 2026-10-27 — P12-36-WRITER-SOURCE-PARTIAL-BANKED
+
+Read B36 source checkpoint and immediate correction in full. Actual sticky debounce is150ms, not300ms from stale comments; aggregate500ms and wholesale store replacement plus separate reconciliation are source facts only. Finite execution/candidate rules remain pending, so no causal or UI conclusion is accepted. Preserve both report commits without rewriting history; no product change.
 
 
 ## §5. Durable work ledger — update in place, evidence append only
