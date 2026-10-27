@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T11:09:45.576Z
+AS OF        2026-10-27T11:09:49.716Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.401   NEXT RULING §1h.402   NEXT ITEM ID P12-37   NEXT FREE PORT 4236
+LAST RULING  §1h.402   NEXT RULING §1h.403   NEXT ITEM ID P12-37   NEXT FREE PORT 4236
 RUBRIC       P12-RUBRIC.md frozen; formal R1 A0.00/B0.00; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
 RUNNING      FreshA34ThemeA4233+A35ThemeB4234+B36writer4235runningat66656b33/web28cf;R1medians0/0counts0/0;clockACTIVE
 THEN         parallelfreshR2AThemeA/B→3freshblindreaders/theme→director→mechanismB/Cfixes→nextscoredround;stop97.9twoconsecutive
@@ -583,6 +583,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T11:09:41.539Z | parent 66656b33 (entry commit follows) | manager | P12-34-FRESH-R2-THEME-A-STARTED: FreshindependentA34dispatchedatbrief-containingrelease66656b33/web28cf;owndetachedp12-34/wt/4233,firstactualdocumentedUIcapabilitythenfiniteoriginal/public/inventedbaselineparts. NoC/oldreaderreuse. SeparateA35andB36parallel. | evidence: briefs/P12-34.md;briefs/P12-R2-A-COMMON.md;agentp12_34_r2_theme_a | next: A34bankfinitecapability/baselineandnotefamilies;managerintegratesreport-onlyparts;A35/B36independentparallel
 
 - 2026-10-27T11:09:45.576Z | parent 0d578188 (entry commit follows) | manager | P12-35-FRESH-R2-THEME-B-STARTED: FreshindependentA35dispatchedat66656b33/web28cf;owndetachedp12-35/wt/4234,actualUIcapabilitythenproduction/public/privateinput/width/control/full79guardfacts. Completeknownwidthcontractinthepackrequired;separatefromA34andB36. | evidence: briefs/P12-35.md;briefs/P12-R2-A-COMMON.md;agentp12_35_r2_theme_b | next: A35bankfinitecapability/baselineandguardfamilies;managerintegratesreport-onlyparts;noverdictsharingwithA34
+
+- 2026-10-27T11:09:49.716Z | parent dbf51df6 (entry commit follows) | manager | P12-36-SAME-NOTE-WRITER-B-STARTED: IndependentB36dispatchedat66656b33/web28cf;ownp12-36/wt/4235reserved;finiteinventedproducer/debounce/save/delete/escape/reload/isolationmatrix. Manageroverwritediagnosisunverified;3candidaterulesandadversarialcasesowed;noCfixauthorized. | evidence: briefs/P12-36.md;agentp12_36_same_note_writer_b;P12-R1-DIRECTOR-20261027.md | next: B36finitecausalguidewhilefreshA34/A35measure;managerreadactualreportsandrulebeforeanyC;clockunchanged
 
 ---
 

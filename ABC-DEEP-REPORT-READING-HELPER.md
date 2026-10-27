@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round2 preparation; formal round1 medians A0.00/B0.00; consecutive passes A0/2 B0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T11:09:45.576Z; only writer of this file
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T11:09:49.716Z; only writer of this file
 CURRENT ITEM:          FreshA34ThemeA4233+A35ThemeB4234+B36writer4235runningat66656b33/web28cf;R1medians0/0counts0/0;clockACTIVE
-NEXT TURN:          A35bankfinitecapability/baselineandguardfamilies;managerintegratesreport-onlyparts;noverdictsharingwithA34
+NEXT TURN:          B36finitecausalguidewhilefreshA34/A35measure;managerreadactualreportsandrulebeforeanyC;clockunchanged
 STOPPED BECAUSE:          — active; prior quota interruptions preserved in log; C28 independently verified and landed
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1689,6 +1689,11 @@ A34 is a fresh independent reviewer at brief-containing release66656b33, own det
 A35 is a fresh independent reviewer at66656b33, own detached copy/4234, parallel to A34/B36. Owns the full79-line inherited inventory, current factual width contract in pack, actual input-specific image/click/selection/control and common-gate observations. Normal production public entry is source-supported but does not certify private upload/revision/fullmatrix. No score at dispatch or inherited acceptance.
 
 
+### §1h.402 — 2026-10-27 — P12-36-SAME-NOTE-WRITER-B-STARTED
+
+B36 independently investigates the observed same-note aggregate/sticky writer question at66656b33, own detached copy and reserved4235. Finite invented matrix and all producing paths must confirm or correct the manager hypothesis; foreign-note deletion success is not same-note precedence evidence. Three general candidate rules and adversarial/risk facts precede a manager implementation ruling. No product fix or new acceptance rule is authorized by dispatch; A34/A35 continue independent actual walks.
+
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -1978,7 +1983,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-R1 | SCORED | TwoA+threefreshblindreaders/theme+directoraudit | MediansA0.00/B0.00commongatesunestablished;counts0/2each | Mechanismfixes+freshnextA/readerround | P12-R1-DIRECTOR-20261027.md;P12-RUBRIC.md |
 | P12-34 | RUNNING | Fresh round2 ThemeA independent A at66656b33/web28cf;4233 | ActualUIcapability→inputbaselines→allnote/portable/common/inheritedfacts→frozenpack+score | First finite capability/baseline checkpoint; no old observation inheritance | agentp12_34_r2_theme_a;briefs/P12-34.md |
 | P12-35 | RUNNING | Fresh round2 ThemeB independent A at66656b33/web28cf;4234 | ActualUIcapability→inputbaselines→full79guards+6commongates+all12units→frozenpack+score | First finite capability/baseline checkpoint; no old crop/CI substituted for page | agentp12_35_r2_theme_b;briefs/P12-35.md |
-| P12-36 | BRIEF READY | Independent finite same-note writer precedence B; port4235reserved | Completeproducerpaths+inventedorder/debounce/lifecycle/isolationmatrix+3candidate rules | Read-only investigation; no product change or closure | briefs/P12-36.md |
+| P12-36 | RUNNING | Independent same-note producer/order B at66656b33/web28cf;4235reserved | Finitecausalmatrix+allproducerbranches+3generalrules+adversarialproof/risk;noUIclosure | B causal checkpoint then manager ruling before any C; A independent | agentp12_36_same_note_writer_b;briefs/P12-36.md |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
 | P11-26 | **DONE 21:0xZ 2026-10-20** — on the branch (§1h.128 (b)); was RUNNING (rules 4, 5 added §1h.127 (c)) since 09:1xZ 2026-10-20 — C, `briefs/P11-26.md`, `scratchpad/p11c26/wt`, port 4127: the explain card keeps its top at the selection (B3); a figure in front of the stack is never a thumbnail (X-3) | round 1 Theme B | §1h.122 (b) 1, 4 | C → the manager | — |
