@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T01:04:29.699Z; only writer of this file
-CURRENT ITEM:          C28native595files10898pass+499x3;managerUIpublicA4missingHELD;B31briefready;6blindreadersreturned0finaleachdirectorPending;A23A24scores0;A0B0;clockACTIVE
-NEXT TURN:          B31 publicA preservation guide;finish director audit of six returned blind baseline readers;C28 stays frozen/unlanded;no test-green substitution for image evidence
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T01:09:01.300Z; only writer of this file
+CURRENT ITEM:          B31pathprovenanceactive/B32briefready;C28heldUIpublicA4+5regression;6blindreturned0finaleachdirectorPending;A23A24scores0;A0B0;clockACTIVE
+NEXT TURN:          B31pathprovenance + B32inventedidentitymatrix in parallel;director audit six returned blind readers;C28held until independent real preservation verification
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1577,6 +1577,11 @@ Independent candidatewebd2f89f8 native595files/10898tests pass,build/tsc0,lint0/
 ### §1h.379 — 2026-10-27 — P12-31-PUBLIC-FIGURE-PRESERVATION-BRIEF
 
 Separate read-only B31brief names exact publicAold/new engine/source-region comparison and finite invented general-rule probes;own detached candidatecopy/noUIornewupload;sourceclassifierB29separate;C28frozenpending measuredguide. Evidence: briefs/P12-31.md;cecf2abc;p12-31/wt. No waiver, source change, score inflation or landing.
+
+
+### §1h.380 — 2026-10-27 — P12-31-PUBLIC-PRESERVATION-REGRESSIONS-BANKED
+
+B31 independently confirms new loss of publicA4/5 caused by typed-caption overlap rejection before competition;old2alreadyrightpanelonly,floorsunchanged;3numeric-overlapcandidatesunsafelyattachinteriorlabelsormissanalogue;continue finitepathprovenance/render-footprint measurement,noCauthorized. Evidence: P12-31-B-20261027T011000Z.md;1d7c0078;p12-31/private;cua-public-a-results.json. No safe rule inferred from a small sample; no threshold/guard/score change.
 
 
 ## §5. Durable work ledger — update in place, evidence append only
