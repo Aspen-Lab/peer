@@ -242,8 +242,63 @@ function readPageStructure(page: Page): { texts: TextBlock[]; images: ImageBlock
   } finally {
     structured.destroy();
   }
-  texts.sort((a, b) => a.rect[1] - b.rect[1] || a.rect[0] - b.rect[0]);
-  return { texts, images };
+  const lines = joinLabelOnlyLines(texts);
+  lines.sort((a, b) => a.rect[1] - b.rect[1] || a.rect[0] - b.rect[0]);
+  return { texts: lines, images };
+}
+
+// P12-45: a paper may set the figure label ("Fig. 1") as its own text line, a
+// few points left of the caption text, outside the picture's width. The label
+// then has no horizontal relation to the picture, so it is never a typed
+// caption, and the caption beside it carries no label. Such a line is joined
+// with the line of its own block on its row. Only a label-only line joins:
+// two column captions on one baseline in one block must stay two lines.
+const LABEL_ONLY_RE = /^\s*fig(?:ure)?\.?\s*\d+[a-z]?\s*[.:|]?\s*$/i;
+/** How far right of the label's end the caption text may start, in points. */
+const LABEL_ROW_REACH = 12;
+/** Label-only lines examined on one page; the ones past it are left as they were. */
+const MAX_LABEL_ONLY_LINES = 200;
+
+/** `lines` with each label-only line merged into the line of the same block on
+ *  its row that starts within `LABEL_ROW_REACH` pt to its right: one line, the
+ *  union rectangle, the text "label body", in the body line's place. */
+export function joinLabelOnlyLines(lines: TextBlock[]): TextBlock[] {
+  const byBlock = new Map<number, number[]>();
+  for (const [index, line] of lines.entries()) {
+    const members = byBlock.get(line.blockId);
+    if (members) members.push(index);
+    else byBlock.set(line.blockId, [index]);
+  }
+  const joined = new Map<number, TextBlock>();
+  const dropped = new Set<number>();
+  let examined = 0;
+  for (const [index, label] of lines.entries()) {
+    if (!LABEL_ONLY_RE.test(label.text)) continue;
+    if (++examined > MAX_LABEL_ONLY_LINES) break;
+    let nearest = -1;
+    let nearestGap = Infinity;
+    for (const other of byBlock.get(label.blockId) ?? []) {
+      const body = lines[other];
+      if (other === index || joined.has(other)) continue;
+      if (LABEL_ONLY_RE.test(body.text) || CAPTION_RE.test(body.text) || OTHER_CAPTION_RE.test(body.text)) continue;
+      const gap = body.rect[0] - label.rect[2];
+      if (gap < -1 || gap > LABEL_ROW_REACH || gap >= nearestGap) continue;
+      const shared = Math.min(label.rect[3], body.rect[3]) - Math.max(label.rect[1], body.rect[1]);
+      if (shared < 0.5 * Math.min(height(label.rect), height(body.rect))) continue;
+      nearest = other;
+      nearestGap = gap;
+    }
+    if (nearest < 0) continue;
+    const body = lines[nearest];
+    dropped.add(index);
+    joined.set(nearest, {
+      rect: [Math.min(label.rect[0], body.rect[0]), Math.min(label.rect[1], body.rect[1]), Math.max(label.rect[2], body.rect[2]), Math.max(label.rect[3], body.rect[3])],
+      text: `${label.text} ${body.text}`,
+      blockId: body.blockId,
+    });
+  }
+  if (joined.size === 0) return lines;
+  return lines.flatMap((line, index) => (dropped.has(index) ? [] : [joined.get(index) ?? line]));
 }
 
 // ── Captions ─────────────────────────────────────────────────────────────
