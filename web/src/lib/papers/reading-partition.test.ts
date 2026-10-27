@@ -4,13 +4,15 @@ import { describe, expect, it } from "vitest";
 import type { Paper } from "@/types";
 import { MAP } from "@/components/reader/copy";
 import type { FullTextResult } from "./full-text";
-import type { ExtractedDocument } from "./html-text";
+import { canonicalizeHeading, withInheritedBuckets, withSectionIds, type ExtractedDocument } from "./html-text";
 import { buildReading } from "./reading";
-import { GIST_QUESTION, gistRoute, readableSections, routeByQuestions, type RouteResult } from "./reading-map";
+import { GIST_QUESTION, buildReadingMap, gistRoute, readableSections, routeByQuestions, type RouteResult } from "./reading-map";
 import {
+  CLOSING,
   PARTITION_ROLES,
   PART_ROLE,
   TRUNK,
+  closingPartition,
   partOf,
   partitionedMap,
   restorePartition,
@@ -697,5 +699,346 @@ describe("withPartitionMarks — a group's mark from the paragraphs inside it (B
     const got = withPartitionMarks(silent, map, reading.body, FOUR)!.byQuestion[0].sections;
 
     expect(["s0~0", "s0~1", "s0~2", "s0~3"].map((id) => got[id].tier)).toEqual(["none", "none", "none", "none"]);
+  });
+});
+
+// ── The closing split (P12-48; B P12-40 rule set B; ruling §1h.426) ──────────────────────────────────
+//
+// A paper that prints no discussion or conclusion ends inside its last results part. Invented input only: a
+// "survey of shore snails", with an abstract the closing paragraph restates.
+
+const SNAILS = "Snail density rises with wave exposure";
+const SHELLS = "Shell thickness follows crab predation";
+const STORMS = "Recovery after storm scouring";
+/** Long words (7+ letters): density, exposure, thickness, follows, predation, scouring. */
+const ABSTRACT = "Snail density rises with wave exposure while shell thickness follows crab predation, and storm scouring resets algal cover on the shore.";
+/** Cue "taken together" / "we show"; no figure; long words together, exposure, density, predation, thickens - three of five in the abstract. */
+const SUMMARY = "Taken together, we show that wave exposure raises snail density and that crab predation thickens the shells.";
+/** No cue: a closing paragraph that is outlook. */
+const OUTLOOK = "Future surveys could follow the recovery of algal cover after storm scouring across more shores.";
+
+/** `n` plain results paragraphs: no cue, no figure. */
+const plain = (n: number, seed = 0): string[] =>
+  Array.from({ length: n }, (_, k) => `The survey logged ${10 + k + seed} counts of ${["snail density", "shell thickness", "crab predation"][(k + seed) % 3]} on the rocky shore.`);
+
+/** A paper from `[heading, paragraphs[]]`, built the way the extractors hand it over. */
+function shore(rows: ReadonlyArray<readonly [string, readonly string[]]>): ExtractedDocument {
+  return {
+    sections: withSectionIds(withInheritedBuckets(rows.map(([heading, paragraphs]) => ({ heading, canonical: canonicalizeHeading(heading), text: paragraphs.join("\n\n") })))),
+    figureCaptions: [],
+    source: "pdf",
+  };
+}
+
+const bodyOf = (doc: ExtractedDocument) => readableSections(doc).map(({ id, section, paragraphs }) => ({ id, canonical: section.canonical, paragraphs }));
+
+/** The Nature-style paper whose last results part ends with the closing: front text, three descriptive parts, the
+ *  methods and the references. `last` is the last results part's paragraphs. */
+function natureStyle(last: readonly string[] = [...plain(3), SUMMARY, OUTLOOK]): ExtractedDocument {
+  return shore([
+    ["Body", plain(3)],
+    [SNAILS, plain(4, 1)],
+    [SHELLS, plain(4, 2)],
+    [STORMS, last],
+    ["Online content", plain(1)],
+    ["References", plain(3)],
+    ["Methods", plain(3)],
+  ]);
+}
+
+/** The split of `doc` against `abstract`, with the map and body it was made from. */
+function splitOf(doc: ExtractedDocument, abstract: string = ABSTRACT) {
+  const map = buildReadingMap(doc);
+  const body = bodyOf(doc);
+  return { map, body, partition: closingPartition(map, body, abstract) };
+}
+
+describe("closingPartition — the closing of a paper that names no discussion or conclusion", () => {
+  it("holds the three numbers B P12-40 specified", () => {
+    expect(CLOSING).toEqual({ lastParagraphs: 4, abstractShare: 0.2, longWord: 7 });
+  });
+
+  it("splits the last evidence row at the first paragraph with a summary cue, no figure and the abstract's words", () => {
+    const { map, partition } = splitOf(natureStyle());
+    const storms = map.sections.find((row) => row.heading === STORMS)!;
+
+    expect(storms.role).toBe("evidence");
+    expect(partition).toEqual({
+      sectionId: storms.id,
+      closing: true,
+      parts: [
+        { role: "results", fromParagraph: 0, toParagraph: 2 },
+        { role: "conclusion", fromParagraph: 3, toParagraph: 4 },
+      ],
+    });
+  });
+
+  it("(a) draws the row as two: the paper's own heading over the results, the role's own label over the closing", () => {
+    const { map, body, partition } = splitOf(natureStyle());
+    const drawn = partitionedMap(map, body, partition);
+    const at = map.sections.findIndex((row) => row.heading === STORMS);
+    const [head, tail] = [drawn.sections[at], drawn.sections[at + 1]];
+
+    expect(drawn.sections).toHaveLength(map.sections.length + 1);
+    expect(head).toMatchObject({ id: `${map.sections[at].id}~0`, heading: STORMS, canonical: "body", role: "evidence", level: 1 });
+    expect(head.paragraphs.map((line) => line.index)).toEqual([0, 1, 2]);
+    expect(tail).toMatchObject({ id: `${map.sections[at].id}~1`, heading: MAP.parts.labels.conclusion, canonical: "conclusion", role: "interpretation", level: 1 });
+    expect(tail.paragraphs.map((line) => line.index)).toEqual([3, 4]);
+    expect("page" in tail).toBe(false);
+    expect(partOf(head)).toEqual({ sectionId: map.sections[at].id, sectionIndex: at, role: "results", from: 0, to: 2, closing: true });
+    expect(partOf(tail)).toEqual({ sectionId: map.sections[at].id, sectionIndex: at, role: "conclusion", from: 3, to: 4, closing: true });
+    // The rows around it are the very rows they were, in the same order; the totals and the words add up.
+    drawn.sections.slice(0, at).forEach((row, k) => expect(row).toBe(map.sections[k]));
+    drawn.sections.slice(at + 2).forEach((row, k) => expect(row).toBe(map.sections[at + 1 + k]));
+    expect(head.words + tail.words).toBe(map.sections[at].words);
+    expect(drawn.totalMinutes).toBe(map.totalMinutes);
+  });
+
+  it("does not touch the body", () => {
+    const doc = natureStyle();
+    const { map, body, partition } = splitOf(doc);
+    const before = JSON.stringify(body);
+
+    partitionedMap(map, body, partition);
+
+    expect(JSON.stringify(body)).toBe(before);
+    expect(JSON.stringify(bodyOf(doc))).toBe(before);
+  });
+
+  it.each([
+    ["we show", "Here we show that wave exposure raises snail density and crab predation thickens shells."],
+    ["we showed", "We showed that wave exposure raises snail density and crab predation thickens shells."],
+    ["we have shown", "We have shown that wave exposure raises snail density and crab predation thickens shells."],
+    ["we demonstrate", "We demonstrate that wave exposure raises snail density and crab predation thickens shells."],
+    ["we demonstrated", "We demonstrated that wave exposure raises snail density and crab predation thickens shells."],
+    ["we conclude", "We conclude that wave exposure raises snail density and crab predation thickens shells."],
+    ["in summary", "In summary, wave exposure raises snail density and crab predation thickens shells."],
+    ["taken together", "Taken together, wave exposure raises snail density and crab predation thickens shells."],
+    ["our findings", "Our findings are that wave exposure raises snail density and crab predation thickens shells."],
+    ["overall", "Overall, wave exposure raises snail density and crab predation thickens shells."],
+    ["in conclusion", "In conclusion, wave exposure raises snail density and crab predation thickens shells."],
+  ])("(a) reads %s as a summary cue", (_cue, paragraph) => {
+    expect(splitOf(natureStyle([...plain(3), paragraph, OUTLOOK])).partition?.parts[1].fromParagraph).toBe(3);
+  });
+
+  it("(a) needs a cue: a paragraph with the abstract's words and no cue is not the closing", () => {
+    const noCue = "Wave exposure raises snail density and crab predation thickens the shells of the snails.";
+
+    expect(splitOf(natureStyle([...plain(3), noCue, OUTLOOK])).partition).toBeNull();
+  });
+
+  it.each([
+    "Taken together (Fig. 3), we show that wave exposure raises snail density and crab predation thickens shells.",
+    "Taken together, we show that wave exposure raises snail density and crab predation thickens shells (Figure 2).",
+    "Taken together, we show that wave exposure raises snail density and crab predation thickens shells (Figs. 2 and 3).",
+    "Taken together, we show that wave exposure raises snail density and crab predation thickens shells (Table 1).",
+    "Taken together, we show that wave exposure raises snail density and crab predation thickens shells (Table S1).",
+    "Taken together, we show that wave exposure raises snail density and crab predation thickens shells (Extended Data Fig. 4).",
+    "Taken together, we show that wave exposure raises snail density and crab predation thickens shells (Supplementary Fig. S3).",
+  ])("(b) is not the closing when it cites a figure or a table: %s", (paragraph) => {
+    expect(splitOf(natureStyle([...plain(3), paragraph, OUTLOOK])).partition).toBeNull();
+  });
+
+  it("(b) is still the closing when it only speaks of a figure or a table without citing one", () => {
+    const talks = "Taken together, we show that wave exposure raises snail density, and that crab predation thickens shells; a table of counts is in the data.";
+
+    expect(splitOf(natureStyle([...plain(3), talks, OUTLOOK])).partition).not.toBeNull();
+  });
+
+  describe("(c) at least 20 % of the paragraph's long words are among the abstract's", () => {
+    // The abstract is two long words; a paragraph of ten long words holds both (20 %), eleven do not (18 %).
+    const TWO = "Exposure and density.";
+    const OTHERS = ["mudstone", "limestone", "sandstone", "dolomite", "granitic", "feldspar", "obsidian", "gabbroic", "andesite", "basaltic"];
+    const paragraph = (others: number) => `We show exposure density ${OTHERS.slice(0, others).join(" ")}.`;
+
+    it("passes at exactly 20 %", () => {
+      expect(splitOf(natureStyle([...plain(3), paragraph(8), OUTLOOK]), TWO).partition).not.toBeNull();
+    });
+
+    it("fails just under 20 %", () => {
+      expect(splitOf(natureStyle([...plain(3), paragraph(9), OUTLOOK]), TWO).partition).toBeNull();
+      expect(splitOf(natureStyle([...plain(3), paragraph(10), OUTLOOK]), TWO).partition).toBeNull();
+    });
+
+    it("counts a word once, and only words of seven letters or more", () => {
+      // "exposure" ×4 is one long word; "tide", "snail", "shore" are short. Two long words, both the abstract's: 100 %.
+      expect(splitOf(natureStyle([...plain(3), "We show exposure exposure exposure exposure density tide snail shore.", OUTLOOK]), TWO).partition).not.toBeNull();
+    });
+
+    it("fails a paragraph with no long word at all", () => {
+      expect(splitOf(natureStyle([...plain(3), "We show it is so.", OUTLOOK]), TWO).partition).toBeNull();
+    });
+  });
+
+  it("has no split without an abstract, or with one that has no long word", () => {
+    const { map, body } = splitOf(natureStyle());
+
+    expect(closingPartition(map, body, undefined)).toBeNull();
+    expect(closingPartition(map, body, null)).toBeNull();
+    expect(closingPartition(map, body, "")).toBeNull();
+    expect(closingPartition(map, body, "Snails on a shore.")).toBeNull();
+    expect(closingPartition(map, body, ABSTRACT)).not.toBeNull();
+  });
+
+  it("looks only at the last four paragraphs of the row", () => {
+    // Five paragraphs from the end: not looked at. Four from the end: looked at.
+    expect(splitOf(natureStyle([SUMMARY, ...plain(4)])).partition).toBeNull();
+    expect(splitOf(natureStyle([...plain(2), SUMMARY, ...plain(3)])).partition?.parts[1].fromParagraph).toBe(2);
+  });
+
+  it("takes the first paragraph that qualifies", () => {
+    const second = "In summary, we show that crab predation thickens shells with wave exposure and snail density.";
+
+    expect(splitOf(natureStyle([...plain(3), SUMMARY, second, OUTLOOK])).partition?.parts[1].fromParagraph).toBe(3);
+  });
+
+  it("never divides the row from its first paragraph: the closing is not the whole row", () => {
+    const { partition } = splitOf(natureStyle([SUMMARY, OUTLOOK]));
+
+    // Two paragraphs: the first is the cue paragraph, which would leave nothing above it.
+    expect(partition).toBeNull();
+    expect(splitOf(natureStyle([plain(1)[0], SUMMARY])).partition?.parts).toEqual([
+      { role: "results", fromParagraph: 0, toParagraph: 0 },
+      { role: "conclusion", fromParagraph: 1, toParagraph: 1 },
+    ]);
+  });
+
+  it("is skipped when the paper names a discussion or a conclusion", () => {
+    for (const heading of ["Discussion", "Conclusions", "Conclusion and outlook"]) {
+      const doc = shore([
+        ["1 Introduction", plain(3)],
+        [SNAILS, [...plain(3), SUMMARY, OUTLOOK]],
+        [heading, plain(2)],
+        ["References", plain(2)],
+      ]);
+
+      expect(splitOf(doc).partition).toBeNull();
+    }
+  });
+
+  it("is not skipped for a results-and-discussion part, which is evidence", () => {
+    const doc = shore([
+      ["1 Introduction", plain(3)],
+      ["2 Results and discussion", [...plain(3), SUMMARY, OUTLOOK]],
+      ["References", plain(2)],
+    ]);
+
+    expect(splitOf(doc).partition?.sectionId).toBe("s1");
+  });
+
+  it("splits the last evidence row only", () => {
+    const earlier = shore([
+      ["1 Introduction", plain(3)],
+      [SNAILS, [...plain(3), SUMMARY, OUTLOOK]],
+      [SHELLS, plain(4)],
+      ["Methods", plain(2)],
+    ]);
+
+    expect(splitOf(earlier).partition).toBeNull();
+  });
+
+  it("has no split where no row is evidence", () => {
+    const doc = shore([["Methods", [...plain(3), SUMMARY, OUTLOOK]], ["References", plain(2)]]);
+
+    expect(splitOf(doc).partition).toBeNull();
+  });
+
+  it("is left to the model when the row is the unheaded paper's trunk", () => {
+    // One part of 12 paragraphs holds most of the words, with the introduction and the methods beside it.
+    const trunky = shore([
+      ["1 Introduction", plain(1)],
+      [SNAILS, [...plain(10), SUMMARY, OUTLOOK]],
+      ["Methods", plain(1)],
+    ]);
+    const { map, body, partition } = splitOf(trunky);
+
+    expect(unheadedTrunk(body)?.sectionId).toBe("s1");
+    expect(map.sections[1].role).toBe("evidence");
+    expect(partition).toBeNull();
+    // The same part among enough other text is no trunk, and is divided.
+    const headed = shore([
+      ["1 Introduction", plain(8)],
+      [SNAILS, [...plain(10), SUMMARY, OUTLOOK]],
+      ["2 Methods", plain(8)],
+    ]);
+    expect(unheadedTrunk(bodyOf(headed))).toBeNull();
+    expect(splitOf(headed).partition?.sectionId).toBe("s1");
+  });
+
+  it("is not done to a row that has rows under it", () => {
+    const doc = shore([
+      ["1 Introduction", plain(3)],
+      ["2 " + SNAILS, [...plain(3), SUMMARY, OUTLOOK]],
+      ["2.1 Counts by site", plain(2)],
+      ["3 Methods", plain(2)],
+    ]);
+    const { map, partition } = splitOf(doc);
+
+    // The last evidence row is the sub-row 2.1, which holds no cue; the parent, which does, has a child.
+    expect(map.sections[2].role).toBe("evidence");
+    expect(partition).toBeNull();
+  });
+
+  it("gives up when the body is not the map's", () => {
+    const { map, body } = splitOf(natureStyle());
+
+    expect(closingPartition(map, body.slice(1), ABSTRACT)).toBeNull();
+    expect(closingPartition(map, undefined, ABSTRACT)).toBeNull();
+  });
+});
+
+describe("partitionedMap on a closing partition — drawn only where the map bears it out", () => {
+  it("returns the map as it was when the paper now names a conclusion, or the row is not evidence", () => {
+    const { map, body, partition } = splitOf(natureStyle());
+    const named = { ...map, sections: map.sections.map((row, k) => (k === 0 ? { ...row, canonical: "conclusion" } : row)) };
+    const untagged = { ...map, sections: map.sections.map((row) => (row.id === partition!.sectionId ? { ...row, role: "body" as const } : row)) };
+
+    expect(partitionedMap(named, body, partition)).toBe(named);
+    expect(partitionedMap(untagged, body, partition)).toBe(untagged);
+    expect(partitionedMap(map, body, partition)).not.toBe(map);
+  });
+
+  it("returns the map as it was for parts the closing does not make", () => {
+    const { map, body, partition } = splitOf(natureStyle());
+    const [head, tail] = partition!.parts;
+
+    expect(partitionedMap(map, body, { ...partition!, parts: [head] })).toBe(map);
+    expect(partitionedMap(map, body, { ...partition!, parts: [head, { ...tail, role: "discussion" }] })).toBe(map);
+    expect(partitionedMap(map, body, { ...partition!, parts: [{ ...head, role: "introduction" }, tail] })).toBe(map);
+    expect(partitionedMap(map, body, { ...partition!, parts: [head, { ...tail, fromParagraph: tail.fromParagraph + 1 }] })).toBe(map);
+  });
+
+  it("does not apply a model's partition (no closing flag) to a headed paper: its behaviour is the unheaded rule's", () => {
+    const { map, body, partition } = splitOf(natureStyle());
+    const { closing: _closing, ...asModel } = partition!;
+
+    expect(partitionedMap(map, body, asModel)).toBe(map);
+  });
+});
+
+describe("withPartitionMarks on a closing partition — the two rows are marked as the model's parts are", () => {
+  const QUESTION = "Does crab predation thicken the shells of snails?";
+
+  it("adds a mark for each row beside the section's own, which the body reads and which stays as it was", () => {
+    const { map, body, partition } = splitOf(natureStyle());
+    const route = routeByQuestions(map, body, [QUESTION]);
+    const got = withPartitionMarks(route, map, body, partition)!.byQuestion[0].sections;
+    const id = partition!.sectionId;
+
+    expect(got[id]).toBe(route.byQuestion[0].sections[id]);
+    expect(Object.keys(got)).toEqual(expect.arrayContaining([`${id}~0`, `${id}~1`]));
+    expect(got[`${id}~0`].paragraphs.every((i) => i <= 2)).toBe(true);
+    expect(got[`${id}~1`].paragraphs.every((i) => i >= 3)).toBe(true);
+    // The summary paragraph says the most about predation and shells; it is the closing's.
+    expect(got[`${id}~1`].paragraphs).toContain(3);
+  });
+
+  it("takes the gist tier of each row from its role", () => {
+    const { map, body, partition } = splitOf(natureStyle());
+    const got = withPartitionMarks(gistRoute(map), map, body, partition)!.byQuestion[0].sections;
+    const id = partition!.sectionId;
+
+    expect(got[`${id}~0`].tier).toBe("strong");
+    expect(got[`${id}~1`].tier).toBe("strong");
   });
 });
