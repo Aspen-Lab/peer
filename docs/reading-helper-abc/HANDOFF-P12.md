@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T00:41:21.114Z
+AS OF        2026-10-27T00:50:24.113Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.368   NEXT RULING §1h.369   NEXT ITEM ID P12-31   NEXT FREE PORT 4230
+LAST RULING  §1h.369   NEXT RULING §1h.370   NEXT ITEM ID P12-31   NEXT FREE PORT 4230
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      C28FINALPARTIALa5dbdc8freadynewsource8c4bef60;Managerverify28oldCUAbaselinecomplete;B29FINAL/A23-A24factsbankpending;A26PARTIAL1860missing30;blindnotstarted;A0B0;clockACTIVE
+RUNNING      ManagerC28verifywebd2f89f8CI40428712922/localgates;A23-A24+B29-B30factsbanked;A26PARTIAL1860missing30;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -517,6 +517,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-26T20:58:59.586Z | parent 1d291547 (entry commit follows) | manager | P12-30-TIGHT-LEADING-REGRESSION-BANKED: ReadandbankB30fivecheckpoints3f1fdf43/fb9efe03/89faed07/7bb398d3/01ff5a6b. Managerdifflead independentlyconfirmedNode22C28sameblock10ptleading/9ptglyphbboxoverlapdropscontinuation. Baselinecomplete/Cpartial;14ptandcolumnscontrols retained. C28mustfixsameblockalignedlater-start eligibility, addexactpool/requestcaptionregression, no thresholds/fontclassifier orweakenedassertions. | evidence: docs/reading-helper-abc/P12-30-B-20261026T193000Z.md; source01ff5a6b; privateprotect-leading-node22.json sourcehashd1b7043d | next: sameC28minimumsameblocklaterlinefix+regression/typedboundary/columnscontrols→newfrozenwebtree/gates; Managerdoesnotverify/landoldregressingcandidate
 
 - 2026-10-27T00:41:21.114Z | parent f4719569 (entry commit follows) | manager | P12-MANAGER-P28-ACTUAL-BASELINES-BANKED: Bank ownpublicBnormalupload/requiredconsent andsameprofilecontinuation2normalviewers, actualPNGSHAmatchwrongtables. AllowedCUAbrowsernormalinventedupload/old1064x476Figure4tableviewer baseline savedwithsourceparagraphs; tabhandoff retained. Firstpendinghelper/navigationtimeouts remainfailed. CorrectedC28notlanded; independentgates/UIstillowed. | evidence: docs/reading-helper-abc/P12-MANAGER-P28-VERIFY-20261026.md; externalbaseline-continuation-results.json,cua-invented-before.{jpg,json} | next: finishCtestdiffread; allowedbrowserold/freshinputbaseline then integratecorrectedfrozencandidateinfreecopy; owntests/mutations/nativegates/UI
+
+- 2026-10-27T00:50:24.113Z | parent 749a58a9 (entry commit follows) | manager | P12-MANAGER-P28-CANDIDATE-GATES-STARTED: Allowed-UI publicB baseline saved; separate candidate webd2f89f8 matches worker; exact-tree CI40428712922 and local sequential gates started, generated DEV-type syntax errors preserved; no landing | evidence: P12-MANAGER-P28-VERIFY-20261026.md;verify-p28/private;CI40428712922 | next: Finish independent C28 gates/mutations/normal existing/fresh-upload UI; freeze round1 evidence and score missing evidence explicitly; no landing or closure until verified
 
 ---
 

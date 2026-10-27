@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T00:41:21.114Z; only writer of this file
-CURRENT ITEM:          C28FINALPARTIALa5dbdc8freadynewsource8c4bef60;Managerverify28oldCUAbaselinecomplete;B29FINAL/A23-A24factsbankpending;A26PARTIAL1860missing30;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          finishCtestdiffread; allowedbrowserold/freshinputbaseline then integratecorrectedfrozencandidateinfreecopy; owntests/mutations/nativegates/UI
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T00:50:24.113Z; only writer of this file
+CURRENT ITEM:          ManagerC28verifywebd2f89f8CI40428712922/localgates;A23-A24+B29-B30factsbanked;A26PARTIAL1860missing30;blindnotstarted;A0B0;clockACTIVE
+NEXT TURN:          Finish independent C28 gates/mutations/normal existing/fresh-upload UI; freeze round1 evidence and score missing evidence explicitly; no landing or closure until verified
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1523,6 +1523,11 @@ The manager's actual diff read identified an unverified preservation risk; indep
 ### §1h.368 — 2026-10-26 — P12-MANAGER-P28-ACTUAL-BASELINES-BANKED
 
 Bank independently observed normal-upload baselines before changing the manager verification source. Distinguish pending-image/helper/navigation failures from delivered clicks. Preserve exact wrong-image bytes and the same-profile publicB continuation. Further UI uses the documented allowed browser interface; its actual invented upload/consent/click/viewer screenshot and source paragraphs are retained privately for migration comparison. A tab timeout that already navigated is recovered through its visible state, never duplicated blindly. No worker UI success, extraction completeness, corrected-tree gate or score follows. Main product remains on released web88ac until complete independent verification and normal landing.
+
+### §1h.369 — 2026-10-27 — P12-MANAGER-P28-CANDIDATE-GATES-STARTED
+
+Allowed-UI publicB baseline saved; separate candidate webd2f89f8 matches worker; exact-tree CI40428712922 and local sequential gates started, generated DEV-type syntax errors preserved; no landing. Evidence: P12-MANAGER-P28-VERIFY-20261026.md;verify-p28/private;CI40428712922. No product acceptance, formal score or threshold change.
+
 
 ## §5. Durable work ledger — update in place, evidence append only
 
