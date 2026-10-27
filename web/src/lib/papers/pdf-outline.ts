@@ -252,6 +252,31 @@ export function linePitch(lines: PdfLine[]): number {
   return gaps[Math.floor(gaps.length * 0.25)];
 }
 
+/** How far the gap under a caption's first line may stand from one line pitch, as a share of it,
+ *  for the line below to be read as the caption's own second line (R7a). */
+const TITLE_PITCH_TOLERANCE = 0.2;
+
+/**
+ * P12-46 (R7a): whether `next`, in another face than `previous`, is still the caption's second line.
+ * Only when `previous` is the caption's first line (it opens with the label: a later line never
+ * does, `continuesCaption` ends the caption at one that does) and the gap to `next` is one line pitch,
+ * the paper's pitch for the size the caption is set in, within `TITLE_PITCH_TOLERANCE`; with no pitch
+ * to measure (0) it is not. The size is held to the first line's by `continuesCaption` right after.
+ * What this lets by is a bold title line over text-face lines at the leading of one block; the prose
+ * that resumes under a figure, in another face, sits further below or at another leading, and stays out.
+ */
+function titleFaceChange(
+  previous: PdfLine,
+  next: PdfLine,
+  gap: number,
+  pitch: number,
+  body: { size: number; font: string },
+): boolean {
+  if (pitch <= 0 || !captionOf(previous)) return false;
+  const leading = body.size > 0 ? pitch * (next.size / body.size) : pitch;
+  return Math.abs(gap - leading) <= leading * TITLE_PITCH_TOLERANCE;
+}
+
 /**
  * Whether `next` is the next printed line of the caption `previous` is part
  * of: the same page, within a line pitch and a half below, in the SAME FACE
@@ -263,6 +288,10 @@ export function linePitch(lines: PdfLine[]): number {
  * size told the two apart not at all, and the prose under the figure read
  * as more caption. And `headingOf` is not consulted: it takes "in the other
  * face" for a heading, which is exactly what a caption's second line is.
+ *
+ * P12-46 (R7a): one change of face is let by, directly after the caption's FIRST line: a caption set
+ * with a bold title line over lines in the text face is one caption (`titleFaceChange`). A second
+ * change of face, or a first one that the size or the pitch do not bear out, ends it as before.
  */
 export function continuesCaption(
   previous: PdfLine,
@@ -275,16 +304,15 @@ export function continuesCaption(
   const gap = previous.y - next.y;
   if (gap <= 0) return false;
   if (pitch > 0 && gap > pitch * 1.5) return false;
-  if (next.font !== previous.font) return false;
+  if (next.font !== previous.font && !titleFaceChange(previous, next, gap, pitch, body)) return false;
   if (Math.abs(next.size - previous.size) > 0.6) return false;
   const text = next.text.trim();
   if (!text) return false;
   if (isFurniture(next, furniture)) return false;
   if (captionOf(next)) return false;
   if (NUMBERED_HEADING.test(text) && text.length <= HEADING_MAX) return false;
-  // `body` is kept in the signature for the callers that pass it; the face
-  // test above is what distinguishes caption from prose.
-  void body;
+  // The face test above is what distinguishes caption from prose; `body` only sizes the leading
+  // `titleFaceChange` looks for.
   return true;
 }
 

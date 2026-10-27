@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildOutline, captionOf, headingOf, type PdfLine, type PdfTextItem } from "./pdf-outline";
+import { buildOutline, captionOf, continuesCaption, headingOf, type PdfLine, type PdfTextItem } from "./pdf-outline";
 
 // P12-46 (B P12-39, M6): what the outline takes for a figure's caption. All of it is invented text,
 // built the way `pdf-outline.test.ts` builds a page: runs on baselines, in a face and a size.
@@ -117,5 +117,113 @@ describe("a caption has a separator after its label's number (P12-46, R6a)", () 
     const outline = paper([item("Figure 3 shows the same ordering as the two earlier runs of the experiment.", { y: 654 })]);
     expect(labelsOf(outline)).toEqual([]);
     expect(proseOf(outline)).toContain("Figure 3 shows the same ordering as the two earlier runs of the experiment.");
+  });
+});
+
+describe("a caption may change face once, right after its first line (P12-46, R7a)", () => {
+  // A margin caption: a bold title line, then lines in the text face, one block at one leading.
+  const BODY12 = { size: 12, font: "body" };
+  const first = line("Figure 2: Soil moisture under the three covers.", { y: 330, size: 12, font: "titlebold" });
+  const second = line("Measured weekly at ten depths in the spring and summer,", { y: 318, size: 12, font: "body" });
+  const next = (over: Partial<PdfLine>, from: PdfLine = first) => line("and averaged over the three plots of each cover.", { y: from.y - 12, size: 12, font: "body", ...over });
+  const ends = (previous: PdfLine, following: PdfLine, pitch = 12, body = BODY12) => !continuesCaption(previous, following, pitch, body, new Set());
+
+  it("takes the text-face line under a title-face first line, at the caption's size and one line pitch", () => {
+    expect(continuesCaption(first, second, 12, BODY12, new Set())).toBe(true);
+    // The leading of one block, a little either way.
+    expect(continuesCaption(first, next({ y: first.y - 13.5 }), 12, BODY12, new Set())).toBe(true);
+    expect(continuesCaption(first, next({ y: first.y - 10 }), 12, BODY12, new Set())).toBe(true);
+  });
+
+  it("ends at a line of another leading: the prose under a figure sits further below, or tighter", () => {
+    expect(ends(first, next({ y: first.y - 17 })), "1.4 pitches").toBe(true);
+    expect(ends(first, next({ y: first.y - 15 })), "1.25 pitches").toBe(true);
+    expect(ends(first, next({ y: first.y - 9 })), "0.75 pitch").toBe(true);
+    expect(ends(first, next({ y: first.y - 19 })), "past the pitch and a half, as before").toBe(true);
+  });
+
+  it("ends at a line of another size", () => {
+    expect(ends(first, next({ size: 9 }))).toBe(true);
+    expect(ends(first, next({ size: 14 }))).toBe(true);
+  });
+
+  it("lets only the one change by: a second change of face ends the caption", () => {
+    expect(continuesCaption(second, next({ font: "body" }, second), 12, BODY12, new Set())).toBe(true);
+    expect(ends(second, next({ font: "italic" }, second)), "third line in a third face").toBe(true);
+    expect(ends(second, next({ font: "titlebold" }, second)), "the title face again").toBe(true);
+    // The first line and a second in the same face, then a change: that is the first change, but not right after the first line.
+    const secondBold = line("Measured weekly at ten depths in the spring and summer,", { y: 318, size: 12, font: "titlebold" });
+    expect(continuesCaption(first, secondBold, 12, BODY12, new Set())).toBe(true);
+    expect(ends(secondBold, next({ font: "body" }, secondBold)), "after a second line in the title face").toBe(true);
+  });
+
+  it("lets it by only directly after the caption's first line, the line that opens with the label", () => {
+    const notALabel = line("a line of the paper, set in the title face", { y: 330, size: 12, font: "titlebold" });
+    expect(ends(notALabel, next({}, notALabel))).toBe(true);
+    expect(ends(line("Figure 2) is the one we", { y: 330, size: 12, font: "titlebold" }), next({}))).toBe(true);
+  });
+
+  it("does not let a face change by when there is no line pitch to hold it to", () => {
+    expect(ends(first, second, 0)).toBe(true);
+    // The same face needs none, as before.
+    const sameFace = line("feature extraction, and classification stages", { y: 318, size: 12, font: "titlebold" });
+    expect(continuesCaption(first, sameFace, 0, BODY12, new Set())).toBe(true);
+  });
+
+  it("reads the leading for the size the caption is set in: a caption smaller than the text has a tighter pitch", () => {
+    const small = line("Figure 3: Soil moisture under the three covers.", { y: 330, size: 9, font: "titlebold" });
+    const smallNext = (gap: number) => line("Measured weekly at ten depths in the spring.", { y: small.y - gap, size: 9, font: "body" });
+    // The paper's pitch is 15 for 12-point text: 11.25 for 9-point.
+    expect(continuesCaption(small, smallNext(11), 15, BODY12, new Set())).toBe(true);
+    expect(ends(small, smallNext(15), 15)).toBe(true);
+    expect(ends(small, smallNext(7), 15)).toBe(true);
+  });
+
+  it("keeps the old tests' answers: prose back in the text face under a caption's last line ends it", () => {
+    const cap = line("Figure 1: Medical image analysis pipeline showing preprocessing,", { y: 330, size: 12, font: "caption" });
+    const capSecond = line("feature extraction, and classification stages", { y: 314, size: 12, font: "caption" });
+    const proseBack = line("Drug Formation and Innovation:-The long and costly process", { y: 298, size: 12, font: "body" });
+    expect(continuesCaption(cap, capSecond, 16, BODY12, new Set())).toBe(true);
+    expect(continuesCaption(capSecond, proseBack, 16, BODY12, new Set())).toBe(false);
+  });
+
+  // Whole papers. The lines under the caption's first line are at y = 642, 630...; the prose of the page is 12 apart.
+  it("end to end: a caption with a bold first line and text-face lines of the same size and pitch is all of its lines", () => {
+    const outline = paper([
+      item("Figure 2: Soil moisture under the three covers.", { y: 654, fontName: "titlebold" }),
+      item("Measured weekly at ten depths in the spring and summer,", { y: 642 }),
+      item("and averaged over the three plots of each cover.", { y: 630 }),
+    ]);
+    expect(outline.figureCaptions).toEqual([
+      {
+        ordinal: 2,
+        label: "Figure 2",
+        caption: "Soil moisture under the three covers. Measured weekly at ten depths in the spring and summer, and averaged over the three plots of each cover.",
+        page: 1,
+      },
+    ]);
+    const prose = proseOf(outline);
+    expect(prose).not.toContain("Measured weekly");
+    expect(prose).not.toContain("averaged over the three plots");
+    expect(prose).toContain("Recurrent neural networks");
+  });
+
+  it("end to end: prose under a figure in another face, at another pitch, stays outside the caption", () => {
+    const outline = paper([
+      item("Figure 2: Soil moisture under the three covers.", { y: 654, fontName: "titlebold" }),
+      item("The deeper layers hold more water than the straw does in every one of the four seasons.", { y: 637 }),
+    ]);
+    expect(outline.figureCaptions?.map((c) => c.caption)).toEqual(["Soil moisture under the three covers."]);
+    expect(proseOf(outline)).toContain("The deeper layers hold more water than the straw does in every one of the four seasons.");
+  });
+
+  it("end to end: a third face after the text-face line ends the caption there", () => {
+    const outline = paper([
+      item("Figure 2: Soil moisture under the three covers.", { y: 654, fontName: "titlebold" }),
+      item("Measured weekly at ten depths in the spring and summer,", { y: 642 }),
+      item("and averaged over the three plots of each cover.", { y: 630, fontName: "italic" }),
+    ]);
+    expect(outline.figureCaptions?.map((c) => c.caption)).toEqual(["Soil moisture under the three covers. Measured weekly at ten depths in the spring and summer,"]);
+    expect(JSON.stringify(outline.sections)).toContain("averaged over the three plots of each cover.");
   });
 });
