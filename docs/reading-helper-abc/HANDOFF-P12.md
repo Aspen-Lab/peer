@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T00:53:44.724Z
+AS OF        2026-10-27T00:53:47.956Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.376   NEXT RULING §1h.377   NEXT ITEM ID P12-31   NEXT FREE PORT 4230
+LAST RULING  §1h.377   NEXT RULING §1h.378   NEXT ITEM ID P12-31   NEXT FREE PORT 4230
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
 RUNNING      C28managerverifyd2f89f8/nativeCI40428712922+local;A23A24scores0evidence;3ThemeAreaderslive3ThemeBqueued;A26PARTIAL1860missing30;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
@@ -533,6 +533,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T00:53:41.550Z | parent 5f2a9a5f (entry commit follows) | manager | P12-R1-A24-ADVERSE-BASELINE-SCORE: A24 independent adverse baseline score0.00;12unitFAIL(evidence),sixcommongatesunestablished,0substantiatedextras;frozen610-artifactmanifest378da67a;notreader median or closure | evidence: P12-24-A-20261025T230500Z.md;19917ecb;frozenThemeBpack | next: Finish C28 independent exact-tree native full gates/touched3/mutations and real existing/fresh-upload UI; complete six blind readers and director baseline; preserve failures
 
 - 2026-10-27T00:53:44.724Z | parent cfc1f707 (entry commit follows) | manager | P12-R1-THREE-THEME-A-BLIND-READERS-STARTED: Three fresh independent requested-platform readers dispatched separately against exact same frozenThemeApack/rubric/owneronly;noA/directorscores/code/stateprovided;ThemeBreadersqueuedonlybecause4runtime slotsinclude manager | evidence: briefs/P12-R1-reader.md;privateblind-round1;agentsp12_r1_theme_a_reader_1/2/3 | next: Finish C28 independent exact-tree native full gates/touched3/mutations and real existing/fresh-upload UI; complete six blind readers and director baseline; preserve failures
+
+- 2026-10-27T00:53:47.956Z | parent 58ae5a66 (entry commit follows) | manager | P12-28-NATIVE-TOUCHED-REPETITION-GROUP: Existing native verification infrastructure adds approved group28 for exact23unchanged touched/directproducerrouteviewer tests;no assertion/timeout/config weakening;Windows3runs497pass2POSIXmodefails retained;native repetition required before landing | evidence: .github/p12-repeat-tests.mjs;verify-p28/private/manager-touched-{1,2,3}.log | next: Finish C28 independent exact-tree native full gates/touched3/mutations and real existing/fresh-upload UI; complete six blind readers and director baseline; preserve failures
 
 ---
 

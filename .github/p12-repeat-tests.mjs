@@ -4,6 +4,33 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const requested = (process.env.P12_REPEAT_GROUPS ?? '').split(',');
+// P12-28's changed tests and the directly affected producer/route/viewer guards.
+// Run the same assertions on native Linux, including owner-only POSIX modes.
+const captionAndFreshness = new Set([
+  'src/app/api/papers/[id]/reading/route.test.ts',
+  'src/components/notes/note-tags.blocks.test.ts',
+  'src/components/notes/note-tags.lost.test.tsx',
+  'src/components/paper-figure.test.ts',
+  'src/components/reader/paper-body.plain.test.tsx',
+  'src/components/reader/paper-body.test.tsx',
+  'src/components/reader/question-box.flow.test.tsx',
+  'src/components/reader/use-model-report.cache.test.ts',
+  'src/components/reader/use-reading.effects.test.ts',
+  'src/lib/figures/extract.test.ts',
+  'src/lib/figures/pdf-engine.caption-pairing.test.ts',
+  'src/lib/papers/figure-binding.route-url.test.ts',
+  'src/lib/papers/figure-binding.same-figure.test.ts',
+  'src/lib/papers/full-text.test.ts',
+  'src/lib/papers/pdf-text.figure-once.test.ts',
+  'src/lib/papers/reading.test.ts',
+  'src/lib/figures/pdf-engine.test.ts',
+  'src/lib/papers/upload-store.test.ts',
+  'src/app/api/papers/[id]/figure-image/route.test.ts',
+  'src/components/reader/paper-body.figure-open.test.tsx',
+  'src/components/reader/paper-body.figure-size.test.tsx',
+  'src/components/reader/figure-card.test.tsx',
+  'src/components/reader/figure-host.narrow.test.tsx',
+]);
 const groups = {
   '07': (f) => ['src/components/reader/responsive-margin', 'src/components/reader/margin-stack-scroll', 'src/components/reader/margin-figure', 'src/components/reader/reader-shell', 'src/components/reader/reader-layout', 'src/components/reader/pane-divider', 'src/components/reader/pane-layout', 'src/components/reader/matted-figure', 'src/components/cards/paper-plate', 'src/components/ui/page-container', 'src/lib/reader/margin.test', 'src/components/reader/explain-box', 'src/components/reader/figure-host', 'src/components/reader/figure-card', 'src/components/reader/figure-zoom', 'src/components/reader/use-figure-zoom', 'src/components/reader/paper-body.figure-open', 'src/components/reader/spread', 'src/components/reader/decision-block', 'src/lib/reader/figure-viewer', 'src/store/reader-panes'].some((prefix) => f.startsWith(prefix)),
   '08': (f) => /src\/store\/notes[.]/.test(f) || /src\/lib\/notes\/(blocks|anchor-blocks|export)[.]/.test(f) || /src\/components\/notes\/(highlight|block-marks|note-tags|sticky-note|note-editor)[.-]/.test(f) || /src\/components\/reader\/(paper-body[.]selection|selection-toolbar)[.-]/.test(f) || f === 'src/components/shell/thumb-bar.test.tsx' || /src\/lib\/reader\/(explain-offer|reader-keys)[.]/.test(f) || /src\/app\/papers\/\[id\]\/page[.](highlight|sticky|explain)[.]test/.test(f),
@@ -11,6 +38,7 @@ const groups = {
   '16': (f) => ['src/app/globals.css.reading-text.test.ts', 'src/app/globals.css.test.ts', 'src/components/reader/explain-dock.test.ts', 'src/components/reader/left-pane.fit-top.test.ts'].includes(f),
   '19': (f) => /src\/components\/notes\/(note-editor|note-toolbar|wysiwyg-field)[.-]/.test(f),
   '21': (f) => /src\/components\/reader\/margin-(card|stack)[.-]/.test(f) || f === 'src/lib/reader/windows.test.ts',
+  '28': (f) => captionAndFreshness.has(f),
   place: (f) => /keep-place|keep-selection|reading-position|reader-layout|responsive-margin/.test(f),
 };
 if (!requested.length || requested.some((id) => !Object.hasOwn(groups, id)) || new Set(requested).size !== requested.length) throw Error('Unknown or duplicate verification group');
