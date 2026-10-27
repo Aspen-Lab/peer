@@ -237,11 +237,20 @@ const anyCase = (word: string): string => [...word].map((c) => `[${c.toLowerCase
  * and the bar is the separator, not the first word of the title.
  * `CAPTION` itself stays as it was: `headingOf` uses it to keep a line that opens with a figure's label
  * out of the headings, caption or not.
+ *
+ * P12-56 (R6b): a space and a bracket after the number is a caption when the bracket is a panel mark and
+ * a capital letter, a separator or the end of the line follows it: "Fig. 1 (a) Title", "Figure 2 (A)
+ * Overview". "Fig. 5 (left) shows ...", "Fig. 1 (a) shows ..." and "Fig. 2 (see below) ..." are still
+ * citations. A citation that is a panel mark and a capital ("Fig. 1 (a) Observed ...") after a line
+ * that does not end a sentence is refused by `opensMidSentence`, not by this pattern.
  */
+/** A panel mark in a bracket, "(a)", "(B)", "(a,b)", "(a-c)", "(ii)": one or two letters, or a short list of them. */
+const PANEL_MARK = String.raw`\(\s*\p{L}{1,2}(?:\s*[,\u2013-]\s*\p{L}{1,2})*\s*\)`;
+
 const CAPTION_SEPARATED = new RegExp(
   `^(${anyCase("fig")}(?:${anyCase("ure")})?|${anyCase("table")}|${anyCase("scheme")}|${anyCase("chart")})` +
     String.raw`\s*\.?\s*(\d{1,3}|[IVXLivxl]{1,5})\b` +
-    String.raw`(?=\s*(?:$|[.:|\u2010-\u2015\u2212-])|\s+\p{Lu})` +
+    String.raw`(?=\s*(?:$|[.:|\u2010-\u2015\u2212-])|\s+\p{Lu}|\s+${PANEL_MARK}\s*(?:$|\p{Lu}|[.:|\u2010-\u2015\u2212-]))` +
     String.raw`\s*[.:|—–-]?\s*(.*)$`,
   "u",
 );
@@ -1182,6 +1191,96 @@ export function captionOf(line: PdfLine): OutlineCaption | null {
   };
 }
 
+/** What a citation mark leaves at the end of a sentence's last line: a run of superscript digits ("shown.¹²,¹³") or
+ *  a bracketed number list ("shown. [12, 13]"). Taken off before asking whether the line ends a sentence. */
+const CITATION_TAIL = new RegExp(
+  String.raw`(?:\s|[\u00B2\u00B3\u00B9\u2070-\u209F]+[,\u2013-]?|\[[\d,\s\u2013-]+\])+$`,
+  "u",
+);
+
+/** Whether a line's last words close a sentence: `.` `!` `?` or `:`, a closing bracket or quote after it allowed, and
+ *  a citation mark after that. */
+function endsSentence(text: string): boolean {
+  return /[.!?:][)\]"'\u201D\u2019\u00BB]*$/.test(text.trim().replace(CITATION_TAIL, ""));
+}
+
+/** How far a caption's own lines are looked for above a line (R6b), in lines; a caption is not longer than this. */
+const CAPTION_LOOKBACK = 80;
+/** A line starts in the column of the line above it when the two left edges are within this many body sizes
+ *  (a paragraph's indent is one or two). */
+const SAME_COLUMN_EMS = 2.5;
+
+/**
+ * P12-56 (R6b): whether the line `read[index]`, which opens with a figure's label, is the next words of a sentence the
+ * line above it did not finish. That is when the line above is, in the same column and directly above (within a line
+ * pitch and a half), on the same page, set in the body's size and face, and does not end a sentence (`endsSentence`):
+ * "...as shown in" over "Fig. 4. Then the signal rises ...". A caption is never that: it follows a sentence's end,
+ * a gap, a figure, another column or a face of its own. The line above is not body text when it is itself part of a
+ * caption (the next caption of a list follows a caption's last line, which may end without a stop).
+ */
+function opensMidSentence(
+  read: PdfLine[],
+  index: number,
+  pitch: number,
+  body: { size: number; font: string },
+  furniture: Set<string>,
+): boolean {
+  return followsOpenProse(read, index, pitch, body, furniture) && !inCaption(read, index - 1, pitch, body, furniture);
+}
+
+function followsOpenProse(
+  read: PdfLine[],
+  index: number,
+  pitch: number,
+  body: { size: number; font: string },
+  furniture: Set<string>,
+): boolean {
+  const line = read[index];
+  const above = index > 0 ? read[index - 1] : undefined;
+  if (!above || above.page !== line.page || above.block || isFurniture(above, furniture)) return false;
+  const gap = above.y - line.y;
+  if (gap <= 0 || gap > (pitch > 0 ? pitch : body.size * 1.2) * 1.5) return false;
+  if (Math.abs(above.x - line.x) > body.size * SAME_COLUMN_EMS) return false;
+  if (above.font !== body.font || Math.abs(above.size - body.size) > HEADING_WRAP_SIZE) return false;
+  return above.text.trim().length > 0 && !endsSentence(above.text);
+}
+
+/** Whether `read[last]` is a line of a caption, by the chain `buildOutline` reads one by: back from it, over the lines
+ *  that `continuesCaption` takes as the next of the one above, to a line that opens a caption. A line that opens like
+ *  a caption but follows open prose is a caption exactly when the line above it is in one (a list of captions that
+ *  end without a stop: each follows the last line of the one before). */
+function inCaption(
+  read: PdfLine[],
+  last: number,
+  pitch: number,
+  body: { size: number; font: string },
+  furniture: Set<string>,
+): boolean {
+  for (let j = last, steps = 0; j >= 0 && steps < CAPTION_LOOKBACK; j--, steps++) {
+    if (captionOf(read[j])) {
+      if (!followsOpenProse(read, j, pitch, body, furniture)) return true;
+    } else if (j === 0 || !continuesCaption(read[j - 1], read[j], pitch, body, furniture)) {
+      return false;
+    }
+  }
+  return false;
+}
+
+/**
+ * P12-56 (R6b): `captionOf(read[index])`, unless the line is the middle of a sentence (`opensMidSentence`): a body line
+ * that begins with a figure citation after a line that ends mid-clause is prose, not a caption.
+ */
+export function captionAt(
+  read: PdfLine[],
+  index: number,
+  pitch: number,
+  body: { size: number; font: string },
+  furniture: Set<string>,
+): OutlineCaption | null {
+  const caption = captionOf(read[index]);
+  return caption && !opensMidSentence(read, index, pitch, body, furniture) ? caption : null;
+}
+
 /**
  * The section number a line opens with ("3.2.1", "10."), or null. A real one is
  * one to three digits to a group and has no zero before its decimal point:
@@ -2106,7 +2205,7 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
   for (let i = 0; i < read.length; i++) {
     const line = read[i];
     if (skipped[i] || figureText.has(i)) continue;
-    const caption = captionOf(line);
+    const caption = captionAt(read, i, pitch, body, furniture);
     if (caption) {
       // A caption belongs to the figure pool, not to the prose it interrupts.
       // It is as many lines as it was printed on: the lines under it at the
