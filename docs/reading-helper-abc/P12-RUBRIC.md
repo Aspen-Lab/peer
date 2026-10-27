@@ -94,7 +94,7 @@ The unmodified app baseline must be measured and its discrepancies explained bef
 
 | Round | App head | Theme A (readers' median / A / director) | Theme B (readers' median / A / director) | Pass runs A / B; notes |
 |---|---|---|---|---|
-| — | — | Not measured | Not measured | 0 / 0; preparation only |
+| 1 | 82fe23db / web88ac6122 | 0.00 / 0.00 / 0.00 | 0.00 / 0.00 / 0.00 | 0 / 0; common evidence gates unestablished; P12-R1-DIRECTOR-20261027.md |
 
 The loop's end is the manager's measure; **the owner's own look at the surface is the acceptance above this rubric**. The final report follows P11-FINAL-REPORT.md and states in Chinese each theme's two scores, changes, open backlog, owner-only decisions and material evidence limits.
 

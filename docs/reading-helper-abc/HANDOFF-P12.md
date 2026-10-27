@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T05:48:37.221Z
+AS OF        2026-10-27T05:48:40.673Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.385   NEXT RULING §1h.386   NEXT ITEM ID P12-33   NEXT FREE PORT 4232
+LAST RULING  §1h.386   NEXT RULING §1h.387   NEXT ITEM ID P12-33   NEXT FREE PORT 4232
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
 RUNNING      C28enginefrozenclipguidepending/web444freshnesspartial;B31/B32reportsbanked;R1sixblindmediansA0/B0director0/0;consecutiveA0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
@@ -551,6 +551,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T05:48:32.468Z | parent 92400ad8 (entry commit follows) | manager | P12-31-STROKE-SUPPORT-LIMITS-BANKED: B31 finite stroke pixels prove fixed10ptpaddinglosesthick/miter/transformedink;nativeboundsfalsevetomiter andchangefloorsemantic;centerline-onlyclipcanerase8000pixels. No universaldualboundsguideapproved;fillclipcause54/135remainsseparatefrompreexistingstrokebounds | evidence: P12-31-B-20261027T011000Z.md through315a58f8;p12-31/private/stroke-measure.json | next: Narrow measured fill-clipping repair with existing stroke contract preserved;continue finite captionidentityprovenance;fresh independent candidate gates/UI;next A round closes named gaps
 
 - 2026-10-27T05:48:37.221Z | parent b8a5d078 (entry commit follows) | manager | P12-32-IDENTITY-MATRIX-PARTIAL-BANKED: B32 15inventedPDFcausalmeasurement banked;punctuation/stylebothfalsepositiveandnegative,aliasesduplicated/exactsamedupesuppressed;twocolumnmerged/crosspageunmeasured,nosafeclassifierguide. Earlyda9bd4a5traileromissionretainedsourceSHA;appliedreportwithnewcorrectlyattributedintegrationcommit,norewriteororiginalbadcommitlanding | evidence: P12-32-B-20261027T012000Z.md;da9bd4a5/af231924;p12-32/private | next: Narrow measured fill-clipping repair with existing stroke contract preserved;continue finite captionidentityprovenance;fresh independent candidate gates/UI;next A round closes named gaps
+
+- 2026-10-27T05:48:40.673Z | parent 4744feb6 (entry commit follows) | manager | P12-R1-SIX-BLIND-MEDIANS-DIRECTOR-RECORDED: Formal R1baseline recorded atweb88ac:threefreshreaders/theme final0/0/0 each;mediansA0.00/B0.00,A23A24each0,director0/0. Director independentlyhashes1795+610artifacts0mismatch,auditsdisputes;A9/B9boundedPASS,preoverride8.333each,commongatesoverride0;prices/denominator/stoplineunchanged,consecutive0/2each | evidence: P12-R1-DIRECTOR-20261027.md;P12-RUBRIC.mdScores;privateblind-round1outputs/audits | next: Narrow measured fill-clipping repair with existing stroke contract preserved;continue finite captionidentityprovenance;fresh independent candidate gates/UI;next A round closes named gaps
 
 ---
 
