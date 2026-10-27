@@ -1088,12 +1088,18 @@ export function linesOfPage(page: PdfPageText): PdfLine[] {
   return linesOfPageWith(page, null);
 }
 
-// ── The body's style (P12-49) ─────────────────────────────────────────────────────────────────────────
+// ── The body's style, and what the paper's numbering and reference list rule out (P12-49) ─────────────
 
-/** The size and face the paper's body is set in. */
+/**
+ * The size and face the paper's body is set in, and — when the paper has any — the numbered lines its own
+ * numbering and its reference list rule out of its headings (`headingOf` reads them; see `numberedOut`).
+ */
 export interface BodyStyle {
   size: number;
   font: string;
+  /** The keys (`lineKey`) of the numbered lines that are not headings: an entry of a reference list, a
+   *  number that goes back. Present only when there is one. */
+  notHeadings?: ReadonlySet<string>;
 }
 
 /** A size is the body's when it holds at least this share of the heaviest size's characters... */
@@ -1126,7 +1132,9 @@ export function bodyStyle(lines: PdfLine[]): BodyStyle {
   const byFont = new Map<string, number>();
   for (const line of lines) if (line.size === size) byFont.set(line.font, (byFont.get(line.font) ?? 0) + line.text.length);
   const font = [...byFont].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
-  return { size, font };
+  const body = { size, font };
+  const out = numberedOut(lines, body);
+  return out.size > 0 ? { ...body, notHeadings: out } : body;
 }
 
 /** A running head is on at least this many pages (P10-33, BACKLOG-84): two pages that open with the same
@@ -1352,8 +1360,43 @@ function sectionNumberOf(text: string): RegExpMatchArray | null {
   return numbered && !/^(?:0\.\d|\d{4,})/.test(numbered[1]) ? numbered : null;
 }
 
-/** The heading this line is, or nothing. */
-export function headingOf(line: PdfLine, body: { size: number; font: string }): string | null {
+// ── What is not a numbered heading: an address, an entry of a reference list (P12-49) ──────────────────────
+//
+// O3: a line that starts with a number and a capital was a numbered heading whatever it was set in — a street
+// address in an affiliation block, an entry of the reference list.
+
+/** A capitalised word of a name or an address: "Quarry", "O'Neil", "St.". */
+const CAP_WORD = String.raw`\p{Lu}[\p{L}'’.-]*`;
+/** A word of a name or an address: a capitalised one, or a small connecting word. */
+const NAME_WORD = `(?:${CAP_WORD}|of|and|for|the|de|la|du|van|von|der|&)`;
+/** A street number ("12", never "12." or "1.2": a section number carries its point) and capitalised words up to
+ *  a comma: "12 Quarry Lane, Fenwick Hall, Elmstead". */
+const STREET_COMMA = new RegExp(`^\\d{1,5}\\s+${CAP_WORD}(?:\\s+${NAME_WORD})*,`, "u");
+/** ...or at least two capitalised words ahead of a postal code: "5 Hamilton Court Springfield IL 62704". */
+const STREET_WORDS = new RegExp(`^\\d{1,5}\\s+${CAP_WORD}(?:\\s+${NAME_WORD})+\\s`, "u");
+const POSTAL_CODE = /\b(?:\d{5}(?:-\d{4})?|[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}|\d{4}\s?[A-Z]{2})\b/;
+
+/** Whether this line, which opens with a plain number and a capital, is a street address (an affiliation's)
+ *  and not a section's number: the number, capitalised words, and a comma or a postal code. */
+function isStreetAddress(text: string): boolean {
+  return STREET_COMMA.test(text) || (STREET_WORDS.test(text) && POSTAL_CODE.test(text));
+}
+
+const SURNAME = String.raw`\p{Lu}[\p{L}'’-]+`;
+/** The first words of a reference-list entry: its number, then the authors as a bibliography writes them —
+ *  "17 Smith, J. A.; Doe", "3. J. A. Smith, B. Doe", "12 Zhang Q, Li W". */
+const ENTRY_AUTHORS = new RegExp(
+  `^\\d{1,3}\\.?\\s+(?:${SURNAME},\\s+(?:\\p{Lu}\\.\\s?){1,3}|(?:\\p{Lu}\\.\\s?){1,3}${SURNAME}(?:,|\\s+and\\s|\\s+&\\s|\\s+et\\s+al)|${SURNAME}\\s+\\p{Lu}{1,3},\\s)`,
+  "u",
+);
+
+/** Whether the line is set apart from the body by its size or its face. */
+function isSetApart(line: PdfLine, body: { size: number; font: string }): boolean {
+  return line.size >= body.size * HEADING_SIZE_RATIO || (line.font !== body.font && line.size >= body.size * 0.95);
+}
+
+/** The heading this line would be, judged on the line alone: its shape, its size and its face. */
+function candidateOf(line: PdfLine, body: { size: number; font: string }): string | null {
   const text = line.text.trim();
   if (text.length === 0 || text.length > HEADING_MAX) return null;
   if (CAPTION.test(text)) return null;
@@ -1369,7 +1412,13 @@ export function headingOf(line: PdfLine, body: { size: number; font: string }): 
   if (letters < text.length * 0.5) return null;
   // "2.1 Constant velocity model" is a heading; "10 and the flow is clearly
   // laminar" is a line of prose that happens to start with a number.
-  if (numbered && numbered[2].length >= 3 && /^[A-Z(]/.test(numbered[2])) return text;
+  if (numbered && numbered[2].length >= 3 && /^[A-Z(]/.test(numbered[2])) {
+    // ...and neither is a street address ("12 Quarry Lane, Elmstead", unless the line is set larger than the
+    // body) nor the first line of a reference-list entry ("17 Smith, J. A.; Doe, B.").
+    const larger = line.size >= body.size * HEADING_SIZE_RATIO;
+    if ((!larger && isStreetAddress(text)) || ENTRY_AUTHORS.test(text)) return null;
+    return text;
+  }
   const bigger = line.size >= body.size * HEADING_SIZE_RATIO;
   const otherFace = line.font !== body.font && line.size >= body.size * 0.95;
   if (!bigger && !otherFace) return null;
@@ -1378,6 +1427,91 @@ export function headingOf(line: PdfLine, body: { size: number; font: string }): 
   // the page happens to set apart.
   if (!/[A-Za-z]{4}/.test(text)) return null;
   return text;
+}
+
+/** A line, as a key that survives a copy of it: its page, its place and its words. */
+const lineKey = (line: PdfLine): string => `${line.page}|${line.x}|${line.y}|${line.text}`;
+
+/** A section number's groups: "2.10" is [2, 10]. */
+const numberParts = (group: string): number[] => group.split(".").map(Number);
+
+/** Whether the numbering `a` comes after `b` ([2, 1] after [2], [3] after [2, 4]; not [2] after [2, 1]). */
+function numbersAfter(a: number[], b: number[]): boolean {
+  for (let i = 0; i < Math.min(a.length, b.length); i++) if (a[i] !== b[i]) return a[i] > b[i];
+  return a.length > b.length;
+}
+
+/** A top-level number this far past the last one is a heading that skipped some, and moves the numbering on;
+ *  one further ("20. EXTRAS" after 3) is a heading, and leaves the numbering where it stood. */
+const NUMBER_REACH = 3;
+
+/** The words of the heading that opens a reference list. */
+const REFERENCES_HEADING =
+  /^(?:references?(?:\s+(?:and|&)\s+notes)?|reference\s+list|bibliography|notes\s+and\s+references|literature\s+cited|works\s+cited)\s*[:.]?\s*$/i;
+
+/**
+ * The numbered lines of a paper that are not its headings (P12-49, O3), as `lineKey`s. A numbered line is a
+ * heading only when its number **continues the paper's numbering**: it comes after the last section number met
+ * ([2, 1] after [2], [3] after [2, 4]), and the paper's numbering starts at its first named part, not on the cover.
+ * A number that goes back is a list, an entry or a footnote: "1", "2", "3" under the references after a paper of
+ * four sections. And **no line in a references section** is one — that section runs from its heading to the next
+ * heading, which is a line set apart (larger, or in another face).
+ *
+ * The numbering is the headings that are set apart: they move it. A line in the body's own face is judged against
+ * it and moves it only while no heading has (the plain fixtures of a test), so a paper's stray "2 Institute of ..."
+ * in the footnote of page 1 neither takes the number of the real "2. Results" nor turns it away; and a set-apart
+ * heading that goes back is taken only while the numbering is still the body-face lines' own.
+ */
+function numberedOut(lines: PdfLine[], body: { size: number; font: string }): Set<string> {
+  const out = new Set<string>();
+  const furniture = furnitureOf(lines, new Set(lines.map((line) => line.page)).size);
+  const margin = marginPrintOf(lines, body);
+  const heads: { line: PdfLine; head: string }[] = [];
+  for (const line of lines) {
+    if (isFurniture(line, furniture) || margin(line)) continue;
+    const head = candidateOf(line, body);
+    if (head !== null) heads.push({ line, head });
+  }
+  // The paper starts at its first named part (as `buildOutline` reads it); above that is the cover.
+  const start = Math.max(0, heads.findIndex(({ head }) => FRONT_MATTER_END.has(canonicalizeHeading(head))));
+  let last: number[] = [];
+  // Whether a heading set apart has moved the numbering.
+  let set = false;
+  let inReferences = false;
+  for (const { line, head } of heads.slice(start)) {
+    const numbered = sectionNumberOf(head);
+    if (!numbered) {
+      inReferences = REFERENCES_HEADING.test(head.replace(GLYPH_LEAD, "").trim());
+      continue;
+    }
+    const apart = isSetApart(line, body);
+    if (inReferences) {
+      if (!apart) {
+        out.add(lineKey(line));
+        continue;
+      }
+      inReferences = false;
+    }
+    const parts = numberParts(numbered[1]);
+    const continues = numbersAfter(parts, last);
+    if (!continues && !(apart && !set)) {
+      out.add(lineKey(line));
+      continue;
+    }
+    // A number far ahead is a heading, and leaves the numbering where it stood.
+    if ((apart || !set) && (!continues || parts[0] <= (last[0] ?? 0) + NUMBER_REACH)) {
+      last = parts;
+      set = set || apart;
+    }
+    inReferences = REFERENCES_HEADING.test(numbered[2].trim());
+  }
+  return out;
+}
+
+/** The heading this line is, or nothing. */
+export function headingOf(line: PdfLine, body: BodyStyle): string | null {
+  const head = candidateOf(line, body);
+  return head !== null && !body.notHeadings?.has(lineKey(line)) ? head : null;
 }
 
 // ── Line ends: the document's own words decide a hyphen (P9-09, cluster C) ──────

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   bodyStyle,
   buildOutline,
+  headingOf,
   type PdfLine,
   type PdfPageText,
   type PdfTextItem,
@@ -20,6 +21,8 @@ function item(str: string, at: Partial<PdfTextItem> = {}): PdfTextItem {
 function line(text: string, at: Partial<PdfLine> = {}): PdfLine {
   return { page: 1, text, x: 100, y: 500, size: 10, font: "body", ...at };
 }
+
+const BODY = { size: 10, font: "body" };
 
 type Row = [string, Partial<PdfTextItem>?];
 /** A page of rows, one under the other from the top. */
@@ -161,5 +164,240 @@ describe("margin print is a few rows, not a section set small (P12-49, O1)", () 
     const page = pageOf(1, rows, 780, 12);
     page.items.push(item("© 2026 Example Society https://doi.org/10.1000/example.2026", { y: 34, height: 6.3 }));
     expect(textOf([page])).not.toContain("Example Society");
+  });
+});
+
+/** (b) A first page with an affiliation block (street addresses) set between the halves of the introduction, and
+ *  a reference list whose heading is not set apart, so nothing stops the numbered entries. */
+function affiliationsAndReferences(): PdfPageText[] {
+  const prose = (text: string): Row => [text];
+  return [
+    pageOf(1, [
+
+    ["Quillwort Cathodes Under Strain", { height: 17 }],
+    ["Abstract", { height: 12 }],
+    prose("Quillwort cathodes fade through chemistry and strain together."),
+    ["1 Introduction", { fontName: "display" }],
+    prose("Quillwort cathodes are an important class of cathode materials for cells."),
+    prose("They are used in cells of every size, from watches to grid stores."),
+    // the footnote block of the first page, set small, between the two halves of the introduction
+    ["1 Department of Materials Science, University of Elmstead, Fenwick 12345", { height: 7.5 }],
+    ["2 Institute of Invented Results, 12 Quarry Lane, Elmstead, Fenwick", { height: 7.5 }],
+    ["3 Quarry Lane Laboratory 14 Fenwick Road Elmstead 62704", { height: 7.5 }],
+    prose("The rest of the introduction sets out the questions the paper answers."),
+    prose("It names the cells, the series and the order of the sections that follow."),
+    ["2 Methods", { fontName: "display" }],
+    prose("Cells were assembled in an argon filled glovebox with less than one part."),
+    prose("They were cycled at twenty five degrees at the rate the supplier gave."),
+    ["3 Conclusions", { fontName: "display" }],
+    prose("The coating slows the fade of every film in the series of cells."),
+    prose("The next step is to test the thick films in the same way as these."),
+    // the heading of the list is not set apart, and no heading stops it: the entries stand where they stand
+    prose("References"),
+    ["1 Smith, J. A.; Doe, B. Growth of quillwort films. J. Invented Res.", { height: 8 }],
+    prose("2015, 12, 345."),
+    ["2 Zhang Q, Li W, Wu H. Strain in cathodes. Fenwick Mater. 2019, 4, 12.", { height: 8 }],
+    prose("A second line of the entry."),
+    ["3. J. A. Smith, B. Doe, Cathode letters, Elmstead Phys. 2020, 8, 1.", { height: 8 }],
+    prose("A second line of the entry."),
+    ]),
+  ];
+}
+
+// ── Rule 2 (O3): an address and a reference entry are no numbered heading ────────────────────────────────
+
+describe("headingOf — a street address is no numbered heading (P12-49, O3)", () => {
+  it("refuses a number, capitalised words and a comma", () => {
+    expect(headingOf(line("12 Quarry Lane, Fenwick Hall, Elmstead"), BODY)).toBeNull();
+    expect(headingOf(line("1 Department of Materials Science, University of Elmstead"), BODY)).toBeNull();
+    expect(headingOf(line("77 Quillwort Avenue, Fenwick"), BODY)).toBeNull();
+  });
+
+  it("refuses a number, capitalised words and a postal code", () => {
+    expect(headingOf(line("5 Hamilton Court Springfield IL 62704"), BODY)).toBeNull();
+    expect(headingOf(line("9 Quarry Lane Laboratory Elmstead AB1 2CD"), BODY)).toBeNull();
+  });
+
+  it("still takes a section number with its point, whatever commas the heading has", () => {
+    expect(headingOf(line("2.3. Electrochemical Growth of Twinned, Coincident Site Lattice Interfaces"), BODY)).toBe(
+      "2.3. Electrochemical Growth of Twinned, Coincident Site Lattice Interfaces",
+    );
+    expect(headingOf(line("4. Synthesis, Characterization, and Testing"), BODY)).toBe("4. Synthesis, Characterization, and Testing");
+  });
+
+  it("still takes a heading set larger than the body, comma or not", () => {
+    expect(headingOf(line("3 Synthesis, Characterization and Testing", { size: 12 }), BODY)).toBe("3 Synthesis, Characterization and Testing");
+  });
+
+  it("still takes a plain numbered heading without a comma or a code", () => {
+    expect(headingOf(line("2 Experimental Methods"), BODY)).toBe("2 Experimental Methods");
+    expect(headingOf(line("3 Results and Discussion"), BODY)).toBe("3 Results and Discussion");
+  });
+});
+
+describe("headingOf — a reference entry is no numbered heading (P12-49, O3)", () => {
+  it("refuses the first line of an entry that opens with its authors", () => {
+    expect(headingOf(line("17 Smith, J. A.; Doe, B. Growth of quillwort films"), BODY)).toBeNull();
+    expect(headingOf(line("3. J. A. Smith, B. Doe, Cathode letters of the series"), BODY)).toBeNull();
+    expect(headingOf(line("12 Zhang Q, Li W, Wu H. Strain in the cathode grains"), BODY)).toBeNull();
+    expect(headingOf(line("8. Lopez, M. et al. Slow annealing of quillwort films"), BODY)).toBeNull();
+  });
+
+  it("still takes a heading with a name in it, and a dotted number with words", () => {
+    expect(headingOf(line("4 Smith's Model of Cathode Fade"), BODY)).toBe("4 Smith's Model of Cathode Fade");
+    expect(headingOf(line("4.5 Macrotexture Analysis"), BODY)).toBe("4.5 Macrotexture Analysis");
+  });
+});
+
+describe("a numbered line is a heading only when its number continues the paper's numbering (P12-49, O3)", () => {
+  /** A paper of numbered sections 1 to 3, set in the body's face (as the fixtures of this suite do), a list under
+   *  the third and a fourth section after it. The lines are in the order the paper prints them. */
+  const sections = [
+    line("Abstract", { size: 12, y: 700 }),
+    line("1 Introduction", { y: 680 }),
+    line("2 Methods", { y: 660 }),
+    line("3 Results", { y: 640 }),
+    line("1 Mix the powders by hand", { y: 620 }),
+    line("2 Anneal at eight hundred degrees", { y: 600 }),
+    line("4 Conclusions", { y: 580 }),
+    ...block(30, 70, 10).map((l, i) => ({ ...l, y: 560 - i * 12 })),
+  ];
+  const style = bodyStyle(sections);
+  const [, intro, methods, results, mix, anneal, conclusions] = sections;
+
+  it("takes the next number and the sub-numbers of the current one", () => {
+    expect(headingOf(intro, style)).toBe("1 Introduction");
+    expect(headingOf(methods, style)).toBe("2 Methods");
+    expect(headingOf(results, style)).toBe("3 Results");
+    expect(headingOf(conclusions, style)).toBe("4 Conclusions");
+    const sub = [
+      line("Abstract", { size: 12, y: 700 }),
+      line("1 Introduction", { y: 680 }),
+      line("2 Methods", { y: 660 }),
+      line("2.1 Cell Design", { y: 640 }),
+      line("2.2 Cell Cycling", { y: 620 }),
+      line("2.2.1 Rates Used", { y: 600 }),
+      line("3 Results", { y: 580 }),
+      line("3.1 Fade of the Films", { y: 560 }),
+      ...block(30, 70, 10).map((l, i) => ({ ...l, y: 540 - i * 12 })),
+    ];
+    const subStyle = bodyStyle(sub);
+    expect(sub.slice(1, 8).map((l) => headingOf(l, subStyle))).toEqual(sub.slice(1, 8).map((l) => l.text));
+  });
+
+  it("refuses a number that goes back: a list under a section, whatever its words", () => {
+    expect(headingOf(mix, style)).toBeNull();
+    expect(headingOf(anneal, style)).toBeNull();
+    // without the paper around them the same lines read as they always did
+    expect(headingOf(mix, BODY)).toBe("1 Mix the powders by hand");
+  });
+
+  it("goes on past a heading that skipped some numbers, and past a far one", () => {
+    const skipping = [line("Abstract", { size: 12 }), line("1 Introduction"), line("6 Acknowledgements"), line("20 Extras Appended Late")];
+    const skippingStyle = bodyStyle([...skipping, ...block(30, 70, 10)]);
+    expect(headingOf(skipping[2], skippingStyle)).toBe("6 Acknowledgements");
+    expect(headingOf(skipping[3], skippingStyle)).toBe("20 Extras Appended Late");
+  });
+
+  it("counts the numbering from the paper's first named part, not from its cover", () => {
+    const cover = [
+      line("7 Invented Institute of Results", { y: 760 }),
+      line("Abstract", { size: 12, y: 740 }),
+      line("1 Introduction", { y: 720 }),
+      line("2 Methods", { y: 700 }),
+      ...block(30, 70, 10),
+    ];
+    const coverStyle = bodyStyle(cover);
+    expect(headingOf(cover[2], coverStyle)).toBe("1 Introduction");
+    expect(headingOf(cover[3], coverStyle)).toBe("2 Methods");
+  });
+
+  it("does not turn a heading set apart away because a stray line took its number before it", () => {
+    // The paper's headings are in the body's face here: the stray "2 ..." moves the numbering, the real "2" is set apart.
+    const stray = [
+      line("Abstract", { size: 12, y: 760 }),
+      line("1 Introduction", { y: 740 }),
+      line("2 Institute of Invented Results Elmstead", { size: 8, y: 720 }),
+      line("2 Results and Discussion", { font: "display", y: 700 }),
+      line("3 Conclusions", { font: "display", y: 680 }),
+      ...block(30, 70, 10),
+    ];
+    const strayStyle = bodyStyle(stray);
+    expect(headingOf(stray[3], strayStyle)).toBe("2 Results and Discussion");
+    expect(headingOf(stray[4], strayStyle)).toBe("3 Conclusions");
+  });
+
+  it("holds the numbering a set-apart heading gave: a stray after it neither moves it nor takes a real number", () => {
+    const set = [
+      line("Abstract", { size: 12, y: 760 }),
+      line("1 Introduction", { font: "display", y: 740 }),
+      line("2 Institute of Invented Results Elmstead", { size: 8, y: 720 }),
+      line("3 School of Quillwort Studies Fenwick", { size: 8, y: 710 }),
+      line("2 Results and Discussion", { font: "display", y: 700 }),
+      line("3 Conclusions", { font: "display", y: 680 }),
+      // an entry list in the face of a heading, numbered from one again
+      line("1 Journal of Invented Results Volume 12", { font: "display", y: 660 }),
+      line("2 Quillwort Society Reports Series Nine", { font: "display", y: 648 }),
+      ...block(30, 70, 10),
+    ];
+    const setStyle = bodyStyle(set);
+    expect(headingOf(set[4], setStyle)).toBe("2 Results and Discussion");
+    expect(headingOf(set[5], setStyle)).toBe("3 Conclusions");
+    expect(headingOf(set[6], setStyle)).toBeNull();
+    expect(headingOf(set[7], setStyle)).toBeNull();
+  });
+});
+
+describe("no line inside a references section is a numbered heading (P12-49, O3)", () => {
+  const list = [
+    line("Abstract", { size: 12, y: 800 }),
+    line("1 Introduction", { y: 780 }),
+    line("2 Conclusions", { y: 760 }),
+    line("References", { size: 12, y: 740 }),
+    // entries a number and a capital open, in no author shape: only their place says what they are
+    line("3 Journal of Invented Results Volume 12 Pages 345", { size: 8, y: 720 }),
+    line("4 Another Odd Entry Title Held Here For The Test", { size: 8, y: 708 }),
+    line("5 Quillwort Society Reports Series Number Nine", { size: 8, y: 696 }),
+    line("6 Appendix Proofs Of The Lemmas", { size: 12, y: 600 }),
+    ...block(30, 70, 10),
+  ];
+  const style = bodyStyle(list);
+
+  it("refuses an entry, however it reads, from the references heading to the next heading", () => {
+    for (const entry of list.slice(4, 7)) expect(headingOf(entry, style), entry.text).toBeNull();
+    // without the paper around them the same lines are numbered headings, as they were
+    expect(headingOf(list[4], BODY)).toBe("3 Journal of Invented Results Volume 12 Pages 345");
+  });
+
+  it("takes the numbered heading that follows the list, set apart as a heading", () => {
+    expect(headingOf(list[7], style)).toBe("6 Appendix Proofs Of The Lemmas");
+  });
+
+  it("takes the heading itself, numbered or not", () => {
+    expect(headingOf(list[3], style)).toBe("References");
+    const numbered = [...list];
+    numbered[3] = line("3 References", { size: 12, y: 740 });
+    const numberedStyle = bodyStyle(numbered);
+    expect(headingOf(numbered[3], numberedStyle)).toBe("3 References");
+    expect(headingOf(numbered[4], numberedStyle)).toBeNull();
+  });
+});
+
+describe("the whole reading — an affiliation and a reference list are no sections (P12-49, O3)", () => {
+  const pages = affiliationsAndReferences();
+
+  it("keeps the introduction whole and the sections the paper numbers", () => {
+    const outline = buildOutline(pages);
+    expect(outline.sections?.map((s) => s.heading)).toEqual(["Abstract", "1 Introduction", "2 Methods", "3 Conclusions"]);
+    const intro = outline.sections?.[1].text ?? "";
+    expect(intro).toContain("rest of the introduction sets out the questions");
+    expect(intro).toContain("order of the sections that follow");
+  });
+
+  it("leaves the affiliation and the entries in the text they stand in, and no section of their own", () => {
+    const text = textOf(pages);
+    expect(text).toContain("Department of Materials Science");
+    expect(text).toContain("62704");
+    expect(text).toContain("Zhang Q, Li W, Wu H");
   });
 });
