@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round2 preparation; formal round1 medians A0.00/B0.00; consecutive passes A0/2 B0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T11:22:17.407Z; only writer of this file
-CURRENT ITEM:          A35actualR2continue4234;A34newcontinuationbriefreadySAME5f5d54b6copy4233;B36boundedDONE;web28cf;R1medians0/0counts0/0;clockACTIVE
-NEXT TURN:          DispatchnewindependentA34continuationatclean5f5d54b6withmainbriefsupplement;actualCUAcapabilityfirst;A35keepsfullR2families
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T11:24:29.650Z; only writer of this file
+CURRENT ITEM:          A34independentcontinuationSAMEcopy4233;A35freshR2production/remainingfamilies4234;B36boundedDONE;R1medians0/0counts0/0;clockACTIVE
+NEXT TURN:          ContinuationA34actualCUA+firstunfinishedstickyfamily;A35production/remainingfamilies;managerbanksreturnedparts
 STOPPED BECAUSE:          — active; prior quota interruptions preserved in log; C28 independently verified and landed
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1769,6 +1769,11 @@ Manager actual original-input check on exact web28cf/1280×720 has seven initial
 A34 old reviewer is stopped, own4233listener absent, checkpoint5f5d54b6. Its later IAB interface was unavailable; permit a separate continuation reviewer using exactly the same documented CUA mechanism, same detached copy/port and first unfinished family, preserving all raw evidence/transition and never repeating completed parts. This is runtime recovery, not a rejected-action workaround. Actual sticky-card selection/format/lifecycle remains first: prior aggregate bold notes do not establish it. Temporarily retain print-output as unmeasured and avoid repeated print during concurrent walks; temporal adjacency does not prove interruption cause and nothing is waived. No rubric/price change or score.
 
 
+### §1h.418 — 2026-10-27 — P12-34-INDEPENDENT-CONTINUATION-STARTED
+
+Dispatch the separate continuation reviewer under417 into the SAME clean detached A34 checkpoint5f5d54b6, web28cf and own4233. Prior worker is completed/listener absent; no duplicate. Completed families remain evidence, not redo. Browser capability must be real/documented and actual sticky family remains first. No score/waiver, product/source/config/auth change or alternate UI stack.
+
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2056,7 +2061,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-32 | DONE | 15onepage+5twopagecaptionidentity/sourcewordmatrix | 416orderedlineschecked;semanticassociationunresolved;noclassifierauthorized | Managerrepresentationdecisioniflaterbriefneeded | P12-32-B-20261027T012000Z.md through576a5c15 |
 | P12-33 | DONE | Ordinaryproductionentry/publicroutegates/source-backedchoices | Sourceguideonly;managernormalpublicHTMLfigureactual,originalupload/fullmatrixopen | Keepnormalaccessprerequisites/servedrevisionexplicit | P12-33-B-20261027T055000Z.md through3937cf82;managerproductionreport |
 | P12-R1 | SCORED | TwoA+threefreshblindreaders/theme+directoraudit | MediansA0.00/B0.00commongatesunestablished;counts0/2each | Mechanismfixes+freshnextA/readerround | P12-R1-DIRECTOR-20261027.md;P12-RUBRIC.md |
-| P12-34 | PARTIAL / RESUME OWED | FreshR2A34same66656b33/web28cfcopy4233;4inputboldbaseline+inventedexports | Capability/entry/boundednote/exportfactsbanked;afterresumeIABunavailable;ownserverstopped | Sameitemfirstunfinishednote/action/matrix/privacy/guardpartthroughsupportedCUA;nodefaultPASS | P12-34-A-20261027T111042Z.md;through5f5d54b6 |
+| P12-34 | RUNNING / CONTINUATION | SamefreshR2Aitem/release66656b33/web28cf;checkpoint5f5d54b6;own4233 | Newindependentreviewertransitionexplicit;preserve4inputaggregatebold+inventedoutputs;actualstickyfullfamiliesowed | ActualCUAcapability→firstunfinishedsticky/list/lifecycle/matrix/privacy/guards;nodefaultPASS | agentp12_34_r2_theme_a_continuation;briefs/P12-34.mdRuling417 |
 | P12-35 | RUNNING | Fresh round2 ThemeB independent A at66656b33/web28cf;4234 | ActualUIcapability→inputbaselines→full79guards+6commongates+all12units→frozenpack+score | First finite capability/baseline checkpoint; no old crop/CI substituted for page | agentp12_35_r2_theme_b;briefs/P12-35.md |
 | P12-36 | DONE / BOUNDED | 11inventedfunctionprobes+producer/export/persistencepathtrace | 31/31existingtests;3generalcandidaterules;actualReact/UI/reloadlinknotproved | Actualsame-notewriterorderingneededbeforemanagerCauthorization;nocausalclosure | P12-36-B-20261027T000000Z.md;throughf779613f |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
