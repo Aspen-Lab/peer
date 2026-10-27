@@ -73,6 +73,43 @@ describe("canonicalizeHeading", () => {
   });
 });
 
+// P12-48 (rule L1; B P12-40 R1, Theme C): "experimental methods" is a methods heading. It used to miss the
+// methods words and fall to the `^experiment…` line, which files it as results — the methods part of a paper
+// (and its numbered sub-headings, which inherit the bucket) read as evidence.
+describe("canonicalizeHeading — experimental methods (L1)", () => {
+  it.each([
+    ["Experimental methods", "methods"],
+    ["2. Experimental Methods", "methods"],
+    ["EXPERIMENTAL PROCEDURES", "methods"],
+    ["3 Experimental procedure", "methods"],
+    ["Experimental and computational methods", "methods"],
+    ["Experimental protocols", "methods"],
+    ["Experimental techniques", "methods"],
+    ["Experimental details", "methods"],
+    ["Experimental detail", "methods"],
+  ])("%s → %s", (heading, bucket) => {
+    expect(canonicalizeHeading(heading)).toBe(bucket);
+  });
+
+  it("keeps the headings that were methods before, and the ones that are results", () => {
+    expect(canonicalizeHeading("4. EXPERIMENTAL SECTION")).toBe("methods");
+    expect(canonicalizeHeading("IV. Experimental Setup")).toBe("methods");
+    expect(canonicalizeHeading("Experimental design")).toBe("methods");
+    // No methods word follows "experimental": these are the paper's findings.
+    expect(canonicalizeHeading("Experimental results")).toBe("results");
+    expect(canonicalizeHeading("Experiments")).toBe("results");
+    expect(canonicalizeHeading("5 Experimental Evaluation")).toBe("results");
+    expect(canonicalizeHeading("Experimental and numerical results")).toBe("results");
+  });
+
+  it("gives the numbered sub-headings of an experimental-methods part the methods bucket", () => {
+    const inherit = bucketInheritor();
+    expect(inherit("2. Experimental methods", canonicalizeHeading("2. Experimental methods"))).toBe("methods");
+    expect(inherit("2.1 Sample preparation", canonicalizeHeading("2.1 Sample preparation"))).toBe("methods");
+    expect(inherit("2.2 Measurements", canonicalizeHeading("2.2 Measurements"))).toBe("methods");
+  });
+});
+
 describe("withInheritedBuckets", () => {
   const section = (heading: string, canonical: string) => ({ heading, canonical, text: "x" });
 

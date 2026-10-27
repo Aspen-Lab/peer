@@ -185,7 +185,11 @@ export function canonicalizeHeading(heading: string): string {
   if (/limitation|caveat|threats? to validity|failure (?:case|mode)s?|weakness/.test(lower)) {
     return "limitations";
   }
-  if (/material.*method|experimental (?:section|setup|design|details|procedure)|methodolog/.test(lower)) {
+  // P12-48 (L1, B P12-40 R1): "experimental methods" is the methods part, whichever methods word follows
+  // "experimental" ("experimental procedures", "experimental and computational methods"). It is tested here, before
+  // the `^experiment…` → results line below, which would otherwise file it as results. "Experimental results" and
+  // "Experiments" have no methods word right after "experimental" and stay results.
+  if (/material.*method|experimental (?:and \w+ )?(?:section|setup|design|details?|procedures?|methods?|protocols?|techniques?)|methodolog/.test(lower)) {
     return "methods";
   }
   if (/result.*discussion/.test(lower)) return "results";
