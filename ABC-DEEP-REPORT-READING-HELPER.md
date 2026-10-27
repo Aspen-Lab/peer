@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round2 preparation; formal round1 medians A0.00/B0.00; consecutive passes A0/2 B0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T11:08:15.681Z; only writer of this file
-CURRENT ITEM:          C28web28cfLANDED;freshA34/A35+B36briefscommittedawaitspawn;R1medians0/0counts0/0;clockACTIVE
-NEXT TURN:          Releaseexactbrief-containingapprovedSHAweb28cf;spawnseparatefreshA34/A35andB36inparallel;manageronlysharedstatewriter;bankeachfinitepart
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T11:09:41.539Z; only writer of this file
+CURRENT ITEM:          FreshA34ThemeA4233+A35ThemeB4234+B36writer4235runningat66656b33/web28cf;R1medians0/0counts0/0;clockACTIVE
+NEXT TURN:          A34bankfinitecapability/baselineandnotefamilies;managerintegratesreport-onlyparts;A35/B36independentparallel
 STOPPED BECAUSE:          — active; prior quota interruptions preserved in log; C28 independently verified and landed
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1679,6 +1679,11 @@ Fresh detached landing copy from e2c97b2f preserves33 chronological worker commi
 Open fresh round2 at landed web28cf under unchanged P12 rubric. Dispatch separate A34 ThemeA/4233 and A35 ThemeB/4234, with independent B36/4235reserved investigating unresolved same-note writer order while both A measure. The brief contains the exact existing width contract so no blind evidence omission recurs. Work in finite committed parts, first verify actual supported UI capability, then close named action/privacy/source/inherited families rather than collecting duplicate easy rows. No external UI stack, hidden browser state, auth fabrication or rejected cache deletion. Old R1packs stay frozen and old A23/A24 rows become SCORED R1; they are not live workers or unscored partials. No rubric/price/input waiver or changed denominator.
 
 
+### §1h.400 — 2026-10-27 — P12-34-FRESH-R2-THEME-A-STARTED
+
+A34 is a fresh independent reviewer at brief-containing release66656b33, own detached copy/4233, distinct from implementers and prior blind readers. Product read-only, actual documented browser capability first, original input only through chooser, finite checkpoint parts. A35 and B36 work independently in parallel. No final score or gate advance at dispatch.
+
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -1966,7 +1971,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-32 | DONE | 15onepage+5twopagecaptionidentity/sourcewordmatrix | 416orderedlineschecked;semanticassociationunresolved;noclassifierauthorized | Managerrepresentationdecisioniflaterbriefneeded | P12-32-B-20261027T012000Z.md through576a5c15 |
 | P12-33 | DONE | Ordinaryproductionentry/publicroutegates/source-backedchoices | Sourceguideonly;managernormalpublicHTMLfigureactual,originalupload/fullmatrixopen | Keepnormalaccessprerequisites/servedrevisionexplicit | P12-33-B-20261027T055000Z.md through3937cf82;managerproductionreport |
 | P12-R1 | SCORED | TwoA+threefreshblindreaders/theme+directoraudit | MediansA0.00/B0.00commongatesunestablished;counts0/2each | Mechanismfixes+freshnextA/readerround | P12-R1-DIRECTOR-20261027.md;P12-RUBRIC.md |
-| P12-34 | BRIEF READY | Fresh round2 independent ThemeA A; port4233 | All12units+applicableguards+sixcommongates with factual frozen pack | Independent UI capability and exact release; finite parts | briefs/P12-34.md;briefs/P12-R2-A-COMMON.md |
+| P12-34 | RUNNING | Fresh round2 ThemeA independent A at66656b33/web28cf;4233 | ActualUIcapability→inputbaselines→allnote/portable/common/inheritedfacts→frozenpack+score | First finite capability/baseline checkpoint; no old observation inheritance | agentp12_34_r2_theme_a;briefs/P12-34.md |
 | P12-35 | BRIEF READY | Fresh round2 independent ThemeB A; port4234 | All12units+full79guards+sixcommongates+normalproduction with factual frozen pack | Independent UI capability and exact release; finite parts | briefs/P12-35.md;briefs/P12-R2-A-COMMON.md |
 | P12-36 | BRIEF READY | Independent finite same-note writer precedence B; port4235reserved | Completeproducerpaths+inventedorder/debounce/lifecycle/isolationmatrix+3candidate rules | Read-only investigation; no product change or closure | briefs/P12-36.md |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
