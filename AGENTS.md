@@ -17,6 +17,8 @@ Hard rule: Peer is a calm daily forecast for career, work, research, and knowled
 
 - **Develop tasks in parallel, never one after another.** When a request holds several independent items, run them at the same time as separate subagent A/B/C cycles: one implementer (C) per item in its own detached worktree, an investigator (B) first where the cause is not obvious, a reviewer (A) after, the manager verifying every item's commits and bringing them onto the branch. Group items only by file overlap. Sequential work is the exception and needs a stated reason.
 
+- **Workaholic mode (owner's standing order, 2026-10-27).** When the owner says "开启workaholic mode" (or "workaholic mode"), follow `.claude/skills/workaholic-mode/SKILL.md`: the reviewing cycle, the subagent group, the hourly clock and every available agent working at the same time, together. The canonical copy is github.com/peter14531453/claude-skills (`workaholic-mode/`).
+
 Decision priorities:
 
 - Time efficiency over information volume.
