@@ -176,6 +176,29 @@ const FRONT_MATTER_END = new Set(["abstract", "introduction"]);
 // Roman numerals only in caps: lower case ate the "c" of "Figure captions
 // are elsewhere" and called it Figure C.
 const CAPTION = /^(fig(?:ure)?|table|scheme|chart)\s*\.?\s*(\d{1,3}|[IVXL]{1,5})\b\s*[.:—–-]?\s*(.*)$/i;
+
+/** `word` as a pattern for either case of each letter. The caption pattern below cannot take the `i`
+ *  flag: it asks for a capital letter, and under `i` a small letter is one too. */
+const anyCase = (word: string): string => [...word].map((c) => `[${c.toLowerCase()}${c.toUpperCase()}]`).join("");
+
+/**
+ * P12-46 (R6a): `CAPTION`, and a separator after the label's number. A caption's number is followed by
+ * a full stop, a colon, a bar or a dash (the dashes are the hyphen, the Unicode hyphens and dashes
+ * U+2010–2015, and the minus sign U+2212), with or without a space before it; or by a space and a
+ * capital letter ("Table 1 Scores of …"); or by nothing, the label standing alone on its line with its
+ * words on the next. A body line that opens with a citation does not have one: "Fig. 8) is consistent
+ * with …", "Fig. 3, left, …", "Fig. 2; the …", "Figure 3 shows …" (a small letter after the space).
+ * The groups are `CAPTION`'s: label, number, words; the words are cut from the line as they always were.
+ * `CAPTION` itself stays as it was: `headingOf` uses it to keep a line that opens with a figure's label
+ * out of the headings, caption or not.
+ */
+const CAPTION_SEPARATED = new RegExp(
+  `^(${anyCase("fig")}(?:${anyCase("ure")})?|${anyCase("table")}|${anyCase("scheme")}|${anyCase("chart")})` +
+    String.raw`\s*\.?\s*(\d{1,3}|[IVXLivxl]{1,5})\b` +
+    String.raw`(?=\s*(?:$|[.:|\u2010-\u2015\u2212-])|\s+\p{Lu})` +
+    String.raw`\s*[.:—–-]?\s*(.*)$`,
+  "u",
+);
 const NUMBERED_HEADING = /^(\d+(?:\.\d+)*)\s*[.)]?\s+(\S.*)$/;
 const FOLIO = /^(page\s*)?\d{1,4}$/i;
 /** A line of the publication history a journal prints in a box on the first
@@ -1033,7 +1056,7 @@ function wrapsHeading(previous: PdfLine | null, line: PdfLine, text: string): bo
 }
 
 export function captionOf(line: PdfLine): OutlineCaption | null {
-  const m = line.text.match(CAPTION);
+  const m = line.text.match(CAPTION_SEPARATED);
   if (!m) return null;
   const ordinal = /^\d+$/.test(m[2]) ? Number(m[2]) : undefined;
   return {
