@@ -42,7 +42,7 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T01:04:26.010Z; only writer of this file
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T01:04:29.699Z; only writer of this file
 CURRENT ITEM:          C28native595files10898pass+499x3;managerUIpublicA4missingHELD;B31briefready;6blindreadersreturned0finaleachdirectorPending;A23A24scores0;A0B0;clockACTIVE
 NEXT TURN:          B31 publicA preservation guide;finish director audit of six returned blind baseline readers;C28 stays frozen/unlanded;no test-green substitution for image evidence
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
@@ -1572,6 +1572,11 @@ Existing native verification infrastructure adds approved group28 for exact23unc
 ### §1h.378 — 2026-10-27 — P12-28-MANAGER-NATIVE-GATES-AND-PRESERVATION-STOP
 
 Independent candidatewebd2f89f8 native595files/10898tests pass,build/tsc0,lint0/144;related23files499tests×3pass;manager spatialmutation3red/restored19green+sidecar1red/restored1green exactSHAs;realpublicB/invented corrected but publicApage14missingregion stops landing. Evidence: P12-MANAGER-P28-VERIFY-20261026.md;CI40428712922/40429380626;verify-p28/private. No waiver, source change, score inflation or landing.
+
+
+### §1h.379 — 2026-10-27 — P12-31-PUBLIC-FIGURE-PRESERVATION-BRIEF
+
+Separate read-only B31brief names exact publicAold/new engine/source-region comparison and finite invented general-rule probes;own detached candidatecopy/noUIornewupload;sourceclassifierB29separate;C28frozenpending measuredguide. Evidence: briefs/P12-31.md;cecf2abc;p12-31/wt. No waiver, source change, score inflation or landing.
 
 
 ## §5. Durable work ledger — update in place, evidence append only

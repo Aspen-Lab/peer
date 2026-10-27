@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T01:04:26.010Z
+AS OF        2026-10-27T01:04:29.699Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.378   NEXT RULING §1h.379   NEXT ITEM ID P12-32   NEXT FREE PORT 4231
+LAST RULING  §1h.379   NEXT RULING §1h.380   NEXT ITEM ID P12-32   NEXT FREE PORT 4231
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
 RUNNING      C28native595files10898pass+499x3;managerUIpublicA4missingHELD;B31briefready;6blindreadersreturned0finaleachdirectorPending;A23A24scores0;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
@@ -537,6 +537,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T00:53:47.956Z | parent 58ae5a66 (entry commit follows) | manager | P12-28-NATIVE-TOUCHED-REPETITION-GROUP: Existing native verification infrastructure adds approved group28 for exact23unchanged touched/directproducerrouteviewer tests;no assertion/timeout/config weakening;Windows3runs497pass2POSIXmodefails retained;native repetition required before landing | evidence: .github/p12-repeat-tests.mjs;verify-p28/private/manager-touched-{1,2,3}.log | next: Finish C28 independent exact-tree native full gates/touched3/mutations and real existing/fresh-upload UI; complete six blind readers and director baseline; preserve failures
 
 - 2026-10-27T01:04:26.010Z | parent 4b25e6c8 (entry commit follows) | manager | P12-28-MANAGER-NATIVE-GATES-AND-PRESERVATION-STOP: Independent candidatewebd2f89f8 native595files/10898tests pass,build/tsc0,lint0/144;related23files499tests×3pass;manager spatialmutation3red/restored19green+sidecar1red/restored1green exactSHAs;realpublicB/invented corrected but publicApage14missingregion stops landing | evidence: P12-MANAGER-P28-VERIFY-20261026.md;CI40428712922/40429380626;verify-p28/private | next: B31 publicA preservation guide;finish director audit of six returned blind baseline readers;C28 stays frozen/unlanded;no test-green substitution for image evidence
+
+- 2026-10-27T01:04:29.699Z | parent 0d8298a8 (entry commit follows) | manager | P12-31-PUBLIC-FIGURE-PRESERVATION-BRIEF: Separate read-only B31brief names exact publicAold/new engine/source-region comparison and finite invented general-rule probes;own detached candidatecopy/noUIornewupload;sourceclassifierB29separate;C28frozenpending measuredguide | evidence: briefs/P12-31.md;cecf2abc;p12-31/wt | next: B31 publicA preservation guide;finish director audit of six returned blind baseline readers;C28 stays frozen/unlanded;no test-green substitution for image evidence
 
 ---
 
