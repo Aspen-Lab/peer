@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round2 preparation; formal round1 medians A0.00/B0.00; consecutive passes A0/2 B0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T11:21:15.966Z; only writer of this file
-CURRENT ITEM:          A35R2realactions+productionpartialcontinue4234;A34samecopyPARTIALinterfaceunavailableawaitcontinuation;B36boundedDONE;rootoriginal10deliveredacrossseparateattempts;R1medians0/0counts0/0;clockACTIVE
-NEXT TURN:          A35completefreshR2families;resumeA34samecheckpointwithsupportedCUAinnewindependentworkerifavailable;neverreclassifyearlierfailures
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T11:22:17.407Z; only writer of this file
+CURRENT ITEM:          A35actualR2continue4234;A34newcontinuationbriefreadySAME5f5d54b6copy4233;B36boundedDONE;web28cf;R1medians0/0counts0/0;clockACTIVE
+NEXT TURN:          DispatchnewindependentA34continuationatclean5f5d54b6withmainbriefsupplement;actualCUAcapabilityfirst;A35keepsfullR2families
 STOPPED BECAUSE:          — active; prior quota interruptions preserved in log; C28 independently verified and landed
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1762,6 +1762,11 @@ OneactualforwardbodylinedragoffersTakeNotes/Highlight;Highlightproducesmark+colo
 ### §1h.416 — 2026-10-27 — P12-MANAGER-ORIGINAL-TEN-FIGURES-CONTINUATION
 
 Manager actual original-input check on exact web28cf/1280×720 has seven initial image deliveries/closes and three initial timeouts; separately later normal10/8/9 clicks deliver and close, without source/configuration/auth/hidden-state change. Thus all10 distinct targets have scoped delivered-click evidence, while original failures remain unchanged. Exact14section/55paragraph arrays agree before/after. No cause is assigned to temporary broad interaction interruption or another reviewer's print action, and no crop/source completeness/fullmatrix/production claim follows. Original attachment used only through chooser; all private words/images remain outsideGit.
+
+
+### §1h.417 — 2026-10-27 — P12-34-SAME-ITEM-CONTINUATION-RULED
+
+A34 old reviewer is stopped, own4233listener absent, checkpoint5f5d54b6. Its later IAB interface was unavailable; permit a separate continuation reviewer using exactly the same documented CUA mechanism, same detached copy/port and first unfinished family, preserving all raw evidence/transition and never repeating completed parts. This is runtime recovery, not a rejected-action workaround. Actual sticky-card selection/format/lifecycle remains first: prior aggregate bold notes do not establish it. Temporarily retain print-output as unmeasured and avoid repeated print during concurrent walks; temporal adjacency does not prove interruption cause and nothing is waived. No rubric/price change or score.
 
 
 ## §5. Durable work ledger — update in place, evidence append only
