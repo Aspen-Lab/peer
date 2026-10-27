@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T00:50:28.741Z
+AS OF        2026-10-27T00:50:33.989Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.370   NEXT RULING §1h.371   NEXT ITEM ID P12-31   NEXT FREE PORT 4230
+LAST RULING  §1h.371   NEXT RULING §1h.372   NEXT ITEM ID P12-31   NEXT FREE PORT 4230
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
 RUNNING      ManagerC28verifywebd2f89f8CI40428712922/localgates;A23-A24+B29-B30factsbanked;A26PARTIAL1860missing30;blindnotstarted;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
@@ -521,6 +521,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T00:50:24.113Z | parent 749a58a9 (entry commit follows) | manager | P12-MANAGER-P28-CANDIDATE-GATES-STARTED: Allowed-UI publicB baseline saved; separate candidate webd2f89f8 matches worker; exact-tree CI40428712922 and local sequential gates started, generated DEV-type syntax errors preserved; no landing | evidence: P12-MANAGER-P28-VERIFY-20261026.md;verify-p28/private;CI40428712922 | next: Finish independent C28 gates/mutations/normal existing/fresh-upload UI; freeze round1 evidence and score missing evidence explicitly; no landing or closure until verified
 
 - 2026-10-27T00:50:28.741Z | parent 9b045f2c (entry commit follows) | manager | P12-23-FACTUAL-SUPPLEMENT-BANKED: A23 factual supplements banked:660 original cycles retained;A26 publicA630/publicB630/invented600 attributed;1795-artifact snapshot; one same-note92ms and foreign-note63ms pending-Delete case; no whole guard or score | evidence: P12-23-A-20261025T230000Z.md;source75728a3c;private1795-artifact view | next: Finish independent C28 gates/mutations/normal existing/fresh-upload UI; freeze round1 evidence and score missing evidence explicitly; no landing or closure until verified
+
+- 2026-10-27T00:50:33.989Z | parent dce363b7 (entry commit follows) | manager | P12-24-FOCUS-DIVIDER-CURATION-BANKED: A24 retained measurements and focus/divider snapshot banked;610 artifacts SHA/bytes0mismatch;48 adjacent focus sides>=6.702;4 actual divider drags; privacy7995files/12finiteprobes0hits; no production-original access or full guard closure | evidence: P12-24-A-20261025T230500Z.md;source5570e993;evidence-only-20261026T-focus-divider-v1 | next: Finish independent C28 gates/mutations/normal existing/fresh-upload UI; freeze round1 evidence and score missing evidence explicitly; no landing or closure until verified
 
 ---
 
