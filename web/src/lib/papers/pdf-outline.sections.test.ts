@@ -1,0 +1,323 @@
+import { describe, expect, it } from "vitest";
+import { buildOutline, type OutlineSection, type PdfPageText, type PdfTextItem } from "./pdf-outline";
+
+// P12-51 (C, Theme C, §1h.426): section assembly. Three things the outline did to the parts of a paper
+// that stand outside its named body, each on invented text only (a paper about quillwort cathodes; no
+// sentence of any real paper):
+//   O5  an end-matter heading ended the outline: what followed the references (Methods, a second block of
+//       notes) and what followed a supporting-information line (acknowledgements, statements) was dropped;
+//   O6  a paper that names neither an abstract nor an introduction had no row for its unheaded opening;
+//   O8  the text of a figure's panels (axis labels, panel letters, tick strings) became rows and prose.
+// The pages are one column, as the engine's other tests set them: a row is {text, kind, gap}.
+
+type Kind =
+  | "body" //     a line of the paper's prose, 10 pt, the body face
+  | "head" //     a heading set larger (12 pt)
+  | "num" //      a numbered heading in the body's size ("2 Results")
+  | "sub" //      a sub-heading in the other face (11 pt)
+  | "title" //    the paper's title (17 pt)
+  | "author" //   the author line (11 pt, the other face)
+  | "affil" //    the affiliation print (8.5 pt, the body face)
+  | "summary" //  a summary paragraph set in the other face (10.5 pt)
+  | "italic" //   a line in an italic face (an affiliation block)
+  | "panel"; //   a line of figure text, set small (7 pt)
+interface Row {
+  text: string;
+  kind?: Kind;
+  /** Points between this row's baseline and the one above it; the pitch is 14, a paragraph break 28. */
+  gap?: number;
+}
+
+function item(str: string, at: Partial<PdfTextItem> = {}): PdfTextItem {
+  return { str, height: 10, width: str.length * 4.6, fontName: "body", x: 100, y: 500, ...at };
+}
+
+const STYLE: Record<Kind, Partial<PdfTextItem>> = {
+  body: {},
+  head: { height: 12 },
+  num: {},
+  sub: { height: 11, fontName: "display" },
+  title: { height: 17 },
+  author: { height: 11, fontName: "display" },
+  affil: { height: 8.5 },
+  summary: { height: 10.5, fontName: "display" },
+  italic: { fontName: "italic" },
+  panel: { height: 7 },
+};
+
+function page(n: number, rows: Row[], top = 780): PdfPageText {
+  let y = top;
+  return {
+    page: n,
+    items: rows.map((row, i) => {
+      y -= i === 0 ? 0 : (row.gap ?? 14);
+      return item(row.text, { y, ...STYLE[row.kind ?? "body"] });
+    }),
+  };
+}
+
+const r = (text: string, kind: Kind = "body", gap?: number): Row => ({ text, kind, gap });
+/** Lines of prose that run to full width; each is an invented sentence about the same subject. */
+const prose = (...lines: string[]): Row[] => lines.map((text) => r(text));
+/** The same, the first line set a paragraph apart from the row above. */
+const para = (...lines: string[]): Row[] => lines.map((text, i) => r(text, "body", i === 0 ? 28 : undefined));
+
+const INTRO = [
+  "Quillwort cathodes degrade through slow loss of lithium at the grain edges of the film.",
+  "We follow the loss over four hundred cycles and ask which edge goes first in each sample.",
+  "The answer decides how the films are annealed before they are built into a cell.",
+];
+const RESULTS = [
+  "The capacity of the annealed films held at ninety percent of its first value over the run.",
+  "Films that were cooled quickly lost a third of their capacity before the hundredth cycle.",
+  "The edges of the slow-cooled grains stayed whole under the microscope after the last cycle.",
+];
+const REFERENCES = [
+  "[1] Someone, A. A paper about films. Journal of Films 12, 1-9 (2015).",
+  "[2] Another, B. A second paper about cathodes. Journal of Cells 4, 22-30 (2016).",
+];
+const METHODS_ONE = [
+  "Films were grown on polished steel discs in a furnace held at a fixed temperature.",
+  "Each disc was weighed before and after growth and the mass gained was written down.",
+  "Three discs from each batch were kept aside as controls and were never cycled.",
+];
+const METHODS_TWO = [
+  "Cells were cycled between two voltages at a constant current in a sealed glove box.",
+  "The current was set from the mass of each film and the cell was rested between cycles.",
+  "Every cell was cycled until its capacity fell below half of the first value it showed.",
+];
+
+const sectionsOf = (pages: PdfPageText[]): OutlineSection[] => buildOutline(pages).sections ?? [];
+const headingsOf = (pages: PdfPageText[]) => sectionsOf(pages).map((s) => s.heading);
+const textOf = (pages: PdfPageText[]) => sectionsOf(pages).map((s) => s.text ?? "").join("\n\n");
+const bucketsOf = (pages: PdfPageText[]) => sectionsOf(pages).map((s) => [s.heading, s.canonical]);
+
+// ── O5: what follows an end-matter heading ──────────────────────────────────────────────────────────────
+
+const BODY_ROWS: Row[] = [
+  r("A Paper About Quillwort Cathodes", "title"),
+  r("1 Introduction", "num", 20),
+  ...prose(...INTRO),
+  r("2 Results", "num", 20),
+  ...prose(...RESULTS),
+];
+const BODY_HEADINGS = ["1 Introduction", "2 Results"];
+const section = (heading: string, canonical: string, text: string): OutlineSection => ({ heading, canonical, page: 1, text });
+
+/** (a) The references, then a Methods heading with two paragraphs, then two end-matter notes. */
+const afterTheReferences = (): PdfPageText[] => [
+  page(1, [
+    ...BODY_ROWS,
+    r("References", "head", 20),
+    ...prose(...REFERENCES),
+    r("Methods", "head", 20),
+    ...prose(...METHODS_ONE),
+    ...para(...METHODS_TWO),
+    r("Data availability", "head", 20),
+    r("The numbers behind every figure are kept with the authors and are shared on request."),
+    r("Competing interests", "head", 20),
+    r("The authors declare that they have no competing interests in this work."),
+  ]),
+];
+
+/** The supporting-information line comes first and the acknowledgements and statements after it. */
+const supportingFirst = (): PdfPageText[] => [
+  page(1, [
+    ...BODY_ROWS,
+    r("Supporting Information", "head", 20),
+    r("The Supporting Information is available free of charge from the publisher."),
+    r("Acknowledgements", "head", 20),
+    r("We thank the staff of the furnace room for their patience and their time."),
+    r("Author Contributions", "head", 20),
+    r("A.F. grew the films and B.L. cycled the cells; both wrote the paper."),
+    r("Competing interests", "head", 20),
+    r("The authors declare that they have no competing interests in this work."),
+    r("References", "head", 20),
+    ...prose(...REFERENCES),
+  ]),
+];
+
+/** Methods after the references, with sub-headings of its own, then a note, then a block of affiliations. */
+const methodsAfterReferences = (): PdfPageText[] => [
+  page(1, [
+    ...BODY_ROWS,
+    r("References", "head", 20),
+    ...prose(...REFERENCES),
+    r("Methods", "head", 20),
+    ...prose(...METHODS_ONE),
+    r("Cell assembly", "sub", 20),
+    ...prose(...METHODS_TWO),
+    r("Statistics", "sub", 20),
+    r("Every figure reports the mean of three cells and the spread between them."),
+    r("Acknowledgements", "head", 20),
+    r("We thank the staff of the furnace room for their patience and their time."),
+    r("Ada Fenwick - Department of Films, University of Tarn", "italic", 20),
+    r("Port Merrow, Tarn Province, a place the notes keep to themselves."),
+  ]),
+];
+
+/** Reference entries that the page sets as numbered lines, some of them with an argument word in them. */
+const referenceHeadings = (): PdfPageText[] => [
+  page(1, [
+    ...BODY_ROWS,
+    r("References", "head", 20),
+    r("12 Zhang, X. Methods for growing quillwort films on steel"),
+    r("A second line of that entry, which carries the journal and the year of it."),
+    r("13 Tarn, B. A model of grain-edge loss in cathodes (2019)"),
+    r("A second line of that entry, which carries the journal and the year of it."),
+  ]),
+];
+
+/** An appendix after the references stays where it was: out. */
+const appendixAfterReferences = (): PdfPageText[] => [
+  page(1, [
+    ...BODY_ROWS,
+    r("References", "head", 20),
+    ...prose(...REFERENCES),
+    r("Appendix A Proofs", "head", 20),
+    r("Proof of the lemma follows from the triangle inequality applied twice over here."),
+  ]),
+];
+
+/** The numbered Methods after the references, with a numbered sub-section of it. */
+const numberedMethodsAfterReferences = (): PdfPageText[] => [
+  page(1, [
+    ...BODY_ROWS,
+    r("References", "head", 20),
+    ...prose(...REFERENCES),
+    r("5 Methods", "num", 20),
+    ...prose(...METHODS_ONE),
+    r("5.1 Cell assembly", "num", 20),
+    ...prose(...METHODS_TWO),
+  ]),
+];
+
+/** (d) A numbered paper that names every part; its acknowledgements are the first end matter. */
+const numberedPaper = (): PdfPageText[] => [
+  page(1, [
+    r("A Paper About Quillwort Cathodes", "title"),
+    r("Ada Fenwick", "author", 20),
+    r("Abstract", "head", 20),
+    ...prose("Quillwort cathodes degrade slowly, and slow cooling after growth keeps their edges whole."),
+    r("1 Introduction", "num", 20),
+    ...prose(...INTRO),
+    r("2 Methods", "num", 20),
+    ...prose(...METHODS_ONE),
+    r("3 Results", "num", 20),
+    ...prose(...RESULTS),
+    r("4 Conclusion", "num", 20),
+    ...prose("Slow cooling keeps the grain edges whole, and the films keep their capacity for it."),
+    r("Acknowledgements", "head", 20),
+    r("We thank the staff of the furnace room for their patience and their time."),
+    r("References", "head", 20),
+    ...prose(...REFERENCES),
+  ]),
+];
+
+describe("an end-matter heading no longer ends the outline (P12-51, O5)", () => {
+  it("reads the Methods and the notes that follow the references, as sections", () => {
+    // Before: the references ended the outline and the Methods and both notes were discarded.
+    expect(sectionsOf(afterTheReferences())).toEqual([
+      section("1 Introduction", "introduction", INTRO.join(" ")),
+      section("2 Results", "results", RESULTS.join(" ")),
+      section("Methods", "methods", `${METHODS_ONE.join(" ")}\n\n${METHODS_TWO.join(" ")}`),
+      section("Data availability", "acknowledgments", "The numbers behind every figure are kept with the authors and are shared on request."),
+      section("Competing interests", "acknowledgments", "The authors declare that they have no competing interests in this work."),
+    ]);
+  });
+
+  it("keeps the reference entries out of the prose, as it always did", () => {
+    const text = textOf(afterTheReferences());
+    expect(text).not.toContain("Someone");
+    expect(text).not.toContain("Another, B.");
+    expect(text).not.toContain("Journal of");
+  });
+
+  it("reads the acknowledgements and statements that follow a supporting-information line", () => {
+    // Before: the supporting-information line ended the outline and everything after it was discarded.
+    expect(bucketsOf(supportingFirst())).toEqual([
+      ["1 Introduction", "introduction"],
+      ["2 Results", "results"],
+      ["Acknowledgements", "acknowledgments"],
+      ["Author Contributions", "acknowledgments"],
+      ["Competing interests", "acknowledgments"],
+    ]);
+    const text = textOf(supportingFirst());
+    expect(text).toContain("We thank the staff of the furnace room");
+    expect(text).toContain("A.F. grew the films");
+    expect(text).not.toContain("Someone");
+  });
+
+  it("still leaves the first end-matter heading, and the text under it, out", () => {
+    // P7-18: the supporting-information line is the first end matter, so what it holds stays out...
+    expect(textOf(supportingFirst())).not.toContain("Supporting Information is available");
+    // ...and so does a first Acknowledgements, and what it holds.
+    const first: Row[] = [...BODY_ROWS, r("Acknowledgements", "head", 20), r("We thank the staff of the furnace room for their patience.")];
+    expect(headingsOf([page(1, first)])).toEqual(BODY_HEADINGS);
+    expect(textOf([page(1, first)])).not.toContain("We thank");
+  });
+
+  it("reads the sub-headings of a Methods after the references as the body's, and its notes after it", () => {
+    expect(bucketsOf(methodsAfterReferences())).toEqual([
+      ["1 Introduction", "introduction"],
+      ["2 Results", "results"],
+      ["Methods", "methods"],
+      ["Cell assembly", "body"],
+      ["Statistics", "body"],
+      ["Acknowledgements", "acknowledgments"],
+    ]);
+    expect(textOf(methodsAfterReferences())).toContain("Every figure reports the mean of three cells");
+  });
+
+  it("keeps a block of affiliations that follows a note out: a heading no bucket names reads nothing there", () => {
+    const text = textOf(methodsAfterReferences());
+    expect(text).not.toContain("Port Merrow");
+    expect(headingsOf(methodsAfterReferences())).not.toContain("Ada Fenwick - Department of Films, University of Tarn");
+  });
+
+  it("gives a numbered Methods after the references, and its numbered sub-section, the methods bucket", () => {
+    expect(bucketsOf(numberedMethodsAfterReferences()).slice(2)).toEqual([
+      ["5 Methods", "methods"],
+      ["5.1 Cell assembly", "methods"],
+    ]);
+  });
+
+  it("does not open a section at a reference entry the page set as a heading, whatever word it holds", () => {
+    // "Methods" and "model" would name a part of the argument; the comma after the authors and the year do not let them.
+    expect(headingsOf(referenceHeadings())).toEqual(BODY_HEADINGS);
+    expect(textOf(referenceHeadings())).not.toContain("second line of that entry");
+  });
+
+  it("leaves an appendix after the references out, as it always was", () => {
+    expect(headingsOf(appendixAfterReferences())).toEqual(BODY_HEADINGS);
+    expect(textOf(appendixAfterReferences())).not.toContain("triangle inequality");
+  });
+
+  it("files an end-matter part that no bucket names under the apparatus bucket", () => {
+    const rows: Row[] = [
+      ...BODY_ROWS,
+      r("AUTHOR INFORMATION", "head", 20),
+      r("Not read: this heading is the first end matter."),
+      r("ASSOCIATED CONTENT", "head", 20),
+      r("The online content of this paper is kept with the publisher."),
+    ];
+    expect(bucketsOf([page(1, rows)])).toEqual([...BODY_HEADINGS.map((h, i) => [h, ["introduction", "results"][i]]), ["ASSOCIATED CONTENT", "acknowledgments"]]);
+  });
+
+  it("reads a paper that names every part exactly as it did", () => {
+    // (d) Byte-identical to the outline before P12-51: its acknowledgements are the first end matter and its references end it.
+    expect(buildOutline(numberedPaper())).toEqual({
+      title: "A Paper About Quillwort Cathodes",
+      sections: [
+        section("Abstract", "abstract", "Quillwort cathodes degrade slowly, and slow cooling after growth keeps their edges whole."),
+        section("1 Introduction", "introduction", INTRO.join(" ")),
+        section("2 Methods", "methods", METHODS_ONE.join(" ")),
+        section("3 Results", "results", RESULTS.join(" ")),
+        section("4 Conclusion", "conclusion", "Slow cooling keeps the grain edges whole, and the films keep their capacity for it."),
+      ],
+      figureCaptions: [],
+      pageCount: 1,
+      reason: null,
+    });
+  });
+});

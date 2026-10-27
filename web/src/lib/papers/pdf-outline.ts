@@ -173,6 +173,43 @@ function endsTheArgument(heading: string, canonical: string, afterBody = false):
 /** The first of these ends the cover and starts the paper. */
 const FRONT_MATTER_END = new Set(["abstract", "introduction"]);
 
+// ── What follows an end-matter heading (P12-51, O5) ─────────────────────────────────────────────────────
+//
+// The first end-matter heading still closes the argument: it and the text under it stay out, as P7-18 set
+// it. The outline no longer stops there. A journal prints Methods after its references, a second block of
+// notes after that, and a paper that opens its end matter with a supporting-information line prints its
+// acknowledgements and statements after the line. What follows is read by what each heading names:
+//   a note      another end-matter part (acknowledgements, a statement, author contributions...): its own
+//               section, in the apparatus bucket, and its text is read;
+//   an argument a heading that names a part of the argument (methods above all): its own section, and its
+//               sub-headings are read as the body's are;
+//   out         the references and the bulky apparatus (an appendix, the supplementary material): their text
+//               stays out, as it always did;
+//   (nothing)   any other heading, which reads whatever its surroundings read (the sub-headings of an
+//               argument part), and in the notes' company reads nothing (the authors' affiliation blocks, a
+//               reference entry the page set as a heading).
+
+/** The buckets that name a part of the argument. */
+const ARGUMENT_PARTS = new Set(["introduction", "related_work", "methods", "results", "discussion", "conclusion", "limitations"]);
+/** The apparatus too long to be a note: it stays out after the argument, as it did. */
+const BULKY_END_MATTER = /^(?:appendix|appendices|supplementary\s+(?:materials?|information))\b/i;
+/** A heading named only by its bucket's words is a short line: a reference entry the page set as a
+ *  heading is longer than this, carries a comma after its authors or the year of its journal. */
+const PLAIN_HEADING_WORDS = 8;
+const PRINT_YEAR = /\b(?:1[5-9]|20)\d\d\b/;
+
+type TailPart = "note" | "argument" | "out" | null;
+
+/** What a heading met once the argument is over stands for (see above); `ends` is `endsTheArgument` of it. */
+function tailPartOf(heading: string, canonical: string, ends: boolean): TailPart {
+  if (canonical === "references") return "out";
+  const own = heading.trim().replace(GLYPH_LEAD, "").replace(SECTION_LEAD, "");
+  if (ends) return BULKY_END_MATTER.test(own) ? "out" : "note";
+  if (own.split(/\s+/).length > PLAIN_HEADING_WORDS || own.includes(",") || PRINT_YEAR.test(own)) return null;
+  if (canonical === "acknowledgments") return "note";
+  return ARGUMENT_PARTS.has(canonical) ? "argument" : null;
+}
+
 // Roman numerals only in caps: lower case ate the "c" of "Figure captions
 // are elsewhere" and called it Figure C.
 const CAPTION = /^(fig(?:ure)?|table|scheme|chart)\s*\.?\s*(\d{1,3}|[IVXL]{1,5})\b\s*[.:—–-]?\s*(.*)$/i;
@@ -1798,7 +1835,14 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
   let canonical = "body";
   let page = pages[0]?.page ?? 1;
   let held: PdfLine[] = [];
-  let done = false;
+  // P12-51 (O5): the first end-matter heading closes the argument (`tail`) and the text under it is not
+  // read (`reading`); what follows is read by what each heading names (`tailPartOf`). `resumed`: the
+  // current stretch is a part of the argument, whose sub-headings are read; `opensTail`: the heading that
+  // closed the argument, which stays closed when a wrapped second line joins it.
+  let tail = false;
+  let reading = true;
+  let resumed = false;
+  let opensTail = false;
 
   // P7-18 (F3): every heading takes its place in the numbering, a heading with nothing under it
   // too ("2. RESULTS AND DISCUSSION" holds only its subsections and is no section), so "2.1 …"
@@ -1815,11 +1859,11 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
     const text = joinProse(lifted, { vocab });
     if (text.trim().length > 0) {
       sections.push({ heading: heading ?? undefined, canonical, page, text });
-    } else if (heading !== null && !done && headingNumber(heading) !== null) {
+    } else if (heading !== null && reading && headingNumber(heading) !== null) {
       // P10-04 (review 3.3): a numbered heading with nothing under it may be the paper's own group
       // heading ("2. RESULTS AND DISCUSSION", then "2.1 …"). Kept here with empty text; `dropStrayHeadings`
       // below keeps it if the next section's number is its child, and drops it (a stray) if not. Never one
-      // that sits in the end matter.
+      // whose text is not read (the references, the first end-matter heading).
       sections.push({ heading, canonical, page, text: "" });
     }
     held = [];
@@ -1882,18 +1926,39 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
         flush();
         heading = next;
         page = line.page;
+        opensTail = false;
       }
       lastHeading = line;
       canonical = canonicalizeHeading(heading);
       // The argument ends at the references, the acknowledgements or an
       // appendix, or at the end matter a journal prints after it (associated
       // content, author information, data availability, funding past the
-      // body ...); what follows is apparatus.
-      if (endsTheArgument(heading, canonical, lastNumbered >= 0 && i > lastNumbered)) done = true;
+      // body ...); what follows is apparatus. P12-51 (O5): the first of them
+      // closes the argument and its own text stays out; the outline reads on,
+      // and a heading after it that names an argument part or another
+      // end-matter part opens a section of its own.
+      const ends = endsTheArgument(heading, canonical, lastNumbered >= 0 && i > lastNumbered);
+      if (!tail) {
+        if (ends) {
+          tail = true;
+          opensTail = true;
+          reading = false;
+        }
+      } else if (!opensTail) {
+        const part = tailPartOf(heading, canonical, ends);
+        if (part !== null) {
+          reading = part !== "out";
+          resumed = part === "argument";
+        } else {
+          reading = resumed;
+        }
+        // An end-matter part no bucket names ("Associated content") is the apparatus bucket's, as its notes are.
+        if (part === "note" && canonical === "body") canonical = "acknowledgments";
+      }
       continue;
     }
     lastHeading = null;
-    if (done) continue;
+    if (!reading) continue;
     if (title && line.page === 1 && line.size > body.size * 1.25) continue;
     const equation = equationOf(line);
     if (equation) {

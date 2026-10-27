@@ -1789,10 +1789,18 @@ const BODY_HEADINGS = [
 ];
 
 describe("the end matter after the argument is not the paper's (P7-18, F2)", () => {
-  it("ends the map after 4.5 on the owner's paper's heading list: associated content, author information and the affiliation blocks are out", () => {
-    expect(headingsOf(OWNER_PAPER)).toEqual(BODY_HEADINGS);
+  // P12-51 (O5), RE-AIMED: the argument still ends after 4.5 and the first end matter (ASSOCIATED CONTENT), the
+  // blocks of affiliations, the notes under a heading no bucket names and the references stay out. The outline no
+  // longer stops at the first end-matter heading, though: the Supporting Information line and the ACKNOWLEDGMENTS
+  // that follow it are other end-matter parts and are sections of their own now (a paper whose supporting-information
+  // line comes first lost its acknowledgements and statements). The first assertion is the one the test had, on the
+  // first fifteen headings; the "not.toContain" lines are all kept but the first, which is its contrary.
+  it("ends the argument after 4.5 on the owner's paper's heading list: associated content, author information and the affiliation blocks are out; the notes after them are read", () => {
+    expect(headingsOf(OWNER_PAPER)?.slice(0, BODY_HEADINGS.length)).toEqual(BODY_HEADINGS);
+    expect(headingsOf(OWNER_PAPER)).toEqual([...BODY_HEADINGS, "Supporting Information", "ACKNOWLEDGMENTS"]);
     const text = textOf(OWNER_PAPER);
-    expect(text).not.toContain("Supporting Information is available");
+    expect(text).toContain("Supporting Information is available");
+    expect(text).toContain("The authors thank the funders");
     expect(text).not.toContain("Urbana");
     expect(text).not.toContain("Department of Materials");
     expect(text).not.toContain("competing financial interest");
@@ -1829,10 +1837,21 @@ describe("the end matter after the argument is not the paper's (P7-18, F2)", () 
     expect(textOf(rows)).not.toContain("Under the end matter");
   });
 
-  it("takes everything from the first such heading on, sub-headings and text, to the references", () => {
-    const rows: PageRow[] = [...AFTER_THE_ARGUMENT, ["H", "AUTHOR INFORMATION"], ["S", "Funding"], marker("Funding text"), ["H", "Methods addendum"], marker("Addendum text")];
-    expect(headingsOf(rows)).toEqual(["ABSTRACT", "1. INTRODUCTION", "2. METHODS", "3. CONCLUSION"]);
-    expect(textOf(rows)).not.toMatch(/Funding text|Addendum text/);
+  // P12-51 (O5), RE-AIMED: the first such heading still takes its own text, and the sub-headings no bucket names,
+  // out. What follows it is read now: a Funding statement is another end-matter part and "Methods addendum" names a
+  // part of the argument, so each opens a section of its own (the outline no longer stops at the first end matter).
+  it("takes the first such heading's text and its other sub-headings out, and reads the end-matter parts and the argument parts after it", () => {
+    const rows: PageRow[] = [
+      ...AFTER_THE_ARGUMENT,
+      ["H", "AUTHOR INFORMATION"], marker("Author information text"),
+      ["S", "Corresponding Authors"], marker("Corresponding author text"),
+      ["S", "Funding"], marker("Funding text"),
+      ["H", "Methods addendum"], marker("Addendum text"),
+    ];
+    expect(headingsOf(rows)).toEqual(["ABSTRACT", "1. INTRODUCTION", "2. METHODS", "3. CONCLUSION", "Funding", "Methods addendum"]);
+    expect(textOf(rows)).not.toMatch(/Author information text|Corresponding author text/);
+    expect(textOf(rows)).toMatch(/Funding text/);
+    expect(textOf(rows)).toMatch(/Addendum text/);
   });
 
   // A template that prints Funding (or Data availability, Competing interests) on page 1 under the
@@ -1972,7 +1991,9 @@ describe("a numbered subsection takes its parent's bucket, even when the parent 
     for (const s of sections) counts[s.canonical ?? "body"] = (counts[s.canonical ?? "body"] ?? 0) + 1;
 
     // P10-04, RE-AIMED: the two group headings are sections too, each in its bucket (results 5 -> 6, methods 5 -> 6).
-    expect(counts).toEqual({ abstract: 1, introduction: 1, results: 6, conclusion: 1, methods: 6 });
+    // P12-51 (O5), RE-AIMED: and the two end-matter parts the outline now reads after the first end matter, the
+    // Supporting Information line (supplementary) and the ACKNOWLEDGMENTS (acknowledgments), one each.
+    expect(counts).toEqual({ abstract: 1, introduction: 1, results: 6, conclusion: 1, methods: 6, supplementary: 1, acknowledgments: 1 });
     for (const s of sections) {
       if (/^2\.\d?/.test(s.heading ?? "")) expect(s.canonical).toBe("results");
       if (/^4\.\d?/.test(s.heading ?? "")) expect(s.canonical).toBe("methods");
