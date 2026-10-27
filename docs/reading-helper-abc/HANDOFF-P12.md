@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T15:23Z
+AS OF        2026-10-27T15:32Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
-LAST RULING  §1h.424   NEXT RULING §1h.425   NEXT ITEM ID P12-41   NEXT FREE PORT 4242
+LAST RULING  §1h.425   NEXT RULING §1h.426   NEXT ITEM ID P12-48   NEXT FREE PORT 4243
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
-RUNNING      A P12-37 (Theme A, 4240) ∥ A P12-38 (Theme B, 4241) on P1 / P2 / P3; B P12-39 (figure engine on P1 / P2); B P12-40 (Theme C ground truth and role inference)
+RUNNING      A P12-37 (4240) ∥ A P12-38 (4241) ∥ B P12-40 (Tier 0) ∥ B P12-41 (figures P4–P6) ∥ B P12-42 (Tier 1) ∥ B P12-43 (sealed P4–P6 truth) ∥ A-smoke P12-44 (4242) ∥ C P12-45 (R1a) ∥ C P12-46 (R6a/R7a) ∥ C P12-47 (R2a/R3a/R5a/R8a)
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
 OWNER'S PDFS P1–P6 (uploads in the manager's session; P4–P6 held out); upload UI only; never commit or quote
 CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB ENABLED (Haiku, hourly at :20)
@@ -631,6 +631,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T15:12Z | manager (Claude) | §1h.423: P3 (Zahiri 2021) added; Theme C (the paper's structure: does Peer tell introduction / methods / results / discussion / back matter apart, also without role-naming headings) scored per paper; nine scores; §1f.2's no-positional-guessing superseded for unnamed parts; B P12-40 dispatched for the ground truth and the inference rules; A37 / A38 add P3 | evidence: P12-RUBRIC.md amendment; briefs/P12-40.md | next: B40's ground truth → the manager's ruling → C
 
 - 2026-10-27T15:23Z | manager (Claude) | §1h.424: no inferred mark; with a key the model reviews the rules' structure from a compact skeleton (corrections only, validated, cached, Tier 0 never breaks); C0 / C1 scoring (C1 needs a real key from the owner); P4–P6 held out for a first-sight adaptation score | evidence: P12-RUBRIC.md amendment | next: B40 adds the Tier-1 design
+
+- 2026-10-27T15:32Z | manager (Claude) | §1h.425: the owner — every available agent at once; B P12-39 landed (7291f0a8: P1 0/6 found, a regression of 19dd2cab; P2 6/6; P3 2/6 right); decisions on its rules; seven more items dispatched together (B41 figures P4–P6, B42 Tier 1, B43 sealed P4–P6 truth, A44 upload smoke, C45 R1a, C46 R6a/R7a, C47 R2a/R3a/R5a/R8a); ten workers | evidence: briefs/P12-41..47.md | next: verify each C as it reports
 
 ---
 
