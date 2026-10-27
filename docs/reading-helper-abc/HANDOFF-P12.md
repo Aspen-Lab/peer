@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T20:27Z
+AS OF        2026-10-27T20:35Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
-LAST RULING  §1h.429   NEXT RULING §1h.430   NEXT ITEM ID P12-57   NEXT FREE PORT 4244
+LAST RULING  §1h.430   NEXT RULING §1h.431   NEXT ITEM ID P12-58   NEXT FREE PORT 4245
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
-RUNNING      A P12-37 (4240) ∥ A P12-38 (4241) ∥ A-smoke P12-44 (4242) ∥ C P12-46 (R6a/R7a) ∥ C P12-47 (R2a/R3a/R5a/R8a) ∥ C P12-48 (roles) ∥ C P12-49 (headings) ∥ C P12-50 (gutter) ∥ C P12-51 (assembly) ∥ B P12-52 (same-note writers, 4243) ∥ C P12-53 (Tier 1) ∥ C P12-54 (byte ceiling) ∥ C P12-55 (ceilings, clip)
+RUNNING      A P12-37 (4240) ∥ A P12-38 (4241) ∥ A-smoke P12-44 (4242) ∥ C P12-46 (R6a/R7a) ∥ C P12-47 (R2a/R3a/R5a/R8a) ∥ C P12-48 (roles) ∥ C P12-49 (headings) ∥ C P12-50 (gutter) ∥ C P12-51 (assembly) ∥ B P12-52 (same-note writers, 4243) ∥ C P12-53 (Tier 1) ∥ C P12-54 (byte ceiling) ∥ C P12-55 (ceilings, clip) ∥ A P12-57 (C1 keyed harness, 4244)
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
 OWNER'S PDFS P1–P6 (uploads in the manager's session; P4–P6 held out); upload UI only; never commit or quote
 CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB, Haiku, "20 * * * *", enabled, read back 17:02Z; prompt now says workaholic mode: resume usage-limited agents and refill the frontier
@@ -645,6 +645,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T17:03Z | manager (Claude) | the workers' weekly usage limit stopped all 13 running workers at about 16:50Z (C P12-45 had already reported); the limit reset at 17:00Z and all 13 were resumed by message at 17:01Z; the owner asked to make sure workaholic mode is on: skill loaded, clock prompt updated and read back; C P12-45 verified (own mutation red 5, sha256 equal; P1 figure route 6 of 6 on the real paper), its full suite under load 63 showed 3 timeouts that pass alone — re-run with 2 workers before landing | evidence: mgr/gates-c45.log, mgr/out/P1-fig-c45.json | next: land C45
 
 - 2026-10-27T20:27Z | manager (Claude) | C P12-45 LANDED (R1a, revision 4) with the manager's re-aim of six tests that pinned v=3 (they now read FIGURE_EXTRACTION_REVISION; same assertions). Verified in the free copy: diff read; tsc 0; lint 0 / 144; engine tests ×3 green; own mutation (join off) → 5 red, sha256 equal after restore; build 0; full suite (2 workers) 597 + 3 skipped files, 10,945 passed + 3 skipped after re-running two timing tests alone (pane-layout fitPanes, wysiwyg 20k-character keystroke — both pass alone, 150/150); P1 figure route on the real paper 6 of 6 (was 0), P2 6 of 6, P3 6 of 7 (the 7th is the ghost caption, C P12-46 / P12-56). A second limit (session) stopped all 13 workers at about 17:15Z; the container restarted; all 13 resumed by message at 20:23Z | evidence: mgr/suite-c45b.log, mgr/out/P1-fig-c45.json | next: verify the Cs as they report
+
+- 2026-10-27T20:35Z | manager (Claude) | §1h.430: the owner says use the test key; PEER_TEST_GEMINI_API_KEY answers 200 (value printed nowhere); C1 joins the stop line once measured; A P12-57 dispatched (phase 1 the keyed harness on P1, phase 2 the arms after C P12-53 and Tier 0) | evidence: briefs/P12-57.md | next: verify Cs as they report
 
 ---
 

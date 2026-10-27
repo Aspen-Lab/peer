@@ -48,7 +48,7 @@ NEXT TURN:          three blind readers per theme on each pack; director; score;
 STOPPED BECAUSE:          — (the Codex manager stood down at the owner's word, §1h.419)
 GATE BASELINE:          GREEN on a16cbe48 (Claude, p504/wt, 2026-10-27 14:46–14:53Z, TZ=America/Chicago): build 0; tsc 0; lint 0 errors / 144 warnings; 596 test files + 3 skipped, 10,919 tests + 3 skipped, 0 failed. (Codex native baseline on 220ca9e1 retained in the log.)
 CLOCK:            trig_01MkdKP21BdT8TbcyZpB4umB ENABLED (Haiku, 20 * * * *, P12 prompt; wakes session_017DGPdGJqr95t3pMMcspXjE only when idle)
-OWNER INPUT:      P1 Lin 2025, P2 Sederholm 2026, P3 Zahiri 2021, P4 Nat. Commun. 2026, P5 Nature 2024, P6 Nature 2026 (the owner's uploads; upload UI only, never committed or quoted); a model key for C1 not supplied
+OWNER INPUT:      P1 Lin 2025, P2 Sederholm 2026, P3 Zahiri 2021, P4 Nat. Commun. 2026, P5 Nature 2024, P6 Nature 2026 (the owner's uploads; upload UI only, never committed or quoted); the owner's test key PEER_TEST_GEMINI_API_KEY for C1 (§1h.430)
 ```
 
 ### §1a. BINDING — user decisions 2026-10-05 (from the chat replies on the blueprint)
@@ -1900,6 +1900,14 @@ B P12-41's report (`P12-41-B-20261027T162712Z.md`, landed) checked the figure en
 (d) **M14: R14a — Extended Data figures are listed and open** under their own label namespace ("Extended Data Fig. N", route token `ed<N>`): a reader expects every figure the PDF prints. The owner may veto. **M6: R6b** (a caption line's previous line in the column must not end mid-sentence; R6a misses P6's ghost) and **M15: R15a** (`|` among the caption separators) join R14a in one C, **P12-56, after C P12-46 lands** — all three change `CAPTION` in `pdf-outline.ts`, which C P12-46 is changing now (the stated reason for the sequence).
 (e) Marks stay strict (axis titles, tick digits and panel letters are part of the figure).
 
+### §1h.430 — 2026-10-27 — C1 WITH THE OWNER'S TEST KEY; A P12-57 THE KEYED HARNESS
+
+The owner, 2026-10-27 (chat, verbatim), answering "测试用 key，用来实测有 key 时结构 100% 准确": "使用".
+
+(a) **C1 is measured with the owner's test key already in the environment**, `PEER_TEST_GEMINI_API_KEY` (added 2026-10-11 for P9-KEY; checked 20:3xZ today: Google answers 200 with the model list, the key's value printed nowhere). The key enters the app only as a reader's own key (BYOK: the Profile form, filled by Playwright from the environment), never as a server variable, never printed, logged, written or screenshotted; a 429 / quota / billing answer stops the run at once.
+(b) **C1 joins the stop line** once measured: per paper, with the key, every part right (start and role) and no extra — 100 % — on P1–P6, by B P12-42 §7's protocol (natural drafts, 5 runs; seeded drafts reported). P4–P6 are measured first-sight only after the Tier-0 rules land; their truth stays sealed and the manager scores them.
+(c) **A P12-57 builds the keyed measuring harness now** (phase 1: the BYOK path end to end on P1 with today's keyed features), and runs the C1 arms when the manager says the structure review (C P12-53) and the Tier-0 rules have landed (phase 2, resumed by message).
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2210,6 +2218,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-54 | IN_PROGRESS — C (Sonnet), scratch p12/c54 | R13b: one-page figure calls up to 27,000,000 bytes | invented-input test; own mutation; gates | checkpoint P12-54-C-<UTC>.md; manager verifies | briefs/P12-54.md; §1h.429 |
 | P12-55 | IN_PROGRESS — C (Sonnet), scratch p12/c55 | R11a ceilings with grid clustering; R12a strokes honour the clip | invented-input tests; 5 re-aimed budget tests named; own mutations; gates | checkpoint P12-55-C-<UTC>.md; manager verifies | briefs/P12-55.md; §1h.429 |
 | P12-56 | QUEUED — after C P12-46 lands (same `CAPTION`) | R14a Extended Data namespace; R6b ghost caption; R15a `|` separator | — | — | §1h.429 (d) |
+| P12-57 | IN_PROGRESS — A (Sonnet), measurer, port 4244, scratch p12/a57 | C1 with the owner's test key: phase 1 harness on P1; phase 2 arms after C P12-53 and Tier 0 land | BYOK path, rows, Google calls, hygiene 0 | report P12-57-A-<UTC>.md | briefs/P12-57.md; §1h.430 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
 | P11-26 | **DONE 21:0xZ 2026-10-20** — on the branch (§1h.128 (b)); was RUNNING (rules 4, 5 added §1h.127 (c)) since 09:1xZ 2026-10-20 — C, `briefs/P11-26.md`, `scratchpad/p11c26/wt`, port 4127: the explain card keeps its top at the selection (B3); a figure in front of the stack is never a thumbnail (X-3) | round 1 Theme B | §1h.122 (b) 1, 4 | C → the manager | — |

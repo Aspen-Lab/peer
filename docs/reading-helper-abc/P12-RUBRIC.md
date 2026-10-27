@@ -169,3 +169,9 @@ The blind readers score from the pack against this matrix; the director voids a 
 ## Dated amendment, ruling §1h.427 (2026-10-27): the held-out papers' units
 
 (a) **The held-out judgement calls are decided by §1h.426's principles, without the manager reading the per-part detail now:** back matter is one unit per contiguous block (a block split by the print order around the methods is two units); an unheaded closing is a unit with the interpretation role (as P3's); a disputed role follows the paper's own order. By the sealed file's counts this gives **N = 5 (P4), 9 (P5), 9 (P6)**; the manager opens the sealed file only at the first-sight measure, after the Tier-0 rules land, and records there any count the principles do not settle.
+
+## Dated amendment, ruling §1h.430 (2026-10-27): C1 with the owner's test key
+
+(a) **C1 is measured with the owner's test key already in the environment**, `PEER_TEST_GEMINI_API_KEY` (added 2026-10-11 for P9-KEY; checked 20:3xZ today: Google answers 200 with the model list, the key's value printed nowhere). The key enters the app only as a reader's own key (BYOK: the Profile form, filled by Playwright from the environment), never as a server variable, never printed, logged, written or screenshotted; a 429 / quota / billing answer stops the run at once.
+(b) **C1 joins the stop line** once measured: per paper, with the key, every part right (start and role) and no extra — 100 % — on P1–P6, by B P12-42 §7's protocol (natural drafts, 5 runs; seeded drafts reported). P4–P6 are measured first-sight only after the Tier-0 rules land; their truth stays sealed and the manager scores them.
+(c) **A P12-57 builds the keyed measuring harness now** (phase 1: the BYOK path end to end on P1 with today's keyed features), and runs the C1 arms when the manager says the structure review (C P12-53) and the Tier-0 rules have landed (phase 2, resumed by message).
