@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T00:50:41.270Z; only writer of this file
-CURRENT ITEM:          ManagerC28verifywebd2f89f8CI40428712922/localgates;A23-A24+B29-B30factsbanked;A26PARTIAL1860missing30;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          Finish independent C28 gates/mutations/normal existing/fresh-upload UI; freeze round1 evidence and score missing evidence explicitly; no landing or closure until verified
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T00:53:38.067Z; only writer of this file
+CURRENT ITEM:          C28managerverifyd2f89f8/nativeCI40428712922+local;A23A24scores0evidence;3ThemeAreaderslive3ThemeBqueued;A26PARTIAL1860missing30;A0B0;clockACTIVE
+NEXT TURN:          Finish C28 independent exact-tree native full gates/touched3/mutations and real existing/fresh-upload UI; complete six blind readers and director baseline; preserve failures
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1547,6 +1547,11 @@ B29 bounded source identity guide banked:both page7 Fig6 reference and page8 Fig
 ### §1h.373 — 2026-10-27 — P12-30-CORRECTED-CAPTION-REVIEW-BANKED
 
 B30 corrected-engine bounded review banked:overlapping mixed-font typed Table stops correctly;hanging-indent omission exists in both baseline/candidate; no new regression established by these finite probes; same-block distant helper case remains synthetic. Evidence: P12-30-B-20261026T193000Z.md;source24d5a571. No product acceptance, formal score or threshold change.
+
+
+### §1h.374 — 2026-10-27 — P12-R1-A23-ADVERSE-BASELINE-SCORE
+
+A23 independent adverse baseline score0.00;12unitFAIL(evidence),sixcommongatesunestablished,0substantiatedextras;frozen1795-artifactmanifest998dc74d;notreader median or feature-wide malfunction claim. Evidence: P12-23-A-20261025T230000Z.md;f5de90a5;frozenThemeApack. No threshold, price, denominator, guard or production-access requirement waived.
 
 
 ## §5. Durable work ledger — update in place, evidence append only

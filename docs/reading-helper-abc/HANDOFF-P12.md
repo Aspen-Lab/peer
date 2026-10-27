@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T00:50:41.270Z
+AS OF        2026-10-27T00:53:38.067Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.373   NEXT RULING §1h.374   NEXT ITEM ID P12-31   NEXT FREE PORT 4230
+LAST RULING  §1h.374   NEXT RULING §1h.375   NEXT ITEM ID P12-31   NEXT FREE PORT 4230
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      ManagerC28verifywebd2f89f8CI40428712922/localgates;A23-A24+B29-B30factsbanked;A26PARTIAL1860missing30;blindnotstarted;A0B0;clockACTIVE
+RUNNING      C28managerverifyd2f89f8/nativeCI40428712922+local;A23A24scores0evidence;3ThemeAreaderslive3ThemeBqueued;A26PARTIAL1860missing30;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -527,6 +527,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T00:50:37.421Z | parent c10feda8 (entry commit follows) | manager | P12-29-SOURCE-IDENTITY-GUIDE-BANKED: B29 bounded source identity guide banked:both page7 Fig6 reference and page8 Figure6 true caption survive exact-string alias dedupe;both actual404;two total authorized successfuluploads;all three typography candidates insufficient as universal gate; finite invented next measurement required | evidence: P12-29-B-20261026T190500Z.md;sourcea46ffbc5 | next: Finish independent C28 gates/mutations/normal existing/fresh-upload UI; freeze round1 evidence and score missing evidence explicitly; no landing or closure until verified
 
 - 2026-10-27T00:50:41.270Z | parent cf92d20e (entry commit follows) | manager | P12-30-CORRECTED-CAPTION-REVIEW-BANKED: B30 corrected-engine bounded review banked:overlapping mixed-font typed Table stops correctly;hanging-indent omission exists in both baseline/candidate; no new regression established by these finite probes; same-block distant helper case remains synthetic | evidence: P12-30-B-20261026T193000Z.md;source24d5a571 | next: Finish independent C28 gates/mutations/normal existing/fresh-upload UI; freeze round1 evidence and score missing evidence explicitly; no landing or closure until verified
+
+- 2026-10-27T00:53:38.067Z | parent 9443d628 (entry commit follows) | manager | P12-R1-A23-ADVERSE-BASELINE-SCORE: A23 independent adverse baseline score0.00;12unitFAIL(evidence),sixcommongatesunestablished,0substantiatedextras;frozen1795-artifactmanifest998dc74d;notreader median or feature-wide malfunction claim | evidence: P12-23-A-20261025T230000Z.md;f5de90a5;frozenThemeApack | next: Finish C28 independent exact-tree native full gates/touched3/mutations and real existing/fresh-upload UI; complete six blind readers and director baseline; preserve failures
 
 ---
 
