@@ -42,7 +42,7 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T01:09:01.300Z; only writer of this file
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T01:09:04.510Z; only writer of this file
 CURRENT ITEM:          B31pathprovenanceactive/B32briefready;C28heldUIpublicA4+5regression;6blindreturned0finaleachdirectorPending;A23A24scores0;A0B0;clockACTIVE
 NEXT TURN:          B31pathprovenance + B32inventedidentitymatrix in parallel;director audit six returned blind readers;C28held until independent real preservation verification
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
@@ -1582,6 +1582,11 @@ Separate read-only B31brief names exact publicAold/new engine/source-region comp
 ### §1h.380 — 2026-10-27 — P12-31-PUBLIC-PRESERVATION-REGRESSIONS-BANKED
 
 B31 independently confirms new loss of publicA4/5 caused by typed-caption overlap rejection before competition;old2alreadyrightpanelonly,floorsunchanged;3numeric-overlapcandidatesunsafelyattachinteriorlabelsormissanalogue;continue finitepathprovenance/render-footprint measurement,noCauthorized. Evidence: P12-31-B-20261027T011000Z.md;1d7c0078;p12-31/private;cua-public-a-results.json. No safe rule inferred from a small sample; no threshold/guard/score change.
+
+
+### §1h.381 — 2026-10-27 — P12-32-CAPTION-IDENTITY-MATRIX-BRIEF
+
+Separate B32 finite invented identity/source-word matrix brief committed;pdf-outline/aliasclassification investigation independent of B31graphicregions;no sourcechange or chosenclassifier;work remains parallel in owncopy. Evidence: briefs/P12-32.md;P12-29-B-20261026T190500Z.md. No safe rule inferred from a small sample; no threshold/guard/score change.
 
 
 ## §5. Durable work ledger — update in place, evidence append only

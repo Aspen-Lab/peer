@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T01:09:01.300Z
+AS OF        2026-10-27T01:09:04.510Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.380   NEXT RULING §1h.381   NEXT ITEM ID P12-33   NEXT FREE PORT 4232
+LAST RULING  §1h.381   NEXT RULING §1h.382   NEXT ITEM ID P12-33   NEXT FREE PORT 4232
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
 RUNNING      B31pathprovenanceactive/B32briefready;C28heldUIpublicA4+5regression;6blindreturned0finaleachdirectorPending;A23A24scores0;A0B0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
@@ -541,6 +541,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T01:04:29.699Z | parent 0d8298a8 (entry commit follows) | manager | P12-31-PUBLIC-FIGURE-PRESERVATION-BRIEF: Separate read-only B31brief names exact publicAold/new engine/source-region comparison and finite invented general-rule probes;own detached candidatecopy/noUIornewupload;sourceclassifierB29separate;C28frozenpending measuredguide | evidence: briefs/P12-31.md;cecf2abc;p12-31/wt | next: B31 publicA preservation guide;finish director audit of six returned blind baseline readers;C28 stays frozen/unlanded;no test-green substitution for image evidence
 
 - 2026-10-27T01:09:01.300Z | parent dbba18e4 (entry commit follows) | manager | P12-31-PUBLIC-PRESERVATION-REGRESSIONS-BANKED: B31 independently confirms new loss of publicA4/5 caused by typed-caption overlap rejection before competition;old2alreadyrightpanelonly,floorsunchanged;3numeric-overlapcandidatesunsafelyattachinteriorlabelsormissanalogue;continue finitepathprovenance/render-footprint measurement,noCauthorized | evidence: P12-31-B-20261027T011000Z.md;1d7c0078;p12-31/private;cua-public-a-results.json | next: B31pathprovenance + B32inventedidentitymatrix in parallel;director audit six returned blind readers;C28held until independent real preservation verification
+
+- 2026-10-27T01:09:04.510Z | parent 8f78d91d (entry commit follows) | manager | P12-32-CAPTION-IDENTITY-MATRIX-BRIEF: Separate B32 finite invented identity/source-word matrix brief committed;pdf-outline/aliasclassification investigation independent of B31graphicregions;no sourcechange or chosenclassifier;work remains parallel in owncopy | evidence: briefs/P12-32.md;P12-29-B-20261026T190500Z.md | next: B31pathprovenance + B32inventedidentitymatrix in parallel;director audit six returned blind readers;C28held until independent real preservation verification
 
 ---
 
