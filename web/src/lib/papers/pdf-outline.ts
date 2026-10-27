@@ -1088,17 +1088,45 @@ export function linesOfPage(page: PdfPageText): PdfLine[] {
   return linesOfPageWith(page, null);
 }
 
-/** The size and face most of the paper's words are set in. */
-export function bodyStyle(lines: PdfLine[]): { size: number; font: string } {
-  const bySize = new Map<number, number>();
-  const byFont = new Map<string, number>();
+// ── The body's style (P12-49) ─────────────────────────────────────────────────────────────────────────
+
+/** The size and face the paper's body is set in. */
+export interface BodyStyle {
+  size: number;
+  font: string;
+}
+
+/** A size is the body's when it holds at least this share of the heaviest size's characters... */
+const BODY_SIZE_SHARE = 0.35;
+/** ...and is set on at least this many lines: a title of three lines is not the body of a short page. */
+const BODY_MIN_LINES = 5;
+
+/**
+ * The size and face the paper's body is set in: the **largest size that holds at least 35 % of the heaviest
+ * size's characters** (and is set on a body's worth of lines: five), and the face most of that size's
+ * characters are set in.
+ *
+ * P12-49 (O1): the size with the most characters is not the body where the methods, the references and the
+ * captions are set small and outweigh it (7.5 pt against a 9.3 pt body, on the owner's third paper): every body
+ * line then reads as "bigger" than the body and each short unpunctuated one became a heading — a hundred
+ * sections from eleven pages. A paper whose heaviest size is its body is read as before.
+ */
+export function bodyStyle(lines: PdfLine[]): BodyStyle {
+  const bySize = new Map<number, { chars: number; lines: number }>();
   for (const line of lines) {
-    bySize.set(line.size, (bySize.get(line.size) ?? 0) + line.text.length);
-    byFont.set(line.font, (byFont.get(line.font) ?? 0) + line.text.length);
+    const known = bySize.get(line.size) ?? { chars: 0, lines: 0 };
+    bySize.set(line.size, { chars: known.chars + line.text.length, lines: known.lines + 1 });
   }
-  const top = <T>(counts: Map<T, number>, fallback: T): T =>
-    [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? fallback;
-  return { size: top(bySize, 10), font: top(byFont, "") };
+  const heaviest = Math.max(0, ...[...bySize.values()].map((n) => n.chars));
+  const holding = [...bySize]
+    .filter(([, n]) => n.chars === heaviest || (n.chars >= heaviest * BODY_SIZE_SHARE && n.lines >= BODY_MIN_LINES))
+    .map(([s]) => s);
+  const size = heaviest > 0 ? Math.max(...holding) : 10;
+  // The face follows the size: the one most of the body-size characters are set in.
+  const byFont = new Map<string, number>();
+  for (const line of lines) if (line.size === size) byFont.set(line.font, (byFont.get(line.font) ?? 0) + line.text.length);
+  const font = [...byFont].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
+  return { size, font };
 }
 
 /** A running head is on at least this many pages (P10-33, BACKLOG-84): two pages that open with the same
@@ -1150,6 +1178,10 @@ function isFurniture(line: PdfLine, furniture: Set<string>): boolean {
   return furniture.has(key);
 }
 
+/** Small print beyond a page's text is a footer or a stamp up to this many rows (3 pt apart); past it, it is a
+ *  section set small (P12-49). */
+const MARGIN_PRINT_ROWS = 8;
+
 /**
  * The lines that are margin print: small print above the page's first or
  * below its last full-size line — the publisher's copyright and DOI footer, a
@@ -1164,9 +1196,23 @@ function marginPrintOf(lines: PdfLine[], body: { size: number }): (line: PdfLine
     const edge = edges.get(line.page) ?? { top: -Infinity, bottom: Infinity };
     edges.set(line.page, { top: Math.max(edge.top, line.y), bottom: Math.min(edge.bottom, line.y) });
   }
-  return (line) => {
+  const sideOf = (line: PdfLine): "top" | "bottom" | null => {
     const edge = edges.get(line.page);
-    return !!edge && line.size < body.size * MARGIN_PRINT_RATIO && (line.y < edge.bottom || line.y > edge.top);
+    if (!edge || line.size >= body.size * MARGIN_PRINT_RATIO) return null;
+    return line.y < edge.bottom ? "bottom" : line.y > edge.top ? "top" : null;
+  };
+  // P12-49 (O1): the body is now the larger size, so a section set small (the methods, the references) can stand
+  // below the page's last full-size line. A footer or a stamp is a few rows; many rows of small print are a section.
+  const rows = new Map<string, Set<number>>();
+  for (const line of lines) {
+    const side = sideOf(line);
+    if (side === null) continue;
+    const key = `${line.page}:${side}`;
+    rows.set(key, (rows.get(key) ?? new Set<number>()).add(Math.round(line.y / 3)));
+  }
+  return (line) => {
+    const side = sideOf(line);
+    return side !== null && (rows.get(`${line.page}:${side}`)?.size ?? 0) <= MARGIN_PRINT_ROWS;
   };
 }
 
