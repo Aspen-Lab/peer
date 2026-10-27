@@ -51,6 +51,20 @@ describe("P12-28 drawing analysis work budget", () => {
     expect(result.reason).toMatch(/drawing.*limit|limit.*drawing/i);
   }, 30_000);
 
+  it.each([11_999, 12_000])("keeps the independent cluster bound for %i retained tiny boxes and a later panel", async (count) => {
+    const operations = Array.from({ length: count }, (_, i) => `${(1 + i * 0.002).toFixed(3)} 1 1 1 re f`);
+    const bytes = figurePdf([{ text: [["Figure 1. Invented visible panel.", 90, 268, 9]], drawingOps: [...operations, "90 542 360 150 re f"] }]);
+    const { result, walks } = await measured(bytes);
+    expect(walks).toBe(count + 1);
+    if (count === 11_999) {
+      expect(result.figures.map((figure) => figure.box)).toEqual([[90, 100, 450, 250]]);
+      expect(result.reason).toBeNull();
+    } else {
+      expect(result.figures).toEqual([]);
+      expect(result.reason).toMatch(/drawing.*limit|limit.*drawing/i);
+    }
+  }, 30_000);
+
   it("still returns an independent raster and reports the vector analysis limit", async () => {
     const { result, walks } = await measured(pdf(LIMIT, true));
     expect(walks).toBe(LIMIT);
