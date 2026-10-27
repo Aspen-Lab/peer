@@ -508,3 +508,144 @@ describe("a paper that names no abstract or introduction opens with its unheaded
     expect(sectionsOf(twoLinesOfProse()).every((s) => s.heading !== undefined)).toBe(true);
   });
 });
+
+// ── O8: the text of a figure's panels ────────────────────────────────────────────────────────────────────
+
+/** (c) A figure: panel letters, tick strings and axis labels above its caption, between two paragraphs. */
+const figurePage = (): PdfPageText[] => [
+  page(1, [
+    ...BODY_ROWS.slice(0, 5),
+    r("a", "panel", 24),
+    r("b", "panel", 10),
+    r("3.6 3.4 3.2", "panel", 10),
+    r("0 20 40 60 80", "panel", 10),
+    r("Time (s)", "panel", 10),
+    r("Voltage (V)", "panel", 10),
+    r("Figure 2: Capacity of the films over the cycles.", "body", 12),
+    ...para(...RESULTS),
+  ]),
+];
+
+/** Figure text of the given lines, in the given kind, set `gap` apart, above a caption with a paragraph after it. */
+const panelRun = (labels: string[], kind: Kind = "panel", gap = 10): PdfPageText[] => [
+  page(1, [
+    ...BODY_ROWS.slice(0, 5),
+    ...labels.map((text, i) => r(text, kind, i === 0 ? 24 : gap)),
+    r("Figure 2: Capacity of the films over the cycles.", "body", 12),
+    ...para(...RESULTS),
+  ]),
+];
+
+/** Short lines that read as headings by their shape ("5 Min": a number and a capital word), above a caption. */
+const labelsLikeHeadings = (): PdfPageText[] => [
+  page(1, [
+    ...BODY_ROWS.slice(0, 5),
+    r("5 Min", "body", 24),
+    r("10 Min", "body", 14),
+    r("20 Min", "body", 14),
+    r("Figure 4: Capacity after five, ten and twenty minutes.", "body", 12),
+    ...para(...RESULTS),
+  ]),
+];
+
+/** A paragraph that ends on a short line (`last`), and a caption straight after it. */
+const shortLastLine = (last: string): PdfPageText[] => [
+  page(1, [
+    r("A Paper About Quillwort Cathodes", "title"),
+    r("1 Introduction", "num", 20),
+    ...prose(
+      "Quillwort cathodes degrade through slow loss of lithium at the grain edges of the film.",
+      "We follow the loss over four hundred cycles and ask which edge goes first in each sample",
+      last,
+    ),
+    r("Figure 3: Capacity of the films over the cycles.", "body", 14),
+    ...para(...RESULTS),
+  ]),
+];
+
+/** Three panel-style lines far from the one caption on the page. */
+const panelLikeLinesFarFromACaption = (): PdfPageText[] => [
+  page(1, [
+    ...BODY_ROWS.slice(0, 5),
+    r("a", "panel", 24),
+    r("b", "panel", 14),
+    r("c", "panel", 14),
+    ...para(...RESULTS),
+    ...para(...METHODS_ONE),
+    ...para(...METHODS_TWO),
+    ...para(...INTRO),
+    ...para(...RESULTS),
+    r("Figure 2: Capacity of the films over the cycles.", "body", 40),
+  ]),
+];
+
+/** A caption that runs over three short lines of its own, none of them punctuated. */
+const narrowCaption = (): PdfPageText[] => [
+  page(1, [
+    ...BODY_ROWS.slice(0, 5),
+    r("Figure 5: Rates", "body", 24),
+    r("of the new set", "body", 12),
+    r("up to ten", "body", 12),
+    r("on it", "body", 12),
+    ...para(...RESULTS),
+  ]),
+];
+
+describe("the text of a figure's panels is out of the prose and never a heading (P12-51, O8)", () => {
+  const PANEL_STRINGS = ["Time (s)", "Voltage (V)", "0 20 40 60 80", "3.6 3.4 3.2"];
+
+  it("leaves axis labels, tick strings and panel letters beside a caption out of the section's prose", () => {
+    // Before: the labels were prose paragraphs ("0 20 40 60 80 Time (s)") and the panel letters an equation.
+    const outline = buildOutline(figurePage());
+    const text = (outline.sections ?? []).map((s) => s.text).join("\n\n");
+    for (const label of PANEL_STRINGS) expect(text).not.toContain(label);
+    expect(text).toBe(`${INTRO.join(" ")}\n\n${RESULTS.join(" ")}`);
+    expect(outline.equations).toBeUndefined();
+    expect(outline.figureCaptions).toEqual([
+      { ordinal: 2, label: "Figure 2", caption: "Capacity of the films over the cycles.", page: 1 },
+    ]);
+  });
+
+  it("never reads a short line of figure text as a heading, though its shape is a numbered heading's", () => {
+    // Before: "5 Min", "10 Min" and "20 Min" were headings, and the last of them took the paragraph under the figure.
+    expect(headingsOf(labelsLikeHeadings())).toEqual(["1 Introduction"]);
+    expect(textOf(labelsLikeHeadings())).toBe(`${INTRO.join(" ")}\n\n${RESULTS.join(" ")}`);
+  });
+
+  it("keeps the short last line of a body paragraph in its paragraph, with or without a full stop, beside a caption", () => {
+    // Required negative: one short line is not a run, and a caption right after it does not make it figure text.
+    expect(textOf(shortLastLine("of the new set"))).toContain("in each sample of the new set\n\n");
+    expect(textOf(shortLastLine("of the new set."))).toContain("in each sample of the new set.\n\n");
+  });
+
+  it("takes a run of three but not of two", () => {
+    expect(textOf(panelRun(["a", "Time (s)", "Voltage (V)"], "panel", 14))).not.toMatch(/Time \(s\)|Voltage/);
+    expect(textOf(panelRun(["a", "Time (s)"], "panel", 14))).toContain("a Time (s)");
+  });
+
+  it("takes a line of 25 characters or fewer, and not a longer one", () => {
+    const short = "ab ".repeat(8).trim(); // 23 characters, no word of four letters
+    const long = "ab ".repeat(9).trim(); // 26 characters
+    expect(textOf(panelRun([short, short, short], "body", 14))).not.toContain(short);
+    expect(textOf(panelRun([long, long, long], "body", 14))).toContain(long);
+  });
+
+  it("takes a line with no word of four letters, or any line set smaller than the body, and not a larger-word line at body size", () => {
+    expect(textOf(panelRun(["to be on it", "as is, to us", "up to us all"], "body", 14))).not.toContain("to be on it");
+    expect(textOf(panelRun(["Time axis", "Mass axis", "Cost axis"], "panel", 14))).not.toContain("Time axis");
+    expect(textOf(panelRun(["Time axis", "Mass axis", "Cost axis"], "body", 14))).toContain("Time axis Mass axis Cost axis");
+  });
+
+  it("does not take a line that ends a sentence", () => {
+    expect(textOf(panelRun(["a.", "b.", "c."], "panel", 14))).toContain("a. b. c.");
+  });
+
+  it("takes only what stands beside a caption, on the same page", () => {
+    expect(textOf(panelLikeLinesFarFromACaption())).toContain("a b c");
+  });
+
+  it("leaves a caption's own lines to the caption, short as they are", () => {
+    const outline = buildOutline(narrowCaption());
+    expect(outline.figureCaptions?.[0]?.caption).toBe("Rates of the new set up to ten on it");
+  });
+});

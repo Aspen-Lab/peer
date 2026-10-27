@@ -1875,6 +1875,80 @@ function openingStart(
   return live[at];
 }
 
+// ── Figure text (P12-51, O8) ─────────────────────────────────────────────────────────────────────────────
+//
+// A figure's panels are text in the PDF: panel letters, tick strings, axis labels. They arrive as lines of
+// a few characters, and the outline read them as the paper's prose, as rows of their own when one has the
+// shape of a heading ("5 Min"), and as an equation when they stand close enough to fold. The text next to a
+// figure's caption that is nothing else is dropped: three or more lines in a row, each short, unpunctuated
+// and either free of any word of four letters or set smaller than the body.
+
+/** A line of figure text is at most this many characters. */
+const PANEL_LINE_MAX = 25;
+/** Fewer lines in a row than this are not figure text: the short last line of a paragraph is one. */
+const PANEL_RUN_MIN = 3;
+/** Figure text is "next to" a caption within this many body sizes of it on the page. */
+const PANEL_REACH = 8;
+/** A line is set smaller than the body below this share of its size. */
+const SMALLER_THAN_BODY = 0.95;
+
+function isPanelLine(line: PdfLine, body: { size: number }): boolean {
+  const text = line.text.trim();
+  if (line.block || text.length === 0 || text.length > PANEL_LINE_MAX) return false;
+  if (SENTENCE_END.test(text) || captionOf(line) || equationOf(line)) return false;
+  return !/\p{L}{4,}/u.test(text) || line.size < body.size * SMALLER_THAN_BODY;
+}
+
+/**
+ * The indices into `read` of the lines that are figure text. `skipped` marks the lines the reading leaves
+ * out anyway (furniture, margin print, the dated box); a caption and the lines it runs on to (the reading's
+ * own `continuesCaption`) are the caption's and never figure text.
+ */
+function figureTextOf(
+  read: PdfLine[],
+  skipped: boolean[],
+  body: { size: number; font: string },
+  pitch: number,
+  furniture: Set<string>,
+): Set<number> {
+  const captions: PdfLine[] = [];
+  const taken = new Set<number>();
+  for (let i = 0; i < read.length; i++) {
+    if (skipped[i] || !captionOf(read[i])) continue;
+    captions.push(read[i]);
+    taken.add(i);
+    let previous = read[i];
+    while (i + 1 < read.length && continuesCaption(previous, read[i + 1], pitch, body, furniture)) {
+      previous = read[i + 1];
+      taken.add(i + 1);
+      i++;
+    }
+  }
+  const figure = new Set<number>();
+  if (captions.length === 0) return figure;
+  const reach = body.size * PANEL_REACH;
+  let run: number[] = [];
+  const close = () => {
+    if (run.length >= PANEL_RUN_MIN) {
+      const page = read[run[0]].page;
+      const beside = captions.some((c) => c.page === page && run.some((i) => Math.abs(c.y - read[i].y) <= reach));
+      if (beside) for (const i of run) figure.add(i);
+    }
+    run = [];
+  };
+  for (let i = 0; i < read.length; i++) {
+    if (skipped[i]) continue;
+    if (taken.has(i) || !isPanelLine(read[i], body)) {
+      close();
+      continue;
+    }
+    if (run.length > 0 && read[run[0]].page !== read[i].page) close();
+    run.push(i);
+  }
+  close();
+  return figure;
+}
+
 /**
  * The whole reading: pages of text items in, a document out. `reason` is set
  * — and everything else left empty — when the PDF carries no text to read.
@@ -1957,6 +2031,9 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
   // Introduction). One such line is a sentence or a note, and stays.
   const dated = read.map((line) => PUBLICATION_DATE.test(line.text.trim()));
   const inDateBox = (i: number) => dated[i] && (dated[i - 1] === true || dated[i + 1] === true);
+  // P12-51 (O8): the text of a figure's panels is the figure's, not a section's: out of the prose and never a heading.
+  const skipped = read.map((line, i) => isFurniture(line, furniture) || isMarginPrint(line) || inDateBox(i));
+  const figureText = figureTextOf(read, skipped, body, pitch, furniture);
   // P7-18 (F2): where the body's last numbered section stands. A heading that is end matter only
   // after the body ("Funding": some templates print it on page 1, under the abstract) ends the
   // argument only past this line; a paper with no numbered section has no such line, and there
@@ -1964,7 +2041,7 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
   let lastNumbered = -1;
   for (let i = read.length - 1; i >= 0 && lastNumbered < 0; i--) {
     const line = read[i];
-    if (isFurniture(line, furniture) || isMarginPrint(line) || inDateBox(i)) continue;
+    if (skipped[i] || figureText.has(i)) continue;
     const head = headingOf(line, body);
     // A numbered end-matter heading ("6. Funding", "7. Acknowledgements") is not the body's.
     if (head && sectionNumberOf(head) && !endsTheArgument(head, canonicalizeHeading(head), true)) lastNumbered = i;
@@ -1973,7 +2050,7 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
 
   for (let i = 0; i < read.length; i++) {
     const line = read[i];
-    if (isFurniture(line, furniture) || isMarginPrint(line) || inDateBox(i)) continue;
+    if (skipped[i] || figureText.has(i)) continue;
     const caption = captionOf(line);
     if (caption) {
       // A caption belongs to the figure pool, not to the prose it interrupts.
