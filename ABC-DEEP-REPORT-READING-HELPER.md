@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-26T20:58:59.586Z; only writer of this file
-CURRENT ITEM:          C28Terraawaittightleadingcorrection;B30fivecheckpointsbanked;Managerindependentverificationholdsregressingtree;B29FINAL/A23-A24newfactsbankpending;A26PARTIAL1860missing30;blindnotstarted;A0B0;clockACTIVE
-NEXT TURN:          sameC28minimumsameblocklaterlinefix+regression/typedboundary/columnscontrols→newfrozenwebtree/gates; Managerdoesnotverify/landoldregressingcandidate
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T00:41:21.114Z; only writer of this file
+CURRENT ITEM:          C28FINALPARTIALa5dbdc8freadynewsource8c4bef60;Managerverify28oldCUAbaselinecomplete;B29FINAL/A23-A24factsbankpending;A26PARTIAL1860missing30;blindnotstarted;A0B0;clockACTIVE
+NEXT TURN:          finishCtestdiffread; allowedbrowserold/freshinputbaseline then integratecorrectedfrozencandidateinfreecopy; owntests/mutations/nativegates/UI
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1519,6 +1519,10 @@ The required observable provenance is the original text-block identity and actua
 ### §1h.367 — 2026-10-26 — P12-30-TIGHT-LEADING-REGRESSION-BANKED
 
 The manager's actual diff read identified an unverified preservation risk; independent B30 executed the exact committed C28 engine under Node22 and confirmed it. At9pt font/baselines268and278, two lines in one original block overlap glyph boxes by2.366pt; baseline retains the full caption while C28drops its continuation. Fourteen-point and same-baseline other-column controls bound the cause. Permit the narrow same-original-block/same-column/genuinely-later-line-start eligibility correction, preserving typed boundaries, ambiguity, resource floors and every positive; add exact full caption+region pool/request/max1 regressions and re-run final-source gates. No numeric gap expansion or font-specific/semantic classifier. The old candidate is not landable despite its prior focused tests. Preserve all five B30 checkpoints and failed shapes; Manager independently verifies the corrected new tree.
+
+### §1h.368 — 2026-10-26 — P12-MANAGER-P28-ACTUAL-BASELINES-BANKED
+
+Bank independently observed normal-upload baselines before changing the manager verification source. Distinguish pending-image/helper/navigation failures from delivered clicks. Preserve exact wrong-image bytes and the same-profile publicB continuation. Further UI uses the documented allowed browser interface; its actual invented upload/consent/click/viewer screenshot and source paragraphs are retained privately for migration comparison. A tab timeout that already navigated is recovered through its visible state, never duplicated blindly. No worker UI success, extraction completeness, corrected-tree gate or score follows. Main product remains on released web88ac until complete independent verification and normal landing.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
