@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T06:00:29.966Z; only writer of this file
-CURRENT ITEM:          C28correctionguide392ready/source2cHELD;B31/B32/B33finiteguidesbanked;managerproductionpublicentrynext;R1mediansA0B0counts0/0;clockACTIVE
-NEXT TURN:          C28two-measuredcorrections→newexactsourcegates/UI;managerordinaryproductionpublicentryperB33;R1scores0/0recorded, fresh nextAafterlanding
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T06:14:22.623Z; only writer of this file
+CURRENT ITEM:          ManagerverifyC28web28cf/pinned581e13c4;B31postfixactualsources;normalproductionpublicHTMLfigureworks/privatestillblocked;R1mediansA0B0counts0/0;clockACTIVE
+NEXT TURN:          Managerexact28cf sourcegates+touched24x3+ownmutations+normal existing/freshUI;B31independentpostfixsourcechecks;landonlyafterproof then freshA
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1642,6 +1642,11 @@ ManagerindependentreviewtwoquestionsconfirmedbyseparateB31onexact2c204c03:unused
 ### §1h.392 — 2026-10-27 — P12-28-DRAWN-SUBPATH-WORK-CAP-GUIDE
 
 Authorizeonlymeasured drawn-vs-unusedfill-subpath distinction and attemptedpathworkcapbeforeclipfilter;redfirstactualPDFtests,retained/rasterfallbackandbudgetdiagnosticguards;stroke/floorsunchanged. Current3/16/v9unpublishedprofileversionretained;newsourceown+managergates/UIrequired.. Evidence: briefs/P12-28.mdRuling392;B31through748c2de0. No full-source loss, current deployment revision, universal classifier, green final candidate or score waiver is inferred.
+
+
+### §1h.393 — 2026-10-27 — P12-MANAGER-NORMAL-PRODUCTION-PUBLIC-ENTRY
+
+ManageractualordinaryproductionOpenAlexreaderopensbutfigureloadfails,exactresourceJSONNoPDF;source-supportedarxivreaderHTMLfigure1520x2239deliveredtwice/closed,22orderedsectionparagrapharrayssame;initiallazyattemptretained. Noauthbypass/sourcecompleteness/allmatrix/deployedrevisionclaim. B33publicdeterministicroutegatesclarified.. Evidence: P12-MANAGER-PRODUCTION-ENTRY-20261027.md;B33through3937cf82;privatecua-production-entry-results.json. Missing/failed checks remain explicit; no final score, branch landing, security change or complete-image claim.
 
 
 ## §5. Durable work ledger — update in place, evidence append only

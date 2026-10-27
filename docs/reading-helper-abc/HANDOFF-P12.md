@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T06:00:29.966Z
+AS OF        2026-10-27T06:14:22.623Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.392   NEXT RULING §1h.393   NEXT ITEM ID P12-34   NEXT FREE PORT 4233
+LAST RULING  §1h.393   NEXT RULING §1h.394   NEXT ITEM ID P12-34   NEXT FREE PORT 4233
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      C28correctionguide392ready/source2cHELD;B31/B32/B33finiteguidesbanked;managerproductionpublicentrynext;R1mediansA0B0counts0/0;clockACTIVE
+RUNNING      ManagerverifyC28web28cf/pinned581e13c4;B31postfixactualsources;normalproductionpublicHTMLfigureworks/privatestillblocked;R1mediansA0B0counts0/0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -565,6 +565,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T06:00:26.906Z | parent dba7ed10 (entry commit follows) | manager | P12-31-MANAGER-COUNTEREXAMPLES-CONFIRMED: ManagerindependentreviewtwoquestionsconfirmedbyseparateB31onexact2c204c03:unusedtrailingmoveidenticalrasterbutmissingfigure;65002callbacksold60000walksoverflowtruevsnew65002walksoverflowfalse. Timingnotperformancetrend. Ccandidatehelddespitetype/buildpasses. | evidence: P12-31-B-20261027T011000Z.md;748c2de0;move-trace.json;budget-65001.json;workerf19b2b5c | next: C28two-measuredcorrections→newexactsourcegates/UI;managerordinaryproductionpublicentryperB33;R1scores0/0recorded, fresh nextAafterlanding
 
 - 2026-10-27T06:00:29.966Z | parent a550cfb5 (entry commit follows) | manager | P12-28-DRAWN-SUBPATH-WORK-CAP-GUIDE: Authorizeonlymeasured drawn-vs-unusedfill-subpath distinction and attemptedpathworkcapbeforeclipfilter;redfirstactualPDFtests,retained/rasterfallbackandbudgetdiagnosticguards;stroke/floorsunchanged. Current3/16/v9unpublishedprofileversionretained;newsourceown+managergates/UIrequired. | evidence: briefs/P12-28.mdRuling392;B31through748c2de0 | next: C28two-measuredcorrections→newexactsourcegates/UI;managerordinaryproductionpublicentryperB33;R1scores0/0recorded, fresh nextAafterlanding
+
+- 2026-10-27T06:14:22.623Z | parent 56600f7a (entry commit follows) | manager | P12-MANAGER-NORMAL-PRODUCTION-PUBLIC-ENTRY: ManageractualordinaryproductionOpenAlexreaderopensbutfigureloadfails,exactresourceJSONNoPDF;source-supportedarxivreaderHTMLfigure1520x2239deliveredtwice/closed,22orderedsectionparagrapharrayssame;initiallazyattemptretained. Noauthbypass/sourcecompleteness/allmatrix/deployedrevisionclaim. B33publicdeterministicroutegatesclarified. | evidence: P12-MANAGER-PRODUCTION-ENTRY-20261027.md;B33through3937cf82;privatecua-production-entry-results.json | next: Managerexact28cf sourcegates+touched24x3+ownmutations+normal existing/freshUI;B31independentpostfixsourcechecks;landonlyafterproof then freshA
 
 ---
 
