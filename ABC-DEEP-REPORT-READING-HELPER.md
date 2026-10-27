@@ -42,7 +42,7 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T00:50:33.989Z; only writer of this file
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T00:50:37.421Z; only writer of this file
 CURRENT ITEM:          ManagerC28verifywebd2f89f8CI40428712922/localgates;A23-A24+B29-B30factsbanked;A26PARTIAL1860missing30;blindnotstarted;A0B0;clockACTIVE
 NEXT TURN:          Finish independent C28 gates/mutations/normal existing/fresh-upload UI; freeze round1 evidence and score missing evidence explicitly; no landing or closure until verified
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
@@ -1537,6 +1537,11 @@ A23 factual supplements banked:660 original cycles retained;A26 publicA630/publi
 ### §1h.371 — 2026-10-27 — P12-24-FOCUS-DIVIDER-CURATION-BANKED
 
 A24 retained measurements and focus/divider snapshot banked;610 artifacts SHA/bytes0mismatch;48 adjacent focus sides>=6.702;4 actual divider drags; privacy7995files/12finiteprobes0hits; no production-original access or full guard closure. Evidence: P12-24-A-20261025T230500Z.md;source5570e993;evidence-only-20261026T-focus-divider-v1. No product acceptance, formal score or threshold change.
+
+
+### §1h.372 — 2026-10-27 — P12-29-SOURCE-IDENTITY-GUIDE-BANKED
+
+B29 bounded source identity guide banked:both page7 Fig6 reference and page8 Figure6 true caption survive exact-string alias dedupe;both actual404;two total authorized successfuluploads;all three typography candidates insufficient as universal gate; finite invented next measurement required. Evidence: P12-29-B-20261026T190500Z.md;sourcea46ffbc5. No product acceptance, formal score or threshold change.
 
 
 ## §5. Durable work ledger — update in place, evidence append only
