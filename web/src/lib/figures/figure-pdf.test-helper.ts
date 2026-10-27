@@ -28,6 +28,8 @@ export interface FigurePage {
   size?: [number, number];
   text?: TextRun[];
   shapes?: Shape[];
+  /** Invented raw PDF drawing operators for clipping and graphics-state tests. */
+  drawingOps?: string[];
 }
 
 const RASTER_SIDE = 16;
@@ -86,6 +88,7 @@ export function figurePdf(pages: FigurePage[]): Buffer {
         ops.push(`q ${n(shape.w)} 0 0 ${n(shape.h)} ${n(shape.x)} ${y(shape.top + shape.h)} cm /Im${images.length} Do Q`);
       }
     }
+    ops.push(...(page.drawingOps ?? []));
     for (const [text, x, top, size] of page.text ?? []) {
       ops.push(`BT /F1 ${size} Tf ${n(x)} ${y(top)} Td (${escapeText(text)}) Tj ET`);
     }

@@ -151,6 +151,46 @@ describe("P12-28: defensible typed caption pairing", () => {
     expect(await boxes({ text: [["The text refers to Figure 4 elsewhere.", 40, 268, 9]], shapes: panel(40, 100, 180, 150) }, "Figure 4")).toEqual([]);
   });
 
+  it("uses nested transformed clipping bounds for a filled path that extends past its caption", async () => {
+    const page: FigurePage = {
+      text: [["Figure 4. Invented clipped panel.", 90, 268, 9]],
+      // In PDF coordinates: page-space x90..450, y542..692. The fill extends
+      // below the clip into the caption; nested transform preserves that clip.
+      drawingOps: ["q 90 542 360 150 re W n", "q 1 0 0 1 90 542 cm 0 0 360 150 re W n", "0 -52 360 202 re f Q Q"],
+    };
+    expect(await boxes(page)).toEqual([[90, 100, 450, 250]]);
+    expect(await boxes(page, "Figure 4")).toEqual([[90, 100, 450, 250]]);
+  });
+
+  it("preserves a stroked, transformed clip and its visible edge", async () => {
+    const page: FigurePage = {
+      text: [["Figure 1. Invented stroked panel.", 90, 268, 9]],
+      drawingOps: ["q 90 542 360 150 re W n 1 0 0 1 90 542 cm 4 w 0 0 360 150 re S Q"],
+    };
+    expect(await boxes(page, "Figure 1")).toEqual([[90, 100, 450, 250]]);
+  });
+
+  it("retains zero-width vertical and horizontal stroked lines when they cross a caption", async () => {
+    const page: FigurePage = {
+      text: [["Figure 1. Invented interior label.", 90, 268, 9]],
+      drawingOps: ["90 542 360 150 re f", "2 w 90 542 m 90 490 l S", "90 490 m 450 490 l S"],
+    };
+    expect(await boxes(page, "Figure 1")).toEqual([]);
+  });
+
+  it("restores the previous clip after a nested graphics state closes", async () => {
+    const page: FigurePage = {
+      text: [["Figure 1. Invented panel.", 90, 268, 9]],
+      drawingOps: ["q 90 542 360 150 re W n q 90 600 360 92 re W n 90 490 360 202 re f Q 90 542 360 150 re f Q"],
+    };
+    expect(await boxes(page, "Figure 1")).toEqual([[90, 100, 450, 250]]);
+  });
+
+  it("does not pair a truly painted extension through its caption", async () => {
+    const page: FigurePage = { text: [["Figure 4. Invented interior label.", 90, 268, 9]], drawingOps: ["90 490 360 202 re f"] };
+    expect(await boxes(page, "Figure 4")).toEqual([]);
+  });
+
   it("never searches another page to conceal an incorrect requested page", async () => {
     const pdf = figurePdf([{ text: [["Table 1. Invented rows.", 90, 268, 9]], shapes: panel(90, 100, 360, 150) }, neighbors]);
     expect((await extractPdfFigures(pdf, { ...options, onlyPage: 1, label: "Figure 4", maxFigures: 1 })).figures).toEqual([]);
