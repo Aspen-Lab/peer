@@ -168,6 +168,19 @@ export function inferRoles(rows: readonly ReadingMapSection[], trunkId: string |
     else if (firstReferences >= 0 && t > firstReferences) patches.set(row.id, { role: "apparatus" });
     else if (t < evidenceEnd) patches.set(row.id, { role: "evidence" });
   });
+
+  // A4: a sub-row whose heading names no role takes its part's: the role of the row it hangs under, as that row
+  // ends up (a parent comes before its children, so it is settled first).
+  const ends = new Map<string, ReadingRole>();
+  for (const row of rows) {
+    let role = patches.get(row.id)?.role ?? row.role;
+    const above = row.parentId === undefined ? undefined : ends.get(row.parentId);
+    if (role === "body" && above !== undefined && above !== "body") {
+      role = above;
+      patches.set(row.id, { ...patches.get(row.id), role });
+    }
+    ends.set(row.id, role);
+  }
   return rows.map((row) => {
     const patch = patches.get(row.id);
     return patch ? { ...row, ...patch } : row;

@@ -329,6 +329,72 @@ describe("A3 — the unnamed parts after the references are back matter, and a p
   });
 });
 
+describe("A4 — a sub-row takes its part's role", () => {
+  it("gives the sub-headings of an unnamed part the role the part was given", () => {
+    const doc = paper([
+      ["1 Introduction", 3],
+      ["2 " + SNAILS, 3],
+      ["2.1 Counts by site", 2],
+      ["2.2 Counts by season", 2],
+      ["3 " + SHELLS, 3],
+      ["3.1 Counts by size", 2],
+      ["4 Methods", 2],
+    ]);
+
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "evidence", "evidence", "evidence", "evidence", "method"]);
+  });
+
+  it("follows the part into the back matter", () => {
+    const doc = paper([["1 Introduction", 3], ["2 Discussion", 2], ["References", 2], ["3 Notes on the survey", 1], ["3.1 Counts by site", 1]]);
+
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "interpretation", "apparatus", "apparatus", "apparatus"]);
+  });
+
+  it("takes the role of the nearest row above, through a sub-sub-heading", () => {
+    const doc = paper([["1 Introduction", 3], ["2 " + SNAILS, 2], ["2.1 Counts by site", 2], ["2.1.1 Counts by tide", 2], ["3 Methods", 2]]);
+
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "evidence", "evidence", "method"]);
+  });
+
+  it("never overrides a sub-heading that names a role", () => {
+    const doc = paper([["1 Introduction", 3], ["2 " + SNAILS, 2], ["2.1 Counts by site", 2], ["2.2 Limitations", 2], ["3 Methods", 2]]);
+
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "evidence", "interpretation", "method"]);
+  });
+
+  it("leaves a sub-row alone where its part has no role", () => {
+    // Above the introduction: the part is untagged, so is its sub-row.
+    const above = paper([["1 Notes on the survey", 1], ["1.1 Counts by site", 1], ["2 Introduction", 3], ["3 Methods", 2]]);
+    expect(rolesOf(above).map(([, role]) => role)).toEqual(["body", "body", "setup", "method"]);
+    // No introduction to stand on at all.
+    const none = paper([["1 " + SNAILS, 3], ["1.1 Counts by site", 2], ["2 Methods", 2]]);
+    expect(rolesOf(none).map(([, role]) => role)).toEqual(["body", "body", "method"]);
+  });
+
+  it("gives a sub-row of a named part the part's role where the bucket did not reach it", () => {
+    const row = (id: string, heading: string, canonical: string, role: ReadingMapSection["role"], extra: Partial<ReadingMapSection> = {}): ReadingMapSection => ({
+      id,
+      heading,
+      canonical,
+      role,
+      words: 30,
+      minutes: 1,
+      paragraphs: [{ index: 0, opening: "x" }],
+      level: 1,
+      ...extra,
+    });
+    const rows = [
+      row("a", "1 Introduction", "introduction", "setup"),
+      row("b", "2 Methods", "methods", "method"),
+      row("c", "2.1 Field work", "body", "body", { level: 2, parentId: "b" }),
+    ];
+
+    expect(inferRoles(rows, null).map((r) => r.role)).toEqual(["setup", "method", "method"]);
+    // Without an introduction to stand on, nothing is inferred.
+    expect(inferRoles(rows.slice(1), null).map((r) => r.role)).toEqual(["method", "body"]);
+  });
+});
+
 describe("a paper that names every part is not touched", () => {
   it("(b) numbered: every row keeps the role its heading gave it, and is the very row it was", () => {
     const doc = paper([
