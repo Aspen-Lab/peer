@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T05:49:57.824Z
+AS OF        2026-10-27T05:55:49.348Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.387   NEXT RULING §1h.388   NEXT ITEM ID P12-33   NEXT FREE PORT 4232
+LAST RULING  §1h.388   NEXT RULING §1h.389   NEXT ITEM ID P12-34   NEXT FREE PORT 4233
 RUBRIC       P12-RUBRIC.md frozen; scores none; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      C28fillonlyclipguideapproved/freshnessweb444partial;B32column-crosspagepending;R1mediansA0/B0A0B0;clockACTIVE
+RUNNING      C28source2c204c03gatesfrozen/B31moves-budgetreplay;B32followupbankpending/B33briefready;R1mediansA0B0counts0/0;clockACTIVE
 THEN         freshA23/A24→3freshblindreaders/theme→directoraudit/mechanismfix→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -555,6 +555,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T05:48:40.673Z | parent 4744feb6 (entry commit follows) | manager | P12-R1-SIX-BLIND-MEDIANS-DIRECTOR-RECORDED: Formal R1baseline recorded atweb88ac:threefreshreaders/theme final0/0/0 each;mediansA0.00/B0.00,A23A24each0,director0/0. Director independentlyhashes1795+610artifacts0mismatch,auditsdisputes;A9/B9boundedPASS,preoverride8.333each,commongatesoverride0;prices/denominator/stoplineunchanged,consecutive0/2each | evidence: P12-R1-DIRECTOR-20261027.md;P12-RUBRIC.mdScores;privateblind-round1outputs/audits | next: Narrow measured fill-clipping repair with existing stroke contract preserved;continue finite captionidentityprovenance;fresh independent candidate gates/UI;next A round closes named gaps
 
 - 2026-10-27T05:49:57.824Z | parent 1ebc2314 (entry commit follows) | manager | P12-28-MEASURED-FILL-CLIP-SCOPE: After B31 stroke counterexamples, choose measured fill-only activeclipcontrolbounds correction;preserveunchangedstrokegeometry/flooreligibility/renderpadding. All189offendingpublicApathsarefills. No universaldualbounds/native-strokeregionrepair,oldtestreaim,neighbor grouping or complete-stroke claim;oldlimitationsremainopen. Existing24captionassertionsandallgatesmusthold. | evidence: briefs/P12-28.mdRuling387;B31through315a58f8;C28red5883df1f/stop0691385e/freshnessafc6474a | next: C28implement measuredfillclip+gates;B32complete finite genuinecolumn/crosspage matrix;manager exactnewcandidateverification then freshA round
+
+- 2026-10-27T05:55:49.348Z | parent ff5348a3 (entry commit follows) | manager | P12-33-NORMAL-PRODUCTION-ENTRY-BRIEF: SeparateB33read-onlybrief names actual source conditions and three ordinary supported production entry choices;no repeatanonymouslanding/no synthetic auth/configbypass/credentialsinspection. Ownp12-33/wtff5348a3/4232reserved. C28/B31graphicvalidationparallel;R1medians0/0recorded. | evidence: briefs/P12-33.md;P12-24normalproductionfacts | next: StartB33normal-entrysourceinvestigation;B31replaymanagerallMoves/budgetcounterexamples;C28keepfrozenfinishgates;bankB32crosspagefacts
 
 ---
 

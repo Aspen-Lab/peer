@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round1 independent A walks; official scores none; both themes consecutive passes0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T05:49:57.824Z; only writer of this file
-CURRENT ITEM:          C28fillonlyclipguideapproved/freshnessweb444partial;B32column-crosspagepending;R1mediansA0/B0A0B0;clockACTIVE
-NEXT TURN:          C28fillclipimplementation;B32column/crosspage measurement;R1medians0/0recorded;repeatindependentgates/UIonnewcandidate
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T05:55:49.348Z; only writer of this file
+CURRENT ITEM:          C28source2c204c03gatesfrozen/B31moves-budgetreplay;B32followupbankpending/B33briefready;R1mediansA0B0counts0/0;clockACTIVE
+NEXT TURN:          B33normalentry;B31managercounterexample;C28frozengates;B32followupbank
 STOPPED BECAUSE:          — recovery14 at2026-10-26T18:18UTC after usage-limit interruption; sameA23/A24/B27 resumed, no duplicate; A26 PARTIAL retained
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1619,6 +1619,11 @@ Formal R1baseline recorded atweb88ac:threefreshreaders/theme final0/0/0 each;med
 Use the measured fill-only clip-bound correction after B31 stroke counterexamples. Preserve the established stroke collector/geometry/floors/report/render and every existing test. Conservative active-clip fill bounds must retain genuine support and bounded graphics state; no unproved tighter clip, caption-overlap widening, whole-page recall regression or universal stroke claim. Larger pre-existing stroke/raster grouping limitations remain open and count normally in A. This implementation scope clarification changes no rubric price, input, pass requirement or stop line. Evidence: P12-28 ruling387 supplement; B31through315a58f8; C28 red tests5883df1f and freshnessafc6474a.
 
 
+### §1h.388 — 2026-10-27 — P12-33-NORMAL-PRODUCTION-ENTRY-BRIEF
+
+Investigate source-backed ordinary supported production entry/prerequisites in separate read-only B33. No synthetic authentication, configuration/security bypass, credential inspection, new account or replay of already completed anonymous landing checks. Blocked production gates stay blocked until actual authorized evidence exists. Parallel C28/B31 source verification continues.
+
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -1901,6 +1906,11 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-24 | PARTIAL | R1ThemeB own4223/web88ac;4inputs/no-key+stub | 600inventedcycles/18compositions/4canonicalHTTP200/byteprivacyv3banked;full79guards/stablefigures/production/remainingactionsowed | Completeallguards/actualfigures/normalproduction+privacy/factualcuration then3blind | P12-24-A-20261025T230500Z.md@975b232b; uniqueprivate raw |
 | P12-25 | INVESTIGATION_COMPLETE | Independent B ninepublicAloading cases; own4224stopped/web88ac | 9stabletimedcases/all200by10s;5pending+8deliveredopens;separatepeekvisibleclick;3candidates; no productfix justified, historicalA gapsremain | A24 freshstableidentity/progressiveobservations; A26starts freedslot; formalround remainsopen | P12-25-B-20261026T043000Z.md@03127840; summary/historicalgeometry/25filemanifest |
 | P12-26 | PARTIAL | FreshpublicA/publicB/invented factualnotehelper own4225/web88ac | 3normalUIentriesonceeach/consent3of3/0errors banked;functional/matrix/exports/cycles/guardsowed | Noteformat/list/lifecycle/export/cliphit/matrix/cycles/privacy/curatedfacts | P12-26-A-20261026T072000Z.md@ec5db89d; threeprivateentryartifacts |
+| P12-28 | PARTIAL | Caption/freshness and measured clipped-fill correction; independent manager preservation checks | Not landed. New2c204c03sourcegatespending;managernewcounterexamplesunderB31 | B31guide→Ccorrectionifneeded→managerexacttreegates/UI | P12-28brief;worker6c6db9af;managerverifyreport;B31 |
+| P12-31 | PARTIAL | PublicAgraphicpreservation+clipping/strokebounds+managercounterexamples | Finitecausesmeasured;noscorerequirementwaived | ReplayallMoves/unpaintedpathandclipped-awayworkbudget | P12-31-B-20261027T011000Z.md through315a58f8 |
+| P12-32 | PARTIAL | Captionidentity/sourcewordmatrix | 15onepage+5twopagecases;classifiernotauthorized | Bank576a5c15boundedfindings;sourceposition/associationremainsopen | P12-32-B-20261027T012000Z.md |
+| P12-33 | READY | Normalproductionentrysupportedjourneys/prerequisites | Read-only;noauthworkaround | StartseparateB33 | briefs/P12-33.md |
+| P12-R1 | SCORED | TwoA+threefreshblindreaders/theme+directoraudit | MediansA0.00/B0.00commongatesunestablished;counts0/2each | Mechanismfixes+freshnextA/readerround | P12-R1-DIRECTOR-20261027.md;P12-RUBRIC.md |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
 | P11-26 | **DONE 21:0xZ 2026-10-20** — on the branch (§1h.128 (b)); was RUNNING (rules 4, 5 added §1h.127 (c)) since 09:1xZ 2026-10-20 — C, `briefs/P11-26.md`, `scratchpad/p11c26/wt`, port 4127: the explain card keeps its top at the selection (B3); a figure in front of the stack is never a thumbnail (X-3) | round 1 Theme B | §1h.122 (b) 1, 4 | C → the manager | — |
