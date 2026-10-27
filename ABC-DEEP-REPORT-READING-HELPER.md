@@ -42,9 +42,9 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ```text
 ROUND:          P12 round2 preparation; formal round1 medians A0.00/B0.00; consecutive passes A0/2 B0/2
 BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
-HELD BY:          Codex manager, local desktop chat, 2026-10-27T11:11:33.831Z; only writer of this file
-CURRENT ITEM:          A34/A35actualCUAavailableown4233/4234baselinesrunning;B36sourcePARTIALbankedexecnext;web28cf;R1medians0/0counts0/0;clockACTIVE
-NEXT TURN:          B36execfinitewriterorder/debounce/isolationmatrixand3candidates;A34/A35independentrealUIcontinue
+HELD BY:          Codex manager, local desktop chat, 2026-10-27T11:12:58.660Z; only writer of this file
+CURRENT ITEM:          A34actualIAB4233capabilitybankedinputactionscontinue;A35actualpublicA4234readerbaseline;B36finitefunctionmatrix;web28cf;R1medians0/0counts0/0;clockACTIVE
+NEXT TURN:          A34normaloriginal/public/inventedentryandnotefamilies;A35parallel;B36finitefunctiondiagnosismissingcomponenttimingexplicit
 STOPPED BECAUSE:          — active; prior quota interruptions preserved in log; C28 independently verified and landed
 GATE BASELINE:          GREEN: original220ca9e1 webtree a0ac51590e2975e77f577cb0d9c0f0da3bba8ba3; native Ubuntu24.04 Node22.23.4 TZAmerica/Chicago run40042575107:build0 tsc0 lint0errors/144warnings test0;569passed3skipped files(572),10684passed3skipped tests(10687). Earlier Windows/TCG discrepancies retained as environment history.
 CLOCK:            peer-p12 hourly heartbeat ACTIVE in this chat; separate cheapest-model selection unavailable in heartbeat tool
@@ -1697,6 +1697,11 @@ B36 independently investigates the observed same-note aggregate/sticky writer qu
 ### §1h.403 — 2026-10-27 — P12-36-WRITER-SOURCE-PARTIAL-BANKED
 
 Read B36 source checkpoint and immediate correction in full. Actual sticky debounce is150ms, not300ms from stale comments; aggregate500ms and wholesale store replacement plus separate reconciliation are source facts only. Finite execution/candidate rules remain pending, so no causal or UI conclusion is accepted. Preserve both report commits without rewriting history; no product change.
+
+
+### §1h.404 — 2026-10-27 — P12-34-ACTUAL-UI-CAPABILITY-PARTIAL-BANKED
+
+Read A34 capability checkpoint in full: actual documented background IAB and ordinary4233DEV reached welcome then home via Skip setup. Initial visibility/pre-server/navigation failures are preserved setup facts, not product findings. Context isolation is unestablished. This is an initial finite checkpoint only; input/actions/common gates/score remain and the same fresh A continues.
 
 
 ## §5. Durable work ledger — update in place, evidence append only

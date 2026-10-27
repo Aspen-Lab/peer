@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T11:11:33.831Z
+AS OF        2026-10-27T11:12:58.660Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; local clone peer-p12-manager
 HELD BY      Codex manager (local desktop chat); only writer of the state file
-LAST RULING  §1h.403   NEXT RULING §1h.404   NEXT ITEM ID P12-37   NEXT FREE PORT 4236
+LAST RULING  §1h.404   NEXT RULING §1h.405   NEXT ITEM ID P12-37   NEXT FREE PORT 4236
 RUBRIC       P12-RUBRIC.md frozen; formal R1 A0.00/B0.00; consecutive A0/B0; stop ≥97.9 / one0.25 / two rounds
-RUNNING      A34/A35actualCUAavailableown4233/4234baselinesrunning;B36sourcePARTIALbankedexecnext;web28cf;R1medians0/0counts0/0;clockACTIVE
+RUNNING      A34actualIAB4233capabilitybankedinputactionscontinue;A35actualpublicA4234readerbaseline;B36finitefunctionmatrix;web28cf;R1medians0/0counts0/0;clockACTIVE
 THEN         parallelfreshR2AThemeA/B→3freshblindreaders/theme→director→mechanismB/Cfixes→nextscoredround;stop97.9twoconsecutive
 OWNER'S PDF  supplied attachment; use only original path through upload UI; never commit or quote
 CLOCK        hourly heartbeat peer-p12 ACTIVE; independent cheapest model unavailable in current heartbeat tool
@@ -587,6 +587,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T11:09:49.716Z | parent dbf51df6 (entry commit follows) | manager | P12-36-SAME-NOTE-WRITER-B-STARTED: IndependentB36dispatchedat66656b33/web28cf;ownp12-36/wt/4235reserved;finiteinventedproducer/debounce/save/delete/escape/reload/isolationmatrix. Manageroverwritediagnosisunverified;3candidaterulesandadversarialcasesowed;noCfixauthorized. | evidence: briefs/P12-36.md;agentp12_36_same_note_writer_b;P12-R1-DIRECTOR-20261027.md | next: B36finitecausalguidewhilefreshA34/A35measure;managerreadactualreportsandrulebeforeanyC;clockunchanged
 
 - 2026-10-27T11:11:33.831Z | parent 7ec01986 (entry commit follows) | manager | P12-36-WRITER-SOURCE-PARTIAL-BANKED: B36sourcecheckpointd080208d+correction7d94a8efbanked:actualsticky150ms(notoldcomment300),aggregate500ms,whole-docstore save andseparatereconciletrace. Finiteexecutionpending;nocausal/UI/acceptanceconclusion. No product edit. | evidence: P12-36-B-20261027T000000Z.md;d080208d/7d94a8ef | next: B36execfinitewriterorder/debounce/isolationmatrixand3candidates;A34/A35independentrealUIcontinue
+
+- 2026-10-27T11:12:58.660Z | parent a59359c1 (entry commit follows) | manager | P12-34-ACTUAL-UI-CAPABILITY-PARTIAL-BANKED: ReadandbankedA34report40aca22e:exact66656b33/web28cf,own4233ordinaryDEVready,documentedbackgroundIABreacheswelcomeandSkipsetuphome. Visibilityunsupported/pre-serverrefusal/navigationtimeoutretainedsetupfacts. Freshprofileisolationunestablished;input/action/scorepending. Agentcontinues. | evidence: P12-34-A-20261027T111042Z.md;40aca22e;own4233 | next: A34normaloriginal/public/inventedentryandnotefamilies;A35parallel;B36finitefunctiondiagnosismissingcomponenttimingexplicit
 
 ---
 
