@@ -183,8 +183,10 @@ const FRONT_MATTER_END = new Set(["abstract", "introduction"]);
 //               section, in the apparatus bucket, and its text is read;
 //   an argument a heading that names a part of the argument (methods above all): its own section, and its
 //               sub-headings are read as the body's are;
-//   out         the references and the bulky apparatus (an appendix, the supplementary material): their text
-//               stays out, as it always did;
+//   out         the references: their text stays out, as it always did;
+//   an appendix the bulky apparatus (an appendix, the supplementary material, a lettered "B Additional
+//               results"): its text stays out as it did, and nothing after it is taken for a part of the
+//               argument, whatever words its headings hold;
 //   (nothing)   any other heading, which reads whatever its surroundings read (the sub-headings of an
 //               argument part), and in the notes' company reads nothing (the authors' affiliation blocks, a
 //               reference entry the page set as a heading).
@@ -193,18 +195,23 @@ const FRONT_MATTER_END = new Set(["abstract", "introduction"]);
 const ARGUMENT_PARTS = new Set(["introduction", "related_work", "methods", "results", "discussion", "conclusion", "limitations"]);
 /** The apparatus too long to be a note: it stays out after the argument, as it did. */
 const BULKY_END_MATTER = /^(?:appendix|appendices|supplementary\s+(?:materials?|information))\b/i;
+/** A heading numbered by a letter or a numeral ("B Additional results", "C.1 Setup", "IV. Proofs"), once the
+ *  argument is over, is a section of an appendix. */
+const APPENDIX_NUMBER = /^(?:[A-Z]|[IVX]+)(?:\.\d+)*\.?\s+\S/;
 /** A heading named only by its bucket's words is a short line: a reference entry the page set as a
  *  heading is longer than this, carries a comma after its authors or the year of its journal. */
 const PLAIN_HEADING_WORDS = 8;
 const PRINT_YEAR = /\b(?:1[5-9]|20)\d\d\b/;
 
-type TailPart = "note" | "argument" | "out" | null;
+type TailPart = "note" | "argument" | "out" | "appendix" | null;
 
 /** What a heading met once the argument is over stands for (see above); `ends` is `endsTheArgument` of it. */
 function tailPartOf(heading: string, canonical: string, ends: boolean): TailPart {
   if (canonical === "references") return "out";
-  const own = heading.trim().replace(GLYPH_LEAD, "").replace(SECTION_LEAD, "");
-  if (ends) return BULKY_END_MATTER.test(own) ? "out" : "note";
+  const bare = heading.trim().replace(GLYPH_LEAD, "");
+  const own = bare.replace(SECTION_LEAD, "");
+  if (ends) return BULKY_END_MATTER.test(own) ? "appendix" : "note";
+  if (APPENDIX_NUMBER.test(bare)) return "appendix";
   if (own.split(/\s+/).length > PLAIN_HEADING_WORDS || own.includes(",") || PRINT_YEAR.test(own)) return null;
   if (canonical === "acknowledgments") return "note";
   return ARGUMENT_PARTS.has(canonical) ? "argument" : null;
@@ -1990,11 +1997,13 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
   // P12-51 (O5): the first end-matter heading closes the argument (`tail`) and the text under it is not
   // read (`reading`); what follows is read by what each heading names (`tailPartOf`). `resumed`: the
   // current stretch is a part of the argument, whose sub-headings are read; `opensTail`: the heading that
-  // closed the argument, which stays closed when a wrapped second line joins it.
+  // closed the argument, which stays closed when a wrapped second line joins it; `appendix`: an appendix
+  // has begun, and no heading after it opens a part of the argument again.
   let tail = false;
   let reading = true;
   let resumed = false;
   let opensTail = false;
+  let appendix = false;
 
   // P7-18 (F3): every heading takes its place in the numbering, a heading with nothing under it
   // too ("2. RESULTS AND DISCUSSION" holds only its subsections and is no section), so "2.1 …"
@@ -2099,9 +2108,11 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
           reading = false;
         }
       } else if (!opensTail) {
-        const part = tailPartOf(heading, canonical, ends);
+        let part = tailPartOf(heading, canonical, ends);
+        if (part === "appendix") appendix = true;
+        else if (part === "argument" && appendix) part = null;
         if (part !== null) {
-          reading = part !== "out";
+          reading = part === "note" || part === "argument";
           resumed = part === "argument";
         } else {
           reading = resumed;

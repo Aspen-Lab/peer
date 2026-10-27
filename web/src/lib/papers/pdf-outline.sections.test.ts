@@ -649,3 +649,56 @@ describe("the text of a figure's panels is out of the prose and never a heading 
     expect(outline.figureCaptions?.[0]?.caption).toBe("Rates of the new set up to ten on it");
   });
 });
+
+// ── O5, the appendix: what is not read after the references although a heading's words name an argument part ─
+
+/** Appendices numbered by letters, as a machine-learning paper prints them after its references. */
+const lettersAfterReferences = (): PdfPageText[] => [
+  page(1, [
+    ...BODY_ROWS,
+    r("Acknowledgements", "head", 20),
+    r("We thank the staff of the furnace room for their patience and their time."),
+    r("References", "head", 20),
+    ...prose(...REFERENCES),
+    r("A Proofs", "head", 20),
+    r("Proof of the lemma follows from the triangle inequality applied twice over here."),
+    r("B Additional Results", "head", 20),
+    r("More cells were cycled and the extra curves are shown below for the reader."),
+    r("C.1 Experimental Details", "sub", 20),
+    r("Each cell was built in a glove box by the same hand on the same day of the week."),
+  ]),
+];
+
+/** Words that name an argument part, under an appendix the paper does not call by a letter. */
+const argumentWordsAfterAppendix = (): PdfPageText[] => [
+  page(1, [
+    ...BODY_ROWS,
+    r("References", "head", 20),
+    ...prose(...REFERENCES),
+    r("Supplementary Material", "head", 20),
+    r("Everything the paper could not hold is kept in this part of the file."),
+    r("Additional results", "sub", 20),
+    r("More cells were cycled and the extra curves are shown below for the reader."),
+    r("Methods", "head", 20),
+    r("Each cell was built in a glove box by the same hand on the same day of the week."),
+  ]),
+];
+
+describe("an appendix after the references is not read although its headings name an argument part (P12-51, O5)", () => {
+  it("leaves lettered appendix sections out, whatever words their headings hold", () => {
+    expect(headingsOf(lettersAfterReferences())).toEqual(BODY_HEADINGS);
+    const text = textOf(lettersAfterReferences());
+    for (const appendixText of ["triangle inequality", "extra curves", "glove box"]) expect(text).not.toContain(appendixText);
+  });
+
+  it("reads no part of the argument after supplementary material, as it read nothing there before", () => {
+    expect(headingsOf(argumentWordsAfterAppendix())).toEqual(BODY_HEADINGS);
+    const text = textOf(argumentWordsAfterAppendix());
+    for (const appendixText of ["kept in this part", "extra curves", "glove box"]) expect(text).not.toContain(appendixText);
+  });
+
+  it("still reads a Methods that follows the references when no appendix has begun", () => {
+    expect(headingsOf(methodsAfterReferences())).toContain("Methods");
+    expect(headingsOf(afterTheReferences())).toContain("Methods");
+  });
+});
