@@ -1,6 +1,6 @@
 # P12-28 independent manager verification — baseline checkpoint
 
-PARTIAL. No product landing or score. Manager free copy starts at a4cfd453e3d72fa625df4aa9a9e13d634ebd6247, released web88ac61222f469dd5d720f4e620cb7963f4a85cbf. Worker changes remain separate until independent exact-tree gates and browser verification finish.
+VERIFIED AND LANDED. On2026-10-27, the manager integrated33 chronological C28 commits into a fresh detached landing copy from e2c97b2f and fast-forwarded the approved branch to c4955144ce93fd3226df8dcae899808b96faf5dc. Landed web28cf74ea90ebc67ec3bbc56f30fa178b1681517f is byte-identical to independently verified581e13c4 and worker e0e2ff67; the web diff is silent. Scoped C verification is complete; fresh formal A walks and scoring remain open. The chronological evidence below retains the original released web88ac baseline, failures, rejected candidates and subsequent corrections.
 
 ## Actual old-source public-input baseline
 
