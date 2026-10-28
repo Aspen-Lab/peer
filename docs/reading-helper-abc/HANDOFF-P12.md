@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-28T10:25Z
+AS OF        2026-10-28T10:37Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
-LAST RULING  §1h.453   NEXT RULING §1h.454   NEXT ITEM ID P12-78   NEXT FREE PORT 4248
+LAST RULING  §1h.454   NEXT RULING §1h.455   NEXT ITEM ID P12-78   NEXT FREE PORT 4248
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
-RUNNING      (max 2, §1h.443) C P12-75 item 2 ∥ blind reader A-r2 (Theme A pack); branch head 4f6d6e67; QUEUE: A P12-72 (Theme B walk on 4f6d6e67 or later) → reader A-r3 → C P12-77 (E1, O2, E2) → C P12-70 item 10 → B short paragraphs → Theme C round 3 measure → A P12-57 phase 2 (C1)
+RUNNING      (max 2, §1h.443) A P12-72 (Theme B walk, head ccfa098b, port 4247) ∥ C P12-77 (E1, O2, E2); branch head e5f21d9d; QUEUE: Theme B readers (pack r2/a72/pack) → Theme A round 3 (A walk + readers, after C P12-77) → C P12-70 item 10 → B short paragraphs → Theme C round 3 measure → A P12-57 phase 2 (C1)
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
 OWNER'S PDFS P1–P6 (uploads in the manager's session; P4–P6 held out); upload UI only; never commit or quote
 CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB, Haiku, "20 * * * *", enabled, read back 06:23Z; prompt: at most two subagents (§1h.443)
@@ -701,6 +701,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-28T10:14Z | manager (Claude) | §1h.452: C P12-75 landed (mutations 1/2/1/3 red, one list word unpinned; 649 / 12,030 / 0 failed); Theme C P1–P4, P6 100, P5 88.89 | evidence: mgr/gates-V.log, mgr/out/P*-c75.json | next: C P12-76, reader A-r1
 
 - 2026-10-28T10:25Z | manager (Claude) | §1h.453: C P12-76 landed (mutations 4/1/3/12 red; 650 / 12,068 / 0 failed); Theme C round 2 = 100 on P1–P6; reader A-r1 P1 95.83, P2 95.83, P3 97.92 (E2 → C P12-77 rule 3) | evidence: mgr/gates-V.log, mgr/out/P*-c76.json, r2/readers/A-r1.md | next: reader A-r2, C P12-75 item 2, A P12-72
+
+- 2026-10-28T10:37Z | manager (Claude) | §1h.454: C P12-75 item 2 landed (8 / 23 red; 650 / 12,094 / 0 failed); Theme A round 2 of record P1 95.83, P2 95.83 (below), P3 97.92 / 95.83; third reader skipped | evidence: r2/readers/A-r1.md, A-r2.md, mgr/gates-V.log | next: C P12-77, A P12-72
 
 ---
 

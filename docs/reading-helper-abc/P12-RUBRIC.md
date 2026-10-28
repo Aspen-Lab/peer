@@ -183,3 +183,7 @@ The blind readers score from the pack against this matrix; the director voids a 
 ## Scores of record — Theme C round 2 (§1h.453), head `4f6d6e67`
 
 C0 (no key): P1 100, P2 100, P3 100, P4 100, P5 100, P6 100 (every part right, no extras). Consecutive rounds at the target: 1. C1: not yet measured.
+
+## Scores of record — Theme A round 2 (§1h.454)
+
+A P12-71 on `d44aeabb`; readers A-r1 and A-r2 (median): P1 95.83, P2 95.83 (below 97.25); P3 readers 97.92 / 95.83 (third reader skipped, the round's outcome is set). Consecutive rounds at the target: 0. Theme B round 2: A P12-72 walking `ccfa098b`.
