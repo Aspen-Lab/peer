@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-28T18:34Z
+AS OF        2026-10-28T21:24Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
-LAST RULING  §1h.472   NEXT RULING §1h.473   NEXT ITEM ID P12-91   NEXT FREE PORT 4248
+LAST RULING  §1h.473   NEXT RULING §1h.474   NEXT ITEM ID P12-91   NEXT FREE PORT 4248
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
-RUNNING      (max 2, §1h.443) reader B3-r1 (Theme B round 3) ∥ C P12-90 (Tier-1 piece guard + numbers); branch head 93ba0c7b; QUEUE: reader B3-r2 → C P12-89 (E5) → A P12-57 phase 4 (P6 × 5, P4 × 2) → Theme B round 4 → B short paragraphs; DONE: Theme A, Theme C0; OWNER: O1
+RUNNING      (max 2, §1h.443) C P12-89 (E5 rules 1 + 2) ∥ reader B3-r2 (Theme B round 3); both resumed after the 5-hour limit (reset 21:20 UTC); branch head 8bf1dadb; QUEUE: A P12-57 phase 4 (P6 × 5, P4 × 2) → Theme B round 4 → B short paragraphs; DONE: Theme A, Theme C0; OWNER: O1
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
 OWNER'S PDFS P1–P6 (uploads in the manager's session; P4–P6 held out); upload UI only; never commit or quote
 CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB, Haiku, "20 * * * *", enabled, read back 06:23Z; prompt: at most two subagents (§1h.443)
@@ -739,6 +739,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-28T18:31Z | manager (Claude) | §1h.471: A P12-88 Theme B round 3 95.83 ×3 (E2 + E5); C P12-89 briefed; Theme C round 4 C0 100 ×6 | evidence: P12-88-A report, mgr/out/P*-r4.json | next: readers B3, C P12-89
 
 - 2026-10-28T18:34Z | manager (Claude) | §1h.472: C1 phase 3 P3 3/3, P4 3/3, P6 4/5; C P12-90 started | evidence: mgr/sealed-c1/*-p3run*.json, P12-57-A phase 3 report | next: reader B3-r1, C P12-90
+
+- 2026-10-28T21:24Z | manager (Claude) | §1h.473: C P12-90 landed (11 / 6 red; 658 / 12,369 / 0 failed); the 5-hour limit stopped C P12-89 and reader B3-r2, both resumed after 21:20 UTC; phase 4 briefed | evidence: mgr/gates-V.log | next: C P12-89, B3-r2, phase 4
 
 ---
 
