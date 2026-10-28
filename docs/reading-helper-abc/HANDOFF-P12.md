@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-28T06:32Z
+AS OF        2026-10-28T06:55Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
-LAST RULING  §1h.444   NEXT RULING §1h.445   NEXT ITEM ID P12-71   NEXT FREE PORT 4246
+LAST RULING  §1h.445   NEXT RULING §1h.446   NEXT ITEM ID P12-71   NEXT FREE PORT 4246
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
-RUNNING      (max 2, §1h.443) C P12-70 (integration, items 1–7) ∥ C P12-53 (Tier 1 on Tier 0); QUEUE: C P12-67 follow-up (ft + word list) → C P12-69 → fresh A walks → readers → P4–P6 first sight → A P12-57 phase 2
+RUNNING      (max 2, §1h.443) C P12-70 item 8 (the real drop-cap shape) ∥ C P12-69 (takedown, privacy page); V = p504/wt full gates running; QUEUE: land V → fresh A walks → readers → P4–P6 first sight → A P12-57 phase 2
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
 OWNER'S PDFS P1–P6 (uploads in the manager's session; P4–P6 held out); upload UI only; never commit or quote
 CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB, Haiku, "20 * * * *", enabled, read back 06:23Z; prompt: at most two subagents (§1h.443)
@@ -683,6 +683,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-28T06:23Z | manager (Claude) | §1h.443: the owner — at most two subagents at a time; a fourth limit (5-hour) stopped C53, C67, C70, A37, A38 at ~03:30Z; reset 06:20Z; resumed C70 + C67 only; A37 / A38 paused as stale; batch 2 (C64, C68) verified in mgr/v3 | evidence: mgr/gates-combo1.log | next: C70's fixes → land batches 1 + 2
 
 - 2026-10-28T06:32Z | manager (Claude) | §1h.444: C67 upstream verified in mgr/v3; Theme C on batches 1+2 with the closing split: P1 4/5, P2 5/5, P3 7/8; C67 follow-up queued; C70 item 7 (drop cap in the opening) | evidence: mgr/out/P1-3-b2*.json | next: C70, C53
+
+- 2026-10-28T06:55Z | manager (Claude) | §1h.445: batch-2 gates 6 red (C P12-70's five + P12-67 × P12-62, re-aimed b9f960a2); V's three files 150/150; Theme C on V P1 5/5, P2 5/5, P3 6/8 → C P12-70 item 8 | evidence: mgr/gates-batch2.log, mgr/gates-V.log (running) | next: C P12-70 item 8, V gates, land
 
 ---
 
