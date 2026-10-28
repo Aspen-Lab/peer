@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-28T02:00Z
+AS OF        2026-10-28T02:06Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
 LAST RULING  §1h.438   NEXT RULING §1h.439   NEXT ITEM ID P12-67   NEXT FREE PORT 4246
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
-RUNNING      A P12-37 (4240) ∥ A P12-38 (4241) ∥ C P12-47 (R2a/R3a/R5a/R8a) ∥ C P12-63 (closing split on the page) ∥ C P12-64 (titles) ∥ C P12-49 (headings) ∥ C P12-50 (gutter) ∥ C P12-62 (first end-matter part) ∥ C P12-65 (no overwrite, 4243) ∥ C P12-66 (focus, 4245) ∥ C P12-53 (Tier 1) ∥ C P12-55 (ceilings, clip) ∥ C P12-56 (Extended Data, R6b, R15a) ∥ C P12-58 (body arrives) ∥ C P12-61 (kept cut, then page-only)
+RUNNING      A P12-37 (4240) ∥ A P12-38 (4241) ∥ C P12-47 (R2a/R3a/R5a/R8a) ∥ C P12-63 (closing split on the page) ∥ C P12-64 (titles) ∥ C P12-49 (headings) ∥ C P12-62 (first end-matter part) ∥ C P12-65 (no overwrite, 4243) ∥ C P12-66 (focus, 4245) ∥ C P12-53 (Tier 1) ∥ C P12-55 (ceilings, clip) ∥ C P12-56 (Extended Data, R6b, R15a) ∥ C P12-58 (body arrives) ∥ C P12-61 (kept cut, then page-only)
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
 OWNER'S PDFS P1–P6 (uploads in the manager's session; P4–P6 held out); upload UI only; never commit or quote
 CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB, Haiku, "20 * * * *", enabled, read back 17:02Z; prompt now says workaholic mode: resume usage-limited agents and refill the frontier
@@ -665,6 +665,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-28T01:53Z | manager (Claude) | §1h.437: B P12-52 landed — M1 a pagehide overwrite plus a seed-save loop doubling the note to the storage quota; M2 / M3 focus theft and a lost key; C P12-65 and C P12-66 dispatched in parallel | evidence: P12-52 report; briefs/P12-65..66.md | next: land C50 + C51, C48, C49, C53
 
 - 2026-10-28T02:00Z | manager (Claude) | §1h.438: A P12-57 phase 1 landed (keyed harness works on P1; 0 key occurrences in its commit); the dev server's Turbopack cache snapshots the environment's test key — every dev server starts with env -u PEER_TEST_GEMINI_API_KEY, caches deleted after use; running workers told; finished worktrees' caches deleted | evidence: P12-57 report | next: land C50 + C51, C48, C53; verify C49, C55
+
+- 2026-10-28T02:06Z | manager (Claude) | C P12-50 (O2) and C P12-51 (O5, O6, O8) LANDED together. Verified in the free copy: diffs read; tsc 0; lint 0 / 144; outline + pdf-text tests 488 green; own mutations O5 → 6 red, O6 → 4, O8 → 5, narrow gutter → 10, prior by position → 7, sha256 equal after restore; full suite (2 workers) 601 + 3 skipped files, 11,029 + 3 skipped tests, 0 failed; build 0. Theme C on the real papers with these two alone (scorer, strict): P1 3 / 5 (was 0), P2 4 / 5 (was 3), P3 2 / 8 (was 0) — the roles (C P12-48), the headings (C P12-49) and the first end-matter part (C P12-62) are still to land | evidence: mgr/gates-c5051.log, mgr/out/P1-3-c5051.json | next: land C48, combine C47 + C55
 
 ---
 
