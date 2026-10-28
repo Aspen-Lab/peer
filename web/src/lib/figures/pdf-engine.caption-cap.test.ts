@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { figureCaption } from "@/components/reader/matted-figure";
 import { figurePdf, panel, type FigurePage, type TextRun } from "./figure-pdf.test-helper";
+import { FIGURE_EXTRACTION_REVISION } from "./figure-revision";
 import { extractPdfFigures } from "./pdf-engine";
 
 const options = { maxPages: 24, maxFigures: 12 };
@@ -120,5 +121,15 @@ describe("P12-68: the cap is 1,500 characters, not 500", () => {
     expect(printed.length).toBeLessThanOrEqual(1500);
     expect(printed).toMatch(/\.$/);
     expect(cut!.startsWith(printed)).toBe(true);
+  });
+});
+
+describe("P12-68: the figure revision", () => {
+  it("moved past 8, the revision before a caption could be 1,500 characters, so derived figure caches are rebuilt", () => {
+    // Captions longer than 500 characters change (`isSameFigure` compares captions exactly, BACKLOG-60), and the
+    // sizes cache and the figure-request `v` key on this number. Any later number retires what 8 stored.
+    const revision = Number(FIGURE_EXTRACTION_REVISION);
+    expect(Number.isInteger(revision)).toBe(true);
+    expect(revision).toBeGreaterThan(8);
   });
 });
