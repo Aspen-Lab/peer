@@ -251,7 +251,17 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   // Made whole by code: a reply that is not an answer — or whose every correction was refused — leaves the draft.
   const reviewed = reviewStructure(parseModelJson(raw), draft.parts, draft.paragraphs);
   if (reviewed.fellBack || !reviewed.answer) {
-    console.debug("[papers/structure] unusable", { promptChars: prompt.systemPrompt.length + prompt.userPrompt.length, answerChars: raw.length });
+    // Why, as counts only (P12-86): the cause is one of three names, the rest are numbers, and the two tallies are
+    // keyed by the ops and reasons of closed sets. No reply text, no paper word and no key can reach this line.
+    console.debug("[papers/structure] unusable", {
+      promptChars: prompt.systemPrompt.length + prompt.userPrompt.length,
+      answerChars: raw.length,
+      cause: reviewed.cause ?? "unsound",
+      read: reviewed.read,
+      rejected: reviewed.rejected,
+      refusedByOp: reviewed.refused.byOp,
+      refusedByReason: reviewed.refused.byReason,
+    });
     return fellBack("unusable");
   }
 

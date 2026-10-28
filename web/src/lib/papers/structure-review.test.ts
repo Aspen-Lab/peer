@@ -13,6 +13,8 @@ import {
   parseLookVerdict,
   partsOf,
   resolveLooks,
+  REFUSAL_OPS,
+  REFUSAL_REASONS,
   REVIEW_CAPS,
   reviewedParts,
   reviewPromptFixedText,
@@ -742,6 +744,131 @@ describe("applyCorrections / sound / reviewStructure — starts, then roles, the
     expect(result.fellBack).toBe(false);
     expect(result.rejected).toBe(1);
     expect(result.parts[1].role).toBe("evidence");
+  });
+});
+
+describe("sanitizeReview / reviewStructure — what was refused and why, and the cause of a fallback, as counts only (P12-86)", () => {
+  const draft = [part(0, 5, "setup"), part(6, 10, "method"), part(11, 20, "evidence"), part(21, 25, "interpretation"), part(26, 28, "apparatus")];
+  const N = 29;
+  const sum = (counts: Record<string, number | undefined>) => Object.values(counts).reduce<number>((total, n) => total + (n ?? 0), 0);
+
+  it("counts each refusal under its op and its reason, and the two tallies add up to what was rejected", () => {
+    const answer = sanitizeReview(
+      {
+        corrections: [
+          "not an object",
+          null,
+          { op: "delete", part: 1 },
+          { op: "set_role", part: "x", role: "method" },
+          { op: "set_role", part: 1, role: "banana" },
+          { op: "move_start", part: 2, toParagraph: "x" },
+          { op: "split", part: 2, atParagraph: 14 },
+          { op: "set_role", part: 99, role: "method" },
+          { op: "move_start", part: 2, toParagraph: 99 },
+          { op: "split", part: 2, atParagraph: 11, role: "method" },
+          { op: "move_start", part: 0, toParagraph: 2 },
+          { op: "set_role", part: 1, role: "method" },
+          { op: "set_role", part: 3, role: "evidence" },
+          { op: "set_role", part: 3, role: "method" },
+          { op: "move_start", part: 1, toParagraph: 8 },
+          { op: "move_start", part: 1, toParagraph: 9 },
+          { op: "move_start", part: 3, toParagraph: 21 },
+          { op: "split", part: 2, atParagraph: 14, role: "interpretation" },
+          { op: "split", part: 2, atParagraph: 14, role: "evidence" },
+          { op: "split", part: 2, atParagraph: 15, role: "evidence" },
+          { op: "split", part: 2, atParagraph: 16, role: "evidence" },
+          { op: "split", part: 2, atParagraph: 17, role: "evidence" },
+          { op: "set_role", part: 2, role: "setup" },
+          { op: "split", part: 3, atParagraph: 23, role: "setup" },
+        ],
+      },
+      draft,
+      N,
+    )!;
+
+    expect(answer.read).toBe(24);
+    expect(answer.answer.corrections).toHaveLength(5);
+    expect(answer.rejected).toBe(19);
+    expect(answer.refused.byOp).toEqual({ other: 3, set_role: 6, move_start: 5, split: 5 });
+    expect(answer.refused.byReason).toEqual({
+      malformed: 7,
+      "out-of-range": 3,
+      "part-0": 1,
+      "same-role": 1,
+      repeat: 4,
+      "split-cap": 1,
+      "setup-after-opening": 2,
+    });
+    expect(sum(answer.refused.byOp)).toBe(answer.rejected);
+    expect(sum(answer.refused.byReason)).toBe(answer.rejected);
+  });
+
+  it("counts what is past the first forty as over-cap, under the op it would have had", () => {
+    const many = Array.from({ length: 50 }, (_, k) => part(k * 2, k * 2 + 1, k % 2 === 0 ? "setup" : "method"));
+    const corrections = many.map((_, k) => ({ op: "set_role", part: k, role: k % 2 === 0 ? "evidence" : "apparatus" }));
+    const answer = sanitizeReview({ corrections }, many, 100)!;
+
+    expect(answer.refused).toEqual({ byOp: { set_role: 10 }, byReason: { "over-cap": 10 } });
+  });
+
+  it("names the counts from closed sets only: whatever the reply calls an op, the tally never carries its text", () => {
+    const answer = sanitizeReview(
+      { corrections: [{ op: "__proto__", part: 1 }, { op: "constructor", part: 1 }, { op: "Invented prose about tide pools", part: 1 }, { op: ["set_role"], part: 1 }, { part: 1 }] },
+      draft,
+      N,
+    )!;
+
+    expect(answer.refused).toEqual({ byOp: { other: 5 }, byReason: { malformed: 5 } });
+    expect(Object.keys(answer.refused.byOp).every((op) => (REFUSAL_OPS as readonly string[]).includes(op))).toBe(true);
+    expect(Object.keys(answer.refused.byReason).every((reason) => (REFUSAL_REASONS as readonly string[]).includes(reason))).toBe(true);
+    expect(Object.getPrototypeOf(answer.refused.byOp)).toBe(Object.prototype);
+  });
+
+  it("counts nothing for an answer that is whole, and an empty list of corrections", () => {
+    expect(sanitizeReview({ corrections: [{ op: "set_role", part: 1, role: "evidence" }] }, draft, N)!.refused).toEqual({ byOp: {}, byReason: {} });
+    expect(sanitizeReview({ corrections: [] }, draft, N)!.refused).toEqual({ byOp: {}, byReason: {} });
+  });
+
+  it("falls back `not-json` for a reply that is not an object with a corrections array, with nothing read and nothing refused", () => {
+    for (const raw of ["prose", null, undefined, 5, [], {}, { corrections: "no" }, { corrections: {} }]) {
+      const result = reviewStructure(raw, draft, N);
+      expect(result).toMatchObject({ fellBack: true, cause: "not-json", read: 0, rejected: 0, refused: { byOp: {}, byReason: {} }, answer: null });
+      expect(result.parts).toEqual(partsOf(draft));
+    }
+  });
+
+  it("falls back `all-refused` for corrections that were all refused, with how many were read and why they were refused", () => {
+    const result = reviewStructure(
+      { corrections: [{ op: "set_role", part: 99, role: "method" }, { op: "move_start", part: 42, toParagraph: 3 }, { op: "split", part: 77, atParagraph: 5, role: "evidence" }, { op: "set_role", part: 3, role: "setup" }] },
+      draft,
+      N,
+    );
+
+    expect(result).toMatchObject({ fellBack: true, cause: "all-refused", read: 4, rejected: 4, answer: null });
+    expect(result.refused).toEqual({ byOp: { set_role: 2, move_start: 1, split: 1 }, byReason: { "out-of-range": 3, "setup-after-opening": 1 } });
+    expect(result.parts).toEqual(partsOf(draft));
+  });
+
+  it("falls back `unsound` when what the corrections made is not a sound structure, and when the step throws", () => {
+    // A draft that no sound answer can mend (a part whose role is outside the five): the corrections are passed
+    // and counted, the result is refused.
+    const broken = [part(0, 5, "setup"), part(6, 28, "body" as ReviewRole)];
+    const result = reviewStructure({ corrections: [{ op: "split", part: 0, atParagraph: 3, role: "method" }, { op: "set_role", part: 0, role: "banana" }] }, broken, N);
+
+    expect(result).toMatchObject({ fellBack: true, cause: "unsound", read: 2, rejected: 1, answer: null });
+    expect(result.refused).toEqual({ byOp: { set_role: 1 }, byReason: { malformed: 1 } });
+    expect(result.parts).toEqual(partsOf(broken));
+
+    const trap = new Proxy({}, { get: () => { throw new Error("boom"); } });
+    expect(reviewStructure(trap, draft, N)).toMatchObject({ fellBack: true, cause: "unsound", read: 0, rejected: 0, refused: { byOp: {}, byReason: {} } });
+  });
+
+  it("carries no cause when it did not fall back, and the counts of what it read and refused", () => {
+    const whole = reviewStructure({ corrections: [{ op: "set_role", part: 1, role: "evidence" }, { op: "set_role", part: 1, role: "banana" }] }, draft, N);
+    expect(whole).toMatchObject({ fellBack: false, cause: null, read: 2, rejected: 1 });
+    expect(whole.refused).toEqual({ byOp: { set_role: 1 }, byReason: { malformed: 1 } });
+
+    expect(reviewStructure({ corrections: [], unsure: [2] }, draft, N)).toMatchObject({ fellBack: false, cause: null, read: 0, refused: { byOp: {}, byReason: {} } });
   });
 });
 

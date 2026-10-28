@@ -548,10 +548,36 @@ const roleFrom = (value: unknown): ReviewRole | null => {
   return isReviewRole(role) ? role : null;
 };
 
+/** What a refusal is counted under: the correction's op (`other` for anything that is not one of the three) and why it was refused. */
+export const REFUSAL_OPS = ["move_start", "set_role", "split", "other"] as const;
+export type RefusalOp = (typeof REFUSAL_OPS)[number];
+/**
+ * Why a correction is refused, a closed set (never a word of the reply):
+ *   - `malformed`: not an object, an op outside the three, an index that is not a whole number, a role outside the five;
+ *   - `out-of-range`: a part that does not exist, a start or a split outside the part's own room;
+ *   - `part-0`: a `move_start` of part 0, which never moves;
+ *   - `same-role`: a `set_role` to the role the part already has;
+ *   - `repeat`: the same move, role or split asked twice, or a move to where the part already starts;
+ *   - `split-cap`: a fourth split in one part;
+ *   - `setup-after-opening`: the role `setup` given to a stretch that does not continue the paper's opening run;
+ *   - `over-cap`: past the first forty corrections.
+ */
+export const REFUSAL_REASONS = ["malformed", "out-of-range", "part-0", "same-role", "repeat", "split-cap", "setup-after-opening", "over-cap"] as const;
+export type RefusalReason = (typeof REFUSAL_REASONS)[number];
+
+/** How many corrections were refused, by op and by reason: only the keys that are not zero, and the two add up alike. */
+export interface Refusals {
+  byOp: Partial<Record<RefusalOp, number>>;
+  byReason: Partial<Record<RefusalReason, number>>;
+}
+
+/** The op of a correction as a name from the closed set. The reply's own text is never kept. */
+const refusalOpOf = (c: unknown): RefusalOp => (isRec(c) && (c.op === "move_start" || c.op === "set_role" || c.op === "split") ? c.op : "other");
+
 /**
  * 1. The answer, correction by correction, against the DRAFT as given. Null is "not an answer at all" (not an
  * object, no `corrections` array): the draft stands and nothing is kept. `rejected` counts what was dropped,
- * `read` how many corrections were in the answer.
+ * `read` how many corrections were in the answer, and `refused` says what was dropped, by op and by reason.
  *
  * The damage guard (P12-86): the role `setup` is the paper's OPENING run, so it is never given to anything
  * after it. The opening is the draft's leading parts of role setup; `openingEnd` is the first part that is not
@@ -559,16 +585,23 @@ const roleFrom = (value: unknown): ReviewRole | null => {
  * one (the first one itself may become setup: that moves the opening's end), and a `split` that makes a setup
  * piece is refused in that part and every part after it (a piece cut out of the middle of a part cannot
  * continue the opening). Measured: a split at paragraph 11 as setup and a split at 12 as evidence, inside the
- * first results part, flipped that row's majority to setup. The refusal is counted with the others.
+ * first results part, flipped that row's majority to setup.
  */
 export function sanitizeReview(
   raw: unknown,
   draft: readonly DraftPart[],
   paragraphs: number,
-): { answer: Answer; rejected: number; read: number } | null {
+): { answer: Answer; rejected: number; read: number; refused: Refusals } | null {
   if (!isRec(raw) || !Array.isArray(raw.corrections)) return null;
   const out: Correction[] = [];
   let rejected = 0;
+  const refused: Refusals = { byOp: {}, byReason: {} };
+  const refuse = (c: unknown, reason: RefusalReason): void => {
+    const op = refusalOpOf(c);
+    rejected += 1;
+    refused.byOp[op] = (refused.byOp[op] ?? 0) + 1;
+    refused.byReason[reason] = (refused.byReason[reason] ?? 0) + 1;
+  };
   const moved = new Set<number>();
   const roled = new Set<number>();
   const splits = new Map<number, Set<number>>();
@@ -576,32 +609,60 @@ export function sanitizeReview(
   const openingEnd = firstNotSetup === -1 ? draft.length : firstNotSetup;
   for (const c of raw.corrections as unknown[]) {
     if (out.length >= REVIEW_CAPS.corrections) {
-      rejected += 1;
+      refuse(c, "over-cap");
       continue;
     }
     if (!isRec(c)) {
-      rejected += 1;
+      refuse(c, "malformed");
       continue;
     }
     const k = whole(c.part);
-    if (k === null || k >= draft.length) {
-      rejected += 1;
+    if (k === null) {
+      refuse(c, "malformed");
+      continue;
+    }
+    if (k >= draft.length) {
+      refuse(c, "out-of-range");
       continue;
     }
     if (c.op === "move_start") {
       const i = whole(c.toParagraph);
       // Part 0 never moves; the start stays in the draft's own room: after the previous part's first paragraph, up
       // to this part's last, somewhere new, and once only.
-      if (i === null || k === 0 || i >= paragraphs || i <= draft[k - 1].from || i > draft[k].to || i === draft[k].from || moved.has(k)) {
-        rejected += 1;
+      if (i === null) {
+        refuse(c, "malformed");
+        continue;
+      }
+      if (k === 0) {
+        refuse(c, "part-0");
+        continue;
+      }
+      if (i >= paragraphs || i <= draft[k - 1].from || i > draft[k].to) {
+        refuse(c, "out-of-range");
+        continue;
+      }
+      if (i === draft[k].from || moved.has(k)) {
+        refuse(c, "repeat");
         continue;
       }
       moved.add(k);
       out.push({ op: "move_start", part: k, toParagraph: i });
     } else if (c.op === "set_role") {
       const role = roleFrom(c.role);
-      if (role === null || role === draft[k].role || roled.has(k) || (role === "setup" && k > openingEnd)) {
-        rejected += 1;
+      if (role === null) {
+        refuse(c, "malformed");
+        continue;
+      }
+      if (role === draft[k].role) {
+        refuse(c, "same-role");
+        continue;
+      }
+      if (roled.has(k)) {
+        refuse(c, "repeat");
+        continue;
+      }
+      if (role === "setup" && k > openingEnd) {
+        refuse(c, "setup-after-opening");
         continue;
       }
       roled.add(k);
@@ -610,29 +671,37 @@ export function sanitizeReview(
       const at = whole(c.atParagraph);
       const role = roleFrom(c.role);
       const seen = splits.get(k) ?? new Set<number>();
-      if (
-        at === null ||
-        role === null ||
-        at <= draft[k].from ||
-        at > draft[k].to ||
-        seen.has(at) ||
-        seen.size >= REVIEW_CAPS.splitsPerPart ||
-        (role === "setup" && k >= openingEnd)
-      ) {
-        rejected += 1;
+      if (at === null || role === null) {
+        refuse(c, "malformed");
+        continue;
+      }
+      if (at <= draft[k].from || at > draft[k].to) {
+        refuse(c, "out-of-range");
+        continue;
+      }
+      if (seen.has(at)) {
+        refuse(c, "repeat");
+        continue;
+      }
+      if (seen.size >= REVIEW_CAPS.splitsPerPart) {
+        refuse(c, "split-cap");
+        continue;
+      }
+      if (role === "setup" && k >= openingEnd) {
+        refuse(c, "setup-after-opening");
         continue;
       }
       seen.add(at);
       splits.set(k, seen);
       out.push({ op: "split", part: k, atParagraph: at, role });
     } else {
-      rejected += 1;
+      refuse(c, "malformed");
     }
   }
   const unsure = Array.isArray(raw.unsure)
     ? [...new Set((raw.unsure as unknown[]).map(whole).filter((n): n is number => n !== null && n < draft.length))]
     : [];
-  return { answer: { corrections: out, unsure }, rejected, read: raw.corrections.length };
+  return { answer: { corrections: out, unsure }, rejected, read: raw.corrections.length, refused };
 }
 
 /** 2. Starts first, roles next, splits last; any correction that breaks the order is dropped, never repaired. */
@@ -699,11 +768,25 @@ export function sound(parts: readonly Part[], paragraphs: number): boolean {
 
 export type FellBack = "unusable" | "timeout" | "provider_error" | "too_large";
 
+/**
+ * Why `reviewStructure` fell back, a closed set (P12-86), so a log can say which of three things happened without
+ * a word of the reply: `not-json` (the reply is not an object with a `corrections` array), `all-refused` (it held
+ * corrections and the sanitizer refused every one) or `unsound` (what the corrections made was not a sound
+ * structure, or the step threw). Only the last can never come of a reply alone: a sound draft and an answer the
+ * sanitizer passed always make a sound structure; it is the net under the other two.
+ */
+export type FallbackCause = "not-json" | "all-refused" | "unsound";
+
 export interface Reviewed {
   parts: Part[];
   answer: Answer | null;
   rejected: number;
   fellBack: boolean;
+  /** Why it fell back; null when it did not. */
+  cause: FallbackCause | null;
+  /** How many corrections the reply held (0 for a reply that is not an answer), and what was refused, by op and by reason. */
+  read: number;
+  refused: Refusals;
 }
 
 /** The draft as plain parts. */
@@ -711,21 +794,31 @@ export const partsOf = (draft: readonly DraftPart[]): Part[] => draft.map(({ fro
 
 /**
  * The whole step: never throws, never returns an unsound structure. An answer that is not one — or one whose
- * corrections were all refused, which is a model that did not understand — leaves the draft exactly.
+ * corrections were all refused, which is a model that did not understand — leaves the draft exactly, and says
+ * which (`cause`) with the counts behind it (`read`, `refused`): numbers and names from closed sets, never text.
  */
 export function reviewStructure(raw: unknown, draft: readonly DraftPart[], paragraphs: number): Reviewed {
   const base = partsOf(draft);
+  let seen: ReturnType<typeof sanitizeReview> = null;
+  const fell = (cause: FallbackCause): Reviewed => ({
+    parts: base,
+    answer: null,
+    rejected: seen?.rejected ?? 0,
+    fellBack: true,
+    cause,
+    read: seen?.read ?? 0,
+    refused: seen?.refused ?? { byOp: {}, byReason: {} },
+  });
   try {
-    const sanitized = sanitizeReview(raw, draft, paragraphs);
-    if (!sanitized || (sanitized.read > 0 && sanitized.answer.corrections.length === 0)) {
-      return { parts: base, answer: null, rejected: sanitized?.rejected ?? 0, fellBack: true };
-    }
-    const result = applyCorrections(draft, paragraphs, sanitized.answer);
+    seen = sanitizeReview(raw, draft, paragraphs);
+    if (!seen) return fell("not-json");
+    if (seen.read > 0 && seen.answer.corrections.length === 0) return fell("all-refused");
+    const result = applyCorrections(draft, paragraphs, seen.answer);
     return sound(result.parts, paragraphs)
-      ? { parts: result.parts, answer: sanitized.answer, rejected: sanitized.rejected + result.dropped, fellBack: false }
-      : { parts: base, answer: null, rejected: sanitized.rejected, fellBack: true };
+      ? { parts: result.parts, answer: seen.answer, rejected: seen.rejected + result.dropped, fellBack: false, cause: null, read: seen.read, refused: seen.refused }
+      : fell("unsound");
   } catch {
-    return { parts: base, answer: null, rejected: 0, fellBack: true };
+    return fell("unsound");
   }
 }
 
