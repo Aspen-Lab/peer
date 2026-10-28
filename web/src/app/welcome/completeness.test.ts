@@ -174,8 +174,11 @@ describe("firstIncompleteStep", () => {
     // configured (no Account step: radar is index 3, as before).
     expect(firstIncompleteStep(p, false, "signed-in")).toBe(4);
     expect(firstIncompleteStep(p, false, "unconfigured")).toBe(3);
-    // A signed-out reader is offered Account first, however much else is done.
-    expect(firstIncompleteStep(p, false, "signed-out")).toBe(0);
+    // L4-fix (R13, D3) — CHANGED: this was "a signed-out reader is offered
+    // Account first, however much else is done" (index 0). A returning
+    // reader now resumes where the wizard opened before Account existed:
+    // radar, index 4 of the visible list.
+    expect(firstIncompleteStep(p, false, "signed-out")).toBe(4);
   });
 
   it("a fully set-up profile lands on the last step, not past the end", () => {
@@ -258,8 +261,11 @@ describe("the Account step", () => {
     expect(steps[steps.length - 1].key).toBe("persona");
   });
 
-  it("a returning signed-out reader with everything else done opens on Account, not Persona", () => {
-    const p = profileWith({
+  // L4-fix (R13, D3) — CHANGED: this pinned the defect ("… opens on Account,
+  // not Persona"). A returning signed-out reader now resumes where the wizard
+  // opened before Account existed, never on Account.
+  describe("resuming (R13, D3): Account opens the wizard only for a new reader", () => {
+    const full = profileWith({
       displayName: "Peter",
       researchTopics: ["x"],
       school: "MIT",
@@ -267,7 +273,52 @@ describe("the Account step", () => {
       feedAiProvider: "openai",
       feedAiApiKey: "sk",
     });
-    expect(firstIncompleteStep(p, true, "signed-out")).toBe(0);
+    const keyOf = (p: UserProfile, persona: boolean, auth: "signed-out" | "unknown" | "signed-in") =>
+      visibleSteps(auth)[firstIncompleteStep(p, persona, auth)].key;
+
+    /** The rule before Account existed, over the six steps it had. */
+    const before = (p: UserProfile, persona: boolean, auth: "signed-out" | "unknown" | "signed-in") => {
+      const six = STEP_META.filter((m) => m.key !== "account");
+      const j = six.findIndex((m) => !isStepDone(m.key, p, persona, auth));
+      return j === -1 ? six[six.length - 1].key : six[j].key;
+    };
+
+    it("a returning signed-out reader with everything set up does not open on Account", () => {
+      expect(keyOf(full, true, "signed-out")).not.toBe("account");
+    });
+
+    it("…and opens where it did before this work: the AI step, the one step a signed-out reader cannot finish (the key waits for sign-in)", () => {
+      expect(isStepDone("ai", full, true, "signed-out")).toBe(false);
+      expect(keyOf(full, true, "signed-out")).toBe("ai");
+      expect(keyOf(full, true, "signed-out")).toBe(before(full, true, "signed-out"));
+    });
+
+    it("signed in, the same profile still opens on the last step, Persona", () => {
+      expect(firstIncompleteStep(full, true, "signed-in")).toBe(STEP_META.length - 1);
+    });
+
+    it("a new reader (nothing done) still starts on Account, signed out or not yet known", () => {
+      expect(keyOf(defaultProfile, false, "signed-out")).toBe("account");
+      expect(keyOf(defaultProfile, false, "unknown")).toBe("account");
+    });
+
+    it("every returning signed-out reader resumes exactly where the wizard opened before Account existed", () => {
+      const profiles: Array<[UserProfile, boolean]> = [
+        [profileWith({ displayName: "Peter" }), false],
+        [profileWith({ researchTopics: ["x"] }), false],
+        [profileWith({ displayName: "Peter", researchTopics: ["x"], school: "MIT" }), false],
+        [profileWith({ displayName: "Peter", researchTopics: ["x"], school: "MIT", feedFocus: "tight" }), false],
+        [full, false],
+        [full, true],
+        [profileWith({ displayName: "Peter", researchTopics: ["x"], school: "MIT", feedFocus: "tight" }), true],
+      ];
+      for (const [p, persona] of profiles) {
+        for (const auth of ["signed-out", "unknown"] as const) {
+          expect(keyOf(p, persona, auth)).toBe(before(p, persona, auth));
+          expect(keyOf(p, persona, auth)).not.toBe("account");
+        }
+      }
+    });
   });
 
   it("offers the sign-in buttons to a reader who is not signed in, on a deployment that has sign-in", () => {

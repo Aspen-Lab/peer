@@ -162,7 +162,16 @@ export function readPersonaDone(): boolean {
  * index into `visibleSteps(auth)`. A fully set-up profile lands on the last
  * step (persona), where "Enter Peer" is immediately available — review, don't
  * redo. A reader who is not signed in (where sign-in exists) has Account
- * unfinished, so they open on it, first.
+ * unfinished, so a new reader opens on it, first.
+ *
+ * L4-fix (R13, D3): Account opens the wizard only for a new reader — one who
+ * has finished no other step. A returning reader resumes exactly where the
+ * wizard opened before Account existed: the first other unfinished step, or
+ * the last step when all of them are done. (For a signed-out reader that is
+ * at the latest the AI step — a key does not run until they sign in, so it is
+ * never done for them — where "Sign in to use your key" now waits.) The
+ * closing review still lists "Account — Not signed in" with its Edit link,
+ * and the rail still reaches it.
  */
 export function firstIncompleteStep(
   profile: UserProfile,
@@ -170,8 +179,9 @@ export function firstIncompleteStep(
   auth: AuthOutcome = "signed-out",
 ): number {
   const steps = visibleSteps(auth);
-  const i = steps.findIndex(
-    (m) => !isStepDone(m.key, profile, personaDone, auth),
-  );
-  return i === -1 ? steps.length - 1 : i;
+  const undone = (m: StepMeta) => !isStepDone(m.key, profile, personaDone, auth);
+  const others = steps.filter((m) => m.key !== "account");
+  const started = others.some((m) => !undone(m));
+  const next = (started ? others : steps).find(undone);
+  return next ? steps.indexOf(next) : steps.length - 1;
 }
