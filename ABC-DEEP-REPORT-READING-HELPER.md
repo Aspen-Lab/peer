@@ -2365,6 +2365,30 @@ B P12-80's report (`P12-80-B-20261028T1444Z.md`, landed `b6cbc27c`) is ruled. Ev
 
 **C P12-84 (K3) is reported** (R3-C the furniture band, R3-B the 24 pt line reach and 6 pt marks; B's four re-aims and no other). It is verified next. **C P12-86 has started.** C P12-83 is running.
 
+### §1h.466 — 2026-10-28 — C P12-84 (FIGURE BOUNDS) LANDED; 14 OF 43 BOXES CHANGED, P1 AND P2 UNCHANGED
+
+**C P12-84 (K3) is landed** (head `6371b78e`; the landed `web/` tree equals V's at `1f139422`).
+
+The rules:
+- **R3-C:** a line or drawing wholly in the top furniture band, and at least 20 pt wide, never joins a figure, and the clip starts under that ink.
+- **R3-B:** a figure-text line may reach 24 pt past a side, and small marks within 6 pt join, with guards (the nearest captioned figure, no other region, no caption or body line, at most 64 marks).
+
+Manager measure, figure boxes on P1–P6 (43 captions):
+- **14 changed:** P3 Figs. 1, 2, 3 and 5 take their left edge labels; P4 Fig. 1; P5 Figs. 2, 3 and 5's tops leave the running head (24.8 → about 47); P5 Figs. 1 and 4 and P6 Figs. 1–4 take their edge labels.
+- **P1 and P2 unchanged.**
+- Renders checked by eye: P3 Fig. 2 has its legend squares and rotated row labels; P5 Fig. 2 is whole, without the head. The page-edge vertical rule B named is a residual.
+
+Manager mutations (sha256 equal):
+- furniture width out of reach → 8 red;
+- the reach back to 6 pt → 6;
+- the mark cap at 0 → 9.
+
+V's full gates: lint 0 / 144; **656 files, 12,293 tests, 0 failed**; build 0. B's four re-aims only, named by C.
+
+Residuals, backlog: a running foot (R3-C is top-only); the 6 pt mark reach (24 pt moved three more tests); P4 Fig. 1's caption pixel rows.
+
+The revision 10 → 11 bump follows C P12-83.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2702,7 +2726,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-81 | DONE — C (Sonnet); landed at ca0c13c6 (§1h.462) | O2: the Explain card's body overscroll-contain | a pin; own mutation; gates | checkpoint P12-81-C-<UTC>.md | briefs/P12-81.md; §1h.459 (c) |
 | P12-82 | DONE — C (Sonnet); landed with C P12-85 at 1f672ccf (§1h.465) | K1: a caption goes on through its title's face change (R1-B) | invented fixtures; own mutations; gates | checkpoint P12-82-C-<UTC>.md | briefs/P12-82.md; §1h.463 |
 | P12-83 | IN_PROGRESS — C (Sonnet), scratch p12/c83, from c4d0b7db | K2: a font's lowercased capitals repaired from the document (R2-C) | invented fixtures; own mutations; gates | checkpoint P12-83-C-<UTC>.md | briefs/P12-83.md; §1h.463 |
-| P12-84 | REPORTED — C (Sonnet), head 1e09656c; manager verifying | K3: figure bounds without furniture, with edge labels (R3-C, R3-B) | invented fixtures; own mutations; gates | checkpoint P12-84-C-<UTC>.md | briefs/P12-84.md; §1h.463 |
+| P12-84 | DONE — C (Sonnet); landed at 6371b78e (§1h.466) | K3: figure bounds without furniture, with edge labels (R3-C, R3-B) | invented fixtures; own mutations; gates | checkpoint P12-84-C-<UTC>.md | briefs/P12-84.md; §1h.463 |
 | P12-85 | DONE — C (Sonnet); landed with C P12-82 at 1f672ccf (§1h.465) | the closing split's echo skips fragments (≥ 40 words) | invented fixtures; own mutation; gates | checkpoint P12-85-C-<UTC>.md | briefs/P12-85.md; §1h.464 |
 | P12-86 | IN_PROGRESS — C (Sonnet), scratch p12/c86 | Tier 1: no setup role after the opening run (damage guard); the fallback's cause logged as counts | invented fixtures; own mutations; gates | checkpoint P12-86-C-<UTC>.md | briefs/P12-86.md; §1h.464 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
