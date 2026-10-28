@@ -358,8 +358,11 @@ describe("no line inside a references section is a numbered heading (P12-49, O3)
     line("1 Introduction", { y: 780 }),
     line("2 Conclusions", { y: 760 }),
     line("References", { size: 12, y: 740 }),
-    // entries a number and a capital open, in no author shape: only their place says what they are
-    line("3 Journal of Invented Results Volume 12 Pages 345", { size: 8, y: 720 }),
+    // entries a number and a capital open, in no author shape: only their place says what they are. RE-AIMED
+    // (P12-49, with P12-51): the first read "...Invented Results Volume 12..."; its plain words (eight, no comma,
+    // no year) name a part of the argument, which now ends the list ("5 Methods" after the references), so the
+    // entry names no part here.
+    line("3 Journal of Invented Studies Volume 12 Pages 345", { size: 8, y: 720 }),
     line("4 Another Odd Entry Title Held Here For The Test", { size: 8, y: 708 }),
     line("5 Quillwort Society Reports Series Number Nine", { size: 8, y: 696 }),
     line("6 Appendix Proofs Of The Lemmas", { size: 12, y: 600 }),
@@ -370,7 +373,7 @@ describe("no line inside a references section is a numbered heading (P12-49, O3)
   it("refuses an entry, however it reads, from the references heading to the next heading", () => {
     for (const entry of list.slice(4, 7)) expect(headingOf(entry, style), entry.text).toBeNull();
     // without the paper around them the same lines are numbered headings, as they were
-    expect(headingOf(list[4], BODY)).toBe("3 Journal of Invented Results Volume 12 Pages 345");
+    expect(headingOf(list[4], BODY)).toBe("3 Journal of Invented Studies Volume 12 Pages 345");
   });
 
   it("takes the numbered heading that follows the list, set apart as a heading", () => {
@@ -384,6 +387,41 @@ describe("no line inside a references section is a numbered heading (P12-49, O3)
     const numberedStyle = bodyStyle(numbered);
     expect(headingOf(numbered[3], numberedStyle)).toBe("3 References");
     expect(headingOf(numbered[4], numberedStyle)).toBeNull();
+  });
+});
+
+describe("a plain numbered heading that names a part ends the references, an entry does not (P12-49, O3, with P12-51)", () => {
+  // A journal prints its Methods after the references, numbered, in the body's size and face.
+  const list = [
+    line("Abstract", { size: 12, y: 800 }),
+    line("1 Introduction", { y: 780 }),
+    line("2 Results", { y: 760 }),
+    line("References", { size: 12, y: 740 }),
+    line("3 Journal of Invented Studies Volume 12 Pages 345", { size: 8, y: 720 }),
+    line("4 Methods in Cathode Research, Elmstead Press 2020", { size: 8, y: 708 }),
+    line("5 Methods", { y: 600 }),
+    line("5.1 Cell assembly", { y: 588 }),
+    line("6 Smith, J. (2020) Methods for cathode films", { y: 570 }),
+    line("7 Acknowledgements", { y: 540 }),
+    ...block(30, 70, 10),
+  ];
+  const style = bodyStyle(list);
+
+  it("takes '5 Methods' after the references, and its numbered sub-section", () => {
+    expect(headingOf(list[6], style)).toBe("5 Methods");
+    expect(headingOf(list[7], style)).toBe("5.1 Cell assembly");
+  });
+
+  it("takes an end-matter note named by its words, numbered, after the references", () => {
+    expect(headingOf(list[9], style)).toBe("7 Acknowledgements");
+  });
+
+  it("still refuses an entry: one in the shape of its authors, or with a comma or a year in its words", () => {
+    expect(headingOf(list[8], style)).toBeNull();
+    // no author shape: only its comma and its year keep "Methods" from naming a part
+    expect(headingOf(list[5], style)).toBeNull();
+    // and an entry no word names, however plain
+    expect(headingOf(list[4], style)).toBeNull();
   });
 });
 

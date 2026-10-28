@@ -1551,12 +1551,26 @@ const REFERENCES_HEADING =
   /^(?:references?(?:\s+(?:and|&)\s+notes)?|reference\s+list|bibliography|notes\s+and\s+references|literature\s+cited|works\s+cited)\s*[:.]?\s*$/i;
 
 /**
+ * Whether a numbered line's words after its number are a **plain heading that names a part**: `tailPartOf`'s test
+ * (P12-51) — at most `PLAIN_HEADING_WORDS` words, no comma, no year — and the words name a part of the argument
+ * (methods above all) or an end-matter note. A reference entry has an author shape, a comma or a year.
+ */
+function namesAPart(head: string): boolean {
+  const own = head.trim().replace(GLYPH_LEAD, "").replace(SECTION_LEAD, "");
+  if (own.split(/\s+/).length > PLAIN_HEADING_WORDS || own.includes(",") || PRINT_YEAR.test(own)) return false;
+  const canonical = canonicalizeHeading(head);
+  const part = tailPartOf(head, canonical, endsTheArgument(head, canonical));
+  return part === "argument" || part === "note";
+}
+
+/**
  * The numbered lines of a paper that are not its headings (P12-49, O3), as `lineKey`s. A numbered line is a
  * heading only when its number **continues the paper's numbering**: it comes after the last section number met
  * ([2, 1] after [2], [3] after [2, 4]), and the paper's numbering starts at its first named part, not on the cover.
  * A number that goes back is a list, an entry or a footnote: "1", "2", "3" under the references after a paper of
  * four sections. And **no line in a references section** is one — that section runs from its heading to the next
- * heading, which is a line set apart (larger, or in another face).
+ * heading, which is a line set apart (larger, or in another face) or a plain numbered heading that names a part
+ * (`namesAPart`: "5 Methods" after the references).
  *
  * The numbering is the headings that are set apart: they move it. A line in the body's own face is judged against
  * it and moves it only while no heading has (the plain fixtures of a test), so a paper's stray "2 Institute of ..."
@@ -1587,7 +1601,9 @@ function numberedOut(lines: PdfLine[], body: { size: number; font: string }): Se
     }
     const apart = isSetApart(line, body);
     if (inReferences) {
-      if (!apart) {
+      // A numbered line in the body's face is an entry, unless its words are a plain heading naming a part (a
+      // journal that prints its Methods after the references, numbered: "5 Methods"): that ends the list.
+      if (!apart && !namesAPart(head)) {
         out.add(lineKey(line));
         continue;
       }
