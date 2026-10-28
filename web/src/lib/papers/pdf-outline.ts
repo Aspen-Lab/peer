@@ -1707,12 +1707,18 @@ function isSetApart(line: PdfLine, body: { size: number; font: string }): boolea
 /** C P12-74 (R1): a numbered line is a heading candidate only at this share of the body's size or more. */
 const NUMBERED_SIZE_RATIO = 0.95;
 
+/** C P12-74 (R3): a lone panel letter, b to h (never "a", a word of its own): a figure's "b Discharge curve". */
+const PANEL_LETTER = /(?:^|\s)[b-h](?=\s|$)/;
+
 /** The heading this line would be, judged on the line alone: its shape, its size and its face. */
 function candidateOf(line: PdfLine, body: { size: number; font: string }): string | null {
   const text = line.text.trim();
   if (text.length === 0 || text.length > HEADING_MAX) return null;
   if (CAPTION.test(text)) return null;
   if (isDropCap(line, body)) return null;
+  // C P12-74 (R3, B P12-73 M1): a single letter b to h between spaces, or at an end of the line, is a figure's panel
+  // label ("a Charge curve  b Discharge curve"): the line is figure text, not a heading.
+  if (PANEL_LETTER.test(text)) return null;
   const numbered = sectionNumberOf(text);
   // A sentence that happens to be short is still a sentence.
   if (/[.;,]$/.test(text) && !numbered) return null;

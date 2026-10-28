@@ -200,3 +200,34 @@ describe("a paper that numbers its headings is read as it was (C P12-74, R1 and 
     });
   });
 });
+
+// ── R3: a lone panel letter makes a line figure text ────────────────────────────────────────────────────
+
+describe("a line with a lone panel letter b to h is figure text, not a heading (C P12-74, R3)", () => {
+  it("refuses a row of panel labels in the figure's own face, the letter first, inside or last", () => {
+    for (const text of [
+      "a Charge curve b Discharge curve c Rate test",
+      "b Discharge curve at the rate of the test",
+      "Rate test at the highest current d",
+      "Capacity e retention after cycling",
+      "Cell h",
+    ]) {
+      expect(headingOf(line(text, { font: "plot" }), BODY), text).toBeNull();
+    }
+    // a numbered row too
+    expect(headingOf(line("2 Charge curve c Discharge curve", { font: "display", size: 12 }), BODY)).toBeNull();
+  });
+
+  it("keeps a heading whose words only hold those letters, and a lone a or i", () => {
+    for (const text of ["Bulk phase behaviour", "Studies on a Lattice", "Group i Structures", "Discussion and Outlook"]) {
+      expect(headingOf(line(text, { font: "display", size: 12 }), BODY), text).toBe(text);
+    }
+    expect(headingOf(line("2.1 Cell assembly", { font: "display", size: 12 }), BODY)).toBe("2.1 Cell assembly");
+  });
+
+  it("end to end: a row of panel labels in the figure's face opens no section", () => {
+    const pages = paperOf([item("a Charge curve  b Discharge curve  c Rate test", { y: 654, fontName: "plot" })]);
+    expect(headingsOf(pages)).toEqual(["Introduction"]);
+    expect(textOf(pages)).toContain("a Charge curve b Discharge curve c Rate test");
+  });
+});
