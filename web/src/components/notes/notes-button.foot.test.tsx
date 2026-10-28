@@ -7,7 +7,7 @@ import { DOCK_TOP_PX, MASTHEAD_MIN_VIEWPORT_PX, legendHeightPx } from "@/compone
 import { bottomMarginRectOf } from "@/lib/reader/margin";
 import { fitPanes } from "@/components/reader/pane-layout";
 import { THUMB_BAR_PX } from "@/components/shell/thumb-bar";
-import { EDGE_TAB_FOOT_CLEAR_PX, EDGE_TAB_LENGTH_PX, EDGE_TAB_PASSES_DRAG, NOTES_LABEL, NotesButtonView } from "./notes-button";
+import { EDGE_TAB_FOOT_CLEAR_PX, EDGE_TAB_LENGTH_PX, EDGE_TAB_PASSES_DRAG, EDGE_TAB_PHONE_THICKNESS_PX, NOTES_LABEL, NotesButtonView } from "./notes-button";
 
 // P12-77 rule 1 (E1; A P12-71 §6): the fixed "Open your notes" edge tab never overlaps the fixed key legend and never runs below the window.
 //
@@ -322,6 +322,65 @@ describe("a card standing on a phone: the tab's foot is the band's top (§1h.455
     expect(styleProps(view({ bandTop: 384.6 }))["--tab-band-top"]).toBe("384.6px");
     expect(view({})).not.toContain("--tab-band-top:");
     expect(view({})).not.toContain("style=");
+  });
+});
+
+// P12-77 (ruling §1h.455, item 3): on a phone the tab covers no text. The text column of the one-column page runs from its side padding to the other (`px-5`,
+// 20 px, under 640 px; `sm:px-6`, 24 px, from it: read from `reader-shell.tsx`), the tab stands on the window's right edge, and its border box must not
+// reach into the column. (The rect is the border box; `shadow-card` paints a ring 1 px outside it, which would be over the column's last pixel, so
+// the tab has none under md.)
+describe("on a phone the tab's rect and the paper's text column do not intersect (§1h.455 item 3)", () => {
+  const shell = read("src/components/reader/reader-shell.tsx");
+  const gutters = /"mx-auto max-w-\[760px\] px-(\d+) sm:px-(\d+)"/.exec(shell);
+  const SM_PX = 640;
+  /** The side padding of the one-column page at a width, in px (Tailwind's spacing unit is 4 px). */
+  const gutterAt = (width: number) => Number(gutters?.[width < SM_PX ? 1 : 2]) * 4;
+  /** The tab's thickness at a phone width, from its classes the way the stylesheet applies them: `max-sm:w-[Npx]` under 640, `sm:max-md:w-[Npx]` from it to md. */
+  const thicknessAt = (html: string, width: number) => {
+    const classes = classesOf(html);
+    const wanted = width < SM_PX ? /^max-sm:w-\[(\d+)px\]$/ : /^sm:max-md:w-\[(\d+)px\]$/;
+    const found = classes.map((c) => wanted.exec(c)).find(Boolean);
+    expect(found, `a width class for ${width}`).toBeTruthy();
+    return Number(found?.[1]);
+  };
+
+  it("reads the gutter from the page: 20 px under 640, 24 px from it", () => {
+    expect(shell).toContain("data-reader-one-column");
+    expect(gutters).not.toBeNull();
+    expect([gutterAt(390), gutterAt(639), gutterAt(640), gutterAt(767)]).toEqual([20, 20, 24, 24]);
+    expect(EDGE_TAB_PHONE_THICKNESS_PX).toEqual({ narrow: gutterAt(390), wide: gutterAt(700) });
+  });
+
+  it.each([320, 360, 375, 390, 414, 600, 639, 640, 700, 767])("%i px wide: the tab (no card, and beside a card) begins at or after the column's right edge, with no ring over it", (width) => {
+    for (const html of [view({}), view({ has: false }), view({ bandTop: 300 })]) {
+      const left = width - thicknessAt(html, width);
+      const textRight = width - gutterAt(width);
+
+      expect(left, `the tab's left edge against the column's right edge`).toBeGreaterThanOrEqual(textRight);
+      expect(classesOf(html)).toEqual(expect.arrayContaining(["max-md:shadow-none", "max-md:py-0"]));
+    }
+  });
+
+  it("at 390 x 844 the tab is 20 px thick, from x 370 to 390, against a column that ends at 370: they touch and do not intersect", () => {
+    const html = view({});
+
+    expect(thicknessAt(html, 390)).toBe(20);
+    expect(390 - thicknessAt(html, 390)).toBe(370);
+    expect(390 - gutterAt(390)).toBe(370);
+  });
+
+  it("the label still fits: the line of the label (the eyebrow face, 11.5 px at 1.4) is held by what is left of the thickness after the 1 px border", () => {
+    const LINE_PX = 11.5 * 1.4;
+
+    for (const thickness of Object.values(EDGE_TAB_PHONE_THICKNESS_PX)) expect(thickness - 1).toBeGreaterThanOrEqual(LINE_PX);
+  });
+
+  it("applies under md only: the wide screen's tab is as it was (no width of its own, its ring and its side padding)", () => {
+    const classes = classesOf(view({}));
+
+    for (const c of ["max-sm:w-[20px]", "sm:max-md:w-[24px]", "max-md:py-0", "max-md:shadow-none"]) expect(classes).toContain(c);
+    expect(classes.filter((c) => /^w-/.test(c))).toEqual([]);
+    expect(classes).toEqual(expect.arrayContaining(["py-1", "shadow-card", "px-3"]));
   });
 });
 

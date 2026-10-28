@@ -102,6 +102,17 @@ export const EDGE_TAB_HIT_PX = 24;
 export const EDGE_TAB_PASSES_DRAG = "[:root:active_&:not(:active)]:pointer-events-none";
 
 /**
+ * P12-77 (ruling §1h.455, item 3): on a phone the tab covers no text. The one-column page has a side padding of `px-5` (20 px) under 640 px and
+ * `sm:px-6` (24 px) from it (`reader-shell.tsx`, `data-reader-one-column`), and the tab stands on the window's right edge: the 25.1 px tab of
+ * the wide screen reached 5.1 px into the text at 390 x 844 (1.1 px at 640 and over). Under `md` it is as thick as that gutter — 20 px under
+ * 640, 24 px from it (`max-sm`, `sm:max-md`) — with no side padding and no outer ring (`shadow-card` paints 1 px outside the box), so its
+ * border box is all of it and ends where the text column does. The label's line (16.1 px) is held by the 19 px left of the border.
+ * From `md` the tab is as it was.
+ */
+export const EDGE_TAB_PHONE_THICKNESS_PX = { narrow: 20, wide: 24 } as const;
+const EDGE_TAB_PHONE = "max-sm:w-[20px] sm:max-md:w-[24px] max-md:py-0 max-md:shadow-none";
+
+/**
  * P12-77 (E1; A P12-71 §6): the edge tab's length down the window, in px, whole: one line of label and the tab's own padding, set not left to
  * the label's width. `top-[max(27rem,50vh)]` put the tab 27rem down whatever the window's height, and the foot legend (a fixed 28 px bar, the
  * foot of the window) stood under it from 1024 x 576 (the tab ended at 574 against the legend's 548, over the "H" key cap beside a card) and,
@@ -215,6 +226,7 @@ export function NotesButtonView({
         EDGE_TAB_PLACE[has ? "open" : "take"],
         EDGE_TAB_FOOT,
         EDGE_TAB_BAND,
+        EDGE_TAB_PHONE,
         squeezed ? "py-0 before:absolute before:top-0 before:-left-[10px] before:h-full before:w-[9px]" : "py-1",
         // P11-46: a press that began outside the tab passes through it — the tab, strip included, only takes a press that began on it.
         EDGE_TAB_PASSES_DRAG,
