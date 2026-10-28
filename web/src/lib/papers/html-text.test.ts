@@ -111,6 +111,39 @@ describe("canonicalizeHeading — experimental methods (L1)", () => {
   });
 });
 
+// P12-75 (item 2, §1h.452): in chemistry and materials journals a bare "Experimental" is the whole heading of the methods
+// part; the `^experiment…` line filed it (and "Experimental part") as results, and the part's sub-headings with it.
+describe("canonicalizeHeading — a bare 'Experimental' is the methods part (P12-75, item 2)", () => {
+  it.each([
+    "Experimental",
+    "EXPERIMENTAL",
+    "Experimental part",
+    "Experimental section",
+    "Experimental details",
+    "Experimental procedures",
+    "Experimental procedure",
+    "4. Experimental",
+    "IV. Experimental part",
+    "2.1 Experimental",
+  ])("%s → methods", (heading) => {
+    expect(canonicalizeHeading(heading)).toBe("methods");
+  });
+
+  it.each([
+    "Experiments",
+    "Experiment",
+    "Experimental results",
+    "Experimental evaluation",
+    "Experimental findings",
+    "Experimental and numerical results",
+    "Experimental validation",
+    "5 Experimental Evaluation",
+    "Experimental data",
+  ])("%s → results, as before", (heading) => {
+    expect(canonicalizeHeading(heading)).toBe("results");
+  });
+});
+
 // P12-75 (B P12-73, M7): a part headed "Implications" or "Outlook" sits between the last results and the conclusion; it had
 // no bucket of its own word (`body`, or methods by "model"), and the map read it as evidence. The word names the discussion.
 describe("canonicalizeHeading — implications and outlook are the discussion (P12-75, M7)", () => {

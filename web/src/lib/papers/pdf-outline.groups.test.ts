@@ -424,3 +424,26 @@ describe("buildOutline — a part headed 'Implications' is the discussion (P12-7
     ]);
   });
 });
+
+// P12-75 (item 2, §1h.452): a bare "Experimental" heading, with only sub-headings under it, is the methods part. It was
+// filed results by `^experiment…`, so the group row and every sub-heading under it took the results bucket.
+describe("buildOutline — a bare 'Experimental' heading is a methods group (P12-75, item 2)", () => {
+  it.each(["Experimental", "Experimental part"])("makes '%s' a methods group row and its sub-headings methods children", (name) => {
+    const rows = rowsOf([page(1, [r(TITLE, "title"), ...prose(...INTRO), ...methodsPart(name, "head", "sub", SUBS.slice(0, 2))])]);
+    expect(rows.map((row) => [row[0], row[1], row[2]])).toEqual([
+      [TITLE, "body", undefined],
+      [name, "methods", 1],
+      [SUBS[0], "methods", 2],
+      [SUBS[1], "methods", 2],
+    ]);
+  });
+
+  it("keeps 'Experiments' with only sub-headings under it a results heading with no group (not a part name)", () => {
+    const rows = rowsOf([page(1, [r(TITLE, "title"), ...prose(...INTRO), ...methodsPart("Experiments", "head", "sub", SUBS.slice(0, 2))])]);
+    expect(rows.map((row) => [row[0], row[1], row[2]])).toEqual([
+      [TITLE, "body", undefined],
+      [SUBS[0], "body", undefined],
+      [SUBS[1], "body", undefined],
+    ]);
+  });
+});

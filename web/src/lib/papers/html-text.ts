@@ -203,6 +203,11 @@ export function canonicalizeHeading(heading: string): string {
   if (/limitation|caveat|threats? to validity|failure (?:case|mode)s?|weakness/.test(lower)) {
     return "limitations";
   }
+  // P12-75 (item 2, §1h.452): a heading that is "Experimental" alone, or "Experimental" and one of section / part / details /
+  // procedures, names the methods part (in chemistry and materials journals it is the whole heading of the methods).
+  // Tested before the `^experiment…` → results line below; "Experiments", "Experimental results" and "Experimental
+  // evaluation" are not it and stay results.
+  if (/^experimental(?:\s+(?:section|part|details?|procedures?))?$/.test(lower)) return "methods";
   // P12-48 (L1, B P12-40 R1): "experimental methods" is the methods part, whichever methods word follows
   // "experimental" ("experimental procedures", "experimental and computational methods"). It is tested here, before
   // the `^experiment…` → results line below, which would otherwise file it as results. "Experimental results" and
