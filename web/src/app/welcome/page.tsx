@@ -42,7 +42,6 @@ import {
   ApiKeyHelp,
   AiProviderGuide,
   AiProviderRecommendation,
-  providerShortLabel,
 } from "@/components/profile/ai-setup";
 import { SchoolAutocomplete } from "@/components/profile/school-autocomplete";
 import { AdvisorField } from "@/components/profile/advisor-field";
@@ -64,6 +63,7 @@ import {
   visibleSteps,
 } from "./completeness";
 import { AccountStep, SignInToUseKey } from "./account-step";
+import { aiStepSummary } from "./summary";
 
 const DEFAULT_NAME = "Peer Member";
 
@@ -741,9 +741,7 @@ function summarizeStep(
     case "radar":
       return isStepDone("radar", profile, false) ? "Customized" : "Defaults";
     case "ai":
-      return isStepDone("ai", profile, false, auth)
-        ? `${providerShortLabel(profile.feedAiProvider)} key connected`
-        : "No key — reading without a model";
+      return aiStepSummary(profile, auth);
     case "persona":
       return "";
   }
