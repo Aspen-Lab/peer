@@ -54,7 +54,7 @@ A defect costs **1.0** if unusable, **0.5** if misleading, **0.25** if cosmetic.
 
 ## Stop line
 
-Target: **pending the owner**. Every theme at or above the target in two consecutive rounds. The loop's end is the manager's measure; the owner's own look is the acceptance above it.
+Target: **97.9** per theme (the owner, 2026-10-28, state file R5: "达标线用 97.9，每个主题连续两轮达到就停。"), i.e. one 0.25 cosmetic defect is tolerated in a 12-unit theme (97.9) and none in an 11-unit theme (97.7 < 97.9). Every theme at or above the target in two consecutive rounds. The loop's end is the manager's measure; the owner's own look is the acceptance above it.
 
 ## Scores
 

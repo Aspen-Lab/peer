@@ -12,7 +12,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 | CURRENT ITEM | L3-C and L4-C running; L1-C and L2-C paused (owner's cap) |
 | NEXT TURN | on each worker report: verify → land on the branch → refill up to the cap of two groups |
 | STOPPED BECAUSE | — |
-| TARGET | **pending the owner** (asked 2026-10-28). Earlier loops: 99, then 97.9 by the owner's ruling §1h.163 ("允许一处 0.25 的小瑕疵"). |
+| TARGET | **97.9 per theme, two consecutive rounds** (the owner, 2026-10-28, R5: "达标线用 97.9，每个主题连续两轮达到就停。") |
 | CAP | **at most two subagent groups running at once** (the owner, 2026-10-28: "使用workaholic mode工作，但确保每次最多只有两个subagent group在跑"). A group = one item's A/B/C chain, or one scoring round's blind readers. |
 | GATE BASELINE | untouched db0f070a in `own-key-verify` (full `npm ci`): vitest 10681 tests, **35 failed** (25 files: CRLF under `core.autocrlf=true`, Windows backslash paths, reader timing, papers page tests, spend-scans scan 5 count). List: manager scratch `verify-baseline.json`. With the main checkout's stale node_modules (no `server-only`, no `mupdf`): 69 failed + feed suites error at import. |
 | CLOCK | `b37a2acb`, session cron `20 * * * *`, read back 2026-10-28 (§6) |
@@ -23,6 +23,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 - **R2 (2026-10-28).** Worker models: opus, per the owner's standing subagent-model policy (memory, 2026-08-13), which overrides the skill's smaller-model default.
 - **R3 (2026-10-28).** `own-key-verify` holds the only complete `node_modules`; the branch worktree and lanes 1–2 are junctions to it. Do not remove `own-key-verify` before the loop ends.
 - **R4 (2026-10-28).** Rendering for scoring uses the dev server with only the public Supabase URL and publishable key (no service-role key) and never signs in locally without the owner's explicit OK (local writes are production writes). Signed-in states are scored from route/unit evidence and static renders of the views.
+- **R5 (2026-10-28).** The owner set the stop line: "达标线用 97.9，每个主题连续两轮达到就停。" Every theme at or above 97.9 in two consecutive rounds; a theme that has done so stops being scored, and a later change to its files reopens only the lines it could move.
 
 ## §3 Items
 
@@ -51,6 +52,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 
 - 2026-10-28 | db0f070a | manager | branch cut; four lane worktrees; baselines run; four Cs spawned.
 - 2026-10-28 | db0f070a | manager | workaholic mode on; cap two groups (R1); L1-C, L2-C paused clean; state file and rubric written.
+- 2026-10-28 | f958bdb0 | manager | owner set target 97.9 ×2 per theme (R5).
 
 ## §6 Clock
 
