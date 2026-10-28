@@ -568,7 +568,7 @@ export type RefusalOp = (typeof REFUSAL_OPS)[number];
  *   - `same-role`: a `set_role` to the role the part already has;
  *   - `repeat`: the same move, role or split asked twice, or a move to where the part already starts;
  *   - `split-cap`: a fourth split in one part;
- *   - `setup-after-opening`: the role `setup` given to a stretch that does not continue the paper's opening run;
+ *   - `setup-after-opening`: the role `setup` given to the first part that is not setup or to any part after it, or to a piece cut out of one;
  *   - `piece-too-short`: a split (or a pair of splits on one part) that would leave a piece of fewer than
  *     `REVIEW_CAPS.minPiece` paragraphs (P12-90);
  *   - `over-cap`: past the first forty corrections.
@@ -641,13 +641,14 @@ function refusalNumbers(
  * object, no `corrections` array): the draft stands and nothing is kept. `rejected` counts what was dropped,
  * `read` how many corrections were in the answer, and `refused` says what was dropped, by op and by reason.
  *
- * The damage guard (P12-86): the role `setup` is the paper's OPENING run, so it is never given to anything
- * after it. The opening is the draft's leading parts of role setup; `openingEnd` is the first part that is not
- * one (the draft's length when every part is). A `set_role` to setup is refused for any part after that first
- * one (the first one itself may become setup: that moves the opening's end), and a `split` that makes a setup
- * piece is refused in that part and every part after it (a piece cut out of the middle of a part cannot
- * continue the opening). Measured: a split at paragraph 11 as setup and a split at 12 as evidence, inside the
- * first results part, flipped that row's majority to setup.
+ * The damage guard (P12-86, P12-91): the role `setup` is the paper's OPENING run, so it is never given to
+ * anything after it. The opening is the draft's leading parts of role setup; `openingEnd` is the first part that
+ * is not one (the draft's length when every part is). A `set_role` to setup is refused for that first part and
+ * every part after it, and so is a `split` that makes a setup piece (a piece cut out of the middle of a part
+ * cannot continue the opening). Measured: a split at paragraph 11 as setup and a split at 12 as evidence, inside
+ * the first results part, flipped that row's majority to setup; and a `set_role` of the first results part
+ * itself to setup (which P12-86 let through, as a move of the opening's end) flipped two rows to setup. The
+ * opening's end can still move, by a `move_start` of the first part that is not setup.
  *
  * No one-paragraph piece (P12-90): the same pair with the roles method and evidence did the same damage on the
  * next run (a piece of one paragraph flips a short row's majority, whatever its role). When the reply has been
@@ -776,7 +777,7 @@ function judgeCorrections(
         refuse(c, "repeat");
         continue;
       }
-      if (role === "setup" && k > openingEnd) {
+      if (role === "setup" && k >= openingEnd) {
         refuse(c, "setup-after-opening");
         continue;
       }

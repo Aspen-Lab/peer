@@ -581,31 +581,95 @@ describe("sanitizeReview — the damage guard: the role setup belongs to the pap
     expect(cut({ op: "split", part: 2, atParagraph: 25, role: "setup" }).answer.corrections).toEqual([]);
   });
 
-  it("still applies a correction that moves the setup part's end, sets a later part to method, or gives the first part after the opening the role setup", () => {
+  it("still applies a correction that moves the setup part's end, sets a later part to method, or splits a part with a role other than setup", () => {
     expect(cut({ op: "move_start", part: 1, toParagraph: 8 }).answer.corrections).toEqual([{ op: "move_start", part: 1, toParagraph: 8 }]);
     expect(cut({ op: "set_role", part: 2, role: "method" }).answer.corrections).toEqual([{ op: "set_role", part: 2, role: "method" }]);
-    expect(cut({ op: "set_role", part: 1, role: "setup" }).answer.corrections).toEqual([{ op: "set_role", part: 1, role: "setup" }]);
+    expect(cut({ op: "set_role", part: 1, role: "method" }).answer.corrections).toEqual([{ op: "set_role", part: 1, role: "method" }]);
     expect(cut({ op: "split", part: 1, atParagraph: 12, role: "method" }).answer.corrections).toEqual([{ op: "split", part: 1, atParagraph: 12, role: "method" }]);
     // Inside the opening run itself, a split is judged as it always was.
     expect(cut({ op: "split", part: 0, atParagraph: 3, role: "method" }).answer.corrections).toEqual([{ op: "split", part: 0, atParagraph: 3, role: "method" }]);
     expect(cut({ op: "split", part: 0, atParagraph: 3, role: "setup" }).answer.corrections).toEqual([{ op: "split", part: 0, atParagraph: 3, role: "setup" }]);
 
-    // Applied: the opening's end moves, the later part is method, the opening takes the first results part whole.
+    // Applied: the opening's end moves, the later part is method.
     expect(reviewStructure({ corrections: [{ op: "move_start", part: 1, toParagraph: 8 }, { op: "set_role", part: 2, role: "method" }] }, draft, N).parts).toEqual([
       { from: 0, to: 7, role: "setup" },
       { from: 8, to: 20, role: "evidence" },
       { from: 21, to: 28, role: "method" },
     ]);
-    expect(reviewStructure({ corrections: [{ op: "set_role", part: 1, role: "setup" }] }, draft, N).parts).toEqual([
-      { from: 0, to: 20, role: "setup" },
-      { from: 21, to: 28, role: "interpretation" },
+  });
+
+  it("refuses the role setup for the first part that is not setup, as it does for every part after it (P12-91)", () => {
+    // The measured damage (P6, a run of five): a `set_role` of the first results part to setup, which the guard let through
+    // as a move of the opening's end, turned two rows of that part to setup. The end moves by a `move_start` instead.
+    const longer = [part(0, 5, "setup"), part(6, 10, "method"), part(11, 20, "evidence"), part(21, 28, "interpretation")];
+    for (const role of ["setup", " Setup ", "SETUP"]) {
+      const first = cut({ op: "set_role", part: 1, role });
+      expect(first.answer.corrections).toEqual([]);
+      expect(first.rejected).toBe(1);
+      expect(first.refused).toEqual({ byOp: { set_role: 1 }, byReason: { "setup-after-opening": 1 } });
+    }
+    for (const k of [1, 2, 3]) {
+      expect(cut({ op: "set_role", part: k, role: "setup" }, longer).refused.byReason).toEqual({ "setup-after-opening": 1 });
+    }
+    // Alone it is a review that fell back for that reason; the draft stands, whole.
+    const alone = reviewStructure({ corrections: [{ op: "set_role", part: 1, role: "setup" }] }, draft, N);
+    expect(alone).toMatchObject({ fellBack: true, cause: "all-refused", read: 1, rejected: 1, parts: partsOf(draft) });
+    expect(alone.refusedNumbers).toEqual([
+      { op: "set_role", reason: "setup-after-opening", part: 1, ordinal: null, role: "setup", draftLength: 3, paragraphs: N, from: 6, to: 20 },
+    ]);
+    // P6's run 4 in shape: the same reply beside three splits of the one part with its own role and a later part set to method.
+    // The splits stand (they merge back into the part), the later part is method, the first results part is not setup.
+    const wide = [part(0, 6, "setup"), part(7, 69, "evidence"), part(70, 89, "interpretation")];
+    const beside = reviewStructure(
+      {
+        corrections: [
+          { op: "set_role", part: 1, role: "setup" },
+          { op: "split", part: 1, atParagraph: 12, role: "evidence" },
+          { op: "split", part: 1, atParagraph: 29, role: "evidence" },
+          { op: "split", part: 1, atParagraph: 32, role: "evidence" },
+          { op: "set_role", part: 2, role: "method" },
+        ],
+      },
+      wide,
+      90,
+    );
+    expect(beside.fellBack).toBe(false);
+    expect(beside.answer!.corrections.map((c) => c.op)).toEqual(["split", "split", "split", "set_role"]);
+    expect(beside.rejected).toBe(1);
+    expect(beside.parts).toEqual([
+      { from: 0, to: 6, role: "setup" },
+      { from: 7, to: 69, role: "evidence" },
+      { from: 70, to: 89, role: "method" },
     ]);
   });
 
-  it("finds the opening in the draft as given: a draft that does not open with setup lets only its first part become setup", () => {
+  it("lets the setup part's own end move, and a later part become method, beside the refused set_role; the refused one uses up nothing", () => {
+    const answer = sanitizeReview(
+      {
+        corrections: [
+          { op: "set_role", part: 1, role: "setup" },
+          { op: "move_start", part: 1, toParagraph: 8 },
+          { op: "set_role", part: 1, role: "method" },
+          { op: "set_role", part: 2, role: "method" },
+        ],
+      },
+      draft,
+      N,
+    )!;
+
+    expect(answer.answer.corrections).toEqual([
+      { op: "move_start", part: 1, toParagraph: 8 },
+      { op: "set_role", part: 1, role: "method" },
+      { op: "set_role", part: 2, role: "method" },
+    ]);
+    expect(answer.rejected).toBe(1);
+    expect(answer.refused.byReason).toEqual({ "setup-after-opening": 1 });
+  });
+
+  it("finds the opening in the draft as given: a draft that does not open with setup has no opening run, so no part becomes setup (P12-91)", () => {
     const unopened = [part(0, 10, "method"), part(11, 20, "evidence"), part(21, 28, "interpretation")];
 
-    expect(cut({ op: "set_role", part: 0, role: "setup" }, unopened).answer.corrections).toEqual([{ op: "set_role", part: 0, role: "setup" }]);
+    expect(cut({ op: "set_role", part: 0, role: "setup" }, unopened).answer.corrections).toEqual([]);
     expect(cut({ op: "set_role", part: 1, role: "setup" }, unopened).answer.corrections).toEqual([]);
     expect(cut({ op: "split", part: 0, atParagraph: 4, role: "setup" }, unopened).answer.corrections).toEqual([]);
     // A draft that is all setup has nothing after its opening.
