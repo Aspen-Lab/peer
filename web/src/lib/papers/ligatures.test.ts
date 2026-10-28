@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { applyLigatures, learnLigatures, restoreLigatures } from "./ligatures";
 import { prose, type Run } from "./minimal-pdf.test-helper";
@@ -507,5 +509,154 @@ describe("extractPdfTextFromBytes — a font that sets its ligatures as private-
     const text = result.doc?.sections.map((section) => section.text).join("\n") ?? "";
     expect(text).toContain("The first survey was different from the later ones in a way the notes explain.");
     expect(text).toContain("A tide has an effect on the sand, and the effect is easy to see at low water.");
+  });
+});
+
+// ── Rule 3: pure, deterministic, no dependency, linear ───────────────────────────────────────────────────────
+
+/** Deep-freezes a value, so that a function that writes to its input throws (modules are strict). */
+function freeze<T>(value: T): T {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const inner of Object.values(value)) freeze(inner);
+  }
+  return value;
+}
+
+describe("ligatures — rule 3: pure, deterministic, no dependency (P12-67)", () => {
+  const source = readFileSync(fileURLToPath(new URL("./ligatures.ts", import.meta.url)), "utf8");
+  const code = source
+    .split("\n")
+    .filter((line) => !/^\s*(\/\/|\/\*|\*)/.test(line))
+    .join("\n");
+
+  it("imports nothing and reaches for nothing outside its arguments", () => {
+    expect(code).not.toMatch(/^\s*import\b/m);
+    expect(code).not.toMatch(/\brequire\s*\(/);
+    expect(code).not.toMatch(/\bimport\s*\(/);
+    expect(code).not.toMatch(/^\s*export\s+.*\bfrom\b/m);
+    // no clock, no random, no environment, no network, no disk, no global state to write to
+    for (const forbidden of [/\bDate\b/, /Math\.random/, /\bprocess\b/, /\bfetch\b/, /\bconsole\b/, /\bglobalThis\b/, /\bwindow\b/, /Intl\./]) {
+      expect(code).not.toMatch(forbidden);
+    }
+  });
+
+  it("does not change what it is given: frozen inputs go through", () => {
+    const doc = freeze(invented());
+    const texts = freeze(PAPER.slice());
+    const learned = new Map([[FI, "fi"]]);
+    for (const method of ["set", "delete", "clear"]) {
+      Object.defineProperty(learned, method, {
+        value: () => {
+          throw new Error(`the learned map was written to (${method})`);
+        },
+      });
+    }
+    expect(() => learnLigatures(texts)).not.toThrow();
+    expect(() => applyLigatures(`${FI}gure`, learned)).not.toThrow();
+    expect(() => restoreLigatures(doc)).not.toThrow();
+    expect([...learned]).toEqual([[FI, "fi"]]);
+    expect(doc.sections[0]?.text).toContain(FI);
+  });
+
+  it("gives the same answer every time, and whatever the order of the texts", () => {
+    const first = [...learnLigatures(PAPER)].sort();
+    expect(first).toHaveLength(3);
+    for (let round = 0; round < 3; round++) expect([...learnLigatures(PAPER)].sort()).toEqual(first);
+    // every order of the three texts
+    const orders = [
+      [0, 1, 2],
+      [0, 2, 1],
+      [1, 0, 2],
+      [1, 2, 0],
+      [2, 0, 1],
+      [2, 1, 0],
+    ];
+    for (const order of orders) expect([...learnLigatures(order.map((i) => PAPER[i] as string))].sort()).toEqual(first);
+    // and the document: the same JSON twice, and restoring what is restored changes nothing
+    const once = restoreLigatures(invented());
+    expect(JSON.stringify(restoreLigatures(invented()))).toBe(JSON.stringify(once));
+    expect(restoreLigatures(once)).toBe(once);
+  });
+});
+
+/** The time `fn` takes, in milliseconds. */
+function timed<T>(fn: () => T): { ms: number; value: T } {
+  const start = performance.now();
+  const value = fn();
+  return { ms: performance.now() - start, value };
+}
+
+describe("ligatures — rule 3: linear in the size of the text (P12-67)", () => {
+  // A quadratic reading of a million characters is 10^12 steps: minutes to hours. A linear one is a fraction of a
+  // second, so a budget that a loaded machine does not reach separates them without a flaky margin.
+  const BUDGET_MS = 15_000;
+  const SIZE = 1_000_000;
+
+  it("reads a million characters of prose with a few thousand broken words", { timeout: 60_000 }, () => {
+    const sentence = `The ${FI}rst ${FI}gure and the ${FL}ow, the in${FL}uence; di${FF}erent e${FF}ect. Plain first figure flow influence different effect. `;
+    const reps = Math.ceil(SIZE / sentence.length);
+    const text = sentence.repeat(reps);
+    const run = timed(() => {
+      const learned = learnLigatures([text]);
+      return { learned, out: applyLigatures(text, learned) };
+    });
+    expect(run.ms).toBeLessThan(BUDGET_MS);
+    expect(run.value.learned.size).toBe(3);
+    // six codes a sentence, each now two letters
+    expect(run.value.out).toHaveLength(text.length + 6 * reps);
+    expect(run.value.out).not.toMatch(/[\uE000-\uF8FF]/);
+  });
+
+  it("reads a hundred thousand different broken words, each confirmed by a plain one", { timeout: 60_000 }, () => {
+    // letters only: a digit ends a word
+    const letters = (n: number) => [...n.toString(26)].map((digit) => String.fromCharCode(97 + parseInt(digit, 26))).join("");
+    const broken: string[] = [];
+    const plain: string[] = [];
+    for (let i = 0; i < 100_000; i++) {
+      broken.push(`${FI}${letters(i)}`);
+      plain.push(`fi${letters(i)}`);
+    }
+    const texts = [broken.join(" "), plain.join(" ")];
+    const run = timed(() => {
+      const learned = learnLigatures(texts);
+      return { learned, out: applyLigatures(texts[0] as string, learned) };
+    });
+    expect(run.ms).toBeLessThan(BUDGET_MS);
+    expect(run.value.learned.get(FI)).toBe("fi");
+    expect(run.value.out).toBe(plain.join(" "));
+  });
+
+  it("reads one word of a million characters, with one code in it, and with every code of the area in it", { timeout: 60_000 }, () => {
+    const one = "a".concat(FI.repeat(1)).repeat(SIZE / 2);
+    const learnedOne = timed(() => learnLigatures([one, "afi"]));
+    expect(learnedOne.ms).toBeLessThan(BUDGET_MS);
+    expect(learnedOne.value.size).toBe(0);
+    const appliedOne = timed(() => applyLigatures(one, new Map([[FI, "fi"]])));
+    expect(appliedOne.ms).toBeLessThan(BUDGET_MS);
+    expect(appliedOne.value).toBe("afi".repeat(SIZE / 2));
+
+    // all 6,400 codes of the area, over and over, in a single word
+    const every: string[] = [];
+    for (let c = 0xe000; c <= 0xf8ff; c++) every.push(`x${String.fromCharCode(c)}`);
+    const all = every.join("").repeat(Math.ceil(SIZE / every.join("").length));
+    const allLearned = new Map(every.map((pair) => [pair.slice(1), "fl"] as [string, string]));
+    const learnedAll = timed(() => learnLigatures([all, "xfl"]));
+    expect(learnedAll.ms).toBeLessThan(BUDGET_MS);
+    expect(learnedAll.value.size).toBe(0);
+    const appliedAll = timed(() => applyLigatures(all, allLearned));
+    expect(appliedAll.ms).toBeLessThan(BUDGET_MS);
+    expect(appliedAll.value).not.toMatch(/[\uE000-\uF8FF]/);
+  });
+
+  it("restores a document of two thousand sections without a pause", { timeout: 60_000 }, () => {
+    const sections = Array.from({ length: 2000 }, (_, i) => ({
+      heading: `Section ${i}`,
+      text: `The ${FI}rst ${FI}gure shows the ${FL}ow and the in${FL}uence, di${FF}erent, e${FF}ect: first figure flow influence different effect, again and again. `.repeat(8),
+    }));
+    const doc = { title: "T", sections, figureCaptions: [] };
+    const run = timed(() => restoreLigatures(doc));
+    expect(run.ms).toBeLessThan(BUDGET_MS);
+    expect(JSON.stringify(run.value)).not.toMatch(/[\uE000-\uF8FF]/);
   });
 });
