@@ -135,7 +135,11 @@ describe("P12-28: defensible typed caption pairing", () => {
     expect(result.figures.map(({ box, caption }) => ({ box, caption }))).toEqual([{ box: [40, 100, 220, 250], caption: "Figure 1. First caption." }]);
   });
 
-  it("retains the known close-body over-join instead of claiming semantic separation", async () => {
+  // P12-47 R8a re-aim (title and comment only: the fixture and the assertion are as they were, and still hold). A
+  // caption now ends at a pitch jump, but a one-line caption has no pitch of its own to jump from, so a body line
+  // right under it is still joined: the limit R8a leaves. The jump itself is pinned in
+  // `pdf-engine.figure-regions.test.ts` ("ends a caption of two lines before a body paragraph set apart by twice its pitch").
+  it("still joins a body line right under a one-line caption (R8a ends a caption at a pitch jump; this one has no pitch yet)", async () => {
     const page: FigurePage = { text: [["Figure 1. Complete caption.", 40, 268, 9], ["The body references Figure 1.", 40, 282, 9]], shapes: panel(40, 100, 180, 150) };
     const result = await extractPdfFigures(figurePdf([page]), { ...options, onlyPage: 1, label: "Figure 1", maxFigures: 1, measureOnly: true });
     expect(result.figures[0]?.caption).toBe("Figure 1. Complete caption. The body references Figure 1.");

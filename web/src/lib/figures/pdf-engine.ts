@@ -20,6 +20,8 @@
 //     all needs three such pieces whose union passes them;
 //   * the short figure-text lines within 6 pt of such a region (an axis title,
 //     a panel letter) join it too; the last line of a body paragraph does not;
+//   * a caption is its typed line and the lines that continue it, and it ends
+//     at the first line set apart by more than 1.4 of its own line pitch;
 //   * a figure is the region plus 10 pt (less, where its caption starts inside
 //     that padding: the clip then stops half a point short of the caption),
 //     rendered at 2.8x (about 200 DPI), stepped down by 0.2 to stay at or
@@ -339,12 +341,25 @@ function horizontalPenalty(region: Rect, block: TextBlock): number {
   return overlap / minWidth >= 0.2 ? 0 : 40;
 }
 
+/** P12-47 R8a: a caption ends at the first line that starts more than this many times the caption's own median
+ *  line pitch below the line above it (the body paragraph that follows a caption is set apart by more than a line). */
+const CAPTION_PITCH_JUMP = 1.4;
+
+const medianOf = (values: number[]) => {
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = sorted.length >> 1;
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+};
+
 /** The caption block and the lines that continue it (each within 28 pt of the
- *  last and horizontally overlapping it), up to 500 characters. */
+ *  last and horizontally overlapping it), up to 500 characters, ending at a
+ *  pitch jump (R8a): the pitch is top to top, and a caption of one line so far
+ *  has none of its own, so its second line is joined as before. */
 export function mergeCaptionLines(blocks: TextBlock[], start: number): string {
   const parts = [blocks[start].text];
   const originalBlock = blocks[start].blockId;
   let anchor = blocks[start];
+  const pitches: number[] = [];
   for (const next of blocks.slice(start + 1)) {
     // Original block lines were joined before spatial checks. A distant other
     // block must not prevent a later line from that same original block.
@@ -354,6 +369,9 @@ export function mergeCaptionLines(blocks: TextBlock[], start: number): string {
     // when their starts are distinct and later. Same-baseline lines stay apart.
     if (next.blockId === originalBlock ? next.rect[1] <= anchor.rect[1] : next.rect[1] < anchor.rect[3]) continue;
     if (CAPTION_RE.test(next.text) || OTHER_CAPTION_RE.test(next.text)) break;
+    const pitch = next.rect[1] - anchor.rect[1];
+    if (pitches.length > 0 && pitch > CAPTION_PITCH_JUMP * medianOf(pitches)) break;
+    pitches.push(pitch);
     parts.push(next.text);
     anchor = next;
     if (parts.join(" ").length >= MAX_FIGURE_TEXT_CHARS) break;

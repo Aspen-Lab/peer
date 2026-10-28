@@ -7,8 +7,8 @@
 //   R8a  a caption ends at a pitch jump
 import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
-import { barChart, figurePdf, pngInfo, type FigurePage, type Shape, type TextRun } from "./figure-pdf.test-helper";
-import { extractPdfFigures } from "./pdf-engine";
+import { barChart, figurePdf, panel, pngInfo, type FigurePage, type Shape, type TextRun } from "./figure-pdf.test-helper";
+import { extractPdfFigures, mergeCaptionLines } from "./pdf-engine";
 
 const options = { maxPages: 24, maxFigures: 12 };
 const figuresOf = async (page: FigurePage, extra: Record<string, unknown> = {}) =>
@@ -395,5 +395,51 @@ describe("P12-47 R5a: the padded clip stops at a caption that sits inside the pa
   it("keeps the 10 pt padding when the caption's first line is outside it", async () => {
     // 10.3 pt under the picture, as the engine's paper fixture has it.
     near((await render({ text: [captionBelow(10.3)], shapes: [raster] })).height, 220 * SCALE);
+  });
+});
+
+// ── R8a: a caption ends at a pitch jump ──────────────────────────────────
+
+describe("P12-47 R8a: a caption ends at the first line set apart by more than 1.4 of its own line pitch", () => {
+  /** A line of a 12.4 pt box whose top is `top` (x 40 to 200); the pitch of lines is the distance between tops. */
+  const line = (text: string, top: number, blockId: number) => ({ rect: [40, top, 200, top + 12.4] as [number, number, number, number], text, blockId });
+  /** Two caption lines 11 pt apart, then a third. */
+  const caption = [line("Figure 1. First.", 100, 1), line("Second.", 111, 1), line("Third.", 122, 1)];
+
+  it("ends at a line that starts more than 1.4 pitches below the line above it, and takes none after it", () => {
+    // 16 / 11 = 1.45, then a line 11 pt below that one, which would have followed at the caption's own pitch.
+    expect(mergeCaptionLines([...caption, line("Body starts.", 138, 2), line("Body goes on.", 149, 2)], 0)).toBe("Figure 1. First. Second. Third.");
+  });
+
+  it("joins a line at 1.3 pitches and ends at 1.5", () => {
+    expect(mergeCaptionLines([...caption, line("Fourth.", 122 + 14.3, 2)], 0)).toBe("Figure 1. First. Second. Third. Fourth.");
+    expect(mergeCaptionLines([...caption, line("Body.", 122 + 16.5, 2)], 0)).toBe("Figure 1. First. Second. Third.");
+  });
+
+  it("judges against the median pitch, not against the last one", () => {
+    // Pitches 11, 11, 13 (median 11). A line 16 below the last is 1.23 of the last pitch but 1.45 of the median.
+    const uneven = [...caption, line("Fourth.", 135, 1)];
+    expect(mergeCaptionLines([...uneven, line("Body.", 151, 2)], 0)).toBe("Figure 1. First. Second. Third. Fourth.");
+    expect(mergeCaptionLines([...uneven, line("Still the caption.", 135 + 14.3, 2)], 0)).toBe("Figure 1. First. Second. Third. Fourth. Still the caption.");
+  });
+
+  it("has no pitch to compare while the caption is a single line: its second line is joined as before", () => {
+    expect(mergeCaptionLines([line("Figure 1. Only.", 100, 1), line("Body, set well apart.", 120, 2)], 0)).toBe("Figure 1. Only. Body, set well apart.");
+  });
+
+  it("ends a caption of two lines before a body paragraph set apart by twice its pitch, in the pool and the route", async () => {
+    const text = (bodyBaseline: number): TextRun[] => [
+      ["Figure 1. The invented caption starts here", 40, 268, 9],
+      ["and goes on to a second line.", 40, 279, 9],
+      ["The body paragraph begins here and runs on a while.", 40, bodyBaseline, 9],
+    ];
+    const pdf = (bodyBaseline: number) => figurePdf([{ text: text(bodyBaseline), shapes: panel(40, 100, 180, 150) }]);
+    const captionOf = async (bytes: Buffer, extra: Record<string, unknown>) =>
+      (await extractPdfFigures(bytes, { ...options, measureOnly: true, ...extra })).figures.map((figure) => figure.caption);
+    const ended = ["Figure 1. The invented caption starts here and goes on to a second line."];
+    // 301 - 279 = 22 = 2 x 11: ended. 293 - 279 = 14 = 1.27 x 11: still joined.
+    expect(await captionOf(pdf(301), {})).toEqual(ended);
+    expect(await captionOf(pdf(301), { onlyPage: 1, label: "Figure 1", maxFigures: 1 })).toEqual(ended);
+    expect(await captionOf(pdf(293), {})).toEqual([`${ended[0]} The body paragraph begins here and runs on a while.`]);
   });
 });
