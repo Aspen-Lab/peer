@@ -199,17 +199,38 @@ describe("POST /api/ai/check-key", () => {
       expect(response.headers.get("cache-control")).toBe("no-store");
     });
 
-    it("busy, for a 429", async () => {
+    it("busy, for the provider's own 429", async () => {
       const { text, body } = await answer(async () => ({ ok: false, error: `429 Too Many Requests ${SENTINEL}` }));
 
       expect(body).toEqual({ result: "busy" });
       expect(text).not.toContain(SENTINEL);
     });
 
-    it("unreachable, for any other failure", async () => {
+    it("no-credit, for an account that cannot pay (a 402, or a 429 that says insufficient_…)", async () => {
+      const payment = await answer(async () => ({ ok: false, error: `402 Payment Required ${SENTINEL}` }));
+      expect(payment.body).toEqual({ result: "no-credit" });
+      expect(payment.text).not.toContain(SENTINEL);
+
+      const openai = await answer(async () => ({
+        ok: false,
+        error: `Error: OpenAI API error 429: {"error":{"code":"insufficient_quota","message":"${SENTINEL}"}}`,
+      }));
+      expect(openai.body).toEqual({ result: "no-credit" });
+      expect(openai.text).not.toContain(SENTINEL);
+    });
+
+    it("unreachable, for a failure on the provider's side", async () => {
       const { text, body } = await answer(async () => ({ ok: false, error: `500 Internal Server Error ${SENTINEL}` }));
 
       expect(body).toEqual({ result: "unreachable" });
+      expect(text).not.toContain(SENTINEL);
+    });
+
+    it("error, for any other answer from the provider", async () => {
+      const { response, text, body } = await answer(async () => ({ ok: false, error: `404 Not Found ${SENTINEL}` }));
+
+      expect(response.status).toBe(200);
+      expect(body).toEqual({ result: "error" });
       expect(text).not.toContain(SENTINEL);
     });
 

@@ -9,6 +9,12 @@
 // the word into a line. The key travels only in the request body, never in the
 // address, and nothing here renders any part of it.
 //
+// Two answers come from Peer itself, before any provider is asked, and get lines of
+// their own so the reader is never told the provider did something it did not: this
+// account's hourly limit (the route's 429) and a sign-in that has run out (its 401).
+// A reader confirmed signed out sees "Sign in to check your key." beside the disabled
+// button; while the sign-in check has not answered, nothing extra is said.
+//
 // What /privacy says about it ("Your own model key") is pinned to the route and to
 // the button's label below.
 //
@@ -25,8 +31,15 @@ import { ApiError, apiFetch } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { KEY_CHECK_RESULTS, type KeyCheckResult } from "@/lib/llm/key-check";
 
-/** Where the check stands: not asked, waiting, or the route's word. */
-export type KeyCheckStatus = "idle" | "checking" | KeyCheckResult;
+/**
+ * What a press got back: the route's word, or one of Peer's own two refusals —
+ * "limited" (this account's hourly limit, the route's 429) and "signed-out" (the
+ * route's 401: the sign-in ran out since the page loaded).
+ */
+export type KeyCheckAnswer = KeyCheckResult | "limited" | "signed-out";
+
+/** Where the check stands: not asked, waiting, or what came back. */
+export type KeyCheckStatus = "idle" | "checking" | KeyCheckAnswer;
 
 /** Every string this component renders. */
 export const KEY_CHECK_COPY = {
@@ -35,9 +48,13 @@ export const KEY_CHECK_COPY = {
   checking: "Checking…",
   ok: "This key works.",
   rejected: "The provider did not accept this key.",
-  busy: "Too many checks this hour. Try again later.",
+  "no-credit": "This key works, but the provider says its account has no credit left.",
+  busy: "The provider is busy right now. Try again in a minute.",
+  limited: "Too many checks this hour. Try again later.",
+  "signed-out": "Sign in to check your key.",
   unreachable: "Could not reach the provider just now. Try again.",
-} as const;
+  error: "The provider answered with an error. Check the key and your account on the provider's site.",
+} as const satisfies Record<"button" | "note" | Exclude<KeyCheckStatus, "idle">, string>;
 
 /**
  * May the button be pressed? Only with a provider chosen, a key typed, and a sign-in
@@ -52,8 +69,13 @@ export function canCheckKey(provider: UserAiProvider, apiKey: string, authOutcom
   );
 }
 
-/** The line under the button, or nothing before the first check. */
-export function keyCheckLine(status: KeyCheckStatus): string | null {
+/**
+ * The line under the button. A reader confirmed signed out is told to sign in, which
+ * is why the button cannot be pressed; otherwise nothing before the first check, then
+ * what came back. "unknown" (the sign-in check has not answered) adds nothing.
+ */
+export function keyCheckLine(status: KeyCheckStatus, provider: UserAiProvider, authOutcome: AuthOutcome): string | null {
+  if (provider !== "default" && authOutcome === "signed-out") return KEY_CHECK_COPY["signed-out"];
   return status === "idle" ? null : KEY_CHECK_COPY[status];
 }
 
@@ -62,11 +84,11 @@ function isKeyCheckResult(value: unknown): value is KeyCheckResult {
 }
 
 /**
- * Ask the route. Answers a word whatever happens: the route's own 429 (this account's
- * hourly limit) is "busy", and any other failure, or an answer that is not one of the
- * four words, is "unreachable".
+ * Ask the route. Answers whatever happens: the route's own 429 (this account's hourly
+ * limit) is "limited", its 401 (signed out since the page loaded) is "signed-out", and
+ * any other failure, or an answer that is not one of the route's words, is "unreachable".
  */
-export async function requestKeyCheck(provider: UserAiProvider, apiKey: string): Promise<KeyCheckResult> {
+export async function requestKeyCheck(provider: UserAiProvider, apiKey: string): Promise<KeyCheckAnswer> {
   try {
     const body = await apiFetch<{ result?: unknown } | undefined>("/api/ai/check-key", {
       method: "POST",
@@ -75,7 +97,9 @@ export async function requestKeyCheck(provider: UserAiProvider, apiKey: string):
     });
     return isKeyCheckResult(body?.result) ? body.result : "unreachable";
   } catch (error) {
-    return error instanceof ApiError && error.status === 429 ? "busy" : "unreachable";
+    if (error instanceof ApiError && error.status === 429) return "limited";
+    if (error instanceof ApiError && error.status === 401) return "signed-out";
+    return "unreachable";
   }
 }
 
@@ -97,7 +121,7 @@ export function KeyCheckView({
 }) {
   const checking = status === "checking";
   const enabled = !checking && canCheckKey(provider, apiKey, authOutcome);
-  const line = keyCheckLine(status);
+  const line = keyCheckLine(status, provider, authOutcome);
   const noteId = `${idPrefix}-check-key-note`;
 
   return (

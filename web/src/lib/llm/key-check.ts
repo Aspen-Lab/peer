@@ -5,7 +5,18 @@ import type { DigestProvider } from "./providers/types";
  *
  * The route (`app/api/ai/check-key/route.ts`) asks the provider built from the
  * request's own key for one short request (`testConnection`) and answers with
- * one of these four words, and nothing else. Every provider's `testConnection`
+ * one of these six words, and nothing else:
+ *
+ *  - `ok`: the provider accepted the request (an empty answer included);
+ *  - `rejected`: it refused the key;
+ *  - `no-credit`: it accepted the key but says the account cannot pay;
+ *  - `busy`: its own rate limit turned the request away for now;
+ *  - `unreachable`: no answer came back (a timeout, a network failure, a thrown
+ *    error) or the provider failed on its side (5xx), so trying later may help;
+ *  - `error`: any other answer from the provider (a model this key cannot use, a
+ *    region the provider does not serve), which trying again will not change.
+ *
+ * Every provider's `testConnection`
  * reports a failure as `String(err)`, the raw error text of the provider's SDK or
  * HTTP body, which can quote the request it answered (OpenAI's 401 names the
  * first and last characters of the key it refused). That text is read here, once,
@@ -15,10 +26,17 @@ import type { DigestProvider } from "./providers/types";
  * Kept out of the route file because a route module may export only its
  * handlers.
  */
-export type KeyCheckResult = "ok" | "rejected" | "busy" | "unreachable";
+export type KeyCheckResult = "ok" | "rejected" | "no-credit" | "busy" | "unreachable" | "error";
 
 /** Every word the route can answer, for a client that checks what it got. */
-export const KEY_CHECK_RESULTS: readonly KeyCheckResult[] = ["ok", "rejected", "busy", "unreachable"];
+export const KEY_CHECK_RESULTS: readonly KeyCheckResult[] = [
+  "ok",
+  "rejected",
+  "no-credit",
+  "busy",
+  "unreachable",
+  "error",
+];
 
 /** How long a check may take before it is answered "unreachable". */
 export const KEY_CHECK_TIMEOUT_MS = 15_000;
@@ -54,7 +72,23 @@ const REJECTED_PATTERNS: readonly RegExp[] = [
   /\bAPI_KEY_INVALID\b/,
 ];
 
-/** Words that mean the provider is turning requests away for now. */
+/**
+ * Words that mean the key is good but the account cannot pay. Read before any
+ * status, because OpenAI and Qwen send this as a 429, which would otherwise read
+ * as a rate limit, and Anthropic and Qwen send it as a 400:
+ *
+ *  - OpenAI and Qwen: the error code `insufficient_…` (429);
+ *  - DeepSeek: "Insufficient Balance" (402, caught by the status);
+ *  - Anthropic: "Your credit balance is too low to access the Anthropic API." (400);
+ *  - Qwen (DashScope): the code `Arrearage`, an overdue account (400).
+ */
+const NO_CREDIT_PATTERNS: readonly RegExp[] = [
+  /insufficient_\w+/i,
+  /credit balance is too low/i,
+  /\bArrearage\b/,
+];
+
+/** Words that mean the provider's own rate limit is turning requests away for now. */
 const BUSY_PATTERNS: readonly RegExp[] = [
   /\brate[ _-]?limit/i,
   /\bRESOURCE_EXHAUSTED\b/,
@@ -70,18 +104,23 @@ function statusIn(text: string): number | undefined {
 }
 
 /**
- * The word for a failed check, from the provider's error text. Pure, and total:
- * anything it does not recognise (a timeout, a network failure, a model the
- * account cannot reach, a server error, no text at all) is "unreachable".
+ * The word for a failed check, from the provider's error text. Pure, and total,
+ * in this order: no credit first (whatever the status), then a refused key
+ * (401, 403, or the words), then the provider's rate limit (429, or the words),
+ * then "unreachable" for no status at all (a timeout, a network failure, no text)
+ * or a failure on the provider's side (5xx, or 408), and "error" for any other
+ * answer the provider gave.
  */
 export function classifyKeyCheckError(errorText: unknown): Exclude<KeyCheckResult, "ok"> {
   if (typeof errorText !== "string" || errorText === "") return "unreachable";
   const status = statusIn(errorText);
+  if (status === 402 || NO_CREDIT_PATTERNS.some((pattern) => pattern.test(errorText))) return "no-credit";
   if (status === 401 || status === 403) return "rejected";
   if (status === 429) return "busy";
   if (REJECTED_PATTERNS.some((pattern) => pattern.test(errorText))) return "rejected";
   if (BUSY_PATTERNS.some((pattern) => pattern.test(errorText))) return "busy";
-  return "unreachable";
+  if (status === undefined || status >= 500 || status === 408) return "unreachable";
+  return "error";
 }
 
 /**

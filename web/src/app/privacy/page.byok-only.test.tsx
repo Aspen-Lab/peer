@@ -265,7 +265,7 @@ describe("/privacy - Check key and where the model key lives", () => {
     const classify = check.slice(check.indexOf("export function classifyKeyCheckError"), check.indexOf("export async function checkProviderKey"));
     const returns = [...classify.matchAll(/return ([^;]+);/g)].map((match) => match[1]);
     expect(returns.length).toBeGreaterThan(0);
-    for (const value of returns) expect(value).toMatch(/^"(?:rejected|busy|unreachable)"$/);
+    for (const value of returns) expect(value).toMatch(/^"(?:no-credit|rejected|busy|unreachable|error)"$/);
     expect(check).toContain('return outcome.ok === true ? "ok" : classifyKeyCheckError(outcome.error);');
   });
 

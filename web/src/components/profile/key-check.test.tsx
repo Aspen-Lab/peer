@@ -63,7 +63,8 @@ function keySlicesIn(markup: string): string[] {
   return found;
 }
 
-const STATUSES: KeyCheckStatus[] = ["idle", "checking", "ok", "rejected", "busy", "unreachable"];
+const ANSWERS = ["ok", "rejected", "no-credit", "busy", "limited", "signed-out", "unreachable", "error"] as const;
+const STATUSES: KeyCheckStatus[] = ["idle", "checking", ...ANSWERS];
 const AUTH: AuthOutcome[] = ["unknown", "signed-in", "signed-out", "unconfigured"];
 
 describe("KeyCheckView — the button, the note and the line", () => {
@@ -82,30 +83,56 @@ describe("KeyCheckView — the button, the note and the line", () => {
   it.each([
     ["ok", "This key works."],
     ["rejected", "The provider did not accept this key."],
-    ["busy", "Too many checks this hour. Try again later."],
+    ["no-credit", "This key works, but the provider says its account has no credit left."],
+    ["busy", "The provider is busy right now. Try again in a minute."],
+    ["limited", "Too many checks this hour. Try again later."],
+    ["signed-out", "Sign in to check your key."],
     ["unreachable", "Could not reach the provider just now. Try again."],
+    ["error", "The provider answered with an error. Check the key and your account on the provider's site."],
   ] as const)("says exactly what a '%s' answer means", (status, line) => {
     const markup = view({ status });
-    expect(keyCheckLine(status)).toBe(line);
+    expect(KEY_CHECK_COPY[status]).toBe(line);
+    expect(keyCheckLine(status, "openai", "signed-in")).toBe(line);
     expect(markup).toContain(`<p id="ai-check-key-result" role="status" aria-live="polite"`);
     expect(visibleText(markup)).toContain(line);
   });
 
+  it("tells the provider's own rate limit apart from this account's hourly limit", () => {
+    expect(KEY_CHECK_COPY.busy).not.toBe(KEY_CHECK_COPY.limited);
+    expect(KEY_CHECK_COPY.busy).toContain("The provider");
+    expect(KEY_CHECK_COPY.limited).not.toContain("provider");
+  });
+
   it("says nothing before the first check, and that it is checking while it waits", () => {
-    expect(keyCheckLine("idle")).toBeNull();
+    expect(keyCheckLine("idle", "openai", "signed-in")).toBeNull();
     const idle = visibleText(view({ status: "idle" }));
-    for (const line of [KEY_CHECK_COPY.ok, KEY_CHECK_COPY.rejected, KEY_CHECK_COPY.busy, KEY_CHECK_COPY.unreachable, KEY_CHECK_COPY.checking]) {
-      expect(idle).not.toContain(line);
-    }
+    for (const status of [...ANSWERS, "checking"] as const) expect(idle).not.toContain(KEY_CHECK_COPY[status]);
     expect(visibleText(view({ status: "checking" }))).toContain("Checking…");
   });
 
-  it("shows one line at a time", () => {
-    const lines = [KEY_CHECK_COPY.ok, KEY_CHECK_COPY.rejected, KEY_CHECK_COPY.busy, KEY_CHECK_COPY.unreachable];
-    for (const status of ["ok", "rejected", "busy", "unreachable"] as const) {
-      const text = visibleText(view({ status }));
-      expect(lines.filter((line) => text.includes(line))).toEqual([KEY_CHECK_COPY[status]]);
+  it("shows one line at a time, and the result line holds nothing else", () => {
+    for (const status of ANSWERS) {
+      const result = /<p id="ai-check-key-result"[^>]*>([\s\S]*?)<\/p>/.exec(view({ status }))?.[1] ?? "";
+      expect(visibleText(result)).toBe(KEY_CHECK_COPY[status]);
     }
+  });
+
+  it("tells a reader confirmed signed out to sign in, which is why the button is disabled", () => {
+    const markup = view({ authOutcome: "signed-out" });
+    expect(buttonDisabled(markup)).toBe(true);
+    expect(visibleText(markup)).toContain("Sign in to check your key.");
+    // Even after an earlier answer: the reason the button cannot be pressed comes first.
+    expect(visibleText(view({ authOutcome: "signed-out", status: "ok" }))).not.toContain(KEY_CHECK_COPY.ok);
+    expect(keyCheckLine("idle", "gemini", "signed-out")).toBe("Sign in to check your key.");
+  });
+
+  it("says nothing extra while the sign-in check has not answered, or with no company chosen", () => {
+    const unknown = visibleText(view({ authOutcome: "unknown" }));
+    expect(buttonDisabled(view({ authOutcome: "unknown" }))).toBe(true);
+    for (const status of ANSWERS) expect(unknown).not.toContain(KEY_CHECK_COPY[status]);
+    expect(keyCheckLine("idle", "default", "signed-out")).toBeNull();
+    expect(keyCheckLine("idle", "openai", "unknown")).toBeNull();
+    expect(keyCheckLine("idle", "openai", "unconfigured")).toBeNull();
   });
 
   it("uses the field's id prefix, so two mounts on one page do not share ids", () => {
@@ -152,7 +179,7 @@ describe("KeyCheckView — when the button can be pressed", () => {
   });
 
   it("can be pressed again after an answer, to check once more", () => {
-    for (const status of ["ok", "rejected", "busy", "unreachable"] as const) {
+    for (const status of ANSWERS) {
       expect(buttonDisabled(view({ status }))).toBe(false);
     }
   });
@@ -214,18 +241,22 @@ describe("requestKeyCheck — the request, and what each answer becomes", () => 
     expect(init.cache).toBe("no-store");
   });
 
-  it.each(["ok", "rejected", "busy", "unreachable"] as const)("passes the route's '%s' through", async (result) => {
+  it.each(["ok", "rejected", "no-credit", "busy", "unreachable", "error"] as const)("passes the route's '%s' through", async (result) => {
     reply(200, { result });
     expect(await requestKeyCheck("openai", KEY)).toBe(result);
   });
 
-  it("reads the route's own 429 (this account's hourly limit) as busy", async () => {
+  it("reads the route's own 429 (this account's hourly limit) as limited, not as the provider being busy", async () => {
     reply(429, { error: "AI request limit reached. Try again later." });
-    expect(await requestKeyCheck("openai", KEY)).toBe("busy");
+    expect(await requestKeyCheck("openai", KEY)).toBe("limited");
+  });
+
+  it("reads the route's own 401 (signed out since the page loaded) as signed-out", async () => {
+    reply(401, { error: "Sign in before using an AI feature" });
+    expect(await requestKeyCheck("openai", KEY)).toBe("signed-out");
   });
 
   it.each([
-    ["a 401 (signed out)", 401, { error: "Sign in before using an AI feature" }],
     ["a 400", 400, { error: "invalid_request" }],
     ["a 500", 500, {}],
     ["a 503", 503, { error: "AI features require sign-in configuration" }],
@@ -234,7 +265,7 @@ describe("requestKeyCheck — the request, and what each answer becomes", () => 
     expect(await requestKeyCheck("openai", KEY)).toBe("unreachable");
   });
 
-  it("reads an answer that is not one of the four words as unreachable", async () => {
+  it("reads an answer that is not one of the route's words as unreachable", async () => {
     reply(200, { result: "maybe" });
     expect(await requestKeyCheck("openai", KEY)).toBe("unreachable");
     reply(200, {});

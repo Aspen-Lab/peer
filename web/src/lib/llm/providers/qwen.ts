@@ -10,6 +10,7 @@ import type {
 } from "./types";
 import { DIGEST_SYSTEM_PROMPT, buildUserPrompt, safeParseDigest } from "./types";
 import { logLlmUsage, now } from "../usage-log";
+import { EmptyAnswerError } from "./empty-answer";
 import { PROVIDER_MODELS } from "../provider-models";
 
 const QWEN_CHAT_API =
@@ -106,7 +107,7 @@ async function callQwenChat(args: {
     ok: true,
   });
   const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error("Qwen returned empty content");
+  if (!content) throw new EmptyAnswerError("Qwen returned empty content");
   return content.trim();
 }
 
@@ -174,6 +175,8 @@ export function createQwenProvider(
         });
         return { ok: true };
       } catch (err) {
+        // An empty answer is still an accepted request: the key works.
+        if (err instanceof EmptyAnswerError) return { ok: true };
         return { ok: false, error: String(err) };
       }
     },

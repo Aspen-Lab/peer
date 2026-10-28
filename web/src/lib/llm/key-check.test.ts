@@ -55,6 +55,40 @@ const GEMINI_503 = 'ApiError: {"error":{"code":503,"message":"The model is overl
 const FETCH_FAILED = "TypeError: fetch failed";
 const ABORTED = "TimeoutError: The operation was aborted due to timeout";
 
+// No credit: the key is good, the account cannot pay. OpenAI and Qwen send it as a 429,
+// Anthropic and Qwen (an overdue account) as a 400, DeepSeek as a 402.
+const OPENAI_429_NO_CREDIT =
+  'Error: OpenAI API error 429: {"error":{"message":"You exceeded your current quota, please check your plan and billing details.","type":"insufficient_quota","param":null,"code":"insufficient_quota"}}';
+const QWEN_429_NO_CREDIT =
+  'Error: Qwen API error 429: {"error":{"message":"You exceeded your current quota, please check your plan and billing details.","type":"insufficient_quota","param":null,"code":"insufficient_quota"}}';
+const QWEN_400_ARREARAGE =
+  'Error: Qwen API error 400: {"error":{"message":"Access denied, please make sure your account is in good standing.","type":"Arrearage","param":null,"code":"Arrearage"},"request_id":"0a1b2c3d-invented"}';
+const ANTHROPIC_400_CREDIT =
+  'Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits."}}';
+
+// Other answers from the provider: trying again will not change them.
+const OPENAI_400 =
+  'Error: OpenAI API error 400: {"error":{"message":"Unsupported parameter: \'reasoning_effort\' is not supported with this model.","type":"invalid_request_error","param":"reasoning_effort","code":"unsupported_parameter"}}';
+const ANTHROPIC_404 =
+  'Error: 404 {"type":"error","error":{"type":"not_found_error","message":"model: claude-haiku-4-5-20251001"}}';
+const DEEPSEEK_422 =
+  'Error: DeepSeek API error 422: {"error":{"message":"Invalid Parameters","type":"invalid_request_error"}}';
+const ANTHROPIC_408 = 'Error: 408 {"type":"error","error":{"type":"timeout_error","message":"Request timed out"}}';
+const GEMINI_500 = 'ApiError: {"error":{"code":500,"message":"An internal error has occurred.","status":"INTERNAL"}}';
+
+describe("classifyKeyCheckError — no credit on the account is 'no-credit', read before any status", () => {
+  it.each([
+    ["OpenAI 429 insufficient_… (would otherwise read as a rate limit)", OPENAI_429_NO_CREDIT],
+    ["Qwen 429 insufficient_…", QWEN_429_NO_CREDIT],
+    ["Qwen 400 Arrearage (an overdue account)", QWEN_400_ARREARAGE],
+    ["DeepSeek 402 Insufficient Balance", DEEPSEEK_402],
+    ["Anthropic 400 credit balance is too low", ANTHROPIC_400_CREDIT],
+    ["a bare 402", "402 Payment Required"],
+  ])("%s", (_name, text) => {
+    expect(classifyKeyCheckError(text)).toBe("no-credit");
+  });
+});
+
 describe("classifyKeyCheckError — each provider's refusal of a key is 'rejected'", () => {
   it.each([
     ["OpenAI 401 invalid_api_key", OPENAI_401],
@@ -71,10 +105,10 @@ describe("classifyKeyCheckError — each provider's refusal of a key is 'rejecte
   });
 });
 
-describe("classifyKeyCheckError — a provider turning requests away for now is 'busy'", () => {
+describe("classifyKeyCheckError — the provider's own rate limit is 'busy'", () => {
   it.each([
-    ["OpenAI 429", OPENAI_429],
-    ["Qwen 429", QWEN_429],
+    ["OpenAI 429 rate_limit_exceeded", OPENAI_429],
+    ["Qwen 429 limit_requests", QWEN_429],
     ["DeepSeek 429", DEEPSEEK_429],
     ["Anthropic 429 rate_limit_error", ANTHROPIC_429],
     ["Gemini 429 RESOURCE_EXHAUSTED", GEMINI_429],
@@ -85,17 +119,15 @@ describe("classifyKeyCheckError — a provider turning requests away for now is 
   });
 });
 
-describe("classifyKeyCheckError — everything else is 'unreachable'", () => {
+describe("classifyKeyCheckError — no answer, or a failure on the provider's side, is 'unreachable'", () => {
   it.each([
-    ["OpenAI 404 model_not_found", OPENAI_404],
     ["OpenAI 500", OPENAI_500],
-    ["DeepSeek 402 Insufficient Balance", DEEPSEEK_402],
     ["Anthropic 529 overloaded", ANTHROPIC_529],
+    ["Anthropic 408 timeout_error", ANTHROPIC_408],
+    ["Gemini 500 INTERNAL", GEMINI_500],
+    ["Gemini 503 overloaded", GEMINI_503],
     ["Anthropic connection error", ANTHROPIC_CONNECTION],
     ["Anthropic request timed out", ANTHROPIC_TIMEOUT],
-    ["Gemini 404 model not found", GEMINI_404],
-    ["Gemini 400 location not supported", GEMINI_LOCATION],
-    ["Gemini 503 overloaded", GEMINI_503],
     ["a network failure", FETCH_FAILED],
     ["an aborted fetch", ABORTED],
     ["an empty string", ""],
@@ -112,6 +144,29 @@ describe("classifyKeyCheckError — everything else is 'unreachable'", () => {
 
   it("does not read a 401 out of a number that is only part of a word", () => {
     expect(classifyKeyCheckError('Error: OpenAI API error 500: {"id":"req401abc"}')).toBe("unreachable");
+  });
+});
+
+describe("classifyKeyCheckError — any other answer from the provider is 'error'", () => {
+  it.each([
+    ["OpenAI 404 model_not_found (a model this key cannot use)", OPENAI_404],
+    ["OpenAI 400 unsupported_parameter", OPENAI_400],
+    ["Anthropic 404 not_found_error", ANTHROPIC_404],
+    ["DeepSeek 422 Invalid Parameters", DEEPSEEK_422],
+    ["Gemini 404 model not found", GEMINI_404],
+    ["Gemini 400 location not supported", GEMINI_LOCATION],
+    ["a bare 400", "400 Bad Request"],
+  ])("%s", (_name, text) => {
+    expect(classifyKeyCheckError(text)).toBe("error");
+  });
+});
+
+describe("classifyKeyCheckError — every word it can give", () => {
+  it("is one of the route's six words, and never 'ok'", () => {
+    expect(KEY_CHECK_RESULTS).toEqual(["ok", "rejected", "no-credit", "busy", "unreachable", "error"]);
+    const all = [OPENAI_401, OPENAI_429_NO_CREDIT, ANTHROPIC_400_CREDIT, QWEN_429, OPENAI_500, GEMINI_LOCATION, FETCH_FAILED, ""];
+    const words = new Set(all.map((text) => classifyKeyCheckError(text)));
+    expect([...words].sort()).toEqual(["busy", "error", "no-credit", "rejected", "unreachable"]);
   });
 });
 

@@ -2,8 +2,10 @@
 //
 // A reader who pastes a wrong key used to find out only when a report failed. This asks the
 // provider once, with the smallest request each provider has (`testConnection`), and answers
-// one word: "ok", "rejected" (the provider refused the key), "busy" (the provider is turning
-// requests away for now) or "unreachable" (anything else, a timeout included).
+// one word: "ok", "rejected" (the provider refused the key), "no-credit" (the key is good but
+// the account cannot pay), "busy" (the provider's own rate limit), "unreachable" (no answer,
+// a timeout included, or a failure on the provider's side) or "error" (any other answer).
+// `lib/llm/key-check.ts` says how each is read.
 //
 // The request carries `{ provider, apiKey }` and nothing else is read from it. The key is used
 // for this one request and kept by nothing: it is handed to the registry, which builds the
@@ -15,7 +17,8 @@
 //  - answer with the provider's words. `testConnection` reports a failure as the provider's raw
 //    error text, which can quote the request (OpenAI's 401 names part of the key it refused).
 //    `checkProviderKey` reads it once to choose the word and the response carries only the word;
-//  - write a log line. There is no console call in this file.
+//  - write a log line of its own. There is no console call in this file; the one line a check
+//    leaves is the provider's usage line (`lib/llm/usage-log.ts`), which has no field for a key.
 //
 // The hourly limit is 10 checks per account (scope `key-check`): a check is a request on the
 // reader's own key, and the limit is what keeps a loop from running it up.
