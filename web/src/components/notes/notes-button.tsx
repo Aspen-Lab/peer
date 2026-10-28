@@ -5,7 +5,8 @@
 //
 //   `edge` — a small tab fixed at the viewport's right edge, from `md` up. It is in the window's
 //   pixels (mounted outside the zoomed page container, beside the "Explain this?" box), at least
-//   27rem from the top whatever the window's height, clear of the upper right 400px. P11-14 (B P11-01 §3.1): while a card
+//   27rem from the top where the window is tall enough, clear of the upper right 400px, and never lower than the foot legend
+//   allows (P12-77, E1: see `EDGE_TAB_LENGTH_PX`). P11-14 (B P11-01 §3.1): while a card
 //   stands in the margin — the explain card, a sticky, the notes window — the tab stands at the margin's left edge (the
 //   margin's rect, `useMarginRect()`), beside the cards instead of under them; with no card it is on the window's edge.
 //   P11-34 (BACKLOG-102): beside a card the tab is narrow — `EDGE_TAB_BESIDE_PX` — because the room it has there is the shell's
@@ -26,12 +27,14 @@
 // (360 px in), a second press closing it. The phone's row still navigates to the notes page (the phone is deferred).
 
 import { useState } from "react";
+import type { CSSProperties } from "react";
 import type { Paper } from "@/types";
 import type { QuestionAnswers } from "@/lib/papers/report";
 import { buttonVariants } from "@/components/ui/button";
 import { COMMAND } from "@/components/ui/command";
 import { cn } from "@/lib/cn";
-import { useMarginRect } from "@/lib/reader/margin";
+import { legendHeightPx } from "@/components/reader/explain-dock";
+import { readPageZoom, useMarginRect } from "@/lib/reader/margin";
 import { useWindows } from "@/lib/reader/windows";
 import { NotesWindow } from "./notes-window";
 import { usePaperNotes } from "./paper-notes";
@@ -92,12 +95,44 @@ export const EDGE_TAB_HIT_PX = 24;
  */
 export const EDGE_TAB_PASSES_DRAG = "[:root:active_&:not(:active)]:pointer-events-none";
 
+/**
+ * P12-77 (E1; A P12-71 §6): the edge tab's length down the window, in px, whole: one line of label and the tab's own padding, set not left to
+ * the label's width. `top-[max(27rem,50vh)]` put the tab 27rem down whatever the window's height, and the foot legend (a fixed 28 px bar, the
+ * foot of the window) stood under it from 1024 x 576 (the tab ended at 574 against the legend's 548, over the "H" key cap beside a card) and,
+ * at 853 x 480, the label wrapped to three lines (the room left under 27rem was 48 px) and the tab ran 16.5 px below the window.
+ *
+ * The length is 26 px (12 px of padding at each end and its two 1 px borders) and 8 px for each character of the label — Roboto Mono at the
+ * `eyebrow` face's 11.5 px with 0.06em of tracking, measured 7.72 px a character in the page (141.9 px for "Open your notes", 64.5 for "Notes"),
+ * 8 so that a fallback face a little wider than the real one still fits. The label does not wrap (`whitespace-nowrap`) and the tab is as
+ * long as this says, so its top can be clamped to its foot: `top` is the 27rem it always had (or the window's middle, if lower) where the window is tall
+ * enough, and otherwise the highest the foot allows: the window's height less what stands at its foot (`--tab-foot`), less `EDGE_TAB_FOOT_CLEAR_PX`
+ * of air, less the tab's own length. It never goes above the masthead's foot (3rem) — a window under about 230 px high has no room for the
+ * tab and the legend together, and the legend wins the foot.
+ *
+ * What stands at the foot is set on the tab itself, as a custom property, so one `top` serves both: from `md` the key legend, 28 px
+ * (`--legend-h`; inside the Fit zoom, so 28 x zoom on the window's pixels: `--tab-legend`, below); under it the phone's thumb bar, 56 px
+ * and the safe area (`THUMB_BAR_PX`, `thumb-bar.tsx`). The whole class names are written out for Tailwind to find.
+ */
+export const EDGE_TAB_LENGTH_PX = { take: 66, open: 146 } as const;
+
+/** The air kept between the tab's foot and whatever stands under it (the legend's top, the thumb bar's top), in px. */
+export const EDGE_TAB_FOOT_CLEAR_PX = 8;
+
+const EDGE_TAB_PLACE = {
+  take: "h-[66px] top-[max(3rem,min(max(27rem,50vh),calc(100vh-var(--tab-foot)-8px-66px)))]",
+  open: "h-[146px] top-[max(3rem,min(max(27rem,50vh),calc(100vh-var(--tab-foot)-8px-146px)))]",
+} as const;
+
+/** What stands at the window's foot: the thumb bar under `md`, the key legend from it (its height, `--tab-legend` where Fit has made it taller). */
+const EDGE_TAB_FOOT = "[--tab-foot:calc(56px+env(safe-area-inset-bottom,0px))] md:[--tab-foot:var(--tab-legend,var(--legend-h))]";
+
 export function NotesButtonView({
   variant,
   has,
   shown = false,
   beside = false,
   marginLeft,
+  zoom = 1,
   onOpen,
 }: {
   variant: "edge" | "row";
@@ -109,11 +144,22 @@ export function NotesButtonView({
   beside?: boolean;
   /** The margin's left edge in the window's pixels, where a shell has registered one; else the cards stand at the right edge, 360 px wide. */
   marginLeft?: number;
+  /** The page's Fit zoom, where it is not 1: the foot legend is that much taller in the window's pixels, and the tab keeps clear of it. */
+  zoom?: number;
   onOpen: () => void;
 }) {
   const label = notesLabel(has);
   // Beside a card with a margin registered: the tab stands in the shell's gutter, at the margin's left edge (P11-34).
   const squeezed = beside && marginLeft !== undefined;
+  // P12-77: Fit's zoom makes the legend taller in the window's pixels (it is inside the zoomed page); the tab, outside it, is told how much.
+  const taller = zoom !== 1 && Number.isFinite(zoom) && zoom > 0;
+  const style: CSSProperties | undefined =
+    squeezed || taller
+      ? {
+          ...(squeezed ? { left: marginLeft, transform: "translateX(-100%)", width: EDGE_TAB_BESIDE_PX, lineHeight: 1 } : {}),
+          ...(taller ? ({ "--tab-legend": `${legendHeightPx(zoom)}px` } as CSSProperties) : {}),
+        }
+      : undefined;
   if (variant === "row") {
     return (
       <button
@@ -135,16 +181,18 @@ export function NotesButtonView({
       onClick={onOpen}
       aria-expanded={shown}
       title={has ? undefined : TAKE_TITLE}
-      style={squeezed ? { left: marginLeft, transform: "translateX(-100%)", width: EDGE_TAB_BESIDE_PX, lineHeight: 1 } : undefined}
+      style={style}
       className={cn(
         // Fixed to the right edge — beside the cards instead of under them while one stands in the margin (at the margin's left edge,
         // from its rect; else the card's 360 px) — vertically from 27rem down (or the window's middle, if lower), clear of the upper
-        // right 400px. The label runs down the tab (vertical writing mode), so it is as narrow as a line of type: in that mode `px`
-        // pads the tab's top and bottom (the inline axis) and `py` its two sides, and the tab must not reach into the page's own
-        // side margin (24px). Beside a card, at the margin's left edge, it is narrower still (`EDGE_TAB_BESIDE_PX`, set on its style),
+        // right 400px and, P12-77, clear of the foot legend whatever the window's height (`EDGE_TAB_LENGTH_PX`). The label runs down
+        // the tab (vertical writing mode), so it is as narrow as a line of type: in that mode `px` pads the tab's top and bottom (the
+        // inline axis) and `py` its two sides, and the tab must not reach into the page's own side margin (24px). Beside a card, at the margin's left edge, it is narrower still (`EDGE_TAB_BESIDE_PX`, set on its style),
         // with no side padding, and a transparent strip on the text's side gives it back its 24 px hit area (`EDGE_TAB_HIT_PX`).
         beside ? (marginLeft === undefined ? "right-[min(360px,100vw)]" : "") : "right-0",
-        "fixed top-[max(27rem,50vh)] z-40 hidden md:flex items-center border border-r-0 border-border-strong bg-surface px-3 shadow-card",
+        "fixed z-40 hidden md:flex items-center justify-center whitespace-nowrap border border-r-0 border-border-strong bg-surface px-3 shadow-card",
+        EDGE_TAB_PLACE[has ? "open" : "take"],
+        EDGE_TAB_FOOT,
         squeezed ? "py-0 before:absolute before:top-0 before:-left-[10px] before:h-full before:w-[9px]" : "py-1",
         // P11-46: a press that began outside the tab passes through it — the tab, strip included, only takes a press that began on it.
         EDGE_TAB_PASSES_DRAG,
@@ -181,6 +229,8 @@ export function NotesButton({
   const rect = useMarginRect();
   const standing = useWindows((s) => s.windows.length > 0);
   if (!ready) return null;
+  // P12-77: Fit's zoom, read where the tab is drawn (it mounts after the notes store has hydrated, never in the server render). It changes the
+  // margin's rect, which this component reads, so the next render has the new one; below 1024 px Fit does nothing and the zoom is 1.
   return (
     <>
       <NotesButtonView
@@ -189,6 +239,7 @@ export function NotesButton({
         shown={variant === "edge" && shown}
         beside={variant === "edge" && (standing || shown)}
         marginLeft={rect?.left}
+        zoom={readPageZoom()}
         onOpen={variant === "edge" && shown ? () => setShown(false) : open}
       />
       {variant === "edge" && shown && <NotesWindow paper={paper} onClose={() => setShown(false)} />}
