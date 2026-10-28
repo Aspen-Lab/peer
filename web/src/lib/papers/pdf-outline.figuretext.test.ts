@@ -303,6 +303,11 @@ describe("small print under the opening page's text, opening with a footnote mar
     expect(opened([note("Supplementary note: the cells were cycled at 25 C.", 600)])).toContain("Supplementary note: the cells were cycled at 25 C.");
   });
 
+  it("does not take a short line at the foot, in the body's own face and size, for the last line of prose", () => {
+    const text = opened([note(AFFILIATION, 600), item("Page 1 of 9", { y: 40 })]);
+    expect(text).not.toContain("Department of Materials Science");
+  });
+
   it("keeps small print that is not set apart from the last line by more than a pitch", () => {
     // the line pitch of the page is 12: a note one pitch under the last line of prose is that paragraph's own
     expect(opened([note(AFFILIATION, 654)])).toContain("Department of Materials Science");
