@@ -75,6 +75,12 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 - N2 (A4): "… need the full text and you to sign in." reads awkwardly. Candidate 0.25.
 - N3 (A2/A6/A10): a signed-out reader on the Welcome AI step meets three sign-in lines in one block ("Sign in to use your key", "Peer uses your key only while you are signed in.", "Sign in to check your key."). Candidate 0.25.
 
+## §4c Round 1 — director's score at 4a883c0a (written before reading any reader)
+
+- Theme A (12): A5 "Continue without signing in" wraps "in" onto a second line at 375 px (screenshot in `R1-pack/`) 0.25; A5 the signed-in Account step keeps the kicker "Optional" above "You are signed in." 0.25; A6 a signed-out reader with a saved Jev key also sees `JEV_SIGN_IN_NOTE` on the AI step, a third sign-in line 0.25; A12 no CHANGELOG entry at the round commit 0.5 (written since, 1e4a1a98). Σ 1.25 → 100 × 10.75 / 12 = **89.58**.
+- Theme B (11): B9 five stale comments (L1-A D1) 0.25. Σ 0.25 → 100 × 10.75 / 11 = **97.73**.
+- A2 on Welcome: the note is hidden there by ruling R14 (the block above replaces it); not costed by the director. If a reader costs it, it is ruled under R14 and both numbers are reported.
+
 ## §5 Log
 
 - 2026-10-28 | db0f070a | manager | branch cut; four lane worktrees; baselines run; four Cs spawned.
@@ -97,6 +103,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 - 2026-10-28 | 62b442ed | manager | L4-fix reported (6 commits); L1-A started in the freed slot; L4-fix verified (two mutations) and landed; R15; tip full suite started.
 - 2026-10-28 | 62b442ed | manager | tip +L4-fix full suite: 11133 tests, 34 failed, **0 new**. L2-fix reported; L4-fix2 started in the freed slot; L2-fix verified (two mutations) and landed (61492242); tip full suite started.
 - 2026-10-28 | 61492242 | manager | tip +L2-fix full suite: tsc 0; 11168 tests, 34 failed, **0 new**. Reader brief `briefs/R1-reader.md` written.
+- 2026-10-28 | 84dbc1c6 | manager | L4-fix2 landed (4a883c0a); round-1 pack built; readers ×3 started; L1-A reported (R16); L1-fix started; CHANGELOG entry 1e4a1a98; director's score A 89.58 / B 97.73 (§4c).
 
 ## §6 Clock
 
