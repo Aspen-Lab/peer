@@ -207,3 +207,7 @@ With the owner's test key (A P12-57 phase 2, 5 runs per paper, the product as bu
 ## Scores of record — Theme A round 4 (§1h.470)
 
 A P12-87 on `48d14081`; readers A4-r1 and A4-r2: P1 100, P2 100, P3 100. Consecutive rounds at the target: 2 — **Theme A has met the stop line.**
+
+## Scores of record — Theme C round 4 (§1h.471)
+
+C0 (no key) on `web/` tree 54f4b003: P1–P6 each 100. Consecutive rounds at the target (C0): 3. C1: phase 3 running.

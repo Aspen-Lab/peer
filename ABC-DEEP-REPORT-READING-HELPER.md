@@ -2454,6 +2454,24 @@ C's deviations are accepted:
 
 **A P12-57 phase 3** (C1) has started, on `e5aaa7d2`, port 4244.
 
+### §1h.471 — 2026-10-28 — THEME B ROUND 3 (A P12-88): 12/12 ×3, E2 + E5 → 95.83; C P12-89; THEME C ROUND 4 C0 100 ×6
+
+(a) **A P12-88** (Theme B round 3 on `921dbd8b`; report landed `1f906d66`; its four-word runs shared with P1–P6 are 5, digit runs and a common phrase).
+- The six pass requirements hold. **12 / 12 on P1, P2 and P3.**
+- Round 2's marks:
+  - B7 on P3 is GONE (Fig. 1 1,165 and Fig. 6 535 characters, all six whole);
+  - E1, E3 (capitals), E4 (bounds: 18 / 18 figures whole against their pages) and O2 (the page moves 0 px past the Explain card's end) are GONE.
+- Extras:
+  - E2, the standing §1h.168 cost, 0.25;
+  - **E5 (new)**, 0.25: while a card is open, the notes tab stands over the margin divider's strip and hides 146 px of it; the cursor there is `default`, and a drag there does nothing.
+- **A's score: 95.83 on each paper.** Without E5 it would be 97.92.
+
+(b) **Director:** E5 is real (a drag fails where the strip should take it) and is not voided. The tab's place beside a card (C P12-77 / C P12-79) and the divider's strip are two placements that collide. → **C P12-89**: the tab never intersects the strip. O1 (the 1 px divider range at 853 px) still waits on the owner.
+
+(c) **Readers for Theme B round 3** (B3-r1 running, then B3-r2) give the score of record. If they charge E5, round 3 is below the target.
+
+(d) **Theme C round 4 (C0, no key)** on the landed `web/` tree `54f4b003` (C P12-82 … C P12-86, revision 11): **every part right on all six papers, no extras, 100 × 6.** The only change from round 3 is P3's heading in capitals (C P12-83). C0 has three consecutive rounds at the target. C1 phase 3 is running.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2795,7 +2813,8 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-85 | DONE — C (Sonnet); landed with C P12-82 at 1f672ccf (§1h.465) | the closing split's echo skips fragments (≥ 40 words) | invented fixtures; own mutation; gates | checkpoint P12-85-C-<UTC>.md | briefs/P12-85.md; §1h.464 |
 | P12-86 | DONE — C (Sonnet); landed at e024cc39 (§1h.468) | Tier 1: no setup role after the opening run (damage guard); the fallback's cause logged as counts | invented fixtures; own mutations; gates | checkpoint P12-86-C-<UTC>.md | briefs/P12-86.md; §1h.464 |
 | P12-87 | DONE — A (Sonnet), report on the branch (6c5c8347); 36/36, no extras, 100 ×3; readers running (§1h.469) | Theme A A1–A12 + E3 re-check | rubric | walk, pack, P12-87-A-<UTC>.md | briefs/P12-87.md; §1h.467 |
-| P12-88 | IN_PROGRESS — A (Sonnet), Theme B round 3, head 69e5e2ef, port 4247 | Theme B B1–B12 + round 2's marks | rubric | walk, pack, P12-88-A-<UTC>.md | briefs/P12-88.md; §1h.467 |
+| P12-88 | DONE — A (Sonnet), report on the branch (1f906d66); 12/12 ×3, E2 + E5, 95.83 ×3; readers running (§1h.471) | Theme B B1–B12 + round 2's marks | rubric | walk, pack, P12-88-A-<UTC>.md | briefs/P12-88.md; §1h.467 |
+| P12-89 | QUEUED — C (Sonnet) | E5: the notes tab never stands over the margin's pane divider | tests; own mutation; gates | checkpoint P12-89-C-<UTC>.md | briefs/P12-89.md; §1h.471 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
 | P11-26 | **DONE 21:0xZ 2026-10-20** — on the branch (§1h.128 (b)); was RUNNING (rules 4, 5 added §1h.127 (c)) since 09:1xZ 2026-10-20 — C, `briefs/P11-26.md`, `scratchpad/p11c26/wt`, port 4127: the explain card keeps its top at the selection (B3); a figure in front of the stack is never a thumbnail (X-3) | round 1 Theme B | §1h.122 (b) 1, 4 | C → the manager | — |
