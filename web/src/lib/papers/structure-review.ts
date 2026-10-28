@@ -21,8 +21,9 @@
 //   - `sanitizeReview` / `applyCorrections` / `reviewStructure`: the answer is made whole by code, none
 //     of it is hoped for — `move_start`, `set_role`, `split` and `unsure` only; at most 40; every index in
 //     range and in order; five roles only (`body` is refused); the role `setup` only for the paper's opening
-//     run (P12-86); no split that leaves a piece of fewer than two paragraphs, but a closing (P12-90). A
-//     correction that fails a check is dropped, never mended; an answer that is not an answer
+//     run (P12-86, P12-91); no split that leaves a piece of fewer than two paragraphs, but a closing
+//     (P12-90); a split at a part's own edge, where the draft already cuts, is no correction at all (P12-91).
+//     A correction that fails a check is dropped, never mended; an answer that is not an answer
 //     leaves the draft exactly (Tier 0 never breaks).
 //   - `secondLookTargets` / `lookParagraphs` / `buildLookPrompt` / `resolveLooks`: a correction against a
 //     high- or medium-confidence part, or a part the model could not judge, gets one more look at that
@@ -563,7 +564,8 @@ export type RefusalOp = (typeof REFUSAL_OPS)[number];
 /**
  * Why a correction is refused, a closed set (never a word of the reply):
  *   - `malformed`: not an object, an op outside the three, an index that is not a whole number, a role outside the five;
- *   - `out-of-range`: a part that does not exist, a start or a split outside the part's own room;
+ *   - `out-of-range`: a part that does not exist, a start or a split outside the part's own room (a split at the
+ *     part's own edge is no refusal: see `isEdgeSplit`);
  *   - `part-0`: a `move_start` of part 0, which never moves;
  *   - `same-role`: a `set_role` to the role the part already has;
  *   - `repeat`: the same move, role or split asked twice, or a move to where the part already starts;
@@ -637,9 +639,30 @@ function refusalNumbers(
 }
 
 /**
+ * P12-91: a `split` that cuts where the draft already cuts changes nothing. Its ordinal is the part's own first
+ * paragraph (`from`) or the paragraph after its last (`to + 1`, the next part's first paragraph, when there is a next
+ * part). Measured: a paper's every reply was one split of a part at `to + 1`, a model that names the next part's
+ * start as a cut; it was refused as out of range and, with nothing else read, the review fell back, though the
+ * reply agreed with the draft. Judged against the draft as given, like every other check, and only for a split that
+ * is otherwise well formed (a part that exists, whole numbers, one of the five roles): a malformed one stays a
+ * refusal. A split one paragraph further out (`to + 2`, or before `from`) is still out of range.
+ */
+function isEdgeSplit(c: unknown, draft: readonly DraftPart[]): boolean {
+  if (!isRec(c) || c.op !== "split") return false;
+  const k = whole(c.part);
+  const at = whole(c.atParagraph);
+  if (k === null || at === null || k >= draft.length || roleFrom(c.role) === null) return false;
+  return at === draft[k].from || (k + 1 < draft.length && at === draft[k].to + 1);
+}
+
+/**
  * 1. The answer, correction by correction, against the DRAFT as given. Null is "not an answer at all" (not an
  * object, no `corrections` array): the draft stands and nothing is kept. `rejected` counts what was dropped,
  * `read` how many corrections were in the answer, and `refused` says what was dropped, by op and by reason.
+ *
+ * A split at a part's own edge (P12-91) is not a correction: see `isEdgeSplit`. It is taken out of the reply
+ * before anything is judged, so it is not in `read`, not in `rejected`, not in the tallies and not among the
+ * forty, and a reply of nothing else is an answer that agrees with the draft.
  *
  * The damage guard (P12-86, P12-91): the role `setup` is the paper's OPENING run, so it is never given to
  * anything after it. The opening is the draft's leading parts of role setup; `openingEnd` is the first part that
@@ -666,7 +689,7 @@ export function sanitizeReview(
   paragraphs: number,
 ): { answer: Answer; rejected: number; read: number; refused: Refusals; refusedNumbers: RefusalNumbers[] } | null {
   if (!isRec(raw) || !Array.isArray(raw.corrections)) return null;
-  const list = raw.corrections as unknown[];
+  const list = (raw.corrections as unknown[]).filter((c) => !isEdgeSplit(c, draft));
   // Each round judges the reply with the splits already found to leave a short piece refused, then looks for more.
   // A round refuses at least one more of the reply's own splits or it is the last, so there are at most as many
   // rounds as the reply has corrections (a reply holds a few, and the stored and sanitized ones at most forty).
@@ -963,7 +986,7 @@ export interface Reviewed {
   fellBack: boolean;
   /** Why it fell back; null when it did not. */
   cause: FallbackCause | null;
-  /** How many corrections the reply held (0 for a reply that is not an answer), and what was refused, by op and by reason. */
+  /** How many corrections the reply held (0 for a reply that is not an answer; a split at a part's own edge is none, P12-91), and what was refused, by op and by reason. */
   read: number;
   refused: Refusals;
   /** The first refused corrections, each by its numbers (P12-90): at most `REVIEW_CAPS.refusalsNamed`, in the order of the reply. */

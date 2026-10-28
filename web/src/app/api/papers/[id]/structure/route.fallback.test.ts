@@ -211,9 +211,11 @@ describe("POST /api/papers/[id]/structure — what it logs when the review falls
     expect(structureReviewCache.size()).toBe(0);
   });
 
-  it("names the number that was out of range: a split one paragraph past its part logs its op, part, ordinal, role and the bounds it was judged against (P12-90)", async () => {
-    // The measured shape: one correction read, one refused as out of range, a split. The results part is 9 to 17.
-    const reply = JSON.stringify({ corrections: [{ op: "split", part: 2, atParagraph: 18, role: "method" }], unsure: [] });
+  it("names the number that was out of range: a split two paragraphs past its part logs its op, part, ordinal, role and the bounds it was judged against (P12-90)", async () => {
+    // One correction read, one refused as out of range, a split. The results part is 9 to 17. (One paragraph past, 18,
+    // was this test's ordinal until P12-91: that split is the next part's own start, a cut the draft already has, and
+    // is no correction; two past is still out of range.)
+    const reply = JSON.stringify({ corrections: [{ op: "split", part: 2, atParagraph: 19, role: "method" }], unsure: [] });
     const { answer, lines, fields, text } = await fellBackWith(reply);
 
     expect(answer).toEqual({ fellBack: "unusable" });
@@ -227,10 +229,44 @@ describe("POST /api/papers/[id]/structure — what it logs when the review falls
       rejected: 1,
       refusedByOp: { split: 1 },
       refusedByReason: { "out-of-range": 1 },
-      refusedNumbers: [{ op: "split", reason: "out-of-range", part: 2, ordinal: 18, role: "method", ...FIVE_BOUNDS, from: 9, to: 17 }],
+      refusedNumbers: [{ op: "split", reason: "out-of-range", part: 2, ordinal: 19, role: "method", ...FIVE_BOUNDS, from: 9, to: 17 }],
     });
     expect(Object.keys((fields.refusedNumbers as Array<Record<string, unknown>>)[0]).sort()).toEqual(NUMBER_KEYS);
     expect(text).not.toMatch(/Invented|tide pools|kelp|Zymurgy/);
+  });
+
+  it("is no fallback when the only correction is a split at the next part's start, or at the part's own first paragraph (P12-91): reviewed, nothing corrected, no look", async () => {
+    // P4's shape: every reply was one split of a part at the paragraph the next part already starts at, refused as out of
+    // range, and the review fell back `all-refused`. The results part here is 9 to 17; 18 is the next part's start.
+    const consoleText = captureConsole();
+    const debug = vi.spyOn(console, "debug");
+    try {
+      for (const atParagraph of [18, 9]) {
+        structureReviewCache.clear();
+        debug.mockClear();
+        provider = providerOf(async () => JSON.stringify({ corrections: [{ op: "split", part: 2, atParagraph, role: "interpretation" }], unsure: [] }));
+        mocks.resolveProvider.mockReturnValue(provider);
+        const body = await json(await call());
+
+        expect(body.cached).toBe(false);
+        expect(body.fellBack).toBeUndefined();
+        expect(body.review).toMatchObject({ corrections: [], unsure: [], secondLooks: [] });
+        expect(provider.generateJsonText).toHaveBeenCalledTimes(1);
+        expect(structureReviewCache.size()).toBe(1);
+        expect(debug.mock.calls.filter(([label]) => label === UNUSABLE)).toHaveLength(0);
+        const fields = debug.mock.calls.find(([label]) => label === "[papers/structure] review")![1] as Record<string, unknown>;
+        expect(fields).toMatchObject({ corrections: 0, rejected: 0, refusedNumbers: [], looks: 0 });
+      }
+      // One paragraph further out is still a fallback, named by its numbers.
+      structureReviewCache.clear();
+      debug.mockClear();
+      provider = providerOf(async () => JSON.stringify({ corrections: [{ op: "split", part: 2, atParagraph: 19, role: "interpretation" }], unsure: [] }));
+      mocks.resolveProvider.mockReturnValue(provider);
+      expect(await json(await call())).toEqual({ fellBack: "unusable" });
+      expect(debug.mock.calls.filter(([label]) => label === UNUSABLE)).toHaveLength(1);
+    } finally {
+      consoleText.restore();
+    }
   });
 
   it("names the numbers of the pair of splits that were refused for their piece, with the room of the part (P12-90)", async () => {
@@ -272,7 +308,7 @@ describe("POST /api/papers/[id]/structure — what it logs when the review falls
         "not an object",
         { op: "set_role", part: 1, role: "method" },
         { op: "move_start", part: 0, toParagraph: 2 },
-        { op: "split", part: 2, atParagraph: 9, role: "method" },
+        { op: "split", part: 2, atParagraph: 19, role: "method" },
         { op: "split", part: 5, atParagraph: 27, role: "setup" },
       ],
     });

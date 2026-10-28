@@ -879,6 +879,142 @@ describe("sanitizeReview — no one-paragraph piece: a split cannot cut a piece 
   });
 });
 
+describe("sanitizeReview / reviewStructure — a split at a part's own edge changes nothing (P12-91)", () => {
+  // Measured (P4, two runs of two): every reply was one split of part 1 at the paragraph after its last, where the
+  // next part already starts. It was refused as out of range and, with nothing else read, the review fell back
+  // `all-refused` though the reply agreed with the draft. A split at the part's `to + 1` or its own `from` is a cut
+  // the draft already has: dropped silently, not read, not rejected, not a correction. Shaped like P4: five parts,
+  // 164 paragraphs, part 1 from 35 to 146.
+  const draft = [part(0, 34, "setup"), part(35, 146, "evidence"), part(147, 155, "interpretation"), part(156, 160, "method"), part(161, 163, "apparatus")];
+  const N = 164;
+  const split = (at: number, role: ReviewRole | string = "interpretation", k = 1) => ({ op: "split", part: k, atParagraph: at, role });
+  const quiet = { byOp: {}, byReason: {} };
+
+  it("drops a split at the next part's start, and at the part's own first paragraph, as no correction: not read, not rejected, not counted", () => {
+    for (const at of [147, 35]) {
+      const answer = sanitizeReview({ corrections: [split(at)] }, draft, N)!;
+
+      expect(answer.answer.corrections).toEqual([]);
+      expect(answer.read).toBe(0);
+      expect(answer.rejected).toBe(0);
+      expect(answer.refused).toEqual(quiet);
+      expect(answer.refusedNumbers).toEqual([]);
+    }
+    // Whatever the role it names (one of the five), and in any part that has a next part, or a first paragraph.
+    for (const role of ["setup", "method", "evidence", "interpretation", "apparatus", " Method "]) {
+      expect(sanitizeReview({ corrections: [split(147, role)] }, draft, N)!.read).toBe(0);
+      expect(sanitizeReview({ corrections: [split(35, role)] }, draft, N)!.read).toBe(0);
+    }
+    for (const [k, at] of [[0, 35], [0, 0], [2, 156], [2, 147], [3, 161], [4, 161]] as const) {
+      expect(sanitizeReview({ corrections: [split(at, "method", k)] }, draft, N)!.read).toBe(0);
+    }
+    // A digit string reads as a number, as everywhere in the sanitizer.
+    expect(sanitizeReview({ corrections: [{ op: "split", part: "1", atParagraph: "147", role: "evidence" }] }, draft, N)!.read).toBe(0);
+  });
+
+  it("is a review that agrees with the draft when it is all there is: reviewed, nothing corrected, not a fallback", () => {
+    for (const reply of [{ corrections: [split(147)] }, { corrections: [split(35)] }, { corrections: [split(147), split(35, "method"), split(147)] }]) {
+      const result = reviewStructure(reply, draft, N);
+
+      expect(result.fellBack).toBe(false);
+      expect(result.cause).toBeNull();
+      expect(result.answer).toEqual({ corrections: [], unsure: [] });
+      expect(result.parts).toEqual(partsOf(draft));
+      expect(result.read).toBe(0);
+      expect(result.rejected).toBe(0);
+      expect(result.refused).toEqual(quiet);
+      expect(result.refusedNumbers).toEqual([]);
+    }
+    // The same as the reply that says so itself.
+    expect(reviewStructure({ corrections: [] }, draft, N)).toEqual(reviewStructure({ corrections: [split(147)] }, draft, N));
+    // Its `unsure` parts are kept as they are for an answer with no corrections.
+    expect(reviewStructure({ corrections: [split(147)], unsure: [2] }, draft, N).answer).toEqual({ corrections: [], unsure: [2] });
+  });
+
+  it("still refuses a split one paragraph further out, or before the part, as out of range", () => {
+    for (const [at, from, to] of [[148, 35, 146], [149, 35, 146], [34, 35, 146], [200, 35, 146], [N, 35, 146]] as const) {
+      const result = reviewStructure({ corrections: [split(at)] }, draft, N);
+
+      expect(result).toMatchObject({ fellBack: true, cause: "all-refused", read: 1, rejected: 1, refused: { byOp: { split: 1 }, byReason: { "out-of-range": 1 } } });
+      expect(result.refusedNumbers).toEqual([
+        { op: "split", reason: "out-of-range", part: 1, ordinal: at, role: "interpretation", draftLength: 5, paragraphs: N, from, to },
+      ]);
+    }
+  });
+
+  it("takes the last part's end for no edge: a split at the paragraph after the paper's last is out of range, at its first paragraph none", () => {
+    expect(sanitizeReview({ corrections: [split(N, "method", 4)] }, draft, N)!).toMatchObject({ read: 1, rejected: 1, refused: { byReason: { "out-of-range": 1 } } });
+    expect(sanitizeReview({ corrections: [split(161, "method", 4)] }, draft, N)!.read).toBe(0);
+    // And a part that does not exist has no edge.
+    expect(sanitizeReview({ corrections: [split(147, "method", 9)] }, draft, N)!).toMatchObject({ read: 1, rejected: 1, refused: { byReason: { "out-of-range": 1 } } });
+  });
+
+  it("keeps a split that is not well formed refused as malformed, edge or not", () => {
+    const answer = sanitizeReview(
+      { corrections: [{ op: "split", part: 1, atParagraph: 147 }, split(147, "banana"), { op: "split", part: 1, atParagraph: "x", role: "method" }, { op: "split", part: "y", atParagraph: 147, role: "method" }] },
+      draft,
+      N,
+    )!;
+
+    expect(answer.read).toBe(4);
+    expect(answer.rejected).toBe(4);
+    expect(answer.refused).toEqual({ byOp: { split: 4 }, byReason: { malformed: 4 } });
+  });
+
+  it("leaves the reply's other corrections as they were judged, and counts only them", () => {
+    // Beside a correction that stands: it stands, and the edge split is not in `read` or `rejected`.
+    const beside = sanitizeReview({ corrections: [split(147), { op: "set_role", part: 2, role: "method" }, split(35)] }, draft, N)!;
+    expect(beside.answer.corrections).toEqual([{ op: "set_role", part: 2, role: "method" }]);
+    expect(beside.read).toBe(1);
+    expect(beside.rejected).toBe(0);
+    expect(reviewStructure({ corrections: [split(147), { op: "set_role", part: 2, role: "method" }] }, draft, N)).toMatchObject({ fellBack: false, read: 1, rejected: 0 });
+
+    // Beside a refusal: the refusal is the only one counted, and the reply is still all refused.
+    const refusedToo = reviewStructure({ corrections: [split(147), split(148), split(35)] }, draft, N);
+    expect(refusedToo).toMatchObject({ fellBack: true, cause: "all-refused", read: 1, rejected: 1 });
+    expect(refusedToo.refusedNumbers.map((entry) => entry.ordinal)).toEqual([148]);
+
+    // The numbers name the first refusals in the order of the reply, with the edge splits left out of the count of eight.
+    const many = Array.from({ length: 12 }, (_, k) => ({ op: "set_role", part: 90 + k, role: "method" }));
+    const named = sanitizeReview({ corrections: [split(147), ...many, split(35)] }, draft, N)!;
+    expect(named.read).toBe(12);
+    expect(named.rejected).toBe(12);
+    expect(named.refusedNumbers.map((entry) => entry.part)).toEqual([90, 91, 92, 93, 94, 95, 96, 97]);
+  });
+
+  it("uses up nothing: not one of the forty, not a place among a part's three splits, not its repeat memory", () => {
+    // Forty-five edge splits, then a correction: the correction is the first, not the forty-sixth.
+    const edges = Array.from({ length: 45 }, (_, k) => split(k % 2 === 0 ? 147 : 35));
+    const afterEdges = sanitizeReview({ corrections: [...edges, { op: "set_role", part: 2, role: "method" }] }, draft, N)!;
+    expect(afterEdges.answer.corrections).toEqual([{ op: "set_role", part: 2, role: "method" }]);
+    expect(afterEdges.rejected).toBe(0);
+    expect(afterEdges.refused).toEqual(quiet);
+
+    // The three splits of the part, spaced as pieces of two or more need, stand beside the edge splits.
+    const three = [split(147), split(40, "method"), split(35), split(50, "interpretation"), split(60, "method"), split(147)];
+    const kept = sanitizeReview({ corrections: three }, draft, N)!;
+    expect(kept.answer.corrections.map((c) => (c.op === "split" ? c.atParagraph : null))).toEqual([40, 50, 60]);
+    expect(kept.rejected).toBe(0);
+    expect(kept.read).toBe(3);
+  });
+
+  it("judges a split against the draft as given: an edge of the draft is none after a move of the next part's start, and is not mended into a cut", () => {
+    // The next part's start moves to 150; a split at 147, the draft's own cut, is still no correction (and cuts no piece).
+    const moved = reviewStructure({ corrections: [{ op: "move_start", part: 2, toParagraph: 150 }, split(147, "method")] }, draft, N);
+
+    expect(moved.answer!.corrections).toEqual([{ op: "move_start", part: 2, toParagraph: 150 }]);
+    expect(moved).toMatchObject({ fellBack: false, read: 1, rejected: 0 });
+    expect(moved.parts[2]).toEqual({ from: 150, to: 155, role: "interpretation" });
+  });
+
+  it("is the rule of a kept review too: a stored edge split lays nothing over the map", () => {
+    const five = draftOf(FIVE.input)!;
+    const parts = reviewedParts(five, { corrections: [{ op: "split", part: 2, atParagraph: five.parts[2].to + 1, role: "method" }], unsure: [], draftDigest: five.digest });
+
+    expect(parts).toEqual(partsOf(five.parts));
+  });
+});
+
 describe("applyCorrections / sound / reviewStructure — starts, then roles, then splits; the draft stands for anything unsound", () => {
   const draft = [part(0, 5, "setup"), part(6, 10, "method"), part(11, 20, "evidence"), part(21, 25, "interpretation"), part(26, 28, "apparatus")];
   const N = 29;
@@ -994,7 +1130,7 @@ describe("sanitizeReview / reviewStructure — what was refused and why, and the
           { op: "split", part: 2, atParagraph: 14 },
           { op: "set_role", part: 99, role: "method" },
           { op: "move_start", part: 2, toParagraph: 99 },
-          { op: "split", part: 2, atParagraph: 11, role: "method" },
+          { op: "split", part: 2, atParagraph: 22, role: "method" },
           { op: "move_start", part: 0, toParagraph: 2 },
           { op: "set_role", part: 1, role: "method" },
           { op: "set_role", part: 3, role: "evidence" },
@@ -1113,7 +1249,7 @@ describe("sanitizeReview / reviewStructure — a refused correction is named by 
     const answer = sanitizeReview(
       {
         corrections: [
-          { op: "split", part: 2, atParagraph: 21, role: "method" },
+          { op: "split", part: 2, atParagraph: 22, role: "method" },
           { op: "move_start", part: 3, toParagraph: 99 },
           { op: "move_start", part: 0, toParagraph: 2 },
           { op: "set_role", part: 99, role: "method" },
@@ -1128,7 +1264,7 @@ describe("sanitizeReview / reviewStructure — a refused correction is named by 
     )!;
 
     expect(answer.refusedNumbers).toEqual([
-      { op: "split", reason: "out-of-range", part: 2, ordinal: 21, role: "method", ...bounds, from: 11, to: 20 },
+      { op: "split", reason: "out-of-range", part: 2, ordinal: 22, role: "method", ...bounds, from: 11, to: 20 },
       { op: "move_start", reason: "out-of-range", part: 3, ordinal: 99, role: null, ...bounds, from: 21, to: 25 },
       { op: "move_start", reason: "part-0", part: 0, ordinal: 2, role: null, ...bounds, from: 0, to: 5 },
       { op: "set_role", reason: "out-of-range", part: 99, ordinal: null, role: "method", ...bounds, from: null, to: null },
@@ -1221,9 +1357,9 @@ describe("sanitizeReview / reviewStructure — a refused correction is named by 
   });
 
   it("carries them through reviewStructure: for a fallback and for a used review, and none for a reply that is not an answer or is whole", () => {
-    const out = reviewStructure({ corrections: [{ op: "split", part: 2, atParagraph: 21, role: "method" }] }, draft, N);
+    const out = reviewStructure({ corrections: [{ op: "split", part: 2, atParagraph: 22, role: "method" }] }, draft, N);
     expect(out).toMatchObject({ fellBack: true, cause: "all-refused", read: 1, rejected: 1 });
-    expect(out.refusedNumbers).toEqual([{ op: "split", reason: "out-of-range", part: 2, ordinal: 21, role: "method", ...bounds, from: 11, to: 20 }]);
+    expect(out.refusedNumbers).toEqual([{ op: "split", reason: "out-of-range", part: 2, ordinal: 22, role: "method", ...bounds, from: 11, to: 20 }]);
 
     const used = reviewStructure({ corrections: [{ op: "set_role", part: 1, role: "evidence" }, { op: "set_role", part: 7, role: "evidence" }] }, draft, N);
     expect(used.fellBack).toBe(false);
