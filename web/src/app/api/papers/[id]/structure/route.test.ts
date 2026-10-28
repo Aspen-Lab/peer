@@ -286,6 +286,11 @@ describe("POST /api/papers/[id]/structure — the review", () => {
         { from: 26, to: 28, role: "apparatus" },
       ]);
       expect(fields).toMatchObject({ corrections: 1, rejected: 2 });
+      // Named by their numbers (P12-90): the results part is 9 to 17 in a draft of six parts and twenty-nine paragraphs.
+      expect(fields.refusedNumbers).toEqual([
+        { op: "split", reason: "piece-too-short", part: 2, ordinal: 11, role: "method", draftLength: 6, paragraphs: 29, from: 9, to: 17 },
+        { op: "split", reason: "piece-too-short", part: 2, ordinal: 12, role: "evidence", draftLength: 6, paragraphs: 29, from: 9, to: 17 },
+      ]);
     } finally {
       consoleText.restore();
     }
@@ -552,8 +557,8 @@ describe("POST /api/papers/[id]/structure — what it logs", () => {
 
       expect(lines).toHaveLength(1);
       const fields = lines[0][1] as Record<string, unknown>;
-      expect(Object.keys(fields).sort()).toEqual(["answerChars", "corrections", "looks", "mode", "paragraphs", "parts", "promptChars", "rejected"]);
-      expect(fields).toMatchObject({ paragraphs: 29, parts: 6, mode: "A", corrections: 2, looks: 2 });
+      expect(Object.keys(fields).sort()).toEqual(["answerChars", "corrections", "looks", "mode", "paragraphs", "parts", "promptChars", "refusedNumbers", "rejected"]);
+      expect(fields).toMatchObject({ paragraphs: 29, parts: 6, mode: "A", corrections: 2, looks: 2, refusedNumbers: [] });
       expect(consoleText.text()).not.toMatch(/Invented|tide pools|kelp|Introduction|Methods|Results|Zymurgy|Further analysis/);
     } finally {
       consoleText.restore();

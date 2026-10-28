@@ -70,6 +70,8 @@ export const REVIEW_CAPS = {
    * the first results part, measured on one run of five.
    */
   minPiece: 2,
+  /** How many refused corrections are named by their numbers (`RefusalNumbers`), the first ones of the reply (P12-90). */
+  refusalsNamed: 8,
   /** The answer's allowance: 40 corrections at about 14 tokens each. */
   answerTokens: 600,
   secondLooks: 3,
@@ -580,8 +582,59 @@ export interface Refusals {
   byReason: Partial<Record<RefusalReason, number>>;
 }
 
+/**
+ * One refused correction, by its numbers (P12-90): measured, a paper's review fell back every time on one correction
+ * "refused as out of range" (read 1, rejected 1, the same reply size each run), and the log could not say which number
+ * was out of range. Names from the closed sets and numbers only, never a word of the reply:
+ *   - `op`, `reason`: as in `Refusals`;
+ *   - `part`: the part the correction names, a whole number, or null when it is not one;
+ *   - `ordinal`: the paragraph it names (`toParagraph` of a move, `atParagraph` of a split), a whole number, or null
+ *     (for a `set_role`, for a number that is not whole, and for an op that is not one of the three);
+ *   - `role`: the role it names when that is one of the five (a `set_role` or a `split`), else null;
+ *   - `draftLength`, `paragraphs`: the number of parts of the draft it was judged against, and of paragraphs;
+ *   - `from`, `to`: the room it was judged against: the named part's first and last paragraph in the draft, or null
+ *     for a part that does not exist. For a refusal for its piece (`piece-too-short`) the part's room after the
+ *     accepted moves of its start and of the next part's.
+ */
+export interface RefusalNumbers {
+  op: RefusalOp;
+  reason: RefusalReason;
+  part: number | null;
+  ordinal: number | null;
+  role: ReviewRole | null;
+  draftLength: number;
+  paragraphs: number;
+  from: number | null;
+  to: number | null;
+}
+
 /** The op of a correction as a name from the closed set. The reply's own text is never kept. */
 const refusalOpOf = (c: unknown): RefusalOp => (isRec(c) && (c.op === "move_start" || c.op === "set_role" || c.op === "split") ? c.op : "other");
+
+/** The numbers of a refused correction (`RefusalNumbers`): whole numbers, the five role names, or null; nothing else of the reply. */
+function refusalNumbers(
+  c: unknown,
+  reason: RefusalReason,
+  draft: readonly DraftPart[],
+  paragraphs: number,
+  room?: { from: number; to: number },
+): RefusalNumbers {
+  const op = refusalOpOf(c);
+  const rec: Record<string, unknown> = isRec(c) ? c : {};
+  const part = whole(rec.part);
+  const own = part !== null && part < draft.length ? draft[part] : undefined;
+  return {
+    op,
+    reason,
+    part,
+    ordinal: op === "move_start" ? whole(rec.toParagraph) : op === "split" ? whole(rec.atParagraph) : null,
+    role: op === "set_role" || op === "split" ? roleFrom(rec.role) : null,
+    draftLength: draft.length,
+    paragraphs,
+    from: room?.from ?? own?.from ?? null,
+    to: room?.to ?? own?.to ?? null,
+  };
+}
 
 /**
  * 1. The answer, correction by correction, against the DRAFT as given. Null is "not an answer at all" (not an
@@ -610,13 +663,13 @@ export function sanitizeReview(
   raw: unknown,
   draft: readonly DraftPart[],
   paragraphs: number,
-): { answer: Answer; rejected: number; read: number; refused: Refusals } | null {
+): { answer: Answer; rejected: number; read: number; refused: Refusals; refusedNumbers: RefusalNumbers[] } | null {
   if (!isRec(raw) || !Array.isArray(raw.corrections)) return null;
   const list = raw.corrections as unknown[];
   // Each round judges the reply with the splits already found to leave a short piece refused, then looks for more.
   // A round refuses at least one more of the reply's own splits or it is the last, so there are at most as many
   // rounds as the reply has corrections (a reply holds a few, and the stored and sanitized ones at most forty).
-  const short = new Set<number>();
+  const short = new Map<number, { from: number; to: number }>();
   let judged = judgeCorrections(list, draft, paragraphs, short);
   for (;;) {
     const cut = splitsLeavingShortPieces(
@@ -625,36 +678,44 @@ export function sanitizeReview(
       judged.kept.map((entry) => entry.correction),
     );
     if (cut.size === 0) break;
-    for (const position of cut) short.add(judged.kept[position].index);
+    for (const [position, room] of cut) short.set(judged.kept[position].index, room);
     judged = judgeCorrections(list, draft, paragraphs, short);
   }
   const unsure = Array.isArray(raw.unsure)
     ? [...new Set((raw.unsure as unknown[]).map(whole).filter((n): n is number => n !== null && n < draft.length))]
     : [];
-  return { answer: { corrections: judged.kept.map((entry) => entry.correction), unsure }, rejected: judged.rejected, read: list.length, refused: judged.refused };
+  return {
+    answer: { corrections: judged.kept.map((entry) => entry.correction), unsure },
+    rejected: judged.rejected,
+    read: list.length,
+    refused: judged.refused,
+    refusedNumbers: judged.refusedNumbers,
+  };
 }
 
 /**
  * The reply's corrections, one by one against the draft as given, in the order of the reply (every check of
- * `sanitizeReview` but the pieces a part is left with). `short` is the set of the reply's indices, found by an
- * earlier round, of the splits that leave a short piece: each is refused as `piece-too-short` at the point where
- * it would otherwise have been kept, so it uses up nothing a later correction needs. A kept correction carries
- * its index in the reply.
+ * `sanitizeReview` but the pieces a part is left with). `short` holds the reply's indices, found by an earlier
+ * round, of the splits that leave a short piece, with the room of the part they were judged in: each is refused as
+ * `piece-too-short` at the point where it would otherwise have been kept, so it uses up nothing a later correction
+ * needs. A kept correction carries its index in the reply; the first refusals are named by their numbers.
  */
 function judgeCorrections(
   list: readonly unknown[],
   draft: readonly DraftPart[],
   paragraphs: number,
-  short: ReadonlySet<number>,
-): { kept: Array<{ correction: Correction; index: number }>; rejected: number; refused: Refusals } {
+  short: ReadonlyMap<number, { from: number; to: number }>,
+): { kept: Array<{ correction: Correction; index: number }>; rejected: number; refused: Refusals; refusedNumbers: RefusalNumbers[] } {
   const kept: Array<{ correction: Correction; index: number }> = [];
   let rejected = 0;
   const refused: Refusals = { byOp: {}, byReason: {} };
-  const refuse = (c: unknown, reason: RefusalReason): void => {
+  const refusedNumbers: RefusalNumbers[] = [];
+  const refuse = (c: unknown, reason: RefusalReason, room?: { from: number; to: number }): void => {
     const op = refusalOpOf(c);
     rejected += 1;
     refused.byOp[op] = (refused.byOp[op] ?? 0) + 1;
     refused.byReason[reason] = (refused.byReason[reason] ?? 0) + 1;
+    if (refusedNumbers.length < REVIEW_CAPS.refusalsNamed) refusedNumbers.push(refusalNumbers(c, reason, draft, paragraphs, room));
   };
   const moved = new Set<number>();
   const roled = new Set<number>();
@@ -745,8 +806,9 @@ function judgeCorrections(
         refuse(c, "setup-after-opening");
         continue;
       }
-      if (short.has(index)) {
-        refuse(c, "piece-too-short");
+      const room = short.get(index);
+      if (room) {
+        refuse(c, "piece-too-short", room);
         continue;
       }
       seen.add(at);
@@ -756,7 +818,7 @@ function judgeCorrections(
       refuse(c, "malformed");
     }
   }
-  return { kept, rejected, refused };
+  return { kept, rejected, refused, refusedNumbers };
 }
 
 /**
@@ -783,7 +845,8 @@ function movedStarts(draft: readonly DraftPart[], paragraphs: number, correction
 
 /**
  * P12-90: which of these (already accepted) corrections are splits to refuse because they leave a piece of fewer
- * than `REVIEW_CAPS.minPiece` paragraphs, as indices into `corrections`.
+ * than `REVIEW_CAPS.minPiece` paragraphs, as indices into `corrections`, each with the room (first and last paragraph)
+ * of the part it was judged in.
  *
  * A part is judged where `applyCorrections` will find it: from its start after the moves to the paragraph before
  * the next part's start after the moves. A split outside that room is dropped there and cuts no piece here. The
@@ -797,13 +860,13 @@ function movedStarts(draft: readonly DraftPart[], paragraphs: number, correction
  * evidence part and the split that begins it gives the role interpretation. The rest of that part is judged as
  * any other piece.
  */
-function splitsLeavingShortPieces(draft: readonly DraftPart[], paragraphs: number, corrections: readonly Correction[]): Set<number> {
+function splitsLeavingShortPieces(draft: readonly DraftPart[], paragraphs: number, corrections: readonly Correction[]): Map<number, { from: number; to: number }> {
   const { starts } = movedStarts(draft, paragraphs, corrections);
   let lastEvidence = -1;
   draft.forEach((part, k) => {
     if (part.role === "evidence") lastEvidence = k;
   });
-  const cut = new Set<number>();
+  const cut = new Map<number, { from: number; to: number }>();
   for (const k of new Set(corrections.flatMap((c) => (c.op === "split" ? [c.part] : [])))) {
     const lo = starts[k];
     const hi = (starts[k + 1] ?? paragraphs) - 1;
@@ -821,7 +884,7 @@ function splitsLeavingShortPieces(draft: readonly DraftPart[], paragraphs: numbe
         if (j < live.length) doomed.add(j);
       }
       if (doomed.size === 0) break;
-      for (const p of doomed) cut.add(live[p].i);
+      for (const p of doomed) cut.set(live[p].i, { from: lo, to: hi });
       live = live.filter((_, p) => !doomed.has(p));
     }
   }
@@ -902,6 +965,8 @@ export interface Reviewed {
   /** How many corrections the reply held (0 for a reply that is not an answer), and what was refused, by op and by reason. */
   read: number;
   refused: Refusals;
+  /** The first refused corrections, each by its numbers (P12-90): at most `REVIEW_CAPS.refusalsNamed`, in the order of the reply. */
+  refusedNumbers: RefusalNumbers[];
 }
 
 /** The draft as plain parts. */
@@ -910,7 +975,8 @@ export const partsOf = (draft: readonly DraftPart[]): Part[] => draft.map(({ fro
 /**
  * The whole step: never throws, never returns an unsound structure. An answer that is not one — or one whose
  * corrections were all refused, which is a model that did not understand — leaves the draft exactly, and says
- * which (`cause`) with the counts behind it (`read`, `refused`): numbers and names from closed sets, never text.
+ * which (`cause`) with the counts behind it (`read`, `refused`) and the first refused corrections by their numbers
+ * (`refusedNumbers`): numbers and names from closed sets, never text.
  */
 export function reviewStructure(raw: unknown, draft: readonly DraftPart[], paragraphs: number): Reviewed {
   const base = partsOf(draft);
@@ -923,6 +989,7 @@ export function reviewStructure(raw: unknown, draft: readonly DraftPart[], parag
     cause,
     read: seen?.read ?? 0,
     refused: seen?.refused ?? { byOp: {}, byReason: {} },
+    refusedNumbers: seen?.refusedNumbers ?? [],
   });
   try {
     seen = sanitizeReview(raw, draft, paragraphs);
@@ -930,7 +997,16 @@ export function reviewStructure(raw: unknown, draft: readonly DraftPart[], parag
     if (seen.read > 0 && seen.answer.corrections.length === 0) return fell("all-refused");
     const result = applyCorrections(draft, paragraphs, seen.answer);
     return sound(result.parts, paragraphs)
-      ? { parts: result.parts, answer: seen.answer, rejected: seen.rejected + result.dropped, fellBack: false, cause: null, read: seen.read, refused: seen.refused }
+      ? {
+          parts: result.parts,
+          answer: seen.answer,
+          rejected: seen.rejected + result.dropped,
+          fellBack: false,
+          cause: null,
+          read: seen.read,
+          refused: seen.refused,
+          refusedNumbers: seen.refusedNumbers,
+        }
       : fell("unsound");
   } catch {
     return fell("unsound");

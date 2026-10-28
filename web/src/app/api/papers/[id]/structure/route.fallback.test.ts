@@ -70,7 +70,11 @@ type Reply = (args: ModelArgs) => Promise<string>;
 const KEY_SENTINEL = "USER-NOT-A-KEY-0123456789";
 const UNUSABLE = "[papers/structure] unusable";
 /** The keys of the line, sorted: the shape this file pins. */
-const LINE_KEYS = ["answerChars", "cause", "promptChars", "read", "refusedByOp", "refusedByReason", "rejected"];
+const LINE_KEYS = ["answerChars", "cause", "promptChars", "read", "refusedByOp", "refusedByReason", "refusedNumbers", "rejected"];
+/** The keys of one refused correction in `refusedNumbers`, sorted (P12-90). */
+const NUMBER_KEYS = ["draftLength", "from", "op", "ordinal", "paragraphs", "part", "reason", "role", "to"];
+/** The five-part invented paper below: six parts, twenty-nine paragraphs, the results part is 9 to 17. */
+const FIVE_BOUNDS = { draftLength: 6, paragraphs: 29 };
 
 function providerOf(reply: Reply) {
   return { id: "gemini", generateJsonText: vi.fn<Reply>(reply) };
@@ -138,6 +142,7 @@ describe("POST /api/papers/[id]/structure — what it logs when the review falls
       rejected: 0,
       refusedByOp: {},
       refusedByReason: {},
+      refusedNumbers: [],
     });
     expect(structureReviewCache.size()).toBe(0);
     expect(text).not.toMatch(/Invented|tide pools|kelp|Zymurgy|Methods are Results|I looked at/);
@@ -173,6 +178,11 @@ describe("POST /api/papers/[id]/structure — what it logs when the review falls
       rejected: 3,
       refusedByOp: { set_role: 1, move_start: 1, split: 1 },
       refusedByReason: { "out-of-range": 3 },
+      refusedNumbers: [
+        { op: "set_role", reason: "out-of-range", part: 99, ordinal: null, role: null, ...FIVE_BOUNDS, from: null, to: null },
+        { op: "move_start", reason: "out-of-range", part: 42, ordinal: 3, role: null, ...FIVE_BOUNDS, from: null, to: null },
+        { op: "split", reason: "out-of-range", part: 77, ordinal: 5, role: null, ...FIVE_BOUNDS, from: null, to: null },
+      ],
     });
     expect(structureReviewCache.size()).toBe(0);
     expect(text).not.toMatch(/banana|Invented|tide pools|Zymurgy/);
@@ -199,6 +209,60 @@ describe("POST /api/papers/[id]/structure — what it logs when the review falls
     expect(answer).toEqual({ fellBack: "unusable" });
     expect(fields).toMatchObject({ cause: "all-refused", read: 2, rejected: 2, refusedByOp: { split: 2 }, refusedByReason: { "piece-too-short": 2 } });
     expect(structureReviewCache.size()).toBe(0);
+  });
+
+  it("names the number that was out of range: a split one paragraph past its part logs its op, part, ordinal, role and the bounds it was judged against (P12-90)", async () => {
+    // The measured shape: one correction read, one refused as out of range, a split. The results part is 9 to 17.
+    const reply = JSON.stringify({ corrections: [{ op: "split", part: 2, atParagraph: 18, role: "method" }], unsure: [] });
+    const { answer, lines, fields, text } = await fellBackWith(reply);
+
+    expect(answer).toEqual({ fellBack: "unusable" });
+    expect(lines).toHaveLength(1);
+    expect(Object.keys(fields).sort()).toEqual(LINE_KEYS);
+    expect(fields).toEqual({
+      promptChars: expect.any(Number),
+      answerChars: reply.length,
+      cause: "all-refused",
+      read: 1,
+      rejected: 1,
+      refusedByOp: { split: 1 },
+      refusedByReason: { "out-of-range": 1 },
+      refusedNumbers: [{ op: "split", reason: "out-of-range", part: 2, ordinal: 18, role: "method", ...FIVE_BOUNDS, from: 9, to: 17 }],
+    });
+    expect(Object.keys((fields.refusedNumbers as Array<Record<string, unknown>>)[0]).sort()).toEqual(NUMBER_KEYS);
+    expect(text).not.toMatch(/Invented|tide pools|kelp|Zymurgy/);
+  });
+
+  it("names the numbers of the pair of splits that were refused for their piece, with the room of the part (P12-90)", async () => {
+    const reply = JSON.stringify({ corrections: [{ op: "split", part: 2, atParagraph: 11, role: "method" }, { op: "split", part: 2, atParagraph: 12, role: "evidence" }] });
+    const { fields } = await fellBackWith(reply);
+
+    expect(fields.refusedNumbers).toEqual([
+      { op: "split", reason: "piece-too-short", part: 2, ordinal: 11, role: "method", ...FIVE_BOUNDS, from: 9, to: 17 },
+      { op: "split", reason: "piece-too-short", part: 2, ordinal: 12, role: "evidence", ...FIVE_BOUNDS, from: 9, to: 17 },
+    ]);
+  });
+
+  it("names at most eight refused corrections, and writes no word of the reply, the paper or the reader's key among them", async () => {
+    const words = "Invented prose about tide pools and Zymurgy of kelp";
+    const reply = JSON.stringify({
+      corrections: [
+        ...Array.from({ length: 6 }, (_, k) => ({ op: "set_role", part: 50 + k, role: "method" })),
+        { op: words, part: words, toParagraph: words, role: words },
+        { op: "split", part: 2, atParagraph: words, role: words },
+        { op: "split", part: 2, atParagraph: 99, role: words },
+        { op: "move_start", part: 77, toParagraph: 4 },
+      ],
+    });
+    const { fields, text } = await fellBackWith(reply, { paper, llmOverride: { provider: "gemini", apiKey: KEY_SENTINEL } });
+    const named = fields.refusedNumbers as Array<Record<string, unknown>>;
+
+    expect(fields).toMatchObject({ cause: "all-refused", read: 10, rejected: 10 });
+    expect(named).toHaveLength(8);
+    expect(named.map((entry) => entry.part)).toEqual([50, 51, 52, 53, 54, 55, null, 2]);
+    for (const entry of named) expect(Object.keys(entry).sort()).toEqual(NUMBER_KEYS);
+    expect(text).not.toMatch(/Invented|prose|tide pools|kelp|Zymurgy/);
+    expect(text).not.toContain(KEY_SENTINEL);
   });
 
   it("counts a mixed reply by op and by reason, and keeps the words of an op the reply invented out of the line", async () => {
@@ -240,6 +304,7 @@ describe("POST /api/papers/[id]/structure — what it logs when the review falls
       rejected: 1,
       refusedByOp: { set_role: 1 },
       refusedByReason: { "out-of-range": 1 },
+      refusedNumbers: [{ op: "set_role", reason: "out-of-range", part: 99, ordinal: null, role: "method", ...FIVE_BOUNDS, from: null, to: null }],
     });
     expect(structureReviewCache.size()).toBe(0);
   });

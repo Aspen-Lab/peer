@@ -16,6 +16,7 @@ import {
   REFUSAL_OPS,
   REFUSAL_REASONS,
   REVIEW_CAPS,
+  REVIEW_ROLES,
   reviewedParts,
   reviewPromptFixedText,
   reviewStructure,
@@ -1033,6 +1034,141 @@ describe("sanitizeReview / reviewStructure — what was refused and why, and the
     expect(whole.refused).toEqual({ byOp: { set_role: 1 }, byReason: { malformed: 1 } });
 
     expect(reviewStructure({ corrections: [], unsure: [2] }, draft, N)).toMatchObject({ fellBack: false, cause: null, read: 0, refused: { byOp: {}, byReason: {} } });
+  });
+});
+
+describe("sanitizeReview / reviewStructure — a refused correction is named by its numbers (P12-90)", () => {
+  // Measured: a paper's review fell back every run on "one correction read, one refused as out of range", and the log
+  // could not say which number was out of range. Each refusal now carries its op, its reason, its part, its ordinal,
+  // its role when that is one of the five, and the bounds it was judged against: numbers and names from closed sets.
+  const draft = [part(0, 5, "setup"), part(6, 10, "method"), part(11, 20, "evidence"), part(21, 25, "interpretation"), part(26, 28, "apparatus")];
+  const N = 29;
+  const bounds = { draftLength: 5, paragraphs: 29 };
+
+  it("names a refused correction by its op, reason, part, ordinal and role, with the bounds it was judged against", () => {
+    const answer = sanitizeReview(
+      {
+        corrections: [
+          { op: "split", part: 2, atParagraph: 21, role: "method" },
+          { op: "move_start", part: 3, toParagraph: 99 },
+          { op: "move_start", part: 0, toParagraph: 2 },
+          { op: "set_role", part: 99, role: "method" },
+          { op: "set_role", part: 1, role: "method" },
+          { op: "set_role", part: 3, role: "setup" },
+          { op: "split", part: 2, atParagraph: "x", role: "method" },
+          { op: "split", part: 4, atParagraph: 27, role: "banana" },
+        ],
+      },
+      draft,
+      N,
+    )!;
+
+    expect(answer.refusedNumbers).toEqual([
+      { op: "split", reason: "out-of-range", part: 2, ordinal: 21, role: "method", ...bounds, from: 11, to: 20 },
+      { op: "move_start", reason: "out-of-range", part: 3, ordinal: 99, role: null, ...bounds, from: 21, to: 25 },
+      { op: "move_start", reason: "part-0", part: 0, ordinal: 2, role: null, ...bounds, from: 0, to: 5 },
+      { op: "set_role", reason: "out-of-range", part: 99, ordinal: null, role: "method", ...bounds, from: null, to: null },
+      { op: "set_role", reason: "same-role", part: 1, ordinal: null, role: "method", ...bounds, from: 6, to: 10 },
+      { op: "set_role", reason: "setup-after-opening", part: 3, ordinal: null, role: "setup", ...bounds, from: 21, to: 25 },
+      { op: "split", reason: "malformed", part: 2, ordinal: null, role: "method", ...bounds, from: 11, to: 20 },
+      { op: "split", reason: "malformed", part: 4, ordinal: 27, role: null, ...bounds, from: 26, to: 28 },
+    ]);
+    // Something that is not a correction has no op, no part and no bounds of its own; an op outside the three keeps the part it names.
+    expect(sanitizeReview({ corrections: ["not an object", { op: "delete", part: 1, toParagraph: 8, atParagraph: 9, role: "method" }] }, draft, N)!.refusedNumbers).toEqual([
+      { op: "other", reason: "malformed", part: null, ordinal: null, role: null, ...bounds, from: null, to: null },
+      { op: "other", reason: "malformed", part: 1, ordinal: null, role: null, ...bounds, from: 6, to: 10 },
+    ]);
+  });
+
+  it("reads a digit string as a number as the sanitizer does, and names anything that is not a whole number as null", () => {
+    const answer = sanitizeReview(
+      {
+        corrections: [
+          { op: "split", part: "2", atParagraph: "30", role: " Method " },
+          { op: "split", part: 1.5, atParagraph: 12, role: "method" },
+          { op: "move_start", part: -1, toParagraph: 12 },
+          { op: "move_start", part: 99, toParagraph: "99999999999" },
+        ],
+      },
+      draft,
+      N,
+    )!;
+
+    expect(answer.refusedNumbers.map(({ part, ordinal, role }) => [part, ordinal, role])).toEqual([
+      [2, 30, "method"],
+      [null, 12, "method"],
+      [null, 12, null],
+      [99, null, null],
+    ]);
+  });
+
+  it("names at most eight refused corrections, the first eight of the reply, and still counts them all", () => {
+    const corrections = Array.from({ length: 12 }, (_, k) => ({ op: "set_role", part: 90 + k, role: "method" }));
+    const answer = sanitizeReview({ corrections }, draft, N)!;
+
+    expect(REVIEW_CAPS.refusalsNamed).toBe(8);
+    expect(answer.refusedNumbers.map((entry) => entry.part)).toEqual([90, 91, 92, 93, 94, 95, 96, 97]);
+    expect(answer.rejected).toBe(12);
+    expect(answer.refused).toEqual({ byOp: { set_role: 12 }, byReason: { "out-of-range": 12 } });
+  });
+
+  it("names nothing of the reply's words: a closed op, a closed reason, one of the five roles or null, and whole numbers", () => {
+    const words = "Invented prose about tide pools and Zymurgy of kelp";
+    const answer = sanitizeReview(
+      {
+        corrections: [
+          { op: words, part: words, toParagraph: words, atParagraph: words, role: words },
+          { op: "split", part: 2, atParagraph: words, role: words },
+          { op: "set_role", part: 99, role: `${words} setup` },
+          { op: ["split"], part: { words }, role: [words] },
+          { op: "__proto__", part: 1, role: "constructor" },
+        ],
+      },
+      draft,
+      N,
+    )!;
+
+    expect(answer.refusedNumbers).toHaveLength(5);
+    for (const entry of answer.refusedNumbers) {
+      expect(Object.keys(entry).sort()).toEqual(["draftLength", "from", "op", "ordinal", "paragraphs", "part", "reason", "role", "to"]);
+      expect(REFUSAL_OPS).toContain(entry.op);
+      expect(REFUSAL_REASONS).toContain(entry.reason);
+      expect(entry.role === null || (REVIEW_ROLES as readonly string[]).includes(entry.role)).toBe(true);
+      for (const key of ["part", "ordinal", "draftLength", "paragraphs", "from", "to"] as const) expect(entry[key] === null || Number.isSafeInteger(entry[key])).toBe(true);
+    }
+    expect(JSON.stringify(answer.refusedNumbers)).not.toMatch(/Invented|prose|tide|Zymurgy|kelp|constructor|__proto__/);
+  });
+
+  it("names a refusal for its piece with the room of the part it was judged in, after the moves of its start and of the next part's", () => {
+    const long = [part(0, 5, "setup"), part(6, 20, "evidence"), part(21, 28, "interpretation")];
+    const numbers = (corrections: unknown[]) => sanitizeReview({ corrections }, long, 29)!.refusedNumbers;
+    const bound = { draftLength: 3, paragraphs: 29 };
+
+    expect(numbers([{ op: "split", part: 1, atParagraph: 11, role: "method" }, { op: "split", part: 1, atParagraph: 12, role: "evidence" }])).toEqual([
+      { op: "split", reason: "piece-too-short", part: 1, ordinal: 11, role: "method", ...bound, from: 6, to: 20 },
+      { op: "split", reason: "piece-too-short", part: 1, ordinal: 12, role: "evidence", ...bound, from: 6, to: 20 },
+    ]);
+    expect(numbers([{ op: "move_start", part: 1, toParagraph: 10 }, { op: "split", part: 1, atParagraph: 11, role: "method" }])).toEqual([
+      { op: "split", reason: "piece-too-short", part: 1, ordinal: 11, role: "method", ...bound, from: 10, to: 20 },
+    ]);
+    expect(numbers([{ op: "move_start", part: 2, toParagraph: 19 }, { op: "split", part: 1, atParagraph: 18, role: "method" }])).toEqual([
+      { op: "split", reason: "piece-too-short", part: 1, ordinal: 18, role: "method", ...bound, from: 6, to: 18 },
+    ]);
+  });
+
+  it("carries them through reviewStructure: for a fallback and for a used review, and none for a reply that is not an answer or is whole", () => {
+    const out = reviewStructure({ corrections: [{ op: "split", part: 2, atParagraph: 21, role: "method" }] }, draft, N);
+    expect(out).toMatchObject({ fellBack: true, cause: "all-refused", read: 1, rejected: 1 });
+    expect(out.refusedNumbers).toEqual([{ op: "split", reason: "out-of-range", part: 2, ordinal: 21, role: "method", ...bounds, from: 11, to: 20 }]);
+
+    const used = reviewStructure({ corrections: [{ op: "set_role", part: 1, role: "evidence" }, { op: "set_role", part: 7, role: "evidence" }] }, draft, N);
+    expect(used.fellBack).toBe(false);
+    expect(used.refusedNumbers).toEqual([{ op: "set_role", reason: "out-of-range", part: 7, ordinal: null, role: "evidence", ...bounds, from: null, to: null }]);
+
+    expect(reviewStructure("prose", draft, N).refusedNumbers).toEqual([]);
+    expect(reviewStructure({ corrections: [{ op: "set_role", part: 1, role: "evidence" }] }, draft, N).refusedNumbers).toEqual([]);
+    const trap = new Proxy({}, { get: () => { throw new Error("boom"); } });
+    expect(reviewStructure(trap, draft, N).refusedNumbers).toEqual([]);
   });
 });
 

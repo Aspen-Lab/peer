@@ -252,7 +252,9 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   const reviewed = reviewStructure(parseModelJson(raw), draft.parts, draft.paragraphs);
   if (reviewed.fellBack || !reviewed.answer) {
     // Why, as counts only (P12-86): the cause is one of three names, the rest are numbers, and the two tallies are
-    // keyed by the ops and reasons of closed sets. No reply text, no paper word and no key can reach this line.
+    // keyed by the ops and reasons of closed sets. The first eight refused corrections are named by their numbers
+    // (P12-90): op, reason, part, ordinal, role (one of the five or null) and the bounds each was judged against.
+    // No reply text, no paper word and no key can reach this line.
     console.debug("[papers/structure] unusable", {
       promptChars: prompt.systemPrompt.length + prompt.userPrompt.length,
       answerChars: raw.length,
@@ -261,6 +263,7 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
       rejected: reviewed.rejected,
       refusedByOp: reviewed.refused.byOp,
       refusedByReason: reviewed.refused.byReason,
+      refusedNumbers: reviewed.refusedNumbers,
     });
     return fellBack("unusable");
   }
@@ -289,7 +292,8 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   const final = reviewStructure({ corrections: answer.corrections, unsure: answer.unsure }, draft.parts, draft.paragraphs);
   const finalAnswer = final.fellBack || !final.answer ? { corrections: [], unsure: answer.unsure } : final.answer;
 
-  // Sizes only: no paper word, no heading, no title.
+  // Sizes and numbers only: no paper word, no heading, no title. The first eight corrections the sanitizer refused
+  // are named by their numbers (P12-90), as in the `unusable` line.
   console.debug("[papers/structure] review", {
     ...(userId ? { userId: shortHash(userId) } : {}),
     promptChars: prompt.systemPrompt.length + prompt.userPrompt.length,
@@ -299,6 +303,7 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
     mode: skeleton.mode,
     corrections: finalAnswer.corrections.length,
     rejected: reviewed.rejected,
+    refusedNumbers: reviewed.refusedNumbers,
     looks: records.length,
   });
 
