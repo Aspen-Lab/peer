@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-28T01:40Z
+AS OF        2026-10-28T01:48Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
-LAST RULING  §1h.435   NEXT RULING §1h.436   NEXT ITEM ID P12-63   NEXT FREE PORT 4245
+LAST RULING  §1h.436   NEXT RULING §1h.437   NEXT ITEM ID P12-65   NEXT FREE PORT 4245
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
-RUNNING      A P12-37 (4240) ∥ A P12-38 (4241) ∥ C P12-47 (R2a/R3a/R5a/R8a) ∥ C P12-48 (roles) ∥ C P12-49 (headings) ∥ C P12-50 (gutter) ∥ C P12-62 (first end-matter part) ∥ B P12-52 (same-note writers, 4243) ∥ C P12-53 (Tier 1) ∥ C P12-55 (ceilings, clip) ∥ A P12-57 (C1 keyed harness, 4244) ∥ C P12-56 (Extended Data, R6b, R15a) ∥ C P12-58 (body arrives) ∥ B P12-59 (55 s, memory, titles) ∥ B P12-60 (open only the figure's page) ∥ C P12-61 (kept cut, then page-only)
+RUNNING      A P12-37 (4240) ∥ A P12-38 (4241) ∥ C P12-47 (R2a/R3a/R5a/R8a) ∥ C P12-63 (closing split on the page) ∥ C P12-64 (titles) ∥ C P12-49 (headings) ∥ C P12-50 (gutter) ∥ C P12-62 (first end-matter part) ∥ B P12-52 (same-note writers, 4243) ∥ C P12-53 (Tier 1) ∥ C P12-55 (ceilings, clip) ∥ A P12-57 (C1 keyed harness, 4244) ∥ C P12-56 (Extended Data, R6b, R15a) ∥ C P12-58 (body arrives) ∥ C P12-61 (kept cut, then page-only)
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
 OWNER'S PDFS P1–P6 (uploads in the manager's session; P4–P6 held out); upload UI only; never commit or quote
 CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB, Haiku, "20 * * * *", enabled, read back 17:02Z; prompt now says workaholic mode: resume usage-limited agents and refill the frontier
@@ -659,6 +659,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-28T01:36Z | manager (Claude) | C P12-46 (R6a, R7a) and C P12-54 (R13b) LANDED together, FIGURE_EXTRACTION_REVISION 5 (manager commit; C P12-45 holds 4). Verified in the free copy: diffs read; tsc 0; lint 0 / 144; touched outline + engine tests 3 clean runs with 2 workers (540 + 1 skipped; two default-worker runs had load timeouts); own mutations R6a off → 4 red, R7a off → 4 red, R13b off → 4 red, sha256 equal after restore; full suite (2 workers) 598 + 3 skipped files, 10,973 passed + 3 skipped, 1 timing test (pane-layout fitPanes) that passes alone; build failed once at load 42 with memory full, then 0 on a quiet machine. Real papers: P3 figure route 6 of 6 and the ghost caption gone; P5 2 of 5 (was 0; the rest need C P12-47 and C P12-55). A third limit (session) stopped all workers at about 21:00Z; reset 01:20Z; the container restarted; 16 resumed at 01:23Z | evidence: mgr/gates-c46c54.log, mgr/build-c46c54.log, mgr/out/P3-fig-c46c54.json, mgr/out/P5-fig-c46c54.json | next: verify the Cs as they report
 
 - 2026-10-28T01:40Z | manager (Claude) | §1h.435: C P12-51 reported (O5, O6, O8); the first end-matter part becomes a part (C P12-62 from C P12-51's head); the rest accepted | evidence: P12-51 checkpoint; briefs/P12-62.md | next: verify C P12-51
+
+- 2026-10-28T01:48Z | manager (Claude) | §1h.436: B P12-60 and B P12-59 landed; C P12-61 told parts 2–3; C P12-48 reported; C P12-63 (its open points) and C P12-64 (titles) dispatched; row start through sub-rows ruled for the scorer | evidence: P12-59 / P12-60 reports; briefs/P12-63..64.md | next: land C50 + C51, verify C48
 
 ---
 

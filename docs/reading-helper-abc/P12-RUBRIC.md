@@ -175,3 +175,7 @@ The blind readers score from the pack against this matrix; the director voids a 
 (a) **C1 is measured with the owner's test key already in the environment**, `PEER_TEST_GEMINI_API_KEY` (added 2026-10-11 for P9-KEY; checked 20:3xZ today: Google answers 200 with the model list, the key's value printed nowhere). The key enters the app only as a reader's own key (BYOK: the Profile form, filled by Playwright from the environment), never as a server variable, never printed, logged, written or screenshotted; a 429 / quota / billing answer stops the run at once.
 (b) **C1 joins the stop line** once measured: per paper, with the key, every part right (start and role) and no extra — 100 % — on P1–P6, by B P12-42 §7's protocol (natural drafts, 5 runs; seeded drafts reported). P4–P6 are measured first-sight only after the Tier-0 rules land; their truth stays sealed and the manager scores them.
 (c) **A P12-57 builds the keyed measuring harness now** (phase 1: the BYOK path end to end on P1 with today's keyed features), and runs the C1 arms when the manager says the structure review (C P12-53) and the Tier-0 rules have landed (phase 2, resumed by message).
+
+## Dated amendment, ruling §1h.436 (d) (2026-10-28): a row's start through its sub-rows
+
+**Scoring interpretation (not a relaxation):** a map row whose own paragraphs are empty because its text sits in its sub-rows (a numbered part over 2.1, 2.2 …) **starts where its first sub-row's first paragraph starts**; the manager's scorer reads it so.
