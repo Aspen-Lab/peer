@@ -84,7 +84,8 @@ describe("KeyCheckView — the button, the note and the line", () => {
     ["ok", "This key works."],
     ["rejected", "The provider did not accept this key."],
     ["no-credit", "This key works, but the provider says its account has no credit left."],
-    ["busy", "The provider is busy right now. Try again in a minute."],
+    // R2-fix item 4 — CHANGED: was "The provider is busy right now. Try again in a minute."
+    ["busy", "The provider is turning requests away for now. Try again later."],
     ["limited", "Too many checks this hour. Try again later."],
     ["signed-out", "Sign in to check your key."],
     ["unreachable", "Could not reach the provider just now. Try again."],
@@ -101,6 +102,13 @@ describe("KeyCheckView — the button, the note and the line", () => {
     expect(KEY_CHECK_COPY.busy).not.toBe(KEY_CHECK_COPY.limited);
     expect(KEY_CHECK_COPY.busy).toContain("The provider");
     expect(KEY_CHECK_COPY.limited).not.toContain("provider");
+  });
+
+  // R2-fix item 4: a limit on the key can reset well after a minute, so the line
+  // names no wait it cannot know, and no number.
+  it("the provider's 'busy' line promises no particular wait", () => {
+    expect(KEY_CHECK_COPY.busy).not.toMatch(/minute|second|hour|\d/i);
+    expect(KEY_CHECK_COPY.busy).toMatch(/Try again later\.$/);
   });
 
   it("says nothing before the first check, and that it is checking while it waits", () => {

@@ -51,7 +51,8 @@ export const KEY_CHECK_COPY = {
   ok: "This key works.",
   rejected: "The provider did not accept this key.",
   "no-credit": "This key works, but the provider says its account has no credit left.",
-  busy: "The provider is busy right now. Try again in a minute.",
+  // R2-fix item 4: no "in a minute" — a limit on the key can reset much later.
+  busy: "The provider is turning requests away for now. Try again later.",
   limited: "Too many checks this hour. Try again later.",
   "signed-out": "Sign in to check your key.",
   unreachable: "Could not reach the provider just now. Try again.",
