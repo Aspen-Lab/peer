@@ -452,8 +452,10 @@ describe("AccountSectionView — P6 sign-out warning, both branches by props (§
   it("a pending warning (confirmingSignOut=true): shows the exact sentence and both buttons instead of the plain Sign out control", () => {
     const html = renderAccountView({ confirmingSignOut: true });
 
+    // R1-fixB item 4 (A8) — CHANGED: the sentence said "this device"; the
+    // dialog now names one place throughout, "this browser".
     expect(html).toContain(
-      "Some changes on this device haven’t reached your account yet. Signing out removes them from this device.",
+      "Some changes in this browser haven’t reached your account yet. Signing out removes them from this browser.",
     );
     // Still exactly one form — "Sign out anyway" posts to the real
     // endpoint, today's exact mechanism, just reached one click later;
@@ -615,7 +617,22 @@ describe("AccountSectionView — the sign-out dialog (OWN-KEY lane 4)", () => {
     "Peer keeps keys only in this browser, never on its server. If they stayed after you signed out, the next person to use this browser could run requests on your keys, billed to you.";
   const AGAIN = "When you sign in again, here or on another device, paste them again.";
   const UNSYNCED =
-    "Some changes on this device haven’t reached your account yet. Signing out removes them from this device.";
+    "Some changes in this browser haven’t reached your account yet. Signing out removes them from this browser.";
+
+  // R1-fixB item 4 (A8): one word for the place, in every dialog.
+  it("names the place 'this browser' throughout, never 'this device', in the unsynced, keys and both dialogs", () => {
+    for (const [prompt, labels] of [
+      ["unsynced", []],
+      ["keys", ["Gemini"]],
+      ["keys", ["Gemini", "Jev"]],
+      ["both", ["Jev"]],
+      ["both", ["Gemini", "Jev"]],
+    ] as const) {
+      const html = dialog(prompt, [...labels]);
+      expect(html, `${prompt} ${labels.join("+")}`).not.toContain("this device");
+      expect(html).toContain("this browser");
+    }
+  });
 
   const dialog = (prompt: Exclude<SignOutPrompt, "none">, labels: string[]) =>
     renderAccountView({ confirmingSignOut: true, signOutPrompt: prompt, signOutKeyLabels: labels });

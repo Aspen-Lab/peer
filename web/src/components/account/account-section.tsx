@@ -408,8 +408,10 @@ export function SignOutDialog({ prompt, keyLabels, onStaySignedIn }: SignOutDial
           </>
         )}
         {unsynced && (
+          // R1-fixB item 4 (A8): "this browser", as the key sentences above say
+          // it — the dialog names one place throughout (was "this device").
           <p>
-            Some changes on this device haven&rsquo;t reached your account yet. Signing out removes them from this device.
+            Some changes in this browser haven&rsquo;t reached your account yet. Signing out removes them from this browser.
           </p>
         )}
       </div>
