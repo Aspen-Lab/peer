@@ -129,9 +129,11 @@ describe("toPrintHtml — what the browser prints to PDF", () => {
 });
 
 describe("toMarkdown keeps the marks as written and no quote", () => {
-  it("is the stored text", () => {
+  // Re-aimed (P12-77 O2): the stored text held `__underline__` and the Markdown copied it; CommonMark, Obsidian and Pandoc read `__x__` as bold,
+  // so the Markdown leaves with the underline as `<u>underline</u>` (the highlight, bold and the headings are as stored).
+  it("is the stored text, its underline written <u>…</u>", () => {
     const md = toMarkdown(THREE);
-    expect(md).toContain("Second, with __underline__ and ==highlight==.");
+    expect(md).toContain("Second, with <u>underline</u> and ==highlight==.");
     expect(md).toContain("My **own** words");
     expect(md).toContain("### Note 1");
     for (const q of [QUOTE_A, QUOTE_B, QUOTE_C]) expect(md).not.toContain(q);

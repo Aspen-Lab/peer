@@ -13,6 +13,9 @@
 // its colour and its ink written into it (`mso-highlight:yellow` besides for Yellow, Word's own highlighter). A sticky's quote
 // and a `quote` block stay out, as above.
 //
+// P12-77 (O2; A P12-71 §6): Markdown has no underline, and the notes store it as `__x__`, which every other Markdown reader takes for
+// bold. The Markdown leaves with `<u>x</u>` instead (`portableUnderline`, `inline.ts`); the notes themselves still read both.
+//
 // The Markdown keeps citations as `[@key]` — Pandoc's syntax — and the .bib
 // carries the same keys, so `pandoc draft.md --citeproc --bibliography
 // draft.bib` turns a draft into a paper with its references formatted. In
@@ -20,7 +23,7 @@
 // prompts are UI, never content: they do not leave.
 
 import type { Block, HighlightColourId, Note, Source } from "./types";
-import { isWrapping, parseInline } from "./inline";
+import { isWrapping, parseInline, portableUnderline } from "./inline";
 import { citedKeys, highlightSegments, isList, isTextual, listNumber, readHighlight } from "./blocks";
 import { authorYear, externalLink } from "./cite";
 import { highlightPaint } from "./highlight-colours";
@@ -80,8 +83,11 @@ function blockMarkdown(b: Block, blocks: Block[], i: number, sources: Record<str
   const pad = "  ".repeat(b.indent ?? 0);
   if (isTextual(b.type) && !b.text.trim()) return null;
   // Prose loses trailing spaces (a citation typed at a line's end leaves
-  // one); code keeps every character it was given.
-  const text = b.type === "code" ? b.text : b.text.replace(/[ \t]+$/gm, "");
+  // one); code keeps every character it was given. P12-77 (O2): and prose leaves with its underline as `<u>…</u>`,
+  // which CommonMark, Obsidian and Pandoc read as underline, where they read the stored `__x__` as bold. This is the one place the
+  // Markdown of every route is made (the notes window's Export, the notes page's, the rail's download), and it covers a note stored
+  // either way; the stored form is not touched, and the other marks and the list markers are written as they were.
+  const text = b.type === "code" ? b.text : portableUnderline(b.text.replace(/[ \t]+$/gm, ""));
   // A line break inside a list item has to stay inside the item.
   const item = (t: string) => t.replace(/\n/g, `\n${pad}  `);
   switch (b.type) {
