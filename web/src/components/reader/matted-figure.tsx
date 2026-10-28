@@ -23,7 +23,7 @@ import { MarginFigure } from "./margin-figure";
  * slice, and one below it never was. It is also a fair room for a figure under a paragraph of the report — a
  * short paragraph of its own, against the lead's 140 for the one line beside a title.
  */
-export const FIGURE_CAPTION_CHARS = 500;
+export const FIGURE_CAPTION_CHARS = 1_500;
 
 const squeeze = (text: string | null | undefined): string => (text ?? "").replace(/\s+/g, " ").trim();
 

@@ -2,6 +2,10 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
+// P12-68: the engine's cap and the view's room are 1,500 characters now (`ROOM` below), not the 500 of P9-59 that the
+// next paragraph describes; the cases that were built on 500 are built on `ROOM`, and a caption of 1,200 characters
+// reaches the page whole.
+//
 // P9-59 (A P9-W5 §5 N10, §7 item 1): a figure the deep report bound to a result is drawn under its section with
 // the caption the figure engine found, and the engine's caption is a hard slice — `MAX_FIGURE_TEXT_CHARS = 500`,
 // `.slice(0, 500)` — so a long caption reached the page as exactly 500 characters ending on a bare article, no stop
@@ -26,7 +30,7 @@ import { MattedFigure } from "./matted-figure";
 
 const SRC = "/api/papers/upload%3A0123456789abcdef/figure-image?page=2&fig=1";
 /** The room: the figure engine's own cap (see the last describe), and what a figure under a section may carry. */
-const ROOM = 500;
+const ROOM = 1_500;
 
 type Props = Record<string, unknown> & { children?: ReactNode };
 function elements(node: ReactNode): ReactElement<Props>[] {
@@ -87,9 +91,9 @@ function sentence(n: number, from = 0): string {
   return `${body[0]!.toUpperCase()}${body.slice(1)}.`;
 }
 const capital = (text: string): string => `${text[0]!.toUpperCase()}${text.slice(1)}`;
-/** What the figure engine hands the binder: the text, white space made single, cut hard at 500 characters. */
+/** What the figure engine hands the binder: the text, white space made single, cut hard at the room (1,500 characters). */
 const engineSlice = (text: string): string => text.replace(/\s+/g, " ").trim().slice(0, ROOM);
-/** The engine's slice of a text for the first starting word whose slice is 500 long and `fits`. */
+/** The engine's slice of a text for the first starting word whose slice is a room long and `fits`. */
 function slicedWhere(make: (from: number) => string, fits: (slice: string) => boolean): string {
   const found = WORDS.map((_, from) => engineSlice(make(from))).find((slice) => slice.length === ROOM && fits(slice));
   if (!found) throw new Error("no starting word gives the slice this test needs");
@@ -97,7 +101,7 @@ function slicedWhere(make: (from: number) => string, fits: (slice: string) => bo
 }
 
 // The measured captions (the brief's four): a short one ending on a stop; the engine's slice, ending mid-clause;
-// a 500-character run with no sentence end at all; a 2,000-character caption.
+// a run of a room's length with no sentence end at all; a 2,000-character caption.
 const LABEL = "Figure 4.";
 const SHORT = `Figure 3. ${sentence(110)}`; // 120 characters, ends on a stop
 const S1 = sentence(160);
@@ -106,12 +110,15 @@ const S3 = sentence(130, 2);
 const WHOLE = `${LABEL} ${S1} ${S2}`; // what the slices below are cut back to: 361 characters
 // The slice of "label, two sentences, a third that runs on", in the two ways it can end: inside a word, or on the
 // space after one (the engine normalizes, then slices, so its 500th character may be that space).
-const SLICED = slicedWhere((from) => `${WHOLE} ${capital(run(400, from))}`, (s) => !s.endsWith(" "));
-const SLICED_ON_A_SPACE = slicedWhere((from) => `${WHOLE} ${capital(run(400, from))}`, (s) => s.endsWith(" "));
-// 500 characters with no sentence end at all (the label is not one), likewise.
-const RUN_ON = slicedWhere((from) => `${LABEL} ${run(700, from)}`, (s) => !s.endsWith(" "));
-const RUN_ON_ON_A_SPACE = slicedWhere((from) => `${LABEL} ${run(700, from)}`, (s) => s.endsWith(" "));
-const LONG_HEAD = `${WHOLE} ${S3} ${sentence(300, 7)} ${sentence(400, 11)} ${sentence(500, 13)}`;
+// P12-68 re-aim: the runs are `ROOM` long (they were 400 and 700 for a room of 500), so the slice still falls inside them.
+const SLICED = slicedWhere((from) => `${WHOLE} ${capital(run(ROOM, from))}`, (s) => !s.endsWith(" "));
+const SLICED_ON_A_SPACE = slicedWhere((from) => `${WHOLE} ${capital(run(ROOM, from))}`, (s) => s.endsWith(" "));
+// A room's length with no sentence end at all (the label is not one), likewise.
+const RUN_ON = slicedWhere((from) => `${LABEL} ${run(ROOM + 200, from)}`, (s) => !s.endsWith(" "));
+const RUN_ON_ON_A_SPACE = slicedWhere((from) => `${LABEL} ${run(ROOM + 200, from)}`, (s) => s.endsWith(" "));
+// P12-68 re-aim: the third sentence is 1,100 characters, so the last sentence end inside the room is still the end of
+// `${WHOLE} ${S3}` (it was a run of five sentences, 300 / 400 / 500, for a room of 500).
+const LONG_HEAD = `${WHOLE} ${S3} ${sentence(1100, 7)}`;
 const LONG = `${LONG_HEAD} ${sentence(2000 - LONG_HEAD.length - 1, 1)}`; // 2,000 characters, ends on a stop
 
 describe("the fixtures are the captions they say they are", () => {
@@ -136,7 +143,7 @@ describe("a caption that fits and ends on a stop is printed as it is (P9-59)", (
     expect(await line(SHORT)).toBe(SHORT);
   });
 
-  it("prints a 500-character caption that ends on a stop as it is, and one that ends on a stop and a closing mark", async () => {
+  it("prints a 1,500-character caption that ends on a stop as it is, and one that ends on a stop and a closing mark", async () => {
     const whole = `${sentence(300)} ${sentence(ROOM - 301, 6)}`;
     expect(whole).toHaveLength(ROOM);
     expect(await line(whole)).toBe(whole);
@@ -148,13 +155,33 @@ describe("a caption that fits and ends on a stop is printed as it is (P9-59)", (
     expect(await line(bracket)).toBe(bracket);
   });
 
+  // P12-68 (the measure): a caption of 1,200 characters. The room was 500 and the engine's cap was 500, so such a
+  // caption was cut twice, and a reader got its first sentence or two. It is below both now: it was never sliced.
+  it("prints a caption of 1,200 characters whole: under the picture, in the alt and in the lightbox (P12-68)", async () => {
+    const lead = `${LABEL} ${sentence(300)} ${sentence(250, 5)}`;
+    const caption = `${lead} ${sentence(1200 - lead.length - 1, 9)}`;
+    expect(caption).toHaveLength(1200);
+    expect(caption).toMatch(/\.$/);
+    const { lines, alt, lightbox } = await printed(caption);
+    expect(lines).toEqual([caption]);
+    expect(alt).toBe(caption);
+    expect(lightbox).toBe(caption);
+  });
+
+  it("prints a caption of 1,200 characters that ends on no stop whole too: it was never sliced (P12-68)", async () => {
+    const caption = `${LABEL} ${run(1200 - LABEL.length - 1, 3)}`;
+    expect(caption).toHaveLength(1200);
+    expect(caption).not.toMatch(/[.!?…]$/);
+    expect(await line(caption)).toBe(caption);
+  });
+
   it("makes its white space single, as the lead's caption does, and nothing else", async () => {
     expect(await line("Figure 1.  Soil water\n by depth.")).toBe("Figure 1. Soil water by depth.");
   });
 });
 
 describe("a caption that does not end on a stop but is shorter than the engine's cut is whole (P9-59)", () => {
-  // The engine's slice is 500 characters. A shorter caption was never sliced: it ends where its author ended it,
+  // The engine's slice is a room (1,500 characters). A shorter caption was never sliced: it ends where its author ended it,
   // and many captions end on no stop ("Figure 2: Overview of the sampling design"). Cutting those would be a
   // regression, not the fix.
   it("prints a label-style caption with no stop as it is", async () => {
@@ -162,14 +189,14 @@ describe("a caption that does not end on a stop but is shorter than the engine's
     expect(await line(label)).toBe(label);
   });
 
-  it("prints a 499-character caption with no stop as it is, and cuts the same text at 500", async () => {
+  it("prints a 1,499-character caption with no stop as it is, and cuts the same text at 1,500", async () => {
     const shorter = `${LABEL} ${run(ROOM - LABEL.length - 2, 4)}`;
     expect(shorter).toHaveLength(ROOM - 1);
     expect(await line(shorter)).toBe(shorter);
     expect(await line(`${shorter}e`)).not.toBe(`${shorter}e`);
   });
 
-  it("leaves a caption that already says it is cut ('…') as it is, at 500", async () => {
+  it("leaves a caption that already says it is cut ('…') as it is, at 1,500", async () => {
     const cut = `${LABEL} ${run(ROOM - LABEL.length - 2, 4)}…`;
     expect(cut).toHaveLength(ROOM);
     expect(await line(cut)).toBe(cut);
@@ -178,7 +205,7 @@ describe("a caption that does not end on a stop but is shorter than the engine's
 
 describe("the engine's slice is cut back to its last whole sentence (P9-59, N10)", () => {
   it("prints the label and the two whole sentences, ending on the second one's stop", async () => {
-    // The slice is 500 characters and ends inside a third sentence; the head printed all 500.
+    // The slice is a room (1,500 characters) and ends inside a third sentence; the head printed all of it.
     expect(await line(SLICED)).toBe(WHOLE);
   });
 
@@ -193,7 +220,7 @@ describe("the engine's slice is cut back to its last whole sentence (P9-59, N10)
   });
 });
 
-describe("a 500-character caption with no sentence end is cut at a word, with one '…' (P9-59, N10)", () => {
+describe("a 1,500-character caption with no sentence end is cut at a word, with one '…' (P9-59, N10)", () => {
   it("ends in exactly one ellipsis, kept as a prefix of the caption cut at a word, with no stop or comma before it", async () => {
     const out = await line(RUN_ON);
     expect(out.endsWith("…")).toBe(true);
@@ -227,14 +254,14 @@ describe("a 500-character caption with no sentence end is cut at a word, with on
 });
 
 describe("a caption longer than the room is cut the same way (P9-59)", () => {
-  it("cuts the 2,000-character caption at the last sentence end that fits in 500", async () => {
+  it("cuts the 2,000-character caption at the last sentence end that fits in 1,500", async () => {
     const out = await line(LONG);
     expect(out).toBe(`${WHOLE} ${S3}`);
     expect(out.length).toBeLessThanOrEqual(ROOM);
     expect(out).toMatch(/\.$/);
   });
 
-  it("cuts a caption ending on a stop at 501 characters back to the first sentence, and keeps it whole at 500", async () => {
+  it("cuts a caption ending on a stop at 1,501 characters back to the first sentence, and keeps it whole at 1,500", async () => {
     const first = sentence(300);
     const over = `${first} ${sentence(ROOM - 300, 6)}`;
     expect(over).toHaveLength(ROOM + 1);
@@ -245,7 +272,7 @@ describe("a caption longer than the room is cut the same way (P9-59)", () => {
   });
 
   it("cuts a caption whose first sentence is longer than the room at a word, with one '…'", async () => {
-    const one = `${sentence(700)} ${sentence(1200, 3)}`;
+    const one = `${sentence(ROOM + 200)} ${sentence(ROOM + 700, 3)}`; // P12-68 re-aim: it was 700 and 1,200 for a room of 500
     const out = await line(one);
     expect(out.endsWith("…")).toBe(true);
     expect(out.match(/…/g)).toHaveLength(1);
@@ -279,7 +306,7 @@ describe("a label, an abbreviation and an initial are not where a sentence ends 
     const first =
       "Figure 4. Soil water after J. R. Okafor et al. and Fig. 3 of Diaz, e.g. under the thick layer, was measured at three depths.";
     expect(first.length).toBeLessThanOrEqual(140);
-    const caption = `${first} ${sentence(600, 2)}`;
+    const caption = `${first} ${sentence(ROOM + 100, 2)}`; // P12-68 re-aim: it was 600 for a room of 500
     expect(leadCaption(caption)).toBe(first);
     expect(await line(caption)).toBe(first);
   });
@@ -337,7 +364,11 @@ describe("whatever the caption, what is printed is whole, cut at a stop, or mark
     LABEL, sentence(130), sentence(90, 4), sentence(170, 8), sentence(60, 12), sentence(240, 2), sentence(300, 6),
     sentence(250, 9), sentence(400, 3), sentence(300, 5),
   ].join(" ");
-  const lengths = [479, 480, 497, 498, 499, 500, 501, 502, 520, 640, 780, 1000, 1500, 1800];
+  // P12-68: the lengths around the old room stay (they are whole captions now); those around the new one are added.
+  const lengths = [
+    479, 480, 497, 498, 499, 500, 501, 502, 520, 640, 780, 1000,
+    1200, 1479, 1480, 1497, 1498, 1499, 1500, 1501, 1502, 1520, 1640, 1800,
+  ];
 
   for (const n of lengths) {
     it(`handles a caption of ${n} characters`, async () => {
@@ -355,10 +386,10 @@ describe("whatever the caption, what is printed is whole, cut at a stop, or mark
 });
 
 describe("the room is the figure engine's own cap, named (P9-59)", () => {
-  // `MAX_FIGURE_TEXT_CHARS` stays 500 (raising it needs a figure-request `v` bump, BACKLOG-60, and `isSameFigure`
-  // compares captions exactly). The view's room is that cap: a caption that reaches it may be the engine's slice,
-  // one below it never was. If the engine's cap ever moves, this test is where the view's room is found to need
-  // moving with it.
+  // `MAX_FIGURE_TEXT_CHARS` is 1,500 (P12-68; it was 500, and raising it took a figure-request `v` bump, BACKLOG-60,
+  // because `isSameFigure` compares captions exactly: `FIGURE_EXTRACTION_REVISION` moved with it). The view's room
+  // is that cap: a caption that reaches it may be the engine's slice, one below it never was. If the engine's cap
+  // ever moves, this test is where the view's room is found to need moving with it.
   const source = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
   const numberAfter = (text: string, name: string) =>
     Number(new RegExp(`${name}\\s*=\\s*([\\d_]+)`).exec(text)?.[1]?.replace(/_/g, ""));
