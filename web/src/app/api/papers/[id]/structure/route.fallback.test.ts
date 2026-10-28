@@ -185,6 +185,22 @@ describe("POST /api/papers/[id]/structure — what it logs when the review falls
     expect(fields).toMatchObject({ cause: "all-refused", read: 1, rejected: 1, refusedByOp: { set_role: 1 }, refusedByReason: { "setup-after-opening": 1 } });
   });
 
+  it("says `all-refused` with the pieces' reason when the only corrections are two splits one paragraph apart in one part (P12-90)", async () => {
+    // The measured damage: "method" at 11 and "evidence" at 12 inside the first results part (here 9 to 17).
+    const reply = JSON.stringify({
+      corrections: [
+        { op: "split", part: 2, atParagraph: 11, role: "method" },
+        { op: "split", part: 2, atParagraph: 12, role: "evidence" },
+      ],
+      unsure: [],
+    });
+    const { answer, fields } = await fellBackWith(reply);
+
+    expect(answer).toEqual({ fellBack: "unusable" });
+    expect(fields).toMatchObject({ cause: "all-refused", read: 2, rejected: 2, refusedByOp: { split: 2 }, refusedByReason: { "piece-too-short": 2 } });
+    expect(structureReviewCache.size()).toBe(0);
+  });
+
   it("counts a mixed reply by op and by reason, and keeps the words of an op the reply invented out of the line", async () => {
     const reply = JSON.stringify({
       corrections: [

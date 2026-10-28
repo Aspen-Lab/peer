@@ -21,7 +21,8 @@
 //   - `sanitizeReview` / `applyCorrections` / `reviewStructure`: the answer is made whole by code, none
 //     of it is hoped for — `move_start`, `set_role`, `split` and `unsure` only; at most 40; every index in
 //     range and in order; five roles only (`body` is refused); the role `setup` only for the paper's opening
-//     run (P12-86). A correction that fails a check is dropped, never mended; an answer that is not an answer
+//     run (P12-86); no split that leaves a piece of fewer than two paragraphs, but a closing (P12-90). A
+//     correction that fails a check is dropped, never mended; an answer that is not an answer
 //     leaves the draft exactly (Tier 0 never breaks).
 //   - `secondLookTargets` / `lookParagraphs` / `buildLookPrompt` / `resolveLooks`: a correction against a
 //     high- or medium-confidence part, or a part the model could not judge, gets one more look at that
@@ -63,6 +64,12 @@ export const REVIEW_CAPS = {
   figureLines: 40,
   corrections: 40,
   splitsPerPart: 3,
+  /**
+   * The smallest piece, in paragraphs, that a `split` may leave in a part (P12-90). A one-paragraph piece flips a
+   * short row's majority: the review's two splits one paragraph apart, "method" at 11 and "evidence" at 12 inside
+   * the first results part, measured on one run of five.
+   */
+  minPiece: 2,
   /** The answer's allowance: 40 corrections at about 14 tokens each. */
   answerTokens: 600,
   secondLooks: 3,
@@ -560,9 +567,11 @@ export type RefusalOp = (typeof REFUSAL_OPS)[number];
  *   - `repeat`: the same move, role or split asked twice, or a move to where the part already starts;
  *   - `split-cap`: a fourth split in one part;
  *   - `setup-after-opening`: the role `setup` given to a stretch that does not continue the paper's opening run;
+ *   - `piece-too-short`: a split (or a pair of splits on one part) that would leave a piece of fewer than
+ *     `REVIEW_CAPS.minPiece` paragraphs (P12-90);
  *   - `over-cap`: past the first forty corrections.
  */
-export const REFUSAL_REASONS = ["malformed", "out-of-range", "part-0", "same-role", "repeat", "split-cap", "setup-after-opening", "over-cap"] as const;
+export const REFUSAL_REASONS = ["malformed", "out-of-range", "part-0", "same-role", "repeat", "split-cap", "setup-after-opening", "piece-too-short", "over-cap"] as const;
 export type RefusalReason = (typeof REFUSAL_REASONS)[number];
 
 /** How many corrections were refused, by op and by reason: only the keys that are not zero, and the two add up alike. */
@@ -586,6 +595,16 @@ const refusalOpOf = (c: unknown): RefusalOp => (isRec(c) && (c.op === "move_star
  * piece is refused in that part and every part after it (a piece cut out of the middle of a part cannot
  * continue the opening). Measured: a split at paragraph 11 as setup and a split at 12 as evidence, inside the
  * first results part, flipped that row's majority to setup.
+ *
+ * No one-paragraph piece (P12-90): the same pair with the roles method and evidence did the same damage on the
+ * next run (a piece of one paragraph flips a short row's majority, whatever its role). When the reply has been
+ * judged, the splits it kept are judged once more part by part, after the part's accepted moved start and the
+ * next part's: a split that leaves a piece of fewer than `REVIEW_CAPS.minPiece` paragraphs is refused, and so is
+ * the split on the far side of that piece, so a pair that cuts a one-paragraph piece out of a part is refused
+ * whole and the part stays as it was. The reply is then judged again with those splits refused, so a split
+ * refused for its piece uses up neither a place among the part's three splits nor its repeat memory, nor one of
+ * the forty (like the setup guard's refusals). The one piece let through is a closing: the last paragraph of the
+ * draft's last evidence part, given the role interpretation, as the rules' own closing split makes.
  */
 export function sanitizeReview(
   raw: unknown,
@@ -593,7 +612,42 @@ export function sanitizeReview(
   paragraphs: number,
 ): { answer: Answer; rejected: number; read: number; refused: Refusals } | null {
   if (!isRec(raw) || !Array.isArray(raw.corrections)) return null;
-  const out: Correction[] = [];
+  const list = raw.corrections as unknown[];
+  // Each round judges the reply with the splits already found to leave a short piece refused, then looks for more.
+  // A round refuses at least one more of the reply's own splits or it is the last, so there are at most as many
+  // rounds as the reply has corrections (a reply holds a few, and the stored and sanitized ones at most forty).
+  const short = new Set<number>();
+  let judged = judgeCorrections(list, draft, paragraphs, short);
+  for (;;) {
+    const cut = splitsLeavingShortPieces(
+      draft,
+      paragraphs,
+      judged.kept.map((entry) => entry.correction),
+    );
+    if (cut.size === 0) break;
+    for (const position of cut) short.add(judged.kept[position].index);
+    judged = judgeCorrections(list, draft, paragraphs, short);
+  }
+  const unsure = Array.isArray(raw.unsure)
+    ? [...new Set((raw.unsure as unknown[]).map(whole).filter((n): n is number => n !== null && n < draft.length))]
+    : [];
+  return { answer: { corrections: judged.kept.map((entry) => entry.correction), unsure }, rejected: judged.rejected, read: list.length, refused: judged.refused };
+}
+
+/**
+ * The reply's corrections, one by one against the draft as given, in the order of the reply (every check of
+ * `sanitizeReview` but the pieces a part is left with). `short` is the set of the reply's indices, found by an
+ * earlier round, of the splits that leave a short piece: each is refused as `piece-too-short` at the point where
+ * it would otherwise have been kept, so it uses up nothing a later correction needs. A kept correction carries
+ * its index in the reply.
+ */
+function judgeCorrections(
+  list: readonly unknown[],
+  draft: readonly DraftPart[],
+  paragraphs: number,
+  short: ReadonlySet<number>,
+): { kept: Array<{ correction: Correction; index: number }>; rejected: number; refused: Refusals } {
+  const kept: Array<{ correction: Correction; index: number }> = [];
   let rejected = 0;
   const refused: Refusals = { byOp: {}, byReason: {} };
   const refuse = (c: unknown, reason: RefusalReason): void => {
@@ -607,8 +661,8 @@ export function sanitizeReview(
   const splits = new Map<number, Set<number>>();
   const firstNotSetup = draft.findIndex((part) => part.role !== "setup");
   const openingEnd = firstNotSetup === -1 ? draft.length : firstNotSetup;
-  for (const c of raw.corrections as unknown[]) {
-    if (out.length >= REVIEW_CAPS.corrections) {
+  for (const [index, c] of list.entries()) {
+    if (kept.length >= REVIEW_CAPS.corrections) {
       refuse(c, "over-cap");
       continue;
     }
@@ -646,7 +700,7 @@ export function sanitizeReview(
         continue;
       }
       moved.add(k);
-      out.push({ op: "move_start", part: k, toParagraph: i });
+      kept.push({ correction: { op: "move_start", part: k, toParagraph: i }, index });
     } else if (c.op === "set_role") {
       const role = roleFrom(c.role);
       if (role === null) {
@@ -666,7 +720,7 @@ export function sanitizeReview(
         continue;
       }
       roled.add(k);
-      out.push({ op: "set_role", part: k, role });
+      kept.push({ correction: { op: "set_role", part: k, role }, index });
     } else if (c.op === "split") {
       const at = whole(c.atParagraph);
       const role = roleFrom(c.role);
@@ -691,30 +745,30 @@ export function sanitizeReview(
         refuse(c, "setup-after-opening");
         continue;
       }
+      if (short.has(index)) {
+        refuse(c, "piece-too-short");
+        continue;
+      }
       seen.add(at);
       splits.set(k, seen);
-      out.push({ op: "split", part: k, atParagraph: at, role });
+      kept.push({ correction: { op: "split", part: k, atParagraph: at, role }, index });
     } else {
       refuse(c, "malformed");
     }
   }
-  const unsure = Array.isArray(raw.unsure)
-    ? [...new Set((raw.unsure as unknown[]).map(whole).filter((n): n is number => n !== null && n < draft.length))]
-    : [];
-  return { answer: { corrections: out, unsure }, rejected, read: raw.corrections.length, refused };
+  return { kept, rejected, refused };
 }
 
-/** 2. Starts first, roles next, splits last; any correction that breaks the order is dropped, never repaired. */
-export function applyCorrections(
-  draft: readonly DraftPart[],
-  paragraphs: number,
-  answer: Answer,
-): { parts: Part[]; applied: number; dropped: number } {
+/**
+ * The starts of the draft's parts after the `move_start` corrections, applied in order, each kept only if it lies
+ * strictly between the starts of its neighbours as they stand then; `applied` and `dropped` count the moves made
+ * and the moves that would cross a start. One definition for `applyCorrections` and for the pieces check.
+ */
+function movedStarts(draft: readonly DraftPart[], paragraphs: number, corrections: readonly Correction[]): { starts: number[]; applied: number; dropped: number } {
   const starts = draft.map((part) => part.from);
-  const roles: ReviewRole[] = draft.map((part) => part.role);
   let applied = 0;
   let dropped = 0;
-  for (const c of answer.corrections) {
+  for (const c of corrections) {
     if (c.op !== "move_start") continue;
     const k = c.part;
     if (starts[k - 1] < c.toParagraph && c.toParagraph < (starts[k + 1] ?? paragraphs)) {
@@ -724,6 +778,67 @@ export function applyCorrections(
       dropped += 1;
     }
   }
+  return { starts, applied, dropped };
+}
+
+/**
+ * P12-90: which of these (already accepted) corrections are splits to refuse because they leave a piece of fewer
+ * than `REVIEW_CAPS.minPiece` paragraphs, as indices into `corrections`.
+ *
+ * A part is judged where `applyCorrections` will find it: from its start after the moves to the paragraph before
+ * the next part's start after the moves. A split outside that room is dropped there and cuts no piece here. The
+ * pieces of a part are the runs between its start, its splits and its end, whatever their roles. A short piece is
+ * refused together with the splits on either side of it (the one that begins it and the one that ends it), so a
+ * pair one paragraph apart is refused whole: neither the piece nor the half of the pair is kept. Taking a split
+ * away only joins two pieces into a longer one, but the rounds run until one refuses nothing, so a larger
+ * `minPiece` stays right.
+ *
+ * The exception is a closing: a piece that is the last paragraph of the part, when the part is the draft's last
+ * evidence part and the split that begins it gives the role interpretation. The rest of that part is judged as
+ * any other piece.
+ */
+function splitsLeavingShortPieces(draft: readonly DraftPart[], paragraphs: number, corrections: readonly Correction[]): Set<number> {
+  const { starts } = movedStarts(draft, paragraphs, corrections);
+  let lastEvidence = -1;
+  draft.forEach((part, k) => {
+    if (part.role === "evidence") lastEvidence = k;
+  });
+  const cut = new Set<number>();
+  for (const k of new Set(corrections.flatMap((c) => (c.op === "split" ? [c.part] : [])))) {
+    const lo = starts[k];
+    const hi = (starts[k + 1] ?? paragraphs) - 1;
+    let live = corrections
+      .flatMap((c, i) => (c.op === "split" && c.part === k && c.atParagraph > lo && c.atParagraph <= hi ? [{ i, at: c.atParagraph, role: c.role }] : []))
+      .sort((a, b) => a.at - b.at);
+    for (;;) {
+      const edges = [lo, ...live.map((split) => split.at), hi + 1];
+      const doomed = new Set<number>();
+      for (let j = 0; j + 1 < edges.length; j += 1) {
+        const size = edges[j + 1] - edges[j];
+        if (size >= REVIEW_CAPS.minPiece) continue;
+        if (j === live.length && j > 0 && size === 1 && k === lastEvidence && live[j - 1].role === "interpretation") continue;
+        if (j > 0) doomed.add(j - 1);
+        if (j < live.length) doomed.add(j);
+      }
+      if (doomed.size === 0) break;
+      for (const p of doomed) cut.add(live[p].i);
+      live = live.filter((_, p) => !doomed.has(p));
+    }
+  }
+  return cut;
+}
+
+/** 2. Starts first, roles next, splits last; any correction that breaks the order is dropped, never repaired. */
+export function applyCorrections(
+  draft: readonly DraftPart[],
+  paragraphs: number,
+  answer: Answer,
+): { parts: Part[]; applied: number; dropped: number } {
+  const moved = movedStarts(draft, paragraphs, answer.corrections);
+  const starts = moved.starts;
+  let applied = moved.applied;
+  let dropped = moved.dropped;
+  const roles: ReviewRole[] = draft.map((part) => part.role);
   for (const c of answer.corrections) {
     if (c.op === "set_role") {
       roles[c.part] = c.role;

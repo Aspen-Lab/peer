@@ -256,6 +256,41 @@ describe("POST /api/papers/[id]/structure — the review", () => {
     }
   });
 
+  it("refuses a one-paragraph piece cut out of a part (P12-90): the log counts both splits and the other correction stands", async () => {
+    const consoleText = captureConsole();
+    const debug = vi.spyOn(console, "debug");
+    try {
+      // "method" at 11 and "evidence" at 12 inside the first results part (9 to 17), beside a correction elsewhere.
+      provider = providerOf(async (args) =>
+        isLook(args)
+          ? JSON.stringify({ verdict: "review" })
+          : JSON.stringify({
+              corrections: [
+                { op: "split", part: 2, atParagraph: 11, role: "method" },
+                { op: "split", part: 2, atParagraph: 12, role: "evidence" },
+                { op: "set_role", part: 3, role: "evidence" },
+              ],
+              unsure: [],
+            }),
+      );
+      mocks.resolveProvider.mockReturnValue(provider);
+      const review = await reviewOf(await call());
+      const fields = debug.mock.calls.find(([label]) => label === "[papers/structure] review")![1] as Record<string, unknown>;
+
+      expect(review.corrections).toEqual([{ op: "set_role", part: 3, role: "evidence" }]);
+      expect(reviewedParts(draft, review)).toEqual([
+        { from: 0, to: 5, role: "setup" },
+        { from: 6, to: 8, role: "method" },
+        { from: 9, to: 21, role: "evidence" },
+        { from: 22, to: 25, role: "interpretation" },
+        { from: 26, to: 28, role: "apparatus" },
+      ]);
+      expect(fields).toMatchObject({ corrections: 1, rejected: 2 });
+    } finally {
+      consoleText.restore();
+    }
+  });
+
   it("never takes more than three looks, each at most 6,600 characters, and none for a correction against a part the rules were unsure of", async () => {
     const many = inventedPaper(
       Array.from({ length: 10 }, (_, k) => ({ heading: `${k + 1} Row ${k}`, canonical: k % 2 === 0 ? "methods" : "results", truth: [[k % 2 === 0 ? "method" : "evidence", 12]] as Array<["method" | "evidence", number]> })),

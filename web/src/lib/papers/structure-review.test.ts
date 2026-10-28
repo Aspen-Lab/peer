@@ -509,12 +509,12 @@ describe("sanitizeReview — the answer, correction by correction, against the d
           { op: "set_role", part: 1, role: "apparatus" },
           { op: "split", part: 2, atParagraph: 11, role: "method" },
           { op: "split", part: 2, atParagraph: 21, role: "method" },
-          { op: "split", part: 2, atParagraph: 14 },
-          { op: "split", part: 2, atParagraph: 14, role: "interpretation" },
-          { op: "split", part: 2, atParagraph: 14, role: "evidence" },
+          { op: "split", part: 2, atParagraph: 13 },
+          { op: "split", part: 2, atParagraph: 13, role: "interpretation" },
+          { op: "split", part: 2, atParagraph: 13, role: "evidence" },
           { op: "split", part: 2, atParagraph: 15, role: "evidence" },
-          { op: "split", part: 2, atParagraph: 16, role: "evidence" },
           { op: "split", part: 2, atParagraph: 17, role: "evidence" },
+          { op: "split", part: 2, atParagraph: 19, role: "evidence" },
         ],
       },
       draft,
@@ -523,9 +523,9 @@ describe("sanitizeReview — the answer, correction by correction, against the d
 
     expect(answer.answer.corrections).toEqual([
       { op: "set_role", part: 1, role: "evidence" },
-      { op: "split", part: 2, atParagraph: 14, role: "interpretation" },
+      { op: "split", part: 2, atParagraph: 13, role: "interpretation" },
       { op: "split", part: 2, atParagraph: 15, role: "evidence" },
-      { op: "split", part: 2, atParagraph: 16, role: "evidence" },
+      { op: "split", part: 2, atParagraph: 17, role: "evidence" },
     ]);
   });
 
@@ -647,6 +647,170 @@ describe("sanitizeReview — the damage guard: the role setup belongs to the pap
     });
 
     expect(parts).toEqual(partsOf(five.parts));
+  });
+});
+
+describe("sanitizeReview — no one-paragraph piece: a split cannot cut a piece shorter than two paragraphs out of a part (P12-90)", () => {
+  // The measured damage (P6, a second run of five after the setup guard): the review's two splits one paragraph apart
+  // inside the first results part, "method" at 11 and "evidence" at 12, left a one-paragraph piece that flipped a short
+  // row's majority. Part 1 below has fifteen paragraphs (6 to 20) and is the draft's last evidence part.
+  const draft = [part(0, 5, "setup"), part(6, 20, "evidence"), part(21, 28, "interpretation")];
+  const N = 29;
+  const split = (at: number, role: ReviewRole, k = 1) => ({ op: "split", part: k, atParagraph: at, role });
+  const kept = (corrections: unknown[], d: readonly DraftPart[] = draft, n = N) => sanitizeReview({ corrections }, d, n)!;
+  const pair = [split(11, "method"), split(12, "evidence")];
+  /** The draft's parts with the middle part's role changed, for the cases where the part must stand. */
+  const standing = (...rest: Array<{ from: number; to: number; role: ReviewRole }>) => [...partsOf(draft).slice(0, 2), ...rest];
+
+  it("refuses the pair of splits one paragraph apart whole, in either order of the reply, and the part stays as the draft has it", () => {
+    for (const corrections of [pair, [...pair].reverse(), [split(11, "method"), split(12, "method")], [split(11, "interpretation"), split(12, "apparatus")]]) {
+      const answer = kept(corrections);
+
+      expect(answer.answer.corrections).toEqual([]);
+      expect(answer.rejected).toBe(2);
+      expect(answer.read).toBe(2);
+      expect(answer.refused).toEqual({ byOp: { split: 2 }, byReason: { "piece-too-short": 2 } });
+    }
+
+    // Whole: alone it is a reply every correction of which was refused, so the draft stands and says why;
+    // beside another correction the review is used and the part is still the draft's.
+    const alone = reviewStructure({ corrections: pair }, draft, N);
+    expect(alone).toMatchObject({ fellBack: true, cause: "all-refused", read: 2, rejected: 2 });
+    expect(alone.parts).toEqual(partsOf(draft));
+    const beside = reviewStructure({ corrections: [...pair, { op: "set_role", part: 2, role: "method" }] }, draft, N);
+    expect(beside).toMatchObject({ fellBack: false, read: 3, rejected: 2 });
+    expect(beside.parts).toEqual(standing({ from: 21, to: 28, role: "method" }));
+  });
+
+  it("still applies a split that leaves two pieces of three or more, and pieces of exactly two", () => {
+    const apply = (...splits: ReturnType<typeof split>[]) => reviewStructure({ corrections: splits }, draft, N);
+
+    expect(apply(split(11, "method")).parts).toEqual([...partsOf(draft).slice(0, 1), { from: 6, to: 10, role: "evidence" }, { from: 11, to: 20, role: "method" }, partsOf(draft)[2]]);
+    for (const corrections of [[split(8, "method")], [split(19, "method")], [split(12, "method"), split(14, "apparatus")], [split(10, "method"), split(14, "apparatus")]]) {
+      const answer = kept(corrections);
+
+      expect(answer.answer.corrections).toEqual(corrections);
+      expect(answer.rejected).toBe(0);
+    }
+    expect(apply(split(8, "method")).parts[1]).toEqual({ from: 6, to: 7, role: "evidence" });
+    expect(apply(split(19, "method")).parts[2]).toEqual({ from: 19, to: 20, role: "method" });
+  });
+
+  it("refuses a one-paragraph piece at the start, at the end and in the middle of a part, and the split on the far side of it", () => {
+    expect(kept([split(7, "method")]).answer.corrections).toEqual([]);
+    expect(kept([split(20, "method")]).answer.corrections).toEqual([]);
+    expect(kept([split(11, "method"), split(12, "apparatus"), split(13, "method")]).answer.corrections).toEqual([]);
+    // A short piece takes its two bounding splits with it; a split that is not next to one stands.
+    expect(kept([split(7, "method"), split(12, "apparatus")]).answer.corrections).toEqual([split(12, "apparatus")]);
+    expect(kept([split(12, "apparatus"), split(19, "method")]).answer.corrections).toEqual([split(12, "apparatus"), split(19, "method")]);
+    expect(kept([split(9, "method"), split(11, "apparatus"), split(20, "apparatus")]).answer.corrections).toEqual([split(9, "method"), split(11, "apparatus")]);
+    // A part of two paragraphs cannot be split at all.
+    const small = [part(0, 5, "setup"), part(6, 7, "evidence"), part(8, 28, "interpretation")];
+    expect(kept([split(7, "interpretation")], small).answer.corrections).toEqual([]);
+  });
+
+  it("lets one one-paragraph piece through: the last paragraph of the draft's last evidence part, given the role interpretation", () => {
+    expect(kept([split(20, "interpretation")]).answer.corrections).toEqual([split(20, "interpretation")]);
+    expect(reviewStructure({ corrections: [split(20, "interpretation")] }, draft, N).parts).toEqual([
+      ...partsOf(draft).slice(0, 2).map((p, k) => (k === 1 ? { ...p, to: 19 } : p)),
+      { from: 20, to: 28, role: "interpretation" },
+    ]);
+    // Any other role for it, and any other paragraph, is a one-paragraph piece like the rest.
+    for (const role of ["setup", "method", "evidence", "apparatus"] as const) expect(kept([split(20, role)]).answer.corrections).toEqual([]);
+    expect(kept([split(19, "interpretation"), split(20, "interpretation")]).answer.corrections).toEqual([]);
+    // Only the draft's LAST evidence part: an earlier one, a part of another role, and a part whose remainder is a single paragraph, are refused.
+    const two = [part(0, 5, "setup"), part(6, 12, "evidence"), part(13, 18, "method"), part(19, 26, "evidence"), part(27, 28, "apparatus")];
+    expect(kept([split(12, "interpretation", 1)], two).answer.corrections).toEqual([]);
+    expect(kept([split(18, "interpretation", 2)], two).answer.corrections).toEqual([]);
+    expect(kept([split(26, "interpretation", 3)], two).answer.corrections).toEqual([split(26, "interpretation", 3)]);
+    const close = [part(0, 5, "setup"), part(6, 7, "evidence"), part(8, 28, "interpretation")];
+    expect(kept([split(7, "interpretation")], close).answer.corrections).toEqual([]);
+  });
+
+  it("counts the pieces after the part's moved start, and after the next part's: a move can make a split safe or unsafe", () => {
+    const move = (k: number, to: number) => ({ op: "move_start", part: k, toParagraph: to });
+
+    // The start moved to 10 makes paragraph 10 a piece of its own before a split at 11; either order of the reply.
+    expect(kept([move(1, 10), split(11, "method")]).answer.corrections).toEqual([move(1, 10)]);
+    expect(kept([split(11, "method"), move(1, 10)]).answer.corrections).toEqual([move(1, 10)]);
+    // The start moved up to 5 gives a split at 7 the two paragraphs it lacked (alone it leaves paragraph 6 on its own).
+    expect(kept([split(7, "method")]).answer.corrections).toEqual([]);
+    expect(kept([move(1, 5), split(7, "method")]).answer.corrections).toEqual([move(1, 5), split(7, "method")]);
+    // The next part's start moved up to 19 ends part 1 at 18: paragraph 18 is the closing's, and a role other than interpretation is refused.
+    expect(kept([move(2, 19), split(18, "interpretation")]).answer.corrections).toEqual([move(2, 19), split(18, "interpretation")]);
+    expect(kept([move(2, 19), split(18, "method")]).answer.corrections).toEqual([move(2, 19)]);
+    // A move that would cross a start is dropped where the corrections are applied, so it counts for nothing here: the start of part 2 stays at 21.
+    const crossed = kept([move(1, 9), move(2, 8), split(10, "method")]);
+    expect(crossed.answer.corrections).toEqual([move(1, 9), move(2, 8)]);
+    // A split outside what is left of its part is dropped where the corrections are applied, and is not refused here.
+    const outside = reviewStructure({ corrections: [move(2, 19), split(20, "method")] }, draft, N);
+    expect(outside).toMatchObject({ fellBack: false, read: 2, rejected: 1 });
+    expect(outside.answer!.corrections).toHaveLength(2);
+  });
+
+  it("gives the same answer when it is asked again of its own answer, so the second pass of the route and a kept review agree", () => {
+    const replies: unknown[][] = [
+      pair,
+      [split(7, "method"), split(12, "apparatus"), { op: "set_role", part: 2, role: "method" }],
+      [split(20, "interpretation"), split(10, "method")],
+      [{ op: "move_start", part: 1, toParagraph: 10 }, split(11, "method"), split(14, "apparatus")],
+      [split(9, "method"), split(11, "apparatus"), split(19, "method"), split(20, "apparatus"), split(13, "evidence")],
+    ];
+    for (const corrections of replies) {
+      const first = kept(corrections);
+      const again = sanitizeReview({ corrections: first.answer.corrections, unsure: [] }, draft, N)!;
+
+      expect(again.answer.corrections).toEqual(first.answer.corrections);
+      expect(again.rejected).toBe(0);
+    }
+  });
+
+  it("uses up nothing for the split it refuses: not a place among the part's three, not its repeat memory, not one of the forty", () => {
+    // Three more splits follow the pair and all three stand: the pair did not take their places.
+    const spaced = [split(14, "apparatus"), split(16, "method"), split(18, "evidence")];
+    expect(kept([...pair, ...spaced]).answer.corrections).toEqual(spaced);
+    expect(kept([...pair, ...spaced]).refused.byReason).toEqual({ "piece-too-short": 2 });
+    // A split refused at paragraph 20 does not stop the closing asked for there next.
+    expect(kept([split(20, "method"), split(20, "interpretation")]).answer.corrections).toEqual([split(20, "interpretation")]);
+    // Forty corrections after three refused splits are all read: the cap of forty is for what is kept.
+    const many = Array.from({ length: 50 }, (_, k) => part(3 * k, 3 * k + 2, k % 2 === 0 ? "evidence" : "method"));
+    const cuts = [0, 1, 2].map((k) => ({ op: "split", part: k, atParagraph: 3 * k + 2, role: "apparatus" }));
+    const roles = Array.from({ length: 40 }, (_, k) => ({ op: "set_role", part: 3 + k, role: "apparatus" }));
+    const answer = sanitizeReview({ corrections: [...cuts, ...roles] }, many, 150)!;
+
+    expect(answer.answer.corrections).toEqual(roles);
+    expect(answer.refused.byReason).toEqual({ "piece-too-short": 3 });
+  });
+
+  it("counts a refused piece under its own reason, in the closed set, with the other tallies adding up to what was rejected", () => {
+    expect(REFUSAL_REASONS).toContain("piece-too-short");
+    const answer = kept([...pair, split(7, "method"), split(15, "method"), { op: "set_role", part: 1, role: "method" }, { op: "set_role", part: 1, role: "method" }, { op: "split", part: 1, atParagraph: 16, role: "banana" }]);
+
+    expect(answer.read).toBe(7);
+    expect(answer.rejected).toBe(5);
+    expect(answer.refused.byReason).toEqual({ "piece-too-short": 3, repeat: 1, malformed: 1 });
+    expect(answer.refused.byOp).toEqual({ split: 4, set_role: 1 });
+    expect(Object.values(answer.refused.byReason).reduce<number>((a, n) => a + (n ?? 0), 0)).toBe(answer.rejected);
+    expect(answer.answer.corrections).toEqual([split(15, "method"), { op: "set_role", part: 1, role: "method" }]);
+  });
+
+  it("is the rule of a kept review too: laid over its draft, the pair leaves no piece in the middle of the results", () => {
+    const five = draftOf(FIVE.input)!;
+    const review = (corrections: Answer["corrections"]) => reviewedParts(five, { corrections, unsure: [], draftDigest: five.digest });
+    const cut: Answer["corrections"] = [
+      { op: "split", part: 2, atParagraph: 11, role: "method" },
+      { op: "split", part: 2, atParagraph: 12, role: "evidence" },
+    ];
+
+    // The pair alone is a review that fell back: no parts. Beside a correction elsewhere, the results part (9 to 17) is whole.
+    expect(review(cut)).toBeNull();
+    expect(review([...cut, { op: "set_role", part: 3, role: "evidence" }])).toEqual([
+      { from: 0, to: 5, role: "setup" },
+      { from: 6, to: 8, role: "method" },
+      { from: 9, to: 21, role: "evidence" },
+      { from: 22, to: 25, role: "interpretation" },
+      { from: 26, to: 28, role: "apparatus" },
+    ]);
   });
 });
 
@@ -773,11 +937,11 @@ describe("sanitizeReview / reviewStructure — what was refused and why, and the
           { op: "move_start", part: 1, toParagraph: 8 },
           { op: "move_start", part: 1, toParagraph: 9 },
           { op: "move_start", part: 3, toParagraph: 21 },
-          { op: "split", part: 2, atParagraph: 14, role: "interpretation" },
-          { op: "split", part: 2, atParagraph: 14, role: "evidence" },
+          { op: "split", part: 2, atParagraph: 13, role: "interpretation" },
+          { op: "split", part: 2, atParagraph: 13, role: "evidence" },
           { op: "split", part: 2, atParagraph: 15, role: "evidence" },
-          { op: "split", part: 2, atParagraph: 16, role: "evidence" },
           { op: "split", part: 2, atParagraph: 17, role: "evidence" },
+          { op: "split", part: 2, atParagraph: 19, role: "evidence" },
           { op: "set_role", part: 2, role: "setup" },
           { op: "split", part: 3, atParagraph: 23, role: "setup" },
         ],
