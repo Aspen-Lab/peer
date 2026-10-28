@@ -177,8 +177,11 @@ and **stage 5 (rerank/distillation)** — the UI shape stays identical across ti
 | **2 — Cloud LLM** | LLM rerank + AI-written digest + deep reports | **User BYOK key** | `tier2-rerank.ts`, `lib/llm/`, `lib/papers/` |
 
 The deployed feed defaults to **Tier 0**. A user who pastes their own key in the UI can
-turn on Tier 2 with that key. Deployed preview/production code never falls back to an
-operator-funded model account. If no user key resolves, the LLM features **hide themselves**
+turn on Tier 2 with that key, **but only while they are signed in**: every AI route refuses a
+signed-out caller, and the feed route gives one the reading without a model whatever the
+request body says (`aiAvailability` in [`lib/feed/ai-tier.ts`](web/src/lib/feed/ai-tier.ts);
+the one exception is a deployment with no sign-in configured at all). Deployed
+preview/production code never falls back to an operator-funded model account. If no user key resolves, the LLM features **hide themselves**
 and the feed keeps working on Tier 0 — that is the correct pattern.
 **Never make a feature that hard-crashes when a key is missing.**
 
@@ -274,6 +277,12 @@ Code against the `DigestProvider` interface — **never against a single SDK dir
 - The digest model default is `claude-haiku-4-5-20251001` ([`llm/client.ts`](web/src/lib/llm/client.ts)).
 - Two model sizes per provider: a **small** model (classify/compress) and a **large** model
   (extract/synthesize) — used by deep reports below.
+- **Check key**, under the model-key field ([`key-check.tsx`](web/src/components/profile/key-check.tsx)),
+  posts `{ provider, apiKey }` to `/api/ai/check-key`, which makes one short request to that
+  provider on the reader's key and answers in one word whether the key works
+  ([`lib/llm/key-check.ts`](web/src/lib/llm/key-check.ts)). It sits behind the same sign-in and
+  hourly-limit gate as the other AI routes (`requireAiRequest`); the key goes in the request body,
+  never in the address, and is neither stored nor logged.
 
 > When you add a provider: implement `DigestProvider` (incl. `generateJsonText` with
 > `tier: "small" | "large"`) and register its user-supplied override. Do not add a
@@ -350,8 +359,19 @@ resolved for your deployment.
 ### Onboarding & persona quiz
 
 First-run wizard at [`web/src/app/welcome/page.tsx`](web/src/app/welcome/page.tsx) —
-Apple-setup style, one idea per page: **basics → topics → work → radar → ai → data → persona**.
+Apple-setup style, one idea per page: **account → basics → topics → work → radar → ai → persona**.
+(The old **data** step, a Tavily key for the events and jobs feeds, is gone with Tavily itself:
+Peer runs no web search.)
 
+- **Account comes first, and is optional.** It offers the GitHub and Google sign-in buttons
+  ("Skip sign-in" / "Continue without signing in" moves on), because a reader's own model key
+  works only while they are signed in. A sign-in started there, or from the AI step's "Sign in
+  to use your key" block, comes back to that step: a short-lived `peer_after_sign_in` cookie
+  carries the path, and `/auth/callback` follows it only after
+  `safeReturnPath` ([`lib/navigation/return-path.ts`](web/src/lib/navigation/return-path.ts))
+  accepts it. The step is left out where sign-in is not configured, and only a new, signed-out
+  reader opens on it; a returning one resumes where they left off
+  ([`completeness.ts`](web/src/app/welcome/completeness.ts)).
 - **A browser that has never been set up opens on it once, from the home page.** `FirstRunGate`
   ([`first-run.tsx`](web/src/components/first-run.tsx)) sends a profile with nothing in it — no
   `onboardedAt`, no topic, project, challenge or model key, and `welcomeSkipped` unset
@@ -393,7 +413,13 @@ and fire-and-forget cloud sync:
 Sync components: `profile-sync.tsx`, `feed-sync.tsx`, `theme-sync.tsx`.
 
 > Local keys (BYOK API keys, Jev key) are stored **only in the browser** (localStorage),
-> not in Supabase. Keep it that way.
+> not in Supabase. Keep it that way. So they **never follow the account**: on another device or
+> browser the reader pastes them again, and a remote profile can never set or clear them
+> (`hydrateFromRemote`). **Signing out removes them from this browser** — a confirmed sign-out
+> always clears them (`clearDeviceKeys`, from the `peer_signed_out` cookie path in
+> `profile-sync.tsx`), whether or not an owner is recorded — and when this browser holds a key,
+> the sign-out dialog ([`account-section.tsx`](web/src/components/account/account-section.tsx))
+> says so, and why, before it happens.
 
 ### Supabase data model
 
@@ -426,7 +452,7 @@ Under [`web/src/app/api/`](web/src/app/api/). Highlights:
 | `profile/`, `saved/`, `read/`, `feedback/`, `briefings/` | Profile + interaction persistence. |
 | `affiliation/resolve/`, `affiliation/seeds/` | Advisor (OpenAlex author) resolution & seed works. |
 | `topics/suggest/` | Topic autocomplete. |
-| `auth/callback/`, `auth/signout/`, `auth/error/` | Supabase GitHub OAuth flow. |
+| `auth/callback/`, `auth/signout/`, `auth/error/` | Supabase GitHub and Google OAuth flow. The callback lands on a path `safeReturnPath` accepts (`next`, else the `peer_after_sign_in` cookie), else `/`. |
 
 ### The digest cron
 
