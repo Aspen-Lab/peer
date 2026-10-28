@@ -2689,6 +2689,48 @@ C1, scored by the manager (`score-c1.py`):
    - Phases 2 to 5 spent 55 to 66 thousand input tokens per phase.
    - The owner is told.
 
+### §1h.482 — 2026-10-28 — RESTART; C1 PHASE 6 SCORED FROM ITS DUMPS (P1–P4, P6 5/5; P5 2/5); THE REVIEW DECIDES ONLY WHERE THE RULES ARE UNSURE; C P12-94; CEILING 280
+
+**The container restarted** while A P12-57 phase 6 and A P12-92 ran.
+
+**Phase 6 had finished every run.** The 30 dumps, `summary.jsonl` and `runall.log` ("DONE") survived on `cf572402`. The A's report was lost before it was written, so the manager scored from the dumps:
+- 73 calls, 221 of 245 spent;
+- every run's calls answered;
+- no 429, quota or billing marker;
+- the key's value in 0 of the 418 files of `a57/out6` and `sealed-c1`.
+
+A P12-92 was resumed by message to walk on from its pack.
+
+**C1, phase 6, the confirming round:**
+- **P1, P2, P3, P4 and P6 are 5 / 5 exact.**
+  - Every map equals the reviewed C0 map.
+  - P3 fell back in 5 runs and P6 in 2 (all-refused); the rest were reviewed.
+- **P5 is 2 / 5.**
+  - **M1** (runs 1 and 3): a `set_role` of part 2 (the closing, interpretation, `low`) to evidence. It was applied with no look, because a `low` part draws none.
+  - **M2** (run 4): a split of part 1 (`medium`) at 61 and a `set_role` of part 1 to method. The look sided with the review, and row 2 flipped to method.
+  - Run 5 carried two splits after a `review` look too, but no row moved.
+
+**The count:**
+- C P12-94 below only refuses more. The applied corrections become a subset, which its differential test must show.
+- So the passes of P1, P2, P3, P4 and P6 stand as lower bounds on the next tree. **Each has two consecutive scored passes:**
+  - P1 and P2 in phases 2 and 6;
+  - P3 in phases 2, 3 and 6;
+  - P4 in phases 2 to 6;
+  - P6 in phases 5 and 6.
+- **P5 has 0 consecutive passes.**
+
+**The principle, ruled:**
+- On the six papers every look that sided with the review against a `high` or `medium` part was wrong:
+  - P6 phase 4 run 4;
+  - P5 phase 6 runs 4 and 5.
+- So the review is not a reliable judge of a part the rules are sure about.
+- Under AGENTS.md (Tier 1 improves quality and degrades gracefully), **the review decides only where the rules said they were unsure (`low`), and only when a second look agrees.**
+  - A correction against a `high` or `medium` part is refused (`confident-draft`) and stays visible in the logs.
+  - A correction against a `low` part draws a look and stands only on `review`.
+- This narrows Tier 1's power. The owner is told, and may restore the looks on `medium` parts.
+
+→ **C P12-94.** Then **A P12-57 phase 7 and phase 8: P5 × 5 each**, two consecutive rounds for P5. That is about 30 calls, so the manager's ceiling goes from 245 to 280. Any quota answer stops the run, and the key stays BYOK only.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2999,7 +3041,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-54 | DONE — C (Sonnet); landed (R13b) with the revision at 5 | R13b: one-page figure calls up to 27,000,000 bytes | invented-input test; own mutation; gates | checkpoint P12-54-C-<UTC>.md; manager verifies | briefs/P12-54.md; §1h.429 |
 | P12-55 | DONE — C (Sonnet); landed (R11a, R12a) | R11a ceilings with grid clustering; R12a strokes honour the clip | invented-input tests; 5 re-aimed budget tests named; own mutations; gates | checkpoint P12-55-C-<UTC>.md; manager verifies | briefs/P12-55.md; §1h.429 |
 | P12-56 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | R14a Extended Data; R6b the line before; R15a the bar | invented-input tests; own mutations; gates | checkpoint P12-56-C-<UTC>.md; manager verifies | briefs/P12-56.md; §1h.429 (d), §1h.431 |
-| P12-57 | PHASE 6 RUNNING — A (Sonnet); phase 5 report ffe1bb29: P6 5/5, P4 1/1; phase 6 P1–P6 × 5, ceiling 245 (§1h.481) | C1 with the owner's test key: phase 1 harness on P1; phase 2 arms after C P12-53 and Tier 0 land | BYOK path, rows, Google calls, hygiene 0 | report P12-57-A-<UTC>.md | briefs/P12-57.md; §1h.430 |
+| P12-57 | PHASE 6 DONE (scored by the manager from the dumps; the report lost in a restart): P1–P4, P6 5/5, P5 2/5; phases 7–8 (P5 × 5 twice) after C P12-94 (§1h.482) | C1 with the owner's test key: phase 1 harness on P1; phase 2 arms after C P12-53 and Tier 0 land | BYOK path, rows, Google calls, hygiene 0 | report P12-57-A-<UTC>.md | briefs/P12-57.md; §1h.430 |
 | P12-58 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | D1: upload keeps its document; reading says pending; the page keeps asking | route and hook tests; own mutations; gates | checkpoint P12-58-C-<UTC>.md; manager verifies | briefs/P12-58.md; §1h.432 |
 | P12-59 | DONE — B (Sonnet), report on the branch | the 55 s request; P5's memory by stage; P1 / P3 titles | file:line; three rules each | report P12-59-B-<UTC>.md | briefs/P12-59.md; §1h.432 |
 | P12-60 | DONE — B (Sonnet), report on the branch | open only the figure's page: memory by stage on P5; cache today; three candidates measured | file:line; measures | report P12-60-B-<UTC>.md | briefs/P12-60.md; §1h.433 |
@@ -3035,6 +3077,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-90 | DONE — C (Sonnet); landed at 8bf1dadb (§1h.473) | Tier 1: no one-paragraph review piece (except a closing); refused corrections log their numbers | invented fixtures; own mutations; gates | checkpoint P12-90-C-<UTC>.md | briefs/P12-90.md; §1h.472 |
 | P12-91 | DONE — landed e56d6a40; manager mutations 3 / 8 red; 12,381 tests | Tier 1: no set_role setup from the first non-setup part; a split at a part's own edge is a no-op | invented fixtures; own mutations; gates | checkpoint P12-91-C-<UTC>.md | briefs/P12-91.md; §1h.477 |
 | P12-92 | IN_PROGRESS — A (Sonnet), scratch p12/r2/a92, port 4247 | Theme B round 4 on the landed head | the walk, the matrix, E5 / E2 / O1 re-measured | P12-92-A-<UTC>.md | briefs/P12-92.md; §1h.480 |
+| P12-94 | IN_PROGRESS — C (Sonnet), scratch p12/c94 | Tier 1: no correction against a high / medium part; a low part's correction needs a look that agrees | invented fixtures; differential subset test; own mutations; gates | checkpoint P12-94-C-<UTC>.md | briefs/P12-94.md; §1h.482 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
 | P11-26 | **DONE 21:0xZ 2026-10-20** — on the branch (§1h.128 (b)); was RUNNING (rules 4, 5 added §1h.127 (c)) since 09:1xZ 2026-10-20 — C, `briefs/P11-26.md`, `scratchpad/p11c26/wt`, port 4127: the explain card keeps its top at the selection (B3); a figure in front of the stack is never a thumbnail (X-3) | round 1 Theme B | §1h.122 (b) 1, 4 | C → the manager | — |

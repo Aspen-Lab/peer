@@ -227,3 +227,7 @@ P6 4 / 5 (one damaged run, a set_role of the first results part), P4 2 / 2 (fall
 ## Scores — Theme C1 phase 5 (§1h.481)
 
 P6 5 / 5 exact (3 reviewed, 2 all-refused fallbacks; no row moved), P4 1 / 1 exact (reviewed, 0 corrections). Consecutive passes toward the stop line: P3 2, P4 2+, P1 1, P2 1, P5 1, P6 1. The confirming round is phase 6 (P1–P6 × 5 on one head).
+
+## Scores — Theme C1 phase 6 (§1h.482)
+
+On `cf572402`: P1 5/5, P2 5/5, P3 5/5, P4 5/5, P5 2/5 (three damaged runs: M1 ×2, M2 ×1), P6 5/5. Consecutive passes: P1 2, P2 2, P3 3, P4 5, P5 0, P6 2 (lower bounds under C P12-94's subset). C1 waits on P5 only.
