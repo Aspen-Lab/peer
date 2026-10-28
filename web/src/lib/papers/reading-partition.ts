@@ -311,11 +311,17 @@ function isClosing(paragraph: string, abstractWords: ReadonlySet<string>): boole
   return shared / own.size >= CLOSING.abstractShare;
 }
 
+/** C P12-85: the shortest paragraph, in words, that the echo's fallback takes as the setup part's announcement; a shorter one is a fragment. */
+const ECHO_MIN_WORDS = 40;
+
 /**
  * The words the closing must echo. The paper's abstract when the reading has one (a long word in it); else the last
- * paragraph of the paper's setup part before `before` - the paper's own announcement of what it shows (P12-63, rule 2;
- * ruling §1h.436 (c)): a Nature-style article prints no abstract in its text, and its introduction ends on "here we show
- * ...". The setup part is the last introduction row before `before` that holds a paragraph, or, where the paper names no
+ * paragraph of the paper's setup part before `before` that has at least `ECHO_MIN_WORDS` words - the paper's own
+ * announcement of what it shows (P12-63, rule 2; ruling §1h.436 (c)): a Nature-style article prints no abstract in its
+ * text, and its introduction ends on "here we show ...". The part's last paragraph is skipped where it is shorter: a
+ * figure's caption read whole leaves the part ending in fragments of the figure's text (axis labels, a legend), which
+ * announce nothing (C P12-85, §1h.464). A part with no paragraph that long gives its longest one (the later of two equals).
+ * The setup part is the last introduction row before `before` that holds a paragraph, or, where the paper names no
  * introduction, the last row of role setup there. Neither gives a word: no echo, and no split.
  */
 function echoOf(abstract: string | null | undefined, map: ReadingMap, body: BodyLike, before: number): Set<string> {
@@ -330,7 +336,18 @@ function echoOf(abstract: string | null | undefined, map: ReadingMap, body: Body
     if (row.canonical === "introduction") introduction = k;
   }
   const from = introduction >= 0 ? introduction : setup;
-  return from < 0 ? stated : longWordsOf(body[from].paragraphs[body[from].paragraphs.length - 1]);
+  if (from < 0) return stated;
+  const paragraphs = body[from].paragraphs;
+  const counts = paragraphs.map((paragraph) => paragraph.trim().split(/\s+/).length);
+  let echo = paragraphs.length - 1;
+  for (let k = paragraphs.length - 1; k >= 0; k--) {
+    if (counts[k] >= ECHO_MIN_WORDS) {
+      echo = k;
+      break;
+    }
+    if (counts[k] > counts[echo]) echo = k;
+  }
+  return longWordsOf(paragraphs[echo]);
 }
 
 /**

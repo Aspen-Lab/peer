@@ -86,8 +86,11 @@ describe("closingPartition - a paper with no abstract takes the echo from the la
   });
 
   it("takes the LAST paragraph of the setup part, not another", () => {
+    // Re-aimed by C P12-85 (§1h.464): the two paragraphs are given 40 words each (`ofWords`: the filler adds no long word). At 16 and 9 words neither is
+    // long, and the echo is now the longest paragraph of the part (here the announcement, wherever it stands), not the last; "the last" holds among
+    // the paragraphs of 40 words or more. The short pair is read in the P12-85 block below.
     // The announcement first, an unrelated paragraph last: the last is the echo, and the closing does not restate it.
-    expect(splitOf(nature([ANNOUNCE, ...plain(1), ELSEWHERE]))).toBeNull();
+    expect(splitOf(nature([ofWords(40, ANNOUNCE), ...plain(1), ofWords(40, ELSEWHERE)]))).toBeNull();
     // The announcement last: the same paper splits.
     expect(splitOf(nature([ELSEWHERE, ...plain(1), ANNOUNCE]))?.parts[1].fromParagraph).toBe(3);
   });
@@ -334,5 +337,104 @@ describe("closingPartition - the last paragraph closes a paper that names no con
     ["a peak that tends to broaden", "The Raman peaks tend to broaden, as the counts showed in the warm pools."],
   ])("does not read %s as an outlook cue", (_name, lead) => {
     expect(splitOf(endingOn(ofWords(70, lead)))).toBeNull();
+  });
+});
+
+// C P12-85 (the closing split's echo skips fragments; C P12-82 x C P12-63, §1h.464): where the paper prints no abstract, the echo is the last paragraph of the
+// setup part that has at least `ECHO_MIN_WORDS` (40) words - not the part's last paragraph, which, once a figure's caption is read whole, is a run of
+// short fragments of the figure's own text ("Sheltered", "Counts at sheltered shores"). No paragraph that long: the longest one (the later of equals).
+// The abstract, when the paper prints one, is unchanged. Every text is invented; the filler of `ofWords` has no word of seven letters.
+
+/** The announcement as a 150-word paragraph: it opens on ANNOUNCE and is filled out with the filler. Shares four long words with SUMMARY. */
+const LONG_ANNOUNCE = ofWords(150, ANNOUNCE);
+/** Five short fragments of a figure's text (axis labels, a legend, a title) that follow the long paragraph; none holds a long word of SUMMARY. */
+const FRAGMENTS = ["Sheltered", "Exposed", "Count per quadrat", "0 10 20 30", "Counts at sheltered shores"];
+
+/** The split of the Nature-style paper whose front text is `intro`; the closing is the last part's SUMMARY and OUTLOOK. */
+const withIntro = (intro: readonly string[], abstract: string | null | undefined = undefined): GuidePartition | null => splitOf(nature(intro), abstract);
+
+describe("closingPartition - the echo is the setup part's last paragraph of at least 40 words, not a fragment of figure text (C P12-85)", () => {
+  it("(a) splits a paper whose setup part ends in five short fragments after a 150-word announcement", () => {
+    const doc = nature([...plain(2), LONG_ANNOUNCE, ...FRAGMENTS]);
+    const storms = buildReadingMap(doc).sections.find((row) => row.heading === STORMS)!;
+
+    expect(wordsIn(LONG_ANNOUNCE)).toBe(150);
+    expect(FRAGMENTS.every((fragment) => wordsIn(fragment) < 10)).toBe(true);
+    expect(splitOf(doc)).toEqual(SPLIT(storms.id));
+    // Each form of "the reading has no abstract" reads the same way.
+    expect(splitOf(doc, null)).toEqual(SPLIT(storms.id));
+    expect(splitOf(doc, "")).toEqual(SPLIT(storms.id));
+  });
+
+  it("(a) shows what the last fragment alone echoed: the same paper, handed that fragment as its abstract, is left whole", () => {
+    // The echo the split took before this rule - the setup part's last paragraph, here a fragment of figure text - shares no long word with the closing.
+    const doc = nature([...plain(2), LONG_ANNOUNCE, ...FRAGMENTS]);
+
+    expect(splitOf(doc, FRAGMENTS[FRAGMENTS.length - 1])).toBeNull();
+    expect(splitOf(doc)).not.toBeNull();
+  });
+
+  it("(a) steps back over a run of fragments of any size under 40 words, one or many", () => {
+    expect(withIntro([LONG_ANNOUNCE, FRAGMENTS[0]])?.parts[1].fromParagraph).toBe(3);
+    expect(withIntro([LONG_ANNOUNCE, ...FRAGMENTS, ...FRAGMENTS, ...FRAGMENTS])?.parts[1].fromParagraph).toBe(3);
+    // A fragment of 39 words is still a fragment.
+    expect(withIntro([LONG_ANNOUNCE, ofWords(39, "Counts at sheltered shores")])?.parts[1].fromParagraph).toBe(3);
+  });
+
+  it("(b) takes the last paragraph of 40 words, not the longest: 150 words of announcement, then a 40-word paragraph about something else, is left whole", () => {
+    expect(withIntro([LONG_ANNOUNCE, ofWords(40, ELSEWHERE), ...FRAGMENTS])).toBeNull();
+    // ...and the other way about.
+    expect(withIntro([ofWords(150, ELSEWHERE), ofWords(40, ANNOUNCE), ...FRAGMENTS])?.parts[1].fromParagraph).toBe(3);
+  });
+
+  it("holds the paragraph to 40 words: forty is long enough, thirty-nine is not", () => {
+    // 45 words about something else, then 40 / 39 of the announcement, then a fragment: only a paragraph of 40 words is looked at, so the 40 is the echo and the 39 is not.
+    expect(withIntro([ofWords(45, ELSEWHERE), ofWords(40, ANNOUNCE), FRAGMENTS[0]])?.parts[1].fromParagraph).toBe(3);
+    expect(withIntro([ofWords(45, ELSEWHERE), ofWords(39, ANNOUNCE), FRAGMENTS[0]])).toBeNull();
+  });
+
+  it("(c) leaves a setup part whose last paragraph is already long as it was: that paragraph is the echo", () => {
+    // The last paragraph announces: split, as before. The last paragraph is about something else (and an earlier one announces): whole, as before.
+    expect(withIntro([...plain(2), LONG_ANNOUNCE])?.parts[1].fromParagraph).toBe(3);
+    expect(withIntro([LONG_ANNOUNCE, ofWords(150, ELSEWHERE)])).toBeNull();
+    expect(withIntro([ofWords(150, ELSEWHERE), LONG_ANNOUNCE])?.parts[1].fromParagraph).toBe(3);
+  });
+
+  it("(d) a setup part with no paragraph of 40 words: its longest paragraph is the echo, the later of two equals", () => {
+    // The announcement is the longest (30 words) and not the last: it is the echo. Before this rule the last (20 words) was, and it echoes nothing.
+    expect(withIntro([ofWords(30, ANNOUNCE), ofWords(20, ELSEWHERE)])?.parts[1].fromParagraph).toBe(3);
+    expect(withIntro([ofWords(20, ELSEWHERE), ofWords(30, ANNOUNCE), ofWords(20, ELSEWHERE)])?.parts[1].fromParagraph).toBe(3);
+    // The longest is about something else: whole, though a shorter paragraph announces.
+    expect(withIntro([ofWords(20, ANNOUNCE), ofWords(30, ELSEWHERE)])).toBeNull();
+    // Two of equal length: the later.
+    expect(withIntro([ofWords(20, ELSEWHERE), ofWords(20, ANNOUNCE)])?.parts[1].fromParagraph).toBe(3);
+    expect(withIntro([ofWords(20, ANNOUNCE), ofWords(20, ELSEWHERE)])).toBeNull();
+  });
+
+  it("(d) a setup part of one paragraph, long or short, is that paragraph", () => {
+    expect(withIntro([ANNOUNCE])?.parts[1].fromParagraph).toBe(3);
+    expect(withIntro([ELSEWHERE])).toBeNull();
+    expect(withIntro([LONG_ANNOUNCE])?.parts[1].fromParagraph).toBe(3);
+  });
+
+  it("(e) leaves a paper with an abstract as it was: the abstract is the echo, the setup part is not looked at", () => {
+    const fragments = [LONG_ANNOUNCE, ...FRAGMENTS];
+
+    // The abstract the closing restates splits the paper whatever its setup part ends in...
+    expect(withIntro([ofWords(150, ELSEWHERE), ...FRAGMENTS], ABSTRACT)?.parts[1].fromParagraph).toBe(3);
+    expect(withIntro(fragments, ABSTRACT)?.parts[1].fromParagraph).toBe(3);
+    // ...and an abstract about something else leaves it whole although a 150-word paragraph of the setup part announces.
+    expect(withIntro(fragments, ELSEWHERE)).toBeNull();
+  });
+
+  it("reads a named introduction the same way, and the row that holds a paragraph", () => {
+    const doc = shore([
+      ["1 Introduction", [...plain(1), LONG_ANNOUNCE, ...FRAGMENTS]],
+      ["2 " + SNAILS, plain(3)],
+      ["3 " + STORMS, [...plain(3), SUMMARY, OUTLOOK]],
+      ["4 Methods", plain(2)],
+    ]);
+
+    expect(splitOf(doc)?.sectionId).toBe("s2");
   });
 });
