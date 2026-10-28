@@ -2053,6 +2053,16 @@ C P12-70 item 9 follows as a small landing.
 
 Next, as slots free (max 2): A P12-71 (Theme A) and A P12-72 (Theme B) walk this head.
 
+### §1h.448 — 2026-10-28 — C P12-70 ITEM 9 LANDED; ITEM 10 QUEUED (ONLY "A" AND "I" ARE ONE-LETTER WORDS)
+
+**C P12-70 item 9 is landed** (head `14246baa`; the landed `web/` tree equals V's at `49008776`).
+- The two-letter limit is pinned. The manager's mutation `letters.length > 99` → 1 red.
+- A one-letter cap that is a word of the paper stays apart ("A study"). Its witness off → 1 red.
+- The outline tests ran ×3, green. P1–P6's maps are byte-identical before and after item 9.
+- V's full gates: lint 0 / 144; **647 files, 11,932 tests, 0 failed**; build 0.
+
+**Item 10 (queued for C P12-70 when a slot frees):** C P12-70's open risk. A paper that prints a one-letter symbol on its own (a unit "S", a variable "T") would witness that letter as a word and split "S" + "econdary". So only "A" and "I" may be a one-letter word: English has no other, and a two-letter fact of the language is not a dictionary. The paper's own words stay the witness.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2376,8 +2386,8 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-67 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | private-use ligature glyphs read as letters (learned from the paper's own words) | invented-input tests; own mutations; gates | checkpoint P12-67-C-<UTC>.md | briefs/P12-67.md; §1h.439 |
 | P12-68 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | the caption cap 500 → 1,500 in the engine and the view | invented-input test; own mutation; gates | checkpoint P12-68-C-<UTC>.md | briefs/P12-68.md; §1h.440 (c) |
 | P12-69 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | the takedown removes kept figures; the privacy page names them | tests; own mutation; gates | checkpoint P12-69-C-<UTC>.md | briefs/P12-69.md; §1h.441 |
-| P12-70 | IN_PROGRESS — C (Sonnet); items 1–8 landed at 098d74b3 (§1h.447); item 9 running | integration: the five tests where eight Cs' rules meet | code fixes; named re-aims only where a ruled rule changed the truth; gates | checkpoint P12-70-C-<UTC>.md | briefs/P12-70.md; §1h.442 |
-| P12-71 | QUEUED — A (Sonnet), fresh walk of Theme A on the landed head (replaces the stale P12-37 walk) | Theme A A1–A12 | rubric units and pass requirements | walk, pack, P12-71-A-<UTC>.md | briefs/P12-71.md; §1h.446 |
+| P12-70 | PARTIAL — C (Sonnet); items 1–9 landed (14246baa, §1h.448); item 10 queued | integration: the five tests where eight Cs' rules meet | code fixes; named re-aims only where a ruled rule changed the truth; gates | checkpoint P12-70-C-<UTC>.md | briefs/P12-70.md; §1h.442 |
+| P12-71 | IN_PROGRESS — A (Sonnet), head d44aeabb, port 4246, scratch p12/r2/a71 | Theme A A1–A12 | rubric units and pass requirements | walk, pack, P12-71-A-<UTC>.md | briefs/P12-71.md; §1h.446 |
 | P12-72 | QUEUED — A (Sonnet), fresh walk of Theme B on the landed head (replaces the stale P12-38 walk) | Theme B B1–B12 | rubric units and pass requirements | walk, pack, P12-72-A-<UTC>.md | briefs/P12-72.md; §1h.446 |
 | P12-73 | IN_PROGRESS — B (Sonnet), scratch p12/b73, head 97b84eb9 | Theme C on P4–P6: M1–M7 by shape | file:line, three candidates each, a C split | report P12-73-B-<UTC>.md | briefs/P12-73.md; §1h.446 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
