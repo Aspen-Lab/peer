@@ -33,14 +33,20 @@ describe("the label", () => {
 describe("NotesButtonView — the tab at the right edge", () => {
   const edge = (has: boolean) => renderToStaticMarkup(createElement(NotesButtonView, { variant: "edge", has, onOpen: () => {} }));
 
-  it("is one button, fixed at the viewport's right edge, from md up and never on a phone", () => {
+  // Re-aimed (P12-77 rule 3, E2): was "is one button, fixed at the viewport's right edge, from md up and never on a phone" and held `hidden` and
+  // `md:flex`. A phone's reader had only the row near the top of the page, so to open notes they scrolled up to it and "Back to paper" returned
+  // them near the top (scrollY 8385 -> 85 at 390 x 844); the fixed tab keeps the place. The tab is now shown at every width (`flex`, no `hidden`),
+  // and a phone's press goes to the notes page (`notes-button.phone.flow.test.tsx`).
+  it("is one button, fixed at the viewport's right edge, at every width — a phone's too", () => {
     const html = edge(false);
 
     expect(html.match(/<button\b/g)).toHaveLength(1);
     expect(html).toContain('type="button"');
     // P11-14 (re-aimed, §1c): P7-15 had made `right-0` the dock's width with a fallback of 0px (`right-[var(--explain-dock-width,0px)]`);
     // nothing is reserved now, so with no card standing the tab is on the window's edge again.
-    for (const cls of ["fixed", "right-0", "hidden", "md:flex"]) expect(html.split('"').some((attr) => attr.split(" ").includes(cls))).toBe(true);
+    const classes = (/class="([^"]*)"/.exec(html)?.[1] ?? "").split(" ");
+    for (const cls of ["fixed", "right-0", "flex"]) expect(classes).toContain(cls);
+    for (const cls of ["hidden", "md:flex", "md:hidden"]) expect(classes).not.toContain(cls);
   });
 
   // P11-14 (re-aimed, §1c): was "stands beside the AI dock when one is open, not under it: its right edge is the dock's left edge"

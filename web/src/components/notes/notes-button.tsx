@@ -3,7 +3,7 @@
 // P7-14 (R9, the owner's review): "Your notes" at the far right of the screen, as a button, not
 // a band at the top of the column. Two renderings of one button, the page mounts both:
 //
-//   `edge` — a small tab fixed at the viewport's right edge, from `md` up. It is in the window's
+//   `edge` — a small tab fixed at the viewport's right edge, at every width. It is in the window's
 //   pixels (mounted outside the zoomed page container, beside the "Explain this?" box), at least
 //   27rem from the top where the window is tall enough, clear of the upper right 400px, and never lower than the foot legend
 //   allows (P12-77, E1: see `EDGE_TAB_LENGTH_PX`). P11-14 (B P11-01 §3.1): while a card
@@ -16,15 +16,19 @@
 //   P11-46 (round 3, Theme B walk E-1): the tab, strip included, takes only a press that began on it; a drag that began in the paper
 //   passes through it and ends at the line's end (`EDGE_TAB_PASSES_DRAG`).
 //
-//   `row` — on a phone, where there is no edge to put a tab on, a full-width row in the command
-//   stack (`DecisionBlock`'s `notesAction`), set like the other commands.
+//   `row` — on a phone, a full-width row in the command stack (`DecisionBlock`'s `notesAction`), set like the other commands.
+//   P12-77 (rule 3, E2; reader A-r1 in A P12-71's pack): the row stays, but on a phone it stands near the top of the page, so the reader
+//   scrolled up to press it and the notes page's "Back to paper" brought them back near the top (scrollY 8385 -> 85 and 6907 -> 92 at
+//   390 x 844); at 1440 and 853 the fixed tab keeps the place exactly. So the tab is offered on a phone too, clamped above the thumb bar
+//   (`EDGE_TAB_LENGTH_PX`), and a press there goes to the notes page as the row does — recording where the reader IS (`rememberPlace`,
+//   in `usePaperNotes`) — instead of opening the window, which has no margin to stand in on a phone (`opensWindow`).
 //
 // What it does is the band's old `open()` (`paper-notes.tsx`): the paper's own notes, made the
 // first time with the paper's title and your sticky notes (P10-09e: nothing else is placed in it).
 //
 // P10-09b (the owner's review 7.2): on the reading page the edge tab opens those notes as a floating window at
 // the right (`notes-window.tsx`) instead of navigating, and while the window stands the tab stands beside it
-// (360 px in), a second press closing it. The phone's row still navigates to the notes page (the phone is deferred).
+// (360 px in), a second press closing it. The phone's row, and (P12-77) its edge tab, navigate to the notes page.
 
 import { useState } from "react";
 import type { CSSProperties } from "react";
@@ -123,7 +127,7 @@ const EDGE_TAB_PLACE = {
   open: "h-[146px] top-[max(3rem,min(max(27rem,50vh),calc(100vh-var(--tab-foot)-8px-146px)))]",
 } as const;
 
-/** What stands at the window's foot: the thumb bar under `md`, the key legend from it (its height, `--tab-legend` where Fit has made it taller). */
+/** What stands at the window's foot: the thumb bar under `md` (the tab is offered on a phone too: P12-77 rule 3), the key legend from it (its height, `--tab-legend` where Fit has made it taller). */
 const EDGE_TAB_FOOT = "[--tab-foot:calc(56px+env(safe-area-inset-bottom,0px))] md:[--tab-foot:var(--tab-legend,var(--legend-h))]";
 
 export function NotesButtonView({
@@ -190,7 +194,7 @@ export function NotesButtonView({
         // inline axis) and `py` its two sides, and the tab must not reach into the page's own side margin (24px). Beside a card, at the margin's left edge, it is narrower still (`EDGE_TAB_BESIDE_PX`, set on its style),
         // with no side padding, and a transparent strip on the text's side gives it back its 24 px hit area (`EDGE_TAB_HIT_PX`).
         beside ? (marginLeft === undefined ? "right-[min(360px,100vw)]" : "") : "right-0",
-        "fixed z-40 hidden md:flex items-center justify-center whitespace-nowrap border border-r-0 border-border-strong bg-surface px-3 shadow-card",
+        "fixed z-40 flex items-center justify-center whitespace-nowrap border border-r-0 border-border-strong bg-surface px-3 shadow-card",
         EDGE_TAB_PLACE[has ? "open" : "take"],
         EDGE_TAB_FOOT,
         squeezed ? "py-0 before:absolute before:top-0 before:-left-[10px] before:h-full before:w-[9px]" : "py-1",
@@ -204,7 +208,23 @@ export function NotesButtonView({
   );
 }
 
-/** The paper's notes as a button: the right-edge tab or, for a phone, the command-stack row. */
+/** Tailwind's `md` (48rem), as a query: from it the legend, the masthead and the margin stand, and "Open your notes" opens the window. */
+export const WINDOW_QUERY = "(min-width: 48rem)";
+
+const browserMatches = (query: string): boolean =>
+  typeof window === "undefined" || typeof window.matchMedia !== "function" ? true : window.matchMedia(query).matches;
+
+/**
+ * P12-77 (rule 3): does a press on the edge tab open the floating window here? From `md` it does, as it always did. On a phone there is no
+ * margin for a window to stand in (the cards stand in a band at the foot, over the thumb bar's reach), so the press goes to the notes page
+ * as the row's does, recording the place the reader is at. Asked at the press, so a window that is turned or resized answers for what it is
+ * now; where there is no window to ask (the server, a test without a DOM) it is the wide screen's answer.
+ */
+export function opensWindow(matches: (query: string) => boolean = browserMatches): boolean {
+  return matches(WINDOW_QUERY);
+}
+
+/** The paper's notes as a button: the right-edge tab and, for a phone, also the command-stack row. */
 export function NotesButton({
   variant,
   paper,
@@ -219,13 +239,17 @@ export function NotesButton({
   forYourQuestions?: readonly QuestionAnswers[];
 }) {
   const [shown, setShown] = useState(false);
-  // The edge tab opens the window; the row (a phone) navigates, as the band always did.
-  const { ready, own, open } = usePaperNotes({
+  // The edge tab opens the window; the row navigates, as the band always did.
+  const { ready, own, open: openWindow } = usePaperNotes({
     paper,
     questions,
     forYourQuestions,
     openWindow: variant === "edge" ? () => setShown(true) : undefined,
   });
+  // P12-77 (rule 3): the same press that navigates, for the edge tab on a phone. Without `openWindow`, `usePaperNotes` records the place
+  // the reader is at and goes to the notes page; the tab is fixed, so that is wherever they are, not where a row would have taken them.
+  const { open: openPage } = usePaperNotes({ paper, questions, forYourQuestions });
+  const open = () => (variant === "edge" && opensWindow() ? openWindow() : openPage());
   const rect = useMarginRect();
   const standing = useWindows((s) => s.windows.length > 0);
   if (!ready) return null;
