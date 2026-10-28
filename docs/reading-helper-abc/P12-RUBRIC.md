@@ -199,3 +199,7 @@ A P12-72 on `ccfa098b`: P1 95.83, P2 95.83, P3 83.33 (B7 FAIL on P3); below the 
 ## Scores of record — Theme A round 3 (§1h.461)
 
 A P12-78 on `e0a80fbf`; readers A3-r1 and A3-r2 (median, the third reader cannot change it): P1 97.92, P2 97.92, P3 97.92. Consecutive rounds at the target: 1.
+
+## Scores of record — Theme C1 (§1h.464)
+
+With the owner's test key (A P12-57 phase 2, 5 runs per paper, the product as built): P1, P2, P3, P4, P5 — 5 / 5 runs exact, 100 %; P6 — 4 / 5 (one run damaged a right part): **not 100 %**. 11 / 30 runs fell back (`unusable`).

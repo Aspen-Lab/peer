@@ -2317,6 +2317,33 @@ B P12-80's report (`P12-80-B-20261028T1444Z.md`, landed `b6cbc27c`) is ruled. Ev
 
 (e) **Order under two slots:** A P12-57 phase 2 is running. C P12-82 starts now; C P12-84 and C P12-83 follow as slots free. Then Theme B round 3 and Theme A round 4.
 
+### §1h.464 — 2026-10-28 — C1 MEASURED: P1–P5 PASS, P6 4/5 (ONE DAMAGE); C P12-82 HELD FOR THE ECHO (C P12-85); C P12-86
+
+(a) **A P12-57 phase 2** (report landed `d771a376`; key-value hits in its files 0; four-word runs shared with P1–P6 are 6, all digit runs).
+- 30 runs (P1–P6 × 5) on `d945437a`, each with a fresh server and browser context; the review fired once per run.
+- 78 Google calls (30 report route, 30 reviews, 18 second looks), all `gemini-3.6-flash`, all ok: 205,574 tokens in, 5,174 out. No quota answer. 84 of the 150 spent with phase 1.
+- The deep-report switch was left off, so the gist never ran. The structure review fires on the key alone (§1h.428 (a)).
+
+(b) **C1, scored by the manager** (`mgr/score-c1.py`, the ruled truth; the dumps in `mgr/sealed-c1/`):
+- **P1 5 / 5 runs exact, P2 5 / 5, P3 5 / 5, P4 5 / 5, P5 5 / 5, P6 4 / 5.** No run made an extra row.
+- **P6 run 3 is damage:** the review split one paragraph out of a results section as setup and the next as evidence, and the row's majority flipped to setup. One right part became wrong.
+- **C1 by §1h.426 (b) / B P12-42 §7's bar** (all 5 runs exact, 0 damage): **P1–P5 pass, P6 fails.**
+- **Also:** 11 of 30 runs fell back `unusable`, among them P4 5 / 5 and P3 4 / 5. Those maps are the rules' draft, which is right, so C1 holds there. But the review helps nothing on those papers, and the log cannot say why (reply sizes only).
+- → **C P12-86** (queued):
+  1. a damage guard in `sanitizeReview`: no correction gives the role setup to a part after the paper's first part that is not setup (setup is the opening run);
+  2. the fallback's cause in the server log, counts only: no JSON, no corrections array, or corrections read / refused by kind and reason.
+  
+  Then A P12-57 phase 3 re-measures P6 × 5, P4 × 3 and P3 × 3 within the 66 calls left.
+
+(c) **C P12-82 (K1) is verified in V but held.**
+- Manager measure on P1–P6: P1, P2, P4, P5 and P6 keep every row and role. P4 and P5 lose 46 and 456 body words, caption text going back into its captions.
+- **P3 drops 8 / 8 → 7 / 8.** Its closing split no longer fires.
+- The cause is in `echoOf`. P3 prints no abstract heading, so the echo is the setup part's last paragraph. Before C P12-82 that was Fig. 1's caption tail, leaked into the body: 152 words, share 0.31. After, the setup part ends in seven figure-text fragments (1, 1, 1, 8, 2, 8 and 10 words), and the last of these gives share 0.04.
+- With the last paragraph of ≥ 40 words as the echo, P3's share is 0.327 and P4's is unchanged (0.303).
+- → **C P12-85** (running). C P12-82 lands only together with it.
+
+(d) **Running:** C P12-84 (K3 bounds) ∥ C P12-85 (echo). **Queued:** C P12-83 (K2 case), C P12-86 (the guard and the log), revision 10 → 11, A P12-57 phase 3, Theme B round 3, Theme A round 4, and the B for short paragraphs (now known to feed the echo).
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2627,7 +2654,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-54 | DONE — C (Sonnet); landed (R13b) with the revision at 5 | R13b: one-page figure calls up to 27,000,000 bytes | invented-input test; own mutation; gates | checkpoint P12-54-C-<UTC>.md; manager verifies | briefs/P12-54.md; §1h.429 |
 | P12-55 | DONE — C (Sonnet); landed (R11a, R12a) | R11a ceilings with grid clustering; R12a strokes honour the clip | invented-input tests; 5 re-aimed budget tests named; own mutations; gates | checkpoint P12-55-C-<UTC>.md; manager verifies | briefs/P12-55.md; §1h.429 |
 | P12-56 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | R14a Extended Data; R6b the line before; R15a the bar | invented-input tests; own mutations; gates | checkpoint P12-56-C-<UTC>.md; manager verifies | briefs/P12-56.md; §1h.429 (d), §1h.431 |
-| P12-57 | IN_PROGRESS — A (Sonnet), phase 2 (C1 on the product, P1–P6 × 5 runs), head d945437a, port 4244 (§1h.462) | C1 with the owner's test key: phase 1 harness on P1; phase 2 arms after C P12-53 and Tier 0 land | BYOK path, rows, Google calls, hygiene 0 | report P12-57-A-<UTC>.md | briefs/P12-57.md; §1h.430 |
+| P12-57 | PHASE 2 DONE — A (Sonnet), report on the branch (d771a376); C1 P1–P5 pass, P6 4/5; phase 3 after C P12-86 (§1h.464) | C1 with the owner's test key: phase 1 harness on P1; phase 2 arms after C P12-53 and Tier 0 land | BYOK path, rows, Google calls, hygiene 0 | report P12-57-A-<UTC>.md | briefs/P12-57.md; §1h.430 |
 | P12-58 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | D1: upload keeps its document; reading says pending; the page keeps asking | route and hook tests; own mutations; gates | checkpoint P12-58-C-<UTC>.md; manager verifies | briefs/P12-58.md; §1h.432 |
 | P12-59 | DONE — B (Sonnet), report on the branch | the 55 s request; P5's memory by stage; P1 / P3 titles | file:line; three rules each | report P12-59-B-<UTC>.md | briefs/P12-59.md; §1h.432 |
 | P12-60 | DONE — B (Sonnet), report on the branch | open only the figure's page: memory by stage on P5; cache today; three candidates measured | file:line; measures | report P12-60-B-<UTC>.md | briefs/P12-60.md; §1h.433 |
@@ -2652,9 +2679,11 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-79 | DONE — C (Sonnet); landed at b1d88d7e (§1h.460) | E3: with a card in the bottom band the notes tab keeps the right edge at every width | tests; own mutation; gates | checkpoint P12-79-C-<UTC>.md | briefs/P12-79.md; §1h.457 |
 | P12-80 | DONE — B (Sonnet), report on the branch (b6cbc27c); ruled §1h.463 | Theme B P3: K1 card caption cut, K2 acronym case, K3 figure bounds | file:line, three candidates each, a C split | report P12-80-B-<UTC>.md | briefs/P12-80.md; §1h.459 |
 | P12-81 | DONE — C (Sonnet); landed at ca0c13c6 (§1h.462) | O2: the Explain card's body overscroll-contain | a pin; own mutation; gates | checkpoint P12-81-C-<UTC>.md | briefs/P12-81.md; §1h.459 (c) |
-| P12-82 | QUEUED — C (Sonnet) | K1: a caption goes on through its title's face change (R1-B) | invented fixtures; own mutations; gates | checkpoint P12-82-C-<UTC>.md | briefs/P12-82.md; §1h.463 |
+| P12-82 | REPORTED — C (Sonnet); verified in V; held until C P12-85 (P3's echo) (§1h.464) | K1: a caption goes on through its title's face change (R1-B) | invented fixtures; own mutations; gates | checkpoint P12-82-C-<UTC>.md | briefs/P12-82.md; §1h.463 |
 | P12-83 | QUEUED — C (Sonnet) | K2: a font's lowercased capitals repaired from the document (R2-C) | invented fixtures; own mutations; gates | checkpoint P12-83-C-<UTC>.md | briefs/P12-83.md; §1h.463 |
-| P12-84 | QUEUED — C (Sonnet) | K3: figure bounds without furniture, with edge labels (R3-C, R3-B) | invented fixtures; own mutations; gates | checkpoint P12-84-C-<UTC>.md | briefs/P12-84.md; §1h.463 |
+| P12-84 | IN_PROGRESS — C (Sonnet), scratch p12/c84, from 3215aee4 | K3: figure bounds without furniture, with edge labels (R3-C, R3-B) | invented fixtures; own mutations; gates | checkpoint P12-84-C-<UTC>.md | briefs/P12-84.md; §1h.463 |
+| P12-85 | IN_PROGRESS — C (Sonnet), scratch p12/c85, from c2ba81b1 | the closing split's echo skips fragments (≥ 40 words) | invented fixtures; own mutation; gates | checkpoint P12-85-C-<UTC>.md | briefs/P12-85.md; §1h.464 |
+| P12-86 | QUEUED — C (Sonnet) | Tier 1: no setup role after the opening run (damage guard); the fallback's cause logged as counts | invented fixtures; own mutations; gates | checkpoint P12-86-C-<UTC>.md | briefs/P12-86.md; §1h.464 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
 | P11-26 | **DONE 21:0xZ 2026-10-20** — on the branch (§1h.128 (b)); was RUNNING (rules 4, 5 added §1h.127 (c)) since 09:1xZ 2026-10-20 — C, `briefs/P11-26.md`, `scratchpad/p11c26/wt`, port 4127: the explain card keeps its top at the selection (B3); a figure in front of the stack is never a thumbnail (X-3) | round 1 Theme B | §1h.122 (b) 1, 4 | C → the manager | — |
