@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { Paper } from "@/types";
 import { blockMarker } from "@/lib/text/math";
-import { withSectionIds, type DraftSection, type ExtractedDocument } from "./html-text";
+import { canonicalizeHeading, withSectionIds, type DraftSection, type ExtractedDocument } from "./html-text";
 import type { FullTextResult } from "./full-text";
 import { buildReading } from "./reading";
 import { ROUTE } from "@/components/reader/copy";
@@ -987,5 +987,27 @@ describe("buildReadingMap — an unnumbered part's group row (P12-75, M2)", () =
       { heading: "2.1. Growth", text: filler(10) },
     ]));
     expect(map.sections.map((r) => [r.level, r.parentId])).toEqual([[1, undefined], [2, "s0"]]);
+  });
+});
+
+// P12-75 (B P12-73, M7): a part headed "Implications" sat between the last results and the named conclusion and was read as
+// evidence (the unnamed rows before the first named interpretation row are). Its heading names the discussion now.
+describe("buildReadingMap — a part headed 'Implications' (P12-75, M7)", () => {
+  it("reads it as interpretation, not as the evidence the unnamed rows before it are", () => {
+    const heading = (text: string) => ({ heading: text, canonical: canonicalizeHeading(text) });
+    const map = buildReadingMap(doc([
+      { ...heading("Introduction"), text: filler(60) },
+      { ...heading("Slow cooling spares the grain edges"), text: filler(120) },
+      { ...heading("Fast cooling splits the film"), text: filler(110) },
+      { ...heading("Implications"), text: filler(90) },
+      { ...heading("Conclusions"), text: filler(40) },
+    ]));
+    expect(map.sections.map((r) => [r.heading, r.role])).toEqual([
+      ["Introduction", "setup"],
+      ["Slow cooling spares the grain edges", "evidence"],
+      ["Fast cooling splits the film", "evidence"],
+      ["Implications", "interpretation"],
+      ["Conclusions", "interpretation"],
+    ]);
   });
 });

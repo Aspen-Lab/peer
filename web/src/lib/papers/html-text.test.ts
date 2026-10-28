@@ -111,6 +111,43 @@ describe("canonicalizeHeading — experimental methods (L1)", () => {
   });
 });
 
+// P12-75 (B P12-73, M7): a part headed "Implications" or "Outlook" sits between the last results and the conclusion; it had
+// no bucket of its own word (`body`, or methods by "model"), and the map read it as evidence. The word names the discussion.
+describe("canonicalizeHeading — implications and outlook are the discussion (P12-75, M7)", () => {
+  it.each([
+    "Implications",
+    "Implication",
+    "Implications for storage",
+    "Broader implications of the proposed model",
+    "Implications and outlook",
+    "Outlook",
+    "OUTLOOK",
+    "Future outlook",
+    "5 Outlook",
+    "6.2. Implications for the field",
+    "Discussion and outlook",
+  ])("%s → discussion", (heading) => {
+    expect(canonicalizeHeading(heading)).toBe("discussion");
+  });
+
+  it("leaves a heading that also names the conclusion or a summary as the conclusion, as it was", () => {
+    expect(canonicalizeHeading("Conclusions and outlook")).toBe("conclusion");
+    expect(canonicalizeHeading("Summary and outlook")).toBe("conclusion");
+    expect(canonicalizeHeading("Conclusion and implications")).toBe("conclusion");
+  });
+
+  it("leaves a heading that an earlier line places where it was", () => {
+    expect(canonicalizeHeading("Results and implications")).toBe("results");
+    expect(canonicalizeHeading("Limitations and implications")).toBe("limitations");
+  });
+
+  it("does not read a word that only contains the letters", () => {
+    expect(canonicalizeHeading("Applications")).toBe("body");
+    expect(canonicalizeHeading("Complications")).toBe("body");
+    expect(canonicalizeHeading("Implicit bias")).toBe("body");
+  });
+});
+
 // P12-75 (B P12-73, M5): "Sample preparation and NMR experiments" is a procedure; the unanchored `experiment` line filed it
 // results. A heading that holds `experiment(s)` and also names the procedure (a sample, a specimen, a preparation, a
 // synthesis, a fabrication, an assembly, a measurement, a setup, details) is methods. Without the procedure word, or

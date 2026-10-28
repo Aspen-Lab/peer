@@ -216,7 +216,12 @@ export function canonicalizeHeading(heading: string): string {
   if (/^result|^finding|^evaluation|^experiment|^empirical|^performance|^ablation/.test(lower)) {
     return "results";
   }
-  if (/discussion/.test(lower)) return "discussion";
+  // P12-75 (B P12-73, M7): "Implications" and "Outlook" name the discussion as the word "discussion" does; they are
+  // tested before the methods words below ("Implications for the proposed model" is not methods). A heading that also
+  // names the conclusion or a summary ("Conclusions and outlook") is the conclusion, as it was.
+  if (/discussion/.test(lower) || (/\bimplications?\b|\boutlook\b/.test(lower) && !/conclusion|summary/.test(lower))) {
+    return "discussion";
+  }
   // P12-75 (B P12-73, M5): the experiments a procedure heading names ("Sample preparation and NMR experiments") are done
   // in the methods; the unanchored `experiment` line below files a heading that holds the word results. The heading
   // must name the procedure too (a sample, a preparation, a synthesis, a setup ...): "Cycling experiments" stays results.

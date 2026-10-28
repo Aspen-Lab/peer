@@ -400,3 +400,27 @@ describe("buildOutline — a procedure's experiments are methods (P12-75, M5)", 
     ]);
   });
 });
+
+// P12-75 (M7): the part headed "Implications" between the last results and the named conclusion is the discussion.
+describe("buildOutline — a part headed 'Implications' is the discussion (P12-75, M7)", () => {
+  it("files 'Implications' under discussion, between the results and the conclusion", () => {
+    const rows = rowsOf([
+      page(1, [
+        r(TITLE, "title"),
+        ...prose(...INTRO),
+        r("Slow cooling spares the grain edges", "head", 20),
+        ...prose(...RESULTS_ONE),
+        r("Implications", "head", 20),
+        ...prose(...RESULTS_TWO),
+        r("Conclusions", "head", 20),
+        ...prose(...END_TWO),
+      ]),
+    ]);
+    expect(rows.map((row) => [row[0], row[1]])).toEqual([
+      [TITLE, "body"],
+      ["Slow cooling spares the grain edges", "body"],
+      ["Implications", "discussion"],
+      ["Conclusions", "conclusion"],
+    ]);
+  });
+});
