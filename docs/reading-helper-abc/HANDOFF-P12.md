@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-28T13:34Z
+AS OF        2026-10-28T13:49Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
-LAST RULING  §1h.457   NEXT RULING §1h.458   NEXT ITEM ID P12-80   NEXT FREE PORT 4248
+LAST RULING  §1h.458   NEXT RULING §1h.459   NEXT ITEM ID P12-80   NEXT FREE PORT 4248
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
-RUNNING      (max 2, §1h.443) A P12-72 (Theme B round 2, head ccfa098b, port 4247) ∥ reader A3-r1 (Theme A round 3, pack r2/a78/pack); branch head 4b6b614f; QUEUE: C P12-79 (E3) → readers A3-r2, A3-r3 → Theme B readers (pack r2/a72/pack) → B short paragraphs → Theme C round 3 measure → A P12-57 phase 2 (C1)
+RUNNING      (max 2, §1h.443) A P12-72 (Theme B round 2, head ccfa098b, port 4247) ∥ C P12-79 (E3); branch head 25bca3b4; QUEUE: readers A3-r2, A3-r3 (pack r2/a78/pack) → Theme B readers (pack r2/a72/pack) → A P12-57 phase 2 (C1, the test key) → B short paragraphs → Theme A round 4 (after C P12-79)
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
 OWNER'S PDFS P1–P6 (uploads in the manager's session; P4–P6 held out); upload UI only; never commit or quote
 CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB, Haiku, "20 * * * *", enabled, read back 06:23Z; prompt: at most two subagents (§1h.443)
@@ -709,6 +709,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-28T11:54Z | manager (Claude) | §1h.456: C P12-70 item 10 landed (1 red; 654 / 12,193 / 0 failed); C P12-70 closed; A P12-78 walking | evidence: mgr/gates-V.log | next: A P12-72, A P12-78
 
 - 2026-10-28T13:34Z | manager (Claude) | §1h.457: A P12-78 Theme A round 3 97.92 ×3 (E3 0.25); round 2's marks gone; readers running; C P12-79 briefed | evidence: P12-78-A report, r2/a78/pack | next: readers, C P12-79
+
+- 2026-10-28T13:49Z | manager (Claude) | §1h.458: Theme C round 3 C0 100 ×6 (two consecutive); C1 queued (A P12-57 phase 2); reader A3-r1 97.92 ×3 | evidence: mgr/out/P*-r3.json, r3/readers/A-r1.md | next: C P12-79, readers, A P12-57 phase 2
 
 ---
 

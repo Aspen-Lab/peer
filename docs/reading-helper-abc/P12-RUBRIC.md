@@ -187,3 +187,7 @@ C0 (no key): P1 100, P2 100, P3 100, P4 100, P5 100, P6 100 (every part right, n
 ## Scores of record — Theme A round 2 (§1h.454)
 
 A P12-71 on `d44aeabb`; readers A-r1 and A-r2 (median): P1 95.83, P2 95.83 (below 97.25); P3 readers 97.92 / 95.83 (third reader skipped, the round's outcome is set). Consecutive rounds at the target: 0. Theme B round 2: A P12-72 walking `ccfa098b`.
+
+## Scores of record — Theme C round 3 (§1h.458), head `25bca3b4`
+
+C0 (no key): P1–P6 each 100 (maps identical to round 2's). Consecutive rounds at the target (C0): 2. C1 (with the key): not yet measured — A P12-57 phase 2.
