@@ -739,7 +739,9 @@ export function ExplainCard({
       // P9-20 (A P9-W2's N4): the quotes in this 360 px window (and the phone's sheet) are set ragged-right, not justified: the body's
       // `reading-justify` opened word gaps 4.4 times a space at this measure. The override is scoped to the window; the paper's own
       // column keeps its justification (the design).
-      className={`${compact ? "absolute left-0 w-full p-2" : "fixed p-4"} z-[70] overflow-y-auto border border-border-strong bg-surface outline-none [&_.reading-justify]:text-left ${
+      // P12-81 (A P12-72's O2): the card is the one thing that scrolls, and a wheel past its end stays in it (`overscroll-contain`, as the
+      // sticky note's body, the notes window and the figure card's caption have), so it does not chain on to the page.
+      className={`${compact ? "absolute left-0 w-full p-2" : "fixed p-4"} z-[70] overflow-y-auto overscroll-contain border border-border-strong bg-surface outline-none [&_.reading-justify]:text-left ${
         dock ? compact ? "block" : "flex flex-col border-r-0" : `shadow-card-hover ${sheet ? "rounded-t-lg border-b-0" : "rounded-lg"}`
       }`}
     >
