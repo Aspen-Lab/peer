@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { rm, writeFile } from "node:fs/promises";
+import { readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { figurePdf } from "@/lib/figures/figure-pdf.test-helper";
@@ -260,6 +260,11 @@ describe("POST /api/admin/uploads/block", () => {
     /** A whole (tiny, invented) PDF of one page. */
     const pagePdf = (marker: string) => figurePdf([{ text: [[marker, 72, 100, 10]] }]);
     const folder = (hash16: string) => path.join(uploadDir, "figure-cuts", hash16);
+    /** What is kept beside an upload: how many pictures (`.cut`) and how many page files (`.pdf`). */
+    const kept = async (hash16: string) => {
+      const names = await readdir(folder(hash16)).catch(() => [] as string[]);
+      return { pictures: names.filter((name) => name.endsWith(".cut")).length, pageFiles: names.filter((name) => name.endsWith(".pdf")).length };
+    };
 
     async function keepUpload(hash16: string, ownerKey: string, documentKey: string): Promise<void> {
       await writeFile(pdfPath(hash16), Buffer.from("%PDF-1.4 fixture"), { mode: 0o600 });
@@ -295,6 +300,7 @@ describe("POST /api/admin/uploads/block", () => {
       await keepCuts(hash16, 10);
       await keepCuts(other, 20);
       // Before: the pictures and the page files are there to be removed.
+      expect(await kept(hash16)).toEqual({ pictures: 2, pageFiles: 2 });
       expect((await readUploadFigureCut(hash16, 1, "Figure 1"))?.png.byteLength).toBeGreaterThan(0);
       expect(await readUploadPageFile(hash16, 2)).not.toBeNull();
       expect(existsSync(folder(hash16))).toBe(true);
@@ -309,11 +315,13 @@ describe("POST /api/admin/uploads/block", () => {
         expect(await readUploadFigureCut(hash16, 2, "Figure 3")).toBeNull();
         expect(await readUploadPageFile(hash16, 1)).toBeNull();
         expect(await readUploadPageFile(hash16, 2)).toBeNull();
+        expect(await kept(hash16)).toEqual({ pictures: 0, pageFiles: 0 });
         expect(existsSync(folder(hash16))).toBe(false);
         expect(existsSync(pdfPath(hash16))).toBe(false);
         expect((await readUploadMeta(hash16))?.status).toBe("blocked");
 
         // Another upload's pictures and page files are not touched.
+        expect(await kept(other)).toEqual({ pictures: 2, pageFiles: 2 });
         expect((await readUploadFigureCut(other, 1, "Figure 1"))?.png[8]).toBe(20);
         expect((await readUploadFigureCut(other, 2, "Figure 3"))?.png[8]).toBe(21);
         expect(await readUploadPageFile(other, 1)).not.toBeNull();
