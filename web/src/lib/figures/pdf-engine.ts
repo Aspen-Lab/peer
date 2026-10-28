@@ -1396,7 +1396,6 @@ export async function measurePdfFigures(
   const release = await acquireSlot();
   let doc: Document | null = null;
   try {
-    if (performance.now() > deadline) return targets.map(() => undefined);
     try {
       doc = openPdf(mupdf, source);
       if (doc.needsPassword()) return unreadable;
