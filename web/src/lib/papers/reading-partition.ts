@@ -274,6 +274,27 @@ const SUMMARY_CUE =
  *  that points at a figure is a results paragraph, not the closing. */
 const FIGURE_REFERENCE = /\b(?:figs?|figures?|tables?)\b\.?\s*(?:S|ED)?\s?\d/i;
 
+/** C P12-76 (M3, c3_last): the shortest last paragraph, in words, that the outlook fallback may close a paper on. */
+const OUTLOOK_MIN_WORDS = 60;
+
+/**
+ * C P12-76 (M3, c3_last): the cues of an outlook paragraph, the one list of `closingPartition`'s fallback - a paragraph that
+ * looks ahead from the work: "holds (great) promise / potential", "paves the way", a horizon opened or widened, a scope to
+ * "broaden", "opens the door / new avenues", "we envisage". Each is a phrase and not the bare word, so the plain senses
+ * ("a soil horizon", "line broadening", "the peaks broaden with heat", "a holding potential") are not cues.
+ */
+const OUTLOOK_CUES: readonly RegExp[] = [
+  /\bholds?\s+(?:(?:great|considerable|significant|substantial|real|much|enormous|strong)\s+)?(?:promise|potential)\b/i,
+  /\bpav(?:es?|ed|ing)\s+the\s+way\b/i,
+  /\b(?:new|wider|broader|further|distant)\s+horizons?\b|\bon the horizon\b|\b(?:expand|extend|widen|open|push)(?:s|ed|ing)?\s+(?:up\s+)?(?:the|our|its|their)\s+horizons?\b/i,
+  /\bbroaden(?:s|ing)?\s+(?:the|its|our|their|this|these)\b|\b(?:to|could|can|will|may|might|would)\s+broaden\b(?!\s*[.,;:)])(?!\s+(?:with|at|as|upon|under|when|by|in|from|to|and|or|slightly|further|significantly|considerably|rapidly|again)\b)/i,
+  /\bopen(?:s|ing)?\s+(?:up\s+)?(?:the\s+(?:way|door)|new\s+(?:avenues|possibilities|opportunities|routes|directions))\b/i,
+  /\bwe envisage\b/i,
+];
+
+/** Whether a paragraph holds an outlook cue (`OUTLOOK_CUES`). */
+const looksAhead = (paragraph: string): boolean => OUTLOOK_CUES.some((cue) => cue.test(paragraph));
+
 /** The distinct words of at least `CLOSING.longWord` letters, lower-cased. */
 function longWordsOf(text: string): Set<string> {
   return new Set(text.toLowerCase().match(new RegExp(`\\p{L}{${CLOSING.longWord},}`, "gu")) ?? []);
@@ -317,7 +338,9 @@ function echoOf(abstract: string | null | undefined, map: ReadingMap, body: Body
  * conclusion, at the first of its last `CLOSING.lastParagraphs` paragraphs that has (a) a summary cue, (b) no figure
  * or table reference and (c) at least `CLOSING.abstractShare` of its long words among the echo's long words — or
  * null. The echo is the abstract, and, where the paper prints none, the last paragraph of its setup part (`echoOf`).
- * The row is divided in two, the paragraphs before the closing and the closing to the row's end; the first
+ * Failing that (C P12-76, M3): the row's last paragraph is the closing when it has at least `OUTLOOK_MIN_WORDS` words and holds
+ * an outlook cue (`OUTLOOK_CUES`), whatever it cites and however little it echoes - the unheaded closing of a paper whose last
+ * results paragraph looks ahead. The row is divided in two, the paragraphs before the closing and the closing to the row's end; the first
  * keeps the paper's own heading and role, the second is a row of the role interpretation under the role's own label
  * (`partitionedMap` draws both). The body is not touched.
  *
@@ -359,6 +382,22 @@ export function closingPartition(
         ],
       };
     }
+  }
+  // C P12-76 (M3, c3_last; ruled a judgement call, §1h.437 (a)): no paragraph of the window passed the three tests. A paper that
+  // names no discussion or conclusion may still end its results on a paragraph that looks ahead (a Nature-style article's last
+  // main-text paragraph), which cites a figure and restates little of the announcement. Its last paragraph is the closing when it
+  // has at least `OUTLOOK_MIN_WORDS` words and holds an outlook cue, whatever it cites and however little it echoes. Tier 0 only:
+  // the structure review (Tier 1) is the better owner of this call and can replace it.
+  const last = text.length - 1;
+  if (last >= 1 && text[last].trim().split(/\s+/).length >= OUTLOOK_MIN_WORDS && looksAhead(text[last])) {
+    return {
+      sectionId: row.id,
+      closing: true,
+      parts: [
+        { role: "results", fromParagraph: 0, toParagraph: last - 1 },
+        { role: "conclusion", fromParagraph: last, toParagraph: last },
+      ],
+    };
   }
   return null;
 }

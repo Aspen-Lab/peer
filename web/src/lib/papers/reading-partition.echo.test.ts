@@ -201,3 +201,138 @@ describe("closingPartition - a paper with no abstract takes the echo from the la
     expect(splitOf(figure)).toBeNull();
   });
 });
+
+// C P12-76 (M3, c3_last; B P12-73; ruled a judgement call by §1h.437 (a)): a Tier-0 fallback after the closing split's loop. A paper that names no
+// discussion or conclusion and whose last results paragraph is a long one holding an outlook cue ("holds promise", "paves the way", ...) closes on
+// that paragraph, whatever its figure references and its echo. The loop's rule is tried first and is unchanged. Every text is invented.
+
+/** Words of the filler, cycled, to make a paragraph of an exact length. */
+const FILLER_WORDS = ["the", "tide", "covers", "most", "of", "the", "low", "shelf", "when", "storms", "pass"];
+
+/** A paragraph of exactly `n` words: `lead` first, the filler after it (no cue of the summary rule, no long word of the announcement). */
+function ofWords(n: number, lead = "Beyond these shores the same approach holds promise for coasts that are harder to reach (Fig. 5)."): string {
+  const head = lead.split(/\s+/);
+  return [...head, ...Array.from({ length: Math.max(0, n - head.length) }, (_, k) => FILLER_WORDS[k % FILLER_WORDS.length])].join(" ");
+}
+const wordsIn = (text: string): number => text.split(/\s+/).length;
+
+/** A last results paragraph of 90 words: an outlook cue, a figure reference, and none of the announcement's long words (a low echo). */
+const LONG_OUTLOOK = ofWords(90);
+
+/** The Nature-style paper whose last part ends on `closing`. */
+const endingOn = (closing: string, before: readonly string[] = plain(3)): ExtractedDocument => nature(undefined, [...before, closing]);
+
+/** The split the fallback makes: the last paragraph (index `at`) alone is the closing. */
+const LAST = (sectionId: string, at: number): GuidePartition => ({
+  sectionId,
+  closing: true,
+  parts: [
+    { role: "results", fromParagraph: 0, toParagraph: at - 1 },
+    { role: "conclusion", fromParagraph: at, toParagraph: at },
+  ],
+});
+
+describe("closingPartition - the last paragraph closes a paper that names no conclusion when it is long and looks ahead (C P12-76, M3, c3_last)", () => {
+  it("(b) closes on a 90-word outlook paragraph that cites a figure and echoes the announcement little", () => {
+    const doc = endingOn(LONG_OUTLOOK);
+    const storms = buildReadingMap(doc).sections.find((row) => row.heading === STORMS)!;
+
+    expect(wordsIn(LONG_OUTLOOK)).toBe(90);
+    expect(splitOf(doc)).toEqual(LAST(storms.id, 3));
+    // The same with an abstract to echo (about something else): the echo is no condition of the fallback.
+    expect(splitOf(doc, ELSEWHERE)).toEqual(LAST(storms.id, 3));
+    // The loop would not have closed it: a figure is cited, and the share of the announcement is nil.
+    expect(splitOf(endingOn(LONG_OUTLOOK.replace("holds promise", "stays open")))).toBeNull();
+  });
+
+  it("(c) leaves a short outlook paragraph, a long paragraph without an outlook cue, and a paper that names a conclusion whole", () => {
+    expect(splitOf(endingOn(ofWords(40)))).toBeNull();
+    expect(splitOf(endingOn(ofWords(90, "Beyond these shores the same count was repeated at every pool in the survey (Fig. 5).")))).toBeNull();
+
+    const named = shore([
+      ["Body", [...plain(2), ANNOUNCE]],
+      [SNAILS, plain(3)],
+      [STORMS, [...plain(3), LONG_OUTLOOK]],
+      ["Conclusions", plain(2)],
+      ["Methods", plain(2)],
+    ]);
+    const discussed = shore([
+      ["Body", [...plain(2), ANNOUNCE]],
+      [STORMS, [...plain(3), LONG_OUTLOOK]],
+      ["Discussion", plain(2)],
+      ["Methods", plain(2)],
+    ]);
+    expect(splitOf(named)).toBeNull();
+    expect(splitOf(discussed)).toBeNull();
+  });
+
+  it("holds the paragraph to 60 words: sixty is long enough, fifty-nine is not", () => {
+    expect(splitOf(endingOn(ofWords(60)))?.parts[1]).toEqual({ role: "conclusion", fromParagraph: 3, toParagraph: 3 });
+    expect(splitOf(endingOn(ofWords(59)))).toBeNull();
+  });
+
+  it("looks at the LAST paragraph of the row only: a long outlook paragraph earlier in the row is not the closing", () => {
+    expect(splitOf(endingOn(plain(1)[0], [...plain(2), LONG_OUTLOOK]))).toBeNull();
+  });
+
+  it("tries the loop's rule first: a paragraph that passes it closes the paper from there, to the row's end", () => {
+    const doc = nature(undefined, [...plain(3), SUMMARY, LONG_OUTLOOK]);
+    const storms = buildReadingMap(doc).sections.find((row) => row.heading === STORMS)!;
+
+    expect(splitOf(doc)).toEqual({ ...SPLIT(storms.id), parts: [SPLIT(storms.id).parts[0], { role: "conclusion", fromParagraph: 3, toParagraph: 4 }] });
+  });
+
+  it("never makes the whole row the closing: a row of one paragraph is left whole", () => {
+    const single = shore([
+      ["Body", [...plain(2), ANNOUNCE]],
+      [STORMS, [LONG_OUTLOOK]],
+      ["Methods", plain(2)],
+    ]);
+
+    expect(splitOf(single)).toBeNull();
+  });
+
+  it("is not tried where the loop's own precondition fails: a paper with no abstract and no setup part has no echo, and no split", () => {
+    const noEcho = shore([["Results", [...plain(3), LONG_OUTLOOK]], ["Methods", plain(2)]]);
+
+    expect(splitOf(noEcho)).toBeNull();
+    // The same paper with an abstract to echo (about something else) is a paper the fallback closes.
+    expect(splitOf(noEcho, ELSEWHERE)?.parts[1]).toEqual({ role: "conclusion", fromParagraph: 3, toParagraph: 3 });
+  });
+
+  it.each([
+    ["holds promise", "Beyond these shores the same approach holds promise for other coasts."],
+    ["holds great potential", "Beyond these shores the same approach holds great potential for other coasts."],
+    ["hold considerable promise", "Beyond these shores such counts hold considerable promise for other coasts."],
+    ["paves the way", "Beyond these shores the same approach paves the way for a shared record of the coast."],
+    ["pave the way", "Beyond these shores such counts pave the way for a shared record of the coast."],
+    ["paved the way", "Beyond these shores the same approach paved the way for a shared record of the coast."],
+    ["new horizons", "Beyond these shores the same approach opens new horizons for the study of the coast."],
+    ["expands the horizon", "Beyond these shores the same approach expands the horizon of what a small crew can count."],
+    ["on the horizon", "Beyond these shores a shared record of the coast is on the horizon for the next decade."],
+    ["broaden the", "Beyond these shores drone images could broaden the number of sites a small crew can visit."],
+    ["to broaden", "Beyond these shores the aim is to broaden coverage with images taken from the air."],
+    ["broadening the", "Beyond these shores the images allow broadening the number of sites a small crew can visit."],
+    ["opens the door", "Beyond these shores the same approach opens the door to a shared record of the coast."],
+    ["new avenues", "Beyond these shores the same approach opens up new avenues for a shared record of the coast."],
+    ["we envisage", "Beyond these shores we envisage a shared record of the coast kept by many hands."],
+    ["in capitals", "Beyond these shores the same approach HOLDS PROMISE for other coasts."],
+  ])("reads %s as an outlook cue", (_name, lead) => {
+    expect(splitOf(endingOn(ofWords(70, lead)))?.parts[1]).toEqual({ role: "conclusion", fromParagraph: 3, toParagraph: 3 });
+  });
+
+  it.each([
+    ["a soil horizon", "The cores showed a clear soil horizon at forty centimetres, and a second one below it."],
+    ["a time horizon", "The model was run over a time horizon of ten years and the counts were compared."],
+    ["a broadening peak", "The Raman line broadening was larger in the warm pools, as the counts showed."],
+    ["a peak that broadens", "The Raman peaks broaden with temperature in the warm pools, as the counts showed."],
+    ["a holding potential", "The holding potential of the cells was kept at a fixed level while the pools were counted."],
+    ["the potential of a cell", "The cell holds the potential at zero while the counts are taken in the pools."],
+    ["a width that broadened", "The Raman peaks broadened in the warm pools, as the counts showed."],
+    ["a peak that will broaden", "The Raman peaks will broaden with heat in the warm pools, as the counts showed."],
+    ["a peak that may broaden, then stops", "The Raman peaks may broaden slightly in the warm pools, as the counts showed."],
+    ["a peak that tends to broaden", "The Raman peaks tend to broaden, as the counts showed in the warm pools."],
+  ])("does not read %s as an outlook cue", (_name, lead) => {
+    expect(splitOf(endingOn(ofWords(70, lead)))).toBeNull();
+  });
+});
