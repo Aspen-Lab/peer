@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { applyLigatures, learnLigatures, restoreLigatures } from "./ligatures";
+import { LIGATURE_CANDIDATES, LIGATURE_WORDS, applyLigatures, learnLigatures, restoreLigatures } from "./ligatures";
 import { prose, type Run } from "./minimal-pdf.test-helper";
 import { extractPdfTextFromBytes, readPages } from "./pdf-text";
 
@@ -50,8 +50,8 @@ describe("learnLigatures — rule 1: the code's ligature is learned from the pap
 
   it("leaves a code alone when only one word confirms it", () => {
     const A = "\uE105";
-    // "figure" is printed plainly; "fish" is not, so the code has one confirming word.
-    const learned = learnLigatures([`The ${A}gure and the ${A}sh.`, "The figure is clear."]);
+    // "figure" is printed plainly; "firuk" is no word of the paper's or the list's, so the code has one confirming word.
+    const learned = learnLigatures([`The ${A}gure and the ${A}ruk.`, "The figure is clear."]);
     expect(learned.has(A)).toBe(false);
   });
 
@@ -102,8 +102,9 @@ describe("learnLigatures — rule 1: the code's ligature is learned from the pap
   it("does not take a word that still carries a private-use code for a word the paper prints plainly", () => {
     const A = "\uE105";
     const B = "\uE106";
-    // "effect" and "different" are printed, but only as broken as the other code spells them.
-    const learned = learnLigatures([`e${A}ect di${A}erent`, `e${B}ect di${B}erent`]);
+    // "zoffar" and "muffel" are printed, but only as broken as the other code spells them (and they are no words of
+    // the list's, which would settle the common ones).
+    const learned = learnLigatures([`zo${A}ar mu${A}el`, `zo${B}ar mu${B}el`]);
     expect(learned.size).toBe(0);
   });
 
@@ -168,6 +169,117 @@ describe("learnLigatures — rule 1: the code's ligature is learned from the pap
     const two = learnLigatures(PAPER);
     expect(one).not.toBe(two);
     expect([...one]).toEqual([...two]);
+  });
+});
+
+// ── §1h.444: the other f-ligatures, and a short list of common words as a second witness ────────────────────
+
+describe("learnLigatures — the other f-ligatures a font may set (P12-67, §1h.444)", () => {
+  it("has ft, fb, fh, fj, fk, fft, ffb and ffh as candidates, after the five it always had", () => {
+    expect([...LIGATURE_CANDIDATES]).toEqual(["fi", "fl", "ff", "ffi", "ffl", "ft", "fb", "fh", "fj", "fk", "fft", "ffb", "ffh"]);
+  });
+
+  it.each(["fi", "fl", "ff", "ffi", "ffl", "ft", "fb", "fh", "fj", "fk", "fft", "ffb", "ffh"])("learns %s from the paper's own words", (ligature) => {
+    const A = "\uE105";
+    // words no list knows, so that only the paper's own can settle it
+    const words = [`zo${ligature}ar`, `mu${ligature}el`];
+    for (const word of words) expect(LIGATURE_WORDS).not.toContain(word);
+    const learned = learnLigatures([words.map((word) => word.replace(ligature, A)).join(" "), words.join(" ")]);
+    expect(learned.get(A)).toBe(ligature);
+  });
+
+  it("settles ft on the paper's own words: real words the list does not know", () => {
+    const A = "\uE09D";
+    const broken = `The lo${A}y tower, the he${A}y stone and the cra${A}y fox.`;
+    // lofty, hefty, crafty: no word of the list, so with nothing printed plainly the code stays
+    expect(learnLigatures([broken]).has(A)).toBe(false);
+    expect(learnLigatures([broken, "A lofty tower; a hefty stone; a crafty fox."]).get(A)).toBe("ft");
+  });
+});
+
+describe("learnLigatures — the second witness: a short list of common words (P12-67, §1h.444)", () => {
+  const A = "\uE104";
+  const B = "\uE09D";
+
+  it("is a few hundred lower-case words, a word once, each holding a letter pair of a candidate", () => {
+    expect(LIGATURE_WORDS.length).toBeGreaterThanOrEqual(200);
+    expect(LIGATURE_WORDS.length).toBeLessThanOrEqual(800);
+    expect(new Set(LIGATURE_WORDS).size).toBe(LIGATURE_WORDS.length);
+    for (const word of LIGATURE_WORDS) {
+      expect(word).toMatch(/^[a-z]+$/);
+      expect(LIGATURE_CANDIDATES.some((candidate) => word.includes(candidate))).toBe(true);
+    }
+    for (const word of [
+      "influence", "fluctuation", "conflict", "reflect", "flow", "flux", "fluorescence", "flat", "flexible", "field", "figure",
+      "first", "final", "specific", "significant", "efficient", "effect", "different", "after", "software", "shift", "left",
+      "soft", "lift", "craft", "draft",
+    ]) {
+      expect(LIGATURE_WORDS).toContain(word);
+    }
+    // the five every font has have a good many words; each of the others, but fk, at least one
+    for (const candidate of ["fi", "fl", "ff", "ffi", "ffl", "ft"]) {
+      expect(LIGATURE_WORDS.filter((word) => word.includes(candidate)).length).toBeGreaterThanOrEqual(15);
+    }
+    for (const candidate of LIGATURE_CANDIDATES.filter((c) => c !== "fk")) {
+      expect(LIGATURE_WORDS.some((word) => word.includes(candidate))).toBe(true);
+    }
+  });
+
+  it("settles a code whose words appear only in ligature form: fl and ft in one paper, nothing printed plainly", () => {
+    const learned = learnLigatures([
+      `The in${A}uence of the tide, the con${A}icts at the pools, the ${A}uctuations of the level and the re${A}ected light.`,
+      `It was recorded a${B}er dusk with the so${B}ware, shi${B}ing the li${B}ed samples.`,
+    ]);
+    expect(learned.get(A)).toBe("fl");
+    expect(learned.get(B)).toBe("ft");
+    expect(learned.size).toBe(2);
+  });
+
+  it("reads the usual endings of a word of the list, and only those", () => {
+    // conflicts, reflected, influencing (the e back), fluctuations, shifting, lifted, firstly, stiffer
+    expect(learnLigatures([`con${A}icts re${A}ected`]).get(A)).toBe("fl");
+    expect(learnLigatures([`in${A}uencing ${A}uctuations`]).get(A)).toBe("fl");
+    expect(learnLigatures([`shi${B}ing li${B}ed`]).get(B)).toBe("ft");
+    expect(learnLigatures([`\uE103rstly sti\uE09Der`]).get("\uE103")).toBeUndefined();
+    expect(learnLigatures([`\uE103rstly \uE103nally`]).get("\uE103")).toBe("fi");
+    // an ending that makes no word of it settles nothing
+    expect(learnLigatures([`in${A}uencxx con${A}ictzz`]).has(A)).toBe(false);
+  });
+
+  it("leaves a code alone when its words are in neither the paper nor the list", () => {
+    expect(learnLigatures([`The ${A}rzum, the ${A}qvex and a ${A}zzop.`, "The first figure and the flow."]).has(A)).toBe(false);
+  });
+
+  it("wants two different words of the list, as the paper does", () => {
+    expect(learnLigatures([`in${A}uence in${A}uence in${A}uence ${A}ruk`]).has(A)).toBe(false);
+    expect(learnLigatures([`in${A}uence con${A}ict ${A}ruk`]).get(A)).toBe("fl");
+  });
+
+  it("wants twice the runner-up among the list's words: two to one wins, two to two does not", () => {
+    // fl: influence, conflict. fi: finite.
+    expect(learnLigatures([`in${A}uence con${A}ict ${A}nite`]).get(A)).toBe("fl");
+    // fi: finite, first
+    expect(learnLigatures([`in${A}uence con${A}ict ${A}nite ${A}rst`]).has(A)).toBe(false);
+  });
+
+  it("never overrides a confident vote of the paper: the paper's fi stands against four words of the list for fl", () => {
+    const text = `${A}rst ${A}gure in${A}uence con${A}ict ${A}uctuation re${A}ect`;
+    // the paper prints "first" and "figure" plainly: two to nothing for fi, which the list's four fl words do not overrule
+    expect(learnLigatures([text, "The first figure."]).get(A)).toBe("fi");
+    // without the paper's words, the list decides: four fl words, two fi
+    expect(learnLigatures([text]).get(A)).toBe("fl");
+  });
+
+  it("gives way to the list only when the paper's vote is not confident: one plain word is not a vote", () => {
+    const text = `${A}gure in${A}uence con${A}ict ${A}uctuation`;
+    // the paper prints "figure": one word for fi, not confident; the list adds influence, conflict and fluctuation for fl
+    expect(learnLigatures([text, "The figure."]).get(A)).toBe("fl");
+  });
+
+  it("counts the paper's plain words with the list's: a word only the paper knows helps the list's", () => {
+    // "lofty" is only the paper's, "after" only the list's: two words for ft
+    expect(learnLigatures([`lo${B}y a${B}er`, "A lofty tower."]).get(B)).toBe("ft");
+    expect(learnLigatures([`lo${B}y a${B}er`]).has(B)).toBe(false);
   });
 });
 
@@ -332,18 +444,18 @@ describe("restoreLigatures — rule 2: the title, the headings, the bodies and t
   });
 
   it("a code with one confirming word, or a tie, stays unchanged while the others are restored", () => {
-    const ONE = "\uE105"; // "fish" is not printed plainly: one confirming word
+    const ONE = "\uE105"; // "firuk" is no word: one confirming word
     const TIE = "\uE106"; // fi: fine, five. fl: flat, flag
     const out = restoreLigatures({
       sections: [
         {
           heading: "A",
-          text: `The ${FI}rst ${FI}gure. The ${ONE}gure and the ${ONE}sh. ${TIE}ne ${TIE}ve ${TIE}at ${TIE}ag.`,
+          text: `The ${FI}rst ${FI}gure. The ${ONE}gure and the ${ONE}ruk. ${TIE}ne ${TIE}ve ${TIE}at ${TIE}ag.`,
         },
         { heading: "B", text: "first figure; figure; fine five flat flag" },
       ],
     });
-    expect(out.sections[0]?.text).toBe(`The first figure. The ${ONE}gure and the ${ONE}sh. ${TIE}ne ${TIE}ve ${TIE}at ${TIE}ag.`);
+    expect(out.sections[0]?.text).toBe(`The first figure. The ${ONE}gure and the ${ONE}ruk. ${TIE}ne ${TIE}ve ${TIE}at ${TIE}ag.`);
   });
 
   it("a paper with no private-use code comes back as the same object, byte for byte", () => {
@@ -659,8 +771,47 @@ describe("extractPdfTextFromBytes — the ligatures are repaired before the outl
     expect(puaIn(JSON.stringify(result.doc))).toBe(0);
   });
 
+  it("reads a paper whose ligated words are never printed plainly: the list settles fl and ft (§1h.444)", async () => {
+    // The font ligates every fl and ft word of the paper, so its own words cannot say what the codes are. The fl code
+    // is U+E104 and the ft code U+E09D; the words are influence, conflicts, fluctuations, reflected, after, software,
+    // shifting, lifted: all common, none printed plainly.
+    const bytes = ligaturePdf([
+      [
+        ["Notes on Tides at Invented Shorelines", 72, 80, 18],
+        ["Abstract", 72, 140, 14],
+        ...prose([`The in${FL}uence of the tide on the beach was measured.`], 160),
+        ["1 Introduction", 72, 210, 11],
+        ...prose(
+          [
+            `The con${FL}icts at the pools led to ${FL}uctuations.`,
+            `The re${FL}ected light was recorded a${FF}er dusk.`,
+            `The so${FF}ware, shi${FF}ing the li${FF}ed samples, ran.`,
+          ],
+          230,
+        ),
+      ],
+      [["2 Methods", 72, 80, 11], ...prose(["We counted the stones at ten sites on every visit to the shore."], 100)],
+    ]);
+    const raw = (await readPages(bytes)).flatMap((page) => page.items.map((item) => item.str)).join("");
+    expect(puaIn(raw)).toBe(8);
+
+    const result = await extractPdfTextFromBytes(bytes);
+
+    expect(result.ok).toBe(true);
+    const text = result.doc?.sections.map((section) => section.text).join("\n") ?? "";
+    expect(text).toContain("The influence of the tide on the beach was measured.");
+    expect(text).toContain("The conflicts at the pools led to fluctuations.");
+    expect(text).toContain("The reflected light was recorded after dusk.");
+    expect(text).toContain("The software, shifting the lifted samples, ran.");
+    expect(puaIn(JSON.stringify(result.doc))).toBe(0);
+    expect(puaIn(result.page1Text ?? "")).toBe(0);
+    expect(result.page1Text).toContain("The influence of the tide on the beach was measured.");
+  });
+
   it("leaves a code that has one confirming word where it is: its heading is not a part, page 1 keeps the code", async () => {
-    // "flow" is the only word with the fl code that the paper also prints plainly (the title has it too).
+    // "flow" is the only word with the fl code that the paper (or the list) vouches for, and "conflict", in the heading,
+    // is the only one with its own code: one confirming word each.
+    const FX = "\uE105";
     const only: Run[] = prose(["The first survey counted the stones; the figure of ten sites was kept for later."], 100);
     const bytes = ligaturePdf([
       [
@@ -670,7 +821,9 @@ describe("extractPdfTextFromBytes — the ligatures are repaired before the outl
         ["1 Introduction", 72, 210, 11],
         ...prose([`Every ${FL}ict was settled without a word, and the ${FL}ow carried on regardless.`], 230),
       ],
-      ...pages(only).slice(1),
+      ...pages(only)
+        .slice(1)
+        .map((runs) => runs.map(([text, ...rest]): Run => [text.split(FL).join(FX), ...rest])),
     ]);
     const result = await extractPdfTextFromBytes(bytes);
 
@@ -794,6 +947,15 @@ describe("ligatures — rule 3: linear in the size of the text (P12-67)", () => 
     expect(run.ms).toBeLessThan(BUDGET_MS);
     expect(run.value.learned.get(FI)).toBe("fi");
     expect(run.value.out).toBe(plain.join(" "));
+  });
+
+  it("asks the list about a hundred thousand different broken words that the paper cannot confirm", { timeout: 60_000 }, () => {
+    // §1h.444: no plain word confirms any of them, so every word is tried against the list, with each ending
+    const letters = (n: number) => [...n.toString(26)].map((digit) => String.fromCharCode(97 + parseInt(digit, 26))).join("");
+    const broken = Array.from({ length: 100_000 }, (_, i) => `${FI}${letters(i)}q`).join(" ");
+    const run = timed(() => learnLigatures([broken, "Nothing here is printed plainly."]));
+    expect(run.ms).toBeLessThan(BUDGET_MS);
+    expect(run.value.size).toBe(0);
   });
 
   it("reads one word of a million characters, with one code in it, and with every code of the area in it", { timeout: 60_000 }, () => {
