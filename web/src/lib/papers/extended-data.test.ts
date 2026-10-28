@@ -150,7 +150,11 @@ describe("a line that opens with a figure label after a line that ends mid-sente
     expect(refused(line(open, { y: 512, size: 14 })), "a heading's size").toMatchObject({ label: "Fig 4" });
     expect(refused(line(open, { y: 512, font: "bold" })), "a heading's face").toMatchObject({ label: "Fig 4" });
     expect(captionAt([caption], 0, 12, body, new Set()), "nothing above").toMatchObject({ label: "Fig 4" });
-    expect(captionAt([line(open, { y: 512 }), caption], 1, 12, body, new Set([`${Math.round(512 / 6)}:${open.toLowerCase()}`])), "furniture above").toMatchObject({ label: "Fig 4" });
+    // P12-70, RE-AIMED (C P12-49, O4): a running head is known by its normalised words, whatever its band or height; the
+    // test named it by the old key ("<height / 6>:<words>"), which `isFurniture` no longer reads. A plain Set knows the
+    // words alone (`headKey`: digits to #, case folded, spaces collapsed), as `isFurniture` documents.
+    expect(captionAt([line(open, { y: 512 }), caption], 1, 12, body, new Set([open.toLowerCase()])), "furniture above").toMatchObject({ label: "Fig 4" });
+    expect(captionAt([line(open, { y: 512 }), caption], 1, 12, body, new Set(["another running head"])), "other furniture is not this line's").toBeNull();
     expect(captionAt([line(open, { y: 512 }), caption], 1, 0, body, new Set()), "no pitch to measure: a line and a half of the body size").toBeNull();
   });
 
