@@ -261,7 +261,7 @@ describe("/privacy — Who else sees a request names the gist pass (P3-05)", () 
 // the text for up to an hour (named in the sentence), and a saved upload is a
 // saved paper like any other, which the page already lists under "papers you save".
 const UPLOAD_TEXT =
-  "If you upload a private PDF, Peer's server keeps the PDF, a record of it (its file name, title and abstract, and when it expires) and the text Peer read out of it, in its own file storage against your account, for 30 days, after which a daily sweep removes them, or until you delete the upload. While you read it, the text also sits in the server's memory for up to an hour.";
+  "If you upload a private PDF, Peer's server keeps the PDF, a record of it (its file name, title and abstract, and when it expires) and the text Peer read out of it, with the pictures cut from its figures and a one-page file of each page they were cut from, in its own file storage against your account, for 30 days, after which a daily sweep removes them, or until you delete the upload or Peer takes it down. While you read it, the text also sits in the server's memory for up to an hour.";
 
 // §1h.12 (b), §1h.13 (c) (P4-02b, A's P4-02 §5): a saved upload is a saved paper, and its record goes to /api/saved.
 const UPLOAD_SAVED_TEXT =
@@ -375,6 +375,60 @@ describe("/privacy — an uploaded PDF's storage on Peer's server (P4-00c N7)", 
     expect(deleteBody).toContain("backend.remove([pdfName(meta.hash16)])");
     expect(deleteBody).toContain("await removeUploadDoc(meta.hash16)");
     expect(read("src/app/api/papers/upload/[id]/route.ts")).toContain("await deleteUpload(meta);");
+  });
+
+  // P12-69 (§1h.441; C P12-61): the clause on the pictures cut from the figures and the one-page files. Each part
+  // of it is pinned to the line that makes it true: what is kept and where, whose, and the three ways it goes.
+  it("keeps the pictures cut from its figures and a one-page file of each page: one folder per upload, in the storage that holds the PDF", () => {
+    const store = read("src/lib/papers/upload-store.ts");
+    expect(store).toContain('const FIGURE_CUT_DIR = "figure-cuts";');
+    expect(store).toContain("return `${FIGURE_CUT_DIR}/${hash16}`;");
+    // A picture is `p<page>-<label>-r<revision>.cut`; a page file is `p<page>.pdf`.
+    expect(store).toContain("-r${revision}.cut`;");
+    expect(store).toContain("`p${page}.pdf`");
+    // Both are written whole through the one backend that holds the PDF, the record and the text.
+    const start = store.indexOf("async function writeKeptObject");
+    const writeBody = store.slice(start, store.indexOf("\n}\n", start));
+    expect(writeBody).toContain("const backend = uploadBackend();");
+    expect(store).toContain("await writeKeptObject(`${figureCutFolder(hash16)}/${name}`, Buffer.concat(");
+    expect(store).toContain('Buffer.from(bytes), "application/pdf");');
+  });
+
+  it("files them against the reader's account: the figure route reads and writes them only after the owner check", () => {
+    const route = read("src/app/api/papers/[id]/figure-image/route.ts");
+    const owner = route.indexOf("await ownedUpload(hash16)");
+    expect(owner).toBeGreaterThan(-1);
+    for (const call of ["await readUploadFigureCut(hash16, page, label)", "await readUploadPageFile(hash16, page)", "await writeUploadPageFile(hash16, page, file)", "await writeUploadFigureCut(keepFor, page, label,"]) {
+      expect(route.indexOf(call), call).toBeGreaterThan(owner);
+    }
+  });
+
+  it("removes them when the reader deletes the upload, and at the end of its 30 days: deleteUpload removes the folder, and the daily sweep calls it", () => {
+    const store = read("src/lib/papers/upload-store.ts");
+    const start = store.indexOf("export async function deleteUpload");
+    const deleteBody = store.slice(start, store.indexOf("\n}\n", start));
+    expect(deleteBody).toContain("await removeUploadFigureCuts(meta.hash16)");
+    const purgeBody = store.slice(store.indexOf("export async function purgeExpiredUploads"), store.indexOf("async function purgeAbandonedStagedUploads"));
+    expect(purgeBody).toContain("Date.parse(meta.expiresAt) <= Date.now()) await deleteUpload(meta);");
+    expect(purgeBody).toContain("await sweepFigureCuts();");
+    // The sweep also takes the folder of an upload that is gone, deleted or taken down.
+    const sweepStart = store.indexOf("async function sweepFigureCuts");
+    const sweepBody = store.slice(sweepStart, store.indexOf("\n}\n", sweepStart));
+    expect(sweepBody).toContain('owner.status === "blocked" || owner.status === "deleted"');
+    expect(sweepBody).toContain("await removeUploadFigureCuts(hash16);");
+  });
+
+  it("removes them when Peer takes the upload down: the operator's route, behind the admin token, removes the folder with the PDF and the text, before it writes the blocked record", () => {
+    const route = read("src/app/api/admin/uploads/block/route.ts");
+    expect(route).toContain("const token = process.env.ADMIN_TOKEN;");
+    const pdf = route.indexOf("await removeUploadPdf(hash16);");
+    const doc = route.indexOf("await removeUploadDoc(hash16);");
+    const cuts = route.indexOf("await removeUploadFigureCuts(hash16)");
+    const blocked = route.indexOf("await writeUploadMeta(hash16, minimal);");
+    expect(pdf).toBeGreaterThan(-1);
+    expect(doc).toBeGreaterThan(pdf);
+    expect(cuts).toBeGreaterThan(doc);
+    expect(blocked).toBeGreaterThan(cuts);
   });
 
   it("ties the hour in memory to the code: the extracted text is held for an hour", () => {

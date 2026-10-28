@@ -34,8 +34,10 @@ const SECTIONS = [
       // record's fields, `deleteUpload`, the purge), `upload-access.ts` (the owner key is a
       // digest of the account) and the upload route's 30 days, which the consent dialog
       // also tells the reader. The test pins each clause. No "nowhere else": the server's
-      // memory holds parts of the text for an hour, which the sentence says.
-      "If you upload a private PDF, Peer's server keeps the PDF, a record of it (its file name, title and abstract, and when it expires) and the text Peer read out of it, in its own file storage against your account, for 30 days, after which a daily sweep removes them, or until you delete the upload. While you read it, the text also sits in the server's memory for up to an hour.",
+      // memory holds parts of the text for an hour, which the sentence says. P12-69: and the
+      // pictures cut from the figures and the page files kept beside the upload (P12-61), which
+      // go with it — at 30 days by the sweep, at a delete, and at an operator's takedown.
+      "If you upload a private PDF, Peer's server keeps the PDF, a record of it (its file name, title and abstract, and when it expires) and the text Peer read out of it, with the pictures cut from its figures and a one-page file of each page they were cut from, in its own file storage against your account, for 30 days, after which a daily sweep removes them, or until you delete the upload or Peer takes it down. While you read it, the text also sits in the server's memory for up to an hour.",
       "When you are signed in and save an uploaded paper, its record — its title, an excerpt of its abstract up to 1,200 characters, its keywords, its DOI, its page count and the link to its file — goes to Peer's server with your other saved papers, against your account; the paper's body text and any plain rewrite do not.",
     ],
   },
