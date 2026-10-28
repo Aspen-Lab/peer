@@ -17,6 +17,11 @@
 //   passes through it and ends at the line's end (`EDGE_TAB_PASSES_DRAG`).
 //   P12-77 (ruling §1h.455, item 2): under md there is no margin at the right — the cards stand in a band across the foot of the window — so
 //   there the tab stays on the window's right edge whatever a card does, and ends 8 px above the band's top while one stands (`EDGE_TAB_BAND`).
+//   P12-79 (E3; A P12-78 §6): the band is not a phone's alone. The page registers it at every width narrower than the panes need
+//   (`railMinimumWidth(scale)`: 852 px at step 1.00, 900 at 1.10, 1,138 at 1.60), so a standing card is in the bottom band from 768 up to that
+//   width and at the larger reading steps beyond it, and the tab was still placed "beside" it, at the band's left edge, x -7 to 8 (8 px of its
+//   label showing). So the rule is the band's, not the width's: while a card stands in a registered bottom band, at any width, the tab keeps the
+//   right edge and ends 8 px above the band's top. Beside a card in a side margin (the rail) it is placed as it was.
 //
 //   `row` — on a phone, a full-width row in the command stack (`DecisionBlock`'s `notesAction`), set like the other commands.
 //   P12-77 (rule 3, E2; reader A-r1 in A P12-71's pack): the row stays, but on a phone it stands near the top of the page, so the reader
@@ -144,14 +149,15 @@ const EDGE_TAB_PLACE = {
 const EDGE_TAB_FOOT = "[--tab-foot:calc(56px+env(safe-area-inset-bottom,0px))] md:[--tab-foot:var(--tab-legend,var(--legend-h))]";
 
 /**
- * P12-77 (ruling §1h.455, item 2): the foot of the tab on a phone is also the top of the card band, while a card stands. Under `md` there is no
- * margin at the right: the cards stand in a band across the foot of the window (`bottomMarginRectOf`, `margin.ts`), so the tab stays on the
- * window's right edge whatever the card does (it is not stood "beside" a margin that is not there) and ends 8 px above the band's top
- * (`--tab-band-top`, written on the tab while a card stands) as it ends above the legend. From `md` the band is not read (`--tab-band` is
- * the window's height, which clamps nothing) and the tab is placed as it was, beside the card. The least `top` is the masthead's foot from `md`,
- * where there is a masthead, and the window's top under it, where there is none.
+ * P12-77 (ruling §1h.455, item 2; widened by P12-79, E3): the foot of the tab is also the top of the card band, while a card stands in it. Where
+ * the page has registered the bottom band (`bottomMarginRectOf`, `margin.ts`: under `md`, and from it up to `railMinimumWidth(scale)` and
+ * at the larger reading steps beyond) there is no margin at the right: the tab stays on the window's right edge whatever the card does (it is not
+ * stood "beside" a margin that is not there) and ends 8 px above the band's top (`--tab-band-top`, written on the tab while a card stands in
+ * the band) as it ends above the legend. With no band written (no card, or a side margin: the rail) `--tab-band` is the window's height, which
+ * clamps nothing, and the tab is placed as it was. The least `top` is the masthead's foot from `md`, where there is a masthead, and the
+ * window's top under it, where there is none.
  */
-const EDGE_TAB_BAND = "[--tab-band:var(--tab-band-top,100vh)] md:[--tab-band:100vh] [--tab-floor:0px] md:[--tab-floor:3rem]";
+const EDGE_TAB_BAND = "[--tab-band:var(--tab-band-top,100vh)] [--tab-floor:0px] md:[--tab-floor:3rem]";
 
 export function NotesButtonView({
   variant,
@@ -174,7 +180,7 @@ export function NotesButtonView({
   marginLeft?: number;
   /** The page's Fit zoom, where it is not 1: the foot legend is that much taller in the window's pixels, and the tab keeps clear of it. */
   zoom?: number;
-  /** On a phone, while a card stands: the top of the band the cards stand in, in the window's pixels; the tab ends 8 px above it. */
+  /** While a card stands in the bottom band (a phone, or any width narrower than the panes need): the band's top, in the window's pixels; the tab ends 8 px above it. */
   bandTop?: number;
   onOpen: () => void;
 }) {
@@ -301,8 +307,13 @@ export function NotesButton({
   const standing = useWindows((s) => s.windows.length > 0);
   // P12-77 (ruling §1h.455, item 2): on a phone the cards stand in a band across the foot (`presentation: "bottom"`, left 8), not in a margin at
   // the right, so the tab does not stand "beside" it (that put it at the band's left edge, x −7 to 8): it stays on the window's right edge and
-  // ends 8 px above the band's top while a card stands. From `md` it is placed as it was.
+  // ends 8 px above the band's top while a card stands.
+  // P12-79 (E3): the same band is registered from 768 px up to the panes' minimum width and at the larger reading steps beyond it, so the
+  // rule is the band's, not the phone's: a card (or the notes window) standing in a registered bottom band, at any width, is "no side
+  // margin". Only a side margin (the rail, `presentation` unset) has the tab stand beside the card at its left edge.
   const phone = usePhone(variant === "edge");
+  const active = variant === "edge" && (standing || shown);
+  const banded = active && rect?.presentation === "bottom";
   if (!ready) return null;
   // P12-77: Fit's zoom, read where the tab is drawn (it mounts after the notes store has hydrated, never in the server render). It changes the
   // margin's rect, which this component reads, so the next render has the new one; below 1024 px Fit does nothing and the zoom is 1.
@@ -312,10 +323,10 @@ export function NotesButton({
         variant={variant}
         has={own !== undefined}
         shown={variant === "edge" && shown}
-        beside={variant === "edge" && !phone && (standing || shown)}
+        beside={active && !phone && !banded}
         marginLeft={rect?.left}
         zoom={readPageZoom()}
-        bandTop={variant === "edge" && phone && standing && rect?.presentation === "bottom" ? rect.top : undefined}
+        bandTop={banded ? rect?.top : undefined}
         onOpen={variant === "edge" && shown ? () => setShown(false) : open}
       />
       {variant === "edge" && shown && <NotesWindow paper={paper} onClose={() => setShown(false)} />}

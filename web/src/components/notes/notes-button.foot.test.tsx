@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { DOCK_TOP_PX, MASTHEAD_MIN_VIEWPORT_PX, legendHeightPx } from "@/components/reader/explain-dock";
 import { bottomMarginRectOf } from "@/lib/reader/margin";
-import { fitPanes } from "@/components/reader/pane-layout";
+import { fitPanes, railMinimumWidth } from "@/components/reader/pane-layout";
 import { THUMB_BAR_PX } from "@/components/shell/thumb-bar";
 import { EDGE_TAB_FOOT_CLEAR_PX, EDGE_TAB_LENGTH_PX, EDGE_TAB_PASSES_DRAG, EDGE_TAB_PHONE_THICKNESS_PX, NOTES_LABEL, NotesButtonView } from "./notes-button";
 
@@ -278,8 +278,9 @@ describe("the label stays on one line, as long as the tab is (P12-77 E1)", () =>
 });
 
 // P12-77 (ruling §1h.455, item 2): on a phone the cards stand in a band across the foot of the window, not in a margin at the right. The tab stays on the
-// right edge whatever a card does and ends 8 px above the band's top while one stands: the rule of E1 with the band as the foot. From md the band
-// is not read. (`NotesButton` writes `--tab-band-top` only on a phone, only while a card stands: `notes-button.phone.flow.test.tsx`.)
+// right edge whatever a card does and ends 8 px above the band's top while one stands: the rule of E1 with the band as the foot. (P12-79, E3: the same
+// holds wherever the page registers that band, from md too — see the describe below. `NotesButton` writes `--tab-band-top` only while a card stands in a
+// bottom band: `notes-button.phone.flow.test.tsx`.)
 describe("a card standing on a phone: the tab's foot is the band's top (§1h.455 item 2)", () => {
   // the band as the page registers it, for the phones that exist (width x height): portrait and landscape, small and large
   const PHONES = [[390, 844], [375, 667], [360, 640], [320, 568], [667, 375], [767, 1024]] as const;
@@ -312,16 +313,141 @@ describe("a card standing on a phone: the tab's foot is the band's top (§1h.455
     expect(tabAt(view({ bandTop: 800 }), 390, 844)).toEqual(free);
   });
 
-  it("from md the band is not read: the tab is placed as it was, whatever bandTop says", () => {
-    for (const [width, height] of [[768, 576], [853, 480], [1024, 576], [1440, 900]] as const) {
-      expect(tabAt(view({ bandTop: 100 }), width, height), `${width} x ${height}`).toEqual(tabAt(view({}), width, height));
+  // RE-AIMED by P12-79 (E3). It held "from md the band is not read: the tab is placed as it was, whatever bandTop says" (768 x 576, 853 x 480, 1024 x 576,
+  // 1440 x 900 with a band of 100), which pinned `md:[--tab-band:100vh]` — the class that switched the band off from md. That is the defect E3 names: the page
+  // registers the bottom band from 768 px up to `railMinimumWidth(scale)` and at the larger reading steps, a card stands in it, and the tab, which ignored the band
+  // from md, was placed beside it at the band's left edge (x -7 to 8). The band is now read at every width, because `NotesButton` writes `--tab-band-top` only while a
+  // card stands in a bottom band; what stays true, and is held here, is that nothing is written with no band (the rail, or no card), and the tab is then placed as it was.
+  it("from md the band is read, the same way: written, the tab ends 8 px above it; not written (the rail, no card), the tab is placed as it was", () => {
+    for (const [width, height] of [[768, 576], [853, 480], [1024, 576]] as const) {
+      const band = bottomMarginRectOf(width, height, 1);
+
+      expect(band.top - tabAt(view({ bandTop: band.top }), width, height).bottom, `${width} x ${height}`).toBeGreaterThanOrEqual(EDGE_TAB_FOOT_CLEAR_PX);
     }
+    // not written: the numbers of the rail's cases above (1440 x 900 at 450, 1024 x 576 at 394, 853 x 480 at 298)
+    expect(tabAt(view({}), 1440, 900)).toMatchObject({ top: 450, bottom: 596 });
+    expect(tabAt(view({}), 1024, 576)).toMatchObject({ top: 394, bottom: 540 });
+    expect(tabAt(view({}), 853, 480)).toMatchObject({ top: 298, bottom: 444 });
   });
 
   it("writes the band on the tab's style (--tab-band-top) and nothing when there is none", () => {
     expect(styleProps(view({ bandTop: 384.6 }))["--tab-band-top"]).toBe("384.6px");
     expect(view({})).not.toContain("--tab-band-top:");
     expect(view({})).not.toContain("style=");
+  });
+});
+
+// P12-79 (E3; A P12-78 §6): with a card standing in the bottom band the tab keeps the right edge AND ends 8 px above the band, at every width the band is
+// registered at — from 768 px up to `railMinimumWidth(scale)`, and wherever the reading step pushes that minimum past the window. A measured the tab at the
+// window's left edge there (x -7 to 8, 8 px of its label showing) at 768 to 851 wide at the default step, 853 x 480 from step 1.10, 1024 x 576 at step 1.60.
+// There is no DOM in this suite, so the tab's place is worked out as above: its `top` and length from the markup, the band as the page registers it
+// (`bottomMarginRectOf`, at Fit's zoom of 1 — Fit does nothing below the panes), and its x from the classes (`right-0`, no left offset). The window it is measured
+// at in a browser is in the checkpoint.
+describe("with a card in the bottom band the tab keeps the right edge and ends 8 px above the band, at every width (P12-79 E3)", () => {
+  /** A's cells: [width, height, reading step]. */
+  const CELLS = [[800, 600, 1], [851, 600, 1], [853, 480, 1.1], [1024, 576, 1.6]] as const;
+  /** What `NotesButton` hands the view in the band: not beside, the band's left (8) still passed as `marginLeft`, the band's top. */
+  const inBand = (band: { left: number; top: number }, has: boolean, extra: Record<string, unknown> = {}) =>
+    view({ has, beside: false, marginLeft: band.left, bandTop: band.top, ...extra });
+
+  it.each(CELLS)("%i x %i at step %f: the band is registered, the tab's foot is exactly 8 px above its top, both labels, inside the window and under the masthead's foot", (width, height, step) => {
+    expect(width, "narrower than the panes need: the band is what the page registers").toBeLessThan(railMinimumWidth(step));
+    const band = bottomMarginRectOf(width, height, 1);
+
+    for (const label of LABELS) {
+      const tab = tabAt(inBand(band, label.has), width, height);
+
+      expect(band.top - tab.bottom, `${label.name}: the gap above the band`).toBeCloseTo(EDGE_TAB_FOOT_CLEAR_PX, 6);
+      expect(tab.top, `${label.name}: not above the masthead's foot`).toBeGreaterThanOrEqual(DOCK_TOP_PX);
+      expect(tab.bottom, `${label.name}: inside the window`).toBeLessThanOrEqual(height);
+      expect(footTop(width, height) - tab.bottom, `${label.name}: and clear of the legend`).toBeGreaterThanOrEqual(EDGE_TAB_FOOT_CLEAR_PX);
+    }
+  });
+
+  it("the exact places (the before numbers are A's: x -7 to 8, y 418 to 564 at 800 x 600, 298 to 444 at 853 x 480, 394 to 540 at 1024 x 576)", () => {
+    const at = (width: number, height: number, has: boolean) => tabAt(inBand(bottomMarginRectOf(width, height, 1), has), width, height);
+
+    // 800 x 600 and 851 x 600: the band begins at 274.8 (the same height, so the same place)
+    expect(at(800, 600, true).top).toBeCloseTo(120.8, 6);
+    expect(at(800, 600, true).bottom).toBeCloseTo(266.8, 6);
+    expect(at(851, 600, true)).toEqual(at(800, 600, true));
+    expect(at(800, 600, false).top).toBeCloseTo(200.8, 6);
+    // 853 x 480 at step 1.10: the band begins at 220.8
+    expect(at(853, 480, true).top).toBeCloseTo(66.8, 6);
+    expect(at(853, 480, true).bottom).toBeCloseTo(212.8, 6);
+    expect(at(853, 480, false).top).toBeCloseTo(146.8, 6);
+    // 1024 x 576 at step 1.60: the band begins at 264
+    expect(at(1024, 576, true)).toMatchObject({ top: 110, bottom: 256 });
+    expect(at(1024, 576, false)).toMatchObject({ top: 190, bottom: 256 });
+  });
+
+  it("on the right edge whatever margin the page also passed: the band's left (8) given as marginLeft places nothing, because the tab is not beside it", () => {
+    for (const [width, height] of [[800, 600], [853, 480], [1024, 576]] as const) {
+      const band = bottomMarginRectOf(width, height, 1);
+      const html = inBand(band, true);
+
+      expect(band.left).toBe(8);
+      expect(classesOf(html)).toContain("right-0");
+      expect(html).not.toContain("left:");
+      expect(html).not.toContain("translateX");
+      expect(html).not.toContain("width:");
+      // the same call beside the card is the defect: x -7 to 8
+      const defect = view({ has: true, beside: true, marginLeft: band.left });
+      expect(defect).toContain("left:8px");
+      expect(defect).toContain("translateX(-100%)");
+      expect(classesOf(defect)).not.toContain("right-0");
+    }
+  });
+
+  it("every height and every width the band is registered at: the foot is 8 px above the band, or the masthead's foot where the window has no room (the floor wins, as the legend's does)", () => {
+    let clamped = 0;
+    for (const width of [768, 800, 851, 852, 900, 1023, 1024, 1137]) {
+      for (let height = 400; height <= 1400; height += 10) {
+        const band = bottomMarginRectOf(width, height, 1);
+        for (const label of LABELS) {
+          const tab = tabAt(inBand(band, label.has), width, height);
+          const length = EDGE_TAB_LENGTH_PX[label.key];
+          const room = band.top - EDGE_TAB_FOOT_CLEAR_PX - length >= DOCK_TOP_PX;
+          const where = `${width} x ${height} ${label.name}`;
+
+          expect(tab.top, where).toBeGreaterThanOrEqual(DOCK_TOP_PX);
+          if (room) {
+            expect(band.top - tab.bottom, where).toBeGreaterThanOrEqual(EDGE_TAB_FOOT_CLEAR_PX - 1e-9);
+            // not pushed higher than it has to be: where it was already clear of the band it stands where it did (27rem, or the middle), else exactly 8 px above
+            const free = tabAt(view({ has: label.has }), width, height);
+            if (free.bottom <= band.top - EDGE_TAB_FOOT_CLEAR_PX) expect(tab.top, where).toBe(free.top);
+            else expect(band.top - tab.bottom, where).toBeCloseTo(EDGE_TAB_FOOT_CLEAR_PX, 6);
+          } else {
+            clamped++;
+            expect(tab.top, `${where}: no room, the masthead's foot`).toBe(DOCK_TOP_PX);
+          }
+        }
+      }
+    }
+    // the no-room windows exist (a short window with the long label) and are few: under about 440 px high at md and up
+    expect(clamped).toBeGreaterThan(0);
+  });
+
+  it("the tab does not intersect the band: it is over the band's width at the right edge, 8 px above its top", () => {
+    for (const [width, height] of [[800, 600], [851, 600], [853, 480], [1024, 576]] as const) {
+      const band = bottomMarginRectOf(width, height, 1);
+      const tab = tabAt(inBand(band, true), width, height);
+
+      expect(tab.bottom, `${width} x ${height}`).toBeLessThan(band.top);
+    }
+  });
+
+  it("with the rail (a side margin) nothing is written and the tab is placed as it was: 1440 x 900 at 450, and beside the card at 1024 x 576 and 853 x 480 at the default step", () => {
+    // the rail: the page registers a side margin from `railMinimumWidth` (852 at step 1.00): 853 x 480 and 1024 x 576 at the default step are the rail's
+    for (const [width, height, top] of [[1440, 900, 450], [1024, 576, 394], [853, 480, 298]] as const) {
+      expect(width).toBeGreaterThanOrEqual(railMinimumWidth(1));
+      const left = width - fitPanes({ viewport: width }).margin;
+      const html = view({ has: true, beside: true, marginLeft: left });
+
+      expect(tabAt(html, width, height).top, `${width} x ${height}`).toBe(top);
+      expect(html).not.toContain("--tab-band-top:"); // (the class names the property as `var(--tab-band-top,100vh)`; what is not there is a value set on the style)
+      expect(html).toContain(`left:${left}px`);
+    }
   });
 });
 
