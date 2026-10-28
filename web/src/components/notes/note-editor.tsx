@@ -637,6 +637,21 @@ export function visibleWordCount(note: Pick<Note, "blocks" | "sources">, hiddenB
   return wordCount(hiddenBlockId ? { ...note, blocks: note.blocks.filter((b) => b.id !== hiddenBlockId) } : note);
 }
 
+/**
+ * P12-65 (M1a): one editor's whole-note write. It remembers the blocks the editor started from, then the blocks it last wrote, and
+ * hands them to `save` as the base of this write, so the store can merge a note another writer changed meanwhile (a sticky) rather
+ * than take the editor's copy over it. The half-second timer, the page leave and the unmount all write through the one writer, so
+ * each is measured against the one before.
+ */
+export function makeDocWriter(start: readonly Block[]) {
+  let base = start;
+  return (doc: { blocks: Block[] }, save: (base: readonly Block[]) => void): void => {
+    const was = base;
+    base = doc.blocks;
+    save(was);
+  };
+}
+
 export function NoteEditor({
   note,
   compact = false,
@@ -751,23 +766,29 @@ export function NoteEditor({
 
   // ── Saving ──
   const dirty = useRef(false);
+  // P12-65 (M1a): every whole-note write carries the blocks this editor started from or last wrote.
+  const [docWriter] = useState(() => makeDocWriter(note.blocks));
+  const writeDoc = useCallback(
+    () => docWriter(docRef.current, (base) => saveNote(note.id, docRef.current, undefined, base)),
+    [docWriter, note.id, saveNote],
+  );
   useEffect(() => {
     if (transient) return;
     if (doc === initial.current) return;
     dirty.current = true;
     setStatus("saving");
     const t = setTimeout(() => {
-      saveNote(note.id, docRef.current);
+      writeDoc();
       dirty.current = false;
       setStatus("saved");
     }, 500);
     return () => clearTimeout(t);
-  }, [doc, note.id, saveNote, transient]);
+  }, [doc, writeDoc, transient]);
   useEffect(() => {
     if (transient) return;
     const flush = () => {
       if (!dirty.current) return;
-      saveNote(note.id, docRef.current);
+      writeDoc();
       dirty.current = false;
     };
     window.addEventListener("pagehide", flush);
@@ -775,7 +796,7 @@ export function NoteEditor({
       window.removeEventListener("pagehide", flush);
       flush();
     };
-  }, [note.id, saveNote, transient]);
+  }, [writeDoc, transient]);
 
   useEffect(() => {
     if (compact) return;
