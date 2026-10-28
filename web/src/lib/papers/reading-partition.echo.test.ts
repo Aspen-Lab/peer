@@ -348,7 +348,7 @@ describe("closingPartition - the last paragraph closes a paper that names no con
 /** The announcement as a 150-word paragraph: it opens on ANNOUNCE and is filled out with the filler. Shares four long words with SUMMARY. */
 const LONG_ANNOUNCE = ofWords(150, ANNOUNCE);
 /** Five short fragments of a figure's text (axis labels, a legend, a title) that follow the long paragraph; none holds a long word of SUMMARY. */
-const FRAGMENTS = ["Sheltered", "Exposed", "Count per quadrat", "0 10 20 30", "Counts at sheltered shores"];
+const FRAGMENTS = ["Sheltered", "Exposed", "Count per quadrat", "Wave height classes", "Counts at sheltered shores"];
 
 /** The split of the Nature-style paper whose front text is `intro`; the closing is the last part's SUMMARY and OUTLOOK. */
 const withIntro = (intro: readonly string[], abstract: string | null | undefined = undefined): GuidePartition | null => splitOf(nature(intro), abstract);
@@ -360,6 +360,9 @@ describe("closingPartition - the echo is the setup part's last paragraph of at l
 
     expect(wordsIn(LONG_ANNOUNCE)).toBe(150);
     expect(FRAGMENTS.every((fragment) => wordsIn(fragment) < 10)).toBe(true);
+    // All five reach the part's body (a line of digits alone would be dropped), and the part is the front text's setup row.
+    expect(bodyOf(doc)[0].paragraphs.slice(-FRAGMENTS.length)).toEqual(FRAGMENTS);
+    expect(buildReadingMap(doc).sections[0].role).toBe("setup");
     expect(splitOf(doc)).toEqual(SPLIT(storms.id));
     // Each form of "the reading has no abstract" reads the same way.
     expect(splitOf(doc, null)).toEqual(SPLIT(storms.id));
