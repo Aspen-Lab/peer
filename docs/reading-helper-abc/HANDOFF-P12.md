@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-28T15:14Z
+AS OF        2026-10-28T15:44Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
-LAST RULING  §1h.464   NEXT RULING §1h.465   NEXT ITEM ID P12-87   NEXT FREE PORT 4248
+LAST RULING  §1h.465   NEXT RULING §1h.466   NEXT ITEM ID P12-87   NEXT FREE PORT 4248
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
-RUNNING      (max 2, §1h.443) C P12-84 (K3 bounds) ∥ C P12-85 (echo); branch head d771a376; V holds C P12-82 (verified, held for C P12-85); QUEUE: C P12-83 (K2 case) → C P12-86 (Tier-1 guard + fallback log) → revision 10 → 11 → A P12-57 phase 3 → Theme B round 3 → Theme A round 4 → B short paragraphs; OWNER: O1
+RUNNING      (max 2, §1h.443) C P12-83 (K2 case) ∥ C P12-86 (Tier-1 guard + fallback log); branch head 1f672ccf; verifying C P12-84 (K3) in V; QUEUE: revision 10 → 11 → A P12-57 phase 3 → Theme B round 3 → Theme A round 4 → B short paragraphs; OWNER: O1
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
 OWNER'S PDFS P1–P6 (uploads in the manager's session; P4–P6 held out); upload UI only; never commit or quote
 CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB, Haiku, "20 * * * *", enabled, read back 06:23Z; prompt: at most two subagents (§1h.443)
@@ -723,6 +723,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-28T14:48Z | manager (Claude) | §1h.463: B P12-80 ruled; C P12-82 started; C P12-83, C P12-84 queued | evidence: P12-80-B report | next: C P12-82, A P12-57
 
 - 2026-10-28T15:14Z | manager (Claude) | §1h.464: C1 P1–P5 pass, P6 4/5 (damage); 11/30 fell back; C P12-82 held for the echo (C P12-85 running); C P12-86 queued | evidence: mgr/sealed-c1, mgr/score-c1.py, P12-57-A report | next: C P12-84, C P12-85
+
+- 2026-10-28T15:44Z | manager (Claude) | §1h.465: C P12-82 + C P12-85 landed (5 / 7 red; 655 / 12,270 / 0 failed; build 0 after V's node_modules re-link); captions whole on P3, P5 | evidence: mgr/gates-V.log, mgr/build-v3.out, mgr/out/P*-caps-*.json | next: C P12-84 verify, C P12-83, C P12-86
 
 ---
 
