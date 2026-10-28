@@ -430,6 +430,133 @@ export async function removeUploadDoc(hash16: string): Promise<void> {
   await uploadBackend().remove([docName(hash16)]);
 }
 
+// ── P12-61 (§1h.434): a figure's cut picture, kept for its owner ──────
+//
+// A figure view used to open the whole PDF every time — the route read the
+// stored bytes and had the engine cut the one region — so the third look at
+// the same figure cost as much as the first. The first successful cut of a
+// figure is now kept beside the upload, and every later look at it is answered
+// from the kept picture with no PDF read at all.
+//
+// Layout: `figure-cuts/<hash16>/p<page>-<digest of the label>-r<revision>.cut`
+// in whichever backend holds the upload (the disk, owner-only 0600 inside a
+// 0700 folder, or the private bucket). One folder per upload, so removing an
+// upload's pictures lists one folder, never the bucket. The key is the upload's
+// hash (the file's bytes, already private to its owner), the page, the label
+// ("Figure 3") and `FIGURE_EXTRACTION_REVISION`: a bumped revision names a
+// different object, so every earlier cut is simply never read again, and the
+// purge removes it. An object is a one-line JSON header (`v`, `bytes`, `width`,
+// `height`) and then the PNG's bytes; a read whose header disagrees with what
+// follows — a half-written or foreign object — misses. On the disk an object is
+// written under a temp name and renamed into place, so a reader never sees half
+// a file; the bucket replaces an object whole.
+//
+// The picture is derived from the upload and goes with it: `deleteUpload`
+// removes the folder, and the purge removes the folder of an upload that is
+// gone or taken down, and any object of an older revision (or a leftover
+// `.tmp`) in a live one. As with the document sidecar, callers look a cut up
+// only after the owner check has passed (`figure-image/route.ts`); nothing
+// here decides who may read an upload.
+
+const FIGURE_CUT_DIR = "figure-cuts";
+const FIGURE_CUT_HEADER_MAX = 512;
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+/** What a kept cut holds: the PNG's bytes, and the pixel size the engine drew it at, when it said. */
+export interface UploadFigureCut {
+  png: Buffer;
+  width?: number;
+  height?: number;
+}
+
+function hasPngSignature(bytes: Uint8Array): boolean {
+  return bytes.byteLength > PNG_SIGNATURE.byteLength && PNG_SIGNATURE.every((byte, index) => bytes[index] === byte);
+}
+
+function figureCutFolder(hash16: string): string {
+  if (!isValidHash16(hash16)) throw new Error("Invalid upload id");
+  return `${FIGURE_CUT_DIR}/${hash16}`;
+}
+
+/** The object name for a page, a label and a revision; null for a key that is not one. */
+function figureCutName(page: number, label: string, revision: string): string | null {
+  if (!Number.isInteger(page) || page < 1 || page > 999_999) return null;
+  if (typeof label !== "string" || label.trim() === "") return null;
+  if (!/^[0-9A-Za-z._-]{1,32}$/.test(revision)) return null;
+  return `p${page}-${createHash("sha256").update(label).digest("hex").slice(0, 16)}-r${revision}.cut`;
+}
+
+function sizeField(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.round(value) : undefined;
+}
+
+/**
+ * The cut kept for `page` and `label` under the current
+ * `FIGURE_EXTRACTION_REVISION`; null when there is none, it was kept under
+ * another revision, or the stored object is not whole.
+ */
+export async function readUploadFigureCut(hash16: string, page: number, label: string): Promise<UploadFigureCut | null> {
+  const name = figureCutName(page, label, FIGURE_EXTRACTION_REVISION);
+  if (!name) return null;
+  try {
+    const raw = await uploadBackend().read(`${figureCutFolder(hash16)}/${name}`);
+    if (!raw) return null;
+    const end = raw.indexOf(0x0a);
+    if (end < 1 || end > FIGURE_CUT_HEADER_MAX) return null;
+    const head = JSON.parse(raw.subarray(0, end).toString("utf-8")) as { v?: unknown; bytes?: unknown; width?: unknown; height?: unknown };
+    const png = raw.subarray(end + 1);
+    if (head.v !== 1 || head.bytes !== png.byteLength || !hasPngSignature(png)) return null;
+    return { png, width: sizeField(head.width), height: sizeField(head.height) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Keep `cut` for `page` and `label` under the current
+ * `FIGURE_EXTRACTION_REVISION`. Refuses (throws, writes nothing) a key that
+ * is not one and bytes that are not a PNG — an empty or failed cut is never
+ * kept.
+ */
+export async function writeUploadFigureCut(
+  hash16: string,
+  page: number,
+  label: string,
+  cut: { png: Uint8Array; width?: number; height?: number },
+): Promise<void> {
+  const name = figureCutName(page, label, FIGURE_EXTRACTION_REVISION);
+  if (!name) throw new Error("Invalid figure cut key");
+  if (!hasPngSignature(cut.png)) throw new Error("A kept figure cut is a PNG");
+  const object = `${figureCutFolder(hash16)}/${name}`;
+  const head = JSON.stringify({ v: 1, bytes: cut.png.byteLength, width: sizeField(cut.width), height: sizeField(cut.height) });
+  const payload = Buffer.concat([Buffer.from(`${head}\n`, "utf-8"), cut.png]);
+  const backend = uploadBackend();
+  if (backend.kind !== "disk") {
+    await backend.write(object, payload, "application/octet-stream");
+    return;
+  }
+  const temporary = `${object}.${randomUUID()}.tmp`;
+  try {
+    await backend.write(temporary, payload, "application/octet-stream");
+    await rename(path.join(UPLOAD_DIR, temporary), path.join(UPLOAD_DIR, object));
+  } catch (error) {
+    await backend.remove([temporary]).catch(() => undefined);
+    throw error;
+  }
+}
+
+/** Forget every picture cut from this upload, whatever its page, label or revision. */
+export async function removeUploadFigureCuts(hash16: string): Promise<void> {
+  const backend = uploadBackend();
+  const folder = figureCutFolder(hash16);
+  if (backend.kind === "disk") {
+    await rm(path.join(UPLOAD_DIR, folder), { recursive: true, force: true });
+    return;
+  }
+  const objects = await backend.list(folder);
+  if (objects.length > 0) await backend.remove(objects.map((object) => `${folder}/${object.name}`));
+}
+
 export async function deleteUpload(meta: UploadMeta): Promise<void> {
   const backend = uploadBackend();
   // Remove permission/metadata first, then the file, then the text Peer
