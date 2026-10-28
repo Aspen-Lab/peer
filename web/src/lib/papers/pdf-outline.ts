@@ -1319,7 +1319,8 @@ const MARGIN_PRINT_ROWS = 8;
  * repetition marks them as furniture, and they landed in the middle of the
  * sentence that crosses the page break.
  */
-function marginPrintOf(lines: PdfLine[], body: { size: number }): (line: PdfLine) => boolean {
+function marginPrintOf(lines: PdfLine[], body: { size: number; font: string }): (line: PdfLine) => boolean {
+  const footnote = footnoteOf(lines, body);
   const edges = new Map<number, { top: number; bottom: number }>();
   for (const line of lines) {
     if (line.size < body.size * FULL_SIZE_RATIO) continue;
@@ -1341,9 +1342,52 @@ function marginPrintOf(lines: PdfLine[], body: { size: number }): (line: PdfLine
     rows.set(key, (rows.get(key) ?? new Set<number>()).add(Math.round(line.y / 3)));
   }
   return (line) => {
+    if (footnote.has(line)) return true;
     const side = sideOf(line);
     return side !== null && (rows.get(`${line.page}:${side}`)?.size ?? 0) <= MARGIN_PRINT_ROWS;
   };
+}
+
+/** C P12-74 (M6): a footnote opens with its marker: a digit or one of the footnote symbols, directly before a letter
+ *  ("1 Department of ...", "∗ Corresponding author"). Without the marker a 9 pt note under the text is the paper's. */
+const FOOTNOTE_MARKER = /^[\d∗*†‡§¶]\s?\p{L}/u;
+/** The last line of the body's prose is at least this long: a folio or a one-word label at the foot is not prose. */
+const PROSE_LINE_MIN = 30;
+/** A line is in the body's size when it is within this many points of it: the running foot of a page, set a third of
+ *  a point smaller, is a size of its own. */
+const BODY_SIZE_SLACK = 0.3;
+/** Small print is set under this share of the body's size. */
+const SMALL_PRINT_RATIO = 0.95;
+
+/**
+ * C P12-74 (M6, B P12-73): the lines of the opening page's footnote — the authors' affiliations, printed on page 1 only
+ * (so no repetition makes them furniture), at 0.86 of the body (so `MARGIN_PRINT_RATIO` leaves them), under the text.
+ * They are **small print under the last line in the body's face and size** (the page's edge for this rule, not the last
+ * full-size line: a running foot at 0.96 of the body is the edge of the other rule), set apart from that line by more
+ * than a pitch, opening with a footnote marker, at most `MARGIN_PRINT_ROWS` rows, and holding no caption. None of
+ * them is the paper's text. Only the opening page has a footnote of this kind; small print under the text of any other
+ * page is a table or a section set small.
+ */
+function footnoteOf(lines: PdfLine[], body: { size: number; font: string }): Set<PdfLine> {
+  const none = new Set<PdfLine>();
+  let opening = Infinity;
+  for (const line of lines) opening = Math.min(opening, line.page);
+  // The last line of prose in the body's face and size: the edge the footnote stands under.
+  let edge = Infinity;
+  for (const line of lines) {
+    if (line.page !== opening || line.block || line.font !== body.font || Math.abs(line.size - body.size) >= BODY_SIZE_SLACK) continue;
+    if (line.text.trim().length >= PROSE_LINE_MIN) edge = Math.min(edge, line.y);
+  }
+  if (edge === Infinity) return none;
+  const below = lines
+    .filter((line) => line.page === opening && !line.block && line.y < edge && line.size < body.size * SMALL_PRINT_RATIO)
+    .sort((a, b) => b.y - a.y || a.x - b.x);
+  if (below.length === 0) return none;
+  const pitch = linePitch(lines) || body.size * 1.2;
+  if (edge - below[0].y <= pitch || !FOOTNOTE_MARKER.test(below[0].text.trim())) return none;
+  if (below.some((line) => captionOf(line) !== null)) return none;
+  if (new Set(below.map((line) => Math.round(line.y / 3))).size > MARGIN_PRINT_ROWS) return none;
+  return new Set(below);
 }
 
 /**

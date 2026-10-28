@@ -439,11 +439,17 @@ describe("the whole reading — an affiliation and a reference list are no secti
     expect(intro).toContain("order of the sections that follow");
   });
 
-  it("leaves the affiliation and the entries in the text they stand in, and no section of their own", () => {
+  // RE-AIMED (C P12-74, M6 block): this test said the affiliation AND the reference entries stay in the text. The
+  // affiliation block stands between the halves of the introduction, so it does; the entries are small print (8 pt,
+  // 0.8 of the body) under the last line of prose, set apart by more than a pitch, the first opening with a marker
+  // (a digit before a letter), three rows: the opening page's footnote, margin print now (a first page's small
+  // print under the text is not the paper's). Kept: the affiliation stays, and neither makes a section of its own.
+  it("leaves the affiliation in the text it stands in, takes the small print under the last line for margin print, and makes no section of either", () => {
     const text = textOf(pages);
     expect(text).toContain("Department of Materials Science");
     expect(text).toContain("62704");
-    expect(text).toContain("Zhang Q, Li W, Wu H");
+    expect(text).not.toContain("Zhang Q, Li W, Wu H");
+    expect(headingsOf(pages)).toEqual(["Abstract", "1 Introduction", "2 Methods", "3 Conclusions"]);
   });
 });
 

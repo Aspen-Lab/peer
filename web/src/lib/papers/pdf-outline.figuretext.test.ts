@@ -255,3 +255,80 @@ describe("a line with a quoted key and a colon is no heading (C P12-74, R5)", ()
     expect(textOf(pages)).toContain("'optimizer': 'adamw' with warmup");
   });
 });
+
+// ── M6: the opening page's footnote is margin print ─────────────────────────────────────────────────────
+
+describe("small print under the opening page's text, opening with a footnote marker, is margin print (C P12-74, M6)", () => {
+  const AFFILIATION = "1 Department of Materials Science, University of Elmstead, Fenwick 12345";
+  /** A line of small print: 8.6 pt against the 10 pt body, 0.86 of it. */
+  const note = (text: string, y: number, height = 8.6) => item(text, { y, height });
+  /** The first page: a title, a heading, six lines of prose from y = 726 down to 666 (the last full-size line), `more`. */
+  const firstPage = (more: PdfTextItem[]): PdfPageText => ({
+    page: 1,
+    items: [
+      item("A Paper About Cathodes", { height: 17, y: 760 }),
+      item("Introduction", { y: 740, height: 12, fontName: "display" }),
+      ...[726, 714, 702, 690, 678, 666].map((y) => prose(y)),
+      ...more,
+    ],
+  });
+  const opened = (more: PdfTextItem[]) => textOf([firstPage(more)]);
+
+  it("takes the affiliations printed under the last line of prose, set small and set apart, marker first", () => {
+    const text = opened([note(AFFILIATION, 600), note("2 Institute of Invented Results, Elmstead, Fenwick", 590)]);
+    expect(text).not.toContain("Department of Materials Science");
+    expect(text).not.toContain("Institute of Invented Results");
+    expect(text).toContain("transduction.");
+  });
+
+  it("takes any footnote marker: a digit, or one of the footnote symbols, with or without a space", () => {
+    for (const first of [
+      "1Department of Materials Science, University of Elmstead",
+      "∗ Corresponding author: the Department of Materials Science",
+      "* Corresponding author: the Department of Materials Science",
+      "† These authors contributed equally to the Department",
+      "‡ Present address: the Department of Materials Science",
+      "§ Also at the Institute of Invented Results, Elmstead",
+      "¶ Joint first authors of the Department of Materials Science",
+    ]) {
+      expect(opened([note(first, 600)]), first).not.toContain(first.slice(2, 14));
+    }
+  });
+
+  it("takes the footnote above a running foot that is a size of its own, but not a block that has no marker", () => {
+    const foot = item("Journal of Invented Results Volume 12 Number 3 Page 1", { y: 40, height: 9.6 });
+    const text = opened([note(AFFILIATION, 600), foot]);
+    expect(text).not.toContain("Department of Materials Science");
+    expect(text).toContain("Journal of Invented Results Volume 12");
+    expect(opened([note("Supplementary note: the cells were cycled at 25 C.", 600)])).toContain("Supplementary note: the cells were cycled at 25 C.");
+  });
+
+  it("keeps small print that is not set apart from the last line by more than a pitch", () => {
+    // the line pitch of the page is 12: a note one pitch under the last line of prose is that paragraph's own
+    expect(opened([note(AFFILIATION, 654)])).toContain("Department of Materials Science");
+    expect(opened([note(AFFILIATION, 640)])).not.toContain("Department of Materials Science");
+  });
+
+  it("keeps small print that stands between lines of prose: only what is under the last line is the page's foot", () => {
+    const text = opened([note(AFFILIATION, 640), prose(620), prose(608)]);
+    expect(text).toContain("Department of Materials Science");
+  });
+
+  it("keeps a block of more than eight rows: that is a section set small, not a footnote", () => {
+    const rows = (n: number) => Array.from({ length: n }, (_, i) => note(i === 0 ? AFFILIATION : `Row ${i} of the invented table of cell results`, 600 - i * 9));
+    expect(opened(rows(8))).not.toContain("Department of Materials Science");
+    expect(opened(rows(9))).toContain("Department of Materials Science");
+  });
+
+  it("keeps a block that holds a caption", () => {
+    const text = opened([note(AFFILIATION, 600), note("Figure 1: Layout of the cells in the series of tests.", 580)]);
+    expect(text).toContain("Department of Materials Science");
+  });
+
+  it("is for the opening page only: the same block under the text of the next page stays", () => {
+    const second: PdfPageText = { page: 2, items: [...[726, 714, 702, 690, 678, 666].map((y) => prose(y)), note(AFFILIATION, 600)] };
+    const text = textOf([firstPage([note(AFFILIATION.replace("Materials", "Cathode"), 600)]), second]);
+    expect(text).not.toContain("Department of Cathode Science");
+    expect(text).toContain("Department of Materials Science");
+  });
+});
