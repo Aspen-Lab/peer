@@ -7,7 +7,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 | field | value |
 |---|---|
 | HELD BY | manager session (Claude Code desktop, worktree `.claude/worktrees/objective-wu-e8d6fe`) |
-| BRANCH | `own-key-on-web` (cut from `origin/main` db0f070a after PR #36 merged; name approved by the owner 2026-10-25). Repository `Aspen-Lab/peer`. No push without the owner's word (AGENTS.md); merge to `main` is Xiaoyang's (it deploys peer.homes; Addendum 4.2). |
+| BRANCH | `own-key-on-web` (cut from `origin/main` db0f070a after PR #36 merged; name approved by the owner 2026-10-25). Repository `Aspen-Lab/peer`. No push without the owner's word (AGENTS.md). The owner merges the PR himself (R6). |
 | ROUND | 0 — implementation of lanes 1–4; round 1 scores after all four land |
 | CURRENT ITEM | L3-C and L4-C running; L1-C and L2-C paused (owner's cap) |
 | NEXT TURN | on each worker report: verify → land on the branch → refill up to the cap of two groups |
@@ -24,6 +24,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 - **R3 (2026-10-28).** `own-key-verify` holds the only complete `node_modules`; the branch worktree and lanes 1–2 are junctions to it. Do not remove `own-key-verify` before the loop ends.
 - **R4 (2026-10-28).** Rendering for scoring uses the dev server with only the public Supabase URL and publishable key (no service-role key) and never signs in locally without the owner's explicit OK (local writes are production writes). Signed-in states are scored from route/unit evidence and static renders of the views.
 - **R5 (2026-10-28).** The owner set the stop line: "达标线用 97.9，每个主题连续两轮达到就停。" Every theme at or above 97.9 in two consecutive rounds; a theme that has done so stops being scored, and a later change to its files reopens only the lines it could move.
+- **R6 (2026-10-28).** The owner: "分支给我来merge就行，我也有权限" — he merges the PR to `main` himself. The manager flagged once that a merge to `main` auto-deploys peer.homes, which Addendum No. 1 §4.2 (draft) lists among the Operating Roles; the decision is the owner's. The manager still never merges.
 
 ## §3 Items
 
