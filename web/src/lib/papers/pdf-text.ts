@@ -123,8 +123,38 @@ export async function getPdfBytes(url: string): Promise<{ bytes: Buffer } | { er
   return { bytes: download.bytes };
 }
 
+/** The longest embedded title read: a title field that holds an abstract is no title. */
+const EMBEDDED_TITLE_MAX = 400;
+
+/**
+ * P12-64: the titles the PDF itself carries — its Info dictionary's `Title` and its XMP packet's `dc:title` — cleaned
+ * of control characters and white space, whichever of the two are there. They say what the file claims to be called,
+ * and are only a witness: `pdf-outline`'s `titleOf` chooses among the first page's own lines by them, and judges
+ * whether one is plausible (a file name, the journal's name and an empty field are not). A PDF whose metadata cannot
+ * be read has none; the reading goes on without.
+ */
+async function embeddedTitlesOf(doc: {
+  getMetadata(): Promise<{ info?: unknown; metadata?: { get?(name: string): unknown } | null }>;
+}): Promise<string[]> {
+  try {
+    const { info, metadata } = await doc.getMetadata();
+    const raw: unknown[] = [(info as { Title?: unknown } | null | undefined)?.Title, metadata?.get?.("dc:title")];
+    const titles: string[] = [];
+    for (const value of raw) {
+      if (typeof value !== "string") continue;
+      // A title field is free text: the NULs and escapes in it are not words.
+      const title = value.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+      if (title && title.length <= EMBEDDED_TITLE_MAX && !titles.includes(title)) titles.push(title);
+    }
+    return titles;
+  } catch {
+    return [];
+  }
+}
+
 /** The PDF's text layer, page by page, as `pdf-outline` wants it. Exported
- *  for the probes that look at a real PDF's lines when the outline misreads. */
+ *  for the probes that look at a real PDF's lines when the outline misreads.
+ *  The first page also carries the titles the PDF itself holds (`embeddedTitlesOf`), when it holds any. */
 export async function readPages(bytes: Buffer): Promise<PdfPageText[]> {
   // `unpdf` ships pdf.js built for a server runtime: no worker, no canvas,
   // no native code — the only build that runs unchanged in a function.
@@ -154,6 +184,8 @@ export async function readPages(bytes: Buffer): Promise<PdfPageText[]> {
     }
     pages.push({ page: n, items });
   }
+  const embedded = pages.length > 0 ? await embeddedTitlesOf(doc) : [];
+  if (embedded.length > 0) pages[0].embeddedTitles = embedded;
   return pages;
 }
 

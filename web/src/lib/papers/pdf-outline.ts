@@ -46,6 +46,9 @@ export interface PdfTextItem {
 export interface PdfPageText {
   page: number;
   items: PdfTextItem[];
+  /** P12-64: the titles the PDF itself carries (its Info dictionary's, its XMP's), as `readPages` found them. Only
+   *  on a paper's first page. A witness for `titleOf` to choose among the first page's lines by; never the title. */
+  embeddedTitles?: string[];
 }
 
 export interface PdfLine {
@@ -2290,20 +2293,82 @@ interface TitleClass {
   size: number;
   lines: PdfLine[];
   text: string;
+  /** The class's words as `titleWords` reads them. */
+  words: string[];
+  /** Where its highest line stands on the page. */
+  top: number;
 }
+
+/** P12-64: a word, for the title's comparisons: letters and digits, lower case, accents and ligatures folded. */
+const titleWords = (text: string): string[] =>
+  text.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
 
 function titleClassesOf(candidates: PdfLine[]): TitleClass[] {
   const anchors: number[] = [];
   for (const size of [...new Set(candidates.map(titleSizeOf))].sort((a, b) => b - a)) {
     if (anchors.length === 0 || size < anchors[anchors.length - 1] - TITLE_SIZE_JOIN) anchors.push(size);
   }
-  const classes = anchors.map((size): TitleClass => ({ size, lines: [], text: "" }));
+  const classes = anchors.map((size): TitleClass => ({ size, lines: [], text: "", words: [], top: -Infinity }));
   for (const line of candidates) {
     const at = anchors.findIndex((anchor) => titleSizeOf(line) >= anchor - TITLE_SIZE_JOIN);
     classes[at].lines.push(line);
+    classes[at].top = Math.max(classes[at].top, line.y);
   }
-  for (const cls of classes) cls.text = cls.lines.map((line) => line.text).join(" ").replace(/\s+/g, " ").trim();
+  for (const cls of classes) {
+    cls.text = cls.lines.map((line) => line.text).join(" ").replace(/\s+/g, " ").trim();
+    cls.words = titleWords(cls.text);
+  }
   return classes.filter((cls) => !cls.lines.every((line) => CAP_ROW.test(line.text.trim())));
+}
+
+/** P12-64: an embedded title is a witness only when it has at least this many words. */
+const WITNESS_MIN_WORDS = 3;
+/** …and the longest, in characters, a title field may be and still be read (a field that holds an abstract is no title). */
+const WITNESS_MAX_CHARS = 300;
+/** A file name, or the name an authoring tool gives a document it has no title for. */
+const FILE_NAME_TITLE =
+  /\.(?:pdf|docx?|dotx?|tex|dvi|ps|eps|rtf|odt|indd|pages|pptx?|xlsx?|html?|xml|txt|tmp)\b|^(?:microsoft\s+(?:word|powerpoint|excel)\b|untitled\b|powerpoint presentation\b)|^\S+$|_.*_/i;
+/** A size class counts for the first page's words in an embedded title when this share of its words is in it… */
+const WITNESS_INSIDE = 0.8;
+/** …and at least this many words are. */
+const WITNESS_MIN_MATCHES = 2;
+/** A masthead stands over a title set at least this share of its own size; a smaller line below it is the authors'. */
+const MASTHEAD_TITLE_RATIO = 0.7;
+/** A masthead of fewer words than this, above a title block, is a name (a journal's), not a title. */
+const MASTHEAD_MAX_WORDS = 3;
+/** A line of a running head sits in this many of the first or last rows of a page, as `bandOf` counts them. */
+const HEAD_ROWS = 3;
+
+/** The words of an embedded title, or null when it is no witness: under three words, a file name, a stamp, too long. */
+function witnessWords(raw: string): Set<string> | null {
+  const text = raw.replace(/\s+/g, " ").trim();
+  if (text.length > WITNESS_MAX_CHARS || STAMP.test(text) || FILE_NAME_TITLE.test(text)) return null;
+  const words = titleWords(text);
+  return words.length >= WITNESS_MIN_WORDS ? new Set(words) : null;
+}
+
+/** The words of the lines that stand in the first or last rows of the pages after the first, joined one string per
+ *  line and with the pages that carry each: what a running head says. */
+function runningHeads(lines: PdfLine[]): Map<string, Set<number>> {
+  const rows = new Map<number, number[]>();
+  for (const { page, y } of lines) {
+    if (page === 1) continue;
+    const row = Math.round(y / 3);
+    const known = rows.get(page);
+    if (!known) rows.set(page, [row]);
+    else if (!known.includes(row)) known.push(row);
+  }
+  for (const known of rows.values()) known.sort((a, b) => b - a);
+  const heads = new Map<string, Set<number>>();
+  for (const line of lines) {
+    const known = rows.get(line.page);
+    if (!known || line.text.length > 120) continue;
+    const at = known.indexOf(Math.round(line.y / 3));
+    if (at >= HEAD_ROWS && at < known.length - HEAD_ROWS) continue;
+    const words = titleWords(line.text).join(" ");
+    if (words) heads.set(words, (heads.get(words) ?? new Set<number>()).add(line.page));
+  }
+  return heads;
 }
 
 /**
@@ -2312,12 +2377,69 @@ function titleClassesOf(candidates: PdfLine[]): TitleClass[] {
  * P12-64 (rule 1): "largest" is by the size most of a line's characters are set in (`titleSize`), not by its
  * tallest run, so one oversized letter (a drop cap) no longer lifts the body line it stands on; and a row of
  * one or two letters that stands alone is a drop cap, not a title.
+ *
+ * P12-64 (rule 2): the first page's lines fall into classes of one size, and the PDF's own title (`embedded`: the
+ * Info and XMP titles `readPages` found) is a witness to choose among them by. A witness counts when it has three
+ * words or more and is not a file name, a stamp, or the journal's name; the class chosen is the one most of whose
+ * words are in it (80%, and two at least), the most words in it winning, the larger size a tie. The title returned is
+ * the page's own text, never the embedded string. With no witness, or none that matches, it is the largest class
+ * that is not a masthead. A masthead is a class above a title block (a class of three words or more, set at 70% of
+ * its size or more) that is a line the running heads repeat (a journal's name stands on every page), or is under three
+ * words and matches no witness (a name, not a title). A paper whose masthead is neither, with no embedded title, still
+ * reads its masthead. Within the class a witness chose, only the lines most of whose words are in the witness are the
+ * title (an article-type label set at the title's size is not).
  */
-function titleOf(lines: PdfLine[], body: { size: number }): string | null {
+function titleOf(lines: PdfLine[], body: { size: number }, embedded: readonly string[] = []): string | null {
   const first = lines.filter((line) => line.page === 1 && titleSizeOf(line) > body.size * 1.25 && !STAMP.test(line.text));
-  const [largest] = titleClassesOf(first);
-  if (!largest) return null;
-  return largest.text.length >= 6 ? largest.text : null;
+  const classes = titleClassesOf(first);
+  if (classes.length === 0) return null;
+
+  let heads: Map<string, Set<number>> | null = null;
+  const pageCount = lines.reduce((n, line) => Math.max(n, line.page), 1);
+  const repeated = (cls: TitleClass): boolean => {
+    if (cls.words.length === 0) return false;
+    heads ??= runningHeads(lines);
+    const needle = ` ${cls.words.join(" ")} `;
+    const pages = new Set<number>();
+    for (const [head, on] of heads) if (` ${head} `.includes(needle)) for (const page of on) pages.add(page);
+    return pages.size >= 2 && pages.size >= (pageCount - 1) * 0.4;
+  };
+  /** Whether a class of three words or more, below `cls` and not smaller than a title would be, is the title block. */
+  const standsOver = (cls: TitleClass): boolean =>
+    classes.some(
+      (c) => c !== cls && c.top < cls.top && c.words.length >= MASTHEAD_MAX_WORDS && c.size >= cls.size * MASTHEAD_TITLE_RATIO && !repeated(c),
+    );
+  const isMasthead = (cls: TitleClass, witnessed: boolean): boolean =>
+    standsOver(cls) && (repeated(cls) || (!witnessed && cls.words.length < MASTHEAD_MAX_WORDS));
+
+  const matched = new Set<TitleClass>();
+  let best: { cls: TitleClass; inside: number; witness: Set<string> } | null = null;
+  for (const raw of embedded) {
+    const witness = witnessWords(raw);
+    if (!witness) continue;
+    for (const cls of classes) {
+      const inside = cls.words.filter((word) => witness.has(word)).length;
+      if (inside < WITNESS_MIN_MATCHES || inside < cls.words.length * WITNESS_INSIDE) continue;
+      matched.add(cls);
+      // A witness that names a masthead is the journal's name, not the paper's.
+      if (isMasthead(cls, true)) continue;
+      if (!best || inside > best.inside) best = { cls, inside, witness };
+    }
+  }
+
+  if (best) {
+    // The class's own lines that are in the witness: an article-type label set at the title's size is not the title.
+    const { cls, witness } = best;
+    const inWitness = cls.lines.filter((line) => {
+      const words = titleWords(line.text);
+      const n = words.filter((word) => witness.has(word)).length;
+      return n > 0 && n >= words.length / 2;
+    });
+    const text = (inWitness.length > 0 ? inWitness : cls.lines).map((line) => line.text).join(" ").replace(/\s+/g, " ").trim();
+    return text.length >= 6 ? text : null;
+  }
+  const chosen = classes.find((cls) => !isMasthead(cls, matched.has(cls))) ?? classes[0];
+  return chosen.text.length >= 6 ? chosen.text : null;
 }
 
 // ── The opening of a paper that names no abstract or introduction (P12-51, O6) ────────────────────────────
@@ -2482,7 +2604,7 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
   }
   const body = bodyStyle(lines);
   const furniture = furnitureOf(lines, pages.length);
-  const title = titleOf(lines, body);
+  const title = titleOf(lines, body, pages[0]?.embeddedTitles);
   // P9-09: the paper's own words, read once from every line, decide each hyphen a line ends in.
   const vocab = vocabularyOf(lines);
 

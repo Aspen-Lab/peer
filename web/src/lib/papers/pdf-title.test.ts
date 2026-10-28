@@ -54,9 +54,63 @@ const LATER = [
 /** A second page of body text, so the paper has a body past its first page. */
 const secondPage = (): Run[] => at(LATER, 100);
 
-async function read(pages: Run[][]) {
-  return extractPdfTextFromBytes(minimalPdf(pages));
+async function read(pages: Run[][], meta?: { info?: string; xmp?: string }) {
+  const pdf = minimalPdf(pages);
+  return extractPdfTextFromBytes(meta ? withMetadata(pdf, meta) : pdf);
 }
+
+/** A PDF string: UTF-16 with its byte-order mark, in hex, the way an authoring tool writes a title. */
+const pdfString = (text: string): string => `<FEFF${Buffer.from(text, "utf16le").swap16().toString("hex")}>`;
+
+const xmpPacket = (title: string): string =>
+  `<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>\n` +
+  `<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">` +
+  `<rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title><rdf:Alt>` +
+  `<rdf:li xml:lang="x-default">${title.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</rdf:li>` +
+  `</rdf:Alt></dc:title></rdf:Description></rdf:RDF></x:xmpmeta>\n<?xpacket end="w"?>`;
+
+/**
+ * The PDF with an Info title and / or an XMP title added by an incremental update: new objects after the old file,
+ * a new cross-reference section, and a trailer that points back at the old one. What `minimalPdf` leaves out.
+ */
+function withMetadata(pdf: Buffer, meta: { info?: string; xmp?: string }): Buffer {
+  let out = pdf.toString("latin1");
+  const trailer = /\/Size (\d+) \/Root (\d+) 0 R/.exec(out)!;
+  const root = Number(trailer[2]);
+  const previous = Number(/startxref\n(\d+)/.exec(out)![1]);
+  const pagesRef = /\/Pages (\d+) 0 R/.exec(out.slice(out.indexOf(`\n${root} 0 obj`)))![1];
+  const added: [number, number][] = [];
+  let next = Number(trailer[1]);
+  const add = (num: number, body: string) => {
+    added.push([num, Buffer.byteLength(out, "latin1")]);
+    out += `${num} 0 obj\n${body}\nendobj\n`;
+  };
+  let infoRef = "";
+  if (meta.info !== undefined) {
+    add(next, `<< /Title ${pdfString(meta.info)} >>`);
+    infoRef = ` /Info ${next++} 0 R`;
+  }
+  if (meta.xmp !== undefined) {
+    const packet = xmpPacket(meta.xmp);
+    add(next, `<< /Type /Metadata /Subtype /XML /Length ${Buffer.byteLength(packet, "latin1")} >>\nstream\n${packet}\nendstream`);
+    add(root, `<< /Type /Catalog /Pages ${pagesRef} 0 R /Metadata ${next++} 0 R >>`);
+  }
+  const xref = Buffer.byteLength(out, "latin1");
+  out += `xref\n${added.map(([num, at]) => `${num} 1\n${String(at).padStart(10, "0")} 00000 n \n`).join("")}`;
+  out += `trailer\n<< /Size ${next} /Root ${root} 0 R${infoRef} /Prev ${previous} >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(out, "latin1");
+}
+
+const JOURNAL = "Journal of Applied Cathodes";
+
+/** A masthead set larger than the title, above it. */
+const MASTHEAD: Run[] = [[JOURNAL, 72, 50, 30]];
+
+/** The second and third pages, each with the journal's running head at the top. */
+const pagesWithHeads = (): Run[][] => [
+  [[`${JOURNAL} 12 (2024) 100-110`, 72, 40, 8], ...at(LATER, 100)],
+  [[`${JOURNAL} 12 (2024) 100-110`, 72, 40, 8], ...at(SENTENCES.slice(0, 6), 100)],
+];
 
 const flat = (text: string | undefined): string => (text ?? "").replace(/\s+/g, " ");
 
@@ -148,5 +202,120 @@ describe("rule 1: the title is ranked by the size most of a line's characters ar
       const headings = (p: PdfPageText[]) => (buildOutline(p).sections ?? []).map((section) => section.heading);
       expect(headings(withCap)).toEqual(headings(without));
     });
+  });
+});
+
+describe("rule 2: the PDF's embedded title is a witness to choose the first page's title by", () => {
+  it("reads the Info title and the XMP title of an invented PDF, on the first page, and nothing when there is none", async () => {
+    const pdf = minimalPdf([firstPage(), secondPage()]);
+    expect((await readPages(pdf))[0].embeddedTitles).toBeUndefined();
+    expect((await readPages(withMetadata(pdf, { info: "An Info Title Of Four Words" })))[0].embeddedTitles).toEqual([
+      "An Info Title Of Four Words",
+    ]);
+    expect((await readPages(withMetadata(pdf, { xmp: "An XMP Title & Its Words" })))[0].embeddedTitles).toEqual(["An XMP Title & Its Words"]);
+    const both = await readPages(withMetadata(pdf, { info: "The Info One Here", xmp: "The XMP One Here" }));
+    expect(both[0].embeddedTitles).toEqual(["The Info One Here", "The XMP One Here"]);
+    expect(both[1].embeddedTitles).toBeUndefined();
+  });
+
+  it("(a) a masthead set larger than the title, with the title embedded: the title, not the masthead", async () => {
+    const pages = [firstPage({ above: MASTHEAD }), secondPage()];
+    const result = await read(pages, { info: TITLE });
+    expect(result.ok).toBe(true);
+    expect(result.doc?.title).toBe(TITLE);
+    // The same page with no embedded title reads the masthead: it is three words, larger, and no head repeats it.
+    expect((await read(pages)).doc?.title).toBe(JOURNAL);
+  });
+
+  it("(a) reads the XMP title as well as the Info title, and whichever of them is the paper's", async () => {
+    const pages = [firstPage({ above: MASTHEAD }), secondPage()];
+    expect((await read(pages, { xmp: TITLE })).doc?.title).toBe(TITLE);
+    // The Info field holds a file name, which is no witness; the XMP holds the title.
+    expect((await read(pages, { info: "Microsoft Word - draft_v3.docx", xmp: TITLE })).doc?.title).toBe(TITLE);
+  });
+
+  it("outputs the page's own text, not the embedded string", async () => {
+    const pages = [firstPage({ above: MASTHEAD }), secondPage()];
+    const result = await read(pages, { info: `${TITLE.toUpperCase()}.` });
+    expect(result.doc?.title).toBe(TITLE);
+  });
+
+  it("an embedded title that is the journal's name does not choose the masthead", async () => {
+    // The journal's name is on every later page's running head: it is a masthead, and the witness that names it is ignored.
+    const pages = [firstPage({ above: MASTHEAD }), ...pagesWithHeads()];
+    expect((await read(pages, { info: `${JOURNAL} Letters` })).doc?.title).toBe(TITLE);
+    expect((await read(pages, { info: `${JOURNAL} 2024` })).doc?.title).toBe(TITLE);
+  });
+
+  it("an embedded title that holds the paper's title and the journal's name still chooses the paper's title", async () => {
+    const pages = [firstPage({ above: MASTHEAD }), secondPage()];
+    // Both classes are inside it; the title has the most words in it.
+    expect((await read(pages, { info: `${TITLE} - ${JOURNAL}` })).doc?.title).toBe(TITLE);
+  });
+
+  it("is no witness when it is a file name, a stamp, or too long, whatever words it holds", async () => {
+    const pages = [firstPage({ above: MASTHEAD }), secondPage()];
+    const witnesses = [
+      `${TITLE.replace(/ /g, "_")}.pdf`,
+      `Microsoft Word - ${TITLE}`,
+      `${TITLE} - final copy.docx`,
+      `arXiv:2401.12345v2 ${TITLE}`,
+      `${TITLE} `.repeat(6),
+    ];
+    for (const info of witnesses) expect((await read(pages, { info })).doc?.title, info).toBe(JOURNAL);
+    // The same words as a title are a witness.
+    expect((await read(pages, { info: TITLE })).doc?.title).toBe(TITLE);
+  });
+
+  it("is no witness under three words, nor when nothing on the page is in it", async () => {
+    const short = [firstPage({ above: MASTHEAD, title: ["Sodium Cathodes"] }), secondPage()];
+    expect((await read(short, { info: "Sodium Cathodes" })).doc?.title).toBe(JOURNAL);
+    expect((await read(short, { info: "Sodium Cathodes Revisited" })).doc?.title).toBe("Sodium Cathodes");
+    const pages = [firstPage({ above: MASTHEAD }), secondPage()];
+    expect((await read(pages, { info: "A Quite Different Study Of Goats" })).doc?.title).toBe(JOURNAL);
+  });
+
+  it("a witness leaves out a line of the title's size that is not in it: an article-type label", async () => {
+    const above: Run[] = [["RESEARCH ARTICLE", 72, 60, 24]];
+    const pages = [firstPage({ above }), secondPage()];
+    expect((await read(pages, { info: TITLE })).doc?.title).toBe(TITLE);
+    // With no witness the class is read whole, as it always was.
+    expect((await read(pages)).doc?.title).toBe(`RESEARCH ARTICLE ${TITLE}`);
+  });
+
+  it("(c) a normal paper is unchanged by its own embedded title", async () => {
+    const pages = [firstPage(), secondPage()];
+    expect((await read(pages)).doc?.title).toBe(TITLE);
+    expect((await read(pages, { info: TITLE, xmp: TITLE })).doc?.title).toBe(TITLE);
+  });
+});
+
+describe("rule 2: with no embedded title, the largest class that is not a masthead", () => {
+  it("(d) a masthead of fewer than three words above the title is a name, not the title", async () => {
+    const pages = [firstPage({ above: [["Applied Cathodes", 72, 50, 30]] }), secondPage()];
+    expect((await read(pages)).doc?.title).toBe(TITLE);
+  });
+
+  it("(d) a masthead the running heads repeat is a masthead, whatever its words", async () => {
+    const pages = [firstPage({ above: MASTHEAD }), ...pagesWithHeads()];
+    expect((await read(pages)).doc?.title).toBe(TITLE);
+  });
+
+  it("(d) the limit: a masthead of three words that no running head repeats, with no embedded title, is read as the title", async () => {
+    // What cannot be told from a title without a witness. Pinned so the choice is a deliberate one.
+    expect((await read([firstPage({ above: MASTHEAD }), secondPage()])).doc?.title).toBe(JOURNAL);
+  });
+
+  it("a short title is not taken for a masthead: the authors under it are set much smaller", async () => {
+    const result = await read([firstPage({ title: ["Sodium Cathodes"] }), secondPage()]);
+    expect(result.doc?.title).toBe("Sodium Cathodes");
+  });
+
+  it("a title the running heads repeat is not taken for a masthead when only the authors stand below it", async () => {
+    const heads: Run[][] = [
+      [["Reversible Sodium Storage in Layered Oxide Cathodes Revisited", 72, 40, 8], ...at(LATER, 100)],
+      [["Reversible Sodium Storage in Layered Oxide Cathodes Revisited", 72, 40, 8], ...at(SENTENCES.slice(0, 6), 100)],
+    ];
+    expect((await read([firstPage(), ...heads])).doc?.title).toBe(TITLE);
   });
 });
