@@ -2519,6 +2519,18 @@ Readers' points recorded, unpriced:
 
 **A P12-57 phase 4** (C1: P6 × 5, P4 × 2) has started on `e8af6ed1`.
 
+### §1h.475 — 2026-10-28 — C P12-89: RULE 2 STANDS; RULE 1 REVISED (THE TAB LEFT OF THE STRIP, IF THE GUTTER ALLOWS)
+
+C P12-89 reported rules 1 and 2 (`e65cb81f`, `98f600fc`, checkpoint `c4e930c0`).
+
+**Rule 2 stands:** the dividers' strips end at the legend's top at every scroll and Fit zoom (mutations 31 and 33 red, by C).
+
+**Rule 1's new place is refused.** The tab stood inside the margin at its left edge, 2 px clear of the strip. That opens two new overlaps: it covers the first ~5 px of a card's text lines, and with three cards at 1024 × 576 or 853 × 480 it covers part of a card header. B5 is in Theme B's matrix, so each would be an extra in round 4.
+
+**Revised rule 1:** the tab stands left of the strip, in the centre column's right gutter, 2 px clear. It meets no paper text and no control, and it never meets a card. C first measures the gutter (text's right edge to the strip) at three windows × two steps × one to three cards. It builds only if every gap is ≥ 17 px; otherwise it reports, and the manager rules.
+
+Nothing of C P12-89 lands until then.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2861,7 +2873,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-86 | DONE — C (Sonnet); landed at e024cc39 (§1h.468) | Tier 1: no setup role after the opening run (damage guard); the fallback's cause logged as counts | invented fixtures; own mutations; gates | checkpoint P12-86-C-<UTC>.md | briefs/P12-86.md; §1h.464 |
 | P12-87 | DONE — A (Sonnet), report on the branch (6c5c8347); 36/36, no extras, 100 ×3; readers running (§1h.469) | Theme A A1–A12 + E3 re-check | rubric | walk, pack, P12-87-A-<UTC>.md | briefs/P12-87.md; §1h.467 |
 | P12-88 | DONE — A (Sonnet), report on the branch (1f906d66); 12/12 ×3, E2 + E5, 95.83 ×3; readers running (§1h.471) | Theme B B1–B12 + round 2's marks | rubric | walk, pack, P12-88-A-<UTC>.md | briefs/P12-88.md; §1h.467 |
-| P12-89 | IN_PROGRESS — C (Sonnet), scratch p12/c89, rules 1 + 2 (§1h.473); resumed after the limit | E5: the notes tab never stands over the margin's pane divider | tests; own mutation; gates | checkpoint P12-89-C-<UTC>.md | briefs/P12-89.md; §1h.471 |
+| P12-89 | IN_PROGRESS — C (Sonnet); rule 2 built; rule 1 revised (§1h.475), gutter measure first | E5: the notes tab never stands over the margin's pane divider | tests; own mutation; gates | checkpoint P12-89-C-<UTC>.md | briefs/P12-89.md; §1h.471 |
 | P12-90 | DONE — C (Sonnet); landed at 8bf1dadb (§1h.473) | Tier 1: no one-paragraph review piece (except a closing); refused corrections log their numbers | invented fixtures; own mutations; gates | checkpoint P12-90-C-<UTC>.md | briefs/P12-90.md; §1h.472 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
