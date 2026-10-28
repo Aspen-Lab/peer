@@ -34,8 +34,10 @@ const textOf = (jsx: string) =>
     .trim();
 const rowText = textOf(row);
 
+// R1-fixB item 3 (A1) — CHANGED: was "…, so the key does not follow your account
+// to another device or browser: there, paste it again. …", which read clumsily.
 const WHERE_THE_KEY_LIVES =
-  "Your key stays in this browser only. Peer passes it on to the provider you choose and never stores it on its server, so the key does not follow your account to another device or browser: there, paste it again. Signing out removes it from this browser.";
+  "Your key stays in this browser only. Peer passes it on to the provider you choose and never stores it on its server, so it does not follow your account: on another device or browser, paste it again. Signing out removes it from this browser.";
 // L2-fix item 5 (R14; L2-A D4): a copy with no sign-in has no account and no signing out.
 const WHERE_THE_KEY_LIVES_NO_SIGN_IN =
   "Your key stays in this browser only. Peer passes it on to the provider you choose and never stores it on its server.";

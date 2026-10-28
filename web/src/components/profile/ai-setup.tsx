@@ -147,7 +147,7 @@ export function keyHomeText(authOutcome: AuthOutcome): string {
     "Your key stays in this browser only. Peer passes it on to the provider you choose and never stores it on its server";
   return authOutcome === "unconfigured"
     ? `${stays}.`
-    : `${stays}, so the key does not follow your account to another device or browser: there, paste it again. Signing out removes it from this browser.`;
+    : `${stays}, so it does not follow your account: on another device or browser, paste it again. Signing out removes it from this browser.`;
 }
 
 /**
