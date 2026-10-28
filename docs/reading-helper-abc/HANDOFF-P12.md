@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-28T02:58Z
+AS OF        2026-10-28T03:08Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
-LAST RULING  §1h.441   NEXT RULING §1h.442   NEXT ITEM ID P12-70   NEXT FREE PORT 4246
+LAST RULING  §1h.442   NEXT RULING §1h.443   NEXT ITEM ID P12-71   NEXT FREE PORT 4246
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
 RUNNING      A P12-37 (4240) ∥ A P12-38 (4241) ∥ C P12-63 (closing split on the page) ∥ C P12-64 (titles) ∥ C P12-49 (headings) ∥ C P12-62 (first end-matter part) ∥ C P12-65 (no overwrite, 4243) ∥ C P12-66 (focus, 4245) ∥ C P12-53 (Tier 1) ∥ C P12-56 (Extended Data, R6b, R15a) ∥ C P12-58 (body arrives) ∥ C P12-61 (kept cut, then page-only)
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
@@ -677,6 +677,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-28T02:40Z | manager (Claude) | §1h.440: C49 × C51 reconcile rule; C62 appendix flag; C P12-68 (caption cap) dispatched; Theme C with C49 in the free copy: P3 6 / 8 | evidence: briefs/P12-68.md; mgr/out/P1-3-c49.json | next: verify C53 on the head
 
 - 2026-10-28T02:58Z | manager (Claude) | §1h.441: C P12-61 done (upload figure call ~210 → ~113 MB; a second view opens no PDF); C P12-69 written (takedown + privacy page), to start on the head that contains C P12-61; combining C56 + C49 + C58 + C61 for one full suite | evidence: P12-61 checkpoint; briefs/P12-69.md | next: the combined gates
+
+- 2026-10-28T03:08Z | manager (Claude) | §1h.442: eight Cs combined (0c4e38c0); 5 integration failures → C P12-70; C P12-53 adapting to Tier 0 | evidence: mgr/gates-combo1.log (running) | next: C P12-70, then one full suite and land
 
 ---
 
