@@ -233,10 +233,13 @@ describe("A2 — the unnamed parts between the introduction and the first named 
     expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "setup", "evidence", "evidence", "evidence", "method"]);
   });
 
+  // P12-63 (rule 5), RE-AIMED (§1c): the part held ONE named sub-heading ("2.1 Methods used on the shore"), and a part whose named sub-headings all name one
+  // role now takes it (A5: the part is method, see its own tests). The claim here - a named sub-heading does not end the run - is kept with a part whose two
+  // named sub-headings name two roles, so that A5 does not fire and A2 reads the part.
   it("looks at top-level parts only: a named sub-heading does not end the run", () => {
-    const doc = paper([["1 Introduction", 3], ["2 " + SNAILS, 4], ["2.1 Methods used on the shore", 2], ["3 " + SHELLS, 3], ["4 Discussion", 2]]);
+    const doc = paper([["1 Introduction", 3], ["2 " + SNAILS, 4], ["2.1 Methods used on the shore", 2], ["2.2 Limitations", 1], ["3 " + SHELLS, 3], ["4 Discussion", 2]]);
 
-    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "method", "evidence", "interpretation"]);
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "method", "interpretation", "evidence", "interpretation"]);
   });
 
   it("(d) is not done in a paper with no introduction to stand on: a descriptive heading stays untagged", () => {
@@ -363,10 +366,13 @@ describe("A4 — a sub-row takes its part's role", () => {
     expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "evidence", "evidence", "method"]);
   });
 
+  // P12-63 (rule 5), RE-AIMED (§1c): the part held ONE named sub-heading ("2.2 Limitations"), and a part whose named sub-headings all name one role now takes it
+  // (A5: the part is interpretation, see its own tests). The claim here - a sub-heading that names a role is never overridden, and its unnamed sibling takes
+  // the part's role - is kept with a part whose two named sub-headings name two roles, so that A5 does not fire and A2 reads the part.
   it("never overrides a sub-heading that names a role", () => {
-    const doc = paper([["1 Introduction", 3], ["2 " + SNAILS, 2], ["2.1 Counts by site", 2], ["2.2 Limitations", 2], ["3 Methods", 2]]);
+    const doc = paper([["1 Introduction", 3], ["2 " + SNAILS, 2], ["2.1 Counts by site", 2], ["2.2 Limitations", 2], ["2.3 Methods used on the shore", 2], ["3 Methods", 2]]);
 
-    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "evidence", "interpretation", "method"]);
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "evidence", "interpretation", "method", "method"]);
   });
 
   it("leaves a sub-row alone where its part has no role", () => {
@@ -423,6 +429,152 @@ describe("A4 — a sub-row takes its part's role", () => {
     expect(inferRoles(rows, null).map((r) => r.role)).toEqual(["setup", "evidence", "evidence", "evidence", "method"]);
     // Without an introduction to stand on, nothing is inferred.
     expect(inferRoles(rows.slice(1), null).map((r) => r.role)).toEqual(["body", "body", "body", "method"]);
+  });
+});
+
+// P12-63 (rule 5; ruling §1h.436 (c)): an unnamed part whose named sub-headings all name one role has that role. The LaTeXML-style case C P12-48 reported
+// (§7 point 5): "3 Causal Explanations and Counterfactual Generation" between a named introduction and a named conclusion, over "3.2 Our Solution", a
+// method; A2 called the part evidence and its own sub-heading contradicted it.
+describe("A5 - an unnamed part whose named sub-headings all name one role takes that role", () => {
+  const row = (id: string, heading: string, canonical: string, role: ReadingMapSection["role"], extra: Partial<ReadingMapSection> = {}): ReadingMapSection => ({
+    id,
+    heading,
+    canonical,
+    role,
+    words: 30,
+    minutes: 1,
+    paragraphs: [{ index: 0, opening: "x" }],
+    level: 1,
+    ...extra,
+  });
+
+  it("(d) takes method over two named method sub-headings - evidence before, method after", () => {
+    const doc = paper([
+      ["1 Introduction", 3],
+      ["2 How the shore was surveyed", 3],
+      ["2.1 Methods", 2],
+      ["2.2 Experimental procedures", 2],
+      ["3 " + SNAILS, 4],
+      ["4 Discussion", 2],
+    ]);
+    const map = buildReadingMap(doc);
+
+    expect(map.sections.map((r) => [r.heading, r.canonical])).toEqual([
+      ["1 Introduction", "introduction"],
+      ["2 How the shore was surveyed", "body"],
+      ["2.1 Methods", "methods"],
+      ["2.2 Experimental procedures", "methods"],
+      ["3 " + SNAILS, "body"],
+      ["4 Discussion", "discussion"],
+    ]);
+    // A2 alone (the part's own sub-rows not read) would call the part evidence, as the part after it is.
+    expect(map.sections.map((r) => r.role)).toEqual(["setup", "method", "method", "method", "evidence", "interpretation"]);
+  });
+
+  it("keeps the heading and the bucket the paper printed: only the role is worked out", () => {
+    const part = buildReadingMap(paper([["1 Introduction", 3], ["2 How the shore was surveyed", 3], ["2.1 Methods", 2], ["3 Discussion", 2]])).sections[1];
+
+    expect(part).toMatchObject({ heading: "2 How the shore was surveyed", canonical: "body", role: "method" });
+  });
+
+  it("takes the role of ONE named sub-heading, the unnamed ones not counting: the sub-heading's role, and its unnamed sibling the part's (A4)", () => {
+    const doc = paper([["1 Introduction", 3], ["2 " + SNAILS, 3], ["2.1 Counts by site", 2], ["2.2 Limitations", 2], ["3 Methods", 2]]);
+
+    // The original A4 fixture, before A5: the part was evidence; its only named sub-heading says interpretation.
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "interpretation", "interpretation", "interpretation", "method"]);
+    const methods = paper([["1 Introduction", 3], ["2 " + SNAILS, 4], ["2.1 Methods used on the shore", 2], ["3 " + SHELLS, 3], ["4 Discussion", 2]]);
+
+    expect(rolesOf(methods).map(([, role]) => role)).toEqual(["setup", "method", "method", "evidence", "interpretation"]);
+  });
+
+  it("is not done where the named sub-headings name two roles: A2 reads the part", () => {
+    const doc = paper([["1 Introduction", 3], ["2 " + SNAILS, 3], ["2.1 Methods used on the shore", 2], ["2.2 Limitations", 2], ["3 Discussion", 2]]);
+
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "method", "interpretation", "interpretation"]);
+  });
+
+  it("is not done where no sub-heading names a role", () => {
+    const doc = paper([["1 Introduction", 3], ["2 " + SNAILS, 3], ["2.1 Counts by site", 2], ["2.2 Counts by season", 2], ["3 Discussion", 2]]);
+
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "evidence", "evidence", "interpretation"]);
+  });
+
+  it("never overrides a part that names its role", () => {
+    // Through the extractors, the sub-headings of a named part take its bucket (`withInheritedBuckets`), so the part keeps its role...
+    const doc = paper([["1 Introduction", 3], ["2 Results", 3], ["2.1 Methods used on the shore", 2], ["3 Discussion", 2]]);
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "evidence", "interpretation"]);
+    // ...and in a map read before the inheritor existed, where a sub-row names another role, the part is still the one its heading names.
+    const rows = [
+      row("a", "1 Introduction", "introduction", "setup"),
+      row("b", "2 Results", "results", "evidence"),
+      row("c", "2.1 Methods used on the shore", "methods", "method", { level: 2, parentId: "b" }),
+      row("d", "3 Discussion", "discussion", "interpretation"),
+    ];
+
+    expect(inferRoles(rows, null).every((r, k) => r === rows[k])).toBe(true);
+  });
+
+  it("reads before the continuation of A3: a part right after a named method part has the role its sub-headings name", () => {
+    const doc = paper([["1 Introduction", 3], ["2 Methods", 2], ["3 How the counts were read", 3], ["3.1 Results", 2], ["4 Discussion", 2]]);
+
+    // Without A5 the part right after the methods continues them (A3).
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "method", "evidence", "evidence", "interpretation"]);
+  });
+
+  it("reads before the back matter of A2: a part directly before the references has the role its sub-headings name", () => {
+    const doc = paper([["1 Introduction", 3], [SNAILS, 3], ["2 How the shore was surveyed", 2], ["2.1 Methods", 2], ["References", 2]]);
+
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "method", "method", "apparatus"]);
+  });
+
+  it("reads before the back matter of A3: a part after the references has the role its sub-headings name", () => {
+    const doc = paper([["1 Introduction", 3], [SNAILS, 3], ["Discussion", 2], ["References", 2], ["5 Survey details", 2], ["5.1 Experimental procedures", 2]]);
+
+    // Without A5 the part after the references is back matter (A3).
+    expect(rolesOf(doc).map(([, role]) => role)).toEqual(["setup", "evidence", "interpretation", "apparatus", "method", "method"]);
+  });
+
+  it("takes the one role of its named sub-rows, however the map was made (hand-built rows)", () => {
+    const rows = [
+      row("a", "1 Introduction", "introduction", "setup"),
+      row("b", "3 Causal Explanations and Counterfactual Generation", "body", "body"),
+      row("c", "3.1 Setting", "body", "body", { level: 2, parentId: "b" }),
+      row("d", "3.2 Our Solution", "methods", "method", { level: 2, parentId: "b" }),
+      row("e", "4 Conclusion", "conclusion", "interpretation"),
+    ];
+
+    expect(inferRoles(rows, null).map((r) => r.role)).toEqual(["setup", "method", "method", "method", "interpretation"]);
+  });
+
+  it("is a top-level part's alone, and only where there is an introduction to stand on", () => {
+    const rows = [
+      row("b", "3 Causal Explanations", "body", "body"),
+      row("d", "3.2 Our Solution", "methods", "method", { level: 2, parentId: "b" }),
+      row("e", "4 Conclusion", "conclusion", "interpretation"),
+    ];
+    // No introduction anywhere: nothing is worked out.
+    expect(inferRoles(rows, null).map((r) => r.role)).toEqual(["body", "method", "interpretation"]);
+    // Above the introduction: left alone.
+    const above = [row("z", "0 Notes", "body", "body"), row("y", "0.1 Experimental procedures", "methods", "method", { level: 2, parentId: "z" }), row("a", "1 Introduction", "introduction", "setup")];
+    expect(inferRoles(above, null).map((r) => r.role)).toEqual(["body", "method", "setup"]);
+    // A sub-part that has sub-parts of its own is not read for them: only the top-level part's direct sub-rows say its role.
+    const deep = [
+      row("a", "1 Introduction", "introduction", "setup"),
+      row("b", "2 Counts", "body", "body"),
+      row("c", "2.1 Sites", "body", "body", { level: 2, parentId: "b" }),
+      row("d", "2.1.1 Experimental procedures", "methods", "method", { level: 3, parentId: "c" }),
+    ];
+    expect(inferRoles(deep, null).map((r) => r.role)).toEqual(["setup", "evidence", "evidence", "method"]);
+  });
+
+  it("leaves a paper that names every part as it is, and changes no row it does not read", () => {
+    const rows = [
+      row("a", "1 Introduction", "introduction", "setup"),
+      row("b", "2 Methods", "methods", "method"),
+      row("c", "2.1 Field work", "methods", "method", { level: 2, parentId: "b" }),
+    ];
+
+    expect(inferRoles(rows, null).every((r, k) => r === rows[k])).toBe(true);
   });
 });
 

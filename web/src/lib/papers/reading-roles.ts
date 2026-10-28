@@ -18,7 +18,9 @@
 //   A3. unnamed top-level rows after a references row are apparatus; an unnamed row right after a named method
 //       or apparatus row continues that role;
 //   A4. sub-rows take their part's role (a part whose role was worked out here; the sub-headings of a part that
-//       names its role already have its bucket from the extractors' inheritor).
+//       names its role already have its bucket from the extractors' inheritor);
+//   A5. (P12-63) an unnamed top-level row whose named sub-rows all name one role takes that role - before A2 and A3
+//       read it, so A2 does not call a part evidence that its own sub-headings call method.
 //
 // Never overridden: a row whose heading names a role (its `role` is not `body`). Never applied to a paper with
 // no introduction to stand on: one that names none and whose first section is not the front text of a paper
@@ -159,6 +161,14 @@ export function inferRoles(rows: readonly ReadingMapSection[], trunkId: string |
   const evidenceEnd = boundary < 0 ? top.length : boundary;
   const firstReferences = top.findIndex((row) => row.canonical === "references");
 
+  // A5: the roles the named sub-rows of each part name (a sub-row whose heading names no role says nothing).
+  const named = new Map<string, Set<ReadingRole>>();
+  for (const row of rows) {
+    if (row.parentId === undefined || row.role === "body") continue;
+    const roles = named.get(row.parentId) ?? new Set<ReadingRole>();
+    named.set(row.parentId, roles.add(row.role));
+  }
+
   const patches = new Map<string, Partial<ReadingMapSection>>();
   top.forEach((row, t) => {
     if (row.role !== "body") return;
@@ -168,6 +178,12 @@ export function inferRoles(rows: readonly ReadingMapSection[], trunkId: string |
       return;
     }
     if (t <= anchor.at) return;
+    // A5: the part's named sub-rows all name one role - the part has it, whatever stands around it.
+    const children = named.get(row.id);
+    if (children?.size === 1) {
+      patches.set(row.id, { role: [...children][0] });
+      return;
+    }
     // A3: an unnamed row right after a named method or back-matter row continues that role.
     const before = top[t - 1];
     if (before.role === "method" || before.role === "apparatus") patches.set(row.id, { role: before.role });

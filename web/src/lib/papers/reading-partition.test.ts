@@ -969,16 +969,20 @@ describe("closingPartition — the closing of a paper that names no discussion o
     expect(splitOf(headed).partition?.sectionId).toBe("s1");
   });
 
+  // P12-63 (rule 5), RE-AIMED (§1c): the row held ONE named sub-row ("2.1 Methods used on the shore"), and a part whose named sub-rows all name one role now
+  // takes it (the part would be method, and no longer the last evidence row). The claim here - a row with rows under it is not divided - is kept with a row whose
+  // two named sub-rows name two roles, so that the part stays evidence (A2).
   it("is not done to a row that has rows under it", () => {
-    // The last evidence row is "2 …", which holds the cue; the row under it is the methods, so it is the last evidence row.
+    // The last evidence row is "2 …", which holds the cue; the rows under it are the methods and the limitations, so it is the last evidence row.
     const doc = shore([
       ["1 Introduction", plain(3)],
       ["2 " + SNAILS, [...plain(3), SUMMARY, OUTLOOK]],
       ["2.1 Methods used on the shore", plain(2)],
+      ["2.2 Limitations", plain(1)],
     ]);
     const { map, partition } = splitOf(doc);
 
-    expect(map.sections.map((row) => [row.role, row.parentId ?? null])).toEqual([["setup", null], ["evidence", null], ["method", "s1"]]);
+    expect(map.sections.map((row) => [row.role, row.parentId ?? null])).toEqual([["setup", null], ["evidence", null], ["method", "s1"], ["interpretation", "s1"]]);
     expect(partition).toBeNull();
     // Without the row under it, the same part is divided.
     expect(splitOf(shore([["1 Introduction", plain(3)], ["2 " + SNAILS, [...plain(3), SUMMARY, OUTLOOK]], ["3 Methods", plain(2)]])).partition?.sectionId).toBe("s1");
