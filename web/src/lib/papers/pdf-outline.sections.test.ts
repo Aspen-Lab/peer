@@ -8,6 +8,9 @@ import { buildOutline, type OutlineSection, type PdfPageText, type PdfTextItem }
 //       notes) and what followed a supporting-information line (acknowledgements, statements) was dropped;
 //   O6  a paper that names neither an abstract nor an introduction had no row for its unheaded opening;
 //   O8  the text of a figure's panels (axis labels, panel letters, tick strings) became rows and prose.
+// P12-62 (C, §1h.435): the first end-matter heading opens its section too, as the later ones do (it and the
+// text under it had stayed out since P7-18); the references and an appendix stay out. The cases of this file that
+// pinned the exclusion are re-aimed below, each marked "P12-62, RE-AIMED" with its reason.
 // The pages are one column, as the engine's other tests set them: a row is {text, kind, gap}.
 
 type Kind =
@@ -194,8 +197,9 @@ const numberedMethodsAfterReferences = (): PdfPageText[] => [
   ]),
 ];
 
-/** (d) A numbered paper that names every part; its acknowledgements are the first end matter. */
-const numberedPaper = (): PdfPageText[] => [
+/** (d) A numbered paper that names every part; its acknowledgements are the first end matter (`thanks`), or,
+ *  with `thanks` false, its references are. */
+const numberedPaper = (thanks = true): PdfPageText[] => [
   page(1, [
     r("A Paper About Quillwort Cathodes", "title"),
     r("Ada Fenwick", "author", 20),
@@ -209,8 +213,9 @@ const numberedPaper = (): PdfPageText[] => [
     ...prose(...RESULTS),
     r("4 Conclusion", "num", 20),
     ...prose("Slow cooling keeps the grain edges whole, and the films keep their capacity for it."),
-    r("Acknowledgements", "head", 20),
-    r("We thank the staff of the furnace room for their patience and their time."),
+    ...(thanks
+      ? [r("Acknowledgements", "head", 20), r("We thank the staff of the furnace room for their patience and their time.")]
+      : []),
     r("References", "head", 20),
     ...prose(...REFERENCES),
   ]),
@@ -235,11 +240,16 @@ describe("an end-matter heading no longer ends the outline (P12-51, O5)", () => 
     expect(text).not.toContain("Journal of");
   });
 
-  it("reads the acknowledgements and statements that follow a supporting-information line", () => {
-    // Before: the supporting-information line ended the outline and everything after it was discarded.
+  // P12-62, RE-AIMED (was "reads the acknowledgements and statements that follow a supporting-information line"):
+  // the supporting-information line is the first end matter and opens a section of its own now, filed under
+  // `supplementary` (a row ahead of the acknowledgements); the three parts after it, and the reference entries
+  // staying out, are as they were. Only the missing first row changed.
+  it("reads the supporting-information line, and the acknowledgements and statements that follow it", () => {
+    // Before P12-51: the supporting-information line ended the outline and everything after it was discarded.
     expect(bucketsOf(supportingFirst())).toEqual([
       ["1 Introduction", "introduction"],
       ["2 Results", "results"],
+      ["Supporting Information", "supplementary"],
       ["Acknowledgements", "acknowledgments"],
       ["Author Contributions", "acknowledgments"],
       ["Competing interests", "acknowledgments"],
@@ -250,13 +260,22 @@ describe("an end-matter heading no longer ends the outline (P12-51, O5)", () => 
     expect(text).not.toContain("Someone");
   });
 
-  it("still leaves the first end-matter heading, and the text under it, out", () => {
-    // P7-18: the supporting-information line is the first end matter, so what it holds stays out...
-    expect(textOf(supportingFirst())).not.toContain("Supporting Information is available");
-    // ...and so does a first Acknowledgements, and what it holds.
+  // P12-62, RE-AIMED (was "still leaves the first end-matter heading, and the text under it, out"): the rule
+  // it pinned is the one P12-62 reverses; the argument's prose still takes none of the end matter's text, and the
+  // text now stands in a section of its own under the first end-matter heading.
+  it("opens a section at the first end-matter heading and reads the text under it, which the argument's sections do not take", () => {
+    const line = "The Supporting Information is available free of charge from the publisher.";
+    expect(sectionsOf(supportingFirst()).find((s) => s.heading === "Supporting Information")).toEqual(
+      section("Supporting Information", "supplementary", line),
+    );
+    const argument = sectionsOf(supportingFirst()).filter((s) => BODY_HEADINGS.includes(s.heading ?? ""));
+    expect(argument.map((s) => s.text).join(" ")).not.toContain("Supporting Information is available");
+    // A first Acknowledgements opens its section too, and what it holds is read.
     const first: Row[] = [...BODY_ROWS, r("Acknowledgements", "head", 20), r("We thank the staff of the furnace room for their patience.")];
-    expect(headingsOf([page(1, first)])).toEqual(BODY_HEADINGS);
-    expect(textOf([page(1, first)])).not.toContain("We thank");
+    expect(headingsOf([page(1, first)])).toEqual([...BODY_HEADINGS, "Acknowledgements"]);
+    expect(sectionsOf([page(1, first)]).at(-1)).toEqual(
+      section("Acknowledgements", "acknowledgments", "We thank the staff of the furnace room for their patience."),
+    );
   });
 
   it("reads the sub-headings of a Methods after the references as the body's, and its notes after it", () => {
@@ -295,28 +314,54 @@ describe("an end-matter heading no longer ends the outline (P12-51, O5)", () => 
     expect(textOf(appendixAfterReferences())).not.toContain("triangle inequality");
   });
 
-  it("files an end-matter part that no bucket names under the apparatus bucket", () => {
+  // P12-62, RE-AIMED (was "files an end-matter part that no bucket names under the apparatus bucket", with the first
+  // part's line "Not read: this heading is the first end matter."): the first end-matter part (AUTHOR INFORMATION) is
+  // read now, so its line is read and the part is a row of its own; the apparatus bucket for a part no bucket names
+  // is asserted for the first and for the second part alike. The line is changed to match what the test now says.
+  it("files an end-matter part that no bucket names under the apparatus bucket, the first one too", () => {
     const rows: Row[] = [
       ...BODY_ROWS,
       r("AUTHOR INFORMATION", "head", 20),
-      r("Not read: this heading is the first end matter."),
+      r("The authors are named in the order in which they worked on the paper."),
       r("ASSOCIATED CONTENT", "head", 20),
       r("The online content of this paper is kept with the publisher."),
     ];
-    expect(bucketsOf([page(1, rows)])).toEqual([...BODY_HEADINGS.map((h, i) => [h, ["introduction", "results"][i]]), ["ASSOCIATED CONTENT", "acknowledgments"]]);
+    expect(bucketsOf([page(1, rows)])).toEqual([
+      ...BODY_HEADINGS.map((h, i) => [h, ["introduction", "results"][i]]),
+      ["AUTHOR INFORMATION", "acknowledgments"],
+      ["ASSOCIATED CONTENT", "acknowledgments"],
+    ]);
   });
 
-  it("reads a paper that names every part exactly as it did", () => {
-    // (d) Byte-identical to the outline before P12-51: its acknowledgements are the first end matter and its references end it.
+  const NUMBERED_SECTIONS = [
+    section("Abstract", "abstract", "Quillwort cathodes degrade slowly, and slow cooling after growth keeps their edges whole."),
+    section("1 Introduction", "introduction", INTRO.join(" ")),
+    section("2 Methods", "methods", METHODS_ONE.join(" ")),
+    section("3 Results", "results", RESULTS.join(" ")),
+    section("4 Conclusion", "conclusion", "Slow cooling keeps the grain edges whole, and the films keep their capacity for it."),
+  ];
+  // P12-62, RE-AIMED (was "reads a paper that names every part exactly as it did", byte-identical with its
+  // acknowledgements, the first end matter, left out): every other section, the title and the figures are as they
+  // were, and the acknowledgements are one row more, the last. (The same paper whose end matter opens with the
+  // references is byte-identical to the outline before P12-51: the case after this one.)
+  it("reads a paper that names every part exactly as it did, and its acknowledgements, the first end matter, as one section more", () => {
     expect(buildOutline(numberedPaper())).toEqual({
       title: "A Paper About Quillwort Cathodes",
       sections: [
-        section("Abstract", "abstract", "Quillwort cathodes degrade slowly, and slow cooling after growth keeps their edges whole."),
-        section("1 Introduction", "introduction", INTRO.join(" ")),
-        section("2 Methods", "methods", METHODS_ONE.join(" ")),
-        section("3 Results", "results", RESULTS.join(" ")),
-        section("4 Conclusion", "conclusion", "Slow cooling keeps the grain edges whole, and the films keep their capacity for it."),
+        ...NUMBERED_SECTIONS,
+        section("Acknowledgements", "acknowledgments", "We thank the staff of the furnace room for their patience and their time."),
       ],
+      figureCaptions: [],
+      pageCount: 1,
+      reason: null,
+    });
+  });
+
+  it("reads a paper whose end matter opens with the references exactly as it did: the entries stay out and nothing is added", () => {
+    // (c) Byte-identical to the outline before P12-51 and to the outline before P12-62.
+    expect(buildOutline(numberedPaper(false))).toEqual({
+      title: "A Paper About Quillwort Cathodes",
+      sections: NUMBERED_SECTIONS,
       figureCaptions: [],
       pageCount: 1,
       reason: null,
@@ -691,8 +736,11 @@ const argumentWordsAfterAppendix = (): PdfPageText[] => [
 ];
 
 describe("an appendix after the references is not read although its headings name an argument part (P12-51, O5)", () => {
+  // P12-62, RE-AIMED (only its first assertion): the fixture's Acknowledgements is the first end matter, ahead of the
+  // references, and opens a section now; the lettered appendix sections after the references stay out, which is
+  // what the test is about, and its three text assertions are unchanged.
   it("leaves lettered appendix sections out, whatever words their headings hold", () => {
-    expect(headingsOf(lettersAfterReferences())).toEqual(BODY_HEADINGS);
+    expect(headingsOf(lettersAfterReferences())).toEqual([...BODY_HEADINGS, "Acknowledgements"]);
     const text = textOf(lettersAfterReferences());
     for (const appendixText of ["triangle inequality", "extra curves", "glove box"]) expect(text).not.toContain(appendixText);
   });
@@ -706,5 +754,121 @@ describe("an appendix after the references is not read although its headings nam
   it("still reads a Methods that follows the references when no appendix has begun", () => {
     expect(headingsOf(methodsAfterReferences())).toContain("Methods");
     expect(headingsOf(afterTheReferences())).toContain("Methods");
+  });
+});
+
+// ── P12-62: the first end-matter heading opens its section, as the later ones do ─────────────────────────────
+
+const DATA_STATEMENT = "The numbers behind every figure are kept with the authors and are shared on request.";
+const THANKS = "We thank the staff of the furnace room for their patience and their time.";
+
+/** (a) The end matter opens with a data-availability statement, then acknowledgements, then the references. */
+const dataFirst = (): PdfPageText[] => [
+  page(1, [
+    ...BODY_ROWS,
+    r("Data availability", "head", 20),
+    r(DATA_STATEMENT),
+    r("Acknowledgements", "head", 20),
+    r(THANKS),
+    r("References", "head", 20),
+    ...prose(...REFERENCES),
+  ]),
+];
+
+/** (b) The end matter opens with a supporting-information line, then acknowledgements, then the references. */
+const supportingLineFirst = (): PdfPageText[] => [
+  page(1, [
+    ...BODY_ROWS,
+    r("Supporting Information Available", "head", 20),
+    r("The extra curves for every cell are kept in a file that the publisher holds for readers."),
+    r("Acknowledgements", "head", 20),
+    r(THANKS),
+    r("References", "head", 20),
+    ...prose(...REFERENCES),
+  ]),
+];
+
+describe("the first end-matter heading opens its section, as the later ones do (P12-62)", () => {
+  it("(a) opens a section at a data-availability statement that opens the end matter, ahead of the acknowledgements", () => {
+    // Before: the first section after the argument was the acknowledgements; the data statement was dropped.
+    expect(sectionsOf(dataFirst())).toEqual([
+      section("1 Introduction", "introduction", INTRO.join(" ")),
+      section("2 Results", "results", RESULTS.join(" ")),
+      section("Data availability", "acknowledgments", DATA_STATEMENT),
+      section("Acknowledgements", "acknowledgments", THANKS),
+    ]);
+  });
+
+  it("(b) opens a section at a supporting-information line that opens the end matter, ahead of the acknowledgements", () => {
+    // Before: the first section after the argument was the acknowledgements; the line was dropped.
+    expect(sectionsOf(supportingLineFirst())).toEqual([
+      section("1 Introduction", "introduction", INTRO.join(" ")),
+      section("2 Results", "results", RESULTS.join(" ")),
+      section(
+        "Supporting Information Available",
+        "supplementary",
+        "The extra curves for every cell are kept in a file that the publisher holds for readers.",
+      ),
+      section("Acknowledgements", "acknowledgments", THANKS),
+    ]);
+  });
+
+  it("(c) leaves a paper whose end matter opens with the references as it was: the entries out, no section added", () => {
+    const rows: Row[] = [...BODY_ROWS, r("References", "head", 20), ...prose(...REFERENCES)];
+    expect(sectionsOf([page(1, rows)])).toEqual([
+      section("1 Introduction", "introduction", INTRO.join(" ")),
+      section("2 Results", "results", RESULTS.join(" ")),
+    ]);
+    // Then the notes after the references are the ones P12-51 reads, and nothing about them changes.
+    expect(headingsOf(afterTheReferences())).toEqual([...BODY_HEADINGS, "Methods", "Data availability", "Competing interests"]);
+  });
+
+  it("keeps the reference entries out of the sections that open before and after them", () => {
+    const text = textOf(dataFirst());
+    expect(text).not.toContain("Someone");
+    expect(text).not.toContain("Journal of");
+  });
+
+  it("gives the section the page its heading stands on", () => {
+    const pages = [page(1, BODY_ROWS), page(2, [r("Data availability", "head", 20), r(DATA_STATEMENT), r("References", "head", 20), ...prose(...REFERENCES)])];
+    expect(sectionsOf(pages).at(-1)).toEqual({ heading: "Data availability", canonical: "acknowledgments", page: 2, text: DATA_STATEMENT });
+  });
+
+  it("names the part by the words of the heading when it wraps over two lines, and keeps the apparatus bucket", () => {
+    const rows: Row[] = [
+      ...BODY_ROWS,
+      r("AUTHOR INFORMATION", "head", 20),
+      r("AND CONTRIBUTIONS", "head", 14),
+      r("A.F. grew the films and B.L. cycled the cells; both wrote the paper."),
+    ];
+    expect(sectionsOf([page(1, rows)]).at(-1)).toEqual(
+      section("AUTHOR INFORMATION AND CONTRIBUTIONS", "acknowledgments", "A.F. grew the films and B.L. cycled the cells; both wrote the paper."),
+    );
+  });
+
+  it("still leaves an appendix that opens the end matter out, as the later ones are", () => {
+    const rows: Row[] = [
+      ...BODY_ROWS,
+      r("Supplementary Material", "head", 20),
+      r("Everything the paper could not hold is kept in this part of the file."),
+      r("Acknowledgements", "head", 20),
+      r(THANKS),
+    ];
+    expect(headingsOf([page(1, rows)])).toEqual([...BODY_HEADINGS, "Acknowledgements"]);
+    expect(textOf([page(1, rows)])).not.toContain("kept in this part");
+  });
+
+  it("adds no row for a first end-matter heading with nothing under it, numbered or not", () => {
+    const empty = (heading: string, kind: Kind): PdfPageText[] => [
+      page(1, [...BODY_ROWS, r(heading, kind, 20), r("References", "head", 20), ...prose(...REFERENCES)]),
+    ];
+    expect(headingsOf(empty("6 Acknowledgements", "num"))).toEqual(BODY_HEADINGS);
+    expect(headingsOf(empty("Data availability", "head"))).toEqual(BODY_HEADINGS);
+  });
+
+  it("does not let the argument's last section take the first end-matter part's text", () => {
+    const [intro, results] = sectionsOf(dataFirst());
+    expect(intro.text).toBe(INTRO.join(" "));
+    expect(results.text).toBe(RESULTS.join(" "));
   });
 });

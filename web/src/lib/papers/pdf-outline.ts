@@ -175,10 +175,12 @@ const FRONT_MATTER_END = new Set(["abstract", "introduction"]);
 
 // ── What follows an end-matter heading (P12-51, O5) ─────────────────────────────────────────────────────
 //
-// The first end-matter heading still closes the argument: it and the text under it stay out, as P7-18 set
-// it. The outline no longer stops there. A journal prints Methods after its references, a second block of
-// notes after that, and a paper that opens its end matter with a supporting-information line prints its
-// acknowledgements and statements after the line. What follows is read by what each heading names:
+// The first end-matter heading closes the argument, and the outline no longer stops there. A journal prints
+// Methods after its references, a second block of notes after that, and a paper that opens its end matter
+// with a supporting-information line prints its acknowledgements and statements after the line. P12-62: the
+// first end-matter heading is read as the later ones are (P7-18 had left it and its text out): a note opens
+// its section and its text is read; the references, and an appendix, stay out. What follows is read by what
+// each heading names:
 //   a note      another end-matter part (acknowledgements, a statement, author contributions...): its own
 //               section, in the apparatus bucket, and its text is read;
 //   an argument a heading that names a part of the argument (methods above all): its own section, and its
@@ -2450,11 +2452,13 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
   let canonical = "body";
   let page = (firstNamed < 0 && start > 0 ? read[0]?.page : undefined) ?? pages[0]?.page ?? 1;
   let held: PdfLine[] = [];
-  // P12-51 (O5): the first end-matter heading closes the argument (`tail`) and the text under it is not
-  // read (`reading`); what follows is read by what each heading names (`tailPartOf`). `resumed`: the
+  // P12-51 (O5): the first end-matter heading closes the argument (`tail`); what the lines under a heading
+  // are is read by what the heading names (`tailPartOf`), and they are read (`reading`) or not. P12-62: the
+  // first end-matter heading is named the same way, as a note, the references or an appendix. `resumed`: the
   // current stretch is a part of the argument, whose sub-headings are read; `opensTail`: the heading that
-  // closed the argument, which stays closed when a wrapped second line joins it; `appendix`: an appendix
-  // has begun, and no heading after it opens a part of the argument again.
+  // closed the argument, which stays closed when a wrapped second line joins it (and is named again by the
+  // joined words); `appendix`: an appendix after the first end-matter heading has begun, and no heading
+  // after it opens a part of the argument again.
   let tail = false;
   let reading = true;
   let resumed = false;
@@ -2553,20 +2557,24 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
       // appendix, or at the end matter a journal prints after it (associated
       // content, author information, data availability, funding past the
       // body ...); what follows is apparatus. P12-51 (O5): the first of them
-      // closes the argument and its own text stays out; the outline reads on,
-      // and a heading after it that names an argument part or another
-      // end-matter part opens a section of its own.
+      // closes the argument and the outline reads on; a heading after it that
+      // names an argument part or another end-matter part opens a section of
+      // its own. P12-62: so does the first of them, as a note: a data
+      // statement, the acknowledgements, a supporting-information line open
+      // their sections and their text is read; the references, and an appendix
+      // (the bulky apparatus), stay out as they do later.
       const ends = endsTheArgument(heading, canonical, lastNumbered >= 0 && i > lastNumbered);
-      if (!tail) {
-        if (ends) {
-          tail = true;
-          opensTail = true;
-          reading = false;
+      if (!tail && ends) {
+        tail = true;
+        opensTail = true;
+      }
+      if (tail) {
+        // The heading that closed the argument ends it by definition, and is named like the ones after it.
+        let part = tailPartOf(heading, canonical, opensTail || ends);
+        if (!opensTail) {
+          if (part === "appendix") appendix = true;
+          else if (part === "argument" && appendix) part = null;
         }
-      } else if (!opensTail) {
-        let part = tailPartOf(heading, canonical, ends);
-        if (part === "appendix") appendix = true;
-        else if (part === "argument" && appendix) part = null;
         if (part !== null) {
           reading = part === "note" || part === "argument";
           resumed = part === "argument";
