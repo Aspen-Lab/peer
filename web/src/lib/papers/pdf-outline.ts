@@ -122,6 +122,8 @@ const LINE_TOLERANCE = 2.2;
 const HEADING_MAX = 90;
 /** Text set this much larger than the body reads as a heading. */
 const HEADING_SIZE_RATIO = 1.12;
+/** C P12-74 (R1, R4): a numbered line is a heading, or ends a caption, only at this share of the body's size or more. */
+const NUMBERED_SIZE_RATIO = 0.95;
 /** Sections after one of these are the paper's apparatus, not its argument.
  *  Compared against what `canonicalizeHeading` returns. */
 const TERMINAL = new Set(["references"]);
@@ -365,6 +367,8 @@ function titleFaceChange(
  * as more caption. And `headingOf` is not consulted: it takes "in the other
  * face" for a heading, which is exactly what a caption's second line is.
  *
+ * C P12-74 (R4): a numbered heading ends a caption only when it is set at 0.95 of the body or more (`NUMBERED_SIZE_RATIO`).
+ *
  * P12-46 (R7a): one change of face is let by, directly after the caption's FIRST line: a caption set
  * with a bold title line over lines in the text face is one caption (`titleFaceChange`). A second
  * change of face, or a first one that the size or the pitch do not bear out, ends it as before.
@@ -386,7 +390,9 @@ export function continuesCaption(
   if (!text) return false;
   if (isFurniture(next, furniture)) return false;
   if (captionOf(next)) return false;
-  if (NUMBERED_HEADING.test(text) && text.length <= HEADING_MAX) return false;
+  // C P12-74 (R4): a numbered line ends a caption only at 0.95 of the body or more; a caption's own middle line that
+  // opens with a number and a unit ("25 C and 45 C ...") is set as small as the rest of it and goes on.
+  if (NUMBERED_HEADING.test(text) && text.length <= HEADING_MAX && next.size >= body.size * NUMBERED_SIZE_RATIO) return false;
   // The face test above is what distinguishes caption from prose; `body` only sizes the leading
   // `titleFaceChange` looks for.
   return true;
@@ -1703,9 +1709,6 @@ function opensWithLeadIn(text: string): boolean {
 function isSetApart(line: PdfLine, body: { size: number; font: string }): boolean {
   return line.size >= body.size * HEADING_SIZE_RATIO || (line.font !== body.font && line.size >= body.size * 0.95);
 }
-
-/** C P12-74 (R1): a numbered line is a heading candidate only at this share of the body's size or more. */
-const NUMBERED_SIZE_RATIO = 0.95;
 
 /** C P12-74 (R3): a lone panel letter, b to h (never "a", a word of its own): a figure's "b Discharge curve". */
 const PANEL_LETTER = /(?:^|\s)[b-h](?=\s|$)/;

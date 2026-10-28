@@ -227,3 +227,34 @@ describe("a caption may change face once, right after its first line (P12-46, R7
     expect(JSON.stringify(outline.sections)).toContain("averaged over the three plots of each cover.");
   });
 });
+
+describe("a number-led line ends a caption only when it is set at 0.95 of the body or more (C P12-74, R4)", () => {
+  const caption = (size: number) => line("Figure 3: Capacity retention of the coated cells at three", { y: 330, size, font: "cap" });
+  const middle = (size: number, text = "25 C and 45 C and 60 C with the uncoated cell shown for") => line(text, { y: 318, size, font: "cap" });
+
+  it("takes a caption's own middle line that opens with a number, set as small as the caption", () => {
+    expect(continuesCaption(caption(8.4), middle(8.4), 12, BODY, new Set())).toBe(true);
+    expect(continuesCaption(caption(9.4), middle(9.4), 12, BODY, new Set())).toBe(true);
+    // a line that does not open with a number goes on as it did
+    expect(continuesCaption(caption(8.4), middle(8.4, "with the uncoated cell shown for comparison"), 12, BODY, new Set())).toBe(true);
+  });
+
+  it("still ends the caption at a numbered line set at 0.95 of the body or more", () => {
+    expect(continuesCaption(caption(9.6), middle(9.6), 12, BODY, new Set())).toBe(false);
+    expect(continuesCaption(caption(10), middle(10, "2 Methods"), 12, BODY, new Set())).toBe(false);
+    expect(continuesCaption(caption(12), middle(12, "2.1 Cell assembly"), 12, BODY, new Set())).toBe(false);
+  });
+
+  it("end to end: a caption set small keeps its number-led middle line, and it opens no section", () => {
+    const outline = paper([
+      item("Figure 3: Capacity retention of the coated cells at three", { y: 654, height: 8.4, fontName: "cap" }),
+      item("25 C and 45 C and 60 C with the uncoated cell shown for", { y: 644, height: 8.4, fontName: "cap" }),
+      item("comparison in each panel of the figure.", { y: 634, height: 8.4, fontName: "cap" }),
+    ]);
+    expect(outline.figureCaptions?.map((c) => c.caption)).toEqual([
+      "Capacity retention of the coated cells at three 25 C and 45 C and 60 C with the uncoated cell shown for comparison in each panel of the figure.",
+    ]);
+    expect(proseOf(outline)).not.toContain("25 C and 45 C");
+    expect(outline.sections?.map((s) => s.heading)).toEqual(["1 Introduction"]);
+  });
+});
