@@ -48,7 +48,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 
 | id | role | status | worktree | evidence |
 |---|---|---|---|---|
-| L1-C | C | LANDED (see log) | `.claude/worktrees/own-key-lane1` | 9381d8cd hydrate ignores device-only fields, 98a92ef7 Tavily out of the profile (store v9), 6590bfe1 Tavily web source + unread searchConnectors deleted. Manager: tsc 0, eslint 0, affected tests ×3 = 1626 pass / 3 fail (reader-panes, reading-prefs, scan 5 — all baseline); M7 (hydrate installs feedAiApiKey again) → 2 red; M8 (legacy strip forgets tavilyApiKey) → 5 red; restored byte-identical. Lane's own full suite: same 35 as baseline. |
+| L1-C | C | LANDED a235c48a, fa965331, 2b6665a6 | `.claude/worktrees/own-key-lane1` | 9381d8cd hydrate ignores device-only fields, 98a92ef7 Tavily out of the profile (store v9), 6590bfe1 Tavily web source + unread searchConnectors deleted. Manager: tsc 0, eslint 0, affected tests ×3 = 1626 pass / 3 fail (reader-panes, reading-prefs, scan 5 — all baseline); M7 (hydrate installs feedAiApiKey again) → 2 red; M8 (legacy strip forgets tavilyApiKey) → 5 red; restored byte-identical. Lane's own full suite: same 35 as baseline. |
 | L1-A | A | QUEUED (cap) | — | — |
 | L2-C | C | LANDED 68163acd, f6cfe7ce, 43e2a404 | `.claude/worktrees/own-key-lane2` | aeba4d49 note under the key field, 187597a6 AI provider row, 495eeba6 paper page sign-in. Manager: tsc 0, eslint 0 errors (44 warnings, pre-existing), touched tests ×3 = 933 pass / 1 fail (jev-setup, CRLF baseline); M5 (note shown for unknown/unconfigured) → 4 red; M6 (keyNeedsSignIn always false) → 1 red (unit level; the page tests take the flag as input); restored byte-identical. Full suite: 10752 tests, 35 failed, **0 new**. |
 | L2-A | A | QUEUED (cap) | — | — |
@@ -74,6 +74,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 - 2026-10-28 | 43e2a404 | manager | combined tip (L2+L3+L4) full suite: 10994 tests, 34 failed, **0 new**, 1 fixed (scan 5).
 - 2026-10-28 | 43e2a404 | manager | dev server needs a real node_modules (R11); branch worktree npm ci; /welcome Account + AI steps and /privacy render on localhost:3000, no console errors. L3-A reported 2.75; R12; L3-fix started in the freed slot.
 - 2026-10-28 | b92851a7 | manager | L1-C reported (3 commits); L4-A started in the freed slot; L1 verified (tsc, eslint, ×3, two mutations); L1 landed by cherry-pick; combined full suite started.
+- 2026-10-28 | 2b6665a6 | manager | tip with L1–L4: tsc 0; full suite 11002 tests, 34 failed, **0 new**, 1 fixed (scan 5).
 
 ## §6 Clock
 
