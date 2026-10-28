@@ -16,6 +16,7 @@ import {
   AI_STEP_RETURN_TO,
   AccountStepView,
   SignInToUseKeyView,
+  accountStepCopy,
   type AccountStepViewProps,
 } from "./account-step";
 
@@ -68,11 +69,13 @@ describe("AccountStepView — signed out", () => {
   });
 });
 
+// L4-fix (R13, D1): signed in, the step's HEADING says so (accountStepCopy,
+// below), so the body no longer repeats "You are signed in." — it shows who.
 describe("AccountStepView — signed in", () => {
-  it("shows the name and that the reader is signed in, and no sign-in button", () => {
+  it("shows the name, no sign-in button, and does not repeat the heading's sentence", () => {
     const html = renderAccount({ auth: "signed-in", user: fakeUser() });
     expect(html).toContain("Ada Lovelace");
-    expect(html).toContain("You are signed in.");
+    expect(html).not.toContain("You are signed in.");
     expect(html).not.toContain("Sign in with");
   });
 
@@ -81,10 +84,36 @@ describe("AccountStepView — signed in", () => {
     expect(html).toMatch(/<span class="text-caption font-semibold">A<\/span>/);
   });
 
-  it("says signed in even before the user's name has arrived", () => {
+  it("before the user's name has arrived: no sign-in button, nothing to show yet (the heading already says signed in)", () => {
     const html = renderAccount({ auth: "signed-in", user: null });
-    expect(html).toContain("You are signed in.");
-    expect(html).not.toContain("Sign in with");
+    expect(html).toBe("");
+  });
+});
+
+describe("accountStepCopy — the Account step's heading", () => {
+  it("signed in: says so, and that the keys stay in this browser", () => {
+    expect(accountStepCopy("signed-in")).toEqual({
+      kicker: "Optional",
+      title: "You are signed in.",
+      subtitle:
+        "Your topics, saved papers and settings now follow your account. Your API keys stay in this browser.",
+    });
+  });
+
+  it("signed out and unknown: the invitation, unchanged", () => {
+    const invitation = {
+      kicker: "Optional",
+      title: "Sign in (optional).",
+      subtitle:
+        "Sign in to keep your topics, saved papers and settings on every device, and to use your own AI key.",
+    };
+    expect(accountStepCopy("signed-out")).toEqual(invitation);
+    expect(accountStepCopy("unknown")).toEqual(invitation);
+  });
+
+  it("never asks a signed-in reader to sign in", () => {
+    const copy = accountStepCopy("signed-in");
+    expect(`${copy.title} ${copy.subtitle}`).not.toMatch(/sign in/i);
   });
 });
 
@@ -139,13 +168,12 @@ describe("welcome page — the Account step and the AI step's block (source)", (
   const page = read("src/app/welcome/page.tsx");
   const step = (from: string, to: string) => page.slice(page.indexOf(from), page.indexOf(to));
 
-  it("renders the Account step first, in the wizard's own StepFrame, with its copy", () => {
+  // L4-fix (R13, D1) — CHANGED marker: the frame's copy now comes from
+  // accountStepCopy(auth) (its own tests above pin every string), so the
+  // heading can say "You are signed in." after sign-in.
+  it("renders the Account step first, in the wizard's own StepFrame, with the copy for the reader's auth state", () => {
     const account = flat(step('key === "account" && (', 'key === "basics" && ('));
-    expect(account).toContain('kicker="Optional"');
-    expect(account).toContain('title="Sign in (optional)."');
-    expect(account).toContain(
-      'subtitle="Sign in to keep your topics, saved papers and settings on every device, and to use your own AI key."',
-    );
+    expect(account).toContain("<StepFrame {...accountStepCopy(auth)}>");
     expect(account).toContain("<AccountStep auth={auth} />");
     expect(page.indexOf('key === "account" && (')).toBeLessThan(page.indexOf('key === "basics" && ('));
   });

@@ -56,18 +56,44 @@ export interface AccountStepViewProps extends SignInHandlers {
   user: User | null;
 }
 
-/** The Account step's body: who is signed in, or the two sign-in buttons. */
+export interface AccountStepCopy {
+  kicker: string;
+  title: string;
+  subtitle: string;
+}
+
+/**
+ * The Account step's heading. Signed in — typically right after OAuth brings
+ * the reader back to this step — it says so instead of asking them to sign in
+ * again (L4-fix, R13 D1), and that the keys are the one thing that does not
+ * follow the account. Signed out or not yet known, the invitation as before.
+ */
+export function accountStepCopy(auth: AuthOutcome): AccountStepCopy {
+  if (auth === "signed-in") {
+    return {
+      kicker: "Optional",
+      title: "You are signed in.",
+      subtitle:
+        "Your topics, saved papers and settings now follow your account. Your API keys stay in this browser.",
+    };
+  }
+  return {
+    kicker: "Optional",
+    title: "Sign in (optional).",
+    subtitle:
+      "Sign in to keep your topics, saved papers and settings on every device, and to use your own AI key.",
+  };
+}
+
+/** The Account step's body: who is signed in (the heading already says that
+ *  they are), or the two sign-in buttons. */
 export function AccountStepView({ auth, user, ...handlers }: AccountStepViewProps) {
   if (auth === "signed-in") {
+    if (!user) return null;
     return (
       <div className="flex items-center gap-3">
-        {user && <Avatar user={user} size={40} />}
-        <div className="min-w-0">
-          {user && (
-            <p className="text-body-sm text-heading font-medium truncate">{userName(user)}</p>
-          )}
-          <p className="text-meta text-text-muted">You are signed in.</p>
-        </div>
+        <Avatar user={user} size={40} />
+        <p className="min-w-0 text-body-sm text-heading font-medium truncate">{userName(user)}</p>
       </div>
     );
   }

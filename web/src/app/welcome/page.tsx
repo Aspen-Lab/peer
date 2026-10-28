@@ -62,7 +62,7 @@ import {
   stepIndexFromKey,
   visibleSteps,
 } from "./completeness";
-import { AccountStep, SignInToUseKey } from "./account-step";
+import { AccountStep, SignInToUseKey, accountStepCopy } from "./account-step";
 import { aiStepSummary } from "./summary";
 
 const DEFAULT_NAME = "Peer Member";
@@ -254,11 +254,7 @@ export default function WelcomePage() {
             {/* Step body — keyed so the entrance animation replays per step */}
             <div key={key} className="animate-fade-in-up" onKeyDown={handleEnter}>
               {key === "account" && (
-                <StepFrame
-                  kicker="Optional"
-                  title="Sign in (optional)."
-                  subtitle="Sign in to keep your topics, saved papers and settings on every device, and to use your own AI key."
-                >
+                <StepFrame {...accountStepCopy(auth)}>
                   <AccountStep auth={auth} />
                 </StepFrame>
               )}
