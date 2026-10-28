@@ -79,12 +79,12 @@ describe("createStructureReviewCache — finished reviews, in this process, for 
   });
 
   it("holds indices, role names and tags only: an entry is numbers and the five roles, no word of a paper", () => {
-    const text = JSON.stringify(entry());
+    const text = JSON.stringify(entry({ secondLooks: [{ part: 1, why: "contradicts-high", verdict: "review" }, { part: 2, why: "contradicts-low", verdict: "draft" }] }));
     const words = text.match(/"[A-Za-z][A-Za-z -]+"/g) ?? [];
 
     // Every string value is a key, an op, a role, a version, a verdict or the model's id.
     for (const word of words) {
-      expect(word).toMatch(/^"(v|docHash|rulesVersion|skeletonVersion|promptVersion|draftDigest|corrections|unsure|secondLooks|model|reviewedAt|op|part|role|why|verdict|set_role|move_start|split|method|setup|evidence|interpretation|apparatus|contradicts-high|contradicts-medium|review|draft|failed|toParagraph|atParagraph|gemini\/large)"$/);
+      expect(word).toMatch(/^"(v|docHash|rulesVersion|skeletonVersion|promptVersion|draftDigest|corrections|unsure|secondLooks|model|reviewedAt|op|part|role|why|verdict|set_role|move_start|split|method|setup|evidence|interpretation|apparatus|contradicts-high|contradicts-medium|contradicts-low|review|draft|failed|toParagraph|atParagraph|gemini\/large)"$/);
     }
   });
 });
@@ -92,6 +92,21 @@ describe("createStructureReviewCache — finished reviews, in this process, for 
 describe("restoreReview — a kept or fetched review, read", () => {
   it("restores an entry as it was", () => {
     expect(restoreReview(JSON.parse(JSON.stringify(entry())))).toEqual(entry());
+  });
+
+  it("reads back an entry whose second looks include `contradicts-low` (P12-94), beside the kinds stored before it", () => {
+    const secondLooks: StructureReviewEntry["secondLooks"] = [
+      { part: 0, why: "contradicts-low", verdict: "review" },
+      { part: 1, why: "contradicts-high", verdict: "draft" },
+      { part: 2, why: "contradicts-medium", verdict: "failed" },
+      { part: 3, why: "unsure", verdict: "review" },
+    ];
+
+    expect(restoreReview(JSON.parse(JSON.stringify(entry({ secondLooks }))))!.secondLooks).toEqual(secondLooks);
+    // A kind that is not one of the four is still dropped.
+    expect(restoreReview({ ...entry(), secondLooks: [{ part: 0, why: "contradicts-none", verdict: "review" }, { part: 1, why: "contradicts-low", verdict: "draft" }] })!.secondLooks).toEqual([
+      { part: 1, why: "contradicts-low", verdict: "draft" },
+    ]);
   });
 
   it("is null for another version of the rules, the skeleton or the prompt, a missing digest, and anything that is not an entry", () => {

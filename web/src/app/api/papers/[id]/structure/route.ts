@@ -5,7 +5,8 @@
 // model a compact SKELETON of the paper — each paragraph's number, its first sixteen words and counts of what
 // it holds, never the paper — beside the rules' draft, and answers the CORRECTIONS it returns, made whole by
 // code (`lib/papers/structure-review.ts`): a part's start moved, a role changed, a part split. A correction
-// against a part the rules were sure of gets one more look at that part's own text, at most three per paper.
+// gets one more look at that part's own text, at most three per paper; one against a part the rules were unsure
+// of stands only if its look sides with the review (P12-94).
 //
 // It runs whenever the reader has a model (§1h.428 (a)); nothing about the reader and not the title reaches
 // the model. EVERY failure — a refusal, a timeout, a reply that is not an answer, a skeleton over budget —
@@ -268,8 +269,9 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
     return fellBack("unusable");
   }
 
-  // The second, targeted look: a correction against a part the rules were sure of, or a part the model could not
-  // judge. Each is one short call at the span's own text; one that fails or cannot be read counts as "failed".
+  // The second, targeted look: a part the model corrected, or a part it could not judge. Each is one short call at the
+  // span's own text; one that fails or cannot be read counts as "failed", and a correction against a part the rules were
+  // unsure of goes with it (P12-94).
   const targets = secondLookTargets(draft.parts, reviewed.answer);
   let answer = reviewed.answer;
   let records: StructureReviewEntry["secondLooks"] = [];

@@ -25,9 +25,10 @@
 //     (P12-90); a split at a part's own edge, where the draft already cuts, is no correction at all (P12-91).
 //     A correction that fails a check is dropped, never mended; an answer that is not an answer
 //     leaves the draft exactly (Tier 0 never breaks).
-//   - `secondLookTargets` / `lookParagraphs` / `buildLookPrompt` / `resolveLooks`: a correction against a
-//     high- or medium-confidence part, or a part the model could not judge, gets one more look at that
-//     part's own text (at most three looks, 6,000 characters each).
+//   - `secondLookTargets` / `lookParagraphs` / `buildLookPrompt` / `resolveLooks`: a correction against any
+//     part, or a part the model could not judge, gets one more look at that part's own text (at most three
+//     looks, 6,000 characters each); a correction against a part the rules were unsure of (`low`) stands only
+//     if its look sides with the review (P12-94).
 //   - `createStructureReviewCache`: the server's memory, keyed `docHash | rules | skeleton | prompt`; an
 //     entry holds indices, role names and the model's id — no word of the paper.
 //   - `applyStructureReview`: lays the reviewed roles over the map's rows for display. No row is added or
@@ -1039,24 +1040,26 @@ export function reviewStructure(raw: unknown, draft: readonly DraftPart[], parag
 
 // ── The second, targeted look ──────────────────────────────────────────
 
-export type LookWhy = "contradicts-high" | "contradicts-medium" | "unsure";
+export type LookWhy = "contradicts-high" | "contradicts-medium" | "contradicts-low" | "unsure";
 export interface LookTarget {
   part: number;
   why: LookWhy;
 }
 
 /**
- * Which parts get a second look: a part the answer corrects that the rules were `high` or `medium` about, and a
- * part listed `unsure`. A correction against a `low` part draws none (the rules already said they were unsure).
- * Strongest contradiction first, then the unsure, then the part's number; at most three.
+ * Which parts get a second look: a part the answer corrects, by the rules' confidence in it (`contradicts-high`,
+ * `contradicts-medium`, and since P12-94 `contradicts-low`), and a part listed `unsure`. A correction against a part the
+ * rules were unsure of needs a look that agrees, as one against a part they were sure of did: measured, a `set_role`
+ * of the closing part to evidence was applied with no look at all. A part both corrected and listed `unsure` draws the
+ * look its correction needs (`contradicts-low`), not a second one. Strongest contradiction first, then the unsure,
+ * then the contradictions of a `low` part, then the part's number; at most three.
  */
 export function secondLookTargets(draft: readonly DraftPart[], answer: Answer): LookTarget[] {
-  const rank = { "contradicts-high": 0, "contradicts-medium": 1, unsure: 2 } as const;
+  const rank = { "contradicts-high": 0, "contradicts-medium": 1, unsure: 2, "contradicts-low": 3 } as const;
   const seen = new Map<number, LookWhy>();
   for (const c of answer.corrections) {
     const conf = draft[c.part].conf;
-    if (conf === "low") continue;
-    const why: LookWhy = conf === "high" ? "contradicts-high" : "contradicts-medium";
+    const why: LookWhy = conf === "high" ? "contradicts-high" : conf === "medium" ? "contradicts-medium" : "contradicts-low";
     const had = seen.get(c.part);
     if (had === undefined || rank[why] < rank[had]) seen.set(c.part, why);
   }
@@ -1196,11 +1199,15 @@ export interface LookRecord {
 }
 
 /**
- * The corrections after the looks. For a part the model corrected against the rules' high or medium confidence:
- * the correction stands on `review`, and on `draft` — or on a look that failed or could not be read — the rules
- * stand and the part's corrections go. For a part the model could not judge (`unsure`): it stays as the draft,
- * unless the look says `review` and names a different role, which becomes a `set_role` of that part.
- * A part with no look keeps what it had (corrections against a `low` part are never looked at).
+ * The corrections after the looks. For a part the model corrected: the correction stands on `review`, and on
+ * `draft` — or on a look that failed or could not be read — the rules stand and the part's corrections go. For a
+ * part the model could not judge (`unsure`): it stays as the draft, unless the look says `review` and names a
+ * different role, which becomes a `set_role` of that part.
+ *
+ * A correction against a part the rules were unsure of (`low`) stands only on a `contradicts-low` look that says
+ * `review` (P12-94): with no look at all (the looks are capped at three) it goes too, and so does one whose part was
+ * looked at as `unsure` only. The `set_role` a look adds for an unsure part is the look's own, and stands. A part with
+ * no look keeps what it had, unless the rules were unsure of it.
  */
 export function resolveLooks(
   draft: readonly DraftPart[],
@@ -1209,16 +1216,24 @@ export function resolveLooks(
 ): { answer: Answer; records: LookRecord[] } {
   let corrections = [...answer.corrections];
   const records: LookRecord[] = [];
+  /** The parts the rules were unsure of whose corrections a look agreed with, and the corrections a look added. */
+  const agreed = new Set<number>();
+  const added = new Set<Correction>();
   for (const { target, verdict } of looks) {
     records.push({ part: target.part, why: target.why, verdict: verdict ? verdict.verdict : "failed" });
     if (target.why === "unsure") {
       if (verdict?.verdict === "review" && verdict.role && verdict.role !== draft[target.part].role && !corrections.some((c) => c.part === target.part && c.op === "set_role")) {
-        corrections.push({ op: "set_role", part: target.part, role: verdict.role });
+        const add: Correction = { op: "set_role", part: target.part, role: verdict.role };
+        corrections.push(add);
+        added.add(add);
       }
     } else if (verdict?.verdict !== "review") {
       corrections = corrections.filter((c) => c.part !== target.part);
+    } else if (target.why === "contradicts-low") {
+      agreed.add(target.part);
     }
   }
+  corrections = corrections.filter((c) => draft[c.part]?.conf !== "low" || agreed.has(c.part) || added.has(c));
   return { answer: { corrections, unsure: answer.unsure }, records };
 }
 
@@ -1326,7 +1341,7 @@ export function restoreReview(value: unknown): StructureReviewEntry | null {
       const part = whole(look.part);
       const why = look.why;
       const verdict = look.verdict;
-      if (part !== null && (why === "contradicts-high" || why === "contradicts-medium" || why === "unsure") && (verdict === "draft" || verdict === "review" || verdict === "failed")) {
+      if (part !== null && (why === "contradicts-high" || why === "contradicts-medium" || why === "contradicts-low" || why === "unsure") && (verdict === "draft" || verdict === "review" || verdict === "failed")) {
         looks.push({ part, why, verdict });
       }
     }

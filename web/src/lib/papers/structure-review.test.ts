@@ -200,11 +200,13 @@ describe("draftOf — the rules' draft from the map's top-level rows", () => {
       expect(draft.lines[2]).toBe("2 7-7 interpretation low closing,rows:1,paras:1");
     });
 
-    it("draws no look for a correction against it: the rules said they were unsure", () => {
+    // Re-aimed (P12-94), was "draws no look for a correction against it: the rules said they were unsure": that is why a look is drawn
+    // now. A correction against a part the rules were unsure of stands only on a look that agrees (`contradicts-low`).
+    it("draws a look for a correction against it, `contradicts-low`: the rules said they were unsure, and a correction there needs a look that agrees", () => {
       const draft = draftOf(paper.input)!;
 
-      expect(secondLookTargets(draft.parts, { corrections: [{ op: "set_role", part: 2, role: "evidence" }], unsure: [] })).toEqual([]);
-      expect(secondLookTargets(draft.parts, { corrections: [{ op: "set_role", part: 1, role: "method" }], unsure: [] })).toHaveLength(1);
+      expect(secondLookTargets(draft.parts, { corrections: [{ op: "set_role", part: 2, role: "evidence" }], unsure: [] })).toEqual([{ part: 2, why: "contradicts-low" }]);
+      expect(secondLookTargets(draft.parts, { corrections: [{ op: "set_role", part: 1, role: "method" }], unsure: [] })).toEqual([{ part: 1, why: "contradicts-high" }]);
     });
 
     it("is no part when the abstract is not echoed, when there is none, or when the paper names its own conclusion", () => {
@@ -1452,7 +1454,9 @@ describe("the double's round trip — a draft with a wrong role and a wrong star
 describe("the second look — which parts, which paragraphs, what the verdict does", () => {
   const draft = [part(0, 5, "setup", "high"), part(6, 10, "method", "medium"), part(11, 20, "evidence", "low"), part(21, 25, "interpretation", "high"), part(26, 28, "apparatus", "high")];
 
-  it("looks at a correction against a high or medium part, then at the unsure; never at a correction against a low part", () => {
+  // Re-aimed (P12-94), was "... then at the unsure; never at a correction against a low part": the third expectation is the other way
+  // (a correction against a low part is looked at, `contradicts-low`), and its rank has a test of its own below.
+  it("looks at a correction against a high or medium part, then at the unsure, then at a correction against a low part", () => {
     const answer: Answer = {
       corrections: [
         { op: "set_role", part: 1, role: "evidence" },
@@ -1469,7 +1473,31 @@ describe("the second look — which parts, which paragraphs, what the verdict do
       { part: 1, why: "contradicts-medium" },
     ]);
     expect(secondLookTargets(draft, { corrections: [], unsure: [2, 0] })).toEqual([{ part: 2, why: "unsure" }, { part: 0, why: "unsure" }].sort((a, b) => a.part - b.part));
-    expect(secondLookTargets(draft, { corrections: [{ op: "set_role", part: 2, role: "method" }], unsure: [] })).toEqual([]);
+    expect(secondLookTargets(draft, { corrections: [{ op: "set_role", part: 2, role: "method" }], unsure: [] })).toEqual([{ part: 2, why: "contradicts-low" }]);
+  });
+
+  it("ranks the looks a correction against a low part needs after the others, inside the same cap of three (P12-94)", () => {
+    const wide = [part(0, 5, "setup", "low"), part(6, 10, "method", "medium"), part(11, 20, "evidence", "low"), part(21, 25, "interpretation", "high"), part(26, 28, "apparatus", "low")];
+    const corrections: Answer["corrections"] = [
+      { op: "set_role", part: 2, role: "method" },
+      { op: "move_start", part: 3, toParagraph: 23 },
+      { op: "set_role", part: 4, role: "evidence" },
+    ];
+
+    // The contradiction of the high part first, the unsure next, the low parts' corrections last: the second of them is past the cap.
+    expect(secondLookTargets(wide, { corrections, unsure: [0] })).toEqual([
+      { part: 3, why: "contradicts-high" },
+      { part: 0, why: "unsure" },
+      { part: 2, why: "contradicts-low" },
+    ]);
+    // Two corrections against low parts and nothing else: both are looked at, in the order of their parts.
+    expect(secondLookTargets(wide, { corrections: [corrections[2], corrections[0]], unsure: [] })).toEqual([
+      { part: 2, why: "contradicts-low" },
+      { part: 4, why: "contradicts-low" },
+    ]);
+    // A part both corrected and listed unsure draws the look its correction needs, not a second one.
+    expect(secondLookTargets(wide, { corrections: [corrections[0]], unsure: [2] })).toEqual([{ part: 2, why: "contradicts-low" }]);
+    expect(REVIEW_CAPS.secondLooks).toBe(3);
   });
 
   it("takes at most three looks per paper", () => {
@@ -1549,14 +1577,56 @@ describe("the second look — which parts, which paragraphs, what the verdict do
       { target: { part: 4, why: "contradicts-high" }, verdict: { verdict: "review" } },
     ]);
 
-    expect(kept.answer.corrections).toHaveLength(4);
+    // Re-aimed (P12-94): four, the fourth being the correction against the low part, which had no look and stood; it goes now.
+    expect(kept.answer.corrections).toEqual(answer.corrections.slice(0, 3));
     expect(kept.records).toEqual([{ part: 1, why: "contradicts-medium", verdict: "review" }]);
-    expect(dropped.answer.corrections).toEqual([
-      { op: "split", part: 4, atParagraph: 27, role: "setup" },
-      // The correction against the low part was never looked at, and stands.
-      { op: "set_role", part: 2, role: "method" },
-    ]);
+    // Re-aimed (P12-94): the correction against the low part (part 2) was never looked at and stood; it goes now, with no look that agrees.
+    expect(dropped.answer.corrections).toEqual([{ op: "split", part: 4, atParagraph: 27, role: "setup" }]);
     expect(dropped.records.map((r) => r.verdict)).toEqual(["draft", "failed", "review"]);
+  });
+
+  describe("a correction against a part the rules were unsure of stands only on a look that agrees (P12-94)", () => {
+    const low = { part: 2, why: "contradicts-low" as const };
+    const answer: Answer = { corrections: [{ op: "set_role", part: 2, role: "method" }, { op: "split", part: 2, atParagraph: 15, role: "interpretation" }, { op: "move_start", part: 3, toParagraph: 23 }], unsure: [] };
+
+    it("keeps all of the part's corrections on `review`, and drops them all on `draft`, on a look that failed, on one that cannot be read", () => {
+      const kept = resolveLooks(draft, answer, [{ target: low, verdict: { verdict: "review" } }]);
+
+      expect(kept.answer.corrections).toEqual([answer.corrections[0], answer.corrections[1], answer.corrections[2]]);
+      expect(kept.records).toEqual([{ part: 2, why: "contradicts-low", verdict: "review" }]);
+      for (const [verdict, recorded] of [[{ verdict: "draft" as const }, "draft"], [null, "failed"]] as const) {
+        const dropped = resolveLooks(draft, answer, [{ target: low, verdict }]);
+
+        // The correction against the high part (part 3) was not looked at here, and stands as before.
+        expect(dropped.answer.corrections).toEqual([answer.corrections[2]]);
+        expect(dropped.records).toEqual([{ part: 2, why: "contradicts-low", verdict: recorded }]);
+      }
+    });
+
+    it("drops them when no look happened, as when the cap was reached; a part the rules were sure of keeps what it had", () => {
+      expect(resolveLooks(draft, answer, []).answer.corrections).toEqual([answer.corrections[2]]);
+      expect(resolveLooks(draft, { corrections: [answer.corrections[0]], unsure: [] }, []).answer.corrections).toEqual([]);
+      // The look of another part does not stand for this one.
+      expect(resolveLooks(draft, answer, [{ target: { part: 3, why: "contradicts-high" }, verdict: { verdict: "review" } }]).answer.corrections).toEqual([answer.corrections[2]]);
+    });
+
+    it("needs a look of its own kind: an unsure look of the part does not confirm its correction", () => {
+      const result = resolveLooks(draft, { corrections: [answer.corrections[0]], unsure: [2] }, [{ target: { part: 2, why: "unsure" }, verdict: { verdict: "review" } }]);
+
+      expect(result.answer.corrections).toEqual([]);
+    });
+
+    it("leaves the role a look adds for an unsure low part its own: it stands", () => {
+      const result = resolveLooks(draft, { corrections: [], unsure: [2] }, [{ target: { part: 2, why: "unsure" }, verdict: { verdict: "review", role: "method" } }]);
+
+      expect(result.answer.corrections).toEqual([{ op: "set_role", part: 2, role: "method" }]);
+      expect(result.records).toEqual([{ part: 2, why: "unsure", verdict: "review" }]);
+    });
+
+    it("costs one look for the part, whatever the number of its corrections, and no more than the unsure listing did", () => {
+      expect(secondLookTargets(draft, answer)).toEqual([{ part: 3, why: "contradicts-high" }, { part: 2, why: "contradicts-low" }]);
+      expect(secondLookTargets(draft, { corrections: [answer.corrections[0]], unsure: [] })).toHaveLength(1);
+    });
   });
 
   it("leaves an unsure part as the draft, unless the look says `review` and names another role", () => {

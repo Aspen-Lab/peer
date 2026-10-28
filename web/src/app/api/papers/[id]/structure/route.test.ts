@@ -322,7 +322,9 @@ describe("POST /api/papers/[id]/structure — the review", () => {
     expect(review.corrections).toHaveLength(10);
   });
 
-  it("asks no look for a correction against a part the rules were unsure of, and keeps it", async () => {
+  // Re-aimed (P12-94), was "asks no look for a correction against a part the rules were unsure of, and keeps it": it asks one, and keeps
+  // the correction only if that look sides with the review. The look costs one call, inside the cap of three.
+  it("asks one look for a correction against a part the rules were unsure of, and keeps it only if the look agrees", async () => {
     const unheaded = inventedPaper([
       { heading: "A Survey of Shore Ecology", canonical: "body", truth: [["setup", 4], ["evidence", 4]] },
       { heading: "Methods", canonical: "methods", truth: [["method", 3]] },
@@ -331,8 +333,19 @@ describe("POST /api/papers/[id]/structure — the review", () => {
     const review = await reviewOf(await call());
 
     expect(review.corrections).toEqual([{ op: "split", part: 0, atParagraph: 4, role: "evidence" }]);
-    expect(review.secondLooks).toEqual([]);
-    expect(provider.generateJsonText).toHaveBeenCalledTimes(1);
+    expect(review.secondLooks).toEqual([{ part: 0, why: "contradicts-low", verdict: "review" }]);
+    expect(provider.generateJsonText).toHaveBeenCalledTimes(2);
+    expect(provider.generateJsonText.mock.calls.filter(([args]) => isLook(args))).toHaveLength(1);
+
+    for (const [look, verdict] of [[JSON.stringify({ verdict: "draft" }), "draft"], ["I cannot help with that.", "failed"]] as const) {
+      structureReviewCache.clear();
+      provider = providerOf(async (args) => (isLook(args) ? look : modelDouble(args.userPrompt)));
+      mocks.resolveProvider.mockReturnValue(provider);
+      const dropped = await reviewOf(await call());
+
+      expect(dropped.corrections).toEqual([]);
+      expect(dropped.secondLooks).toEqual([{ part: 0, why: "contradicts-low", verdict }]);
+    }
   });
 
   it("looks again at a part the model could not judge, and a look that names another role changes it", async () => {
