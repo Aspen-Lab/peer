@@ -2039,6 +2039,20 @@ Running (max 2, §1h.443): C P12-70 item 8 ∥ C P12-69.
 
 Running: C P12-70 item 9 ∥ B P12-73. V's full gates (C P12-69 + item 8) are running; V lands when they are green.
 
+### §1h.447 — 2026-10-28 — V LANDED: FOURTEEN Cs ON THE BRANCH; FULL GATES GREEN
+
+**Landed:** the final combination V (`97b84eb9`, base `1b02ce30`) is cherry-picked onto the branch, 81 commits, head `098d74b3`. The landed `web/` tree equals V's byte for byte (tree `5bc8715f`), the tree the gates ran on.
+
+**V's full gates** (`mgr/gates-V.log`): lint 0 errors / 144 warnings; tsc 0; **647 files + 3 skipped, 11,928 tests + 3 skipped, 0 failed**; build 0.
+
+**What landed:**
+- C P12-49 (headings by the body's real size), C P12-56 (Extended Data, R6b, R15a), C P12-58 (the body arrives after an upload), C P12-61 (a figure view opens only its page), C P12-62, C P12-63, C P12-64 (the page title), C P12-65 and C P12-66 (notes: no overwrite, focus stays), C P12-67 (ligatures, with the follow-up), C P12-68 (captions to 1,500 characters), C P12-69 (the takedown and the privacy page), C P12-53 (Tier 1 structure review), C P12-70 items 1–8;
+- the manager's re-aim `b9f960a2`.
+
+C P12-70 item 9 follows as a small landing.
+
+Next, as slots free (max 2): A P12-71 (Theme A) and A P12-72 (Theme B) walk this head.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2341,28 +2355,28 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-46 | DONE — C (Sonnet); landed (R6a, R7a) | R6a caption separator; R7a one face change in a caption | invented-input tests; own mutations; gates | checkpoint P12-46-C-<UTC>.md; manager verifies | briefs/P12-46.md; §1h.425 |
 | P12-47 | DONE — C (Sonnet); landed (R9a/R10a, R3a, R5a, R8a; cap raise deferred to P12-68) | R2a satellites; R3a figure text; R5a clip at caption; R8a caption end | invented-input tests; own mutations; gates; re-aimed over-join test named | checkpoint P12-47-C-<UTC>.md; manager verifies | briefs/P12-47.md; §1h.425 |
 | P12-48 | DONE — C (Sonnet); landed (L1, L2, A1–A4, closing split; the split reaches the page with C P12-63) | Theme C role rules: L1, L2, A1–A4 (reading-roles.ts), closing split | invented-input tests; re-aimed reading-map.test.ts test named; own mutations; gates | checkpoint P12-48-C-<UTC>.md; manager verifies | briefs/P12-48.md; §1h.426 |
-| P12-49 | REPORTED — C (Sonnet), reconciled 2c9ff453; manager combining | outline headings: O1 body size, O3 numbered guard, O4 running heads, O7 drop cap / lead-ins | pdf-outline.headings.test.ts; own mutations; gates | checkpoint P12-49-C-<UTC>.md; manager verifies | briefs/P12-49.md; §1h.426 |
+| P12-49 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | outline headings: O1 body size, O3 numbered guard, O4 running heads, O7 drop cap / lead-ins | pdf-outline.headings.test.ts; own mutations; gates | checkpoint P12-49-C-<UTC>.md; manager verifies | briefs/P12-49.md; §1h.426 |
 | P12-50 | DONE — C (Sonnet); landed (narrow gutter, prior by position) | outline columns: O2 narrow gutter, prior by position | pdf-outline.gutter.test.ts; own mutations; gates | checkpoint P12-50-C-<UTC>.md; manager verifies | briefs/P12-50.md; §1h.426 |
 | P12-51 | DONE — C (Sonnet); landed (O5, O6, O8) | outline assembly: O5 after references, O6 unheaded opening, O8 panel text | pdf-outline.sections.test.ts; own mutations; gates | checkpoint P12-51-C-<UTC>.md; manager verifies | briefs/P12-51.md; §1h.426 |
 | P12-52 | DONE — B (Sonnet), report on the branch (c0e01390 cherry-picked) | same-note writers (sticky vs notes window) on the real page | sequence table with repeats; mechanism file:line; three rules each | report P12-52-B-<UTC>.md | briefs/P12-52.md; §1h.427 |
-| P12-53 | REPORTED — C (Sonnet); Tier 0 draft addendum in; in the final combination V (§1h.445) | Tier 1 structure review: core, route, client, stub | invented-input tests; own mutations; gates | checkpoint P12-53-C-<UTC>.md; manager verifies | briefs/P12-53.md; §1h.428 |
+| P12-53 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | Tier 1 structure review: core, route, client, stub | invented-input tests; own mutations; gates | checkpoint P12-53-C-<UTC>.md; manager verifies | briefs/P12-53.md; §1h.428 |
 | P12-54 | DONE — C (Sonnet); landed (R13b) with the revision at 5 | R13b: one-page figure calls up to 27,000,000 bytes | invented-input test; own mutation; gates | checkpoint P12-54-C-<UTC>.md; manager verifies | briefs/P12-54.md; §1h.429 |
 | P12-55 | DONE — C (Sonnet); landed (R11a, R12a) | R11a ceilings with grid clustering; R12a strokes honour the clip | invented-input tests; 5 re-aimed budget tests named; own mutations; gates | checkpoint P12-55-C-<UTC>.md; manager verifies | briefs/P12-55.md; §1h.429 |
-| P12-56 | REPORTED — C (Sonnet), head f4202428; manager combining | R14a Extended Data; R6b the line before; R15a the bar | invented-input tests; own mutations; gates | checkpoint P12-56-C-<UTC>.md; manager verifies | briefs/P12-56.md; §1h.429 (d), §1h.431 |
+| P12-56 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | R14a Extended Data; R6b the line before; R15a the bar | invented-input tests; own mutations; gates | checkpoint P12-56-C-<UTC>.md; manager verifies | briefs/P12-56.md; §1h.429 (d), §1h.431 |
 | P12-57 | PHASE 1 DONE — A (Sonnet), report on the branch; phase 2 waits for Tier 0 + C P12-53 | C1 with the owner's test key: phase 1 harness on P1; phase 2 arms after C P12-53 and Tier 0 land | BYOK path, rows, Google calls, hygiene 0 | report P12-57-A-<UTC>.md | briefs/P12-57.md; §1h.430 |
-| P12-58 | REPORTED — C (Sonnet), head 1760bfb1; manager combining | D1: upload keeps its document; reading says pending; the page keeps asking | route and hook tests; own mutations; gates | checkpoint P12-58-C-<UTC>.md; manager verifies | briefs/P12-58.md; §1h.432 |
+| P12-58 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | D1: upload keeps its document; reading says pending; the page keeps asking | route and hook tests; own mutations; gates | checkpoint P12-58-C-<UTC>.md; manager verifies | briefs/P12-58.md; §1h.432 |
 | P12-59 | DONE — B (Sonnet), report on the branch | the 55 s request; P5's memory by stage; P1 / P3 titles | file:line; three rules each | report P12-59-B-<UTC>.md | briefs/P12-59.md; §1h.432 |
 | P12-60 | DONE — B (Sonnet), report on the branch | open only the figure's page: memory by stage on P5; cache today; three candidates measured | file:line; measures | report P12-60-B-<UTC>.md | briefs/P12-60.md; §1h.433 |
-| P12-61 | REPORTED — C (Sonnet), head 62d2c76e; manager combining | part 1 the kept cut (now); parts 2–3 per-page file, no whole copy (after B P12-60) | route / store tests; own mutations; gates | checkpoint P12-61-C-<UTC>.md; manager verifies | briefs/P12-61.md; §1h.434 |
-| P12-62 | REPORTED — C (Sonnet); in the manager's combined copy 0c4e38c0 | the first end-matter part opens its own section; P7-18 / P8-03 exclusions re-aimed | invented-input tests; named re-aims; own mutation; gates | checkpoint P12-62-C-<UTC>.md; manager verifies | briefs/P12-62.md; §1h.435 |
-| P12-63 | REPORTED — C (Sonnet); in the manager's combined copy 0c4e38c0 | closing split on the page; no mark on inferred rows; no placeholder opening heading; A2 and named children; echo fallback | invented-input tests; own mutations; gates | checkpoint P12-63-C-<UTC>.md | briefs/P12-63.md; §1h.436 (c) |
-| P12-64 | REPORTED — C (Sonnet); verified in mgr/v3 batch 2 | the page title: title-only size, embedded title as witness | invented-input tests; own mutations; gates | checkpoint P12-64-C-<UTC>.md | briefs/P12-64.md; §1h.436 (b) |
-| P12-65 | REPORTED — C (Sonnet); in the manager's combined copy 0c4e38c0 | M1: whole-note saves carry a base; no seed-save loop | function-level sequence tests; Playwright M1 rows; own mutations; gates | checkpoint P12-65-C-<UTC>.md | briefs/P12-65.md; §1h.437 |
-| P12-66 | REPORTED — C (Sonnet); in the manager's combined copy 0c4e38c0 | M2 / M3: focus stays where the reader types | function-level tests; Playwright h / h2 / b / c rows; own mutations; gates | checkpoint P12-66-C-<UTC>.md | briefs/P12-66.md; §1h.437 |
-| P12-67 | REPORTED — C (Sonnet); upstream move + follow-up (ft, word list) in V; test re-aimed to P12-62 by the manager b9f960a2 (§1h.445) | private-use ligature glyphs read as letters (learned from the paper's own words) | invented-input tests; own mutations; gates | checkpoint P12-67-C-<UTC>.md | briefs/P12-67.md; §1h.439 |
-| P12-68 | REPORTED — C (Sonnet); verified in mgr/v3 batch 2 | the caption cap 500 → 1,500 in the engine and the view | invented-input test; own mutation; gates | checkpoint P12-68-C-<UTC>.md | briefs/P12-68.md; §1h.440 (c) |
-| P12-69 | REPORTED — C (Sonnet); verified on V (route → 3 red, page → 1 red) (§1h.446) | the takedown removes kept figures; the privacy page names them | tests; own mutation; gates | checkpoint P12-69-C-<UTC>.md | briefs/P12-69.md; §1h.441 |
-| P12-70 | IN_PROGRESS — C (Sonnet); items 1–8 verified on V; item 9 the two-letter pin and a one-letter cap word (§1h.446) | integration: the five tests where eight Cs' rules meet | code fixes; named re-aims only where a ruled rule changed the truth; gates | checkpoint P12-70-C-<UTC>.md | briefs/P12-70.md; §1h.442 |
+| P12-61 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | part 1 the kept cut (now); parts 2–3 per-page file, no whole copy (after B P12-60) | route / store tests; own mutations; gates | checkpoint P12-61-C-<UTC>.md; manager verifies | briefs/P12-61.md; §1h.434 |
+| P12-62 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | the first end-matter part opens its own section; P7-18 / P8-03 exclusions re-aimed | invented-input tests; named re-aims; own mutation; gates | checkpoint P12-62-C-<UTC>.md; manager verifies | briefs/P12-62.md; §1h.435 |
+| P12-63 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | closing split on the page; no mark on inferred rows; no placeholder opening heading; A2 and named children; echo fallback | invented-input tests; own mutations; gates | checkpoint P12-63-C-<UTC>.md | briefs/P12-63.md; §1h.436 (c) |
+| P12-64 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | the page title: title-only size, embedded title as witness | invented-input tests; own mutations; gates | checkpoint P12-64-C-<UTC>.md | briefs/P12-64.md; §1h.436 (b) |
+| P12-65 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | M1: whole-note saves carry a base; no seed-save loop | function-level sequence tests; Playwright M1 rows; own mutations; gates | checkpoint P12-65-C-<UTC>.md | briefs/P12-65.md; §1h.437 |
+| P12-66 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | M2 / M3: focus stays where the reader types | function-level tests; Playwright h / h2 / b / c rows; own mutations; gates | checkpoint P12-66-C-<UTC>.md | briefs/P12-66.md; §1h.437 |
+| P12-67 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | private-use ligature glyphs read as letters (learned from the paper's own words) | invented-input tests; own mutations; gates | checkpoint P12-67-C-<UTC>.md | briefs/P12-67.md; §1h.439 |
+| P12-68 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | the caption cap 500 → 1,500 in the engine and the view | invented-input test; own mutation; gates | checkpoint P12-68-C-<UTC>.md | briefs/P12-68.md; §1h.440 (c) |
+| P12-69 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | the takedown removes kept figures; the privacy page names them | tests; own mutation; gates | checkpoint P12-69-C-<UTC>.md | briefs/P12-69.md; §1h.441 |
+| P12-70 | IN_PROGRESS — C (Sonnet); items 1–8 landed at 098d74b3 (§1h.447); item 9 running | integration: the five tests where eight Cs' rules meet | code fixes; named re-aims only where a ruled rule changed the truth; gates | checkpoint P12-70-C-<UTC>.md | briefs/P12-70.md; §1h.442 |
 | P12-71 | QUEUED — A (Sonnet), fresh walk of Theme A on the landed head (replaces the stale P12-37 walk) | Theme A A1–A12 | rubric units and pass requirements | walk, pack, P12-71-A-<UTC>.md | briefs/P12-71.md; §1h.446 |
 | P12-72 | QUEUED — A (Sonnet), fresh walk of Theme B on the landed head (replaces the stale P12-38 walk) | Theme B B1–B12 | rubric units and pass requirements | walk, pack, P12-72-A-<UTC>.md | briefs/P12-72.md; §1h.446 |
 | P12-73 | IN_PROGRESS — B (Sonnet), scratch p12/b73, head 97b84eb9 | Theme C on P4–P6: M1–M7 by shape | file:line, three candidates each, a C split | report P12-73-B-<UTC>.md | briefs/P12-73.md; §1h.446 |
