@@ -94,15 +94,15 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-28T03:08Z
+AS OF        2026-10-28T06:23Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
-LAST RULING  §1h.442   NEXT RULING §1h.443   NEXT ITEM ID P12-71   NEXT FREE PORT 4246
+LAST RULING  §1h.443   NEXT RULING §1h.444   NEXT ITEM ID P12-71   NEXT FREE PORT 4246
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
-RUNNING      A P12-37 (4240) ∥ A P12-38 (4241) ∥ C P12-63 (closing split on the page) ∥ C P12-64 (titles) ∥ C P12-49 (headings) ∥ C P12-62 (first end-matter part) ∥ C P12-65 (no overwrite, 4243) ∥ C P12-66 (focus, 4245) ∥ C P12-53 (Tier 1) ∥ C P12-56 (Extended Data, R6b, R15a) ∥ C P12-58 (body arrives) ∥ C P12-61 (kept cut, then page-only)
+RUNNING      (max 2, §1h.443) C P12-70 (integration) ∥ C P12-67 (ligatures upstream); QUEUE: C P12-53 → C P12-69 → fresh A walks → readers → P4–P6 first sight → A P12-57 phase 2
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
 OWNER'S PDFS P1–P6 (uploads in the manager's session; P4–P6 held out); upload UI only; never commit or quote
-CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB, Haiku, "20 * * * *", enabled, read back 17:02Z; prompt now says workaholic mode: resume usage-limited agents and refill the frontier
+CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB, Haiku, "20 * * * *", enabled, read back 06:23Z; prompt: at most two subagents (§1h.443)
 ```
 
 ---
@@ -679,6 +679,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-28T02:58Z | manager (Claude) | §1h.441: C P12-61 done (upload figure call ~210 → ~113 MB; a second view opens no PDF); C P12-69 written (takedown + privacy page), to start on the head that contains C P12-61; combining C56 + C49 + C58 + C61 for one full suite | evidence: P12-61 checkpoint; briefs/P12-69.md | next: the combined gates
 
 - 2026-10-28T03:08Z | manager (Claude) | §1h.442: eight Cs combined (0c4e38c0); 5 integration failures → C P12-70; C P12-53 adapting to Tier 0 | evidence: mgr/gates-combo1.log (running) | next: C P12-70, then one full suite and land
+
+- 2026-10-28T06:23Z | manager (Claude) | §1h.443: the owner — at most two subagents at a time; a fourth limit (5-hour) stopped C53, C67, C70, A37, A38 at ~03:30Z; reset 06:20Z; resumed C70 + C67 only; A37 / A38 paused as stale; batch 2 (C64, C68) verified in mgr/v3 | evidence: mgr/gates-combo1.log | next: C70's fixes → land batches 1 + 2
 
 ---
 
