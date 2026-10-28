@@ -225,7 +225,9 @@ export function JevSetupView({
         <p className="text-caption leading-relaxed text-text-muted">{WHAT_A_KEY_ADDS}</p>
         <p className="text-caption leading-relaxed text-text-muted">{jevGainSentence()}</p>
         <JevKeyField value={jevApiKey} onChange={onChange} idPrefix={idPrefix} />
-        {signInNote !== null && <p className="text-micro leading-relaxed text-text-faint">{signInNote}</p>}
+        {/* No sign-in note here (R1-fixA item 3): the Welcome AI step already
+            shows "Sign in to use your key", with its buttons, above this block
+            to every reader the note would reach. The Profile variant keeps it. */}
       </div>
     );
   }
