@@ -94,7 +94,7 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-28T22:57Z
+AS OF        2026-10-28T23:30Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
 LAST RULING  §1h.482   NEXT RULING §1h.483   NEXT ITEM ID P12-95   NEXT FREE PORT 4248
@@ -759,6 +759,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-28T22:25Z | manager (Claude) | §1h.481: C1 phase 5 P6 5/5, P4 1/1; all-refused stays a fallback; phase 6 (P1–P6 × 5), ceiling 245 | evidence: mgr/sealed-c1/*-p5run*.json, P12-57-A phase 5 report | next: A P12-92, phase 6
 
 - 2026-10-28T22:57Z | manager (Claude) | §1h.482: restart; phase 6 scored from dumps (P1–P4, P6 5/5; P5 2/5); review only where the rules are unsure; C P12-94; ceiling 280 | evidence: mgr/sealed-c1/*-p6run*.json, a57/out6/summary.jsonl | next: C P12-94, A P12-92
+
+- 2026-10-28T23:30Z | manager (Claude) | two container restarts (about 23:05Z and 23:25Z); A P12-92 (pack 443 files, no deliverable yet) and C P12-94 (rule 2 committed c6b2ac59, rule 1 uncommitted in c94/wt) both resumed by message from their worktrees; both told to commit early | evidence: r2/a92/pack, c94/wt | next: C P12-94, A P12-92
 
 ---
 
