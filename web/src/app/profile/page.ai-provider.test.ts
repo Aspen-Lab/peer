@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { defaultProfile } from "@/types";
-import { remoteProfilePayload } from "@/components/profile-sync";
+import { remoteProfilePayload, type AuthOutcome } from "@/components/profile-sync";
+import { keyHomeText, showKeySignInNote } from "@/components/profile/ai-setup";
 import { useProfileStore } from "@/store/profile";
 
 // The Profile's "AI provider" row. A model runs on the reader's own key only
@@ -23,32 +24,58 @@ const row = source.slice(rowStart, source.indexOf("</EditRow>", rowStart));
  * condition's `{cond && (` and `)}` out (the text inside it stays), spaces
  * collapsed.
  */
-const rowText = row
-  .replace(/\{\/\*[\s\S]*?\*\/\}/g, " ")
-  .replace(/<[^>]*>/g, " ")
-  .replace(/\{[^{}]*&&\s*\(/g, " ")
-  .replace(/\)\}/g, " ")
-  .replace(/\s+/g, " ")
-  .trim();
+const textOf = (jsx: string) =>
+  jsx
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\{[^{}]*&&\s*\(/g, " ")
+    .replace(/\)\}/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+const rowText = textOf(row);
 
 const WHERE_THE_KEY_LIVES =
   "Your key stays in this browser only. Peer passes it on to the provider you choose and never stores it on its server, so the key does not follow your account to another device or browser: there, paste it again. Signing out removes it from this browser.";
+// L2-fix item 5 (R14; L2-A D4): a copy with no sign-in has no account and no signing out.
+const WHERE_THE_KEY_LIVES_NO_SIGN_IN =
+  "Your key stays in this browser only. Peer passes it on to the provider you choose and never stores it on its server.";
 const SIGN_IN_LINE = "Sign in under Account at the top of this page.";
+const OUTCOMES: AuthOutcome[] = ["unknown", "signed-in", "signed-out", "unconfigured"];
+
+/** The row's text as it reads in one sign-in state: the paragraph's expression filled in. */
+const rowTextFor = (outcome: AuthOutcome) => textOf(row.replace("{keyHomeText(authOutcome)}", keyHomeText(outcome)));
 
 describe("Profile page - the AI provider row says where the key lives", () => {
-  it("control: the row is found and holds the key fields", () => {
+  it("control: the row is found, holds the key fields, and writes the paragraph from the page's auth outcome", () => {
     expect(rowStart).toBeGreaterThan(-1);
     expect(row).toContain("<AiKeyFields");
+    expect(row.split("{keyHomeText(authOutcome)}")).toHaveLength(2);
+    expect(source).toMatch(/import \{[^}]*\bkeyHomeText\b[^}]*\} from "@\/components\/profile\/ai-setup"/);
   });
 
-  it("says the key stays in this browser, does not follow the account, and goes on sign-out", () => {
-    expect(rowText).toContain(WHERE_THE_KEY_LIVES);
+  it.each(["unknown", "signed-in", "signed-out"] as const)(
+    "%s: says the key stays in this browser, does not follow the account, and goes on sign-out",
+    (outcome) => {
+      expect(keyHomeText(outcome)).toBe(WHERE_THE_KEY_LIVES);
+      expect(rowTextFor(outcome)).toContain(WHERE_THE_KEY_LIVES);
+    },
+  );
+
+  it("no sign-in on this copy (unconfigured): keeps the browser and provider sentences, drops the account and the sign-out", () => {
+    expect(keyHomeText("unconfigured")).toBe(WHERE_THE_KEY_LIVES_NO_SIGN_IN);
+    expect(rowTextFor("unconfigured")).toContain(WHERE_THE_KEY_LIVES_NO_SIGN_IN);
+    expect(keyHomeText("unconfigured")).not.toMatch(/account|sign(ing|ed)? (out|in)/i);
+    // The row's only other sign-in words are the Account line, which is not drawn here.
+    for (const provider of ["gemini", "openai", "default"] as const) {
+      expect(showKeySignInNote(provider, "unconfigured")).toBe(false);
+    }
   });
 
-  it("says each thing once: the old 'stays in this browser' sentence is merged, not repeated", () => {
-    expect(rowText.split("stays in this browser")).toHaveLength(2);
-    expect(rowText.split("passes it on to the provider")).toHaveLength(2);
-    expect(rowText).not.toContain("does not keep it");
+  it.each(OUTCOMES)("%s: says each thing once (the old 'stays in this browser' sentence is merged, not repeated)", (outcome) => {
+    const text = rowTextFor(outcome);
+    expect(text.split("stays in this browser")).toHaveLength(2);
+    expect(text.split("passes it on to the provider")).toHaveLength(2);
+    expect(text).not.toContain("does not keep it");
   });
 
   it("keeps the opening paragraph about the reading without a model", () => {
@@ -58,7 +85,9 @@ describe("Profile page - the AI provider row says where the key lives", () => {
   });
 
   it("names no plan, tier, price or abbreviation", () => {
-    expect(rowText).not.toMatch(/Tier [012]|BYOK|quota|allowance|upgrade|paid|price/i);
+    for (const outcome of OUTCOMES) {
+      expect(rowTextFor(outcome)).not.toMatch(/Tier [012]|BYOK|quota|allowance|upgrade|paid|price/i);
+    }
   });
 });
 

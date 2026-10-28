@@ -134,6 +134,23 @@ export function providerKeyPlaceholder(p: UserAiProvider): string {
 export const KEY_SIGN_IN_NOTE = "Peer uses your key only while you are signed in.";
 
 /**
+ * Where the reader's model key lives, as the Profile's "AI provider" row says
+ * it. The key is never synced (`remoteProfilePayload` leaves it out, and the
+ * co-ownership terms forbid storing keys on Peer's server), so it does not come
+ * with the account to another device, and a confirmed sign-out resets the
+ * profile (`logOut`) and the key with it. On a copy with no sign-in at all
+ * (`"unconfigured"`) there is no account and no signing out, so those two
+ * sentences are left out.
+ */
+export function keyHomeText(authOutcome: AuthOutcome): string {
+  const stays =
+    "Your key stays in this browser only. Peer passes it on to the provider you choose and never stores it on its server";
+  return authOutcome === "unconfigured"
+    ? `${stays}.`
+    : `${stays}, so the key does not follow your account to another device or browser: there, paste it again. Signing out removes it from this browser.`;
+}
+
+/**
  * Whether the sign-in note stands under the key field: only while the key field
  * is shown (a company is chosen) and the reader is confirmed signed out, whether
  * or not a key is typed yet. Still checking (`"unknown"`), signed in, or a copy

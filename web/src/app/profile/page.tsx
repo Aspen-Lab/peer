@@ -34,7 +34,7 @@ import { RestoreFromBackup } from "@/components/profile/restore-backup";
 import { useProfileSyncStatus, useSyncGate } from "@/components/profile-sync";
 import { useFeedSyncStatus } from "@/components/feed-sync";
 import { VersionLine } from "@/components/shell/version-line";
-import { AiKeyFields, FEED_AI_PROVIDER_OPTIONS, providerShortLabel, showKeySignInNote } from "@/components/profile/ai-setup";
+import { AiKeyFields, FEED_AI_PROVIDER_OPTIONS, keyHomeText, providerShortLabel, showKeySignInNote } from "@/components/profile/ai-setup";
 import { JevSetup } from "@/components/profile/jev-setup";
 import { Toggle } from "@/components/ui/toggle";
 import { FEED_EMPTY_REASON_CODES } from "@/lib/feed/types";
@@ -2151,16 +2151,11 @@ function EditView({
             by a model, relevance reasons and reports. Without one, Peer shows
             the reading without a model and makes no AI call.
           </p>
-          {/* Where the key lives. It is never synced (`remoteProfilePayload`
-              leaves it out, and the co-ownership terms forbid storing keys on
-              Peer's server), so it does not come with the account to another
-              device; a confirmed sign-out resets the profile (`logOut`) and the
-              key with it. */}
+          {/* Where the key lives (`keyHomeText`): never synced, so it does not
+              follow the account, and gone on sign-out; on a copy with no
+              sign-in, the account and sign-out sentences are left out. */}
           <p className="text-caption leading-relaxed text-text-muted">
-            Your key stays in this browser only. Peer passes it on to the
-            provider you choose and never stores it on its server, so the key
-            does not follow your account to another device or browser: there,
-            paste it again. Signing out removes it from this browser.
+            {keyHomeText(authOutcome)}
           </p>
           <AiKeyFields
             provider={profile.feedAiProvider}
