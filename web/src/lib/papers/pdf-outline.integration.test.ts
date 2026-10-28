@@ -383,6 +383,30 @@ describe("a drop cap on the third line of the opening's first paragraph (P12-70,
       }
     });
 
+    it("joins any other one-letter cap, though the paper prints that bare letter as a unit or a variable (ruling §1h.448)", () => {
+      // English has two one-letter words, "A" and "I". "S" + "econdary" in a paper that prints "S" as a unit and never
+      // prints "secondary" elsewhere is "Secondary", not "S econdary"; so is "T" + "emperature" beside a variable "T".
+      const secondary: Variant = {
+        cap: "S",
+        first: ["econdary cathodes of the rocky shore began on three coasts in the", ...LINES_2_3],
+        rest: ["over two years of survey work on the shore, with the flux measured in S per quadrat.", FIRST_REST[1]],
+      };
+      const temperature: Variant = {
+        cap: "T",
+        first: ["emperature of the rocky shore pools was taken on three coasts in the", ...LINES_2_3],
+        rest: ["over two years of survey work, and the flux grew with T at every quadrat on the shore.", FIRST_REST[1]],
+      };
+      for (const where of [3, 1] as const) {
+        const first = opening(secondary, where);
+        expect(first.startsWith("Secondary cathodes of the rocky shore began"), `cap on row ${where}`).toBe(true);
+        expect(opening(temperature, where).startsWith("Temperature of the rocky shore pools"), `cap on row ${where}`).toBe(true);
+      }
+      // the paper does print the bare letters, so the test is the letters and not the paper's silence
+      const text = (outlineOf(0, 4, true, secondary).sections ?? []).map((section) => section.text).join(" ");
+      expect(text).toContain("measured in S per quadrat");
+      expect(text.replace("Secondary cathodes", "").toLowerCase()).not.toContain("secondary");
+    });
+
     it("joins as it always did when the bare letter is no word of the paper", () => {
       // "Q" + "uillwort": no "q" is printed and "quillwort" is printed nowhere else
       const quillwort: Variant = { cap: "Q", first: ["uillwort snails of the rocky shore began on three coasts in the", ...LINES_2_3] };

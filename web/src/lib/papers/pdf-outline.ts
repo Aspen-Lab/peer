@@ -1655,14 +1655,23 @@ export function isDropCap(line: PdfLine, body: { size: number; font: string }): 
   );
 }
 
+/** P12-70 (ruling §1h.448): English has two one-letter words, "A" and "I". Any other one-letter cap starts the word beside it,
+ *  whatever the paper prints that bare letter as (a unit "S", a variable "T"). */
+const ONE_LETTER_WORD = /^[AI]$/;
+
 /**
  * P12-70 (ruling §1h.446): whether a one-letter cap is a word of its own ("A" before "study", "I" before "think")
  * and not the first letter of the word beside it ("S" before "nail"). The paper's own words are the witness, as for a
  * ligature (P12-67): the cap is a word when the bare letter is printed in the paper and the joined word ("astudy") is
  * printed nowhere else; otherwise it starts the word, as it always did. `vocab` holds the paper's words in lower case.
+ * P12-70 (ruling §1h.448): only "A" and "I" can be a word.
  */
 function capIsWord(letters: string, word: string, vocab: Vocabulary): boolean {
-  return vocab.words.has(letters.toLowerCase()) && !vocab.words.has(`${letters}${word}`.toLowerCase());
+  return (
+    ONE_LETTER_WORD.test(letters) &&
+    vocab.words.has(letters.toLowerCase()) &&
+    !vocab.words.has(`${letters}${word}`.toLowerCase())
+  );
 }
 
 /** A drop cap spans at most this many lines; the lines it stands beside are looked for this far above its row. */
