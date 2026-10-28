@@ -35,6 +35,13 @@
 // MuPDF reads from it only what the page needs; a public paper's downloaded
 // bytes go to the engine as they are, read through a stream, not copied twice.
 //
+// P12-61 (§1h.434, part 2): the first cut on a page also cuts that page out of
+// the upload as a PDF of its own (`cutPdfPage`, kept beside the upload), and a
+// cut of any other figure on that page, or of the same figure after a revision
+// change, opens only that small file. An upload made before this has no page
+// files: its first cut on each page takes the whole-file path above, and makes
+// the page file.
+//
 // No model, no key. The body is the PNG's bytes, never a `data:` URL.
 
 import { NextResponse, type NextRequest } from "next/server";
@@ -42,13 +49,15 @@ import { fetchPaperById } from "@/lib/papers/fetch-by-id";
 import { getFullText } from "@/lib/papers/full-text";
 import { getPdfBytes } from "@/lib/papers/pdf-text";
 import { rawItemToPaper } from "@/lib/feed/mapper";
-import { extractPdfFigures, type PdfEngineResult, type PdfSource } from "@/lib/figures/pdf-engine";
+import { cutPdfPage, extractPdfFigures, type PdfEngineResult, type PdfSource } from "@/lib/figures/pdf-engine";
 import {
   bareUploadId,
   claimsUploadId,
   readUploadFigureCut,
+  readUploadPageFile,
   withUploadPdfSource,
   writeUploadFigureCut,
+  writeUploadPageFile,
 } from "@/lib/papers/upload-store";
 import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
 
@@ -81,6 +90,12 @@ function figureLabel(raw: string | null): string | null {
   return extended ? `Extended Data Fig. ${n}` : `Figure ${n}`;
 }
 
+/** The engine could not read the page file — it failed to open or read it, or it has no page 1 — as opposed to
+ *  reading it and finding no such figure there. (The engine's own reasons.) */
+function readFailed(result: PdfEngineResult): boolean {
+  return result.figures.length === 0 && /^(PDF figure extraction failed|The PDF has no page 1 )/.test(result.reason ?? "");
+}
+
 function reject(status: number, error: string, headers: Record<string, string> = NO_STORE) {
   return NextResponse.json({ error }, { status, headers });
 }
@@ -111,9 +126,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   // The engine's one call for this figure. A failure of the engine is a result here, not a throw, so that a
   // failure to fetch the PDF (which is not the engine's) is not taken for one.
-  const cut = async (source: PdfSource): Promise<{ extracted: PdfEngineResult | null }> => {
+  // `onlyPage` is the page in the source: the page itself in the whole PDF, 1 in the page's own file.
+  const cut = async (source: PdfSource, onlyPage = page): Promise<{ extracted: PdfEngineResult | null }> => {
     try {
-      return { extracted: await extractPdfFigures(source, { maxPages: MAX_PAGE, maxFigures: 1, onlyPage: page, label }) };
+      return { extracted: await extractPdfFigures(source, { maxPages: onlyPage === page ? MAX_PAGE : onlyPage, maxFigures: 1, onlyPage, label }) };
     } catch (err) {
       console.warn("[figure-image] extract failed:", err);
       return { extracted: null };
@@ -121,7 +137,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   };
   // The upload whose cut is kept once it is made; null for a public paper.
   let keepFor: string | null = null;
-  let ran: { extracted: PdfEngineResult | null } | null;
+  let ran: { extracted: PdfEngineResult | null } | null = null;
+  // Whether the answer was cut from the page's own file (its "page 1" is this page).
+  let fromPageFile = false;
   if (privately) {
     // P0-05 / P0-08: only the canonical `upload:<hash16>` is an upload id, and
     // only its owner is answered. A spelling that merely claims to be one is
@@ -135,8 +153,33 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const kept = await readUploadFigureCut(hash16, page, label);
     if (kept) return picture(kept.png, true);
     keepFor = hash16;
-    ran = await withUploadPdfSource(hash16, cut);
-    if (!ran) return reject(404, "Upload not found.", refusal);
+    // The page's own file, when it was cut before: a file of kilobytes. A page file the engine cannot read is
+    // as good as none (it is made again below); an engine that will not load at all is not a reason to try on.
+    const pageFile = await readUploadPageFile(hash16, page);
+    if (pageFile) {
+      const onPage = await cut(pageFile, 1);
+      if (!onPage.extracted || !readFailed(onPage.extracted)) {
+        ran = onPage;
+        fromPageFile = true;
+      }
+    }
+    if (!ran) {
+      ran = await withUploadPdfSource(hash16, async (source) => {
+        const whole = await cut(source);
+        // First cut on this page: make the page's own file, so the next one need not open the paper. Never
+        // fails the answer.
+        if (whole.extracted?.figures[0]?.png.byteLength) {
+          try {
+            const file = await cutPdfPage(source, page);
+            if (file) await writeUploadPageFile(hash16, page, file);
+          } catch (err) {
+            console.warn("[figure-image] could not keep the page file:", err);
+          }
+        }
+        return whole;
+      });
+      if (!ran) return reject(404, "Upload not found.", refusal);
+    }
   } else {
     const raw = await fetchPaperById(paperId);
     if (!raw) return reject(404, "Paper not found");
@@ -167,7 +210,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const found = extracted.figures[0];
   if (!found || found.png.byteLength === 0) {
-    return reject(404, extracted.reason ?? `No ${label} on page ${page}`, engineRan);
+    // The engine counted the page file's page as page 1; the answer names the page the reader asked for.
+    const reason = fromPageFile ? extracted.reason?.replace(/ on page 1\.$/, ` on page ${page}.`) : extracted.reason;
+    return reject(404, reason ?? `No ${label} on page ${page}`, engineRan);
   }
 
   // Only a cut that produced a picture is kept, and keeping it never fails the answer.

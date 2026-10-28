@@ -126,7 +126,8 @@ const STRANGER = "33333333-3333-4333-8333-333333333333";
 const HASH = sha16(PDF);
 const UPLOAD_ID = `upload:${HASH}`;
 const CUTS = path.join(uploadDir, "figure-cuts", HASH);
-const keptObjects = async () => (await readdir(CUTS).catch(() => [])).sort();
+// The kept pictures (`.cut`); the page files (`.pdf`) beside them have their own tests (route.page-file.test.ts).
+const keptObjects = async () => (await readdir(CUTS).catch(() => [])).filter((name) => name.endsWith(".cut")).sort();
 
 function call(id: string, search: string): Promise<Response> {
   const encoded = encodeURIComponent(id);
@@ -267,7 +268,9 @@ describe("GET /api/papers/[id]/figure-image — an upload's kept cut (P12-61)", 
     const narrow = await bytesOf(await call(UPLOAD_ID, "?page=2&fig=4"));
     const chart = await bytesOf(await call(UPLOAD_ID, "?page=3&fig=5"));
     expect(mocks.extractPdfFigures).toHaveBeenCalledTimes(3);
-    expect(mocks.withUploadPdfSource).toHaveBeenCalledTimes(3);
+    // The PDF is opened for the first figure on each page (pages 2 and 3); the second figure on page 2 is cut
+    // from the page's own file, which the first one made (route.page-file.test.ts).
+    expect(mocks.withUploadPdfSource).toHaveBeenCalledTimes(2);
     expect(await keptObjects()).toHaveLength(3);
 
     // Each is then answered from its own kept picture — never another figure's.
@@ -275,7 +278,7 @@ describe("GET /api/papers/[id]/figure-image — an upload's kept cut (P12-61)", 
     const narrowAgain = await bytesOf(await call(UPLOAD_ID, "?page=2&fig=4"));
     const chartAgain = await bytesOf(await call(UPLOAD_ID, "?page=3&fig=5"));
     expect(mocks.extractPdfFigures).toHaveBeenCalledTimes(3);
-    expect(mocks.withUploadPdfSource).toHaveBeenCalledTimes(3);
+    expect(mocks.withUploadPdfSource).toHaveBeenCalledTimes(2);
     expect(Buffer.compare(wideAgain, wide)).toBe(0);
     expect(Buffer.compare(narrowAgain, narrow)).toBe(0);
     expect(Buffer.compare(chartAgain, chart)).toBe(0);
@@ -294,12 +297,13 @@ describe("GET /api/papers/[id]/figure-image — an upload's kept cut (P12-61)", 
     const recut = await call(UPLOAD_ID, "?page=2&fig=3");
 
     expect(recut.status).toBe(200);
-    expect(mocks.withUploadPdfSource).toHaveBeenCalledTimes(2);
+    // The engine ran again, on the page's own file this time: the paper was not opened a second time.
     expect(mocks.extractPdfFigures).toHaveBeenCalledTimes(2);
+    expect(mocks.withUploadPdfSource).toHaveBeenCalledTimes(1);
     expect(await keptObjects()).toHaveLength(2);
     // And the new cut is kept in its turn.
     await call(UPLOAD_ID, "?page=2&fig=3");
-    expect(mocks.withUploadPdfSource).toHaveBeenCalledTimes(2);
+    expect(mocks.extractPdfFigures).toHaveBeenCalledTimes(2);
 
     await purgeExpiredUploads();
     const left = await keptObjects();
