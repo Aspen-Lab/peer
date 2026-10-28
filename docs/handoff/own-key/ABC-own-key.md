@@ -9,7 +9,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 | HELD BY | manager session (Claude Code desktop, worktree `.claude/worktrees/objective-wu-e8d6fe`) |
 | BRANCH | `own-key-on-web` (cut from `origin/main` db0f070a after PR #36 merged; name approved by the owner 2026-10-25). Repository `Aspen-Lab/peer`. No push without the owner's word (AGENTS.md). The owner merges the PR himself (R6). |
 | ROUND | 0 — implementation of lanes 1–4; round 1 scores after all four land |
-| CURRENT ITEM | L4-A and L2-A running; L1–L4 + L3-fix landed (tip full suite: see log); L1-A queued; then scoring round 1 |
+| CURRENT ITEM | L2-A and L4-fix running; L1-A queued; then L2-fix (with N2, N3), then scoring round 1 |
 | NEXT TURN | on each worker report: verify → land on the branch → refill up to the cap of two groups |
 | STOPPED BECAUSE | — |
 | TARGET | **97.9 per theme, two consecutive rounds** (the owner, 2026-10-28, R5: "达标线用 97.9，每个主题连续两轮达到就停。") |
@@ -31,6 +31,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 - **R10 (2026-10-28).** L4 mutation M3 (drop the "//" / "/\\" prefix check in `safeReturnPath`) left the tests green: an equivalent mutant, because the exact allow-list (`/welcome`, `/profile`) refuses those values anyway; the prefix check stays as defence in depth. M3b (drop the allow-list) → 4 red; M3c (callback forwards `next` unchecked) → 4 red.
 - **R11 (2026-10-28).** Turbopack refuses a `node_modules` junction that points outside the project ("Symlink [project]/node_modules is invalid, it points out of the filesystem root"; the dev server exited 1 after 14 s, no orphan left). The branch worktree gets its own `npm ci`; lanes and `own-key-verify` keep their junction / install (tests and tsc are unaffected). The Browser pane twice refused `localhost:3000` while the server was down; retry once after the install, else render-check by HTTP.
 - **R12 (2026-10-28), on L3-A (`L3-A-20261028T1725Z.md`, A10 2.0 + A11 0.75 = 2.75).** All seven defects are accepted for L3-fix (`briefs/L3-fix.md`): D1–D3 as R7, with the no-credit detectors widened (Anthropic "credit balance is too low", Qwen `Arrearage`) and run before the status switch; D4 the /privacy Check key paragraph rewritten to name the one log line (`LlmUsage`: provider, model, tokens, time, ok) instead of "keeps nothing"; D5 Anthropic `maxRetries: 0` for the check; D6 "Sign in to check your key." when signed out; D7 an empty 200 is `ok`, and a non-transient provider error gets its own `error` line instead of "Try again". The gate (KeyCheck mounted nowhere) closes in the same pass.
+- **R13 (2026-10-28), on L4-A (`L4-A-20261028T1818Z.md`; Theme A 0.5, Theme B 0.75).** All accepted for L4-fix (`briefs/L4-fix.md`): D4 (0.5) keys could survive a sign-out after "Reset profile to defaults" while signed in — fixed twice: the reset re-records the signed-in owner, and a confirmed sign-out always clears the device's API keys even with no owner recorded; D2 singular/plural in the dialog; D1 the Account step's title after sign-in; D3 the resume step for a reader who finished everything; plus director note N1 (AI summary while auth is unknown). R9's "no change" is superseded for the reset path. Not taken: the 375 px wrap of "Continue without signing in" is unverified (no browser at A); the scoring round checks it on the dev server.
 
 ## §3 Items
 
@@ -56,9 +57,17 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 | L3-A | A | DONE | own-key-lane3 (read only) | `L3-A-20261028T1725Z.md`: A10 FAIL 2.0, A11 FAIL 0.75, B5 PASS; D1–D7; gate: KeyCheck unmounted |
 | L3-fix | C | LANDED 411bf87b, 4721b099, 0b39f6f6 | `.claude/worktrees/own-key-lane3` | items 1–5 of `briefs/L3-fix.md`. Deviations accepted: /privacy "at most one log line" (fetch providers log only when the provider answers); Anthropic's check now logs like the others; provider 408 = unreachable; a confirmed sign-out replaces an earlier result line. Manager: tsc 0, eslint 0 errors (8 old warnings), affected tests ×3 = 622 pass / 3 fail (baseline); M9 (no-credit decision removed) → 8 red; M10 (Anthropic retries back on) → 1 red; M11 (mount removed) → 9 red; restored byte-identical. |
 | L4-C | C | LANDED 27c1d03a, 2fc2367b, a6278be9, 395e5cfe, acbc8adf | `.claude/worktrees/own-key-lane4` | 15ec36a6 return path + open redirect, 73eff44d Account step + AI-step sign-in, 780cd45d AI summary, 1285860a sign-out dialog, 5708ad40 reset text. Manager: tsc 0, eslint 0 errors (49 warnings, pre-existing), touched tests ×3 = 334/334; M3 equivalent (R10), M3b → 4 red, M3c → 4 red, M4 (keys ignored in signOutPrompt) → 3 red; all restored byte-identical. Full suite: 10814 tests, 35 failed, **0 new** vs baseline. |
-| L4-A | A | RUNNING (started when L1-C finished) | own-key-lane4 (read only) | — |
+| L4-A | A | DONE | own-key-lane4 (read only) | `L4-A-20261028T1818Z.md`: A6 A7 A9 B2 B3 B4 B6 PASS; D1 0.25 (A5), D2 0.25 (A8), D3 0.25 (B1), D4 0.5 (B7); no open redirect in 50+ attempts |
+| L4-fix | C | RUNNING (lane 4's C resumed at the tip) | `.claude/worktrees/own-key-lane4` | `briefs/L4-fix.md` (R13 + N1) |
 | L1-A … L4-A | A | QUEUED | — | — |
 | R1-score | blind readers ×3 + director | QUEUED | — | — |
+
+## §4b Director notes for round 1 (manager, from the static render pack, before any reader)
+
+- Render script: manager scratch `render/round.render.test.tsx` (copied into `own-key-verify/web/src/__render__/`, run, deleted); output `render/out/renders.md`. Static renders cannot show hook-read auth states (zustand serves its initial `unknown` on the server), so signed-out key-field states are captured from the live dev server instead.
+- N1 (A7): Welcome AI summary says "Gemini key saved — sign in to use it" while the sign-in check is still `unknown`; a signed-in reader can see it for a moment. Candidate 0.25.
+- N2 (A4): "… need the full text and you to sign in." reads awkwardly. Candidate 0.25.
+- N3 (A2/A6/A10): a signed-out reader on the Welcome AI step meets three sign-in lines in one block ("Sign in to use your key", "Peer uses your key only while you are signed in.", "Sign in to check your key."). Candidate 0.25.
 
 ## §5 Log
 
@@ -77,6 +86,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 - 2026-10-28 | 2b6665a6 | manager | tip with L1–L4: tsc 0; full suite 11002 tests, 34 failed, **0 new**, 1 fixed (scan 5).
 - 2026-10-28 | 0b39f6f6 | manager | L3-fix reported; L2-A started in the freed slot; L3-fix verified (three mutations) and landed; tip full suite started.
 - 2026-10-28 | 0b39f6f6 | manager | tip full suite after L3-fix: tsc 0; 11055 tests, 34 failed, **0 new**, 1 fixed (scan 5).
+- 2026-10-28 | 982254b9 | manager | render pack for round 1 built (director notes N1–N3). L4-A reported (A 0.5, B 0.75); R13; L4-fix started in the freed slot.
 
 ## §6 Clock
 
