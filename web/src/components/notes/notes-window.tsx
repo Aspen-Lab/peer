@@ -309,6 +309,61 @@ export function reconcileWindow(base: readonly Block[], mine: readonly Block[], 
   return { kind: "merge", blocks: mergeBlocks(base, mine, theirs) };
 }
 
+/** The merge the window will store (`blocks`, `sources`), and the stored blocks it was made from (`from`: its base, and the mark of "nobody wrote since"). */
+export type Seed = { blocks: Block[]; sources: Record<string, Source>; from: Block[] };
+
+/** What the window does after one look at the stored blocks (`settleWindow`): nothing, start the editor afresh, or store a merge first. */
+export type WindowStep = { kind: "none" } | { kind: "restart" } | { kind: "merge"; seed: Seed };
+
+/**
+ * P12-65 (M1b): one pass of the window's reconcile effect. `base` is the blocks the editor was started from or last saw stored
+ * (what "unsaved" is measured against); `mine` is the editor's copy now; `stored` is the note as the window rendered it; `seed` is
+ * the merge that waits to be stored, if one does. Beyond `reconcileWindow`:
+ *  - after a `merge` the base is the merge itself — the blocks the new editor starts from and the window is about to store — so
+ *    the next pass measures the new editor against its own start, and its own merge in the store is `keep` / `same`, never a new
+ *    outside change (B P12-52: with the old base each pass merged the editor's merge again, and the note doubled to the quota);
+ *  - while a seed waits and the note in hand is still the one it was made from (`stored.blocks === seed.from`) that note is about
+ *    to be replaced by the seed, and the editor just mounted on the seed would be compared with a note older than itself: no
+ *    verdict is made on that pair. If the note has moved on since, it is looked at as any change is.
+ */
+export function settleWindow(
+  base: { current: Block[] | null },
+  mine: { blocks: Block[]; sources: Record<string, Source> } | null,
+  stored: Pick<Note, "blocks" | "sources">,
+  seed: Seed | null = null,
+): WindowStep {
+  if (!mine) {
+    base.current = stored.blocks;
+    return { kind: "none" };
+  }
+  if (seed && stored.blocks === seed.from) return { kind: "none" };
+  const verdict = reconcileWindow(base.current ?? stored.blocks, mine.blocks, stored.blocks);
+  if (verdict.kind === "same") base.current = stored.blocks;
+  else if (verdict.kind === "keep") base.current ??= stored.blocks;
+  else if (verdict.kind === "restart") {
+    base.current = stored.blocks;
+    return { kind: "restart" };
+  } else {
+    base.current = verdict.blocks;
+    return { kind: "merge", seed: { blocks: verdict.blocks, sources: { ...stored.sources, ...mine.sources }, from: stored.blocks } };
+  }
+  return { kind: "none" };
+}
+
+/**
+ * P12-65 (M1a, M1b): the merge is stored once the old editor has gone — if the note is still the one the merge was made from.
+ * The old editor's unmount flush writes its copy merged into the note (it carries its base), so when it, or a sticky, has written
+ * since, the note already holds the words of both and the merge, made from the older note, would be merged with them a second
+ * time (the window's words twice). Then nothing is stored and the window looks at the note as it is (`settleWindow`). True when
+ * the seed was stored.
+ */
+export function storeSeed(noteId: string, seed: Seed): boolean {
+  const now = useNotesStore.getState().notes[noteId];
+  if (!now || now.blocks !== seed.from) return false;
+  useNotesStore.getState().save(noteId, { blocks: seed.blocks, sources: seed.sources }, undefined, seed.from);
+  return true;
+}
+
 export function NotesWindow({ paper, onClose }: { paper: Paper; onClose: () => void }) {
   const note = useNotesStore((s) => readingNoteFor(s.notes, paper.id));
   const windows = useWindows((s) => s.windows);
@@ -320,7 +375,7 @@ export function NotesWindow({ paper, onClose }: { paper: Paper; onClose: () => v
   // changes the stored blocks under it, so the editor is started afresh when they change (`rev`). P10-09c: when it holds
   // unsaved typing of its own at that moment the two are merged first (`seed`) rather than the old editor's flush on
   // unmount writing its stale copy over the sticky's words (BACKLOG-69).
-  const [fresh, setFresh] = useState<{ rev: number; seed: { blocks: Block[]; sources: Record<string, Source> } | null }>({ rev: 0, seed: null });
+  const [fresh, setFresh] = useState<{ rev: number; seed: Seed | null }>({ rev: 0, seed: null });
   // The blocks the editor was started from, or last saw stored: what "unsaved" is measured against.
   const base = useRef<Block[] | null>(null);
 
@@ -345,19 +400,9 @@ export function NotesWindow({ paper, onClose }: { paper: Paper; onClose: () => v
 
   useEffect(() => {
     if (!note) return;
-    const mine = doc.current;
-    const from = base.current ?? note.blocks;
-    if (!mine) {
-      base.current = note.blocks;
-      return;
-    }
-    const verdict = reconcileWindow(from, mine.blocks, note.blocks);
-    if (verdict.kind === "same") base.current = note.blocks;
-    else if (verdict.kind === "keep") base.current ??= note.blocks;
-    else if (verdict.kind === "restart") {
-      base.current = note.blocks;
-      setFresh((f) => ({ rev: f.rev + 1, seed: null }));
-    } else setFresh((f) => ({ rev: f.rev + 1, seed: { blocks: verdict.blocks, sources: { ...note.sources, ...mine.sources } } }));
+    const step = settleWindow(base, doc.current, note, fresh.seed);
+    if (step.kind === "restart") setFresh((f) => ({ rev: f.rev + 1, seed: null }));
+    else if (step.kind === "merge") setFresh((f) => ({ rev: f.rev + 1, seed: step.seed }));
     // Only a change of what is stored matters here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note?.blocks]);
@@ -366,7 +411,7 @@ export function NotesWindow({ paper, onClose }: { paper: Paper; onClose: () => v
   // the new editor started from.
   useEffect(() => {
     if (!fresh.seed || !note) return;
-    useNotesStore.getState().save(note.id, { blocks: fresh.seed.blocks, sources: fresh.seed.sources });
+    storeSeed(note.id, fresh.seed);
     setFresh((f) => (f.rev === fresh.rev ? { rev: f.rev, seed: null } : f));
     // Only a new start matters here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
