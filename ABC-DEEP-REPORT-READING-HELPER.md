@@ -2265,6 +2265,17 @@ Then Theme A round 3: a fresh A walk on the landed head and three readers.
 
 (e) O3 / O4 (peek and thumbnail at W2 / W3), O6 (figure labels as body paragraphs on P2 and P3, P2's page-1 interleave) and O8 are backlog with the short-paragraph item (§1h.450).
 
+### §1h.460 — 2026-10-28 — C P12-79 LANDED (E3: THE TAB STAYS RIGHT WITH A BAND CARD)
+
+**C P12-79 is landed** (head `b1d88d7e`; the landed `web/` tree equals V's at `187098ba`).
+- **The rule:** a card or the notes window in the bottom band keeps the tab on the right edge, 8 px above the band, at every width. With a side margin the tab sits beside the card, as before.
+- **Manager mutations** (sha256 equal after each restore): the band rule limited to the phone → 20 red; the `md:` override re-added → 8 red.
+- **V's full gates:** lint 0 / 144; **654 files, 12,241 tests, 0 failed**; build 0.
+- **C's re-aims**, named with their reasons: `phone.flow` "from md … beside the card" (it held E3's own defect) and `foot` "from md the band is not read".
+- **Open, C's point (a):** in a window under about 438 px high from md, the 3rem masthead floor wins over the band. This was already so before.
+
+**Running:** B P12-80 ∥ reader A3-r2. **Queued:** C P12-81 (O2), then the Cs from B P12-80, A P12-57 phase 2 (C1), Theme A round 4, and Theme B round 3.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2597,8 +2608,9 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-76 | DONE — C (Sonnet); landed at 4f6d6e67 (§1h.453) | M8 per-page left edge; M3 c3_last on P5 | invented fixtures; own mutations; gates | checkpoint P12-76-C-<UTC>.md | briefs/P12-76.md; §1h.449 |
 | P12-77 | DONE — C (Sonnet); landed at 4653a1d6 (§1h.455) | E1 the notes tab above the legend; O2 underline as <u> in Markdown | tests; own mutations; gates | checkpoint P12-77-C-<UTC>.md | briefs/P12-77.md; §1h.451 |
 | P12-78 | DONE — A (Sonnet), report on the branch (4b6b614f); 12/12 ×3, E3 0.25, 97.92 ×3; readers running (§1h.457) | Theme A A1–A12 + round-2 marks re-checked | rubric units and pass requirements | walk, pack, P12-78-A-<UTC>.md | briefs/P12-78.md; §1h.455 |
-| P12-79 | IN_PROGRESS — C (Sonnet), scratch p12/c79, from 25bca3b4 | E3: with a card in the bottom band the notes tab keeps the right edge at every width | tests; own mutation; gates | checkpoint P12-79-C-<UTC>.md | briefs/P12-79.md; §1h.457 |
+| P12-79 | DONE — C (Sonnet); landed at b1d88d7e (§1h.460) | E3: with a card in the bottom band the notes tab keeps the right edge at every width | tests; own mutation; gates | checkpoint P12-79-C-<UTC>.md | briefs/P12-79.md; §1h.457 |
 | P12-80 | IN_PROGRESS — B (Sonnet), scratch p12/b80, head e420c898 | Theme B P3: K1 card caption cut, K2 acronym case, K3 figure bounds | file:line, three candidates each, a C split | report P12-80-B-<UTC>.md | briefs/P12-80.md; §1h.459 |
+| P12-81 | QUEUED — C (Sonnet) | O2: the Explain card's body overscroll-contain | a pin; own mutation; gates | checkpoint P12-81-C-<UTC>.md | briefs/P12-81.md; §1h.459 (c) |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
 | P11-26 | **DONE 21:0xZ 2026-10-20** — on the branch (§1h.128 (b)); was RUNNING (rules 4, 5 added §1h.127 (c)) since 09:1xZ 2026-10-20 — C, `briefs/P11-26.md`, `scratchpad/p11c26/wt`, port 4127: the explain card keeps its top at the selection (B3); a figure in front of the stack is never a thumbnail (X-3) | round 1 Theme B | §1h.122 (b) 1, 4 | C → the manager | — |
