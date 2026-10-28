@@ -2496,12 +2496,25 @@ export function joinProse(lines: readonly FlowLine[], options: JoinOptions = {})
   // The line pitch, not the average gap: a section with one paragraph break
   // in three lines has a median that IS the break, and then nothing breaks.
   const pitch = gaps.length > 0 ? gaps[Math.floor(gaps.length * 0.25)] : 0;
-  // The section's usual left edge: the 10th percentile of its line starts, not
-  // the leftmost one, so a margin label or one hanging line does not make every
+  // A page's usual left edge: the 10th percentile of its line starts, not the
+  // leftmost one, so a margin label or one hanging line does not make every
   // other line read as indented. Under ten lines that is the minimum: too few
-  // to tell an outlier from an edge.
-  const starts = lines.map((l) => l.x).sort((a, b) => a - b);
-  const left = starts.length > 0 ? starts[Math.floor(LEFT_EDGE_QUANTILE * (starts.length - 1))] : 0;
+  // to tell an outlier from an edge. C P12-76 (M8): the page's own, not the
+  // section's. A page set at another origin (its text starts at x = -26 where
+  // the others' start at 40) is more than the tenth that sets the quantile when
+  // taken over the whole section, and every line of every other page then read
+  // as an indent and began a paragraph.
+  const startsOf = new Map<number, number[]>();
+  for (const l of lines) {
+    const xs = startsOf.get(l.page);
+    if (xs) xs.push(l.x);
+    else startsOf.set(l.page, [l.x]);
+  }
+  const leftOf = new Map<number, number>();
+  for (const [page, xs] of startsOf) {
+    xs.sort((a, b) => a - b);
+    leftOf.set(page, xs[Math.floor(LEFT_EDGE_QUANTILE * (xs.length - 1))]);
+  }
 
   for (const line of lines) {
     if (line.block) {
@@ -2524,7 +2537,7 @@ export function joinProse(lines: readonly FlowLine[], options: JoinOptions = {})
       previous !== null &&
       !line.continues &&
       ((bigGap && !floatGap) ||
-        (samePage && line.x > left + 6) ||
+        (samePage && line.x > (leftOf.get(line.page) ?? 0) + 6) ||
         previous?.block === true ||
         (previous.page !== line.page && current.trim() !== "" && !continuesAcrossPage(current, line.text)));
     if (breaks && current.trim()) {
