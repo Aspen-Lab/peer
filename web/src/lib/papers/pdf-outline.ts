@@ -1787,12 +1787,19 @@ function namesAPart(head: string): boolean {
  * it and moves it only while no heading has (the plain fixtures of a test), so a paper's stray "2 Institute of ..."
  * in the footnote of page 1 neither takes the number of the real "2. Results" nor turns it away; and a set-apart
  * heading that goes back is taken only while the numbering is still the body-face lines' own.
+ *
+ * C P12-74 (R2): and a numbered line in the body's own face and size that follows open prose (`followsOpenProse`: the
+ * line above is body prose in its column, one pitch up, and does not end a sentence) is the middle of that sentence,
+ * not a heading, unless the line above is a heading candidate itself (stacked numbered headings).
  */
 function numberedOut(lines: PdfLine[], body: { size: number; font: string }): Set<string> {
   const out = new Set<string>();
   const furniture = furnitureOf(lines, new Set(lines.map((line) => line.page)).size);
   const margin = marginPrintOf(lines, body);
   const heads: { line: PdfLine; head: string }[] = [];
+  // C P12-74 (R2): where each line stands among the lines, and the pitch they are read at, for `followsOpenProse`.
+  const placeOf = new Map(lines.map((line, i) => [line, i] as const));
+  const pitch = linePitch(lines);
   for (const line of lines) {
     if (isFurniture(line, furniture) || margin(line)) continue;
     const head = candidateOf(line, body);
@@ -1811,6 +1818,20 @@ function numberedOut(lines: PdfLine[], body: { size: number; font: string }): Se
       continue;
     }
     const apart = isSetApart(line, body);
+    // C P12-74 (R2, B P12-73 M1): a numbered line in the body's own face and size that goes on from a sentence the line
+    // above did not finish is the middle of a paragraph ("... charged at" over "4 A g-1 and then held ..."), not a
+    // heading. Unless the line above is itself a heading candidate: stacked numbered headings in plain fixtures
+    // ("5 Methods" over "5.1 Cell assembly", both in the body's face) are headings.
+    const at = placeOf.get(line) ?? 0;
+    if (
+      !apart &&
+      line.font === body.font &&
+      followsOpenProse(lines, at, pitch, body, furniture) &&
+      candidateOf(lines[at - 1], body) === null
+    ) {
+      out.add(lineKey(line));
+      continue;
+    }
     if (inReferences) {
       // A numbered line in the body's face is an entry, unless its words are a plain heading naming a part (a
       // journal that prints its Methods after the references, numbered: "5 Methods"): that ends the list.
