@@ -535,6 +535,12 @@ export type Correction =
 export interface Answer {
   corrections: Correction[];
   unsure: number[];
+  /**
+   * The corrections the reply made against parts the rules were sure of, each refused as `confident-draft` (P12-94); set by
+   * `sanitizeReview` only when there are any. They are corrections no more, and nothing is laid over the map for them, but each
+   * still takes the place it took before: among the looks (`secondLookTargets`) and among the forty (`resolveLooks`).
+   */
+  contradicted?: Correction[];
 }
 
 export interface Part {
@@ -707,8 +713,10 @@ function isEdgeSplit(c: unknown, draft: readonly DraftPart[]): boolean {
  * all is refused here in place of being kept. A correction refused for its part's confidence otherwise takes its
  * place in the judging as a kept one did (one of the forty, the part's repeat memory and splits, and, for the
  * pieces check, its move or split), so that nothing else in the reply is judged differently than before: the
- * corrections a reply ends with are a subset of those it ended with before, never one more. It is not in the
- * answer. A reply of nothing else is `all-refused`, as every reply whose corrections were all refused.
+ * corrections a reply ends with are a subset of those it ended with before, never one more. It is not among the
+ * answer's corrections: the answer names it in `contradicted`, where `secondLookTargets` and `resolveLooks` find the
+ * places it took (the looks and the forty). A reply of nothing else is `all-refused`, as every reply whose corrections
+ * were all refused.
  */
 export function sanitizeReview(
   raw: unknown,
@@ -735,8 +743,9 @@ export function sanitizeReview(
   const unsure = Array.isArray(raw.unsure)
     ? [...new Set((raw.unsure as unknown[]).map(whole).filter((n): n is number => n !== null && n < draft.length))]
     : [];
+  const contradicted = judged.kept.filter((entry) => entry.sure).map((entry) => entry.correction);
   return {
-    answer: { corrections: judged.kept.filter((entry) => !entry.sure).map((entry) => entry.correction), unsure },
+    answer: { corrections: judged.kept.filter((entry) => !entry.sure).map((entry) => entry.correction), unsure, ...(contradicted.length > 0 ? { contradicted } : {}) },
     rejected: judged.rejected,
     read: list.length,
     refused: judged.refused,
@@ -1083,31 +1092,51 @@ export interface LookTarget {
 }
 
 /**
- * Which parts get a second look: a part the answer corrects, by the rules' confidence in it (`contradicts-high`,
- * `contradicts-medium`, and since P12-94 `contradicts-low`), and a part listed `unsure`. A correction against a part the
- * rules were unsure of needs a look that agrees, as one against a part they were sure of did: measured, a `set_role`
- * of the closing part to evidence was applied with no look at all. A part both corrected and listed `unsure` draws the
- * look its correction needs (`contradicts-low`), not a second one. Strongest contradiction first, then the unsure,
- * then the contradictions of a `low` part, then the part's number; at most three.
+ * Which parts get a second look. Only a part the rules were unsure of (`low`) can be changed by one (P12-94), in two ways:
+ *   - the answer corrects it (`contradicts-low`): the correction needs a look that agrees. Measured, a `set_role` of the
+ *     closing part to evidence was applied with no look at all;
+ *   - the model could not judge it (`unsure`) and corrects nothing there: the look may name another role.
+ * A part both corrected and listed `unsure` draws the look its correction needs, not a second one. An answer built by hand may
+ * also correct a part the rules were sure of (the sanitizer refuses such a correction, `confident-draft`): it still draws the
+ * look it drew, `contradicts-high` or `contradicts-medium`.
  *
- * A part listed `unsure` that the rules were `high` or `medium` about draws no look, and changes nothing (P12-94): the
- * review changes the map only where the rules said they were unsure. Nor can the sanitizer's answer hold a correction
- * against such a part (`confident-draft`); an answer built by hand still draws the contradiction looks it drew.
+ * The cap is three looks, and the places among them are spent as they were before P12-94: strongest contradiction first
+ * (the parts the answer corrects that the rules were sure of, `Answer.contradicted` among them), then every part listed
+ * `unsure` whatever the rules' confidence, then the part's number. A place that falls to a part the rules were sure of makes
+ * no call (an unsure listing of such a part draws no look and changes nothing), but it is spent, so that no unsure part is
+ * looked at that was not looked at before: the corrections a reply ends with are never one more (see `sanitizeReview`). The
+ * other parts the answer corrects that the rules were unsure of are looked at in the places left, by their numbers.
  */
 export function secondLookTargets(draft: readonly DraftPart[], answer: Answer): LookTarget[] {
   const rank = { "contradicts-high": 0, "contradicts-medium": 1, unsure: 2, "contradicts-low": 3 } as const;
-  const seen = new Map<number, LookWhy>();
-  for (const c of answer.corrections) {
-    const conf = draft[c.part].conf;
-    const why: LookWhy = conf === "high" ? "contradicts-high" : conf === "medium" ? "contradicts-medium" : "contradicts-low";
-    const had = seen.get(c.part);
-    if (had === undefined || rank[why] < rank[had]) seen.set(c.part, why);
+  const order = (a: LookTarget, b: LookTarget): number => rank[a.why] - rank[b.why] || a.part - b.part;
+  const corrected = new Set(answer.corrections.map((c) => c.part));
+  const sureWhy = (part: number): LookWhy => (draft[part].conf === "high" ? "contradicts-high" : "contradicts-medium");
+
+  const placed = new Map<number, LookWhy>();
+  const place = (part: number, why: LookWhy): void => {
+    const had = placed.get(part);
+    if (had === undefined || rank[why] < rank[had]) placed.set(part, why);
+  };
+  for (const c of answer.corrections) if (draft[c.part].conf !== "low") place(c.part, sureWhy(c.part));
+  for (const { part } of answer.contradicted ?? []) if (draft[part] && draft[part].conf !== "low") place(part, sureWhy(part));
+  for (const k of answer.unsure) if (!placed.has(k) && draft[k]) placed.set(k, "unsure");
+  const places = [...placed].map(([part, why]): LookTarget => ({ part, why })).sort(order).slice(0, REVIEW_CAPS.secondLooks);
+
+  const looks: LookTarget[] = [];
+  for (const { part, why } of places) {
+    if (why === "unsure") {
+      if (draft[part].conf === "low") looks.push({ part, why: corrected.has(part) ? "contradicts-low" : "unsure" });
+    } else if (corrected.has(part)) {
+      looks.push({ part, why });
+    }
   }
-  for (const k of answer.unsure) if (!seen.has(k) && draft[k]?.conf === "low") seen.set(k, "unsure");
-  return [...seen]
-    .map(([part, why]) => ({ part, why }))
-    .sort((a, b) => rank[a.why] - rank[b.why] || a.part - b.part)
-    .slice(0, REVIEW_CAPS.secondLooks);
+  const looked = new Set(looks.map((look) => look.part));
+  for (const part of [...corrected].sort((a, b) => a - b)) {
+    if (looks.length >= REVIEW_CAPS.secondLooks) break;
+    if (draft[part].conf === "low" && !looked.has(part)) looks.push({ part, why: "contradicts-low" });
+  }
+  return looks.sort(order);
 }
 
 /** A part thinned: its first 3, its last 2 and every fourth between. */
@@ -1247,8 +1276,12 @@ export interface LookRecord {
  *
  * A correction against a part the rules were unsure of (`low`) stands only on a `contradicts-low` look that says
  * `review` (P12-94): with no look at all (the looks are capped at three) it goes too, and so does one whose part was
- * looked at as `unsure` only. The `set_role` a look adds for an unsure part is the look's own, and stands. A part with
- * no look keeps what it had, unless the rules were unsure of it.
+ * looked at as `unsure` only. The `set_role` a look adds for an unsure part is the look's own, and stands, if it is sure
+ * to find room among the forty corrections an answer may hold: the answer's corrections, the ones it made against parts the
+ * rules were sure of (`Answer.contradicted`: refused, but they took their place) and the three looks that might each add one
+ * come to forty at most. Otherwise it is not added: the second pass of the route could refuse it for the cap where the
+ * corrections made against the rules' sure parts, which hold places there too, would have. A part with no look keeps what
+ * it had, unless the rules were unsure of it.
  */
 export function resolveLooks(
   draft: readonly DraftPart[],
@@ -1260,10 +1293,11 @@ export function resolveLooks(
   /** The parts the rules were unsure of whose corrections a look agreed with, and the corrections a look added. */
   const agreed = new Set<number>();
   const added = new Set<Correction>();
+  const room = answer.corrections.length + (answer.contradicted?.length ?? 0) + REVIEW_CAPS.secondLooks <= REVIEW_CAPS.corrections;
   for (const { target, verdict } of looks) {
     records.push({ part: target.part, why: target.why, verdict: verdict ? verdict.verdict : "failed" });
     if (target.why === "unsure") {
-      if (draft[target.part]?.conf === "low" && verdict?.verdict === "review" && verdict.role && verdict.role !== draft[target.part].role && !corrections.some((c) => c.part === target.part && c.op === "set_role")) {
+      if (room && draft[target.part]?.conf === "low" && verdict?.verdict === "review" && verdict.role && verdict.role !== draft[target.part].role && !corrections.some((c) => c.part === target.part && c.op === "set_role")) {
         const add: Correction = { op: "set_role", part: target.part, role: verdict.role };
         corrections.push(add);
         added.add(add);
