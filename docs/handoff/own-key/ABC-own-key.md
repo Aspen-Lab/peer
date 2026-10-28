@@ -115,6 +115,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 - 2026-10-28 | 62b442ed | manager | tip +L4-fix full suite: 11133 tests, 34 failed, **0 new**. L2-fix reported; L4-fix2 started in the freed slot; L2-fix verified (two mutations) and landed (61492242); tip full suite started.
 - 2026-10-28 | 61492242 | manager | tip +L2-fix full suite: tsc 0; 11168 tests, 34 failed, **0 new**. Reader brief `briefs/R1-reader.md` written.
 - 2026-10-28 | 84dbc1c6 | manager | L4-fix2 landed (4a883c0a); round-1 pack built; readers ×3 started; L1-A reported (R16); L1-fix started; CHANGELOG entry 1e4a1a98; director's score A 89.58 / B 97.73 (§4c).
+- 2026-10-28 | 2eae0788 | manager | round 1 scored A 85.4 / B 100.0; R17, R18; R1-fixA landed; R1-fixB started. Tip full suite: tsc 0; 11180 tests, 34 failed, **0 new**. R1-fixB's C stopped on the usage limit ("resets 4:20pm") before editing anything; resumed by message at 16:41 CDT after three clock ticks.
 
 ## §6 Clock
 
