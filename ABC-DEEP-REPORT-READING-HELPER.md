@@ -2296,6 +2296,27 @@ Round 4 (a fresh A walk on the head with C P12-79, and readers) confirms it. It 
 
 (b) **A P12-57 phase 2 has started**, as run (§1h.462, appended to its brief). It measures C1 on the product as built (C P12-53's structure review on the page, BYOK through the Profile form, the server without the key in its environment): P1–P6, 5 independent runs each (a fresh browser context, the server restarted), at most 150 Google calls, and it stops on any quota answer. Dumps go to `mgr/sealed-c1/` (scratch). The manager scores them with `mgr/score-c1.py` against the ruled truth; a row unlike the reviewed C0 map is reviewed as a possible extra. B P12-42 §7's unbuilt arms are not run.
 
+### §1h.463 — 2026-10-28 — B P12-80 RULED: C P12-82 (K1 CAPTIONS), C P12-83 (K2 CASE), C P12-84 (K3 BOUNDS)
+
+B P12-80's report (`P12-80-B-20261028T1444Z.md`, landed `b6cbc27c`) is ruled. Every candidate was measured on P1–P6 with patched copies, and the test impact with a resolve swap.
+
+(a) **K1, the caption cut.**
+- Cause: the face test in `continuesCaption`. A bold title run is the line's longest run, so the next regular line reads as another face. The R7a rescue measures the wrong leading.
+- It cuts P3's Fig. 1 and Fig. 6, and six more captions on P4 and P5.
+- **R1-B** fixes all 8, and 0 of 1,586 tests move → **C P12-82**.
+
+(b) **K2, the acronym case.** Not Peer's code: P3's PDF maps the capital codes I, L, S, T and U of three fonts to lowercase (224 glyphs; 0 in the other five papers). pdf.js follows the map.
+- **R2-C**, a document-level repair from the font's own evidence (≥ 3 hits, ≥ 2 letters), fixes 10 of 10 occurrences and changes 0 items on P1, P2 and P4–P6 → **C P12-83**, with named negatives (pH, eV, mM, kDa, mAh).
+
+(c) **K3, the figure bounds.**
+- Causes: the 6 pt edge reach misses rotated labels and legend marks; the 10 pt clip padding reaches the running head's ink; the furniture band never bounds the clip.
+- B also finds the running head absorbed into P5's Figs. 2, 3 and 5, and its rule in every P5 and P6 crop.
+- **R3-C then R3-B** → **C P12-84**, with 4 named re-aims.
+
+(d) After the three land, the manager bumps `FIGURE_EXTRACTION_REVISION` 10 → 11, so the stored documents are re-read.
+
+(e) **Order under two slots:** A P12-57 phase 2 is running. C P12-82 starts now; C P12-84 and C P12-83 follow as slots free. Then Theme B round 3 and Theme A round 4.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2629,8 +2650,11 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-77 | DONE — C (Sonnet); landed at 4653a1d6 (§1h.455) | E1 the notes tab above the legend; O2 underline as <u> in Markdown | tests; own mutations; gates | checkpoint P12-77-C-<UTC>.md | briefs/P12-77.md; §1h.451 |
 | P12-78 | DONE — A (Sonnet), report on the branch (4b6b614f); 12/12 ×3, E3 0.25, 97.92 ×3; readers running (§1h.457) | Theme A A1–A12 + round-2 marks re-checked | rubric units and pass requirements | walk, pack, P12-78-A-<UTC>.md | briefs/P12-78.md; §1h.455 |
 | P12-79 | DONE — C (Sonnet); landed at b1d88d7e (§1h.460) | E3: with a card in the bottom band the notes tab keeps the right edge at every width | tests; own mutation; gates | checkpoint P12-79-C-<UTC>.md | briefs/P12-79.md; §1h.457 |
-| P12-80 | IN_PROGRESS — B (Sonnet), scratch p12/b80, head e420c898 | Theme B P3: K1 card caption cut, K2 acronym case, K3 figure bounds | file:line, three candidates each, a C split | report P12-80-B-<UTC>.md | briefs/P12-80.md; §1h.459 |
+| P12-80 | DONE — B (Sonnet), report on the branch (b6cbc27c); ruled §1h.463 | Theme B P3: K1 card caption cut, K2 acronym case, K3 figure bounds | file:line, three candidates each, a C split | report P12-80-B-<UTC>.md | briefs/P12-80.md; §1h.459 |
 | P12-81 | DONE — C (Sonnet); landed at ca0c13c6 (§1h.462) | O2: the Explain card's body overscroll-contain | a pin; own mutation; gates | checkpoint P12-81-C-<UTC>.md | briefs/P12-81.md; §1h.459 (c) |
+| P12-82 | QUEUED — C (Sonnet) | K1: a caption goes on through its title's face change (R1-B) | invented fixtures; own mutations; gates | checkpoint P12-82-C-<UTC>.md | briefs/P12-82.md; §1h.463 |
+| P12-83 | QUEUED — C (Sonnet) | K2: a font's lowercased capitals repaired from the document (R2-C) | invented fixtures; own mutations; gates | checkpoint P12-83-C-<UTC>.md | briefs/P12-83.md; §1h.463 |
+| P12-84 | QUEUED — C (Sonnet) | K3: figure bounds without furniture, with edge labels (R3-C, R3-B) | invented fixtures; own mutations; gates | checkpoint P12-84-C-<UTC>.md | briefs/P12-84.md; §1h.463 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
 | P11-26 | **DONE 21:0xZ 2026-10-20** — on the branch (§1h.128 (b)); was RUNNING (rules 4, 5 added §1h.127 (c)) since 09:1xZ 2026-10-20 — C, `briefs/P11-26.md`, `scratchpad/p11c26/wt`, port 4127: the explain card keeps its top at the selection (B3); a figure in front of the stack is never a thumbnail (X-3) | round 1 Theme B | §1h.122 (b) 1, 4 | C → the manager | — |
