@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-28T15:54Z
+AS OF        2026-10-28T16:11Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
-LAST RULING  §1h.466   NEXT RULING §1h.467   NEXT ITEM ID P12-87   NEXT FREE PORT 4248
+LAST RULING  §1h.467   NEXT RULING §1h.468   NEXT ITEM ID P12-89   NEXT FREE PORT 4248
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
-RUNNING      (max 2, §1h.443) C P12-83 (K2 case) ∥ C P12-86 (Tier-1 guard + fallback log); branch head 6371b78e; QUEUE: revision 10 → 11 (after C P12-83) → A P12-57 phase 3 (after C P12-86) → Theme B round 3 → Theme A round 4 → B short paragraphs; OWNER: O1
+RUNNING      (max 2, §1h.443) A P12-87 (Theme A round 4, port 4246) ∥ A P12-88 (Theme B round 3, port 4247); branch head 69e5e2ef; verifying C P12-86 in V; QUEUE: A P12-57 phase 3 (after C P12-86) → readers for A P12-87 and A P12-88 → B short paragraphs; OWNER: O1
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
 OWNER'S PDFS P1–P6 (uploads in the manager's session; P4–P6 held out); upload UI only; never commit or quote
 CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB, Haiku, "20 * * * *", enabled, read back 06:23Z; prompt: at most two subagents (§1h.443)
@@ -727,6 +727,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-28T15:44Z | manager (Claude) | §1h.465: C P12-82 + C P12-85 landed (5 / 7 red; 655 / 12,270 / 0 failed; build 0 after V's node_modules re-link); captions whole on P3, P5 | evidence: mgr/gates-V.log, mgr/build-v3.out, mgr/out/P*-caps-*.json | next: C P12-84 verify, C P12-83, C P12-86
 
 - 2026-10-28T15:54Z | manager (Claude) | §1h.466: C P12-84 landed (8 / 6 / 9 red; 656 / 12,293 / 0 failed; 14 of 43 boxes changed, P1/P2 unchanged) | evidence: mgr/gates-V.log, mgr/out/P*-fig-*.json, mgr/out/png84 | next: C P12-83, C P12-86
+
+- 2026-10-28T16:11Z | manager (Claude) | §1h.467: C P12-83 + revision 11 landed (14 / 1 red; 657 / 12,326 / 0 failed); C P12-86 reported; A P12-87 and A P12-88 walking | evidence: mgr/gates-V.log, mgr/out/P3-capstext-c83.json | next: verify C P12-86
 
 ---
 
