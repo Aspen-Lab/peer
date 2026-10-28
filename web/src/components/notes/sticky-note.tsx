@@ -188,6 +188,38 @@ export function stickyFollowText({ local, stored, pending }: { local: string; st
   return stickyParagraphs(local).join("\n") === stored ? null : stored;
 }
 
+/**
+ * P12-66 (B P12-52, M2 and M3): whether the sticky `headerId`'s editor holds the keyboard focus. `active` is the document's focused element; the card
+ * marks the holder of its editor with `data-sticky-editor`, so an element of the notes window, of another card or of the page is not it. It is asked in
+ * the render that starts the editor afresh, while the editor being replaced is still in the page.
+ */
+export function stickyHoldsFocus(
+  active: { closest(selector: string): { getAttribute(name: string): string | null } | null } | null | undefined,
+  headerId: string,
+): boolean {
+  return active?.closest("[data-sticky-editor]")?.getAttribute("data-sticky-editor") === headerId;
+}
+
+/**
+ * P10-09c / P10-29, and P12-66: one step of the sticky following its blocks in the paper's note. `stored` is the blocks the note holds under this
+ * sticky now, as JSON; `content` is what the editor shows. With a keystroke of its own waiting (`writer.pending()`) nothing is followed — its write,
+ * a quarter second away, is the newer. Otherwise what is stored is what the next write is measured against (`writer.sync`), and if it is not what the
+ * editor shows the editor is started afresh on it. P12-66: that new editor is asked for the focus only if the old one held it (`held`, read before the
+ * old one leaves the page): a reader typing in the notes window keeps the caret there, and a reader typing in the sticky keeps typing in it.
+ * Null: nothing to start afresh.
+ */
+export function stickyFollow({ stored, content, writer, held }: {
+  stored: string;
+  content: readonly Block[];
+  writer: Pick<ReturnType<typeof makeStickyWriter>, "pending" | "sync">;
+  held: boolean;
+}): { content: Block[]; refocus: boolean } | null {
+  if (writer.pending()) return null;
+  writer.sync(stored);
+  if (stored === JSON.stringify(content)) return null;
+  return { content: JSON.parse(stored) as Block[], refocus: held };
+}
+
 /** The writers of the stickies that stand open, by heading id: leaving the page writes what is typed in them first. */
 const openWriters = new Map<string, Pick<ReturnType<typeof makeStickyWriter>, "flush">>();
 
@@ -522,12 +554,21 @@ function StickyWindow({ row, noteId, onSaved }: { row: Row; noteId: string; onSa
   // keystroke of the sticky's own is waiting to be written (then its write, a quarter second away, is the newer).
   const stored = JSON.stringify(stickyContent(note?.blocks ?? [], row.id));
   const [seen, setSeen] = useState(stored);
+  // P12-66: whether the editor is asked for the focus when it starts: a new card opens ready to write in; one started afresh by the follow takes the
+  // focus back only if the old one held it (B P12-52 M2 and M3).
+  const [refocus, setRefocus] = useState(true);
   if (stored !== seen) {
     setSeen(stored);
-    // P10-29: with no keystroke of its own waiting, what is stored now is what the next write is measured against.
-    if (!writer.pending()) writer.sync(stored);
-    if (!writer.pending() && stored !== JSON.stringify(content)) {
-      setContent(JSON.parse(stored) as Block[]);
+    // P12-66: the focus is read here, in the render, while the editor being replaced is still in the page.
+    const step = stickyFollow({
+      stored,
+      content,
+      writer,
+      held: stickyHoldsFocus(typeof document === "undefined" ? null : document.activeElement, row.id),
+    });
+    if (step) {
+      setContent(step.content);
+      setRefocus(step.refocus);
       setEditorVersion((v) => v + 1);
     }
   }
@@ -575,8 +616,8 @@ function StickyWindow({ row, noteId, onSaved }: { row: Row; noteId: string; onSa
       onRaise={() => raise(row.id)}
       onGo={() => goToPassage(row.anchor, { doc: document, navigate: (href) => router.push(href as Route) })}
     >
-      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain">
-        <NoteEditor key={editorVersion} compact transient autoFocus
+      <div data-sticky-editor={row.id} className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain">
+        <NoteEditor key={editorVersion} compact transient autoFocus={refocus}
           leadingMarker={lost ? undefined : <AnchorSquare onClick={() => goToPassage(row.anchor, { doc: document, navigate: (href) => router.push(href as Route) })} />}
           note={{ ...note, blocks: content }}
           onDoc={(doc) => {
