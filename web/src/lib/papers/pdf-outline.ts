@@ -76,8 +76,8 @@ export interface PdfLine {
   runs?: readonly PdfTextItem[];
   raised?: ReadonlySet<PdfTextItem>;
   lowered?: ReadonlySet<PdfTextItem>;
-  /** P12-70: set on a row that a drop cap heads: its largest runs hold one or two characters and every other run is set
-   *  at less than 1 / `DROP_CAP_RATIO` of them. `rest` is the size of the largest of the other runs (the first words of
+  /** P12-70: set on a row that a drop cap heads: it opens with a large mark of one or two characters and every other run
+   *  is set at less than 1 / `DROP_CAP_RATIO` of it. `rest` is the size of the largest of the other runs (the first words of
    *  the paragraph, beside the cap). A row set larger as a whole (a title, a heading) carries none. */
   cap?: { rest: number };
 }
@@ -733,6 +733,8 @@ function lineOf(
   raised?: ReadonlySet<PdfTextItem>,
   lowered?: ReadonlySet<PdfTextItem>,
 ): PdfLine | null {
+  // P12-70: a row a drop cap heads, if it is one.
+  const capRow = capRowOf(runs, raised, lowered);
   // A PDF stores runs, not words: two runs set apart on the page are two
   // words even where neither carries a space ("Ashish Vaswani" and "Noam
   // Shazeer" arrived as one string until this gap was measured).
@@ -834,7 +836,9 @@ function lineOf(
     const argument = !!last && !!lowered?.has(item) && !!lowered.has(last) && item.str.trimStart().startsWith("(");
     // A subscript follows its formula, and its own characters follow each other, with no space.
     const subscript = subLeft > 0 && i >= subFrom && i <= subTo;
-    const joined = isMark || (tied && gap < MARK_REACH_EM * item.height) || i === labelFrom || argument || subscript;
+    // P12-70: a drop cap is joined to the word it starts ("S" + "econdary"), though the page leaves the gap of its padding.
+    const capJoined = capRow !== undefined && i === capRow.next && gap <= capRow.size * CAP_WORD_GAP_EM && CAP_CONTINUES.test(item.str);
+    const joined = isMark || (tied && gap < MARK_REACH_EM * item.height) || i === labelFrom || argument || subscript || capJoined;
     if (!joined && text && Number.isFinite(cursor) && gap > Math.max(1, item.height * 0.18) && !/\s$/.test(text)) {
       text += " ";
     }
@@ -870,7 +874,6 @@ function lineOf(
   }
   text = text.replace(/\s+/g, " ").trim();
   if (text.length === 0) return null;
-  const cap = capOf(runs, raised, lowered);
   return {
     page,
     text,
@@ -879,7 +882,7 @@ function lineOf(
     size: round(Math.max(...runs.map((i) => i.height))),
     titleSize: characterSize(runs),
     font: longestRun(runs).fontName,
-    ...(cap ? { cap } : {}),
+    ...(capRow ? { cap: { rest: capRow.rest } } : {}),
   };
 }
 
@@ -1539,32 +1542,42 @@ const ENTRY_AUTHORS = new RegExp(
 /** A drop cap is set at least this many times the body's size (it stands beside two lines or more). */
 const DROP_CAP_RATIO = 1.8;
 
-/** A drop cap is one or two characters (P12-70, ruling \u00A71h.443: O7's "one or two large letters"). */
+/** A drop cap is one or two characters (P12-70, ruling §1h.443: O7's "one or two large letters"). */
 const DROP_CAP_CHARS = 2;
 /** The words beside a drop cap are body-sized: within this share of the body's size above it. */
 const DROP_CAP_REST_RATIO = 1.25;
 /** A run is "at the row's size" from this share of the row's largest height. */
 const SAME_SIZE_SHARE = 0.9;
 
+/** A drop cap and the word it starts stand within this share of the cap's size of one another. */
+const CAP_WORD_GAP_EM = 0.25;
+/** What follows a drop cap in its word: more letters in lower case, or the rest of a word set in capitals ("T" + "HE"). */
+const CAP_CONTINUES = /^(?:\p{Ll}|\p{Lu}{2,}(?![\p{L}]))/u;
+
 /**
- * P12-70: the `cap` of a row (see `PdfLine.cap`), or undefined when the row is not headed by a large mark of one or two
- * characters ahead of runs set under 1 / `DROP_CAP_RATIO` of it. A row whose runs are all one size has none, and neither
- * has a row whose large part is a word or more (a title or a heading set large) or whose smaller runs are the
- * raised or lowered marks of a formula.
+ * P12-70: a row a drop cap heads: it opens with a large mark of one or two characters and every run after it is set
+ * under 1 / `DROP_CAP_RATIO` of the mark, and not raised or lowered (the marks of a formula). `size` is the mark's,
+ * `rest` the largest of the other runs' (the first words of the paragraph, beside the cap) and `next` the index of
+ * the run that follows the mark. A row set in one size has none, and neither has a row whose large part is a word or
+ * more (a title or a heading set large) or does not open the row.
  */
-function capOf(
+function capRowOf(
   runs: PdfTextItem[],
   raised?: ReadonlySet<PdfTextItem>,
   lowered?: ReadonlySet<PdfTextItem>,
-): PdfLine["cap"] | undefined {
-  const seen = runs.filter((run) => run.str.trim());
-  const top = Math.max(0, ...seen.map((run) => run.height));
-  const large = seen.filter((run) => run.height >= top * SAME_SIZE_SHARE);
-  const rest = seen.filter((run) => run.height < top * SAME_SIZE_SHARE);
-  if (rest.length === 0 || rest.some((run) => raised?.has(run) || lowered?.has(run))) return undefined;
-  const characters = large.reduce((n, run) => n + run.str.replace(/\s/g, "").length, 0);
-  const restSize = Math.max(...rest.map((run) => run.height));
-  return characters <= DROP_CAP_CHARS && restSize * DROP_CAP_RATIO <= top ? { rest: round(restSize) } : undefined;
+): { size: number; rest: number; next: number } | undefined {
+  const seen = runs.map((run, index) => ({ run, index })).filter(({ run }) => run.str.trim());
+  const top = Math.max(0, ...seen.map(({ run }) => run.height));
+  const isLarge = ({ run }: { run: PdfTextItem }) => run.height >= top * SAME_SIZE_SHARE;
+  const first = seen.findIndex((entry) => !isLarge(entry));
+  if (first <= 0) return undefined; // all one size, or the row does not open with the large mark
+  const large = seen.slice(0, first);
+  const rest = seen.slice(first);
+  if (rest.some((entry) => isLarge(entry) || raised?.has(entry.run) || lowered?.has(entry.run))) return undefined;
+  const characters = large.reduce((n, { run }) => n + run.str.replace(/\s/g, "").length, 0);
+  const restSize = Math.max(...rest.map(({ run }) => run.height));
+  if (characters > DROP_CAP_CHARS || restSize * DROP_CAP_RATIO > top) return undefined;
+  return { size: top, rest: round(restSize), next: rest[0].index };
 }
 
 /**
@@ -1572,7 +1585,7 @@ function capOf(
  * first words of the paragraph that the row carries beside it (so the longest run, and the face, are the
  * body's). It is no heading; it belongs to the word it starts.
  *
- * P12-70 (ruling \u00A71h.443): the large part of the row is at most two characters (`PdfLine.cap`, set from the row's
+ * P12-70 (ruling §1h.443): the large part of the row is at most two characters (`PdfLine.cap`, set from the row's
  * runs) and the rest of the row is body-sized. A title or a heading set large in the body's face is one run of
  * several words, and is not a drop cap.
  */
@@ -2561,13 +2574,19 @@ function openingStart(
   });
   if (live.length === 0) return 0;
   const firstPage = lines[live[0]].page;
+  // P12-70 (ruling §1h.444): a line is set in the body's size when its tallest run is, or when the only taller part is a
+  // drop cap (one or two large letters, welded to the body-sized words of the first line) and the size most of its
+  // characters are set in is the body's.
+  const bodySized = (line: PdfLine): boolean =>
+    Math.abs(line.size - body.size) <= OPENING_SIZE_SLACK ||
+    (isDropCap(line, body) && Math.abs(titleSizeOf(line) - body.size) <= OPENING_SIZE_SLACK);
   const isProse = (i: number): boolean => {
     const line = lines[i];
     return (
       line.page === firstPage &&
       !line.block &&
       line.font === body.font &&
-      Math.abs(line.size - body.size) <= OPENING_SIZE_SLACK &&
+      bodySized(line) &&
       !captionOf(line) &&
       headingOf(line, body) === null
     );

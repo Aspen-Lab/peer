@@ -81,3 +81,67 @@ describe("a paragraph's short last line ends its paragraph without a full stop (
     expect(refused(line(full, { y: 524, size: 14 })), "another size").toBeNull();
   });
 });
+
+describe("the opening of a paper that names no introduction starts at a line headed by a drop cap (P12-70, ruling §1h.444: O6 with O7 and P12-64)", () => {
+  const item = (str: string, y: number, at: Partial<PdfTextItem> = {}): PdfTextItem => ({ str, height: 10, width: str.length * 4.6, fontName: "body", x: 100, y, ...at });
+  const OPENING = [
+    "econdary cathodes degrade through slow loss of lithium at the grain edges of the film.",
+    "We follow the loss over four hundred cycles and ask which edge goes first in each sample.",
+    "The answer decides how the films are annealed before they are built into a cell.",
+    "Films that were cooled quickly lost a third of their capacity before the hundredth cycle.",
+  ];
+  const RESULT = [
+    "The capacity of the annealed films held at ninety percent of its first value over the run.",
+    "Films that were cooled quickly lost a third of their capacity before the hundredth cycle.",
+    "The edges of the slow-cooled grains stayed whole under the microscope after the last cycle.",
+  ];
+  /** A title, an author line, a two-line summary in another face, and an opening whose first line begins with a drop cap `cap` pt high, `gap` pt from the rest of the word. */
+  const paper = (cap = 40, gap = 3): PdfPageText[] => [
+    {
+      page: 1,
+      items: [
+        item("Slow Annealing Keeps Quillwort Films Whole", 760, { height: 17 }),
+        item("Ada Fenwick and Boris Lund", 735, { height: 11, fontName: "display" }),
+        item("Quillwort cathodes keep their capacity when the films are cooled slowly after growth and lose it when they are", 705, { height: 10.5, fontName: "display" }),
+        item("not, because the edges of the grains are spared the strain of the cooling that the quick films are put through.", 692, { height: 10.5, fontName: "display" }),
+        item("S", 660, { height: cap, width: cap * 0.6 }),
+        item(OPENING[0], 660, { x: 100 + cap * 0.6 + gap }),
+        item(OPENING[1], 646),
+        item(OPENING[2], 632),
+        item(OPENING[3], 618),
+        item("Slow cooling spares the grain edges", 590, { height: 12, fontName: "display" }),
+        ...RESULT.map((text, i) => item(text, 576 - i * 14)),
+      ],
+    },
+  ];
+
+  it("keeps the drop cap's line in the opening, its first paragraph starts with the whole first word", () => {
+    const sections = buildOutline(paper()).sections ?? [];
+    expect(sections.map((s) => s.heading)).toEqual([undefined, "Slow cooling spares the grain edges"]);
+    expect(sections[0].text?.split("\n\n")[0].startsWith("Secondary cathodes degrade through slow loss of lithium")).toBe(true);
+    expect(sections[0].text).toContain(OPENING[3]);
+    expect(sections[0].text).not.toMatch(/Fenwick|Quillwort cathodes keep|S econdary/);
+    expect(sections[1].text).toBe(RESULT.join(" "));
+    expect(buildOutline(paper()).title).toBe("Slow Annealing Keeps Quillwort Films Whole");
+  });
+
+  it("holds for a cap of any size from twice the body to five times, and for the padding the page leaves beside it (up to a fifth of the cap)", () => {
+    for (const cap of [20, 28, 40, 50]) {
+      for (const gap of [0, 1, 3, cap * 0.2]) {
+        const sections = buildOutline(paper(cap, gap)).sections ?? [];
+        expect(sections[0].text?.startsWith("Secondary cathodes degrade"), `${cap} pt, ${gap} pt apart`).toBe(true);
+      }
+    }
+  });
+
+  it("does not join a large mark to a word that is not the rest of its own: a capital and a capitalised word stay two", () => {
+    const [first] = paper();
+    const page: PdfPageText = {
+      ...first,
+      items: [...first.items, item("A", 520, { height: 30, width: 18 }), item("Results of the second season were as before.", 520, { x: 121 })],
+    };
+    const text = (buildOutline([page]).sections ?? []).map((s) => s.text).join(" ");
+    expect(text).toContain("A Results of the second season were as before.");
+    expect(text).not.toContain("AResults");
+  });
+});

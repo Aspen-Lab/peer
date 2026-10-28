@@ -582,7 +582,7 @@ function leadInPaper(): PdfPageText[] {
 // ── Rule 4 (O7): a drop cap and a run-in lead-in are no heading ──────────────────────────────────────────
 
 describe("a drop cap is no heading (P12-49, O7)", () => {
-  // P12-70 (ruling \u00A71h.443), RE-AIMED: a row of words in the body's face is a drop cap only when its large part is one
+  // P12-70 (ruling §1h.443), RE-AIMED: a row of words in the body's face is a drop cap only when its large part is one
   // or two characters (`PdfLine.cap`, set by `lineOf` from the row's runs). The two fixtures below that stand for "the cap
   // and the words beside it" now say so (`cap: { rest: 10 }`: the words are set at 10 pt); before, any capitalised row at
   // 1.8 times the body in the body's face was one. The real reading of such a row is pinned by "leaves the paragraph
