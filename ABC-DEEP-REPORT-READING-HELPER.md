@@ -2135,6 +2135,41 @@ P5's closing (M3) and M8 are C P12-76's, running.
 
 **C P12-75 item 2 is briefed:** a bare "Experimental" heading → methods; a part name is never a group's child. It starts when a slot frees.
 
+### §1h.453 — 2026-10-28 — C P12-76 LANDED; THEME C ROUND 2: 100 ON ALL SIX PAPERS; READER A-r1 AND E2
+
+**C P12-76 is landed** (head `4f6d6e67`; the landed `web/` tree equals V's at `e63cee53`).
+- Manager mutations (sha256 equal after each restore):
+  - one section-wide edge instead of each page's → 4 red;
+  - the fallback allowed on a one-paragraph row → 1;
+  - "paves the way" broken → 3;
+  - the fallback with no cue → 12.
+- V's full gates: lint 0 / 144; **650 files, 12,068 tests, 0 failed**; build 0.
+
+**Theme C, round 2 of record (C0, no key), on the landed rules**, measured by the manager's harness (the page's own path) against the ruled truth (P1–P3 §1h.426, P4–P6 §1h.437 (a)):
+
+| paper | parts | extras | score |
+|---|---|---|---|
+| P1 | 5 / 5 | 0 | **100** |
+| P2 | 5 / 5 | 0 | **100** |
+| P3 | 8 / 8 | 0 | **100** |
+| P4 | 5 / 5 | 0 | **100** |
+| P5 | 9 / 9 | 0 | **100** |
+| P6 | 9 / 9 | 0 | **100** |
+
+Notes on the measure:
+- P5's closing is the outlook fallback's row, interpretation.
+- C P12-76 changed no row heading, role or level on P1–P4 or P6.
+- Paragraphs went P3 104 → 100, P4 157 → 164 and P5 336 → 268, as M8's whole paragraphs.
+- Two director voids are recorded: P6's M4 (§1h.449) and P4's methods locator (§1h.452). Each was a locator in the manager's private truth, not the app.
+
+**This is Theme C's first round at the target. A second consecutive round is needed:** a fresh measure on the head after the next landing, with the same truth and the same harness. C1 (with the key) is not yet measured (A P12-57 phase 2).
+
+**Theme A, reader A-r1** (blind, pack `r2/a71/pack`): P1 95.83, P2 95.83, P3 97.92. It adds **E2**, cosmetic 0.25, on P1 and P2: at 390 × 844 the notes-page round trip returns near the top of the paper (scrollY 8385 → 85, 6907 → 92).
+- Director: the app restores the very scrollY it left at. But the phone's notes entry is an in-flow row near the top, so a reader must leave their place to reach it. The defect is real and the price stands.
+- P3 has no W4 place measurement, so it is not charged there, by §1h.423 (c).
+- → **C P12-77 rule 3:** the fixed edge tab at the phone width.
+- Readers A-r2 (running) and A-r3 follow; the median is the score of record.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2464,7 +2499,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-73 | DONE — B (Sonnet), report on the branch (a4b384e4); ruled §1h.449 | Theme C on P4–P6: M1–M7 by shape | file:line, three candidates each, a C split | report P12-73-B-<UTC>.md | briefs/P12-73.md; §1h.446 |
 | P12-74 | DONE — C (Sonnet); landed at c91e89e9 (§1h.450) | M1 rule A (R1–R5) + M6 block in pdf-outline.ts | invented fixtures; 2 named re-aims; own mutations; gates | checkpoint P12-74-C-<UTC>.md | briefs/P12-74.md; §1h.449 |
 | P12-75 | PARTIAL — C (Sonnet); M2 / M5 / M7 landed at 7127604d (§1h.452); item 2 queued | M2 group row (level), M5, M7 R7a | invented fixtures; own mutations; gates | checkpoint P12-75-C-<UTC>.md | briefs/P12-75.md; §1h.449 |
-| P12-76 | IN_PROGRESS — C (Sonnet), scratch p12/c76, from 44dd2945 | M8 per-page left edge; M3 c3_last on P5 | invented fixtures; own mutations; gates | checkpoint P12-76-C-<UTC>.md | briefs/P12-76.md; §1h.449 |
+| P12-76 | DONE — C (Sonnet); landed at 4f6d6e67 (§1h.453) | M8 per-page left edge; M3 c3_last on P5 | invented fixtures; own mutations; gates | checkpoint P12-76-C-<UTC>.md | briefs/P12-76.md; §1h.449 |
 | P12-77 | QUEUED — C (Sonnet) | E1 the notes tab above the legend; O2 underline as <u> in Markdown | tests; own mutations; gates | checkpoint P12-77-C-<UTC>.md | briefs/P12-77.md; §1h.451 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |

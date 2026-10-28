@@ -179,3 +179,7 @@ The blind readers score from the pack against this matrix; the director voids a 
 ## Dated amendment, ruling §1h.436 (d) (2026-10-28): a row's start through its sub-rows
 
 **Scoring interpretation (not a relaxation):** a map row whose own paragraphs are empty because its text sits in its sub-rows (a numbered part over 2.1, 2.2 …) **starts where its first sub-row's first paragraph starts**; the manager's scorer reads it so.
+
+## Scores of record — Theme C round 2 (§1h.453), head `4f6d6e67`
+
+C0 (no key): P1 100, P2 100, P3 100, P4 100, P5 100, P6 100 (every part right, no extras). Consecutive rounds at the target: 1. C1: not yet measured.
