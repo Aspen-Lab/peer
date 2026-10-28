@@ -56,12 +56,15 @@ vi.mock("@/lib/figures/figure-revision", () => ({
   },
 }));
 
+import { figurePdf } from "@/lib/figures/figure-pdf.test-helper";
 import {
   deleteUpload,
   purgeExpiredUploads,
   readUploadFigureCut,
+  readUploadPageFile,
   removeUploadFigureCuts,
   writeUploadFigureCut,
+  writeUploadPageFile,
   writeUploadMeta,
   writeUploadPdfIfAbsent,
   type UploadMeta,
@@ -173,5 +176,52 @@ describe("a kept figure cut on the Supabase bucket (P12-61)", () => {
     const left = keysUnder(`figure-cuts/${live}/`);
     expect(left).toHaveLength(2);
     expect(left.every((name) => name.endsWith("-r5.cut"))).toBe(true);
+  });
+});
+
+describe("a kept page file on the Supabase bucket (P12-61, part 2)", () => {
+  const page = (marker: string) => figurePdf([{ text: [[marker, 72, 100, 10]] }]);
+
+  it("is written whole as figure-cuts/<hash16>/p<page>.pdf, read back, and a revision change does not touch it", async () => {
+    const bytes = page("page two");
+    await writeUploadPageFile(ONE, 2, bytes);
+
+    expect(keysUnder(`figure-cuts/${ONE}/`)).toEqual([`figure-cuts/${ONE}/p2.pdf`]);
+    expect(Buffer.compare((await readUploadPageFile(ONE, 2))!, bytes)).toBe(0);
+    expect(await readUploadPageFile(ONE, 3)).toBeNull();
+    expect(await readUploadPageFile(TWO, 2)).toBeNull();
+    revision.value = "5";
+    expect(await readUploadPageFile(ONE, 2)).not.toBeNull();
+  });
+
+  it("is removed by deleteUpload, listing only that upload's folder; another upload's stays", async () => {
+    const mine = meta(ONE);
+    await writeUploadMeta(ONE, mine);
+    await writeUploadPageFile(ONE, 2, page("mine"));
+    await writeUploadFigureCut(ONE, 2, "Figure 3", { png: fakePng(1) });
+    await writeUploadMeta(TWO, meta(TWO));
+    await writeUploadPageFile(TWO, 2, page("theirs"));
+    bucket.lists.length = 0;
+
+    await deleteUpload(mine);
+
+    expect(keysUnder(`figure-cuts/${ONE}/`)).toEqual([]);
+    expect(keysUnder(`figure-cuts/${TWO}/`)).toEqual([`figure-cuts/${TWO}/p2.pdf`]);
+    expect(bucket.lists).not.toContain("");
+  });
+
+  it("is swept by the purge with its upload's folder when the upload is gone, and kept for a live upload through a revision change", async () => {
+    const live = "1111111111111111";
+    const gone = "2222222222222222";
+    await writeUploadMeta(live, meta(live));
+    await writeUploadPageFile(live, 4, page("live"));
+    await writeUploadFigureCut(live, 4, "Figure 1", { png: fakePng(1) });
+    await writeUploadPageFile(gone, 4, page("gone"));
+    revision.value = "5";
+
+    await purgeExpiredUploads();
+
+    expect(keysUnder(`figure-cuts/${gone}/`)).toEqual([]);
+    expect(keysUnder(`figure-cuts/${live}/`)).toEqual([`figure-cuts/${live}/p4.pdf`]);
   });
 });

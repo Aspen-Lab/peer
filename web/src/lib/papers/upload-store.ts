@@ -474,6 +474,12 @@ export async function removeUploadDoc(hash16: string): Promise<void> {
 // written under a temp name and renamed into place, so a reader never sees half
 // a file; the bucket replaces an object whole.
 //
+// The same folder holds the page files (P12-61, part 2): `p<page>.pdf`, the one
+// page that holds a figure cut out of the upload as a PDF of its own, so that a
+// later cut on that page opens a file of kilobytes and not the paper. A page
+// file is a pure function of the upload's bytes (the key is the hash and the
+// page, no revision) and is not touched by a revision change.
+//
 // The picture is derived from the upload and goes with it: `deleteUpload`
 // removes the folder, and the purge removes the folder of an upload that is
 // gone or taken down, and any object of an older revision (or a leftover
@@ -484,6 +490,7 @@ export async function removeUploadDoc(hash16: string): Promise<void> {
 const FIGURE_CUT_DIR = "figure-cuts";
 const FIGURE_CUT_HEADER_MAX = 512;
 const FIGURE_CUT_NAME_RE = /^p\d{1,6}-[0-9a-f]{16}-r([0-9A-Za-z._-]{1,32})\.cut$/;
+const PAGE_FILE_NAME_RE = /^p\d{1,6}\.pdf$/;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 /** What a kept cut holds: the PNG's bytes, and the pixel size the engine drew it at, when it said. */
@@ -551,17 +558,20 @@ export async function writeUploadFigureCut(
   const name = figureCutName(page, label, FIGURE_EXTRACTION_REVISION);
   if (!name) throw new Error("Invalid figure cut key");
   if (!hasPngSignature(cut.png)) throw new Error("A kept figure cut is a PNG");
-  const object = `${figureCutFolder(hash16)}/${name}`;
   const head = JSON.stringify({ v: 1, bytes: cut.png.byteLength, width: sizeField(cut.width), height: sizeField(cut.height) });
-  const payload = Buffer.concat([Buffer.from(`${head}\n`, "utf-8"), cut.png]);
+  await writeKeptObject(`${figureCutFolder(hash16)}/${name}`, Buffer.concat([Buffer.from(`${head}\n`, "utf-8"), cut.png]), "application/octet-stream");
+}
+
+/** Writes `payload` as `object` whole or not at all: on the disk under a temp name, renamed into place; an object upload replaces the object whole. */
+async function writeKeptObject(object: string, payload: Buffer, contentType: string): Promise<void> {
   const backend = uploadBackend();
   if (backend.kind !== "disk") {
-    await backend.write(object, payload, "application/octet-stream");
+    await backend.write(object, payload, contentType);
     return;
   }
   const temporary = `${object}.${randomUUID()}.tmp`;
   try {
-    await backend.write(temporary, payload, "application/octet-stream");
+    await backend.write(temporary, payload, contentType);
     await rename(path.join(UPLOAD_DIR, temporary), path.join(UPLOAD_DIR, object));
   } catch (error) {
     await backend.remove([temporary]).catch(() => undefined);
@@ -569,7 +579,40 @@ export async function writeUploadFigureCut(
   }
 }
 
-/** Forget every picture cut from this upload, whatever its page, label or revision. */
+/** A PDF as written by the engine: its header at the start and its end-of-file marker at the end. A page file that
+ *  is not both was cut short and is never used. */
+function looksLikeWholePdf(bytes: Uint8Array): boolean {
+  if (bytes.byteLength < 16) return false;
+  const start = Buffer.from(bytes.subarray(0, 5)).toString("latin1");
+  const end = Buffer.from(bytes.subarray(Math.max(0, bytes.byteLength - 64))).toString("latin1");
+  return start === "%PDF-" && end.includes("%%EOF");
+}
+
+function pageFileName(page: number): string | null {
+  return Number.isInteger(page) && page >= 1 && page <= 999_999 ? `p${page}.pdf` : null;
+}
+
+/** The page file kept for `page` of the upload — that page as a PDF of its own — or null when there is none or it is not whole. */
+export async function readUploadPageFile(hash16: string, page: number): Promise<Buffer | null> {
+  const name = pageFileName(page);
+  if (!name) return null;
+  try {
+    const raw = await uploadBackend().read(`${figureCutFolder(hash16)}/${name}`);
+    return raw && looksLikeWholePdf(raw) ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Keep `bytes` as the page file of `page`. Refuses (throws, writes nothing) bytes that are not a whole PDF. */
+export async function writeUploadPageFile(hash16: string, page: number, bytes: Uint8Array): Promise<void> {
+  const name = pageFileName(page);
+  if (!name) throw new Error("Invalid page file key");
+  if (!looksLikeWholePdf(bytes)) throw new Error("A page file is a whole PDF");
+  await writeKeptObject(`${figureCutFolder(hash16)}/${name}`, Buffer.from(bytes), "application/pdf");
+}
+
+/** Forget every picture cut from this upload and every page file, whatever its page, label or revision. */
 export async function removeUploadFigureCuts(hash16: string): Promise<void> {
   const backend = uploadBackend();
   const folder = figureCutFolder(hash16);
@@ -582,9 +625,10 @@ export async function removeUploadFigureCuts(hash16: string): Promise<void> {
 }
 
 /**
- * The purge's pass over the cut pictures: the folder of an upload that is gone
- * or taken down is removed whole; in a live upload's folder, an object of
- * another revision or one that is not a cut at all (a `.tmp` leftover) is.
+ * The purge's pass over the cut pictures and page files: the folder of an upload
+ * that is gone or taken down is removed whole; in a live upload's folder, a cut
+ * of another revision or an object that is neither a cut nor a page file (a
+ * `.tmp` leftover) is. Page files do not depend on the revision and stay.
  */
 async function sweepFigureCuts(): Promise<void> {
   const backend = uploadBackend();
@@ -598,7 +642,9 @@ async function sweepFigureCuts(): Promise<void> {
       }
       const folder = figureCutFolder(hash16);
       const names = (await backend.list(folder)).map((object) => object.name);
-      const current = names.filter((name) => FIGURE_CUT_NAME_RE.exec(name)?.[1] === FIGURE_EXTRACTION_REVISION);
+      const current = names.filter(
+        (name) => PAGE_FILE_NAME_RE.test(name) || FIGURE_CUT_NAME_RE.exec(name)?.[1] === FIGURE_EXTRACTION_REVISION,
+      );
       if (current.length === 0) await removeUploadFigureCuts(hash16);
       else {
         const stale = names.filter((name) => !current.includes(name));
