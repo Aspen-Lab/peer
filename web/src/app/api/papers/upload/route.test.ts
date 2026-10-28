@@ -8,6 +8,9 @@ const mocks = vi.hoisted(() => ({
   attachUpload: vi.fn(async () => undefined),
   extractPdfTextFromBytes: vi.fn(),
   writeUploadPdfIfAbsent: vi.fn<(hash16: string, bytes: Buffer) => Promise<void>>(async () => undefined),
+  // P12-58: the route keeps the document it extracted (`keepUploadDocument`); a mock, so these tests
+  // write no file into the upload directory (route.keeps-document.test.ts runs the real chain).
+  writeUploadDoc: vi.fn<(hash16: string, key: string, doc: ExtractedDocument) => Promise<void>>(async () => undefined),
   writeUploadMeta: vi.fn<(hash16: string, meta: import("@/lib/papers/upload-store").UploadMeta) => Promise<void>>(async () => undefined),
   readUploadMeta: vi.fn<() => Promise<import("@/lib/papers/upload-store").UploadMeta | null>>(async () => null),
   // 9-12: the revision chain looks at this owner's other live assets — kept
@@ -41,6 +44,7 @@ vi.mock("@/lib/papers/upload-store", async (importOriginal) => {
   return {
     ...actual,
     writeUploadPdfIfAbsent: mocks.writeUploadPdfIfAbsent,
+    writeUploadDoc: mocks.writeUploadDoc,
     writeUploadMeta: mocks.writeUploadMeta,
     readUploadMeta: mocks.readUploadMeta,
     listUploadMeta: mocks.listUploadMeta,
@@ -101,6 +105,7 @@ describe("POST /api/papers/upload", () => {
     mocks.attachUpload.mockClear();
     mocks.extractPdfTextFromBytes.mockReset();
     mocks.writeUploadPdfIfAbsent.mockClear();
+    mocks.writeUploadDoc.mockClear();
     mocks.writeUploadMeta.mockClear();
     mocks.readUploadMeta.mockReset();
     mocks.readUploadMeta.mockResolvedValue(null);

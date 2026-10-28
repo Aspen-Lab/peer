@@ -16,6 +16,7 @@ import { createHash } from "node:crypto";
 import { hostedUploadsEnabled, ownedUpload, PRIVATE_UPLOAD_HEADERS, sameOriginUploadRequest, UPLOAD_RIGHTS_VERSION, uploadOwner } from "@/lib/papers/upload-access";
 import { extractUploadConcepts, matchUploadedPaper, UPLOAD_CONCEPT_EXTRACTION_VERSION, type PaperMatchBand } from "@/lib/preferences/upload-concepts";
 import { extractPdfTextFromBytes } from "@/lib/papers/pdf-text";
+import { keepUploadDocument } from "@/lib/papers/full-text";
 import { abstractLine } from "@/lib/papers/skim";
 import {
   attachUpload,
@@ -326,6 +327,13 @@ async function handleUpload(req: Request, staged: StagedRef): Promise<Response> 
     if (isNewAsset) await deleteUpload(meta);
     return NextResponse.json({ error: "Could not store the uploaded PDF. Try again." }, { status: 500, headers: PRIVATE_UPLOAD_HEADERS });
   }
+  // P12-58 (rule 1): the upload keeps its document. The extraction above read the whole PDF
+  // (30 CPU seconds for a 25 MB one); the first reading used to read it again, miss the reading
+  // route's eight-second wait, and answer with the abstract alone. The document is kept under
+  // the key `getFullText` looks for (owner, hash, revision, extractor), owner-private as every
+  // kept document is, so that first reading finds it. Only a document that found text is kept,
+  // and a write that fails is a log line: the upload is stored and answered either way.
+  if (doc) await keepUploadDocument(hash16, meta, doc);
   if (target) await attachUpload(ownerKey, target.id, hash16);
   await purgeExpiredUploads();
 

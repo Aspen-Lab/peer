@@ -338,6 +338,47 @@ async function buildPublicResult(input: FullTextInput): Promise<FullTextResult> 
 const uploadsInFlight = new Map<string, Promise<FullTextResult>>();
 
 /**
+ * The key an upload's extracted document is kept under: owner, hash, revision
+ * and the extractor's version (plus the figure revision, inside `uploadDocKey`).
+ * One function for the read below and for the upload route's write
+ * (`keepUploadDocument`, P12-58), so the document the route keeps is the one
+ * the first reading looks for — and for no other owner, revision or extractor.
+ */
+function uploadDocKeyFor(hash16: string, meta: Pick<UploadMeta, "ownerKey" | "revision">): string {
+  return uploadDocKey(meta.ownerKey ?? "", hash16, meta.revision, UPLOAD_CONCEPT_EXTRACTION_VERSION);
+}
+
+/**
+ * P12-58 (rule 1): keep a document that has already been read out of an
+ * upload's PDF, under the key `uploadFullText` reads — so the first reading of
+ * a PDF that was just uploaded reads it from here instead of opening the PDF a
+ * second time (measured on the owner's papers: 2.3 to 31 CPU seconds, the
+ * second of which is what missed the reading route's eight-second wait).
+ *
+ * Only a document that found text is kept (a scan or a failed read is read
+ * again next time, as before), and a failed write is a log line, never an
+ * error: the reading stands, only the cache failed. Returns whether the
+ * document was kept. Called only by a caller that has already established the
+ * owner (the upload route, with the record it has just written; and
+ * `uploadFullText` below, after `ownedUpload`).
+ */
+export async function keepUploadDocument(
+  hash16: string,
+  meta: Pick<UploadMeta, "ownerKey" | "revision">,
+  doc: ExtractedDocument,
+): Promise<boolean> {
+  if (doc.sections.length === 0) return false;
+  try {
+    await writeUploadDoc(hash16, uploadDocKeyFor(hash16, meta), doc);
+    return true;
+  } catch (error) {
+    // The reading stands; only the cache failed. No text in the log.
+    console.warn("[papers/full-text] could not keep an upload's text:", (error as NodeJS.ErrnoException)?.code ?? "unknown error");
+    return false;
+  }
+}
+
+/**
  * P0-02 (spec D0): an upload's text, read out of the PDF once per owner,
  * revision and extraction version. Called only after `ownedUpload` has
  * passed. The document is kept by `upload-store` (memory for the hour, the
@@ -349,9 +390,14 @@ const uploadsInFlight = new Map<string, Promise<FullTextResult>>();
  * The extraction version is `UPLOAD_CONCEPT_EXTRACTION_VERSION`, the
  * upload's own record of which extractor read it: bumping it when the
  * extractor changes (P0-03) retires every document read by the old one.
+ *
+ * P12-58: the upload route keeps the document it extracts at upload time
+ * under this same key (`keepUploadDocument`), so for an upload made now the
+ * first branch below is the one taken; the extraction below it remains for an
+ * upload that predates that, or whose document has expired.
  */
 async function uploadFullText(hash16: string, meta: UploadMeta): Promise<FullTextResult> {
-  const key = uploadDocKey(meta.ownerKey ?? "", hash16, meta.revision, UPLOAD_CONCEPT_EXTRACTION_VERSION);
+  const key = uploadDocKeyFor(hash16, meta);
   const inFlight = uploadsInFlight.get(key);
   if (inFlight) return inFlight;
 
@@ -362,12 +408,7 @@ async function uploadFullText(hash16: string, meta: UploadMeta): Promise<FullTex
       return { status: "ok", doc: kept, sourceLink: link, attempts: [{ link, outcome: "ok" }] };
     }
     const result = await readOwnedUpload(hash16);
-    if (result.status === "ok" && result.doc) {
-      await writeUploadDoc(hash16, key, result.doc).catch((error: NodeJS.ErrnoException) => {
-        // The reading stands; only the cache failed. No text in the log.
-        console.warn("[papers/full-text] could not keep an upload's text:", error?.code ?? "unknown error");
-      });
-    }
+    if (result.status === "ok" && result.doc) await keepUploadDocument(hash16, meta, result.doc);
     return result;
   })();
   uploadsInFlight.set(key, pending);
