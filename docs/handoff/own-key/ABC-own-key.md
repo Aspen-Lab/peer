@@ -8,8 +8,8 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 |---|---|
 | HELD BY | manager session (Claude Code desktop, worktree `.claude/worktrees/objective-wu-e8d6fe`) |
 | BRANCH | `own-key-on-web` (cut from `origin/main` db0f070a after PR #36 merged; name approved by the owner 2026-10-25). Repository `Aspen-Lab/peer`. No push without the owner's word (AGENTS.md). The owner merges the PR himself (R6). |
-| ROUND | 0 — implementation of lanes 1–4; round 1 scores after all four land |
-| CURRENT ITEM | L1-A and L4-fix2 running; L2-fix landed (tip full suite 0 new); then scoring round 1 |
+| ROUND | 1 — scoring at 4a883c0a |
+| CURRENT ITEM | round 1 scoring (3 readers) and L1-fix running; manager writes the CHANGELOG entry |
 | NEXT TURN | on each worker report: verify → land on the branch → refill up to the cap of two groups |
 | STOPPED BECAUSE | — |
 | TARGET | **97.9 per theme, two consecutive rounds** (the owner, 2026-10-28, R5: "达标线用 97.9，每个主题连续两轮达到就停。") |
@@ -34,6 +34,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 - **R13 (2026-10-28), on L4-A (`L4-A-20261028T1818Z.md`; Theme A 0.5, Theme B 0.75).** All accepted for L4-fix (`briefs/L4-fix.md`): D4 (0.5) keys could survive a sign-out after "Reset profile to defaults" while signed in — fixed twice: the reset re-records the signed-in owner, and a confirmed sign-out always clears the device's API keys even with no owner recorded; D2 singular/plural in the dialog; D1 the Account step's title after sign-in; D3 the resume step for a reader who finished everything; plus director note N1 (AI summary while auth is unknown). R9's "no change" is superseded for the reset path. Not taken: the 375 px wrap of "Continue without signing in" is unverified (no browser at A); the scoring round checks it on the dev server.
 - **R14 (2026-10-28), on L2-A (`L2-A-20261028T1822Z.md`; five 0.25 defects, Theme A 1.25).** All accepted. L2-fix (`briefs/L2-fix.md`): D5 + N2 split the signed-out-with-key paper sentence; D1 the paper link shows only when the sentence names a key or a sign-in (this also changes the old no-key PDF-no-text case — ruled); D2 the paper's "Sign in" returns to the paper via `/profile?return=/papers/<id>` (contract with L4-fix item 6: `safeReturnPath` accepts `/papers/<one segment>`, Profile's Account passes a valid `return` as `returnTo`); D3 + N3 + L3-A D6 `AiKeyFields signInNote={false}` on Welcome and KeyCheck's signed-out line only after a 401; D4 the Profile key paragraph drops the account and sign-out sentences where sign-in is unconfigured.
 - **R15 (2026-10-28), on L4-fix's deviations.** Accepted: item 4 (a signed-out reader can never finish the AI step, so the rule became "only a brand-new reader starts on Account; everyone else resumes where the wizard opened before"); the kicker stays "Optional"; a double-encoded id is a literal id on Peer's host. NOT accepted: refusing `%2F` in a paper id. dblp ids (`journals/corr/…`) and old arXiv ids (`hep-th/9901001`) contain "/", so those papers would not come back after sign-in. A decoded "/" inside the one segment is safe: the raw value still starts with `/papers/`, holds no literal "/" or "\\" after it, and the callback joins it to its own origin. Queued as L4-fix2: accept a decoded "/" in the segment; keep refusing a literal "/", "\\", control characters, broken escapes, "." and ".."; tests with a dblp id and an old arXiv id.
+- **R16 (2026-10-28), on L1-A (`L1-A-20261028T185241Z.md`).** B8, B10, A12 PASS; B9 PASS with D1 0.25: five stale comments still describe Tavily or the `web` adapter (spend-scans scan 3 and 5, `pipeline.ts` ~1112, `jev-step.test.ts` ~114, `api/feed/route.test.ts` ~324). Accepted for L1-fix (comments only). A12's CHANGELOG entry is the manager's.
 
 ## §3 Items
 
@@ -52,7 +53,10 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 | id | role | status | worktree | evidence |
 |---|---|---|---|---|
 | L1-C | C | LANDED a235c48a, fa965331, 2b6665a6 | `.claude/worktrees/own-key-lane1` | 9381d8cd hydrate ignores device-only fields, 98a92ef7 Tavily out of the profile (store v9), 6590bfe1 Tavily web source + unread searchConnectors deleted. Manager: tsc 0, eslint 0, affected tests ×3 = 1626 pass / 3 fail (reader-panes, reading-prefs, scan 5 — all baseline); M7 (hydrate installs feedAiApiKey again) → 2 red; M8 (legacy strip forgets tavilyApiKey) → 5 red; restored byte-identical. Lane's own full suite: same 35 as baseline. |
-| L1-A | A | RUNNING (started when L4-fix finished) | own-key-lane1 (read only) | — |
+| L1-A | A | DONE | own-key-lane1 (read only) | `L1-A-20261028T185241Z.md`: B8, B10, A12 PASS; B9 D1 0.25 (stale comments) |
+| L1-fix | C | RUNNING (lane 1's C resumed at the tip) | `.claude/worktrees/own-key-lane1` | R16: reword five stale comments |
+| L4-fix2 | C | LANDED 4a883c0a | own-key-lane4 | a decoded "/" allowed in a paper return path; M16 (literal "/" allowed) → 4 red |
+| R1-score | readers ×3 + director | RUNNING at 4a883c0a | `own-key-verify` (read only) | pack: notes `R1-pack/` (static renders, live captures, 375 px screenshot, test evidence); full suite 11175 / 34 failed / 0 new |
 | L2-C | C | LANDED 68163acd, f6cfe7ce, 43e2a404 | `.claude/worktrees/own-key-lane2` | aeba4d49 note under the key field, 187597a6 AI provider row, 495eeba6 paper page sign-in. Manager: tsc 0, eslint 0 errors (44 warnings, pre-existing), touched tests ×3 = 933 pass / 1 fail (jev-setup, CRLF baseline); M5 (note shown for unknown/unconfigured) → 4 red; M6 (keyNeedsSignIn always false) → 1 red (unit level; the page tests take the flag as input); restored byte-identical. Full suite: 10752 tests, 35 failed, **0 new**. |
 | L2-A | A | DONE | own-key-lane2 (read only) | `L2-A-20261028T1822Z.md`: A1–A4 PASS with five 0.25 defects (D1–D5) |
 | L2-fix | C | LANDED d94b0a09, e2cdf9e3, 61492242 | `.claude/worktrees/own-key-lane2` | items 1–5. Manager: tsc 0, eslint 0 errors, touched tests ×3 = 552 pass / 1 fail (jev-setup baseline); M14 (signInNote ignored) → 3 red; M15 (link back to the old rule) → 3 red; restored. Deviation accepted: the paper link encodes the id with encodeURIComponent (an id with "/" stays one segment). Noted, not taken: `JEV_SIGN_IN_NOTE` still shows on Welcome for a signed-out reader with a Jev key — scored in round 1. |
@@ -62,9 +66,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 | L4-C | C | LANDED 27c1d03a, 2fc2367b, a6278be9, 395e5cfe, acbc8adf | `.claude/worktrees/own-key-lane4` | 15ec36a6 return path + open redirect, 73eff44d Account step + AI-step sign-in, 780cd45d AI summary, 1285860a sign-out dialog, 5708ad40 reset text. Manager: tsc 0, eslint 0 errors (49 warnings, pre-existing), touched tests ×3 = 334/334; M3 equivalent (R10), M3b → 4 red, M3c → 4 red, M4 (keys ignored in signOutPrompt) → 3 red; all restored byte-identical. Full suite: 10814 tests, 35 failed, **0 new** vs baseline. |
 | L4-A | A | DONE | own-key-lane4 (read only) | `L4-A-20261028T1818Z.md`: A6 A7 A9 B2 B3 B4 B6 PASS; D1 0.25 (A5), D2 0.25 (A8), D3 0.25 (B1), D4 0.5 (B7); no open redirect in 50+ attempts |
 | L4-fix | C | LANDED 55f67927, b1f54cd4, 9d6113a4, c2b5d969, 87a4d5f2, 62b442ed | `.claude/worktrees/own-key-lane4` | items 1–6. Manager: tsc 0, eslint 0 errors (49 old warnings), touched tests ×3 = 564/564; M12 (sign-out never clears keys) → 4 red; M13 (reset does not re-record the owner) → 3 red; restored byte-identical. |
-| L4-fix2 | C | RUNNING (lane 4's C resumed when L2-fix finished) | — | accept a decoded "/" in a paper return path |
 | L1-A … L4-A | A | QUEUED | — | — |
-| R1-score | blind readers ×3 + director | QUEUED | — | — |
 
 ## §4b Director notes for round 1 (manager, from the static render pack, before any reader)
 
