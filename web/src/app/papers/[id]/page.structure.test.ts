@@ -23,8 +23,11 @@ function reviewProblems(source: string): string[] {
   if (!/import \{ applyStructureReview, structureDraftOf \} from "@\/lib\/papers\/structure-review";/.test(text)) problems.push("the page no longer imports the draft and the overlay");
   if (text.split("useStructureReview({").length - 1 !== 1) problems.push("the hook is not called exactly once");
 
-  const draft = "const structureDraft = useMemo(() => structureDraftOf(reading?.map, reading?.body), [reading?.map, reading?.body]);";
-  if (!text.includes(draft)) problems.push("the draft is not made from the reading's own map and body, memoised on both");
+  // Re-aimed (P12-53 / §1h.442): the draft now follows Tier 0's closing split, which reads the abstract; the page hands it the
+  // reading's own abstract, as the partition overlay hands `closingPartition` (so the server's draft, made from the record's
+  // abstract, is the same). It was `structureDraftOf(reading?.map, reading?.body)`, memoised on the map and the body.
+  const draft = 'const structureDraft = useMemo( () => structureDraftOf(reading?.map, reading?.body, reading?.abstract.sentences.join(" ")), [reading?.map, reading?.body, reading?.abstract], );';
+  if (!text.includes(draft)) problems.push("the draft is not made from the reading's own map, body and abstract, memoised on all three");
 
   const call = /const structureReview = useStructureReview\(\{[^}]*\}\);/.exec(text)?.[0] ?? "";
   if (!call) problems.push("the page no longer names the hook's answer `structureReview`");
@@ -93,6 +96,15 @@ describe("the page's structure review wiring (P12-53)", () => {
       "the hook is asked about a paper whose private attachment is not yet resolved",
     );
     expect(reviewProblems(source.replace("draftDigest: structureDraft?.digest,", ""))).toContain("the hook is no longer told the digest of the draft it is to review");
+  });
+
+  it("would notice the draft made without the abstract, or not remade when the abstract changes", () => {
+    expect(reviewProblems(source.replace('reading?.body, reading?.abstract.sentences.join(" ")),', "reading?.body),"))).toContain(
+      "the draft is not made from the reading's own map, body and abstract, memoised on all three",
+    );
+    expect(reviewProblems(source.replace("[reading?.map, reading?.body, reading?.abstract],", "[reading?.map, reading?.body],"))).toContain(
+      "the draft is not made from the reading's own map, body and abstract, memoised on all three",
+    );
   });
 
   it("would notice the reader's own key dropped", () => {

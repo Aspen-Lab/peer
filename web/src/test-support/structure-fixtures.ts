@@ -43,6 +43,8 @@ export interface InventedPaper {
   doc: ExtractedDocument;
   input: StructureInput;
   map: ReadingMap;
+  /** The reading's body as the page and the route hold it: `{ id, canonical, paragraphs }` per section. */
+  body: Array<{ id: string; canonical: string; paragraphs: string[] }>;
   /** The true role of every paragraph, by ordinal. */
   roles: ReviewRole[];
   /** The true parts: neighbours of one role are one part. */
@@ -62,14 +64,24 @@ export function partsOfRoles(roles: readonly ReviewRole[]): Array<{ from: number
 }
 
 /** An invented paper of the rows given. Sub-rows are rows whose heading starts "2.1" under "2." and so on. */
-export function inventedPaper(rows: readonly InventedRow[], opts: { pageCount?: number; figures?: number } = {}): InventedPaper {
+export function inventedPaper(
+  rows: readonly InventedRow[],
+  opts: {
+    pageCount?: number;
+    figures?: number;
+    /** The abstract the closing split reads (the record's, joined as the browser or the server joins it). */
+    abstract?: string;
+    /** Paragraph texts to put in place of the generated ones, by ordinal (the role they carry is the row's `truth`). */
+    paragraphs?: Record<number, string>;
+  } = {},
+): InventedPaper {
   let g = 0;
   const roles: ReviewRole[] = [];
   const sections = rows.map((row, k) => {
     const paragraphs: string[] = [];
     for (const [role, n] of row.truth) {
       for (let i = 0; i < n; i += 1) {
-        paragraphs.push(inventedParagraph(role, g));
+        paragraphs.push(opts.paragraphs?.[g] ?? inventedParagraph(role, g));
         roles.push(role);
         g += 1;
       }
@@ -89,13 +101,15 @@ export function inventedPaper(rows: readonly InventedRow[], opts: { pageCount?: 
   };
   const rendered = readableSections(doc);
   const map = readingMapOf(rendered);
-  const input = structureInputOf(map, rendered.map((r) => ({ id: r.id, paragraphs: r.paragraphs })), {
+  const input = structureInputOf(map, rendered.map((r) => ({ id: r.id, canonical: r.section.canonical, paragraphs: r.paragraphs })), {
+    abstract: opts.abstract,
     figures: doc.figureCaptions.map((f) => ({ label: f.label, caption: f.caption, ...(f.page ? { page: f.page } : {}) })),
     pages: doc.pageCount,
   });
   if (!input) throw new Error("invented paper has no input");
   const wholeChars = rendered.reduce((sum, r) => sum + r.section.heading.length + r.paragraphs.reduce((n, p) => n + p.length, 0), 0);
-  return { doc, input, map, roles, truthParts: partsOfRoles(roles), wholeChars };
+  const body = rendered.map((r) => ({ id: r.id, canonical: r.section.canonical, paragraphs: r.paragraphs }));
+  return { doc, input, map, body, roles, truthParts: partsOfRoles(roles), wholeChars };
 }
 
 /** The canonical case: five true parts across seven rows. */

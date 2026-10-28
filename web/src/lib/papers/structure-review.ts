@@ -11,9 +11,10 @@
 //     counts the Tier-0 rules can use.
 //   - `structureInputOf` / `draftOf`: the paper as the map and the body already hold it (paragraph k of
 //     the whole paper is ORDINAL k, over `readableSections` in order), and the rules' draft from the map's
-//     top-level rows: a role, a confidence (high when the heading names the role, medium when it is
-//     inherited, low when nothing places it) and evidence tags that are rule names and counts, never words
-//     of the paper.
+//     top-level rows as Tier 0 draws them now (`reading-roles.ts` A1–A5 and rule set B's closing split):
+//     a role, a confidence (high when the heading names the role, medium when the role rules worked it
+//     out or it is inherited, low when nothing places it and for the closing) and evidence tags that are
+//     rule names and counts, never words of the paper.
 //   - `buildSkeleton` / `buildReviewPrompt`: mode A (every paragraph's first 16 words and counts) by
 //     default; mode B (heads only where the rules are unsure and at the ends of a part) above 24,000
 //     characters; a still smaller B, then none ("too_large": the draft stands).
@@ -33,12 +34,13 @@
 // Role names are the reading map's (`setup`, `method`, `evidence`, `interpretation`, `apparatus`), not the
 // partition's (`introduction`, `results`, …).
 
-import type { ReadingMap, ReadingMapSection, ReadingRole } from "./reading-map";
+import { roleOf, type ReadingMap, type ReadingMapSection, type ReadingRole } from "./reading-map";
+import { closingPartition } from "./reading-partition";
 
 // ── Versions and limits ─────────────────────────────────────────────────
 
 /** Bump when the draft's rules change what they say (a different draft for the same paper). */
-export const STRUCTURE_RULES_VERSION = "rows-1";
+export const STRUCTURE_RULES_VERSION = "rows-2";
 /** Bump when the skeleton's grammar or its heads change. */
 export const SKELETON_VERSION = "s1";
 /** Bump when the review prompt's text changes (a test pins the fixed part by hash). */
@@ -127,6 +129,9 @@ export interface StructureSection {
   canonical: string;
   /** What the map says the bucket is for; `body` when nothing placed it. */
   role: ReadingRole;
+  /** The role was worked out by the Tier-0 role rules (`reading-roles.ts`, A1–A5), not named by the heading: the
+   *  extractor's bucket for the section names no role, and the row has one. Absent means named. */
+  inferred?: boolean;
   page?: number;
   level: number;
   parentId?: string;
@@ -148,6 +153,9 @@ export interface StructureInput {
   paragraphs: number;
   figures: StructureFigure[];
   pages?: number;
+  /** Rule set B's closing split (`closingPartition`), where the paper has one: the ordinal where the closing
+   *  begins and the ordinal where it ends (the end of the row it divides). */
+  closing?: { from: number; to: number };
 }
 
 /**
@@ -157,8 +165,8 @@ export interface StructureInput {
  */
 export function structureInputOf(
   map: ReadingMap | undefined,
-  body: ReadonlyArray<{ id: string; paragraphs: readonly string[] }> | undefined,
-  extra: { figures?: StructureFigure[]; pages?: number } = {},
+  body: ReadonlyArray<{ id: string; paragraphs: readonly string[]; canonical?: string }> | undefined,
+  extra: { figures?: StructureFigure[]; pages?: number; abstract?: string | null } = {},
 ): StructureInput | null {
   if (!map || !body || body.length === 0 || map.sections.length !== body.length) return null;
   const sections: StructureSection[] = [];
@@ -167,11 +175,15 @@ export function structureInputOf(
     const row = map.sections[k];
     const section = body[k];
     if (row.id !== section.id || row.paragraphs.length !== section.paragraphs.length) return null;
+    // The body's bucket is the extractor's; the role rules never change it, though A1 rewrites the row's own heading
+    // and bucket. A row that has a role where the extractor's bucket names none had it worked out.
+    const bucketRole = roleOf(section.canonical ?? row.canonical);
     sections.push({
       id: row.id,
       heading: row.heading,
       canonical: row.canonical,
       role: row.role,
+      inferred: row.role !== "body" && bucketRole === "body",
       ...(typeof row.page === "number" ? { page: row.page } : {}),
       level: row.level ?? 1,
       ...(row.parentId !== undefined ? { parentId: row.parentId } : {}),
@@ -180,7 +192,25 @@ export function structureInputOf(
     });
     for (const paragraph of section.paragraphs) texts.push(paragraph);
   }
-  return { sections, texts, paragraphs: texts.length, figures: extra.figures ?? [], ...(extra.pages ? { pages: extra.pages } : {}) };
+  // The closing split is Tier 0's too, a function of the map, the body and the abstract: the same on both sides.
+  let closing: StructureInput["closing"];
+  const split = closingPartition(
+    map,
+    body.map((section, k) => ({ id: section.id, canonical: section.canonical ?? map.sections[k].canonical, paragraphs: section.paragraphs })),
+    extra.abstract,
+  );
+  const divided = split ? sections.find((section) => section.id === split.sectionId) : undefined;
+  if (split && divided && split.parts.length === 2 && split.parts[1].fromParagraph > 0 && divided.count > split.parts[1].fromParagraph) {
+    closing = { from: divided.first + split.parts[1].fromParagraph, to: divided.first + divided.count - 1 };
+  }
+  return {
+    sections,
+    texts,
+    paragraphs: texts.length,
+    figures: extra.figures ?? [],
+    ...(extra.pages ? { pages: extra.pages } : {}),
+    ...(closing ? { closing } : {}),
+  };
 }
 
 // ── The rules' draft ───────────────────────────────────────────────────
@@ -191,7 +221,7 @@ export interface DraftPart {
   to: number;
   role: ReviewRole;
   conf: Confidence;
-  /** Rule names and counts (`heading:methods`, `inherited`, `default`, `rows:2`, `paras:14`), never words of the paper. */
+  /** Rule names and counts (`heading:methods`, `inferred`, `inherited`, `default`, `closing`, `rows:2`, `paras:14`), never words of the paper. */
   tags: string[];
 }
 
@@ -224,11 +254,14 @@ const CONF_RANK: Readonly<Record<Confidence, number>> = { low: 0, medium: 1, hig
 const isReviewRole = (value: unknown): value is ReviewRole => typeof value === "string" && (REVIEW_ROLES as readonly string[]).includes(value);
 
 /**
- * The rules' draft, from the map's TOP-LEVEL rows (a row with no `parentId`): each row, with the sub-rows under
- * it, is one run of paragraphs; its role is the row's own, with confidence `high` (the heading names the role);
- * a row nothing placed (`body`) takes the role of the part before it, `medium` (tag `inherited`); one at the
- * very start with nothing before it is `setup`, `low` (tag `default`). A row with no paragraphs under it is no
- * part. Neighbours of one role are one part, at the lowest confidence of the rows in it.
+ * The rules' draft, from the map's TOP-LEVEL rows (a row with no `parentId`) as Tier 0 now draws them: each row,
+ * with the sub-rows under it, is one run of paragraphs, and its role is the row's own. The confidence says how the
+ * role was got: `high` where the heading names it (tag `heading:<bucket>`); `medium` where the role rules worked it
+ * out (`reading-roles.ts` A1–A5: tag `inferred`) or where nothing placed the row and it takes the role of the part
+ * before it (tag `inherited`); `low` where nothing at all places it, a row at the very start (`setup`, tag
+ * `default`), and for the closing of rule set B's split (`interpretation`, tag `closing`: the rules read the last
+ * paragraphs of the last results row as the paper's close from an echo of its abstract). A row with no paragraphs
+ * under it is no part. Neighbours of one role are one part, at the lowest confidence of the rows in it.
  * Null for a paper with no paragraph.
  */
 export function draftOf(input: StructureInput): StructureDraft | null {
@@ -236,46 +269,66 @@ export function draftOf(input: StructureInput): StructureDraft | null {
   interface Run {
     role: ReadingRole;
     canonical: string;
+    inferred: boolean;
     from: number;
     to: number;
   }
   const runs: Run[] = [];
   for (const section of input.sections) {
     if (section.parentId === undefined || runs.length === 0) {
-      runs.push({ role: section.role, canonical: section.canonical, from: section.first, to: section.first - 1 });
+      runs.push({ role: section.role, canonical: section.canonical, inferred: section.inferred === true, from: section.first, to: section.first - 1 });
     }
     runs[runs.length - 1].to = section.first + section.count - 1;
   }
 
-  const parts: Array<DraftPart & { rows: number }> = [];
+  interface Segment {
+    from: number;
+    to: number;
+    role: ReviewRole;
+    conf: Confidence;
+    tag: string;
+  }
+  const segments: Segment[] = [];
   let before: ReviewRole | null = null;
   for (const run of runs) {
     if (run.to < run.from) continue;
-    let role: ReviewRole;
-    let conf: Confidence;
-    let tag: string;
+    let segment: Segment;
     if (isReviewRole(run.role)) {
-      role = run.role;
-      conf = "high";
-      tag = /^[a-z_]{1,24}$/.test(run.canonical) ? `heading:${run.canonical}` : "heading:named";
+      segment = run.inferred
+        ? { from: run.from, to: run.to, role: run.role, conf: "medium", tag: "inferred" }
+        : { from: run.from, to: run.to, role: run.role, conf: "high", tag: /^[a-z_]{1,24}$/.test(run.canonical) ? `heading:${run.canonical}` : "heading:named" };
     } else if (before) {
-      role = before;
-      conf = "medium";
-      tag = "inherited";
+      segment = { from: run.from, to: run.to, role: before, conf: "medium", tag: "inherited" };
     } else {
-      role = "setup";
-      conf = "low";
-      tag = "default";
+      segment = { from: run.from, to: run.to, role: "setup", conf: "low", tag: "default" };
     }
-    before = role;
+    before = segment.role;
+    segments.push(segment);
+  }
+
+  // The closing split divides the run it lies in: what is before it and after it keep their roles, the closing
+  // itself is the interpretation, and the rules are unsure of it.
+  const closing = input.closing;
+  if (closing) {
+    const at = segments.findIndex((segment) => segment.from <= closing.from && closing.to <= segment.to);
+    if (at >= 0 && segments[at].from < closing.from) {
+      const whole = segments[at];
+      const pieces: Segment[] = [{ ...whole, to: closing.from - 1 }, { from: closing.from, to: closing.to, role: "interpretation", conf: "low", tag: "closing" }];
+      if (closing.to < whole.to) pieces.push({ ...whole, from: closing.to + 1 });
+      segments.splice(at, 1, ...pieces);
+    }
+  }
+
+  const parts: Array<DraftPart & { rows: number }> = [];
+  for (const segment of segments) {
     const last = parts[parts.length - 1];
-    if (last && last.role === role) {
-      last.to = run.to;
-      if (CONF_RANK[conf] < CONF_RANK[last.conf]) last.conf = conf;
-      if (!last.tags.includes(tag)) last.tags.push(tag);
+    if (last && last.role === segment.role) {
+      last.to = segment.to;
+      if (CONF_RANK[segment.conf] < CONF_RANK[last.conf]) last.conf = segment.conf;
+      if (!last.tags.includes(segment.tag)) last.tags.push(segment.tag);
       last.rows += 1;
     } else {
-      parts.push({ from: run.from, to: run.to, role, conf, tags: [tag], rows: 1 });
+      parts.push({ from: segment.from, to: segment.to, role: segment.role, conf: segment.conf, tags: [segment.tag], rows: 1 });
     }
   }
 
@@ -296,9 +349,10 @@ export function draftOf(input: StructureInput): StructureDraft | null {
 /** The draft of a reading's map and body — the browser's way in. Null for a reading with none. */
 export function structureDraftOf(
   map: ReadingMap | undefined,
-  body: ReadonlyArray<{ id: string; paragraphs: readonly string[] }> | undefined,
+  body: ReadonlyArray<{ id: string; paragraphs: readonly string[]; canonical?: string }> | undefined,
+  abstract?: string | null,
 ): StructureDraft | null {
-  const input = structureInputOf(map, body);
+  const input = structureInputOf(map, body, { abstract });
   return input ? draftOf(input) : null;
 }
 

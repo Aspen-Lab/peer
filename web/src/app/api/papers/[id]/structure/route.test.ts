@@ -1,7 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { explainDocHash } from "@/lib/papers/explain";
-import { draftOf, REVIEW_CAPS, reviewedParts, structureReviewCache, structureReviewKey, type StructureReviewEntry } from "@/lib/papers/structure-review";
+import {
+  draftOf,
+  REVIEW_CAPS,
+  REVIEW_PROMPT_VERSION,
+  reviewedParts,
+  SKELETON_VERSION,
+  STRUCTURE_RULES_VERSION,
+  structureReviewCache,
+  structureReviewKey,
+  type StructureReviewEntry,
+} from "@/lib/papers/structure-review";
 import { FIVE_PARTS, inventedPaper, modelDouble } from "@/test-support/structure-fixtures";
 import { captureConsole } from "@/test-support/console-capture";
 import { resetCounterStoreForTests } from "@/lib/usage/counters";
@@ -130,6 +140,31 @@ describe("POST /api/papers/[id]/structure — the review", () => {
       { part: 2, why: "contradicts-high", verdict: "review" },
       { part: 3, why: "contradicts-high", verdict: "review" },
     ]);
+  });
+
+  it("makes the draft the browser makes: the closing split of rule set B reads the record's abstract, and the closing is a `low` part", async () => {
+    const abstract = "Mussel populations decline sharply under persistent warming, according to the survey.";
+    const closing = inventedPaper(
+      [
+        { heading: "1 Introduction", canonical: "introduction", truth: [["setup", 3]] },
+        { heading: "3 Results", canonical: "results", truth: [["evidence", 5]] },
+        { heading: "4 Methods", canonical: "methods", truth: [["method", 2]] },
+        { heading: "References", canonical: "references", truth: [["apparatus", 2]] },
+      ],
+      { abstract, paragraphs: { 7: "In summary, mussel populations decline sharply under persistent warming across the survey." } },
+    );
+    mocks.getFullText.mockResolvedValue({ status: "ok", doc: closing.doc, attempts: [] });
+    await call({ paper: { ...paper, summaryIntro: "Mussel populations decline sharply", summaryResultDiscussion: "under persistent warming, according to the survey." } });
+    const sent = JSON.parse(provider.generateJsonText.mock.calls[0][0].userPrompt) as { draft: { parts: string[] } };
+    const browser = draftOf(closing.input)!;
+
+    expect(browser.parts[2]).toMatchObject({ from: 7, to: 7, role: "interpretation", conf: "low" });
+    expect(sent.draft.parts).toEqual(browser.lines);
+    // Without the abstract the split is not made, and the draft is another draft (another digest).
+    structureReviewCache.clear();
+    provider.generateJsonText.mockClear();
+    await call({ paper: { ...paper, summaryIntro: "", summaryResultDiscussion: "" } });
+    expect((JSON.parse(provider.generateJsonText.mock.calls[0][0].userPrompt) as { draft: { parts: string[] } }).draft.parts).toHaveLength(4);
   });
 
   it("uses the small tier where the report tier is set small", async () => {
@@ -371,6 +406,28 @@ describe("POST /api/papers/[id]/structure — the server's memory", () => {
 
     expect(body.cached).toBe(false);
     expect(provider.generateJsonText).toHaveBeenCalled();
+  });
+
+  it("counts a hit only for the draft it was made against: the same document under another abstract is asked again", async () => {
+    const docHash = explainDocHash(FIVE.doc);
+    structureReviewCache.set(structureReviewKey(docHash), {
+      v: 1,
+      docHash,
+      rulesVersion: STRUCTURE_RULES_VERSION,
+      skeletonVersion: SKELETON_VERSION,
+      promptVersion: REVIEW_PROMPT_VERSION,
+      draftDigest: "0".repeat(14),
+      corrections: [],
+      unsure: [],
+      secondLooks: [],
+      model: "x",
+      reviewedAt: 0,
+    });
+    const body = await json(await call());
+
+    expect(body.cached).toBe(false);
+    expect(provider.generateJsonText).toHaveBeenCalled();
+    expect(structureReviewCache.get(structureReviewKey(docHash))?.draftDigest).toBe(draft.digest);
   });
 
   it("holds the finished review only, under the document's key: indices, roles and the model's id, no word of the paper", async () => {

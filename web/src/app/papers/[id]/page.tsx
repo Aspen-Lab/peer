@@ -849,7 +849,11 @@ function Reader({
   // browser, from the reading's map and body; the model returns corrections to it (indices and roles), which are
   // laid over the map right after the partition overlay. The rules' map stands until they arrive and for good if
   // they never do (a refusal, a timeout, no model); a corrected role is shown exactly like a named one (§1h.424 (a)).
-  const structureDraft = useMemo(() => structureDraftOf(reading?.map, reading?.body), [reading?.map, reading?.body]);
+  // The abstract is the closing split's echo (the page's overlay reads it the same way), so the draft is the server's.
+  const structureDraft = useMemo(
+    () => structureDraftOf(reading?.map, reading?.body, reading?.abstract.sentences.join(" ")),
+    [reading?.map, reading?.body, reading?.abstract],
+  );
   const structureReview = useStructureReview({
     paper: ready ? paper : undefined,
     hasBody,

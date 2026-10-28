@@ -201,8 +201,14 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   const rendered = readableSections(doc);
   const input = structureInputOf(
     readingMapOf(rendered),
-    rendered.map((section) => ({ id: section.id, paragraphs: section.paragraphs })),
+    rendered.map((section) => ({ id: section.id, canonical: section.section.canonical, paragraphs: section.paragraphs })),
     {
+      // The abstract as the reading builds it (`buildReading`: the record's intro and discussion): the closing split
+      // reads it, so the draft is the browser's.
+      abstract: [body.paper.summaryIntro, body.paper.summaryResultDiscussion]
+        .map((text) => text?.trim() ?? "")
+        .filter(Boolean)
+        .join("\n\n"),
       figures: doc.figureCaptions.map((figure) => ({ label: figure.label, caption: figure.caption, ...(figure.page ? { page: figure.page } : {}) })),
       ...(doc.pageCount ? { pages: doc.pageCount } : {}),
     },
@@ -214,7 +220,9 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   const docHash = explainDocHash(doc);
   const key = structureReviewKey(docHash);
   const hit = structureReviewCache.get(key);
-  if (hit) return reply({ review: hit, cached: true } satisfies StructureResult);
+  // The memory is keyed by the document; the draft also depends on the abstract (the closing split), so a hit counts
+  // only for the draft it was made against.
+  if (hit && hit.draftDigest === draft.digest) return reply({ review: hit, cached: true } satisfies StructureResult);
 
   const skeleton = buildSkeleton(input, draft);
   if (!skeleton) {

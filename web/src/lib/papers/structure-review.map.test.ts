@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { FIVE_PARTS, inventedPaper } from "@/test-support/structure-fixtures";
-import { partitionedMap, partOf, type GuidePartition } from "./reading-partition";
+import { FIVE_PARTS, inventedPaper, type InventedRow } from "@/test-support/structure-fixtures";
+import { closingPartition, partitionedMap, partOf, type GuidePartition } from "./reading-partition";
 import { applyStructureReview, draftOf, reviewedParts, type Correction } from "./structure-review";
 
 // P12-53 (ruling §1h.424 (a), §1h.428; B P12-42 §8.5): the review laid over the displayed map. A row's role
@@ -151,5 +151,31 @@ describe("applyStructureReview — sub-rows, group rows and the partition's rows
     // The group rows keep their record of where they stand, and the row the review left alone is the same object.
     expect(partOf(shown.sections[0])).toEqual(partOf(overlay.sections[0]));
     expect(shown.sections[4]).toBe(overlay.sections[4]);
+  });
+
+  it("handles the rows of the closing split (§1h.442): the ids stay, and the closing row takes the role the review gives it", () => {
+    const abstract = "Mussel populations decline sharply under persistent warming, according to the survey.";
+    const rows: InventedRow[] = [
+      { heading: "1 Introduction", canonical: "introduction", truth: [["setup", 3]] },
+      { heading: "3 Results", canonical: "results", truth: [["evidence", 5]] },
+      { heading: "4 Methods", canonical: "methods", truth: [["method", 2]] },
+      { heading: "References", canonical: "references", truth: [["apparatus", 2]] },
+    ];
+    const paper = inventedPaper(rows, { abstract, paragraphs: { 7: "In summary, mussel populations decline sharply under persistent warming across the survey." } });
+    const overlay = partitionedMap(paper.map, paper.body, closingPartition(paper.map, paper.body, abstract)!);
+    const d = draftOf(paper.input)!;
+    const claim = (corrections: Correction[]) => ({ corrections, unsure: [], draftDigest: d.digest });
+
+    expect(overlay.sections.map((row) => row.id)).toEqual(["s1", "s2~0", "s2~1", "s3", "s4"]);
+    expect(overlay.sections.map((row) => row.role)).toEqual(["setup", "evidence", "interpretation", "method", "apparatus"]);
+    // The rules' close is the draft's low part 2; the review says it is more evidence.
+    const shown = applyStructureReview(overlay, d, claim([{ op: "set_role", part: 2, role: "evidence" }]));
+
+    expect(shown.sections.map((row) => row.id)).toEqual(["s1", "s2~0", "s2~1", "s3", "s4"]);
+    expect(shown.sections.map((row) => row.role)).toEqual(["setup", "evidence", "evidence", "method", "apparatus"]);
+    expect(partOf(shown.sections[2])).toEqual(partOf(overlay.sections[2]));
+    expect(shown.sections[1]).toBe(overlay.sections[1]);
+    // A review that agrees with the rules' close changes nothing.
+    expect(applyStructureReview(overlay, d, claim([]))).toBe(overlay);
   });
 });

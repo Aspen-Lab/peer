@@ -19,6 +19,7 @@ import {
   sanitizeReview,
   secondLookTargets,
   sound,
+  structureDraftOf,
   structureInputOf,
   type Answer,
   type DraftPart,
@@ -95,19 +96,141 @@ describe("draftOf — the rules' draft from the map's top-level rows", () => {
     expect(draft.parts[1].tags).toEqual(["heading:methods", "rows:2", "paras:8"]);
   });
 
+  // Re-aimed (§1h.442): C P12-48's role rules (`reading-roles.ts`) now give an unnamed row an inferred role wherever the paper has an
+  // introduction to stand on, so the fixture that used to leave a row `body` (an unnamed row between an introduction and the
+  // references) is apparatus by A2. What is still left `body` is a row in a paper with no introduction at all; this case keeps its
+  // claim (a row nothing places takes the role before it, `medium`, tagged `inherited`, and the part gets the lowest confidence of its
+  // rows) on such a paper. The inferred cases have tests of their own below.
   it("gives an unplaced heading the role before it, `medium` and tagged `inherited`, and the part the lowest confidence of its rows", () => {
     const paper = inventedPaper([
-      { heading: "1 Introduction", canonical: "introduction", truth: [["setup", 2]] },
-      { heading: "Gas sensing performance", canonical: "body", truth: [["evidence", 3]] },
+      { heading: "1 Results", canonical: "results", truth: [["evidence", 3]] },
+      { heading: "Gas sensing performance", canonical: "body", truth: [["evidence", 2]] },
       { heading: "References", canonical: "references", truth: [["apparatus", 1]] },
     ]);
     const draft = draftOf(paper.input)!;
 
+    expect(paper.map.sections[1].role).toBe("body");
     expect(draft.parts.map(({ from, to, role, conf }) => [from, to, role, conf])).toEqual([
-      [0, 4, "setup", "medium"],
+      [0, 4, "evidence", "medium"],
       [5, 5, "apparatus", "high"],
     ]);
-    expect(draft.parts[0].tags).toEqual(["heading:introduction", "inherited", "rows:2", "paras:5"]);
+    expect(draft.parts[0].tags).toEqual(["heading:results", "inherited", "rows:2", "paras:5"]);
+  });
+
+  it("reads a role the Tier-0 role rules worked out as `medium`, tagged `inferred`: the rows between the introduction and the first named later part", () => {
+    const paper = inventedPaper([
+      { heading: "1 Introduction", canonical: "introduction", truth: [["setup", 2]] },
+      { heading: "Snail density rises with wave exposure", canonical: "body", truth: [["evidence", 3]] },
+      { heading: "Shell thickness follows crab predation", canonical: "body", truth: [["evidence", 2]] },
+      { heading: "2 Methods", canonical: "methods", truth: [["method", 2]] },
+      { heading: "References", canonical: "references", truth: [["apparatus", 1]] },
+    ]);
+    const draft = draftOf(paper.input)!;
+
+    expect(paper.input.sections.map((section) => section.inferred ?? false)).toEqual([false, true, true, false, false]);
+    expect(draft.parts.map(({ from, to, role, conf }) => [from, to, role, conf])).toEqual([
+      [0, 1, "setup", "high"],
+      [2, 6, "evidence", "medium"],
+      [7, 8, "method", "high"],
+      [9, 9, "apparatus", "high"],
+    ]);
+    expect(draft.parts[1].tags).toEqual(["inferred", "rows:2", "paras:5"]);
+    expect(draft.lines[1]).toBe("1 2-6 evidence medium inferred,rows:2,paras:5");
+  });
+
+  it("reads the front text A1 made the introduction, an unnamed row before the references and the rows after them as `inferred`", () => {
+    const paper = inventedPaper([
+      { heading: "Body", canonical: "body", truth: [["setup", 3]] },
+      { heading: "1 Results", canonical: "results", truth: [["evidence", 3]] },
+      { heading: "Online content", canonical: "body", truth: [["apparatus", 1]] },
+      { heading: "References", canonical: "references", truth: [["apparatus", 2]] },
+      { heading: "Author contributions", canonical: "body", truth: [["apparatus", 1]] },
+    ]);
+    const draft = draftOf(paper.input)!;
+
+    // The map's own first row is renamed by A1, the body's bucket is the extractor's: that is how the two are told apart.
+    expect(paper.map.sections[0]).toMatchObject({ heading: "Introduction", canonical: "introduction", role: "setup" });
+    expect(paper.input.sections.map((section) => section.inferred ?? false)).toEqual([true, false, true, false, true]);
+    expect(draft.parts.map(({ from, to, role, conf }) => [from, to, role, conf])).toEqual([
+      [0, 2, "setup", "medium"],
+      [3, 5, "evidence", "high"],
+      [6, 9, "apparatus", "medium"],
+    ]);
+    expect(draft.parts[0].tags).toEqual(["inferred", "rows:1", "paras:3"]);
+    expect(draft.parts[2].tags).toEqual(["inferred", "heading:references", "rows:3", "paras:4"]);
+  });
+
+  it("does not take a heading that names its role for an inferred one, and an introduction headed `Introduction` is named", () => {
+    const paper = inventedPaper([
+      { heading: "Introduction", canonical: "introduction", truth: [["setup", 2]] },
+      { heading: "Results", canonical: "results", truth: [["evidence", 2]] },
+    ]);
+
+    expect(paper.input.sections.map((section) => section.inferred ?? false)).toEqual([false, false]);
+    expect(draftOf(paper.input)!.parts.map((p) => p.conf)).toEqual(["high", "high"]);
+  });
+
+  describe("the closing split of rule set B", () => {
+    const ABSTRACT = "Mussel populations decline sharply under persistent warming, according to the survey.";
+    const CLOSING = "In summary, mussel populations decline sharply under persistent warming across the survey.";
+    const rows: InventedRow[] = [
+      { heading: "1 Introduction", canonical: "introduction", truth: [["setup", 3]] },
+      { heading: "3 Results", canonical: "results", truth: [["evidence", 5]] },
+      { heading: "4 Methods", canonical: "methods", truth: [["method", 2]] },
+      { heading: "References", canonical: "references", truth: [["apparatus", 2]] },
+    ];
+    // Results holds ordinals 3-7; the closing paragraph is the last (7).
+    const paper = inventedPaper(rows, { abstract: ABSTRACT, paragraphs: { 7: CLOSING } });
+
+    it("makes the closing its own part, `interpretation`, `low`, tagged `closing`; what is above it keeps its role and its confidence", () => {
+      const draft = draftOf(paper.input)!;
+
+      expect(paper.input.closing).toEqual({ from: 7, to: 7 });
+      expect(draft.parts.map(({ from, to, role, conf }) => [from, to, role, conf])).toEqual([
+        [0, 2, "setup", "high"],
+        [3, 6, "evidence", "high"],
+        [7, 7, "interpretation", "low"],
+        [8, 9, "method", "high"],
+        [10, 11, "apparatus", "high"],
+      ]);
+      expect(draft.lines[2]).toBe("2 7-7 interpretation low closing,rows:1,paras:1");
+    });
+
+    it("draws no look for a correction against it: the rules said they were unsure", () => {
+      const draft = draftOf(paper.input)!;
+
+      expect(secondLookTargets(draft.parts, { corrections: [{ op: "set_role", part: 2, role: "evidence" }], unsure: [] })).toEqual([]);
+      expect(secondLookTargets(draft.parts, { corrections: [{ op: "set_role", part: 1, role: "method" }], unsure: [] })).toHaveLength(1);
+    });
+
+    it("is no part when the abstract is not echoed, when there is none, or when the paper names its own conclusion", () => {
+      const other = inventedPaper(rows, { abstract: "Granite quarries expand slowly through seasonal erosion.", paragraphs: { 7: CLOSING } });
+      const named = inventedPaper(
+        [rows[0], rows[1], { heading: "5 Conclusions", canonical: "conclusion", truth: [["interpretation", 2]] }, rows[2], rows[3]],
+        { abstract: ABSTRACT, paragraphs: { 7: CLOSING } },
+      );
+
+      expect(other.input.closing).toBeUndefined();
+      expect(draftOf(other.input)!.parts.map((p) => p.role)).toEqual(["setup", "evidence", "method", "apparatus"]);
+      expect(named.input.closing).toBeUndefined();
+    });
+
+    it("divides the run it lies in into three when more of the run follows the closing, and each piece keeps what it was", () => {
+      const tail: StructureInput = { ...paper.input, closing: { from: 5, to: 6 } };
+      const parts = draftOf(tail)!.parts.map(({ from, to, role, conf }) => [from, to, role, conf]);
+
+      // Results is 3-7: before the closing (3-4) and after it (7) keep the row's role and confidence; the closing is `low`.
+      expect(parts.slice(1, 4)).toEqual([[3, 4, "evidence", "high"], [5, 6, "interpretation", "low"], [7, 7, "evidence", "high"]]);
+    });
+
+    it("is the same draft whether the abstract is the record's (paragraphs joined by blank lines) or the reading's (sentences joined by a space)", () => {
+      const server = structureDraftOf(paper.map, paper.body, "Mussel populations decline sharply under persistent warming,\n\naccording to the survey.");
+      const browser = structureDraftOf(paper.map, paper.body, "Mussel populations decline sharply under persistent warming, according to the survey.");
+
+      expect(server!.digest).toBe(browser!.digest);
+      expect(server!.parts).toHaveLength(5);
+      expect(structureDraftOf(paper.map, paper.body)!.digest).not.toBe(browser!.digest);
+    });
   });
 
   it("reads an unplaced beginning as `setup` with `low` confidence, tagged `default`: nothing places it", () => {
@@ -142,11 +265,13 @@ describe("draftOf — the rules' draft from the map's top-level rows", () => {
 
   it("carries rule names and counts in its tags and nothing of the paper", () => {
     const draft = draftOf(FIVE.input)!;
-    for (const part of draft.parts) for (const tag of part.tags) expect(tag).toMatch(/^(heading:[a-z_]+|inherited|default|rows:\d+|paras:\d+)$/);
+    for (const part of draft.parts) for (const tag of part.tags) expect(tag).toMatch(/^(heading:[a-z_]+|inferred|inherited|default|closing|rows:\d+|paras:\d+)$/);
     // A canonical that is not a bucket name is never copied into a tag.
     const odd = structureInputOf(
       { sections: [{ ...FIVE.map.sections[0], canonical: "Tide Pools & Kelp" }], totalMinutes: 1 },
-      [{ id: FIVE.map.sections[0].id, paragraphs: FIVE.doc.sections[0].text.split("\n\n") }],
+      // Re-aimed (§1h.442): the draft reads the extractor's bucket from the body to tell a named role from an inferred one, so the
+      // body says `introduction` here and only the map row carries the odd canonical this test is about.
+      [{ id: FIVE.map.sections[0].id, canonical: "introduction", paragraphs: FIVE.doc.sections[0].text.split("\n\n") }],
     )!;
     expect(draftOf(odd)!.parts[0].tags[0]).toBe("heading:named");
   });
@@ -539,15 +664,27 @@ describe("the double's round trip — a draft with a wrong role and a wrong star
     expect(result.parts).toEqual(FIVE.truthParts);
   });
 
+  // Re-aimed (§1h.442): "Closing remarks" used to be left `body` and inherit the evidence part before it; C P12-48's rules (A2) now give an
+  // unnamed row between the introduction and the first named later part the role evidence, and one directly before the references
+  // apparatus. The claim is kept - a draft that fused two roles (the unnamed closing row read as the results before it) is split
+  // back to the truth - on a paper where A2 still fuses them: the closing row stands before a named Methods part, not before the references.
   it("splits a draft that fused two roles", () => {
     const fused = inventedPaper([
       { heading: "1 Introduction", canonical: "introduction", truth: [["setup", 4]] },
       { heading: "2 Results", canonical: "results", truth: [["evidence", 5]] },
       { heading: "Closing remarks", canonical: "body", truth: [["interpretation", 3]] },
+      { heading: "3 Methods used", canonical: "methods", truth: [["method", 3]] },
       { heading: "References", canonical: "references", truth: [["apparatus", 2]] },
     ]);
     const result = roundTrip(fused.input);
 
+    // The draft: one evidence part (Results and the unnamed row, 4-11), as the rules read it.
+    expect(draftOf(fused.input)!.parts.map((p) => [p.from, p.to, p.role, p.conf])).toEqual([
+      [0, 3, "setup", "high"],
+      [4, 11, "evidence", "medium"],
+      [12, 14, "method", "high"],
+      [15, 16, "apparatus", "high"],
+    ]);
     expect(JSON.parse(result.raw).corrections).toEqual([{ op: "split", part: 1, atParagraph: 9, role: "interpretation" }]);
     expect(result.parts).toEqual(fused.truthParts);
   });
