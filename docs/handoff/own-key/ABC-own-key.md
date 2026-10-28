@@ -9,7 +9,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 | HELD BY | manager session (Claude Code desktop, worktree `.claude/worktrees/objective-wu-e8d6fe`) |
 | BRANCH | `own-key-on-web` (cut from `origin/main` db0f070a after PR #36 merged; name approved by the owner 2026-10-25). Repository `Aspen-Lab/peer`. No push without the owner's word (AGENTS.md). The owner merges the PR himself (R6). |
 | ROUND | 1 — scoring at 4a883c0a |
-| CURRENT ITEM | round 1 scoring (3 readers) and L1-fix running; manager writes the CHANGELOG entry |
+| CURRENT ITEM | round 1 readers and R1-fixA running |
 | NEXT TURN | on each worker report: verify → land on the branch → refill up to the cap of two groups |
 | STOPPED BECAUSE | — |
 | TARGET | **97.9 per theme, two consecutive rounds** (the owner, 2026-10-28, R5: "达标线用 97.9，每个主题连续两轮达到就停。") |
@@ -54,7 +54,8 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 |---|---|---|---|---|
 | L1-C | C | LANDED a235c48a, fa965331, 2b6665a6 | `.claude/worktrees/own-key-lane1` | 9381d8cd hydrate ignores device-only fields, 98a92ef7 Tavily out of the profile (store v9), 6590bfe1 Tavily web source + unread searchConnectors deleted. Manager: tsc 0, eslint 0, affected tests ×3 = 1626 pass / 3 fail (reader-panes, reading-prefs, scan 5 — all baseline); M7 (hydrate installs feedAiApiKey again) → 2 red; M8 (legacy strip forgets tavilyApiKey) → 5 red; restored byte-identical. Lane's own full suite: same 35 as baseline. |
 | L1-A | A | DONE | own-key-lane1 (read only) | `L1-A-20261028T185241Z.md`: B8, B10, A12 PASS; B9 D1 0.25 (stale comments) |
-| L1-fix | C | RUNNING (lane 1's C resumed at the tip) | `.claude/worktrees/own-key-lane1` | R16: reword five stale comments |
+| L1-fix | C | LANDED 26accd41 | own-key-lane1 | comments only (diff checked: no non-comment line changed); tsc 0; 190 tests pass |
+| R1-fixA | C | RUNNING (lane 4's C resumed at 26accd41) | own-key-lane4 | `briefs/R1-fixA.md`: 375 px label, signed-in kicker, Jev note on Welcome |
 | L4-fix2 | C | LANDED 4a883c0a | own-key-lane4 | a decoded "/" allowed in a paper return path; M16 (literal "/" allowed) → 4 red |
 | R1-score | readers ×3 + director | RUNNING at 4a883c0a | `own-key-verify` (read only) | pack: notes `R1-pack/` (static renders, live captures, 375 px screenshot, test evidence); full suite 11175 / 34 failed / 0 new |
 | L2-C | C | LANDED 68163acd, f6cfe7ce, 43e2a404 | `.claude/worktrees/own-key-lane2` | aeba4d49 note under the key field, 187597a6 AI provider row, 495eeba6 paper page sign-in. Manager: tsc 0, eslint 0 errors (44 warnings, pre-existing), touched tests ×3 = 933 pass / 1 fail (jev-setup, CRLF baseline); M5 (note shown for unknown/unconfigured) → 4 red; M6 (keyNeedsSignIn always false) → 1 red (unit level; the page tests take the flag as input); restored byte-identical. Full suite: 10752 tests, 35 failed, **0 new**. |
