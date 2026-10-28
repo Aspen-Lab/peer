@@ -26,6 +26,7 @@ vi.mock("@/lib/papers/upload-access", async (original) => ({
 }));
 
 import { GET } from "./route";
+import { READING_VERSION } from "@/components/reader/use-reading";
 
 const item: RawItem = {
   id: "openalex:W7208807999",
@@ -47,7 +48,7 @@ const upload = (hash16: string) => ({
 });
 
 function call(id: string) {
-  const req = new NextRequest(`http://localhost/api/papers/${encodeURIComponent(id)}/reading?v=16`);
+  const req = new NextRequest(`http://localhost/api/papers/${encodeURIComponent(id)}/reading?v=${READING_VERSION}`);
   return GET(req, { params: Promise.resolve({ id: encodeURIComponent(id) }) });
 }
 

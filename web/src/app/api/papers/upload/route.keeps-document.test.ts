@@ -70,6 +70,7 @@ import { POST as uploadPOST } from "./route";
 import { GET as readingGET } from "../[id]/reading/route";
 import { uploadDocKey, readUploadMeta } from "@/lib/papers/upload-store";
 import { UPLOAD_CONCEPT_EXTRACTION_VERSION } from "@/lib/preferences/upload-concepts";
+import { READING_VERSION } from "@/components/reader/use-reading";
 
 afterAll(async () => {
   delete process.env.PEER_PRIVATE_UPLOAD_DIR;
@@ -107,7 +108,7 @@ async function upload(bytes: Buffer): Promise<{ status: number; id: string; text
 
 function reading(id: string, as = OWNER, get: typeof readingGET = readingGET): Promise<Response> {
   mocks.token.value = as;
-  return get(new NextRequest(`http://localhost/api/papers/${encodeURIComponent(id)}/reading?v=16`), {
+  return get(new NextRequest(`http://localhost/api/papers/${encodeURIComponent(id)}/reading?v=${READING_VERSION}`), {
     params: Promise.resolve({ id: encodeURIComponent(id) }),
   });
 }

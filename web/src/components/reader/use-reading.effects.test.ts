@@ -18,7 +18,7 @@ import type { Paper } from "@/types";
 import type { ExtractedDocument } from "@/lib/papers/html-text";
 import { useReadingQuestionsStore } from "@/store/reading-questions";
 import { readingRoute } from "./reading-map";
-import { useReading } from "./use-reading";
+import { READING_VERSION, useReading } from "./use-reading";
 
 function memoryStorage(): Storage {
   const items = new Map<string, string>();
@@ -85,7 +85,7 @@ describe("useReading with effects running — one reading request across two ope
 
     expect(fetches).toHaveLength(1);
     // P8-04: `v` first, so the private request keeps its `upload` parameter after it.
-    expect(fetches[0]).toBe("/api/papers/openalex%3AW7000000002/reading?v=16&upload=upload%3A0123456789abcdef");
+    expect(fetches[0]).toBe(`/api/papers/openalex%3AW7000000002/reading?v=${READING_VERSION}&upload=upload%3A0123456789abcdef`);
     expect(first.fromServer).toBe(true);
     expect(second.fromServer).toBe(true);
     expect(second.reading?.provenance.fullText).toBe("pdf");
@@ -100,7 +100,7 @@ describe("useReading with effects running — one reading request across two ope
     await open(standalone);
     await open(standalone);
     expect(fetches).toHaveLength(1);
-    expect(fetches[0]).toBe("/api/papers/upload%3Afedcba9876543210/reading?v=16");
+    expect(fetches[0]).toBe(`/api/papers/upload%3Afedcba9876543210/reading?v=${READING_VERSION}`);
 
     await open({ ...standalone, revision: 2 });
     expect(fetches).toHaveLength(2);
@@ -127,7 +127,7 @@ describe("useReading with effects running — one reading request across two ope
     serveReading("pdf");
     expect((await open(standalone)).reading?.provenance.fullText).toBe("pdf");
     expect(fetches).toHaveLength(1);
-    expect(fetches[0]).toContain("?v=16");
+    expect(fetches[0]).toContain(`?v=${READING_VERSION}`);
     await open(standalone);
     expect(fetches).toHaveLength(1);
   });
@@ -141,7 +141,7 @@ describe("useReading with effects running — one reading request across two ope
 
     await open(base);
 
-    expect(fetches).toEqual(["/api/papers/openalex%3AW7000000002/reading?v=16"]);
+    expect(fetches).toEqual([`/api/papers/openalex%3AW7000000002/reading?v=${READING_VERSION}`]);
     // The number is the one the hook accepts: the version of the reading the page builds.
     expect(fetches[0]).toContain(`?v=${buildReading(base, null).version}`);
   });

@@ -101,7 +101,13 @@ export interface ReadingProvenance {
   abstractSentences: number;
   /** Semantic Scholar's TLDR — labelled as such on the page, never merged into the abstract. */
   tldr?: string;
-  fullText: "none" | "html" | "pdf" | "pdf_unreadable_here" | "pdf_empty" | "paywalled";
+  /**
+   * What the reading was built from. "none" is a settled fact (the attempt finished and there is no text);
+   * "pending" (P12-58) is the abstract alone from an attempt that has not finished, or failed in a way that
+   * is a fact about the moment: the route answers it when its wait ended first, the page asks again, and it
+   * is never kept — see `full-text-pending.ts`.
+   */
+  fullText: "none" | "pending" | "html" | "pdf" | "pdf_unreadable_here" | "pdf_empty" | "paywalled";
   /** "arXiv HTML" | "Zenodo PDF" | "PMC" | "publisher page" … */
   sourceLabel?: string;
   /** PDFs only. */
@@ -152,9 +158,13 @@ export interface PaperReading {
    *
    * 13 → 14 (P10-42): a sentence cut by a page break or a floating figure is one paragraph
    * again, so a reading cached under 13 can hold it in two. Read again once.
+   *
+   * 16 → 17 (P12-58): `provenance.fullText` gains "pending". No settled reading changes; the bump is for the
+   * tab still running the build before it, which kept any private reading whose `fullText` was not "none" for a day
+   * and so would have kept a pending one. A reading cached under 16 is read again once.
    */
   // P12-28: discard derived figure URLs and dimensions made by the old caption pairing.
-  version: 16;
+  version: 17;
   paperId: string;
   builtAt: string;
   provenance: ReadingProvenance;
@@ -834,7 +844,7 @@ export function buildReading(
   omitted.push({ block: "nextStep", reason: "needs_key" });
 
   return {
-    version: 16,
+    version: 17,
     paperId: paper.id,
     builtAt: now.toISOString(),
     provenance,

@@ -17,27 +17,25 @@
 // `buildReading` does not make it; the route does, from `markFullTextPending`, when its wait
 // ended before the attempt did.
 //
-// The union in `reading.ts` (`ReadingProvenance["fullText"]`) does not list this value yet: that
-// file is outside this change. The two functions below are the only places that spell the value
-// and that cross the gap in the type, so adding `| "pending"` there lets the casts go and
-// nothing else change. Every other reader of `provenance.fullText` compares for the values it
-// knows ("pdf", "html", "paywalled", ...) and treats any other as the abstract alone, which is
-// what a pending reading is.
+// The value is a member of `ReadingProvenance["fullText"]` in `reading.ts` (and the reading's version was
+// bumped with it, 16 to 17, so a tab on the build before keeps no pending reading). Every other reader of
+// `provenance.fullText` compares for the values it knows ("pdf", "html", "paywalled", ...) and treats any
+// other as the abstract alone, which is what a pending reading is.
 
 import type { PaperReading } from "./reading";
 
 /** The provenance value for a full text that has not settled. */
-export const FULL_TEXT_PENDING = "pending";
+export const FULL_TEXT_PENDING = "pending" as const;
 
 /** `reading` (built from the abstract alone) with its provenance saying the full text is pending. */
 export function markFullTextPending(reading: PaperReading): PaperReading {
   return {
     ...reading,
-    provenance: { ...reading.provenance, fullText: FULL_TEXT_PENDING as unknown as PaperReading["provenance"]["fullText"] },
+    provenance: { ...reading.provenance, fullText: FULL_TEXT_PENDING },
   };
 }
 
 /** Whether `reading` is the abstract-only answer of a full text that has not settled. */
 export function isFullTextPending(reading: Pick<PaperReading, "provenance"> | null | undefined): boolean {
-  return (reading?.provenance?.fullText as string | undefined) === FULL_TEXT_PENDING;
+  return reading?.provenance?.fullText === FULL_TEXT_PENDING;
 }

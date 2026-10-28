@@ -24,6 +24,8 @@ import {
   POLL_BUDGET_MS,
   POLL_DELAYS_MS,
   POLL_EVERY_MS,
+  READING_VERSION,
+  buildReadingKey,
   pollDelayMs,
   sentencesWhileWaiting,
   useReading,
@@ -140,6 +142,25 @@ describe("useReading — P12-58 rule 3: it keeps asking while the full text is p
     expect(POLL_EVERY_MS).toBe(20_000);
     expect(POLL_BUDGET_MS).toBe(180_000);
     expect([1, 2, 3, 4, 5, 6, 9].map(pollDelayMs)).toEqual([2_000, 4_000, 8_000, 16_000, 20_000, 20_000, 20_000]);
+  });
+
+  it("the reading's version moved from 16 to 17 with the 'pending' value, and the hook reads the same number the reading is built with", () => {
+    expect(READING_VERSION).toBe(17);
+    expect(buildReading(base, null).version).toBe(READING_VERSION);
+    expect(markFullTextPending(buildReading(base, null)).version).toBe(READING_VERSION);
+  });
+
+  it("a reading kept by the build before (version 16, here one that says 'pending') is not used: the page asks for it again", async () => {
+    const kept = { ...answerOf(base, "pending"), version: 16 };
+    localStorage.setItem("peer-reading-v2", JSON.stringify({ [buildReadingKey(base.id, undefined, base.revision)]: { reading: kept, ts: Date.now() } }));
+    script = () => reply(answerOf(current, "pdf"));
+
+    const opened = open(base);
+    await advance(0);
+
+    expect(asks).toHaveLength(1);
+    expect(opened.value.reading?.provenance.fullText).toBe("pdf");
+    opened.unmount();
   });
 
   it("asks again at the planned times, shows the abstract and 'pending' meanwhile, and swaps the body in when it arrives", async () => {
