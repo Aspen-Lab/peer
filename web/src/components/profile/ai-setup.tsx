@@ -8,6 +8,7 @@ import { useState } from "react";
 import type { UserAiProvider } from "@/types";
 import { SecretInput } from "@/components/ui";
 import { useSyncGate, type AuthOutcome } from "@/components/profile-sync";
+import { KeyCheck } from "@/components/profile/key-check";
 import {
   PROVIDER_MODELS,
   type UserCloudAiProvider,
@@ -241,6 +242,8 @@ export function AiKeyFields({
               {KEY_SIGN_IN_NOTE}
             </p>
           )}
+          {/* "Check key": asks the chosen provider once whether it takes this key. */}
+          <KeyCheck provider={provider} apiKey={apiKey} idPrefix={idPrefix} />
         </div>
       )}
     </>
