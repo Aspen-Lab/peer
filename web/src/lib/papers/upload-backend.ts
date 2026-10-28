@@ -17,9 +17,12 @@
 // whether uploads are *allowed*; `hostedUploadsEnabled()` (upload-access.ts)
 // does, and it asks `supabaseUploadStorageConfigured()` below.
 
-import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
+import { createWriteStream, existsSync } from "node:fs";
+import { chmod, copyFile, mkdir, readdir, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { Readable } from "node:stream";
+import type { ReadableStream as WebReadableStream } from "node:stream/web";
+import { pipeline } from "node:stream/promises";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export interface UploadObject {
@@ -35,6 +38,13 @@ export interface UploadBackend {
   /** Creates or replaces the object. */
   write(name: string, data: Buffer | string, contentType: string): Promise<void>;
   exists(name: string): Promise<boolean>;
+  /**
+   * P12-61 (§1h.434): puts the object in the file at `filePath` (created owner-only, 0600) without ever holding
+   * it in this process's memory — the body is streamed to the file, where `read` collects it whole (a 25 MB
+   * PDF peaked a function at 215 MB that way, B P12-60). False when there is no such object; on any other
+   * failure the partial file is removed and the error thrown.
+   */
+  downloadToFile(name: string, filePath: string): Promise<boolean>;
   /** Removes each named object; one that is already gone is not an error. */
   remove(names: string[]): Promise<void>;
   /** Objects directly under `prefix` (`""` is the top level); never folders. */
@@ -82,6 +92,16 @@ const diskBackend: UploadBackend = {
   },
   async exists(name) {
     return existsSync(diskPath(name));
+  },
+  async downloadToFile(name, filePath) {
+    try {
+      await copyFile(diskPath(name), filePath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+      throw error;
+    }
+    await chmod(filePath, 0o600);
+    return true;
   },
   async remove(names) {
     for (const name of names) {
@@ -151,6 +171,27 @@ const supabaseBackend: UploadBackend = {
     // 400/404 "Bad Request" error alongside); any other failure throws.
     const { data } = await bucketApi().exists(name);
     return data === true;
+  },
+  async downloadToFile(name, filePath) {
+    // A short-lived signed URL, fetched by this process and written to the file as it arrives. The URL carries a
+    // token: it is never logged and never put in an error.
+    const { data, error } = await bucketApi().createSignedUrl(name, 120);
+    if (error) {
+      if (isNotFound(error as { message?: string; status?: number; statusCode?: string })) return false;
+      throw error;
+    }
+    const res = await fetch(data.signedUrl);
+    if (!res.ok || !res.body) {
+      if (res.status === 404 || (res.status === 400 && /not.?found/i.test(await res.text().catch(() => "")))) return false;
+      throw new Error(`The upload could not be downloaded (HTTP ${res.status}).`);
+    }
+    try {
+      await pipeline(Readable.fromWeb(res.body as unknown as WebReadableStream<Uint8Array>), createWriteStream(filePath, { mode: 0o600 }));
+    } catch (failure) {
+      await rm(filePath, { force: true }).catch(() => undefined);
+      throw failure;
+    }
+    return true;
   },
   async remove(names) {
     if (names.length === 0) return;

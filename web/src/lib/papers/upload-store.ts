@@ -223,6 +223,29 @@ export async function withUploadPdfFile<T>(hash16: string, read: (filePath: stri
   }
 }
 
+/**
+ * P12-61 (§1h.434, part 3): runs `work` with a file source for the stored PDF, for the figure engine, which opens a
+ * file through a stream and reads from it only what a page needs — the PDF is never held in this process's memory.
+ * On disk the source is the stored file itself (no copy, no temp file). From the bucket the object is streamed to
+ * a private temp file (a directory made 0700, the file 0600; `fetch` body to disk, never `download()`'s whole
+ * Blob and ArrayBuffer), and the directory is removed once `work` settles — after it returned, after it threw, and
+ * after the download failed or found nothing. Null when the PDF is gone (`work` is not called).
+ */
+export async function withUploadPdfSource<T>(hash16: string, work: (source: { filePath: string }) => Promise<T>): Promise<T | null> {
+  const backend = uploadBackend();
+  if (backend.kind === "disk") {
+    return (await backend.exists(pdfName(hash16))) ? work({ filePath: pdfPath(hash16) }) : null;
+  }
+  const dir = await mkdtemp(path.join(tmpdir(), "peer-upload-read-"));
+  try {
+    const filePath = path.join(dir, "paper.pdf");
+    if (!(await backend.downloadToFile(pdfName(hash16), filePath))) return null;
+    return await work({ filePath });
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
 /** Writes the PDF bytes only if this hash isn't already stored — the actual
  * idempotency guarantee (a repeat upload of the same file is a no-op here,
  * not a duplicate write). */
