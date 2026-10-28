@@ -565,8 +565,9 @@ From [`AGENTS.md`](AGENTS.md):
   (see "Commit Attribution" in `AGENTS.md`).
 - **Outside contributions need the Contributor License Agreement.** A pull request from
   anyone other than the two owners can be merged only after its author agrees to
-  [`docs/CLA.md`](docs/CLA.md). That agreement is still a draft, so outside pull requests
-  cannot be merged yet.
+  [`docs/CLA.md`](docs/CLA.md), which has been in force since 2026-10-27. The author posts
+  the one sentence given there as a comment on the pull request, from the GitHub account that
+  made the commits.
 
 ## License
 
