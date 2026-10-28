@@ -195,3 +195,7 @@ C0 (no key): P1–P6 each 100 (maps identical to round 2's). Consecutive rounds 
 ## Scores of record — Theme B round 2 (§1h.459)
 
 A P12-72 on `ccfa098b`: P1 95.83, P2 95.83, P3 83.33 (B7 FAIL on P3); below the target whatever the readers (P3 ≤ 91.67 with no extras), readers skipped. Consecutive rounds at the target: 0.
+
+## Scores of record — Theme A round 3 (§1h.461)
+
+A P12-78 on `e0a80fbf`; readers A3-r1 and A3-r2 (median, the third reader cannot change it): P1 97.92, P2 97.92, P3 97.92. Consecutive rounds at the target: 1.
