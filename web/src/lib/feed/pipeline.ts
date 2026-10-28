@@ -1111,9 +1111,10 @@ async function claimSourceRetry(
  * Scoped to the five academic paper sources only (`ACADEMIC_PAPER_SOURCES`):
  * "web"/"hn" are a deliberate scope boundary recorded in this slice's
  * checkpoint, not retried here rather than risking a second, divergent
- * limiter (the `web` source is dark and carries no search options at all, see
- * `buildPaperPool` above). They still get honest `sourceStatus`/`meta.errors`
- * from the build; they are just never auto-retried.
+ * limiter. `web` has no adapter (see `buildPaperPool` above), so a build
+ * attempts and records nothing for it; `hn` still gets an honest
+ * `sourceStatus`/`meta.errors` entry from the build, and is just never
+ * auto-retried.
  *
  * Never runs Tier 2 (no LLM call): a retry only restores candidates a real
  * Tier-0/Tier-1 score can already rank, and a degraded-cache READ must never

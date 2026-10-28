@@ -114,10 +114,11 @@ describe("welcome wizard - the Jev block", () => {
 // Peer's daily search schedule", and no such schedule exists in the code now.
 //
 // P9-44 (BACKLOG-49): the sentence that replaced it said "Tavily web scouting uses its
-// own separate search key". No screen of Peer takes that key, and no paper source
-// uses it: `feed/pipeline.ts` hands the `web` source no `webSearch` options and
-// `store/feed.ts` sends no `searchConnectors`, so the sentence named a key nobody
-// could enter for a feature that does not run. The step now says what AI keys are for
+// own separate search key". No screen of Peer took that key, and no paper source
+// used it: `feed/pipeline.ts` handed the `web` source no `webSearch` options and
+// `store/feed.ts` sent no `searchConnectors` (the adapter, the option and the
+// field are since deleted), so the sentence named a key nobody could enter for a
+// feature that did not run. The step now says what AI keys are for
 // and nothing more.
 describe("welcome wizard - the ai step's note about search keys", () => {
   const pageText = readFileSync(join(process.cwd(), "src/app/welcome/page.tsx"), "utf8");

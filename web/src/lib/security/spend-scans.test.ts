@@ -145,8 +145,8 @@ describe("scan 3 — no operator search credential is read anywhere", () => {
    * AI Search, Gemini grounding) was read in exactly one gated module,
    * `src/lib/search/system-key.ts`. Peer now funds no search for anyone: that
    * module, the two search engines behind it and the two operator scripts that
-   * built and billed the Vertex index are deleted, and the only search a reader
-   * can run is on a Tavily key they paste in themselves, carried in the request.
+   * built and billed the Vertex index are deleted, and the reader's own-key
+   * Tavily search after them is removed too: no search runs on anyone's key.
    * So the honest answer for every name below is **none**, and a revival is a
    * failing case rather than a quiet addition.
    *
@@ -561,10 +561,8 @@ describe("scan 5 — every route that can reach a model is behind requireAiReque
     // second argument. The scan is kept as a belt: it survives the signature
     // being loosened by someone who does not read this file, and its failure
     // message names the offending file, which a TS2554 at a call site does not.
-    // Only files that import the registry are looked at: `sources/web-search.ts`
-    // has its own, unrelated local `resolveProvider` helper with three
-    // parameters. The declaration itself has a parameter list, so a CALL with a
-    // comma is unambiguous.
+    // Only files that import the registry are looked at. The declaration itself
+    // has a parameter list, so a CALL with a comma is unambiguous.
     const offenders = scannedFiles().filter((file) => {
       const source = code(file);
       return (
