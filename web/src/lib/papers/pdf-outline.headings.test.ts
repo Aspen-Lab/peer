@@ -372,8 +372,11 @@ describe("no line inside a references section is a numbered heading (P12-49, O3)
 
   it("refuses an entry, however it reads, from the references heading to the next heading", () => {
     for (const entry of list.slice(4, 7)) expect(headingOf(entry, style), entry.text).toBeNull();
-    // without the paper around them the same lines are numbered headings, as they were
-    expect(headingOf(list[4], BODY)).toBe("3 Journal of Invented Studies Volume 12 Pages 345");
+    // without the paper around them the same words, at the body's size, are a numbered heading, as they were.
+    // RE-AIMED (C P12-74, R1): the entry is set at 8 pt, 0.8 of the 10 pt body, and a numbered line under 0.95 of the
+    // body is no heading even alone (an axis tick, a legend, a small entry); the in-paper assertion above is untouched.
+    expect(headingOf(list[4], BODY)).toBeNull();
+    expect(headingOf({ ...list[4], size: 10 }, BODY)).toBe("3 Journal of Invented Studies Volume 12 Pages 345");
   });
 
   it("takes the numbered heading that follows the list, set apart as a heading", () => {

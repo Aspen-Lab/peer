@@ -99,3 +99,104 @@ describe("a numbered line in the body's face that goes on from a sentence is no 
     expect(headingOf(stacked[8], style)).toBe("5.1 Cell assembly");
   });
 });
+
+// ── R1: a numbered line set smaller than the body is no heading ─────────────────────────────────────────
+
+describe("a numbered line set smaller than the body is no heading (C P12-74, R1)", () => {
+  it("refuses an axis line, a legend and a small reference entry that open with a number", () => {
+    for (const [text, size, font] of [
+      ["80 Capacity retention percent", 5, "plot"],
+      ["25 Voltage window of the cell", 6.1, "plot"],
+      ["17 Journal of Invented Studies Volume 12 Pages 345", 7.2, "refs"],
+      ["3 Rate test at the highest current", 8.4, "body"],
+    ] as const) {
+      expect(headingOf(line(text, { size, font }), BODY), text).toBeNull();
+    }
+  });
+
+  it("stops at 0.95 of the body: a line a little under it is out, at it and above it the number still makes a heading", () => {
+    expect(headingOf(line("2 Voltage window of the cell", { size: 9.4 }), BODY)).toBeNull();
+    expect(headingOf(line("2 Voltage window of the cell", { size: 9.6 }), BODY)).toBe("2 Voltage window of the cell");
+    expect(headingOf(line("2 Voltage window of the cell", { size: 10 }), BODY)).toBe("2 Voltage window of the cell");
+    expect(headingOf(line("2 Voltage window of the cell", { size: 12, font: "display" }), BODY)).toBe("2 Voltage window of the cell");
+  });
+
+  it("end to end: an axis line and a small reference entry open no section", () => {
+    const axis = paperOf([item("80 Capacity retention percent", { y: 654, height: 5, fontName: "plot" })]);
+    expect(headingsOf(axis)).toEqual(["Introduction"]);
+    expect(textOf(axis)).toContain("80 Capacity retention percent");
+    const entry = paperOf([item("17 Journal of Invented Studies Volume 12 Pages 345", { y: 654, height: 7.2, fontName: "refs" })]);
+    expect(headingsOf(entry)).toEqual(["Introduction"]);
+  });
+});
+
+describe("a paper that numbers its headings is read as it was (C P12-74, R1 and R2 together)", () => {
+  const heading = (text: string, y: number, height = 12) => item(text, { y, height, fontName: "display" });
+  const plain = (text: string, y: number) => item(text, { y });
+  // 1, 2, 2.1, 2.2 and 3: three set apart, "2.2 Cycling" in the body's own face after the end of a sentence.
+  const numbered: PdfPageText[] = [
+    {
+      page: 1,
+      items: [
+        item("A Paper About Cathodes", { height: 17, y: 780 }),
+        heading("1 Introduction", 760),
+        plain("Recurrent neural networks have long been established in sequence modelling.", 746),
+        plain("They are used in cells of every size, from watches to grid stores.", 734),
+        plain("The rest of the paper takes up the grains in turn.", 722),
+        heading("2 Methods", 696),
+        plain("Cells were assembled in an argon filled glovebox with less than one part.", 682),
+        plain("They were cycled at twenty five degrees at the rate the supplier gave.", 670),
+        heading("2.1 Cell assembly", 644, 11),
+        plain("Each film was cut to a disc and dried under vacuum for a full day.", 630),
+        plain("The discs were weighed and stacked in the glovebox before sealing.", 618),
+        plain("2.2 Cycling", 592),
+        plain("The cells rested for a day and were then cycled between two limits.", 580),
+        plain("The current was set from the mass of the film in each cell.", 568),
+        heading("3 Conclusions", 542),
+        plain("The coating slows the fade of every film in the series of cells.", 528),
+        plain("The next step is to test the thick films in the same way as these.", 516),
+      ],
+    },
+  ];
+
+  it("keeps every numbered heading, its bucket and its text, exactly as the outline read them before", () => {
+    expect(buildOutline(numbered)).toEqual({
+      title: "A Paper About Cathodes",
+      sections: [
+        {
+          heading: "1 Introduction",
+          canonical: "introduction",
+          page: 1,
+          text: "Recurrent neural networks have long been established in sequence modelling. They are used in cells of every size, from watches to grid stores. The rest of the paper takes up the grains in turn.",
+        },
+        {
+          heading: "2 Methods",
+          canonical: "methods",
+          page: 1,
+          text: "Cells were assembled in an argon filled glovebox with less than one part. They were cycled at twenty five degrees at the rate the supplier gave.",
+        },
+        {
+          heading: "2.1 Cell assembly",
+          canonical: "methods",
+          page: 1,
+          text: "Each film was cut to a disc and dried under vacuum for a full day. The discs were weighed and stacked in the glovebox before sealing.",
+        },
+        {
+          heading: "2.2 Cycling",
+          canonical: "methods",
+          page: 1,
+          text: "The cells rested for a day and were then cycled between two limits. The current was set from the mass of the film in each cell.",
+        },
+        {
+          heading: "3 Conclusions",
+          canonical: "conclusion",
+          page: 1,
+          text: "The coating slows the fade of every film in the series of cells. The next step is to test the thick films in the same way as these.",
+        },
+      ],
+      figureCaptions: [],
+      pageCount: 1,
+      reason: null,
+    });
+  });
+});

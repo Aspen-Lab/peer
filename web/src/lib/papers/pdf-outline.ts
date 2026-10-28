@@ -1704,6 +1704,9 @@ function isSetApart(line: PdfLine, body: { size: number; font: string }): boolea
   return line.size >= body.size * HEADING_SIZE_RATIO || (line.font !== body.font && line.size >= body.size * 0.95);
 }
 
+/** C P12-74 (R1): a numbered line is a heading candidate only at this share of the body's size or more. */
+const NUMBERED_SIZE_RATIO = 0.95;
+
 /** The heading this line would be, judged on the line alone: its shape, its size and its face. */
 function candidateOf(line: PdfLine, body: { size: number; font: string }): string | null {
   const text = line.text.trim();
@@ -1727,6 +1730,10 @@ function candidateOf(line: PdfLine, body: { size: number; font: string }): strin
     // body) nor the first line of a reference-list entry ("17 Smith, J. A.; Doe, B.").
     const larger = line.size >= body.size * HEADING_SIZE_RATIO;
     if ((!larger && isStreetAddress(text)) || ENTRY_AUTHORS.test(text)) return null;
+    // C P12-74 (R1, B P12-73 M1): ...nor a numbered line set smaller than the body, whatever its face: an axis
+    // tick ("80 Capacity retention"), a legend, a reference entry, small print. A heading is not set smaller than
+    // the text it heads (the unnumbered path below has always asked for 0.95 of the body or more).
+    if (line.size < body.size * NUMBERED_SIZE_RATIO) return null;
     return text;
   }
   const bigger = line.size >= body.size * HEADING_SIZE_RATIO;
