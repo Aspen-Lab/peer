@@ -644,8 +644,8 @@ describe("extractPdfTextFromBytes — the ligatures are repaired before the outl
   );
   /**
    * A paper that closes its argument with an acknowledgements part and then prints a conflict-of-interest part
-   * whose heading has the fl ligature in it. The first end-matter heading closes the argument and stays out; the
-   * ones after it are read by what they name, so the second one is a part only if its heading reads as what it is.
+   * whose heading has the fl ligature in it. Every end-matter heading opens its own section (P12-62) and is read
+   * by what it names, so the second one is a part only if its heading reads as what it is.
    */
   const pages = (methods: Run[], first = "Tidal"): Run[][] => [
     [
@@ -692,7 +692,8 @@ describe("extractPdfTextFromBytes — the ligatures are repaired before the outl
       ["1 Introduction", "introduction"],
       ["2 Methods", "methods"],
       ["3 Results", "results"],
-      // "Acknowledgements" is the first end-matter heading: it closes the argument and stays out, as it always did
+      // "Acknowledgements" is the first end-matter heading: it opens its own section, as the later ones do (P12-62)
+      ["Acknowledgements", "acknowledgments"],
       ["Conflict of Interest", "acknowledgments"],
     ]);
     expect(statement(result.doc)?.text).toBe("The authors declare that they have no competing interests in this work.");
