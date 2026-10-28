@@ -94,7 +94,7 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-28T02:06Z
+AS OF        2026-10-28T02:19Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
 LAST RULING  §1h.438   NEXT RULING §1h.439   NEXT ITEM ID P12-67   NEXT FREE PORT 4246
@@ -667,6 +667,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-28T02:00Z | manager (Claude) | §1h.438: A P12-57 phase 1 landed (keyed harness works on P1; 0 key occurrences in its commit); the dev server's Turbopack cache snapshots the environment's test key — every dev server starts with env -u PEER_TEST_GEMINI_API_KEY, caches deleted after use; running workers told; finished worktrees' caches deleted | evidence: P12-57 report | next: land C50 + C51, C48, C53; verify C49, C55
 
 - 2026-10-28T02:06Z | manager (Claude) | C P12-50 (O2) and C P12-51 (O5, O6, O8) LANDED together. Verified in the free copy: diffs read; tsc 0; lint 0 / 144; outline + pdf-text tests 488 green; own mutations O5 → 6 red, O6 → 4, O8 → 5, narrow gutter → 10, prior by position → 7, sha256 equal after restore; full suite (2 workers) 601 + 3 skipped files, 11,029 + 3 skipped tests, 0 failed; build 0. Theme C on the real papers with these two alone (scorer, strict): P1 3 / 5 (was 0), P2 4 / 5 (was 3), P3 2 / 8 (was 0) — the roles (C P12-48), the headings (C P12-49) and the first end-matter part (C P12-62) are still to land | evidence: mgr/gates-c5051.log, mgr/out/P1-3-c5051.json | next: land C48, combine C47 + C55
+
+- 2026-10-28T02:19Z | manager (Claude) | C P12-48 LANDED (roles: L1, L2, A1–A4 in reading-roles.ts, the closing split). Verified in a second free copy (mgr/v2): diff read; tsc 0; lint 0 / 144; the 4 touched files 364 green ×3; own mutations L1 → 7 red, L2 → 15, A1–A4 → 58, closing split → 28, sha256 equal after restore; full suite (2 workers) 598 + 3 skipped files, 11,095 + 3 skipped tests, 2 load timeouts that pass alone (18 / 18); build 0 | evidence: mgr/gates-c48.log | next: Theme C measure with C48; C47 + C55 gates running
 
 ---
 
