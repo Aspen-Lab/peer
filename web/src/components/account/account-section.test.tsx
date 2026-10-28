@@ -36,13 +36,18 @@ vi.mock("./use-auth-user", () => ({
 import {
   AccountSection,
   AccountSectionView,
+  browserKeyLabels,
   hasUnsyncedChanges,
   shouldWarnBeforeSignOut,
   handleSignOutSubmitCore,
+  signOutKeysSentence,
+  signOutPrompt,
   type AccountSectionViewProps,
+  type SignOutPrompt,
   type SignOutSubmitDeps,
   type SignOutGuard,
 } from "./account-section";
+import { defaultProfile, type UserProfile } from "@/types";
 
 function render(state: AuthState): string {
   mocks.authState = state;
@@ -238,8 +243,15 @@ describe("AccountSection's handleSignOutSubmit wrapper wiring (§1bt point 3, §
   // finding: the round-2 refactor proved the core calls onWarn, but nothing
   // pinned that the WRAPPER's onWarn actually opens the "Stay signed in" /
   // "Sign out anyway" confirmation (a no-op onWarn passed the whole suite).
-  it("wires onWarn to open the existing sign-out confirmation (setConfirmingSignOut(true))", () => {
-    expect(body).toMatch(/onWarn:\s*\(\)\s*=>\s*setConfirmingSignOut\(true\)/);
+  // OWN-KEY lane 4 — CHANGED marker, because the structure did: the dialog
+  // now also names the keys signing out removes, so onWarn carries WHICH
+  // dialog to open ("unsynced" | "keys" | "both") and the wrapper keeps that
+  // instead of a bare boolean. The property is the same: the wrapper's onWarn
+  // opens the confirmation (a no-op onWarn still fails here), and it now also
+  // hands the core this browser's key names.
+  it("wires onWarn to open the sign-out confirmation with the prompt the core chose (setPendingSignOut(prompt)), and passes the key names", () => {
+    expect(body).toMatch(/onWarn:\s*\(prompt\)\s*=>\s*setPendingSignOut\(prompt\)/);
+    expect(body).toMatch(/^\s*keyLabels,\s*$/m);
   });
 
   it("(ACCOUNT-SWITCH §1bt.8) sets busy(true) before delegating to the core, and busy(false) in a finally — the VISIBLE half of the double-submit guard, so a stuck flush never leaves the button disabled forever", () => {
@@ -436,10 +448,17 @@ describe("AccountSectionView — P6 sign-out warning, both branches by props (§
     expect(html).toMatch(/<button type="button"[^>]*>Stay signed in<\/button>/);
   });
 
-  it("the warning is announced (role=alert), not just styled", () => {
+  // OWN-KEY lane 4 — CHANGED: the warning moved from an inline `role="alert"`
+  // box into a modal `<dialog>` opened with showModal(). A modal is announced
+  // as a dialog when it opens (its name and description, then the focused
+  // "Stay signed in"); `alertdialog` is the dialog form of `alert`, and an
+  // inner `role="alert"` would only read the same words twice. The property
+  // pinned is the same: the warning is announced, not just styled.
+  it("the warning is announced (a modal alertdialog with a name and a description), not just styled", () => {
     const html = renderAccountView({ confirmingSignOut: true });
-    expect(html).toMatch(/role="alert"/);
-    expect(renderAccountView({ confirmingSignOut: false })).not.toMatch(/role="alert"/);
+    expect(html).toMatch(/<dialog[^>]*role="alertdialog"/);
+    expect(html).toMatch(/<dialog[^>]*aria-labelledby="sign-out-title"[^>]*aria-describedby="sign-out-body"/);
+    expect(renderAccountView({ confirmingSignOut: false })).not.toMatch(/role="alert/);
   });
 });
 
@@ -452,5 +471,238 @@ describe("AccountSection — signed-in (additive only — unchanged by adding Go
     expect(html).toContain("person@example.test");
     expect((html.match(/<form/g) ?? []).length).toBe(1);
     expect(html).toContain("Sign out");
+  });
+});
+
+// OWN-KEY lane 4 — signing out also removes the reader's model and Jev keys
+// from this browser (the local profile is reset), so the sign-out dialog now
+// says so before it happens. One dialog covers unsynced changes, keys, or
+// both; "none" still signs out at once, exactly as before.
+describe("signOutPrompt — what signing out would take", () => {
+  it.each([
+    [false, [], "none"],
+    [true, [], "unsynced"],
+    [false, ["Gemini"], "keys"],
+    [false, ["Jev"], "keys"],
+    [true, ["Gemini", "Jev"], "both"],
+  ] as const)("unsynced=%s, keys=%j → %s", (unsynced, keyLabels, expected) => {
+    expect(signOutPrompt({ unsynced, keyLabels })).toBe(expected);
+  });
+});
+
+describe("browserKeyLabels — names of the keys this browser holds, never the keys", () => {
+  const withKeys = (patch: Partial<UserProfile>): UserProfile => ({ ...defaultProfile, ...patch });
+
+  it("no key → no label", () => {
+    expect(browserKeyLabels(defaultProfile)).toEqual([]);
+  });
+
+  it("a model key is named by its provider's short name", () => {
+    expect(browserKeyLabels(withKeys({ feedAiProvider: "gemini", feedAiApiKey: "user-owned-key" }))).toEqual(["Gemini"]);
+    expect(browserKeyLabels(withKeys({ feedAiProvider: "anthropic", feedAiApiKey: "user-owned-key" }))).toEqual(["Claude"]);
+  });
+
+  it("a Jev key is named Jev, after the model key", () => {
+    expect(browserKeyLabels(withKeys({ jevApiKey: "jev-test-not-a-key-0000" }))).toEqual(["Jev"]);
+    expect(
+      browserKeyLabels(withKeys({ feedAiProvider: "openai", feedAiApiKey: "k", jevApiKey: "jev-test-not-a-key-0000" })),
+    ).toEqual(["OpenAI", "Jev"]);
+  });
+
+  it("asks the same questions as the rest of Peer: a provider with a blank key, a key with no provider, or a malformed Jev value is no key", () => {
+    expect(browserKeyLabels(withKeys({ feedAiProvider: "gemini", feedAiApiKey: "   " }))).toEqual([]);
+    expect(browserKeyLabels(withKeys({ feedAiProvider: "default", feedAiApiKey: "user-owned-key" }))).toEqual([]);
+    expect(browserKeyLabels(withKeys({ jevApiKey: "two words" }))).toEqual([]);
+    expect(browserKeyLabels(withKeys({ jevApiKey: "" }))).toEqual([]);
+  });
+});
+
+describe("signOutKeysSentence", () => {
+  it("lists one key, or two joined by 'and'", () => {
+    expect(signOutKeysSentence(["Gemini"])).toBe("Signing out removes your Gemini key from this browser.");
+    expect(signOutKeysSentence(["Jev"])).toBe("Signing out removes your Jev key from this browser.");
+    expect(signOutKeysSentence(["Gemini", "Jev"])).toBe(
+      "Signing out removes your Gemini key and your Jev key from this browser.",
+    );
+  });
+});
+
+describe("handleSignOutSubmitCore — keys prompt too (OWN-KEY lane 4)", () => {
+  function run(overrides: Partial<SignOutSubmitDeps>) {
+    const warned: SignOutPrompt[] = [];
+    let submitted = 0;
+    const deps: SignOutSubmitDeps = {
+      requestFlush: async () => true,
+      feedPushFailed: false,
+      confirmingSignOut: false,
+      onWarn: (prompt) => {
+        warned.push(prompt);
+      },
+      onSubmitForm: () => {
+        submitted += 1;
+      },
+      ...overrides,
+    };
+    return handleSignOutSubmitCore(deps, { current: false }).then(() => ({ warned, submitted }));
+  }
+
+  it("nothing unsynced and no key → submits at once, as before", async () => {
+    expect(await run({ keyLabels: [] })).toEqual({ warned: [], submitted: 1 });
+    expect(await run({})).toEqual({ warned: [], submitted: 1 });
+  });
+
+  it("a key, nothing unsynced → the keys dialog, no submit", async () => {
+    expect(await run({ keyLabels: ["Gemini"] })).toEqual({ warned: ["keys"], submitted: 0 });
+  });
+
+  it("unsynced only → the unsynced dialog, as before", async () => {
+    expect(await run({ requestFlush: async () => false })).toEqual({ warned: ["unsynced"], submitted: 0 });
+  });
+
+  it("both → one dialog saying both", async () => {
+    expect(await run({ feedPushFailed: true, keyLabels: ["Gemini", "Jev"] })).toEqual({
+      warned: ["both"],
+      submitted: 0,
+    });
+  });
+
+  it("still flushes first, and still only once on a double submit", async () => {
+    let flushes = 0;
+    let release: ((v: boolean) => void) | null = null;
+    const deps: SignOutSubmitDeps = {
+      requestFlush: () => {
+        flushes += 1;
+        return new Promise<boolean>((resolve) => {
+          release = resolve;
+        });
+      },
+      feedPushFailed: false,
+      confirmingSignOut: false,
+      keyLabels: ["Jev"],
+      onWarn: () => {},
+      onSubmitForm: () => {},
+    };
+    const guard: SignOutGuard = { current: false };
+    const first = handleSignOutSubmitCore(deps, guard);
+    const second = handleSignOutSubmitCore(deps, guard);
+    expect(flushes).toBe(1);
+    release!(true);
+    await Promise.all([first, second]);
+    expect(flushes).toBe(1);
+  });
+});
+
+describe("AccountSectionView — the sign-out dialog (OWN-KEY lane 4)", () => {
+  const KEYS_SENTENCE = "Signing out removes your Gemini key and your Jev key from this browser.";
+  const WHY =
+    "Peer keeps keys only in this browser, never on its server. If they stayed after you signed out, the next person to use this browser could run requests on your keys, billed to you.";
+  const AGAIN = "When you sign in again, here or on another device, paste them again.";
+  const UNSYNCED =
+    "Some changes on this device haven’t reached your account yet. Signing out removes them from this device.";
+
+  const dialog = (prompt: Exclude<SignOutPrompt, "none">, labels: string[]) =>
+    renderAccountView({ confirmingSignOut: true, signOutPrompt: prompt, signOutKeyLabels: labels });
+
+  it("keys: the title, the three sentences, and 'Sign out and remove keys'", () => {
+    const html = dialog("keys", ["Gemini", "Jev"]);
+    expect(html).toMatch(/<h2 id="sign-out-title"[^>]*>Sign out and remove your keys\?<\/h2>/);
+    expect(html).toContain(`<p>${KEYS_SENTENCE}</p>`);
+    expect(html).toContain(WHY);
+    expect(html).toContain(AGAIN);
+    expect(html).not.toContain(UNSYNCED);
+    expect(html).toMatch(
+      /<form[^>]*action="\/auth\/signout"[^>]*method="POST"[^>]*><button type="submit"[^>]*>Sign out and remove keys<\/button><\/form>/,
+    );
+    expect(html).toMatch(/<button type="button"[^>]*>Stay signed in<\/button>/);
+    expect(html).not.toContain("Sign out anyway");
+  });
+
+  it("one key reads 'your Gemini key'", () => {
+    const html = dialog("keys", ["Gemini"]);
+    expect(html).toContain("<p>Signing out removes your Gemini key from this browser.</p>");
+    expect(html).not.toContain(" and your ");
+  });
+
+  it("both: the keys sentences and the unsynced sentence, in one dialog with one form", () => {
+    const html = dialog("both", ["Gemini", "Jev"]);
+    expect(html).toContain("Sign out and remove your keys?");
+    expect(html).toContain(KEYS_SENTENCE);
+    expect(html).toContain(UNSYNCED);
+    expect((html.match(/<dialog/g) ?? []).length).toBe(1);
+    expect((html.match(/<form/g) ?? []).length).toBe(1);
+    expect(html).toContain(">Sign out and remove keys</button>");
+  });
+
+  it("unsynced only: the original sentence and 'Sign out anyway', no word about keys", () => {
+    const html = dialog("unsynced", []);
+    expect(html).toContain(UNSYNCED);
+    expect(html).toContain(">Sign out anyway</button>");
+    expect(html).not.toMatch(/\bkeys?\b/i);
+  });
+
+  it("puts 'Stay signed in' first, so the modal's first focus is the safe choice", () => {
+    const html = dialog("both", ["Gemini", "Jev"]);
+    expect(html.indexOf("Stay signed in")).toBeLessThan(html.indexOf("Sign out and remove keys"));
+  });
+
+  it("is a native dialog, closed in the markup until showModal() opens it", () => {
+    const html = dialog("keys", ["Jev"]);
+    expect(html).toMatch(/<dialog[^>]*role="alertdialog"/);
+    expect(html).not.toMatch(/<dialog[^>]*\bopen\b/);
+  });
+
+  it("never renders any piece of a key: a 40-character model key and Jev key, through browserKeyLabels, leave no 4-character slice in the markup", () => {
+    const MODEL_KEY = "Xq7Wz2Rk9Tm4Vb6Np1Ls8Hd3Jf5Gc0Yt7Ue2Ia9O";
+    const JEV_KEY = "Pm3Kw8Zr1Qx6Vn4Bt9Hs2Lc7Jd5Ff0Gy3Ua8Ie1W";
+    expect(MODEL_KEY).toHaveLength(40);
+    expect(JEV_KEY).toHaveLength(40);
+    const profile: UserProfile = {
+      ...defaultProfile,
+      feedAiProvider: "gemini",
+      feedAiApiKey: MODEL_KEY,
+      jevApiKey: JEV_KEY,
+    };
+    const labels = browserKeyLabels(profile);
+    expect(labels).toEqual(["Gemini", "Jev"]);
+    for (const prompt of ["keys", "both"] as const) {
+      const html = dialog(prompt, labels);
+      for (const key of [MODEL_KEY, JEV_KEY]) {
+        for (let i = 0; i + 4 <= key.length; i++) {
+          expect(html).not.toContain(key.slice(i, i + 4));
+        }
+      }
+    }
+  });
+});
+
+describe("SignOutDialog wiring (source) — Esc stays, focus starts on Stay signed in, a real POST", () => {
+  const source = readFileSync(
+    join(process.cwd(), "src", "components", "account", "account-section.tsx"),
+    "utf8",
+  );
+  const dialogSource = source.slice(
+    source.indexOf("export function SignOutDialog("),
+    source.indexOf("export function AccountSection("),
+  );
+
+  it("opens with showModal() and focuses Stay signed in", () => {
+    expect(dialogSource).toContain("dialog.showModal();");
+    expect(dialogSource).toContain("stayRef.current?.focus();");
+    expect(dialogSource).toMatch(/ref=\{stayRef\}[\s\S]*?onClick=\{onStaySignedIn\}[\s\S]*?Stay signed in/);
+  });
+
+  it("Esc (the dialog's cancel) means stay signed in", () => {
+    expect(dialogSource).toMatch(/onCancel=\{\(event\) => \{\s*event\.preventDefault\(\);\s*onStaySignedIn\(\);/);
+  });
+
+  it("confirms with the plain form POST, no fetch", () => {
+    expect(dialogSource).toContain('<form method="POST" action="/auth/signout">');
+    expect(dialogSource).not.toMatch(/fetch\(/);
+  });
+
+  it("the wrapper reads key names from the profile store through browserKeyLabels, nothing else of the keys", () => {
+    const wrapper = source.slice(source.indexOf("export function AccountSection("));
+    expect(wrapper).toContain("useMemo(() => browserKeyLabels(profile), [profile])");
+    expect(wrapper).not.toMatch(/feedAiApiKey|jevApiKey/);
   });
 });
