@@ -111,6 +111,22 @@ describe("GET /auth/callback — where a successful sign-in lands", () => {
     );
     expect(response.headers.get("location")).toBe("https://peer.test/");
   });
+
+  // R14 — a sign-in started from a paper comes back to that paper.
+  it("follows a cookie naming one paper page, with its id still encoded, and clears it", async () => {
+    const response = await GET(
+      callback("?code=abc", withCookie(encodeURIComponent("/papers/openalex%3AW123"))),
+    );
+    expect(response.headers.get("location")).toBe("https://peer.test/papers/openalex%3AW123");
+    expect(clearingLine(response)).toMatch(/Max-Age=0/i);
+  });
+
+  it("refuses a paper cookie that hides a slash or a dot-dot", async () => {
+    for (const value of ["/papers/%2F%2Fevil.com", "/papers/%2e%2e", "/papers/a/b"]) {
+      const response = await GET(callback("?code=abc", withCookie(encodeURIComponent(value))));
+      expect(response.headers.get("location"), value).toBe("https://peer.test/");
+    }
+  });
 });
 
 describe("GET /auth/callback — the next param is checked too", () => {

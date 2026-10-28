@@ -71,3 +71,85 @@ describe("safeReturnPath — refuses everything else", () => {
     expect(safeReturnPath(atMax + "a")).toBeNull();
   });
 });
+
+// R14 — one paper page: a signed-out reader with a key is sent from the paper
+// to sign in (`/profile?return=…`) and must come back to that paper. Exactly
+// `/papers/<one URI-encoded id>`: no further "/", no query, no fragment.
+describe("safeReturnPath — one paper page (R14)", () => {
+  it.each([
+    "/papers/openalex%3AW123",
+    "/papers/W4391234567",
+    "/papers/arxiv%3A2401.01234",
+    "/papers/arxiv:2401.01234v2",
+    "/papers/pubmed%3A38012345",
+    "/papers/hn%3A39999999",
+    "/papers/dblp%3Ajournals.nature.Smith24",
+    "/papers/a",
+    "/papers/A-Z_a.z~0:9",
+    "/papers/%E4%B8%AD%E6%96%87",
+    "/papers/...",
+    "/papers/%252F",
+  ])("accepts %s, unchanged", (value) => {
+    expect(safeReturnPath(value)).toBe(value);
+  });
+
+  it("accepts the address lane 2's paper link produces, after one decode of its return= value", () => {
+    const id = "openalex:W123";
+    const link = `/profile?return=${encodeURIComponent(`/papers/${encodeURIComponent(id)}`)}`;
+    const value = new URLSearchParams(link.slice(link.indexOf("?"))).get("return");
+    expect(value).toBe("/papers/openalex%3AW123");
+    expect(safeReturnPath(value)).toBe("/papers/openalex%3AW123");
+  });
+
+  it.each([
+    ["the bare prefix", "/papers/"],
+    ["no prefix slash", "/papers"],
+    ["a second segment", "/papers/a/b"],
+    ["a trailing slash", "/papers/a/"],
+    ["a sub-page", "/papers/openalex%3AW123/surface"],
+    ["a query", "/papers/a?x=1"],
+    ["a bare query mark", "/papers/a?"],
+    ["a fragment", "/papers/a#x"],
+    ["a dot segment", "/papers/."],
+    ["a dot-dot segment", "/papers/.."],
+    ["an encoded dot-dot", "/papers/%2e%2e"],
+    ["an upper-case encoded dot-dot", "/papers/%2E%2E"],
+    ["a half-encoded dot-dot", "/papers/.%2e"],
+    ["an encoded slash pair", "/papers/%2F%2Fevil.com"],
+    ["an encoded slash", "/papers/a%2Fb"],
+    ["a lower-case encoded slash", "/papers/a%2fb"],
+    ["an encoded traversal", "/papers/..%2F..%2Fwelcome"],
+    ["an encoded backslash", "/papers/%5Cevil.com"],
+    ["an encoded control character", "/papers/a%0d%0aX"],
+    ["an encoded NUL", "/papers/a%00"],
+    ["a broken escape", "/papers/a%2"],
+    ["a broken escape mid-way", "/papers/a%zzb"],
+    ["an invalid UTF-8 escape", "/papers/%E0%A4%A"],
+    ["a space", "/papers/a b"],
+    ["an at sign", "/papers/@evil.com"],
+    ["a protocol-relative host after the prefix", "/papers//evil.com"],
+    ["a backslash", "/papers/a\b"],
+    ["a plus sign", "/papers/a+b"],
+    ["a non-ASCII character", "/papers/中文"],
+    ["a capitalised prefix", "/Papers/a"],
+    ["a longer prefix", "/papersX/a"],
+    ["a full URL", "https://peer.homes/papers/a"],
+  ])("refuses %s", (_label, value) => {
+    expect(safeReturnPath(value)).toBeNull();
+  });
+
+  it("allows a paper path of exactly the maximum length and refuses one character more", () => {
+    const atMax = "/papers/" + "a".repeat(RETURN_PATH_MAX_LENGTH - "/papers/".length);
+    expect(atMax).toHaveLength(200);
+    expect(safeReturnPath(atMax)).toBe(atMax);
+    expect(safeReturnPath(atMax + "a")).toBeNull();
+  });
+
+  it("keeps every earlier answer: /welcome and /profile with a query, and the earlier refusals", () => {
+    expect(safeReturnPath("/welcome?step=ai")).toBe("/welcome?step=ai");
+    expect(safeReturnPath("/profile?return=%2Fpapers%2Fa")).toBe("/profile?return=%2Fpapers%2Fa");
+    for (const value of ["//evil.com", "/\evil.com", "@evil.com", "/papers", "/welcomeX", "/%2F%2Fevil.com"]) {
+      expect(safeReturnPath(value)).toBeNull();
+    }
+  });
+});

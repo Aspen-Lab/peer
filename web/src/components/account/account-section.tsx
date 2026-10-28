@@ -23,6 +23,8 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { safeReturnPath } from "@/lib/navigation/return-path";
 import type { User } from "@supabase/supabase-js";
 import type { UserProfile } from "@/types";
 import { buttonVariants } from "@/components/ui/button";
@@ -113,6 +115,17 @@ export function browserKeyLabels(profile: UserProfile): string[] {
   if (hasUserLlmOverride(profile)) labels.push(providerShortLabel(profile.feedAiProvider));
   if (parseJevApiKey(profile.jevApiKey) !== undefined) labels.push("Jev");
   return labels;
+}
+
+/**
+ * R14 — the Profile page's `return` query parameter, as a sign-in's
+ * `returnTo`: the value when `safeReturnPath` accepts it (a paper's "Sign in"
+ * link sends `/profile?return=<encodeURIComponent("/papers/" + encodedId)>`,
+ * which `URLSearchParams` hands over decoded once), else `undefined`, which
+ * keeps today's sign-in exactly.
+ */
+export function signInReturnTo(returnParam: string | null | undefined): string | undefined {
+  return safeReturnPath(returnParam) ?? undefined;
 }
 
 export interface ConfirmProfileResetDeps {
@@ -251,8 +264,12 @@ export interface AccountSectionViewProps {
   /** The names of the keys this browser holds (`browserKeyLabels`) — names
    *  only; this view is never handed a key. */
   signOutKeyLabels?: readonly string[];
-  onSignInGitHub: () => void;
-  onSignInGoogle: () => void;
+  /** R14 — where a sign-in from here comes back to, already checked by
+   *  `safeReturnPath` (`signInReturnTo`); undefined keeps today's sign-in,
+   *  which lands on `/`. Both buttons are handed it. */
+  signInReturnTo?: string;
+  onSignInGitHub: (returnTo?: string) => void;
+  onSignInGoogle: (returnTo?: string) => void;
   /** Wired to the plain "Sign out" form's `onSubmit`. Whether it actually
    *  intercepts the submit (vs. letting the real `POST /auth/signout` go
    *  through, unchanged from today) is entirely the wrapper's decision —
@@ -269,6 +286,7 @@ export function AccountSectionView({
   confirmingSignOut,
   signOutPrompt: prompt = "unsynced",
   signOutKeyLabels = [],
+  signInReturnTo,
   onSignInGitHub,
   onSignInGoogle,
   onSignOutSubmit,
@@ -288,7 +306,11 @@ export function AccountSectionView({
             Sign in with GitHub or Google to sync saves and reads across your devices.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <SignInButtons busy={busy} onSignInGitHub={onSignInGitHub} onSignInGoogle={onSignInGoogle} />
+            <SignInButtons
+              busy={busy}
+              onSignInGitHub={() => onSignInGitHub(signInReturnTo)}
+              onSignInGoogle={() => onSignInGoogle(signInReturnTo)}
+            />
           </div>
         </>
       ) : user ? (
@@ -424,6 +446,11 @@ export function AccountSection({ className = "" }: { className?: string }) {
   // Names only ("Gemini", "Jev"): the key itself never leaves the store here.
   const keyLabels = useMemo(() => browserKeyLabels(profile), [profile]);
   const feedPushFailed = useFeedSyncStatus((s) => s.pushFailed);
+  // R14 — `/profile?return=/papers/<id>` (a paper's "Sign in" link): come back
+  // there after sign-in. Anything `safeReturnPath` refuses, or no parameter,
+  // leaves the sign-in exactly as it was (no returnTo, lands on `/`).
+  const searchParams = useSearchParams();
+  const returnTo = signInReturnTo(searchParams?.get("return"));
   // ACCOUNT-SWITCH (§1bt.8 AMENDMENT (c)) — the LOGICAL half of the
   // double-submit guard; a ref (not state) because it must be correct
   // synchronously across two calls that can both start before React
@@ -476,13 +503,14 @@ export function AccountSection({ className = "" }: { className?: string }) {
       confirmingSignOut={confirmingSignOut}
       signOutPrompt={confirmingSignOut ? pendingSignOut : undefined}
       signOutKeyLabels={keyLabels}
-      onSignInGitHub={() => {
+      signInReturnTo={returnTo}
+      onSignInGitHub={(to) => {
         setBusy(true);
-        void signInWithGitHub();
+        void signInWithGitHub(to);
       }}
-      onSignInGoogle={() => {
+      onSignInGoogle={(to) => {
         setBusy(true);
-        void signInWithGoogle();
+        void signInWithGoogle(to);
       }}
       onSignOutSubmit={handleSignOutSubmit}
       onStaySignedIn={() => setPendingSignOut("none")}

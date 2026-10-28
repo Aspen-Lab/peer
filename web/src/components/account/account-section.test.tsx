@@ -20,6 +20,12 @@ import type { AuthState } from "./use-auth-user";
 
 const mocks = vi.hoisted(() => ({
   authState: { kind: "signed-out" } as AuthState,
+  // R14 — the Profile page's query string, as the section reads it.
+  search: "",
+}));
+
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(mocks.search),
 }));
 
 vi.mock("./use-auth-user", () => ({
@@ -41,6 +47,8 @@ import {
   hasUnsyncedChanges,
   shouldWarnBeforeSignOut,
   handleSignOutSubmitCore,
+  signInReturnTo,
+  SignInButtons,
   signOutKeysCopy,
   signOutKeysSentence,
   signOutPrompt,
@@ -152,7 +160,11 @@ describe("AccountSection — signed-out", () => {
       source.indexOf('authKind === "signed-out" ? ('),
       source.indexOf(") : user ? ("),
     );
-    expect(signedOutBranch).toMatch(/<SignInButtons busy=\{busy\} onSignInGitHub=\{onSignInGitHub\} onSignInGoogle=\{onSignInGoogle\} \/>/);
+    // R14 — CHANGED marker: the two handlers now also hand on the checked
+    // return path (`signInReturnTo`); the single `busy` is unchanged.
+    expect(signedOutBranch).toMatch(
+      /<SignInButtons\s+busy=\{busy\}\s+onSignInGitHub=\{\(\) => onSignInGitHub\(signInReturnTo\)\}\s+onSignInGoogle=\{\(\) => onSignInGoogle\(signInReturnTo\)\}\s*\/>/,
+    );
     expect(signedOutBranch).not.toMatch(/disabled=/);
   });
 });
@@ -863,5 +875,101 @@ describe("the reviewer's sequence: reset while signed in → paste a key → sig
     // clear must not wait for one.
     expect(isAccountSwitch(useProfileStore.getState().syncedAccountId, "user-b")).toBe(false);
     expectNoKey();
+  });
+});
+
+// R14 — a paper's "Sign in" link sends a signed-out reader with a key to
+// `/profile?return=<encodeURIComponent("/papers/" + encodedId)>`. The Account
+// section reads `return`, and when safeReturnPath accepts it, hands it to both
+// sign-in buttons as `returnTo`; otherwise today's sign-in, exactly.
+describe("signInReturnTo — the Profile page's ?return= (R14)", () => {
+  const fromLink = (id: string) =>
+    new URLSearchParams(`?return=${encodeURIComponent(`/papers/${encodeURIComponent(id)}`)}`).get("return");
+
+  it("a paper link's return value comes back as that paper's path", () => {
+    expect(signInReturnTo(fromLink("openalex:W123"))).toBe("/papers/openalex%3AW123");
+    expect(signInReturnTo(fromLink("arxiv:2401.01234"))).toBe("/papers/arxiv%3A2401.01234");
+  });
+
+  it("the other safe places pass too", () => {
+    expect(signInReturnTo("/welcome?step=ai")).toBe("/welcome?step=ai");
+    expect(signInReturnTo("/profile")).toBe("/profile");
+  });
+
+  it("no parameter, or one safeReturnPath refuses, is undefined: today's sign-in", () => {
+    for (const value of [null, undefined, "", "//evil.com", "@evil.com", "https://evil.com", "/papers/a/b", "/papers/%2F%2Fevil.com", "/"]) {
+      expect(signInReturnTo(value)).toBeUndefined();
+    }
+    // A paper whose id holds a "/" is refused (an encoded slash), so it lands on / as before.
+    expect(signInReturnTo(fromLink("doi:10.1038/nature123"))).toBeUndefined();
+  });
+});
+
+describe("AccountSectionView — both sign-in buttons are handed the return path (R14, through the view's props)", () => {
+  /** The view is a plain function of its props: call it and find the
+   *  SignInButtons element it renders, then press its two handlers. */
+  function findSignInButtons(node: unknown): { onSignInGitHub: () => void; onSignInGoogle: () => void } | null {
+    if (!node || typeof node !== "object") return null;
+    if (Array.isArray(node)) {
+      for (const child of node) {
+        const found = findSignInButtons(child);
+        if (found) return found;
+      }
+      return null;
+    }
+    const element = node as { type?: unknown; props?: { children?: unknown } & Record<string, unknown> };
+    if (element.type === SignInButtons) return element.props as unknown as ReturnType<typeof findSignInButtons>;
+    return findSignInButtons(element.props?.children);
+  }
+
+  function press(signInReturnTo: string | undefined) {
+    const calls: Array<[string, string | undefined]> = [];
+    const tree = AccountSectionView({
+      authKind: "signed-out",
+      user: null,
+      busy: false,
+      confirmingSignOut: false,
+      signInReturnTo,
+      onSignInGitHub: (to) => calls.push(["github", to]),
+      onSignInGoogle: (to) => calls.push(["google", to]),
+      onSignOutSubmit: () => {},
+      onStaySignedIn: () => {},
+    });
+    const buttons = findSignInButtons(tree);
+    expect(buttons).not.toBeNull();
+    buttons!.onSignInGitHub();
+    buttons!.onSignInGoogle();
+    return calls;
+  }
+
+  it("a checked paper path reaches both GitHub and Google", () => {
+    expect(press("/papers/openalex%3AW123")).toEqual([
+      ["github", "/papers/openalex%3AW123"],
+      ["google", "/papers/openalex%3AW123"],
+    ]);
+  });
+
+  it("without one, both get undefined: the sign-in that lands on /, as today", () => {
+    expect(press(undefined)).toEqual([
+      ["github", undefined],
+      ["google", undefined],
+    ]);
+  });
+
+  it("the markup is the same with or without a return path (nothing about it is shown)", () => {
+    const withReturn = renderAccountView({ authKind: "signed-out", user: null, signInReturnTo: "/papers/a" });
+    const without = renderAccountView({ authKind: "signed-out", user: null });
+    expect(withReturn).toBe(without);
+  });
+
+  it("the wired section reads ?return= and still renders the two buttons", () => {
+    mocks.search = `?return=${encodeURIComponent("/papers/openalex%3AW123")}`;
+    try {
+      const html = render({ kind: "signed-out" });
+      expect(html).toContain("Sign in with GitHub");
+      expect(html).toContain("Sign in with Google");
+    } finally {
+      mocks.search = "";
+    }
   });
 });

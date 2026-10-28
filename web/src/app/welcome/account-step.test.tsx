@@ -156,11 +156,17 @@ describe("where each sign-in comes back to", () => {
     expect(keyBlock).toContain("useSignInReturningTo(AI_STEP_RETURN_TO)");
   });
 
-  it("the Profile page's Account section keeps today's sign-in, with no returnTo (source)", () => {
+  // R14 — CHANGED: the Profile page's Account section now hands on a checked
+  // `return` parameter (a paper's "Sign in" link), and only that; with none it
+  // passes undefined, today's sign-in. The decision itself is tested in
+  // account-section.test.tsx (signInReturnTo, and the view's props).
+  it("the Profile page's Account section passes only the checked ?return= value, never a step of the wizard (source)", () => {
     const source = read("src/components/account/account-section.tsx");
-    expect(source).toContain("void signInWithGitHub();");
-    expect(source).toContain("void signInWithGoogle();");
-    expect(source).not.toMatch(/signInWith(GitHub|Google)\([^)]/);
+    const wrapper = source.slice(source.indexOf("export function AccountSection("));
+    expect(wrapper).toContain('const returnTo = signInReturnTo(searchParams?.get("return"));');
+    expect(wrapper).toContain("void signInWithGitHub(to);");
+    expect(wrapper).toContain("void signInWithGoogle(to);");
+    expect(wrapper).not.toMatch(/ACCOUNT_STEP_RETURN_TO|AI_STEP_RETURN_TO|\/welcome/);
   });
 });
 
