@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Paper } from "@/types";
 import type { ExtractedDocument } from "./html-text";
 import type { FullTextResult } from "./full-text";
-import { buildReading, describeAvailability, type PaperReading } from "./reading";
+import { availabilityAsksForKey, buildReading, describeAvailability, type PaperReading } from "./reading";
 import arxivHtmlDocJson from "./__fixtures__/arxiv-2609.02697.doc.json";
 import zenodoDocJson from "./__fixtures__/zenodo-W7208807247.doc.json";
 import normalPaperJson from "./__fixtures__/abstract-normal-W7204479535.paper.json";
@@ -68,8 +68,9 @@ const CASES: { name: string; reading: PaperReading; withoutKey: string; signedOu
     name: "abstract only",
     reading: abstractOnly,
     withoutKey: "Abstract only. Method, caveats and what it means for your project need the full text and a key.",
+    // Each need with its own cause: a sign-in brings what the model adds to the abstract, not the full text.
     signedOutWithKey:
-      "Abstract only. Method, caveats and what it means for your project need the full text and you to sign in.",
+      "Abstract only. Method and caveats need the full text. What it means for your project needs you to sign in.",
   },
   {
     name: "PDF unreadable here",
@@ -116,10 +117,34 @@ describe("describeAvailability - a key saved, the reader signed out (keyNeedsSig
     expect(describeAvailability({ reading, ...noModel, keyNeedsSignIn: false })).toEqual([withoutKey]);
   });
 
-  it("changes only what the blocks wait on: the rest of each sentence is the same", () => {
-    for (const { withoutKey, signedOutWithKey } of CASES) {
+  it("where the key clause is its own sentence, changes only what the blocks wait on", () => {
+    for (const { withoutKey, signedOutWithKey } of CASES.slice(1)) {
       expect(signedOutWithKey).toBe(withoutKey.replace(/a key\.$/, "you to sign in."));
     }
+  });
+
+  it("abstract only: the signed-in sentence, then the key clause as its own sentence (keyClause's structure)", () => {
+    const signedIn = describeAvailability({ reading: abstractOnly, ...noModel, providerConfigured: true })[0];
+    expect(signedIn).toBe("Abstract only. Method and caveats need the full text.");
+    expect(describeAvailability({ reading: abstractOnly, ...noModel, keyNeedsSignIn: true })[0]).toBe(
+      `${signedIn} What it means for your project needs you to sign in.`,
+    );
+    // The same shape as the scanned-PDF and paywalled tiers: what Peer read, then one sentence on the sign-in.
+    for (const reading of [unreadable, paywalled]) {
+      expect(describeAvailability({ reading, ...noModel, keyNeedsSignIn: true })[0]).toMatch(
+        / What it means for your project needs you to sign in\.$/,
+      );
+    }
+  });
+
+  it("abstract only with nothing waiting on the full text: 'Abstract only.' and the sign-in sentence", () => {
+    const reading: PaperReading = {
+      ...abstractOnly,
+      omitted: abstractOnly.omitted.filter((entry) => entry.reason !== "not_in_abstract"),
+    };
+    expect(describeAvailability({ reading, ...noModel, keyNeedsSignIn: true })).toEqual([
+      "Abstract only. What it means for your project needs you to sign in.",
+    ]);
   });
 
   it("a sentence that names no key is unchanged: no abstract (with and without a TLDR), and a PDF with no text", () => {
@@ -159,5 +184,49 @@ describe("describeAvailability - a key saved, the reader signed out (keyNeedsSig
     expect(
       describeAvailability({ reading: sectionsHtml, ...noModel, modelFailed: true, keyNeedsSignIn: true }),
     ).toEqual([CASES[3].signedOutWithKey, "Your model could not finish; what is below is the paper's own text."]);
+  });
+});
+
+// The page's "Add a key" / "Sign in" link follows the sentence: `availabilityAsksForKey`
+// is read from the function that writes it, so the link is drawn exactly when the
+// sentence names a key or a sign-in.
+describe("availabilityAsksForKey - the link follows the sentence", () => {
+  it.each(CASES)("$name: asks, with no key and with a key signed out, and the sentence says so", ({ reading }) => {
+    for (const keyNeedsSignIn of [false, true]) {
+      expect(availabilityAsksForKey({ reading, report: null, providerConfigured: false, keyNeedsSignIn })).toBe(true);
+      expect(describeAvailability({ reading, ...noModel, keyNeedsSignIn })[0]).toMatch(/(a key|you to sign in)\.$/);
+    }
+  });
+
+  it("a fetched PDF with no text: the sentence asks for nothing, so no link, with or without a key", () => {
+    for (const keyNeedsSignIn of [false, true]) {
+      expect(availabilityAsksForKey({ reading: empty, report: null, providerConfigured: false, keyNeedsSignIn })).toBe(false);
+    }
+  });
+
+  it("no abstract (the record only): no link", () => {
+    for (const keyNeedsSignIn of [false, true]) {
+      expect(availabilityAsksForKey({ reading: noAbstract, report: null, providerConfigured: false, keyNeedsSignIn })).toBe(false);
+    }
+  });
+
+  it.each(CASES)("$name: a model configured, or its report on the page: no link", ({ reading }) => {
+    expect(availabilityAsksForKey({ reading, report: null, providerConfigured: true })).toBe(false);
+    const report = { basis: "model-abstract" as const, droppedClaims: 0 };
+    expect(availabilityAsksForKey({ reading, report, providerConfigured: true })).toBe(false);
+    expect(availabilityAsksForKey({ reading, report, providerConfigured: false })).toBe(false);
+  });
+
+  it("over every reading here, the link stands exactly when the sentence names a key or a sign-in", () => {
+    for (const reading of [abstractOnly, noAbstract, sectionsHtml, sectionsPdf, unreadable, empty, paywalled]) {
+      for (const providerConfigured of [false, true]) {
+        for (const keyNeedsSignIn of [false, true]) {
+          const sentence = describeAvailability({ reading, ...noModel, providerConfigured, keyNeedsSignIn })[0];
+          expect(availabilityAsksForKey({ reading, report: null, providerConfigured, keyNeedsSignIn })).toBe(
+            /\b(a key|you to sign in)\b/.test(sentence),
+          );
+        }
+      }
+    }
   });
 });

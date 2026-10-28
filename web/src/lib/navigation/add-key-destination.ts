@@ -33,3 +33,24 @@ export const ADD_KEY_HREF = "/welcome?step=ai";
  * `add-key-destination.test.ts` pins this one as it pins `ADD_KEY_HREF`.
  */
 export const SIGN_IN_HREF = "/profile";
+
+/**
+ * A paper's own path, as a place to come back to: `/papers/` and the id
+ * percent-encoded into one segment, which the paper page decodes back to the
+ * same id (`decodeURIComponent` on its route param). An id with a `/` or a `?`
+ * in it therefore stays one segment.
+ */
+export function paperReturnPath(paperId: string): string {
+  return `/papers/${encodeURIComponent(paperId)}`;
+}
+
+/**
+ * The sign-in link that brings the reader back to `returnTo` once signed in:
+ * `SIGN_IN_HREF` with `?return=` and the path, encoded as one query value. The
+ * Profile's Account section reads `return`, checks it (`safeReturnPath`) and
+ * hands it to the sign-in buttons; a value it refuses lands on the feed, as a
+ * sign-in always did. With no path, the plain `SIGN_IN_HREF`.
+ */
+export function signInHref(returnTo?: string): string {
+  return returnTo ? `${SIGN_IN_HREF}?return=${encodeURIComponent(returnTo)}` : SIGN_IN_HREF;
+}

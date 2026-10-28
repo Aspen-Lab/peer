@@ -944,19 +944,28 @@ function sourcePhrase(provenance: ReadingProvenance): string {
   return provenance.sourceLabel ?? "the full text";
 }
 
+/** The sentence about what Peer read, and whether it asks the reader for a key or a sign-in. */
+interface ReadingSentence {
+  sentence: string;
+  /** It names a key (or, for a reader with a key who is signed out, a sign-in): the page's link may follow it. */
+  asksForKey: boolean;
+}
+
 /** The sentence about what Peer read, with no model in the picture. */
-function readingSentence(reading: PaperReading, providerConfigured: boolean, keyNeedsSignIn: boolean): string {
+function readingSentence(reading: PaperReading, providerConfigured: boolean, keyNeedsSignIn: boolean): ReadingSentence {
   const { provenance } = reading;
   const sectionsRead = provenance.fullText === "html" || provenance.fullText === "pdf";
+  const plain = (sentence: string): ReadingSentence => ({ sentence, asksForKey: false });
 
   if (provenance.abstract === "none" && !sectionsRead) {
-    return provenance.tldr ? NO_ABSTRACT_TLDR : NO_ABSTRACT;
+    return plain(provenance.tldr ? NO_ABSTRACT_TLDR : NO_ABSTRACT);
   }
 
   // A configured key means the model, not the reader, is what the missing
   // blocks wait on; the model's own sentence takes over once it answers.
   const key = providerConfigured ? "" : keyClause(reading, sectionsRead, keyNeedsSignIn);
-  const withKey = (sentence: string) => (key ? `${sentence} ${key}` : sentence);
+  const withKey = (sentence: string): ReadingSentence =>
+    key ? { sentence: `${sentence} ${key}`, asksForKey: true } : plain(sentence);
 
   if (sectionsRead) {
     const qualifier = provenance.buckets.includes("limitations")
@@ -974,7 +983,7 @@ function readingSentence(reading: PaperReading, providerConfigured: boolean, key
     return withKey("Abstract only; the PDF carries no text to read — it looks scanned.");
   }
   if (provenance.fullText === "pdf_empty") {
-    return PDF_NO_TEXT_MESSAGE;
+    return plain(PDF_NO_TEXT_MESSAGE);
   }
   if (provenance.fullText === "paywalled") {
     const host = provenance.paywallHost ?? "the publisher";
@@ -986,15 +995,22 @@ function readingSentence(reading: PaperReading, providerConfigured: boolean, key
   const needFullText = reading.omitted
     .filter((entry) => entry.reason === "not_in_abstract" && entry.block !== "findings")
     .map((entry) => BLOCK_PHRASE[entry.block]);
-  if (providerConfigured) {
-    return needFullText.length > 0
+  const fullTextSentence =
+    needFullText.length > 0
       ? `Abstract only. ${capitalize(joinList(needFullText))} need the full text.`
       : "Abstract only.";
-  }
+  if (providerConfigured) return plain(fullTextSentence);
+  // A key saved and the reader signed out: a sign-in brings only what the model
+  // adds to the abstract, not the full text, so each need is named with its own
+  // cause — the signed-in sentence, then the key clause ("… needs you to sign in.").
+  if (keyNeedsSignIn) return withKey(fullTextSentence);
   const needKey = reading.omitted
     .filter((entry) => entry.reason === "needs_key" && entry.block === "forYou")
     .map((entry) => BLOCK_PHRASE[entry.block]);
-  return `Abstract only. ${capitalize(joinList([...needFullText, ...needKey]))} need the full text and ${keyNeed(keyNeedsSignIn)}.`;
+  return {
+    sentence: `Abstract only. ${capitalize(joinList([...needFullText, ...needKey]))} need the full text and ${keyNeed(keyNeedsSignIn)}.`,
+    asksForKey: true,
+  };
 }
 
 /** Map a report's `sourceKind` to the same names the reading uses. */
@@ -1076,23 +1092,40 @@ function modelSentence(reading: PaperReading, report: AvailabilityReport): strin
  * not use it (`aiAvailability`) and the model-only blocks wait on a sign-in,
  * not on a key. Absent or false, every sentence is as it was.
  */
-export function describeAvailability(input: {
-  reading: PaperReading;
-  report: AvailabilityReport | null;
-  providerConfigured: boolean;
-  profileHasProject: boolean;
-  modelFailed: boolean;
-  keyNeedsSignIn?: boolean;
-}): string[] {
+export function describeAvailability(input: AvailabilityInput): string[] {
   const { reading, report, providerConfigured, profileHasProject, modelFailed, keyNeedsSignIn = false } = input;
   if (report) {
     const out = [modelSentence(reading, report)];
     if (!profileHasProject) out.push(PROFILE_EMPTY);
     return out;
   }
-  const out = [readingSentence(reading, providerConfigured, keyNeedsSignIn)];
+  const out = [readingSentence(reading, providerConfigured, keyNeedsSignIn).sentence];
   if (modelFailed) out.push(MODEL_FAILED);
   return out;
+}
+
+/** What `describeAvailability` reads. */
+export interface AvailabilityInput {
+  reading: PaperReading;
+  report: AvailabilityReport | null;
+  providerConfigured: boolean;
+  profileHasProject: boolean;
+  modelFailed: boolean;
+  keyNeedsSignIn?: boolean;
+}
+
+/**
+ * Whether the sentence `describeAvailability` writes for this input names a
+ * key, or a sign-in — the only case where the page's "Add a key" / "Sign in"
+ * link follows it. Read from the same function that writes the sentence, so a
+ * sentence that asks for neither (no abstract; a PDF with no text; a model on
+ * the page) never carries the link.
+ */
+export function availabilityAsksForKey(
+  input: Pick<AvailabilityInput, "reading" | "report" | "providerConfigured" | "keyNeedsSignIn">,
+): boolean {
+  if (input.report) return false;
+  return readingSentence(input.reading, input.providerConfigured, input.keyNeedsSignIn ?? false).asksForKey;
 }
 
 const SMALL_WORDS = new Set(["and", "or", "of", "the", "in", "for", "on", "to", "a", "an", "with", "by"]);

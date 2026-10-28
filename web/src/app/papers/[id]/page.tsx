@@ -42,6 +42,7 @@ import { mergeTerms, paperDefinedTermsInReading, routeTermScope, termScopeKey, t
 import { placeEvidence } from "@/lib/papers/evidence";
 import {
   PDF_NO_TEXT_MESSAGE,
+  availabilityAsksForKey,
   describeAvailability,
   sharedTerms,
   type AvailabilityReport,
@@ -51,6 +52,7 @@ import { readingToMarkdown } from "@/lib/papers/reading-markdown";
 import type { Claim, PaperReport } from "@/lib/papers/report";
 import type { Route } from "next";
 import { aiAvailability, explainWindowAvailable, keyNeedsSignIn } from "@/lib/feed/ai-tier";
+import { paperReturnPath } from "@/lib/navigation/add-key-destination";
 import { useSyncGate } from "@/components/profile-sync";
 import { PaperPlate, isSameFigure, leadCaption, leadFigurePending } from "@/components/cards/paper-plate";
 import { SwipeableCard } from "@/components/cards/swipe-card";
@@ -1341,17 +1343,17 @@ function Reader({
   // it to have matched; a deep link has no reason to show.
   const recommendation =
     nav.index !== NONE && profile.researchTopics.length > 0 ? reason : null;
-  // No provider means the sentence names a key; the link is the way to one.
-  // A record-only page names no key, so it gets no link. With a key saved and
-  // the reader signed out (`signInForKey`) the sentence asks for a sign-in and
-  // the same link reads "Sign in".
-  const sectionsRead =
-    reading.provenance.fullText === "html" || reading.provenance.fullText === "pdf";
-  const showAddKey =
-    !providerConfigured &&
-    !report &&
-    reading.omitted.some((entry) => entry.reason === "needs_key") &&
-    !(reading.provenance.abstract === "none" && !sectionsRead);
+  // The link follows the sentence: it is drawn only when the sentence on screen
+  // names a key (the link is the way to one) or, with a key saved and the reader
+  // signed out (`signInForKey`), a sign-in (the link reads "Sign in" and comes
+  // back here). A sentence that asks for neither — a record-only page, a PDF
+  // with no text, a model on the page — gets no link.
+  const showAddKey = availabilityAsksForKey({
+    reading,
+    report: availability,
+    providerConfigured,
+    keyNeedsSignIn: signInForKey,
+  });
 
   const keyResults = report?.resultsAndSignificance.keyResults ?? [];
   const methods = report?.whatItProposes.methods ?? [];
@@ -1510,6 +1512,7 @@ function Reader({
             doi={paper.doi}
             showAddKey={showAddKey}
             keyNeedsSignIn={signInForKey}
+            signInReturnTo={paperReturnPath(paper.id)}
             uploadStatus={upload ? <PrivatePdfStatus upload={upload}
               attachedToTitle={!paper.id.startsWith("upload:") ? paper.title : undefined}
               onDeleted={() => {

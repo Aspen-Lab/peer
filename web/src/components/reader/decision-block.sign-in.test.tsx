@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ADD_KEY_HREF, SIGN_IN_HREF } from "@/lib/navigation/add-key-destination";
+import { ADD_KEY_HREF, SIGN_IN_HREF, paperReturnPath } from "@/lib/navigation/add-key-destination";
 import { DecisionBlock } from "./decision-block";
 import { BUTTON } from "./copy";
 
@@ -9,9 +9,9 @@ import { BUTTON } from "./copy";
 // to the key step. A reader with a key saved who is signed out is not missing a
 // key — Peer uses it only for a signed-in reader — so for them (`keyNeedsSignIn`)
 // the link reads "Sign in" and goes to the Profile, whose first block is the
-// Account section with the sign-in buttons.
+// Account section with the sign-in buttons, asking to come back to the paper.
 
-function details(props: { showAddKey: boolean; keyNeedsSignIn?: boolean }): string {
+function details(props: { showAddKey: boolean; keyNeedsSignIn?: boolean; signInReturnTo?: string }): string {
   return renderToStaticMarkup(
     createElement(DecisionBlock, {
       part: "details",
@@ -46,6 +46,22 @@ describe("DecisionBlock - the link after the sentence", () => {
     expect(links(html)).toEqual([{ href: SIGN_IN_HREF, text: "Sign in" }]);
     expect(html).not.toContain("Add a key");
     expect(html).not.toContain(ADD_KEY_HREF);
+  });
+
+  it("comes back to the paper: '/profile?return=' and the paper's own path, encoded as one query value", () => {
+    const back = paperReturnPath("openalex:W7204479535");
+    expect(back).toBe("/papers/openalex%3AW7204479535");
+    const html = details({ showAddKey: true, keyNeedsSignIn: true, signInReturnTo: back });
+    expect(links(html)).toEqual([{ href: "/profile?return=%2Fpapers%2Fopenalex%253AW7204479535", text: "Sign in" }]);
+    // What the Profile reads back from its query is the paper's path, exactly.
+    const href = links(html)[0].href;
+    expect(new URL(href, "https://peer.homes").searchParams.get("return")).toBe(back);
+    expect(new URL(href, "https://peer.homes").pathname).toBe(SIGN_IN_HREF);
+  });
+
+  it("the return path changes nothing for a reader with no key: still 'Add a key', to the key step", () => {
+    const html = details({ showAddKey: true, signInReturnTo: paperReturnPath("openalex:W1") });
+    expect(links(html)).toEqual([{ href: ADD_KEY_HREF, text: "Add a key" }]);
   });
 
   it("stands after the sentence, in the same paragraph", () => {

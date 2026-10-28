@@ -25,16 +25,25 @@ describe("paper page - a key saved, the reader signed out", () => {
     expect(call).toMatch(/\[reading, availability, providerConfigured, profileHasProject, model\.failed, signInForKey\]/);
   });
 
+  const details = source.slice(source.indexOf('<DecisionBlock\n            part="details"'), source.indexOf('<DecisionBlock part="progress"'));
+
   it("hands it to the details' link, beside showAddKey, and to nothing else", () => {
-    const details = source.slice(source.indexOf('<DecisionBlock\n            part="details"'), source.indexOf('<DecisionBlock part="progress"'));
     expect(details).toContain("showAddKey={showAddKey}");
     expect(details).toContain("keyNeedsSignIn={signInForKey}");
     expect(source.split("keyNeedsSignIn={signInForKey}")).toHaveLength(2);
   });
 
-  it("leaves when the link shows as it was: no provider, no report, a block that waits on a key", () => {
+  it("the link follows the sentence: drawn only when the sentence names a key or a sign-in, from the same inputs", () => {
+    // `availabilityAsksForKey` reads the function that writes the sentence (reading.sign-in.test.ts), handed what
+    // `describeAvailability` is handed here, so a sentence that asks for neither (a PDF with no text) gets no link.
     expect(source).toMatch(
-      /const showAddKey =\n\s+!providerConfigured &&\n\s+!report &&\n\s+reading\.omitted\.some\(\(entry\) => entry\.reason === "needs_key"\) &&\n\s+!\(reading\.provenance\.abstract === "none" && !sectionsRead\);/,
+      /const showAddKey = availabilityAsksForKey\(\{\n\s+reading,\n\s+report: availability,\n\s+providerConfigured,\n\s+keyNeedsSignIn: signInForKey,\n\s+\}\);/,
     );
+    expect(source).not.toContain('reading.omitted.some((entry) => entry.reason === "needs_key")');
+  });
+
+  it("'Sign in' comes back to this paper: its own path, built by the shared helper", () => {
+    expect(source).toMatch(/import \{[^}]*\bpaperReturnPath\b[^}]*\} from "@\/lib\/navigation\/add-key-destination"/);
+    expect(details).toContain("signInReturnTo={paperReturnPath(paper.id)}");
   });
 });
