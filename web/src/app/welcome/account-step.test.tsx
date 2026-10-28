@@ -95,13 +95,24 @@ describe("AccountStepView — signed in", () => {
 
 describe("accountStepCopy — the Account step's heading", () => {
   // R1-fixA item 2 — CHANGED: the signed-in kicker was "Optional".
+  // R2-fix item 2 — CHANGED: "settings" became "most settings".
   it("signed in: kicker 'Account', says so, and that the keys stay in this browser", () => {
     expect(accountStepCopy("signed-in")).toEqual({
       kicker: "Account",
       title: "You are signed in.",
       subtitle:
-        "Your topics, saved papers and settings now follow your account. Your API keys stay in this browser.",
+        "Your topics, saved papers and most settings now follow your account. Your API keys stay in this browser.",
     });
+  });
+
+  // R2-fix item 2: some settings stay on the device (Deep report, Preferred
+  // journals, the AI company choice), so neither subtitle may say they all sync.
+  it("says 'most settings' in both subtitles, never 'settings' alone", () => {
+    for (const auth of ["signed-in", "signed-out", "unknown"] as const) {
+      const { subtitle } = accountStepCopy(auth);
+      expect(subtitle).toContain("most settings");
+      expect(subtitle).not.toMatch(/(?<!most )settings/);
+    }
   });
 
   it("only a signed-in reader loses the 'Optional' kicker", () => {
@@ -111,12 +122,13 @@ describe("accountStepCopy — the Account step's heading", () => {
   });
 
   // R1-fixB item 2 — CHANGED: the title was "Sign in (optional).".
-  it("signed out and unknown: kicker 'Optional', title 'Sign in.', the same subtitle", () => {
+  // R2-fix item 2 — CHANGED: "settings" became "most settings".
+  it("signed out and unknown: kicker 'Optional', title 'Sign in.', and the 'most settings' subtitle", () => {
     const invitation = {
       kicker: "Optional",
       title: "Sign in.",
       subtitle:
-        "Sign in to keep your topics, saved papers and settings on every device, and to use your own AI key.",
+        "Sign in to keep your topics, saved papers and most settings on every device, and to use your own AI key.",
     };
     expect(accountStepCopy("signed-out")).toEqual(invitation);
     expect(accountStepCopy("unknown")).toEqual(invitation);

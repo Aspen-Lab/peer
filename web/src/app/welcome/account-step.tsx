@@ -65,12 +65,15 @@ export interface AccountStepCopy {
 /**
  * The Account step's heading. Signed in — typically right after OAuth brings
  * the reader back to this step — it says so instead of asking them to sign in
- * again (L4-fix, R13 D1), and that the keys are the one thing that does not
- * follow the account. Its kicker is then "Account" (R1-fixA item 2): "Optional"
- * above "You are signed in." read as if being signed in were optional. Signed
- * out or not yet known, the invitation: kicker "Optional", title "Sign in."
- * (R1-fixB item 2: the title was "Sign in (optional).", so "optional" was said
- * twice, once by the kicker right above it).
+ * again (L4-fix, R13 D1), and that the keys do not follow the account. Its
+ * kicker is then "Account" (R1-fixA item 2): "Optional" above "You are signed
+ * in." read as if being signed in were optional. Signed out or not yet known,
+ * the invitation: kicker "Optional", title "Sign in." (R1-fixB item 2: the
+ * title was "Sign in (optional).", so "optional" was said twice).
+ *
+ * Both subtitles say "most settings" (R2-fix item 2): a few stay on the device
+ * whatever the account — Deep report, Preferred journals and the AI company
+ * choice — so "settings" alone promised more than syncs.
  */
 export function accountStepCopy(auth: AuthOutcome): AccountStepCopy {
   if (auth === "signed-in") {
@@ -78,14 +81,14 @@ export function accountStepCopy(auth: AuthOutcome): AccountStepCopy {
       kicker: "Account",
       title: "You are signed in.",
       subtitle:
-        "Your topics, saved papers and settings now follow your account. Your API keys stay in this browser.",
+        "Your topics, saved papers and most settings now follow your account. Your API keys stay in this browser.",
     };
   }
   return {
     kicker: "Optional",
     title: "Sign in.",
     subtitle:
-      "Sign in to keep your topics, saved papers and settings on every device, and to use your own AI key.",
+      "Sign in to keep your topics, saved papers and most settings on every device, and to use your own AI key.",
   };
 }
 
