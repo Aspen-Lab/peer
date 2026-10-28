@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { defaultProfile } from "@/types";
+import { KEY_CHECK_COPY } from "@/components/profile/key-check";
 import PrivacyPage from "./page";
 
 /**
@@ -202,6 +203,18 @@ describe("/privacy - Check key and where the model key lives", () => {
     expect(section).toContain("void feedAiApiKey");
     expect(section).toContain("The key is used for that request and is not stored.");
     expect(section.indexOf(CHECK_SENTENCES)).toBeGreaterThan(section.indexOf("The key is used for that request"));
+  });
+
+  it("names the button by its own label, and the button's note says the same thing the page does", () => {
+    // A label that changes in the component shows up here.
+    expect(text()).toContain(`If you press ${KEY_CHECK_COPY.button}, your browser sends the key to Peer's server`);
+    expect(KEY_CHECK_COPY.note).toContain("one short request to the provider");
+    expect(CHECK_SENTENCES).toContain("one short request to that provider");
+    // The button posts to the route these sentences are pinned to, and only there.
+    const component = code("src/components/profile/key-check.tsx");
+    expect(component.match(/apiFetch/g)?.length).toBeGreaterThan(0);
+    expect(component).toContain('"/api/ai/check-key"');
+    expect(component).toContain("body: JSON.stringify({ provider, apiKey })");
   });
 
   it("the check runs behind the shared gate: requireAiRequest(\"key-check\", 10) comes before resolveProvider", () => {
