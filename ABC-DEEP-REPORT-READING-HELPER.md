@@ -2422,6 +2422,22 @@ C's deviations are accepted:
 
 **A P12-57 phase 3** (brief appended: P6 × 5, P4 × 3, P3 × 3 on this head, with the fallback's cause in `dev.log`; within the 66 calls left) starts at the next free slot. Both slots now hold the round walks A P12-87 and A P12-88.
 
+### §1h.469 — 2026-10-28 — THEME A ROUND 4 (A P12-87): 100 ON P1, P2, P3; O8 NOT A GUARD BREAK; READERS
+
+**A P12-87** (Theme A round 4 on `48d14081`; report landed `6c5c8347`; its four-word runs shared with P1–P6 are 8, all digit runs).
+- The six pass requirements hold. 36 / 36 units. **No extra. P1, P2, P3 each 100.**
+- Round 3's E3 is GONE: in 78 banded states the tab stays right, 8.0 px above the band. Round 2's E1, the underline export and E2 (the tab) all stay GONE.
+
+**Director, O8.** On the phone, the in-flow row's round trip lands 48–69 px above where the row was pressed, in 6 of 9 trips.
+- The P11 guard A10 ("the same paragraph at the top of the view, ±1 line") is walked at W1 (B11's matrix), where the round trip is exact. O8 is the phone's in-flow row at the page head, a route a reader takes only from the head.
+- The fixed tab, the route from deep in the paper, returns exactly (9 / 9).
+- Round 3's director and readers left the same observation unpriced.
+- **O8 is not a guard break and is not priced. It is backlog**, in `return-to-paper.ts`'s place-holding at the page head.
+
+**Readers for round 4:** A4-r1 is running; the median is the score of record. If two readers stand at or above 97.25 on all three papers, Theme A has its two consecutive rounds (round 3 at 97.92, round 4).
+
+**A P12-57 phase 3** starts at the next free slot.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2762,7 +2778,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-84 | DONE — C (Sonnet); landed at 6371b78e (§1h.466) | K3: figure bounds without furniture, with edge labels (R3-C, R3-B) | invented fixtures; own mutations; gates | checkpoint P12-84-C-<UTC>.md | briefs/P12-84.md; §1h.463 |
 | P12-85 | DONE — C (Sonnet); landed with C P12-82 at 1f672ccf (§1h.465) | the closing split's echo skips fragments (≥ 40 words) | invented fixtures; own mutation; gates | checkpoint P12-85-C-<UTC>.md | briefs/P12-85.md; §1h.464 |
 | P12-86 | DONE — C (Sonnet); landed at e024cc39 (§1h.468) | Tier 1: no setup role after the opening run (damage guard); the fallback's cause logged as counts | invented fixtures; own mutations; gates | checkpoint P12-86-C-<UTC>.md | briefs/P12-86.md; §1h.464 |
-| P12-87 | IN_PROGRESS — A (Sonnet), Theme A round 4, head 48d14081, port 4246 | Theme A A1–A12 + E3 re-check | rubric | walk, pack, P12-87-A-<UTC>.md | briefs/P12-87.md; §1h.467 |
+| P12-87 | DONE — A (Sonnet), report on the branch (6c5c8347); 36/36, no extras, 100 ×3; readers running (§1h.469) | Theme A A1–A12 + E3 re-check | rubric | walk, pack, P12-87-A-<UTC>.md | briefs/P12-87.md; §1h.467 |
 | P12-88 | IN_PROGRESS — A (Sonnet), Theme B round 3, head 69e5e2ef, port 4247 | Theme B B1–B12 + round 2's marks | rubric | walk, pack, P12-88-A-<UTC>.md | briefs/P12-88.md; §1h.467 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
