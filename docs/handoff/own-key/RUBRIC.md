@@ -30,7 +30,7 @@
 |---|---|
 | B1 | A signed-out reader meets sign-in in the walkthrough (Account step first; AI step block) and the buttons start GitHub / Google OAuth |
 | B2 | After OAuth the reader returns to the wizard step they left (cookie written only with `returnTo`, validated, cleared) |
-| B3 | `/auth/callback` accepts only same-site `/welcome` or `/profile` return paths, for both the cookie and `next` (the open redirect is closed) |
+| B3 | `/auth/callback` accepts only same-site `/welcome` or `/profile` (plus a query) or `/papers/<one encoded id>` return paths, for both the cookie and `next` (the open redirect is closed) — amended by R17, applied late (see R21) |
 | B4 | Unconfigured sign-in hides the Account step; `/welcome?step=ai` and the step rail still work |
 | B5 | Check key: disabled unless signed in (or unconfigured) with a key; route 401 for a stranger before any provider; 4 outcomes mapped; provider text never echoed; 10 an hour |
 | B6 | Sign-out with keys or unsynced changes opens one dialog; Stay signed in / Esc keeps the session; confirm sends the real POST |
@@ -62,3 +62,4 @@ Target: **97.9** per theme (the owner, 2026-10-28, state file R5: "达标线用 
 |---|---|---|---|---|---|
 | 1 | 4a883c0a | **85.4** (readers 85.4 / 85.4 / 85.4; director 89.58) | **100.0** (readers 100 / 100 / 100; director 97.73) | A 0, B 1 | readers `R1-reader-{1,2,3}-*.md`; pack `R1-pack/`; R17, R18 |
 | 2 | e267e1f1 | **97.92** (readers 95.83 / 97.9 / 97.92; director 100, 97.92 after the 375 px re-check) | **100.0** (readers 100 / 100 / 100; director 100) — **stops (R19)** | A 1, B 2 | readers `R2-reader-{1,2,3}-*.md`; pack `R2-pack/`; R19, R20 |
+| 3 | c8704b83 | **97.92** (readers 95.83 / 97.92 / 100; director 100) — **stops: second consecutive round (R22)** | stopped (R19) | A 2, B 2 | readers `R3-reader-{1,2,3}-*.md`; pack `R3-pack/`; R21, R22 — **loop ended** |

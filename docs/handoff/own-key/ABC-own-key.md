@@ -8,14 +8,14 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 |---|---|
 | HELD BY | manager session (Claude Code desktop, worktree `.claude/worktrees/objective-wu-e8d6fe`) |
 | BRANCH | `own-key-on-web` (cut from `origin/main` db0f070a after PR #36 merged; name approved by the owner 2026-10-25). Repository `Aspen-Lab/peer`. No push without the owner's word (AGENTS.md). The owner merges the PR himself (R6). |
-| ROUND | 3 — scoring Theme A at c8704b83 (round 2: A 97.92, B 100.0 — B stopped) |
-| CURRENT ITEM | round 3 scoring (Theme A, 3 readers) |
+| ROUND | 3 scored — A 97.92 (second consecutive), B stopped at 100.0 — LOOP ENDED |
+| CURRENT ITEM | loop ended (R22); tail pass on round 3's findings; clock off |
 | NEXT TURN | on each worker report: verify → land on the branch → refill up to the cap of two groups |
-| STOPPED BECAUSE | — |
+| STOPPED BECAUSE | every theme at or above 97.9 in two consecutive rounds (R22) |
 | TARGET | **97.9 per theme, two consecutive rounds** (the owner, 2026-10-28, R5: "达标线用 97.9，每个主题连续两轮达到就停。") |
 | CAP | **at most two subagent groups running at once** (the owner, 2026-10-28: "使用workaholic mode工作，但确保每次最多只有两个subagent group在跑"). A group = one item's A/B/C chain, or one scoring round's blind readers. |
 | GATE BASELINE | untouched db0f070a in `own-key-verify` (full `npm ci`): vitest 10681 tests, **35 failed** (25 files: CRLF under `core.autocrlf=true`, Windows backslash paths, reader timing, papers page tests, spend-scans scan 5 count). List: manager scratch `verify-baseline.json`. With the main checkout's stale node_modules (no `server-only`, no `mupdf`): 69 failed + feed suites error at import. |
-| CLOCK | `b37a2acb`, session cron `20 * * * *`, read back 2026-10-28 (§6) |
+| CLOCK | `b37a2acb` DELETED 2026-10-28 when the loop ended (R22); CronList read back empty |
 
 ## §2 Rulings
 
@@ -39,6 +39,8 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 - **R18 (2026-10-28), round 1 clusters for R1-fixB.** (1) README: the own-key changes and the wizard's Account step (A12 remainder; the CHANGELOG entry landed in 1e4a1a98, the 375 px wrap and the signed-in kicker in R1-fixA); (2) A5 the signed-out Account title "Sign in (optional)." under the kicker "Optional" says it twice → title "Sign in."; (3) A1 the Profile key paragraph reworded without "there, paste it again"; (4) A8 the dialog says "this browser" throughout (the unsynced sentence said "this device"); (5) A9 the reset line says "your API key" for one key.
 - **R19 (2026-10-28). Theme B stops.** Round 1 100.0 and round 2 100.0, both at or above 97.9: two consecutive rounds (R5). Theme B is no longer scored; a later change to its files has A re-check only the lines it could move, and a loss reopens it. Theme A: round 2 is its first round at or above 97.9 (97.92).
 - **R20 (2026-10-28), round 2 clusters for R2-fix.** (1) A5, all three readers: below `sm` the visible label "Skip sign-in" is not in the accessible name — make the accessible name the visible words at each width (no aria-label; hide the other span with CSS so it leaves the accessibility tree). (2) A5, reader 1: "topics, saved papers and settings" overclaims what follows the account — say "most settings" in both Account-step subtitles. Ruled cosmetic, not a breach of pass requirement 2: it is not a privacy claim and the large majority of settings do sync. (3) Director at 375 px: the Welcome review row cuts "… — sign in to use it"; the row's value may wrap to two lines instead of an ellipsis. (4) Reader 3's uncosted note, taken because it is cheap and true: Check key "busy" becomes "The provider is turning requests away for now. Try again later." (no word the copy scan bans).
+- **R21 (2026-10-28).** Correction: R17's amendment of rubric B3 never reached `RUBRIC.md` — the script's search text did not match the line, and the manager did not read the line back. Readers in rounds 2 and 3 saw the old wording and flagged the mismatch without costing it. Applied now, during round 3, which does not score Theme B. No score changes: every reader passed B3 in rounds 1 and 2.
+- **R22 (2026-10-28). The loop ends.** Theme A: round 2 97.92, round 3 97.92 — two consecutive rounds at or above 97.9. Theme B stopped at R19 (100.0, 100.0). Every theme has met the owner's line (R5). After the end, only what round 3 found is fixed (the tail pass): the CHANGELOG lead line and its incomplete lists (manager), and the Account step's doubled "Sign in" (C). The uncosted notes go to the backlog (§8). The owner's own look is the acceptance above this measure.
 
 ## §3 Items
 
@@ -63,7 +65,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 | R1-fixB | C | LANDED 61a47960, 4cbe5388, f1f464e7, 549f52ed, e267e1f1 | own-key-lane4 | five items of R18; tsc 0; ×3 570 pass / 1 baseline; M18 (dialog back to "this device") → 5 red |
 | R2-score | readers ×3 + director | DONE: A 97.92 / B 100.0 (median); Theme B stops (R19) | own-key-verify (read only) | pack `R2-pack/`; full suite 11185 / 34 failed / 0 new |
 | R2-fix | C | LANDED 3f091b2e, 4f7b7960, de054856, 1fbd962e (+ c8704b83 manager: CHANGELOG busy wording, a comment) | own-key-lane4 | tsc 0; ×3 155/155; M19 (Skip sign-in span aria-hidden again) → 2 red |
-| R3-score | readers ×3 + director | RUNNING at c8704b83, Theme A only | own-key-verify (read only) | pack `R3-pack/`; full suite 11191 / 34 failed / 0 new |
+| R3-score | readers ×3 + director | DONE: A 97.92 (median of 95.83 / 97.92 / 100); director 100 — loop ends (R22) | own-key-verify (read only) | pack `R3-pack/`; full suite 11191 / 34 failed / 0 new |
 | L4-fix2 | C | LANDED 4a883c0a | own-key-lane4 | a decoded "/" allowed in a paper return path; M16 (literal "/" allowed) → 4 red |
 | R1-score | readers ×3 + director | DONE: A 85.4 / B 100.0 (median); director 89.58 / 97.73 | `own-key-verify` (read only) | pack: notes `R1-pack/` (static renders, live captures, 375 px screenshot, test evidence); full suite 11175 / 34 failed / 0 new |
 | L2-C | C | LANDED 68163acd, f6cfe7ce, 43e2a404 | `.claude/worktrees/own-key-lane2` | aeba4d49 note under the key field, 187597a6 AI provider row, 495eeba6 paper page sign-in. Manager: tsc 0, eslint 0 errors (44 warnings, pre-existing), touched tests ×3 = 933 pass / 1 fail (jev-setup, CRLF baseline); M5 (note shown for unknown/unconfigured) → 4 red; M6 (keyNeedsSignIn always false) → 1 red (unit level; the page tests take the flag as input); restored byte-identical. Full suite: 10752 tests, 35 failed, **0 new**. |
@@ -113,6 +115,13 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 
 - Round-2 defects re-checked on the live app at 375 px: the Account step's Next is named by its visible words (DOM: two spans, the hidden one `display: none`, the arrow aria-hidden, no aria-label) — GONE; "most settings" in both subtitles — GONE; the review row wraps ("Gemini key saved — sign in to use it" on two lines, no ellipsis; screenshot in `R3-pack/`) — GONE; Check key "busy" reads "The provider is turning requests away for now. Try again later." and the CHANGELOG says the same — GONE.
 - No new defect found. Theme A 12 / 12 → **100.0**. Theme B stopped (R19); nothing in this pass touched a Theme B unit's behaviour (label, copy and CSS only).
+
+## §4h Round 3 — readers (Theme A)
+
+- Reader 3 (`R3-reader-3-20261028T2331Z.md`): **A 100.0**, no costed defect. Below-threshold notes: /privacy's log-line list omits the fixed label `path=test`; the CHANGELOG quotes only "Continue without signing in" (phones show "Skip sign-in") and says the link is "under" the sentence (it follows inline); the Account step says "AI key" signed out and "API keys" signed in. Flagged the B3 rubric wording (→ R21).
+- Reader 2 (`R3-reader-2-20261028T2331Z.md`): **A 97.92** (A12 0.25: the CHANGELOG entry's lead "…and safe to leave behind." is figurative and can read backwards — as if leaving a key in the browser were safe). Uncosted: a signed-in reader can see "sign in" for a moment on the Account and AI steps while the auth check answers; the CHANGELOG's Check key list omits the "answered with an error" outcome; B3 rubric wording (→ R21).
+- Reader 1 (`R3-reader-1-20261028T2331Z.md`): **A 95.83** (A5 0.25: the title "Sign in." is repeated at once by the subtitle's opening "Sign in to keep…"; A12 0.25: the CHANGELOG lead "safe to leave behind" reads backwards). Uncosted: "Sign in under Account at the top of this page." sits below the Check key row; the AI step's subtitle and callout both say "shows the reading without a model" (older copy); the dialog moves from "keys" to "it"; the momentary sign-in prompt while auth is unknown; B3 wording (→ R21).
+- **Score of record, round 3 (median): Theme A 97.92.** No pass requirement failed for any reader.
 
 ## §5 Log
 
