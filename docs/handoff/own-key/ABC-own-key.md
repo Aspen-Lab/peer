@@ -9,7 +9,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 | HELD BY | manager session (Claude Code desktop, worktree `.claude/worktrees/objective-wu-e8d6fe`) |
 | BRANCH | `own-key-on-web` (cut from `origin/main` db0f070a after PR #36 merged; name approved by the owner 2026-10-25). Repository `Aspen-Lab/peer`. No push without the owner's word (AGENTS.md). The owner merges the PR himself (R6). |
 | ROUND | 0 — implementation of lanes 1–4; round 1 scores after all four land |
-| CURRENT ITEM | L1-A and L4-fix2 running; L2-fix verifying; then scoring round 1 |
+| CURRENT ITEM | L1-A and L4-fix2 running; L2-fix landed (tip full suite 0 new); then scoring round 1 |
 | NEXT TURN | on each worker report: verify → land on the branch → refill up to the cap of two groups |
 | STOPPED BECAUSE | — |
 | TARGET | **97.9 per theme, two consecutive rounds** (the owner, 2026-10-28, R5: "达标线用 97.9，每个主题连续两轮达到就停。") |
@@ -55,7 +55,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 | L1-A | A | RUNNING (started when L4-fix finished) | own-key-lane1 (read only) | — |
 | L2-C | C | LANDED 68163acd, f6cfe7ce, 43e2a404 | `.claude/worktrees/own-key-lane2` | aeba4d49 note under the key field, 187597a6 AI provider row, 495eeba6 paper page sign-in. Manager: tsc 0, eslint 0 errors (44 warnings, pre-existing), touched tests ×3 = 933 pass / 1 fail (jev-setup, CRLF baseline); M5 (note shown for unknown/unconfigured) → 4 red; M6 (keyNeedsSignIn always false) → 1 red (unit level; the page tests take the flag as input); restored byte-identical. Full suite: 10752 tests, 35 failed, **0 new**. |
 | L2-A | A | DONE | own-key-lane2 (read only) | `L2-A-20261028T1822Z.md`: A1–A4 PASS with five 0.25 defects (D1–D5) |
-| L2-fix | C | DONE, VERIFYING | `.claude/worktrees/own-key-lane2` | 5089006c paper sentence + link + return, 08b25c88 one sign-in line beside the key, 2933ebe7 unconfigured key paragraph |
+| L2-fix | C | LANDED d94b0a09, e2cdf9e3, 61492242 | `.claude/worktrees/own-key-lane2` | items 1–5. Manager: tsc 0, eslint 0 errors, touched tests ×3 = 552 pass / 1 fail (jev-setup baseline); M14 (signInNote ignored) → 3 red; M15 (link back to the old rule) → 3 red; restored. Deviation accepted: the paper link encodes the id with encodeURIComponent (an id with "/" stays one segment). Noted, not taken: `JEV_SIGN_IN_NOTE` still shows on Welcome for a signed-out reader with a Jev key — scored in round 1. |
 | L3-C | C | LANDED 7b68634f, 14961cb2 | `.claude/worktrees/own-key-lane3` | 06e101c8 route + privacy, 1ac28885 KeyCheck. Manager in own-key-verify: tsc 0, eslint 0 on 13 files, touched tests ×3 = 272 pass / 2 fail (both baseline: privacy standing, upload record); M1 provider resolved before the gate → 6 red; M2 key rendered in the status line → 2 red; both restored byte-identical. Full suite: 10790 tests, 34 failed, **0 new** vs baseline, 1 fixed (scan 5, R8). |
 | L3-A | A | DONE | own-key-lane3 (read only) | `L3-A-20261028T1725Z.md`: A10 FAIL 2.0, A11 FAIL 0.75, B5 PASS; D1–D7; gate: KeyCheck unmounted |
 | L3-fix | C | LANDED 411bf87b, 4721b099, 0b39f6f6 | `.claude/worktrees/own-key-lane3` | items 1–5 of `briefs/L3-fix.md`. Deviations accepted: /privacy "at most one log line" (fetch providers log only when the provider answers); Anthropic's check now logs like the others; provider 408 = unreachable; a confirmed sign-out replaces an earlier result line. Manager: tsc 0, eslint 0 errors (8 old warnings), affected tests ×3 = 622 pass / 3 fail (baseline); M9 (no-credit decision removed) → 8 red; M10 (Anthropic retries back on) → 1 red; M11 (mount removed) → 9 red; restored byte-identical. |
@@ -93,6 +93,8 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 - 2026-10-28 | 982254b9 | manager | render pack for round 1 built (director notes N1–N3). L4-A reported (A 0.5, B 0.75); R13; L4-fix started in the freed slot.
 - 2026-10-28 | be28d8f0 | manager | L2-A reported (1.25); R14; item 6 sent to L4-fix; L2-fix started in the freed slot.
 - 2026-10-28 | 62b442ed | manager | L4-fix reported (6 commits); L1-A started in the freed slot; L4-fix verified (two mutations) and landed; R15; tip full suite started.
+- 2026-10-28 | 62b442ed | manager | tip +L4-fix full suite: 11133 tests, 34 failed, **0 new**. L2-fix reported; L4-fix2 started in the freed slot; L2-fix verified (two mutations) and landed (61492242); tip full suite started.
+- 2026-10-28 | 61492242 | manager | tip +L2-fix full suite: tsc 0; 11168 tests, 34 failed, **0 new**. Reader brief `briefs/R1-reader.md` written.
 
 ## §6 Clock
 
