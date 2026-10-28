@@ -9,7 +9,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 | HELD BY | manager session (Claude Code desktop, worktree `.claude/worktrees/objective-wu-e8d6fe`) |
 | BRANCH | `own-key-on-web` (cut from `origin/main` db0f070a after PR #36 merged; name approved by the owner 2026-10-25). Repository `Aspen-Lab/peer`. No push without the owner's word (AGENTS.md). The owner merges the PR himself (R6). |
 | ROUND | 3 scored — A 97.92 (second consecutive), B stopped at 100.0 — LOOP ENDED |
-| CURRENT ITEM | loop ended (R22); tail pass on round 3's findings; clock off |
+| CURRENT ITEM | done; waiting on the owner for push / PR |
 | NEXT TURN | on each worker report: verify → land on the branch → refill up to the cap of two groups |
 | STOPPED BECAUSE | every theme at or above 97.9 in two consecutive rounds (R22) |
 | TARGET | **97.9 per theme, two consecutive rounds** (the owner, 2026-10-28, R5: "达标线用 97.9，每个主题连续两轮达到就停。") |
@@ -162,6 +162,13 @@ Session cron (CronCreate) `20 * * * *`, session-only, auto-expires after 7 days 
 4. Refill up to two groups in R1's order.
 5. After all four lanes land: mount `KeyCheck` in `AiKeyFields`, write one CHANGELOG entry, run scoring round 1 (RUBRIC.md).
 6. Never push, merge or sign in locally without the owner's word.
+
+## §7b Final state (2026-10-28)
+
+- Branch `own-key-on-web` at d0bb3cc8 (+ this record): 68 commits on db0f070a before this one, every one ending with the owner's `Co-authored-by` trailer; 84 files under `web/src`, README and CHANGELOG changed. Not pushed; no PR.
+- Final gates at d0bb3cc8 (`own-key-verify`, full install): `tsc` 0 errors; vitest 11192 tests, 11156 passed, 34 failed — **0 new** against the untouched base, 1 fixed (spend-scans scan 5, Windows order); eslint on every changed source file 0 errors (58 warnings, pre-existing in the files touched).
+- Tail pass after R22: CHANGELOG lead line and lists (00d28eec), Account subtitle no longer repeats "Sign in" (d0bb3cc8; M20 → 2 red).
+- Cleanup: dev server stopped, no orphan `next` process, port 3000 free; the four lane worktrees removed after their junctions were deleted and every lane commit was confirmed on the branch by patch id (26 / 26); the agents' scratch clones removed; `own-key-verify` removed last.
 
 ## §8 Backlog (seen, not costed; not fixed after the loop ended)
 
