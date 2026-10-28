@@ -51,3 +51,33 @@ describe("a line the reading leaves out is not open prose (P12-70: R6b with O8)"
     expect((outline.sections ?? []).map((s) => s.text).join(" ")).toBe(prose.join(" "));
   });
 });
+
+describe("a paragraph's short last line ends its paragraph without a full stop (P12-70: R6b with O8's required negative)", () => {
+  const caption = "Figure 3: Capacity of the films over the cycles.";
+  const full = "We follow the loss over four hundred cycles and ask which edge goes first in each sample";
+
+  it("makes a label line under a short last line a caption", () => {
+    const read = [line(full, { y: 524 }), line("of the new set", { y: 512 }), line(caption, { y: 500 })];
+    expect(captionAt(read, 2, 12, BODY, new Set())).toMatchObject({ label: "Figure 3" });
+  });
+
+  it("does not make a mid-sentence line that is only a little shorter than the one above it a paragraph's end", () => {
+    // a ragged right edge: the line above wraps at 70% of the one before it, and the label line goes on with its sentence
+    const wrapped = full.slice(0, Math.round(full.length * 0.7)).replace(/\s+\S*$/, "");
+    const read = [line(full, { y: 524 }), line(wrapped, { y: 512 }), line(GHOST, { y: 500 })];
+    expect(captionAt(read, 2, 12, BODY, new Set())).toBeNull();
+    // and a line of full width: the ghost of R6b, as before
+    expect(captionAt([line(full, { y: 524 }), line(FULL, { y: 512 }), line(GHOST, { y: 500 })], 2, 12, BODY, new Set())).toBeNull();
+  });
+
+  it("needs the line before it to be a line of the same paragraph: same page, directly above, same column, same face and size", () => {
+    const short = line("of the new set", { y: 512 });
+    const refused = (before: PdfLine) => captionAt([before, short, line(GHOST, { y: 500 })], 2, 12, BODY, new Set());
+    expect(refused(line(full, { y: 524 })), "the paragraph's line").toMatchObject({ label: "Fig 4" });
+    expect(refused(line(full, { y: 524, page: 2 })), "another page").toBeNull();
+    expect(refused(line(full, { y: 560 })), "a gap").toBeNull();
+    expect(refused(line(full, { y: 524, x: 340 })), "another column").toBeNull();
+    expect(refused(line(full, { y: 524, font: "bold" })), "another face").toBeNull();
+    expect(refused(line(full, { y: 524, size: 14 })), "another size").toBeNull();
+  });
+});

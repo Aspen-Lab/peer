@@ -1405,6 +1405,32 @@ function opensMidSentence(
   return followsOpenProse(read, index, pitch, body, furniture, leftOut) && !inCaption(read, index - 1, pitch, body, furniture, leftOut);
 }
 
+/** A line shorter than this share of the line above it (same face and size, directly under it, in its column) is a
+ *  paragraph's last line: a line that wraps runs to the column's edge (P12-70). */
+const SHORT_LAST_LINE = 0.5;
+
+/**
+ * P12-70: whether `read[index]` ends its paragraph by its length: it is under `SHORT_LAST_LINE` of the length of the line
+ * above it, which is set in the same face and size, directly above and in the same column. The sentence it ends needs
+ * no full stop for that (C P12-51's required negative: "of the new set", then a caption).
+ */
+function endsParagraph(
+  read: PdfLine[],
+  index: number,
+  pitch: number,
+  body: { size: number; font: string },
+  leftOut?: (index: number) => boolean,
+): boolean {
+  const last = read[index];
+  const before = index > 0 ? read[index - 1] : undefined;
+  if (!before || before.page !== last.page || before.block || leftOut?.(index - 1)) return false;
+  const gap = before.y - last.y;
+  if (gap <= 0 || gap > (pitch > 0 ? pitch : body.size * 1.2) * 1.5) return false;
+  if (Math.abs(before.x - last.x) > body.size * SAME_COLUMN_EMS) return false;
+  if (before.font !== last.font || Math.abs(before.size - last.size) > HEADING_WRAP_SIZE) return false;
+  return last.text.trim().length < before.text.trim().length * SHORT_LAST_LINE;
+}
+
 /**
  * `leftOut` (P12-70): the lines the reading leaves out of the prose (margin print, the dated box, the text of a
  * figure's panels). A line left out is not open prose: it is not the first half of a sentence a label line goes on
@@ -1426,7 +1452,7 @@ function followsOpenProse(
   if (gap <= 0 || gap > (pitch > 0 ? pitch : body.size * 1.2) * 1.5) return false;
   if (Math.abs(above.x - line.x) > body.size * SAME_COLUMN_EMS) return false;
   if (above.font !== body.font || Math.abs(above.size - body.size) > HEADING_WRAP_SIZE) return false;
-  return above.text.trim().length > 0 && !endsSentence(above.text);
+  return above.text.trim().length > 0 && !endsSentence(above.text) && !endsParagraph(read, index - 1, pitch, body, leftOut);
 }
 
 /** Whether `read[last]` is a line of a caption, by the chain `buildOutline` reads one by: back from it, over the lines
