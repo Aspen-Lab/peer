@@ -4,6 +4,7 @@ import { extractPdfFigures, measurePdfFigure } from "@/lib/figures/pdf-engine";
 import { extractPdfCandidatesFromBytes } from "@/lib/figures/pdf-extract";
 import { FIGURE_EXTRACTION_REVISION } from "@/lib/figures/figure-revision";
 import type { FigurePool, FigurePoolEntry } from "@/lib/figures/extract";
+import type { DigestProvider } from "@/lib/llm/providers/types";
 import { bindFiguresToReport } from "./figure-binding";
 import type { ExtractedFigureCaption } from "./html-text";
 import { buildOutline, captionAt, captionOf, type PdfLine, type PdfTextItem } from "./pdf-outline";
@@ -249,8 +250,8 @@ describe("an Extended Data figure is a caption of its own numbering (P12-56, R14
     ];
     for (const [text, label, caption] of shapes) {
       expect(captionOf(line(text)), text).toMatchObject({ label, caption, page: 1 });
-      // its own numbering takes no ordinal: nothing that finds a caption by number can take it for "Fig. N"
-      expect(captionOf(line(text))?.ordinal, text).toBeUndefined();
+      // its own numbering takes an ordinal of its own (1000 + N): nothing that finds a caption by ordinal can take it for "Fig. N"
+      expect(captionOf(line(text))?.ordinal, text).toBe(1000 + Number(label.match(/\d+$/)![0]));
     }
     expect(captionOf(line("Fig. 3 | Soil moisture")), "the paper's own Fig. 3 is as it was").toMatchObject({ ordinal: 3, label: "Fig 3", caption: "Soil moisture" });
   });
@@ -287,7 +288,7 @@ describe("an Extended Data figure is a caption of its own numbering (P12-56, R14
     expect(main.caption).toMatch(/^Soil moisture under the three covers\. Measured weekly/);
     expect(extended.caption).toMatch(/^Soil moisture in the spring\. Measured weekly at ten depths in the spring only/);
     expect(main.ordinal).toBe(1);
-    expect(extended.ordinal).toBeUndefined();
+    expect(extended.ordinal).toBe(1001);
   });
 
   it("end to end: a body line that opens by citing an Extended Data figure after unfinished prose is no caption (R6b)", () => {
@@ -426,7 +427,7 @@ describe("the binder keeps the same three numberings apart (P12-56, R14a, ruling
   const PNG_EXTENDED = "data:image/png;base64,EXTENDED-EXTENDED";
   const captions: ExtractedFigureCaption[] = [
     { ordinal: 3, label: "Fig 3", caption: MAIN, page: 4, at: 0.2 },
-    { ordinal: 1, label: "Extended Data Fig 3", caption: EXTENDED, page: 9, at: 0.8 },
+    { ordinal: 1003, label: "Extended Data Fig 3", caption: EXTENDED, page: 9, at: 0.8 },
   ];
   const entry = (over: Partial<FigurePoolEntry> & Pick<FigurePoolEntry, "imageUrl" | "caption">): FigurePoolEntry => ({
     source: "open-access",
@@ -489,6 +490,24 @@ describe("the binder keeps the same three numberings apart (P12-56, R14a, ruling
     const main = await bind(reportOf("The setup is described in prose only.", "The index rose with depth (Fig. 3)."), { pool: onlyExtended });
     expect(main.resultsAndSignificance.keyResults[0].figureLabel).toBe("Fig 3");
     expect(main.resultsAndSignificance.keyResults[0].figureImageUrl).toBeNull();
+  });
+
+  it("a model's answer by ordinal names one figure: 1003 is Extended Data Fig. 3 and 3 is Fig. 3", async () => {
+    const model = (ordinal: number) => ({ generateJsonText: async () => JSON.stringify({ ordinal, confidence: "high" }) }) as unknown as DigestProvider;
+    const ask = async (ordinal: number) =>
+      (
+        await bindFiguresToReport({
+          paper: { title: "Seaweed mulch", id: PAPER },
+          report: reportOf("Nothing here cites a figure or shares a word with a caption.", "Nor does this."),
+          captions,
+          provider: model(ordinal),
+          figurePool: pool,
+        })
+      ).whatItProposes;
+    expect((await ask(1003)).figureLabel).toBe("Extended Data Fig 3");
+    expect((await ask(1003)).figureImageUrl).toBe(pdfFigureUrl(PAPER, 9, "ed3"));
+    expect((await ask(3)).figureLabel).toBe("Fig 3");
+    expect((await ask(3)).figureImageUrl).toBe(pdfFigureUrl(PAPER, 4, 3));
   });
 
   it("(a) the PDF prints only Fig. 3: a citation of Fig. S3 or Supplementary Fig. 3 binds no figure, and never Fig. 3", async () => {
@@ -560,6 +579,8 @@ describe("the whole chain on a PDF that prints Fig. 1 and Extended Data Fig. 1 (
     expect(captions.map((c) => c.label)).toEqual(["Fig 1", "Extended Data Fig 1"]);
     expect(captions.map((c) => c.caption)).toEqual(["Soil moisture under the three covers.", "Soil moisture in the spring."]);
     expect(captions.map((c) => c.page)).toEqual([2, 3]);
+    // each caption has an ordinal of its own, so a model's answer by ordinal (the binder) names one figure
+    expect(captions.map((c) => c.ordinal)).toEqual([1, 1001]);
     // sized: each by its own engine call, the Extended Data one by its token
     for (const [cap, label] of [[captions[0], "Figure 1"], [captions[1], "Extended Data Fig. 1"]] as const) {
       expect(cap.width && cap.width > 0 && cap.height && cap.height > 0, cap.label).toBe(true);

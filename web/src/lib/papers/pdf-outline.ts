@@ -1184,15 +1184,19 @@ function wrapsHeading(previous: PdfLine | null, line: PdfLine, text: string): bo
   return drop > 0 && drop <= line.size * HEADING_WRAP_LEADING && !NUMBERED_HEADING.test(text);
 }
 
+/** The ordinal of "Extended Data Fig. N" is this and N (R14a): above any "Fig. N" the figure route can draw. */
+const EXTENDED_ORDINAL_BASE = 1000;
+
 export function captionOf(line: PdfLine): OutlineCaption | null {
   const m = line.text.match(CAPTION_SEPARATED);
   if (!m) return null;
   const extended = m[1] !== undefined;
   // "Extended Data Table 1" is not read: only figures have a second numbering here.
   if (extended && !/^fig/i.test(m[2])) return null;
-  // An Extended Data figure's number is its own: it takes no ordinal, so nothing that finds a caption by its
-  // ordinal (the binder's model answer) can take "Extended Data Fig. 3" for "Fig. 3".
-  const ordinal = !extended && /^\d+$/.test(m[3]) ? Number(m[3]) : undefined;
+  // An Extended Data figure's number is its own: its ordinal is in a range of its own (1000 + N; a figure's number
+  // has at most three digits), so nothing that finds a caption by its ordinal (the binder's model answer) can take
+  // "Extended Data Fig. 3" for "Fig. 3".
+  const ordinal = /^\d+$/.test(m[3]) ? (extended ? EXTENDED_ORDINAL_BASE : 0) + Number(m[3]) : undefined;
   return {
     ordinal,
     label: `${extended ? "Extended Data " : ""}${m[2]} ${m[3]}`.replace(/\s+/g, " ").trim(),
