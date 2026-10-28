@@ -1298,3 +1298,135 @@ export async function measurePdfFigure(
   const found = figures[0];
   return found && found.width > 0 && found.height > 0 ? { width: found.width, height: found.height } : null;
 }
+
+/**
+ * P12-61 (§1h.434, part 2): page `pageNumber` (1-based) of the PDF as a PDF of its own — that one page with the
+ * resources it uses, and nothing else of the document — so that a later look at a figure on that page opens a
+ * file of kilobytes and not the whole paper. The page is grafted (`graftPage`) and the catalog's
+ * `/OCProperties` is grafted through the same graft map: `graftPage` does not carry it, and without it a layer
+ * the whole PDF hides by default is drawn in the page file (B P12-60, tested on an invented PDF).
+ *
+ * Null where a page file cannot be made safely: not a PDF, a password, a page that is not there, a page whose
+ * bounds (rotation and crop included) are not the same in the file as in the document, a source over the byte
+ * ceiling. The caller then keeps using the whole PDF. Rejects only when the engine itself cannot load.
+ */
+export async function cutPdfPage(source: PdfSource, pageNumber: number): Promise<Uint8Array | null> {
+  const byteLength = sourceByteLength(source);
+  if (byteLength === null || byteLength === 0 || byteLength > MAX_PDF_BYTES) return null;
+  if (!Number.isInteger(pageNumber) || pageNumber < 1) return null;
+
+  const mupdf = await loadMupdf();
+  const release = await acquireSlot();
+  let doc: Document | null = null;
+  try {
+    try {
+      doc = openPdf(mupdf, source);
+    } catch {
+      return null;
+    }
+    if (!(doc instanceof mupdf.PDFDocument) || doc.needsPassword() || pageNumber > doc.countPages()) return null;
+    return graftOnePage(mupdf, doc, pageNumber - 1);
+  } catch (error) {
+    console.warn("[figures/pdf-engine] a page could not be cut out:", error);
+    return null;
+  } finally {
+    doc?.destroy();
+    release();
+  }
+}
+
+function graftOnePage(mupdf: Mupdf, source: PDFDocument, index: number): Uint8Array | null {
+  const out = new mupdf.PDFDocument();
+  const objects: PDFObject[] = [];
+  const own = (object: PDFObject): PDFObject => {
+    if (!object.isNull()) objects.push(object);
+    return object;
+  };
+  const map = out.newGraftMap();
+  try {
+    map.graftPage(-1, source, index);
+    const optional = own(own(own(source.getTrailer()).get("Root")).get("OCProperties"));
+    if (!optional.isNull()) {
+      own(own(out.getTrailer()).get("Root")).put("OCProperties", own(map.graftObject(optional)));
+    }
+    if (out.countPages() !== 1 || !sameBounds(source.loadPage(index), out.loadPage(0))) return null;
+    const saved = out.saveToBuffer("garbage=compact,compress");
+    try {
+      return new Uint8Array(saved.asUint8Array()); // a copy: the view is the WASM heap's
+    } finally {
+      saved.destroy();
+    }
+  } finally {
+    for (const object of objects) object.destroy();
+    map.destroy();
+    out.destroy();
+  }
+}
+
+/** Whether two pages (both destroyed here) have the same bounds, rotation and crop included. */
+function sameBounds(a: Page, b: Page): boolean {
+  try {
+    const first = a.getBounds();
+    const second = b.getBounds();
+    return first.every((value, i) => Math.abs(value - second[i]) < 0.01);
+  } finally {
+    a.destroy();
+    b.destroy();
+  }
+}
+
+/**
+ * P12-61 (§1h.434, part 3): `measurePdfFigure` for many figures of one PDF with one open of it — `withFigureSizes`
+ * used to open a 25 MB paper once per caption, up to 24 times in a row. Each target is measured as
+ * `measurePdfFigure` would: one page, one label, measured and not drawn. The answer has one entry per target,
+ * in order: its size, null where the route would find nothing (or the PDF cannot be read), and undefined for a
+ * target the `budgetMs` ran out before — not measured, so the caller must not remember it as nothing.
+ */
+export async function measurePdfFigures(
+  source: PdfSource,
+  targets: ReadonlyArray<{ page: number; fig: number }>,
+  budgetMs: number = EXTRACTION_BUDGET_MS,
+): Promise<Array<{ width: number; height: number } | null | undefined>> {
+  const deadline = performance.now() + Math.min(budgetMs, EXTRACTION_BUDGET_MS);
+  const unreadable = targets.map(() => null);
+  const byteLength = sourceByteLength(source);
+  if (targets.length === 0 || byteLength === null || byteLength === 0 || byteLength > MAX_PDF_BYTES) return unreadable;
+
+  const mupdf = await loadMupdf();
+  const release = await acquireSlot();
+  let doc: Document | null = null;
+  try {
+    if (performance.now() > deadline) return targets.map(() => undefined);
+    try {
+      doc = openPdf(mupdf, source);
+      if (doc.needsPassword()) return unreadable;
+    } catch {
+      return unreadable;
+    }
+    const pageCount = Math.min(doc.countPages(), 300);
+    const sizes: Array<{ width: number; height: number } | null | undefined> = [];
+    for (const target of targets) {
+      const wanted = labelKey(`Figure ${target.fig}`);
+      if (performance.now() > deadline) {
+        sizes.push(undefined);
+        continue;
+      }
+      if (wanted === null || !Number.isInteger(target.page) || target.page < 1 || target.page > pageCount) {
+        sizes.push(null);
+        continue;
+      }
+      try {
+        const found = readPage(mupdf, doc.loadPage(target.page - 1), target.page - 1, wanted, 1, deadline, true);
+        const figure = found.figures[0];
+        sizes.push(figure && figure.width > 0 && figure.height > 0 ? { width: figure.width, height: figure.height } : found.outOfTime ? undefined : null);
+      } catch {
+        sizes.push(null); // one unreadable page does not cost the pages after it
+      }
+      await yieldToEventLoop();
+    }
+    return sizes;
+  } finally {
+    doc?.destroy();
+    release();
+  }
+}

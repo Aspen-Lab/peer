@@ -247,19 +247,22 @@ export async function withFigureSizes(doc: ExtractedDocument, bytes: Uint8Array)
     const sizes = measuredFor(`${FIGURE_EXTRACTION_REVISION}|${createHash("sha256").update(bytes).digest("hex")}`);
     const missing = targets.slice(0, MEASURE_MAX).filter((cap) => !sizes.has(`${cap.page}/${pictureNumber(cap.label)}`));
     if (missing.length > 0) {
-      const { measurePdfFigure } = await import("@/lib/figures/pdf-engine");
-      const deadline = Date.now() + MEASURE_BUDGET_MS;
-      const tried = new Set<string>();
+      // P12-61 (part 3): one open of the PDF for all the captions, not one per caption.
+      const { measurePdfFigures } = await import("@/lib/figures/pdf-engine");
+      const tried = new Map<string, { page: number; fig: number }>();
       for (const cap of missing) {
         const key = `${cap.page}/${pictureNumber(cap.label)}`;
-        if (tried.has(key)) continue;
-        tried.add(key);
-        if (Date.now() > deadline) break;
-        try {
-          sizes.set(key, await measurePdfFigure(bytes, cap.page as number, pictureNumber(cap.label) as number));
-        } catch (err) {
-          console.warn("[papers/pdf-text] a figure could not be measured:", err instanceof Error ? err.message : String(err));
-        }
+        if (!tried.has(key)) tried.set(key, { page: cap.page as number, fig: pictureNumber(cap.label) as number });
+      }
+      try {
+        const keys = [...tried.keys()];
+        const results = await measurePdfFigures(bytes, [...tried.values()], MEASURE_BUDGET_MS);
+        // undefined: the budget ran out before this figure; it is left unmeasured and tried again next time.
+        keys.forEach((key, i) => {
+          if (results[i] !== undefined) sizes.set(key, results[i] ?? null);
+        });
+      } catch (err) {
+        console.warn("[papers/pdf-text] figures could not be measured:", err instanceof Error ? err.message : String(err));
       }
     }
     return {
