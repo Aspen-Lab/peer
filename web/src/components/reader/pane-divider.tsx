@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
+import { useEffect, useRef, type CSSProperties, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
 import { readPageZoom } from "@/lib/reader/margin";
 import { clampPane, defaultPanePx, paneRange, stepPane, type PaneName, type PaneRoom } from "./pane-layout";
 
@@ -19,6 +19,26 @@ import { clampPane, defaultPanePx, paneRange, stepPane, type PaneName, type Pane
 //
 // Zoom. Fit scales the page with a CSS `zoom`, so a pointer's distance (window px) is divided by `--page-zoom` to get the layout px the
 // widths are in (B §1.4, measured). `aria-valuenow`, the CSS variable and the committed width are all in those unzoomed px.
+
+/**
+ * P12-89 rule 2 (ruling §1h.473; blind reader B3-r1, A P12-88 §7): the separator's strip ends at the key legend's top edge, so that no fixed overlay stands over any part of it.
+ *
+ * The strip was as tall as the shell's row (`align-self: stretch`), the whole paper; the key legend is fixed to the window's foot, so for the 28 px (x the page's Fit zoom)
+ * above the window's foot the legend stood over the strip at every scroll position but the last, and a scan down the strip missed there (A's `B1hit`: the misses at the
+ * foot of each scan). The strip is now sticky, as the left pane is: it begins where the pane does (`calc(3rem / zoom + 1rem)`: the masthead, unzoomed, and the article's
+ * 1rem of top padding, zoomed: its position at scroll 0, so it never slides) and is no taller than the window leaves between that and the legend's top edge:
+ * `(100vh - 3rem) / zoom - legend - 1rem`, where the legend is `var(--legend-h)` in the zoomed page — the legend's own height, 28 x zoom on the window's pixels
+ * (`legendHeightPx`), so the strip's foot is the legend's top at every Fit zoom. `height: 100%` keeps it no taller than its row where the row is shorter (a short
+ * paper), and at the foot of the page the row's end carries it up, clear of the legend. The line it draws (`::before`, the whole strip), its hit area, its width, its
+ * cursor and its focus are the stylesheet's `.reader-divider`, as they were; only the strip's length changes, from the row's to this.
+ */
+export const DIVIDER_FOOT_STYLE: CSSProperties = {
+  position: "sticky",
+  alignSelf: "start",
+  top: "calc(3rem / var(--page-zoom, 1) + 1rem)",
+  height: "100%",
+  maxHeight: "calc((100vh - 3rem) / var(--page-zoom, 1) - var(--legend-h) - 1rem)",
+};
 
 /** The pointer has to travel this far (window px) before a press is a drag: the lightbox's own threshold. */
 export const DRAG_THRESHOLD_PX = 4;
@@ -183,6 +203,7 @@ export function PaneDivider({ pane, value, room, target, variable, label, contro
       aria-valuenow={value}
       tabIndex={0}
       className="reader-divider"
+      style={DIVIDER_FOOT_STYLE}
       data-reader-divider={pane}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
