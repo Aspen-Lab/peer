@@ -12,6 +12,10 @@
 //   **strong**  *em* / _em_  `code`  [text](https://…)  bare https:// links
 //   __underline__  ==highlight==   (P10-09b, review 7.6: the notes window's toolbar writes these;
 //                       they nest — `**__both__**` — and every export reads them)
+//   <u>underline</u>    (P12-77, O2: the same mark in the form CommonMark, Obsidian and Pandoc read as underline — they read
+//                       `__x__` as bold. It is READ here wherever Markdown comes in (a paste, a file), and `portableUnderline`
+//                       below WRITES a block's source in it for a Markdown that leaves the app. The stored form, and what the
+//                       toolbar writes, is still `__x__`, so nothing already stored or exported changes its meaning.)
 //   [@key] / [@a; @b]   a citation (Pandoc)
 //   [[Title]]           a link to another note (Obsidian)
 //   \* \_ \=            a literal star, underscore or equals sign (P10-28): the one way to write a mark's own
@@ -51,6 +55,10 @@ const UNDERLINE = new RegExp(
   String.raw`(?<![\p{L}\p{N}_])__(?=[^\s_])(${unit(String.raw`(?:[^_\n]|_(?!_))`)}*?${unit(String.raw`[^\s_]`)})__(?![\p{L}\p{N}_])`,
   "uy",
 );
+// P12-77 (O2): `<u>x</u>` is underline too. The same edges as the other marks (a word, not a space, against each tag), no line break
+// inside, and no tag of its own kind inside — `<u>a<u>b</u>` is the inner pair and a literal `<u>`. Case is not significant, as in HTML.
+// Unlike `__`, it needs no whole word around it: a tag cannot be mistaken for the middle of one.
+const UNDERLINE_TAG = /<u>(?=\S)((?:(?!<\/?u>)[^\n])+?)(?<=\S)<\/u>/iy;
 const MARK = new RegExp(String.raw`==(?=[^\s=])(${unit(String.raw`[^=\n]`)}*?${unit(String.raw`[^\s=]`)})==`, "y");
 const CITE = /\[@([^\]\n]+)\]/y;
 const WIKI = /\[\[([^\]\n]+)\]\]/y;
@@ -97,6 +105,9 @@ function tokenAt(src: string, i: number): Inline | null {
       return { kind: "em", text: m[1], from: i, inner: i + 1, to: i + m[0].length };
     }
   }
+  if (c === "<" && (m = at(UNDERLINE_TAG, src, i))) {
+    return { kind: "underline", text: m[1], from: i, inner: i + 3, to: i + m[0].length };
+  }
   if (c === "=" && (m = at(MARK, src, i))) {
     return { kind: "mark", text: m[1], from: i, inner: i + 2, to: i + m[0].length };
   }
@@ -135,6 +146,27 @@ export function parseInline(src: string): Inline[] {
   }
   if (start < src.length) {
     out.push({ kind: "text", text: src.slice(start), from: start, inner: start, to: src.length });
+  }
+  return out;
+}
+
+/**
+ * P12-77 (O2): a block's source with every underline written `<u>…</u>` — the form CommonMark, Obsidian and Pandoc read as underline,
+ * where they read `__x__` as bold. For a Markdown that leaves the app: the app's own stored form, and what its toolbar writes, stays
+ * `__x__` (or `<u>x</u>` where it was pasted so), and both read as the same underline here (`parseInline`), so nothing already stored or
+ * exported changes its meaning on the way back in.
+ *
+ * Token by token, so only a real underline is touched: a `__` that matched nothing, one inside a code run, a link's address or a bare
+ * address stays as it is, and a source with no underline comes back unchanged, character for character. The other marks keep their
+ * own markers, around and inside it (`**__both__**` is `**<u>both</u>**`); an escape inside it (`\_`, `\*`, `\=`) is kept, and
+ * CommonMark reads each of those the same way. Writing it twice is writing it once.
+ */
+export function portableUnderline(src: string): string {
+  let out = "";
+  for (const t of parseInline(src)) {
+    if (t.kind === "underline") out += `<u>${portableUnderline(t.text)}</u>`;
+    else if (isWrapping(t)) out += src.slice(t.from, t.inner) + portableUnderline(t.text) + src.slice(t.inner + t.text.length, t.to);
+    else out += src.slice(t.from, t.to);
   }
   return out;
 }
