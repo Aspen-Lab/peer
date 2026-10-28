@@ -56,7 +56,8 @@
 // Licence: `mupdf` is AGPL-3.0-or-later (Artifex dual licence, the same terms
 // as PyMuPDF). It is loaded here, lazily, and nowhere else.
 
-import type { Device, Document, Image, Matrix, Page, Path, Rect, StrokeState } from "mupdf";
+import { closeSync, fstatSync, openSync, readSync, statSync } from "node:fs";
+import type { Device, Document, Image, Matrix, Page, Path, Rect, StrokeState, Stream } from "mupdf";
 
 type Mupdf = typeof import("mupdf");
 
@@ -1056,6 +1057,75 @@ const captionKey = (caption: string | null): string | null => {
 
 const roundTo = (value: number, places = 2) => Math.round(value * 10 ** places) / 10 ** places;
 
+// ── Where a PDF comes from (P12-61, §1h.434) ─────────────────────────────
+
+/** A PDF as the engine takes it: its bytes in memory (a public paper's download, or a small page file), or a
+ *  file on disk that MuPDF reads as it asks, so the file is never held in this process's memory at all. */
+export type PdfSource = Uint8Array | { filePath: string };
+
+/** The source's size in bytes; null for a file that cannot be read. */
+function sourceByteLength(source: PdfSource): number | null {
+  if (source instanceof Uint8Array) return source.byteLength;
+  try {
+    return statSync(source.filePath).size;
+  } catch {
+    return null;
+  }
+}
+
+interface PdfStreamHandle {
+  fileSize(): number;
+  read(memory: Uint8Array, offset: number, length: number, position: number): number;
+  close(): void;
+}
+
+/** What MuPDF reads the PDF through. A file's descriptor is closed by MuPDF's own `close` once the last
+ *  reference to the stream is dropped (the document's, when `doc.destroy()` runs), or here on a failed open;
+ *  closing twice is harmless. */
+function streamHandle(source: PdfSource): PdfStreamHandle {
+  if (source instanceof Uint8Array) {
+    return {
+      fileSize: () => source.byteLength,
+      read(memory, offset, length, position) {
+        const count = Math.max(0, Math.min(length, source.byteLength - position));
+        memory.set(source.subarray(position, position + count), offset);
+        return count;
+      },
+      close: () => undefined,
+    };
+  }
+  let fd: number | null = openSync(source.filePath, "r");
+  const size = fstatSync(fd).size;
+  return {
+    fileSize: () => size,
+    read: (memory, offset, length, position) => (fd === null ? 0 : readSync(fd, memory, offset, length, position)),
+    close() {
+      if (fd === null) return;
+      const open = fd;
+      fd = null;
+      closeSync(open);
+    },
+  };
+}
+
+/** Opens the document through a `Stream`, not a `Buffer`: MuPDF asks for the bytes it needs, so neither a second
+ *  copy in JS nor a third in the WASM heap is made of a file that is already in memory (B P12-60: a 25 MB paper's
+ *  peak fell by 49 to 105 MB), and a file on disk is not read into memory at all. The stream is destroyed here
+ *  (the document keeps its own reference); a failed open closes the file. */
+function openPdf(mupdf: Mupdf, source: PdfSource): Document {
+  const handle = streamHandle(source);
+  let stream: Stream | null = null;
+  try {
+    stream = new mupdf.Stream(handle);
+    return mupdf.Document.openDocument(stream, "application/pdf");
+  } catch (error) {
+    handle.close();
+    throw error;
+  } finally {
+    stream?.destroy();
+  }
+}
+
 /**
  * Finds the figures of a PDF and renders each one as a PNG.
  *
@@ -1063,12 +1133,14 @@ const roundTo = (value: number, places = 2) => Math.round(value * 10 ** places) 
  * one over the byte ceiling, or one with nothing to find come back as no
  * figures and a `reason`. It rejects only when the engine itself cannot load.
  */
-export async function extractPdfFigures(bytes: Uint8Array, opts: PdfEngineOptions): Promise<PdfEngineResult> {
+export async function extractPdfFigures(source: PdfSource, opts: PdfEngineOptions): Promise<PdfEngineResult> {
   const deadline = performance.now() + EXTRACTION_BUDGET_MS;
   const nothing = (reason: string): PdfEngineResult => ({ figures: [], reason });
 
-  if (bytes.byteLength === 0) return nothing("The PDF is empty.");
-  if (bytes.byteLength > (opts.onlyPage === undefined ? MAX_PDF_BYTES : MAX_ONE_PAGE_PDF_BYTES)) {
+  const byteLength = sourceByteLength(source);
+  if (byteLength === null) return nothing("The PDF could not be opened.");
+  if (byteLength === 0) return nothing("The PDF is empty.");
+  if (byteLength > (opts.onlyPage === undefined ? MAX_PDF_BYTES : MAX_ONE_PAGE_PDF_BYTES)) {
     return nothing("The PDF is too large for Peer to extract its figures safely.");
   }
   const wanted = opts.label === undefined ? null : labelKey(opts.label);
@@ -1082,7 +1154,7 @@ export async function extractPdfFigures(bytes: Uint8Array, opts: PdfEngineOption
     if (performance.now() > deadline) {
       return nothing(`Peer stopped before reading this PDF: other figure work held it for over ${EXTRACTION_BUDGET_MS / 1000} s.`);
     }
-    return await readDocument(mupdf, bytes, opts, wanted, deadline);
+    return await readDocument(mupdf, source, opts, wanted, deadline);
   } finally {
     release();
   }
@@ -1090,7 +1162,7 @@ export async function extractPdfFigures(bytes: Uint8Array, opts: PdfEngineOption
 
 async function readDocument(
   mupdf: Mupdf,
-  bytes: Uint8Array,
+  source: PdfSource,
   opts: PdfEngineOptions,
   wanted: string | null,
   deadline: number,
@@ -1101,15 +1173,10 @@ async function readDocument(
   let drawingLimit = false;
 
   let doc: Document;
-  // The Buffer is made here, not by openDocument, so that it is destroyed on a
-  // failed open too (the document keeps its own reference to the bytes).
-  const buffer = new mupdf.Buffer(bytes);
   try {
-    doc = mupdf.Document.openDocument(buffer, "application/pdf");
+    doc = openPdf(mupdf, source);
   } catch (error) {
     return { figures, reason: `PDF figure extraction failed: ${errorMessage(error)}` };
-  } finally {
-    buffer.destroy();
   }
   try {
     if (doc.needsPassword()) {
@@ -1220,7 +1287,7 @@ function errorMessage(error: unknown): string {
  * the page's analysis and not the render.
  */
 export async function measurePdfFigure(
-  bytes: Uint8Array,
+  bytes: PdfSource,
   page: number,
   fig: number | string,
 ): Promise<{ width: number; height: number } | null> {
