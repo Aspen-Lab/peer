@@ -15,8 +15,11 @@ import {
   ACCOUNT_STEP_RETURN_TO,
   AI_STEP_RETURN_TO,
   AccountStepView,
+  CONTINUE_WITHOUT_SIGNING_IN,
   SignInToUseKeyView,
+  SkipSignInLabel,
   accountStepCopy,
+  continueButtonName,
   type AccountStepViewProps,
 } from "./account-step";
 
@@ -184,10 +187,12 @@ describe("welcome page — the Account step and the AI step's block (source)", (
     expect(page.indexOf('key === "account" && (')).toBeLessThan(page.indexOf('key === "basics" && ('));
   });
 
-  it("labels Next 'Continue without signing in' on the Account step until the reader is signed in", () => {
-    expect(flat(page)).toContain(
-      '{key === "account" && auth !== "signed-in" ? "Continue without signing in" : "Continue"}',
-    );
+  // R1-fixA item 1 — CHANGED marker: the label is now SkipSignInLabel (two
+  // spans by breakpoint) plus an aria-label, pinned in the describe below.
+  it("labels Next for skipping sign-in on the Account step until the reader is signed in", () => {
+    expect(page).toContain('const skipSignIn = key === "account" && auth !== "signed-in";');
+    expect(flat(page)).toContain('{skipSignIn ? <SkipSignInLabel /> : "Continue"}');
+    expect(page).toContain("aria-label={continueButtonName(skipSignIn)}");
   });
 
   it("puts 'Sign in to use your key' above the key fields, only for a reader it applies to", () => {
@@ -207,5 +212,53 @@ describe("welcome page — the Account step and the AI step's block (source)", (
   it("still waits for the profile to settle before choosing a step, so nothing flashes", () => {
     expect(page).toContain("if (settled && autoStart === null) {");
     expect(page).toMatch(/step === null \|\| key === null \?/);
+  });
+});
+
+// R1-fixA item 1 — at 375 px "Continue without signing in" wrapped and left
+// "in" alone on a second line. Below `sm` the button says "Skip sign-in";
+// from `sm` up, "Continue without signing in"; its accessible name is
+// "Continue without signing in" at every width.
+describe("the Account step's Next button: one line on a phone, one name everywhere", () => {
+  /** The button exactly as the wizard builds it. */
+  const nextButton = (skipSignIn: boolean) =>
+    renderToStaticMarkup(
+      createElement(
+        "button",
+        { type: "button", "aria-label": continueButtonName(skipSignIn) },
+        skipSignIn ? createElement(SkipSignInLabel) : "Continue",
+        createElement("span", { "aria-hidden": true }, "→"),
+      ),
+    );
+
+  /** The accessible name of a rendered button: its aria-label, else its text
+   *  without the aria-hidden parts. */
+  const accessibleName = (html: string) => {
+    const label = html.match(/^<button[^>]*aria-label="([^"]*)"/);
+    if (label) return label[1];
+    return html
+      .replace(/<span aria-hidden="true"[^>]*>.*?<\/span>/gs, "")
+      .replace(/<[^>]+>/g, "")
+      .trim();
+  };
+
+  it("renders 'Skip sign-in' below sm and 'Continue without signing in' from sm up, each hidden from assistive technology", () => {
+    const html = renderToStaticMarkup(createElement(SkipSignInLabel));
+    expect(html).toBe(
+      '<span aria-hidden="true" class="sm:hidden">Skip sign-in</span>' +
+        '<span aria-hidden="true" class="hidden sm:inline">Continue without signing in</span>',
+    );
+  });
+
+  it("has the accessible name 'Continue without signing in' whichever span shows", () => {
+    expect(CONTINUE_WITHOUT_SIGNING_IN).toBe("Continue without signing in");
+    expect(accessibleName(nextButton(true))).toBe("Continue without signing in");
+  });
+
+  it("everywhere else Next keeps its own words, 'Continue', as its name (no aria-label)", () => {
+    const html = nextButton(false);
+    expect(html).not.toContain("aria-label");
+    expect(accessibleName(html)).toBe("Continue");
+    expect(html).not.toContain("Skip sign-in");
   });
 });

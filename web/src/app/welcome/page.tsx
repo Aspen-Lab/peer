@@ -62,7 +62,13 @@ import {
   stepIndexFromKey,
   visibleSteps,
 } from "./completeness";
-import { AccountStep, SignInToUseKey, accountStepCopy } from "./account-step";
+import {
+  AccountStep,
+  SignInToUseKey,
+  SkipSignInLabel,
+  accountStepCopy,
+  continueButtonName,
+} from "./account-step";
 import { aiStepSummary } from "./summary";
 
 const DEFAULT_NAME = "Peer Member";
@@ -132,6 +138,8 @@ export default function WelcomePage() {
   const key: StepKey | null = step === null ? null : steps[step].key;
   const isLast = step === total - 1;
   const topicsIdx = steps.findIndex((m) => m.key === "topics");
+  // On the Account step, until the reader signs in, Next skips sign-in.
+  const skipSignIn = key === "account" && auth !== "signed-in";
 
   // Topics is the one gate: the feed needs at least one required topic to
   // build a real first briefing.
@@ -545,15 +553,14 @@ export default function WelcomePage() {
                   onClick={next}
                   disabled={!canContinue}
                   aria-describedby={key === "topics" && !topicsSatisfied ? "topics-gate-note" : undefined}
+                  aria-label={continueButtonName(skipSignIn)}
                   className={cn(
                     buttonVariants({ tone: "primary", size: "lg" }),
                     "bg-heading hover:bg-heading/90 px-6",
                     "disabled:opacity-100 disabled:bg-bg-secondary disabled:text-text-faint/70 disabled:shadow-none disabled:cursor-not-allowed disabled:active:scale-100",
                   )}
                 >
-                  {key === "account" && auth !== "signed-in"
-                    ? "Continue without signing in"
-                    : "Continue"}
+                  {skipSignIn ? <SkipSignInLabel /> : "Continue"}
                   <span aria-hidden>→</span>
                 </button>
               )}
