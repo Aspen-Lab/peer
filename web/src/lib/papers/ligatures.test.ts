@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { learnLigatures } from "./ligatures";
+import { applyLigatures, learnLigatures, restoreLigatures } from "./ligatures";
+import { prose, type Run } from "./minimal-pdf.test-helper";
+import { extractPdfTextFromBytes, readPages } from "./pdf-text";
 
 // P12-67 (§1h.439): a font that sets fi / fl / ff / ffi / ffl as glyphs with no Unicode mapping comes out of pdf.js as
 // a private-use character. Every paper below is invented; the codes are the ones the symptom showed.
-const FI = ""; // "gure"
-const FL = ""; // "inuence"
-const FF = ""; // "dierent"
+const FI = "\uE103"; // "\uE103gure"
+const FL = "\uE104"; // "in\uE104uence"
+const FF = "\uE09D"; // "di\uE09Derent"
 
 /** A paper in three texts: the body, a heading, a caption. Where the font ligated, the code stands. */
 const PAPER = [
@@ -27,8 +29,8 @@ describe("learnLigatures — rule 1: the code's ligature is learned from the pap
   });
 
   it("learns ffi and ffl, which only a three-letter candidate can spell", () => {
-    const A = "";
-    const B = "";
+    const A = "\uE0A1";
+    const B = "\uE0A2";
     const learned = learnLigatures([
       `The e${A}cient o${A}ce and the su${A}cient sta${A}.`,
       `An a${B}uent o${B}ine man was ba${B}ed.`,
@@ -45,14 +47,14 @@ describe("learnLigatures — rule 1: the code's ligature is learned from the pap
   });
 
   it("leaves a code alone when only one word confirms it", () => {
-    const A = "";
+    const A = "\uE105";
     // "figure" is printed plainly; "fish" is not, so the code has one confirming word.
     const learned = learnLigatures([`The ${A}gure and the ${A}sh.`, "The figure is clear."]);
     expect(learned.has(A)).toBe(false);
   });
 
   it("counts a word once however often it occurs", () => {
-    const A = "";
+    const A = "\uE105";
     const learned = learnLigatures([
       `${A}gure ${A}gure ${A}gure ${A}gure ${A}gure ${A}gure`,
       "figure figure figure figure figure figure figure figure",
@@ -61,20 +63,20 @@ describe("learnLigatures — rule 1: the code's ligature is learned from the pap
   });
 
   it("learns a code from two confirming words and no rival", () => {
-    const A = "";
+    const A = "\uE105";
     const learned = learnLigatures([`The ${A}ne ${A}ve.`, "A fine day; a five."]);
     expect(learned.get(A)).toBe("fi");
   });
 
   it("leaves a code alone on a tie between two candidates", () => {
-    const A = "";
+    const A = "\uE105";
     // fi: fine, five. fl: flat, flag. Two words each.
     const learned = learnLigatures([`${A}ne ${A}ve ${A}at ${A}ag`, "fine five flat flag"]);
     expect(learned.has(A)).toBe(false);
   });
 
   it("wants twice the runner-up: two to one wins, three to two does not, four to two wins", () => {
-    const A = "";
+    const A = "\uE105";
     const fiWords = ["ne", "ve", "re", "sh"]; // fine five fire fish
     const flWords = ["at", "ag", "ow"]; // flat flag flow
     const plain = "fine five fire fish flat flag flow";
@@ -90,22 +92,22 @@ describe("learnLigatures — rule 1: the code's ligature is learned from the pap
   });
 
   it("matches case-insensitively", () => {
-    const A = "";
+    const A = "\uE105";
     const learned = learnLigatures([`${A}rst ${A}GURE ${A}rm`, "First FIGURE; Firm."]);
     expect(learned.get(A)).toBe("fi");
   });
 
   it("does not take a word that still carries a private-use code for a word the paper prints plainly", () => {
-    const A = "";
-    const B = "";
+    const A = "\uE105";
+    const B = "\uE106";
     // "effect" and "different" are printed, but only as broken as the other code spells them.
     const learned = learnLigatures([`e${A}ect di${A}erent`, `e${B}ect di${B}erent`]);
     expect(learned.size).toBe(0);
   });
 
   it("lets a word with two different codes confirm nothing", () => {
-    const A = "";
-    const B = "";
+    const A = "\uE105";
+    const B = "\uE106";
     // "figure" confirms A once; "first" is printed too, but the word that would stand for it still carries B.
     const learned = learnLigatures([`${A}gure ${A}rst${B}`, "figure first"]);
     expect(learned.has(A)).toBe(false);
@@ -116,20 +118,20 @@ describe("learnLigatures — rule 1: the code's ligature is learned from the pap
   });
 
   it("never learns a code that stands alone, even when the paper prints a word the candidate spells", () => {
-    const BULLET = "";
-    // "fi" and "fifi" are printed; the bullets are the words "" and "", with no letter in them.
+    const BULLET = "\uF0B7";
+    // "fi" and "fifi" are printed; the bullets are the words "\uF0B7" and "\uF0B7\uF0B7", with no letter in them.
     const learned = learnLigatures([`${BULLET} one ${BULLET} two ${BULLET}${BULLET} three`, "Wi-Fi: fi, fifi."]);
     expect(learned.size).toBe(0);
   });
 
   it("reads a word through the punctuation, digits and hyphens around it", () => {
-    const A = "";
+    const A = "\uE105";
     const learned = learnLigatures([`(${A}ne) 3${A}ve; well-${A}ne, "${A}ve".`, "fine five"]);
     expect(learned.get(A)).toBe("fi");
   });
 
   it("pools the evidence of every text: the body's code is confirmed by the heading and the caption", () => {
-    const A = "";
+    const A = "\uE105";
     expect(learnLigatures([`${A}ne ${A}ve`, "Fine", "five"]).get(A)).toBe("fi");
     // Any iterable, read once.
     function* texts() {
@@ -141,21 +143,21 @@ describe("learnLigatures — rule 1: the code's ligature is learned from the pap
   });
 
   it("learns each code on its own evidence: one code can be fi where another is fl", () => {
-    const A = "";
-    const B = "";
+    const A = "\uE105";
+    const B = "\uE106";
     const learned = learnLigatures([`${A}ne ${A}ve ${B}at ${B}ag`, "fine five flat flag"]);
     expect(learned.get(A)).toBe("fi");
     expect(learned.get(B)).toBe("fl");
   });
 
   it("takes the private-use area as U+E000–U+F8FF, edges included, and nothing around it", () => {
-    const FIRST = "";
-    const LAST = "";
+    const FIRST = "\uE000";
+    const LAST = "\uF8FF";
     const learned = learnLigatures([`${FIRST}ne ${FIRST}ve ${LAST}at ${LAST}ag`, "fine five flat flag"]);
     expect(learned.get(FIRST)).toBe("fi");
     expect(learned.get(LAST)).toBe("fl");
     // U+F900 is a CJK compatibility ideograph: a letter, outside the area. It is a plain word, never a code.
-    const outside = learnLigatures(["豈ne 豈ve 豈at", "fine five flat"]);
+    const outside = learnLigatures(["\uF900ne \uF900ve \uF900at", "fine five flat"]);
     expect(outside.size).toBe(0);
   });
 
@@ -164,5 +166,346 @@ describe("learnLigatures — rule 1: the code's ligature is learned from the pap
     const two = learnLigatures(PAPER);
     expect(one).not.toBe(two);
     expect([...one]).toEqual([...two]);
+  });
+});
+
+// ── Rule 2: applied everywhere ───────────────────────────────────────────────────────────────────────────────
+
+/** The paper's own words, as a finished document: the title, sections, captions, and an equation. */
+function invented() {
+  return {
+    title: `Tidal ${FL}ow at Invented Shorelines`,
+    sections: [
+      {
+        id: "s0",
+        heading: `The ${FI}rst Survey`,
+        canonical: "methods",
+        text: `The ${FI}rst ${FI}gure shows the ${FL}ow. The in${FL}uence of the tide is di${FF}erent here and its e${FF}ect is clear. A ${FI}sh stayed.`,
+        page: 1,
+      },
+      {
+        id: "s1",
+        heading: "Results",
+        canonical: "results",
+        text: "Plainly: the first figure, the flow, the influence, the effect, and a different tide.",
+        page: 2,
+      },
+    ],
+    figureCaptions: [
+      { ordinal: 1, label: "Figure 1", caption: `The ${FI}rst survey and the ${FL}ow it measured.`, page: 2, at: 0.75, width: 400, height: 300 },
+    ],
+    equations: [{ text: `x = ${FI}y`, number: "(1)" }],
+    source: "pdf" as const,
+    pageCount: 2,
+    reason: null,
+  };
+}
+
+describe("applyLigatures — rule 2: every occurrence of a learned code is its ligature's letters (P12-67)", () => {
+  const learned = new Map([
+    [FI, "fi"],
+    [FL, "fl"],
+    [FF, "ff"],
+  ]);
+
+  it("replaces every occurrence, not only the words that confirmed the code", () => {
+    expect(applyLigatures(`The ${FI}rst ${FI}gure, a ${FI}sh, in${FL}uence, di${FF}erent, e${FF}ect, ${FI}${FI}x.`, learned)).toBe(
+      "The first figure, a fish, influence, different, effect, fifix.",
+    );
+    // the code three times in one word
+    expect(applyLigatures(`${FF}o${FF}o${FF}`, learned)).toBe("ffoffoff");
+  });
+
+  it("keeps a code that was not learned where it is, in the word it is in", () => {
+    const OTHER = "\uE105";
+    expect(applyLigatures(`${OTHER}gure ${FI}gure ${FI}${OTHER}x`, learned)).toBe(`${OTHER}gure figure fi${OTHER}x`);
+  });
+
+  it("changes no character outside the private-use area", () => {
+    const NBSP = String.fromCharCode(0xa0);
+    const plain = `Café naïve über – — − ± µm${NBSP}“quoted” 中文 😀 ﬁ ﬂ 100% (a+b) \t\n\n done`;
+    expect(applyLigatures(plain, learned)).toBe(plain);
+    const mixed = `${plain} ${FI}gure ${plain}`;
+    expect(applyLigatures(mixed, learned)).toBe(`${plain} figure ${plain}`);
+    // U+F900 is a CJK compatibility ideograph, just outside the area
+    expect(applyLigatures("\uF900gure", learned)).toBe("\uF900gure");
+  });
+
+  it("leaves a code that stands alone, not inside a word, as it is", () => {
+    for (const text of [
+      `${FI}`,
+      ` ${FI} `,
+      `(${FI})`,
+      `1 ${FI} 2`,
+      `3${FI}`,
+      `${FI}${FI}`,
+      `${FI}.`,
+      `- ${FI}\n${FL}\t${FF}`,
+      "\uF0B7 a bullet",
+    ]) {
+      expect(applyLigatures(text, learned)).toBe(text);
+    }
+    expect(applyLigatures(`${FI} ${FI}gure ${FI}`, learned)).toBe(`${FI} figure ${FI}`);
+  });
+
+  it("returns the very same string when there is nothing to do", () => {
+    const text = "No private-use character here, only the first figure.";
+    expect(applyLigatures(text, learned)).toBe(text);
+    expect(applyLigatures(`${FI}gure`, new Map())).toBe(`${FI}gure`);
+    expect(applyLigatures("", learned)).toBe("");
+  });
+});
+
+describe("restoreLigatures — rule 2: the title, the headings, the bodies and the captions (P12-67)", () => {
+  it("restores the code in the title, every heading, every text and every caption, learned from all of them", () => {
+    const doc = invented();
+    const out = restoreLigatures(doc);
+    expect(out.title).toBe("Tidal flow at Invented Shorelines");
+    expect(out.sections[0]?.heading).toBe("The first Survey");
+    expect(out.sections[0]?.text).toBe(
+      "The first figure shows the flow. The influence of the tide is different here and its effect is clear. A fish stayed.",
+    );
+    expect(out.figureCaptions[0]?.caption).toBe("The first survey and the flow it measured.");
+    // not a private-use character is left anywhere in what the reader reads
+    expect(JSON.stringify({ title: out.title, sections: out.sections, figureCaptions: out.figureCaptions })).not.toMatch(
+      /[\uE000-\uF8FF]/,
+    );
+  });
+
+  it("learns from words spread over different places: a heading's and a body's codes are confirmed by a caption", () => {
+    const out = restoreLigatures({
+      title: `The ${FL}ow`,
+      sections: [
+        { heading: `${FI}gure notes`, text: "Plain words." },
+        { heading: "Plain", text: `The ${FI}rst, and the ${FL}ow beside it.` },
+      ],
+      figureCaptions: [{ label: "Figure 1", caption: "A plain figure, a plain first and a plain flow." }],
+    });
+    // fi: figure (a heading) and first (a body), each printed plainly in a caption.
+    expect(out.sections[0]?.heading).toBe("figure notes");
+    expect(out.sections[1]?.text).toBe(`The first, and the ${FL}ow beside it.`);
+    // fl: "flow" is the one word that carries the code (title and body), so the code is left as it is.
+    expect(out.title).toBe(`The ${FL}ow`);
+  });
+
+  it("carries everything else over as it was: ids, buckets, pages, sizes, the equations, the source", () => {
+    const doc = invented();
+    const out = restoreLigatures(doc);
+    expect(out.sections.map((s) => [s.id, s.canonical, s.page])).toEqual([
+      ["s0", "methods", 1],
+      ["s1", "results", 2],
+    ]);
+    expect(out.figureCaptions[0]).toMatchObject({ ordinal: 1, label: "Figure 1", page: 2, at: 0.75, width: 400, height: 300 });
+    expect(out.equations).toEqual([{ text: `x = ${FI}y`, number: "(1)" }]);
+    expect(out.source).toBe("pdf");
+    expect(out.pageCount).toBe(2);
+    expect(out.reason).toBeNull();
+    expect(Object.keys(out)).toEqual(Object.keys(doc));
+  });
+
+  it("does not change the document it is given", () => {
+    const doc = invented();
+    const before = JSON.stringify(doc);
+    const out = restoreLigatures(doc);
+    expect(out).not.toBe(doc);
+    expect(JSON.stringify(doc)).toBe(before);
+  });
+
+  it("measure: three codes, six words each printed both ways — every occurrence reads correctly after", () => {
+    const doc = invented();
+    const count = (d: { title?: string | null; sections: { heading: string; text: string }[]; figureCaptions: { caption: string }[] }) =>
+      (
+        [d.title ?? "", ...d.sections.flatMap((s) => [s.heading, s.text]), ...d.figureCaptions.map((c) => c.caption)].join("\n").match(
+          /[\uE000-\uF8FF]/g,
+        ) ?? []
+      ).length;
+    // before: the codes stay
+    expect(count(doc)).toBe(11);
+    // after: each code is its letters
+    const out = restoreLigatures(doc);
+    expect(count(out)).toBe(0);
+    const words = [out.title, ...out.sections.map((s) => s.text), ...out.figureCaptions.map((c) => c.caption)].join(" ").toLowerCase();
+    for (const word of ["figure", "first", "influence", "flow", "different", "effect"]) expect(words).toContain(word);
+    for (const wrong of ["fiigure", "flirst", "fiflow", "ffirst", "diflerent", "eflect", "difierent"]) expect(words).not.toContain(wrong);
+  });
+
+  it("a code with one confirming word, or a tie, stays unchanged while the others are restored", () => {
+    const ONE = "\uE105"; // "fish" is not printed plainly: one confirming word
+    const TIE = "\uE106"; // fi: fine, five. fl: flat, flag
+    const out = restoreLigatures({
+      sections: [
+        {
+          heading: "A",
+          text: `The ${FI}rst ${FI}gure. The ${ONE}gure and the ${ONE}sh. ${TIE}ne ${TIE}ve ${TIE}at ${TIE}ag.`,
+        },
+        { heading: "B", text: "first figure; figure; fine five flat flag" },
+      ],
+    });
+    expect(out.sections[0]?.text).toBe(`The first figure. The ${ONE}gure and the ${ONE}sh. ${TIE}ne ${TIE}ve ${TIE}at ${TIE}ag.`);
+  });
+
+  it("a paper with no private-use code comes back as the same object, byte for byte", () => {
+    const doc = {
+      title: "A Plain Paper",
+      sections: [{ id: "s0", heading: "1 Introduction", canonical: "introduction", text: "The first figure shows the flow – ± 5%." }],
+      figureCaptions: [{ ordinal: 1, label: "Figure 1", caption: "The influence of the effect." }],
+      source: "pdf" as const,
+    };
+    const before = JSON.stringify(doc);
+    const out = restoreLigatures(doc);
+    expect(out).toBe(doc);
+    expect(JSON.stringify(out)).toBe(before);
+  });
+
+  it("a paper whose codes have no evidence comes back as the same object, the codes where they were", () => {
+    const doc = {
+      title: `The ${FL}ow`,
+      sections: [{ heading: "Plain", text: `Only the ${FI}rst, once.` }],
+      figureCaptions: [],
+    };
+    expect(restoreLigatures(doc)).toBe(doc);
+  });
+
+  it("tolerates a document with no title, no sections or no captions", () => {
+    expect(restoreLigatures({})).toEqual({});
+    expect(restoreLigatures({ title: null, sections: [], figureCaptions: [] })).toEqual({ title: null, sections: [], figureCaptions: [] });
+    const out = restoreLigatures({ sections: [{ text: `${FI}rst ${FI}gure`, heading: undefined }, { heading: "first figure" }] });
+    expect(out.sections?.[0]?.text).toBe("first figure");
+  });
+});
+
+// ── Through the extractor: a PDF whose font names its ligature glyphs by code, read by pdf.js ─────────────────
+
+/**
+ * A real, minimal PDF like `minimalPdf`'s, but the font is the way the symptom's papers have it: the ligatures are
+ * glyphs named only by their code ("uniE103"), so pdf.js reads each as a private-use character. Each distinct
+ * private-use character in the text becomes the font's own byte 1, 2, 3, …
+ */
+function ligaturePdf(pages: Run[][]): Buffer {
+  const codes = new Map<string, number>();
+  for (const runs of pages) {
+    for (const [text] of runs) {
+      for (const ch of text) if (ch >= "\uE000" && ch <= "\uF8FF" && !codes.has(ch)) codes.set(ch, codes.size + 1);
+    }
+  }
+  const names = [...codes.keys()].map((ch) => `/uni${ch.charCodeAt(0).toString(16).toUpperCase()}`).join(" ");
+  const encoding = names
+    ? `<< /Type /Encoding /BaseEncoding /WinAnsiEncoding /Differences [1 ${names}] >>`
+    : "/WinAnsiEncoding";
+  // The ligature glyphs have widths of their own, as in a real font; without them pdf.js sets a space around each.
+  const widths = names
+    ? ` /FirstChar 1 /LastChar 255 /Widths [${Array.from({ length: 255 }, (_, i) => (i + 1 === 32 ? 278 : 556)).join(" ")}]`
+    : "";
+  const font = (base: string) => `<< /Type /Font /Subtype /Type1 /BaseFont /${base} /Encoding ${encoding}${widths} >>`;
+  const escape = (text: string) =>
+    [...text]
+      .map((ch) => {
+        const code = codes.get(ch);
+        if (code !== undefined) return `\\${code.toString(8).padStart(3, "0")}`;
+        return ch === "\\" || ch === "(" || ch === ")" ? `\\${ch}` : ch;
+      })
+      .join("");
+  const objects: string[] = [font("Helvetica"), font("Helvetica-Bold"), ""];
+  const pagesId = 3;
+  const kids: number[] = [];
+  for (const runs of pages) {
+    const stream = runs
+      .map(([text, x, top, size, bold]) => `BT /${bold ? "F2" : "F1"} ${size} Tf ${x} ${842 - top} Td (${escape(text)}) Tj ET`)
+      .join("\n");
+    objects.push(`<< /Length ${Buffer.byteLength(stream, "latin1")} >>\nstream\n${stream}\nendstream`);
+    const contents = objects.length;
+    objects.push(
+      `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents ${contents} 0 R >>`,
+    );
+    kids.push(objects.length);
+  }
+  objects[pagesId - 1] = `<< /Type /Pages /Kids [${kids.map((k) => `${k} 0 R`).join(" ")}] /Count ${kids.length} >>`;
+  objects.push(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
+  const catalog = objects.length;
+  let out = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  objects.forEach((body, i) => {
+    offsets.push(Buffer.byteLength(out, "latin1"));
+    out += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xref = Buffer.byteLength(out, "latin1");
+  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  out += offsets.map((o) => `${String(o).padStart(10, "0")} 00000 n \n`).join("");
+  out += `trailer\n<< /Size ${objects.length + 1} /Root ${catalog} 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(out, "latin1");
+}
+
+describe("extractPdfTextFromBytes — a font that sets its ligatures as private-use glyphs reads as letters (P12-67)", () => {
+  const PAGES: Run[][] = [
+    [
+      [`Tidal ${FL}ow at Invented Shorelines`, 72, 80, 18],
+      ["Abstract", 72, 130, 14],
+      ...prose(
+        [
+          `We study how the ${FL}ow of water shapes an invented shoreline across ten visits.`,
+          `The ${FI}rst survey was di${FF}erent from the later ones in a way the notes explain.`,
+        ],
+        150,
+      ),
+      ["1 Introduction", 72, 210, 11],
+      ...prose(
+        [
+          `Every ${FI}gure in this paper shows the in${FL}uence of the tide on the beach.`,
+          `A tide has an e${FF}ect on the sand, and the e${FF}ect is easy to see at low water.`,
+        ],
+        230,
+      ),
+    ],
+    [
+      ["2 Methods", 72, 80, 11],
+      ...prose(
+        [
+          "The first survey counted the stones; the figure of ten sites was kept for later.",
+          "We took the flow to be steady, and the influence of the wind to be small.",
+        ],
+        100,
+      ),
+      ["3 Results", 72, 160, 11],
+      ...prose(["The effect was different at the pools, where the tide came in more slowly."], 180),
+      [`Figure 1: The ${FI}rst survey and the ${FL}ow it measured.`, 72, 250, 9],
+    ],
+  ];
+
+  it("reads the PDF as private-use characters in pdf.js, and as letters in the document", async () => {
+    const bytes = ligaturePdf(PAGES);
+    // the precondition: pdf.js hands over private-use characters here, as it does for the owner's papers
+    const raw = (await readPages(bytes)).flatMap((page) => page.items.map((item) => item.str)).join("");
+    expect(raw.match(/[\uE000-\uF8FF]/g)?.length).toBe(10);
+    expect(new Set(raw.match(/[\uE000-\uF8FF]/g))).toEqual(new Set([FI, FL, FF]));
+
+    const result = await extractPdfTextFromBytes(bytes);
+
+    expect(result.ok).toBe(true);
+    const doc = result.doc!;
+    const everything = [
+      doc.title ?? "",
+      ...doc.sections.flatMap((section) => [section.heading, section.text]),
+      ...doc.figureCaptions.flatMap((caption) => [caption.label, caption.caption]),
+    ].join("\n");
+    expect(everything).not.toMatch(/[\uE000-\uF8FF]/);
+    expect(doc.title).toBe("Tidal flow at Invented Shorelines");
+    const text = doc.sections.map((section) => section.text).join("\n");
+    expect(text).toContain("We study how the flow of water shapes an invented shoreline across ten visits.");
+    expect(text).toContain("The first survey was different from the later ones in a way the notes explain.");
+    expect(text).toContain("Every figure in this paper shows the influence of the tide on the beach.");
+    expect(text).toContain("A tide has an effect on the sand, and the effect is easy to see at low water.");
+    expect(doc.figureCaptions.map((caption) => caption.caption)).toEqual(["The first survey and the flow it measured."]);
+  });
+
+  it("reads a PDF with no private-use glyph exactly as before", async () => {
+    const spelled = PAGES.map((page) =>
+      page.map(([text, ...rest]): Run => [text.split(FI).join("fi").split(FL).join("fl").split(FF).join("ff"), ...rest]),
+    );
+    const result = await extractPdfTextFromBytes(ligaturePdf(spelled));
+    expect(result.ok).toBe(true);
+    expect(result.doc?.title).toBe("Tidal flow at Invented Shorelines");
+    const text = result.doc?.sections.map((section) => section.text).join("\n") ?? "";
+    expect(text).toContain("The first survey was different from the later ones in a way the notes explain.");
+    expect(text).toContain("A tide has an effect on the sand, and the effect is easy to see at low water.");
   });
 });

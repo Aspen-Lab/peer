@@ -1,7 +1,7 @@
 // P12-67 (§1h.439): the ligatures a PDF's font stores as private-use glyphs read as letters again.
 //
 // A paper whose font sets fi / fl / ff / ffi / ffl as glyphs with no Unicode mapping comes out of pdf.js with a
-// private-use character (U+E000–U+F8FF) in their place: "inuence", "gure", "dierent". The code is the
+// private-use character (U+E000–U+F8FF) in their place: "in\uE104uence", "\uE103gure", "di\uE09Derent". The code is the
 // font's own — the same glyph is a different code in another font, and nothing in the file says which ligature a
 // code is. The paper does: it prints "figure" and "first" in other places, where the font did not ligate them (a word
 // at a line's end, a bold face, a caption in another font), or prints "influence" with the ligature spelled out.
@@ -10,9 +10,10 @@
 // Pure, deterministic, no dependency, linear in the size of the text. It reads strings and returns strings.
 
 /** The private-use area of the Basic Multilingual Plane. */
-const PRIVATE_USE = /[-]/;
+const PRIVATE_USE = /[\uE000-\uF8FF]/;
+const PRIVATE_USE_EACH = /[\uE000-\uF8FF]/g;
 /** A word: a run of letters (with their combining marks) and private-use codes. */
-const WORD = /[\p{L}\p{M}-]+/gu;
+const WORD = /[\p{L}\p{M}\uE000-\uF8FF]+/gu;
 const LETTER = /\p{L}/u;
 
 /** The letters a code may stand for, in the order they are counted. */
@@ -86,4 +87,70 @@ export function learnLigatures(texts: Iterable<string>): Map<string, string> {
     if (top >= MIN_CONFIRMING_WORDS && top >= MIN_LEAD * runnerUp) learned.set(code, LIGATURE_CANDIDATES[best] as string);
   }
   return learned;
+}
+
+/**
+ * Rule 2: `text` with every learned code inside a word replaced by its ligature's letters.
+ *
+ * Only private-use characters change, and only the learned ones; every other character comes back as it came. A
+ * code that stands alone (no letter in its run: a bullet, a mark between spaces) is left as it is, whatever was
+ * learned: it is not inside a word. A code that was not learned stays in the word it is in.
+ */
+export function applyLigatures(text: string, learned: ReadonlyMap<string, string>): string {
+  if (learned.size === 0 || !PRIVATE_USE.test(text)) return text;
+  return text.replace(WORD, (word) =>
+    PRIVATE_USE.test(word) && LETTER.test(word) ? word.replace(PRIVATE_USE_EACH, (code) => learned.get(code) ?? code) : word,
+  );
+}
+
+/** The parts of a finished document that carry the paper's words. An extracted document, an outline, a draft. */
+export interface LigatureText {
+  title?: string | null;
+  sections?: ReadonlyArray<{ heading?: string; text?: string }>;
+  figureCaptions?: ReadonlyArray<{ label?: string; caption?: string }>;
+}
+
+/**
+ * Rules 1 and 2 on a finished document, in one call: the code of each ligature is learned from the words of the
+ * title, every section's heading and text and every caption's label and text together, and then every occurrence is
+ * replaced in those same places. Everything else in the document (ids, pages, buckets, equations, sizes, the
+ * source) is carried over as it was. A document in which nothing is learned is returned itself, the same object.
+ * The equations are left out on purpose: a math font reuses the private-use area for symbols that are not
+ * ligatures, and what an equation prints is not a word the paper prints elsewhere.
+ */
+export function restoreLigatures<T extends LigatureText>(doc: T): T {
+  const texts: string[] = [];
+  const take = (text: unknown) => {
+    if (typeof text === "string" && text !== "") texts.push(text);
+  };
+  take(doc.title);
+  for (const section of doc.sections ?? []) {
+    take(section.heading);
+    take(section.text);
+  }
+  for (const caption of doc.figureCaptions ?? []) {
+    take(caption.label);
+    take(caption.caption);
+  }
+  const learned = learnLigatures(texts);
+  if (learned.size === 0) return doc;
+
+  const fix = (text: string | undefined) => (typeof text === "string" ? applyLigatures(text, learned) : text);
+  const patch: LigatureText = {};
+  if (typeof doc.title === "string") patch.title = fix(doc.title);
+  if (doc.sections) {
+    patch.sections = doc.sections.map((section) => ({
+      ...section,
+      ...(section.heading !== undefined ? { heading: fix(section.heading) } : {}),
+      ...(section.text !== undefined ? { text: fix(section.text) } : {}),
+    }));
+  }
+  if (doc.figureCaptions) {
+    patch.figureCaptions = doc.figureCaptions.map((caption) => ({
+      ...caption,
+      ...(caption.label !== undefined ? { label: fix(caption.label) } : {}),
+      ...(caption.caption !== undefined ? { caption: fix(caption.caption) } : {}),
+    }));
+  }
+  return { ...doc, ...patch };
 }

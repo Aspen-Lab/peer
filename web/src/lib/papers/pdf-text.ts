@@ -25,6 +25,7 @@ import { readFile } from "node:fs/promises";
 import { cleanPaperText } from "@/lib/text/clean";
 import { buildOutline, gutterPrior, linesOfPageWith, type PdfOutline, type PdfPageText } from "./pdf-outline";
 import { dropStrayHeadings, withSectionIds } from "./html-text";
+import { restoreLigatures } from "./ligatures";
 import type { ExtractedDocument, ExtractedSection, ExtractedFigureCaption } from "./html-text";
 import { pictureNumber } from "./reading";
 import { FIGURE_EXTRACTION_REVISION } from "@/lib/figures/figure-revision";
@@ -224,7 +225,7 @@ function normalize(extractor: PdfOutline): ExtractedDocument {
     .map((eq) => ({ text: cleanPaperText(eq.text), ...(eq.number ? { number: eq.number } : {}) }))
     .filter((eq) => eq.text.length > 0);
 
-  return {
+  const doc: ExtractedDocument = {
     title: cleanPaperText(extractor.title) || null,
     sections,
     figureCaptions,
@@ -233,6 +234,12 @@ function normalize(extractor: PdfOutline): ExtractedDocument {
     pageCount,
     reason: extractor.reason ?? null,
   };
+  // P12-67 (§1h.439): the one place every section's heading and text, every caption and the title have passed
+  // through, and both callers (a link, an upload) arrive here. A font that sets fi / fl / ff / ffi / ffl as glyphs
+  // with no Unicode mapping leaves a private-use character in their place; the paper's own words say which
+  // letters each one is (`ligatures.ts`), and the document comes out with them. A paper without such a character
+  // comes back as the same object.
+  return restoreLigatures(doc);
 }
 
 /** P10-34: the longest the measuring of a paper's figures may take; what is not measured by then carries no size. */
