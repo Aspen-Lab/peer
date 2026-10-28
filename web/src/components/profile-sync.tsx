@@ -677,11 +677,30 @@ export function shouldClearOnConfirmedSignOut(
   return cookiePresent && authOutcome === "signed-out" && syncedAccountId !== null;
 }
 
+/**
+ * OWN-KEY lane 4 (R13, D4) — whether a confirmed sign-out must clear this
+ * browser's API keys. The cookie and the CONFIRMED "signed-out" outcome, and
+ * nothing else: unlike `shouldClearOnConfirmedSignOut`, no recorded owner is
+ * required. The sign-out dialog promises the keys go, and an owner can be
+ * missing while signed in (a "Reset profile to defaults" nulls it until the
+ * next auth event), so a rule that waited for one could leave a key for the
+ * next person on this browser — and for the next account, which then would
+ * not even be seen as a switch.
+ */
+export function shouldClearDeviceKeysOnSignOut(
+  cookiePresent: boolean,
+  authOutcome: AuthOutcome,
+): boolean {
+  return cookiePresent && authOutcome === "signed-out";
+}
+
 export interface ProcessConfirmedSignOutCookieDeps {
   cookiePresent: boolean;
   authOutcome: AuthOutcome;
   syncedAccountId: string | null;
   logOut: () => void;
+  /** The profile store's `clearDeviceKeys()`: the API keys only. */
+  clearDeviceKeys: () => void;
   deleteCookie: () => void;
 }
 
@@ -695,9 +714,16 @@ export interface ProcessConfirmedSignOutCookieDeps {
  * warranted, THEN always consume (delete) the cookie regardless of that
  * decision — a guest's browser must not keep carrying a stale cookie into
  * a LATER sign-in this same session.
+ *
+ * OWN-KEY lane 4 (R13, D4) — and on a confirmed sign-out the API keys are
+ * cleared first, always (`shouldClearDeviceKeysOnSignOut`), whether or not
+ * an owner is recorded; the full `logOut()` still runs only when one is.
  */
 export function processConfirmedSignOutCookie(deps: ProcessConfirmedSignOutCookieDeps): void {
   if (!deps.cookiePresent) return;
+  if (shouldClearDeviceKeysOnSignOut(deps.cookiePresent, deps.authOutcome)) {
+    deps.clearDeviceKeys();
+  }
   if (shouldClearOnConfirmedSignOut(deps.cookiePresent, deps.authOutcome, deps.syncedAccountId)) {
     deps.logOut();
   }
@@ -859,6 +885,7 @@ export function ProfileSync() {
             authOutcome: "signed-out",
             syncedAccountId: useProfileStore.getState().syncedAccountId,
             logOut: () => useProfileStore.getState().logOut(),
+            clearDeviceKeys: () => useProfileStore.getState().clearDeviceKeys(),
             deleteCookie: deleteSignOutCookie,
           });
         }

@@ -1047,12 +1047,20 @@ describe("Reset profile to defaults - says the keys go too (OWN-KEY lane 4)", ()
     expect(question).toBeGreaterThan(-1);
     expect(sentence).toBeGreaterThan(question);
     // Shown above the confirm button itself (the section's header comment also names "Confirm reset").
-    expect(sentence).toBeLessThan(resetSection.indexOf("logOut();"));
+    expect(sentence).toBeLessThan(resetSection.indexOf("confirmProfileReset({"));
     expect(source.match(new RegExp(SENTENCE.replace(/\./g, "\\."), "g")) ?? []).toHaveLength(1);
   });
 
-  it("is the confirmation of the reset that calls logOut()", () => {
-    expect(resetSection).toMatch(/onClick=\{\(\) => \{\s*logOut\(\);/);
+  // L4-fix (R13, D4) — CHANGED marker: "Confirm reset" no longer calls logOut()
+  // bare. It calls confirmProfileReset with the real logOut, the real
+  // setSyncedAccountId and the current auth outcome and id, so a signed-in
+  // reader's account is recorded again right after the reset.
+  it("is the confirmation of the reset: logOut() through confirmProfileReset, which records the signed-in account again", () => {
+    expect(resetSection).toMatch(
+      /onClick=\{\(\) => \{[\s\S]*?const \{ authOutcome, authUserId \} = useSyncGate\.getState\(\);\s*confirmProfileReset\(\{\s*logOut,\s*setSyncedAccountId: useProfileStore\.getState\(\)\.setSyncedAccountId,\s*authOutcome,\s*authUserId,\s*\}\);/,
+    );
+    expect(resetSection).not.toMatch(/^\s*logOut\(\);/m);
+    expect(source).toMatch(/import \{[^}]*\bconfirmProfileReset\b[^}]*\} from "@\/components\/account\/account-section"/);
   });
 
   it("takes the condition from the Account section's browserKeyLabels, so it and the sign-out dialog agree", () => {

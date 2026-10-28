@@ -29,7 +29,7 @@ import { SURFACE_TOPIC_DESCRIPTIONS } from "@/lib/profile/topic-copy";
 import { IconBook, IconBuilding, IconCheck } from "@/components/icons";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageSpread } from "@/components/ui/page-spread";
-import { AccountSection, browserKeyLabels } from "@/components/account/account-section";
+import { AccountSection, browserKeyLabels, confirmProfileReset } from "@/components/account/account-section";
 import { RestoreFromBackup } from "@/components/profile/restore-backup";
 import { useProfileSyncStatus, useSyncGate } from "@/components/profile-sync";
 import { useFeedSyncStatus } from "@/components/feed-sync";
@@ -350,7 +350,15 @@ export default function ProfilePage() {
             <div className="flex items-center gap-3 ml-auto">
               <button
                 onClick={() => {
-                  logOut();
+                  // logOut(), then record the signed-in account again, so a later sign-out still clears this
+                  // browser (R13, D4; confirmProfileReset says why).
+                  const { authOutcome, authUserId } = useSyncGate.getState();
+                  confirmProfileReset({
+                    logOut,
+                    setSyncedAccountId: useProfileStore.getState().setSyncedAccountId,
+                    authOutcome,
+                    authUserId,
+                  });
                   setShowLogout(false);
                   setMode("view");
                 }}

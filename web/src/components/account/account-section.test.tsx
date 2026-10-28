@@ -37,17 +37,21 @@ import {
   AccountSection,
   AccountSectionView,
   browserKeyLabels,
+  confirmProfileReset,
   hasUnsyncedChanges,
   shouldWarnBeforeSignOut,
   handleSignOutSubmitCore,
   signOutKeysSentence,
   signOutPrompt,
   type AccountSectionViewProps,
+  type ConfirmProfileResetDeps,
   type SignOutPrompt,
   type SignOutSubmitDeps,
   type SignOutGuard,
 } from "./account-section";
 import { defaultProfile, type UserProfile } from "@/types";
+import { useProfileStore } from "@/store/profile";
+import { isAccountSwitch, processConfirmedSignOutCookie } from "@/components/profile-sync";
 
 function render(state: AuthState): string {
   mocks.authState = state;
@@ -704,5 +708,118 @@ describe("SignOutDialog wiring (source) — Esc stays, focus starts on Stay sign
     const wrapper = source.slice(source.indexOf("export function AccountSection("));
     expect(wrapper).toContain("useMemo(() => browserKeyLabels(profile), [profile])");
     expect(wrapper).not.toMatch(/feedAiApiKey|jevApiKey/);
+  });
+});
+
+// OWN-KEY lane 4 (R13, D4) — the sign-out dialog promises the keys go. A
+// "Reset profile to defaults" while signed in used to null the recorded owner,
+// so a later sign-out skipped the clear and the key stayed (and the next
+// account inherited it). Two fixes, each enough on its own: the reset records
+// the signed-in account again (confirmProfileReset), and a confirmed sign-out
+// always clears the keys (clearDeviceKeys, in processConfirmedSignOutCookie).
+describe("confirmProfileReset — signed in ⇒ owner recorded (R13, D4)", () => {
+  function run(overrides: Partial<ConfirmProfileResetDeps>) {
+    const calls: string[] = [];
+    confirmProfileReset({
+      logOut: () => calls.push("logOut"),
+      setSyncedAccountId: (id) => calls.push(`owner:${id}`),
+      authOutcome: "signed-in",
+      authUserId: "user-a",
+      ...overrides,
+    });
+    return calls;
+  }
+
+  it("signed in: resets, then records the same account again", () => {
+    expect(run({})).toEqual(["logOut", "owner:user-a"]);
+  });
+
+  it("not signed in, or no id yet: resets and records nobody", () => {
+    expect(run({ authOutcome: "signed-out", authUserId: null })).toEqual(["logOut"]);
+    expect(run({ authOutcome: "unknown", authUserId: null })).toEqual(["logOut"]);
+    expect(run({ authOutcome: "unconfigured", authUserId: null })).toEqual(["logOut"]);
+    expect(run({ authOutcome: "signed-in", authUserId: null })).toEqual(["logOut"]);
+  });
+});
+
+describe("the reviewer's sequence: reset while signed in → paste a key → sign out → the key is gone (R13, D4)", () => {
+  const MODEL = "seq-model-key-sentinel-not-a-key-0000000";
+  const JEV = "seq-jev-key-sentinel-not-a-key-000000000";
+
+  function pasteKeys() {
+    const store = useProfileStore.getState();
+    store.updateFeedAiProvider("gemini");
+    store.updateFeedAiApiKey(MODEL);
+    store.updateJevApiKey(JEV);
+    expect(browserKeyLabels(useProfileStore.getState().profile)).toEqual(["Gemini", "Jev"]);
+  }
+
+  function signOutAndReload(clearDeviceKeys: () => void) {
+    // POST /auth/signout set the cookie; the next load confirms "signed-out".
+    processConfirmedSignOutCookie({
+      cookiePresent: true,
+      authOutcome: "signed-out",
+      syncedAccountId: useProfileStore.getState().syncedAccountId,
+      logOut: () => useProfileStore.getState().logOut(),
+      clearDeviceKeys,
+      deleteCookie: () => {},
+    });
+  }
+
+  function expectNoKey() {
+    const { profile } = useProfileStore.getState();
+    expect(browserKeyLabels(profile)).toEqual([]);
+    expect(JSON.stringify(profile)).not.toContain(MODEL);
+    expect(JSON.stringify(profile)).not.toContain(JEV);
+  }
+
+  function signedInAsA() {
+    useProfileStore.setState({ profile: { ...defaultProfile }, lastSynced: null, syncedAccountId: "user-a" });
+  }
+
+  it("with both fixes: the key is gone, and a second account signing in inherits nothing", () => {
+    signedInAsA();
+    confirmProfileReset({
+      logOut: () => useProfileStore.getState().logOut(),
+      setSyncedAccountId: useProfileStore.getState().setSyncedAccountId,
+      authOutcome: "signed-in",
+      authUserId: "user-a",
+    });
+    expect(useProfileStore.getState().syncedAccountId).toBe("user-a");
+    pasteKeys();
+    signOutAndReload(() => useProfileStore.getState().clearDeviceKeys());
+    expectNoKey();
+    // Account B signs in on this browser next (onSession's own step: wipe on
+    // a switch): whatever the switch check says, no key is left for B.
+    if (isAccountSwitch(useProfileStore.getState().syncedAccountId, "user-b")) {
+      useProfileStore.getState().logOut();
+    }
+    expectNoKey();
+  });
+
+  it("the reset fix alone is enough: the owner is recorded, so the full clear runs", () => {
+    signedInAsA();
+    confirmProfileReset({
+      logOut: () => useProfileStore.getState().logOut(),
+      setSyncedAccountId: useProfileStore.getState().setSyncedAccountId,
+      authOutcome: "signed-in",
+      authUserId: "user-a",
+    });
+    pasteKeys();
+    signOutAndReload(() => {}); // as if the key clear were missing
+    expectNoKey();
+  });
+
+  it("the sign-out fix alone is enough: the old reset (owner nulled) still ends with no key", () => {
+    signedInAsA();
+    useProfileStore.getState().logOut(); // the reset as it was: the owner is forgotten
+    expect(useProfileStore.getState().syncedAccountId).toBeNull();
+    pasteKeys();
+    signOutAndReload(() => useProfileStore.getState().clearDeviceKeys());
+    expectNoKey();
+    // and B is not seen as a switch (no owner), which is exactly why the key
+    // clear must not wait for one.
+    expect(isAccountSwitch(useProfileStore.getState().syncedAccountId, "user-b")).toBe(false);
+    expectNoKey();
   });
 });

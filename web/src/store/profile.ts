@@ -171,6 +171,14 @@ interface ProfileState {
   resetOnboarding: () => void;
   /** Replace local state with a server snapshot. Undefined fields keep local values. */
   hydrateFromRemote: (remote: Partial<UserProfile>) => void;
+  /**
+   * Remove this browser's API keys and nothing else: the model provider back
+   * to "default", the model key and the Jev key blank, and the Jev screening
+   * report (it describes a key that is gone). Run on every confirmed sign-out,
+   * even when no account is recorded as this device's owner, so the sign-out
+   * dialog's "removes your keys" always holds.
+   */
+  clearDeviceKeys: () => void;
   logOut: () => void;
 }
 
@@ -728,6 +736,19 @@ export const useProfileStore = create<ProfileState>()(
         set((s) => ({ profile: { ...s.profile, ...installable } }));
         if (installable.colorTheme) applyColorTheme(installable.colorTheme);
         return true;
+      },
+
+      clearDeviceKeys: () => {
+        useJevScreeningStore.getState().clear();
+        set((s) => ({
+          profile: {
+            ...s.profile,
+            // The same blank values a fresh profile has.
+            feedAiProvider: defaultProfile.feedAiProvider,
+            feedAiApiKey: defaultProfile.feedAiApiKey,
+            jevApiKey: defaultProfile.jevApiKey,
+          },
+        }));
       },
 
       logOut: () => {

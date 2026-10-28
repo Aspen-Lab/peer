@@ -38,7 +38,7 @@ import {
   userName,
   type AuthState,
 } from "./use-auth-user";
-import { requestProfileFlush } from "@/components/profile-sync";
+import { requestProfileFlush, type AuthOutcome } from "@/components/profile-sync";
 import { useFeedSyncStatus } from "@/components/feed-sync";
 
 /**
@@ -113,6 +113,28 @@ export function browserKeyLabels(profile: UserProfile): string[] {
   if (hasUserLlmOverride(profile)) labels.push(providerShortLabel(profile.feedAiProvider));
   if (parseJevApiKey(profile.jevApiKey) !== undefined) labels.push("Jev");
   return labels;
+}
+
+export interface ConfirmProfileResetDeps {
+  logOut: () => void;
+  setSyncedAccountId: (id: string | null) => void;
+  authOutcome: AuthOutcome;
+  authUserId: string | null;
+}
+
+/**
+ * OWN-KEY lane 4 (R13, D4) — Profile's "Confirm reset". `logOut()` resets the
+ * profile and also forgets which account owns this device's data, while the
+ * reader stays signed in; nothing recorded the owner again until the next
+ * auth event. A sign-out in that window then skipped the clear that needs an
+ * owner, and a key pasted after the reset stayed. So a signed-in reader's
+ * account is recorded again at once: "signed in ⇒ owner recorded" holds.
+ */
+export function confirmProfileReset(deps: ConfirmProfileResetDeps): void {
+  deps.logOut();
+  if (deps.authOutcome === "signed-in" && deps.authUserId) {
+    deps.setSyncedAccountId(deps.authUserId);
+  }
 }
 
 /** "Signing out removes your Gemini key and your Jev key from this browser." */

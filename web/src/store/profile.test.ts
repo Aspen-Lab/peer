@@ -14,6 +14,7 @@ import {
   promoteSearchInputs,
   useProfileStore,
 } from "./profile";
+import { useJevScreeningStore } from "./jev-screening";
 
 const profileFixture: UserProfile = {
   ...defaultProfile,
@@ -1246,5 +1247,47 @@ describe("a backup file carries no credential", () => {
     expect(profile).not.toHaveProperty("tavilyEnabled");
     expect(profile).not.toHaveProperty("tavilyApiKey");
     expect(JSON.stringify(profile)).not.toContain("legacy-tavily-sentinel-not-a-key");
+  });
+});
+
+// OWN-KEY lane 4 (R13, D4): a confirmed sign-out always removes this browser's
+// API keys, owner recorded or not. `clearDeviceKeys` is that removal and
+// nothing more: the rest of the profile, the sync baseline and the recorded
+// owner are left exactly as they were.
+describe("clearDeviceKeys", () => {
+  const MODEL = "model-key-test-sentinel-not-a-key-000000";
+  const JEV = "jev-key-test-sentinel-not-a-key-00000000";
+
+  it("blanks the model key and the Jev key, puts the provider back to default, and clears the Jev report", () => {
+    useProfileStore.setState({
+      profile: { ...defaultProfile, researchTopics: ["kept-topic"], displayName: "Kept Name" },
+      syncedAccountId: "user-a",
+      lastSynced: null,
+    });
+    const store = useProfileStore.getState();
+    store.updateFeedAiProvider("gemini");
+    store.updateFeedAiApiKey(MODEL);
+    store.updateJevApiKey(JEV);
+    useJevScreeningStore.setState({ report: { status: "applied", screened: 3, of: 5 } });
+
+    useProfileStore.getState().clearDeviceKeys();
+
+    const after = useProfileStore.getState();
+    expect(after.profile.feedAiProvider).toBe("default");
+    expect(after.profile.feedAiApiKey ?? "").toBe("");
+    expect(after.profile.jevApiKey ?? "").toBe("");
+    expect(useJevScreeningStore.getState().report).toBeNull();
+    expect(JSON.stringify(after.profile)).not.toContain(MODEL);
+    expect(JSON.stringify(after.profile)).not.toContain(JEV);
+    // Nothing else moves.
+    expect(after.profile.researchTopics).toEqual(["kept-topic"]);
+    expect(after.profile.displayName).toBe("Kept Name");
+    expect(after.syncedAccountId).toBe("user-a");
+  });
+
+  it("is harmless on a profile with no key", () => {
+    useProfileStore.setState({ profile: { ...defaultProfile, researchTopics: ["t"] } });
+    useProfileStore.getState().clearDeviceKeys();
+    expect(useProfileStore.getState().profile).toEqual({ ...defaultProfile, researchTopics: ["t"] });
   });
 });

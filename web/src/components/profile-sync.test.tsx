@@ -18,6 +18,7 @@ import {
   hasSignOutCookie,
   deleteSignOutCookie,
   shouldClearOnConfirmedSignOut,
+  shouldClearDeviceKeysOnSignOut,
   processConfirmedSignOutCookie,
   SIGN_OUT_COOKIE_NAME,
   flushBeforeSignOut,
@@ -1225,6 +1226,7 @@ describe("processConfirmedSignOutCookie — decide, clear if warranted, then alw
   function fakeDeps(overrides: Partial<ProcessConfirmedSignOutCookieDeps> = {}) {
     let logOutCalls = 0;
     let deleteCalls = 0;
+    let keyClears = 0;
     const deps: ProcessConfirmedSignOutCookieDeps = {
       cookiePresent: true,
       authOutcome: "signed-out",
@@ -1232,13 +1234,59 @@ describe("processConfirmedSignOutCookie — decide, clear if warranted, then alw
       logOut: () => {
         logOutCalls += 1;
       },
+      clearDeviceKeys: () => {
+        keyClears += 1;
+      },
       deleteCookie: () => {
         deleteCalls += 1;
       },
       ...overrides,
     };
-    return { deps, logOutCalls: () => logOutCalls, deleteCalls: () => deleteCalls };
+    return {
+      deps,
+      logOutCalls: () => logOutCalls,
+      deleteCalls: () => deleteCalls,
+      keyClears: () => keyClears,
+    };
   }
+
+  // OWN-KEY lane 4 (R13, D4) — the API keys go on EVERY confirmed sign-out,
+  // owner recorded or not; the rest of the rule above is unchanged.
+  it("a confirmed sign-out clears the API keys even with no owner recorded (the guest case) — and still skips the full clear", () => {
+    const { deps, logOutCalls, keyClears, deleteCalls } = fakeDeps({ syncedAccountId: null });
+    processConfirmedSignOutCookie(deps);
+    expect(keyClears()).toBe(1);
+    expect(logOutCalls()).toBe(0);
+    expect(deleteCalls()).toBe(1);
+  });
+
+  it("with an owner recorded: the keys are cleared and the full clear runs too", () => {
+    const { deps, logOutCalls, keyClears } = fakeDeps();
+    processConfirmedSignOutCookie(deps);
+    expect(keyClears()).toBe(1);
+    expect(logOutCalls()).toBe(1);
+  });
+
+  it("no cookie, or an outcome that is not a confirmed sign-out, never clears the keys", () => {
+    for (const overrides of [
+      { cookiePresent: false },
+      { authOutcome: "unknown" as const },
+      { authOutcome: "signed-in" as const },
+      { authOutcome: "unconfigured" as const },
+    ]) {
+      const { deps, keyClears } = fakeDeps(overrides);
+      processConfirmedSignOutCookie(deps);
+      expect(keyClears(), JSON.stringify(overrides)).toBe(0);
+    }
+  });
+
+  it("shouldClearDeviceKeysOnSignOut: the cookie and a confirmed 'signed-out', nothing else", () => {
+    expect(shouldClearDeviceKeysOnSignOut(true, "signed-out")).toBe(true);
+    expect(shouldClearDeviceKeysOnSignOut(false, "signed-out")).toBe(false);
+    for (const outcome of ["unknown", "signed-in", "unconfigured"] as const) {
+      expect(shouldClearDeviceKeysOnSignOut(true, outcome)).toBe(false);
+    }
+  });
 
   it("a signed-out load with the cookie and an owner → clears AND consumes the cookie", () => {
     const { deps, logOutCalls, deleteCalls } = fakeDeps();
@@ -1309,6 +1357,11 @@ describe("§1bt.8 scenarios (re-run of §1bt.7's four, plus the forged-link case
         logOut: () => {
           logOutCalls += 1;
         },
+        // OWN-KEY lane 4: the key clear counts as a clear here too — a link
+        // must not trigger either.
+        clearDeviceKeys: () => {
+          logOutCalls += 1;
+        },
         deleteCookie: () => {},
       };
       return { deps, logOutCalls: () => logOutCalls };
@@ -1324,6 +1377,7 @@ describe("§1bt.8 scenarios (re-run of §1bt.7's four, plus the forged-link case
       authOutcome: "signed-out",
       syncedAccountId: "user-a",
       logOut: () => {},
+      clearDeviceKeys: () => {},
       deleteCookie: () => deleteCalls.push(1),
     };
     processConfirmedSignOutCookie(deps);
@@ -1400,6 +1454,10 @@ describe("ProfileSync's onSession wires the cookie-driven clear at the confirmed
   it("wires the real logOut() and deleteSignOutCookie as the injected deps", () => {
     expect(body).toMatch(/logOut:\s*\(\)\s*=>\s*useProfileStore\.getState\(\)\.logOut\(\)/);
     expect(body).toMatch(/deleteCookie:\s*deleteSignOutCookie/);
+  });
+
+  it("(OWN-KEY lane 4, R13) wires the real store's clearDeviceKeys() as the key clear", () => {
+    expect(body).toMatch(/clearDeviceKeys:\s*\(\)\s*=>\s*useProfileStore\.getState\(\)\.clearDeviceKeys\(\)/);
   });
 
   // Checks for actual CODE (a definition or a call), not the explanatory
