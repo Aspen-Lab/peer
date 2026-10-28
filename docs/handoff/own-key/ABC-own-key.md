@@ -8,8 +8,8 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 |---|---|
 | HELD BY | manager session (Claude Code desktop, worktree `.claude/worktrees/objective-wu-e8d6fe`) |
 | BRANCH | `own-key-on-web` (cut from `origin/main` db0f070a after PR #36 merged; name approved by the owner 2026-10-25). Repository `Aspen-Lab/peer`. No push without the owner's word (AGENTS.md). The owner merges the PR himself (R6). |
-| ROUND | 2 scored (A 97.92, B 100.0 — B stopped); round 3 scores Theme A only |
-| CURRENT ITEM | R2-fix running; then round 3 (Theme A only) |
+| ROUND | 3 — scoring Theme A at c8704b83 (round 2: A 97.92, B 100.0 — B stopped) |
+| CURRENT ITEM | round 3 scoring (Theme A, 3 readers) |
 | NEXT TURN | on each worker report: verify → land on the branch → refill up to the cap of two groups |
 | STOPPED BECAUSE | — |
 | TARGET | **97.9 per theme, two consecutive rounds** (the owner, 2026-10-28, R5: "达标线用 97.9，每个主题连续两轮达到就停。") |
@@ -62,7 +62,8 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 | R1-fixA | C | LANDED ac19aa7e, 38aeef1c, 25d64586 | own-key-lane4 | tsc 0; eslint 0 errors; ×3 143 pass / 1 baseline; M17 (signed-in kicker back to Optional) → 2 red; 375 px checked in the browser: "Skip sign-in →" on one line |
 | R1-fixB | C | LANDED 61a47960, 4cbe5388, f1f464e7, 549f52ed, e267e1f1 | own-key-lane4 | five items of R18; tsc 0; ×3 570 pass / 1 baseline; M18 (dialog back to "this device") → 5 red |
 | R2-score | readers ×3 + director | DONE: A 97.92 / B 100.0 (median); Theme B stops (R19) | own-key-verify (read only) | pack `R2-pack/`; full suite 11185 / 34 failed / 0 new |
-| R2-fix | C | RUNNING | own-key-lane4 | `briefs/R2-fix.md` (R20) |
+| R2-fix | C | LANDED 3f091b2e, 4f7b7960, de054856, 1fbd962e (+ c8704b83 manager: CHANGELOG busy wording, a comment) | own-key-lane4 | tsc 0; ×3 155/155; M19 (Skip sign-in span aria-hidden again) → 2 red |
+| R3-score | readers ×3 + director | RUNNING at c8704b83, Theme A only | own-key-verify (read only) | pack `R3-pack/`; full suite 11191 / 34 failed / 0 new |
 | L4-fix2 | C | LANDED 4a883c0a | own-key-lane4 | a decoded "/" allowed in a paper return path; M16 (literal "/" allowed) → 4 red |
 | R1-score | readers ×3 + director | DONE: A 85.4 / B 100.0 (median); director 89.58 / 97.73 | `own-key-verify` (read only) | pack: notes `R1-pack/` (static renders, live captures, 375 px screenshot, test evidence); full suite 11175 / 34 failed / 0 new |
 | L2-C | C | LANDED 68163acd, f6cfe7ce, 43e2a404 | `.claude/worktrees/own-key-lane2` | aeba4d49 note under the key field, 187597a6 AI provider row, 495eeba6 paper page sign-in. Manager: tsc 0, eslint 0 errors (44 warnings, pre-existing), touched tests ×3 = 933 pass / 1 fail (jev-setup, CRLF baseline); M5 (note shown for unknown/unconfigured) → 4 red; M6 (keyNeedsSignIn always false) → 1 red (unit level; the page tests take the flag as input); restored byte-identical. Full suite: 10752 tests, 35 failed, **0 new**. |
@@ -108,6 +109,11 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 - Reader 3 (`R2-reader-3-20261028T2202Z.md`): **A 97.92** (A5 0.25: the same accessible-name mismatch), **B 100.0**. Not costed: Check key "busy" says "in a minute" though a used-up daily limit will not clear in a minute; slightly clumsy dialog wording; could not check whether the Welcome review row "Gemini key saved — sign in to use it" is cut at 375 px.
 - **Score of record, round 2 (median): Theme A 97.92, Theme B 100.0.** Director (before readers): 100 / 100. After the readers, the director re-checked the review row on the live app at 375 px: it IS cut ("Gemini key saved — sign in t…", `text-overflow: ellipsis`, 206 px of text in 178 px) — a 0.25 the director missed; with it the director's A would be 97.92 too.
 
+## §4g Round 3 — director's score at c8704b83, Theme A only (written before reading any reader)
+
+- Round-2 defects re-checked on the live app at 375 px: the Account step's Next is named by its visible words (DOM: two spans, the hidden one `display: none`, the arrow aria-hidden, no aria-label) — GONE; "most settings" in both subtitles — GONE; the review row wraps ("Gemini key saved — sign in to use it" on two lines, no ellipsis; screenshot in `R3-pack/`) — GONE; Check key "busy" reads "The provider is turning requests away for now. Try again later." and the CHANGELOG says the same — GONE.
+- No new defect found. Theme A 12 / 12 → **100.0**. Theme B stopped (R19); nothing in this pass touched a Theme B unit's behaviour (label, copy and CSS only).
+
 ## §5 Log
 
 - 2026-10-28 | db0f070a | manager | branch cut; four lane worktrees; baselines run; four Cs spawned.
@@ -133,6 +139,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 - 2026-10-28 | 84dbc1c6 | manager | L4-fix2 landed (4a883c0a); round-1 pack built; readers ×3 started; L1-A reported (R16); L1-fix started; CHANGELOG entry 1e4a1a98; director's score A 89.58 / B 97.73 (§4c).
 - 2026-10-28 | 2eae0788 | manager | round 1 scored A 85.4 / B 100.0; R17, R18; R1-fixA landed; R1-fixB started. Tip full suite: tsc 0; 11180 tests, 34 failed, **0 new**. R1-fixB's C stopped on the usage limit ("resets 4:20pm") before editing anything; resumed by message at 16:41 CDT after three clock ticks.
 - 2026-10-28 | e267e1f1 | manager | R1-fixB landed; dev server restarted (the app had stopped it; no orphan); round-2 pack built; full suite 11185 / 34 failed / 0 new; readers ×3 started; director 100.0 / 100.0 (§4e).
+- 2026-10-28 | c8704b83 | manager | round 2 scored A 97.92 / B 100.0, B stops (R19); R20; R2-fix landed; round-3 pack built; full suite 11191 / 34 failed / 0 new; director A 100.0 (§4g); readers ×3 started.
 
 ## §6 Clock
 
