@@ -853,14 +853,22 @@ export function NoteEditor({
     if (r.bottom > window.innerHeight - 24 || r.top < 72) el.scrollIntoView({ block: "nearest" });
   });
 
+  // P12-66 (B P12-52, M2 and M3): an editor that is asked for the focus (`autoFocus`: a new sticky, or one started afresh by the follow that held the
+  // focus) takes it in a layout effect. The caret stands in the commit's own turn, before the browser paints and before a key can be delivered, so no
+  // render passes with nothing focused (a key typed in that gap went to the page, where a single letter is a command). One that is not asked leaves the
+  // focus where the reader is.
+  useLayoutEffect(() => {
+    if (!autoFocus) return;
+    const first = initial.current.blocks.find((b) => isTextual(b.type));
+    if (first) focusBlock(first.id, "end");
+    // Once, on open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // A note that was just made opens ready to write in: an empty title first,
-  // else the first prompt a template left.
+  // else the first prompt a template left. (A sticky's editor, `transient`, is opened ready by `autoFocus` alone.)
   useEffect(() => {
-    if (autoFocus) {
-      const first = initial.current.blocks.find((b) => isTextual(b.type));
-      if (first) focusBlock(first.id, "end");
-      return;
-    }
+    if (autoFocus || transient) return;
     const fresh = Date.now() - Date.parse(note.createdAt) < 15_000;
     if (!fresh) return;
     if (!initial.current.title.trim()) {
