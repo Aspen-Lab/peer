@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-28T22:16Z
+AS OF        2026-10-28T22:24Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
-LAST RULING  §1h.479   NEXT RULING §1h.480   NEXT ITEM ID P12-92   NEXT FREE PORT 4248
+LAST RULING  §1h.480   NEXT RULING §1h.481   NEXT ITEM ID P12-94   NEXT FREE PORT 4248
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
-RUNNING      (max 2, §1h.443) A P12-57 phase 5 (P6 × 5, P4 × 1; 17 calls; head e56d6a40); manager verifying C P12-89 (built, b1c283ec); QUEUE: Theme B round 4 (A P12-92, after C P12-89 lands) → B P12-93 (figure text as paragraphs); DONE: Theme A, Theme C0; OWNER: O1
+RUNNING      (max 2, §1h.443) A P12-57 phase 5 (P6 × 5, P4 × 1; 17 calls; head 795aed09) ∥ A P12-92 Theme B round 4 (head 8ff00eea); QUEUE: readers B4 → B P12-93 (figure text as paragraphs, brief drafted); DONE: Theme A, Theme C0; OWNER: O1
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
 OWNER'S PDFS P1–P6 (uploads in the manager's session; P4–P6 held out); upload UI only; never commit or quote
 CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB, Haiku, "20 * * * *", enabled, read back 06:23Z; prompt: at most two subagents (§1h.443)
@@ -753,6 +753,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-28T21:56Z | manager (Claude) | §1h.478: C P12-89 W3 57.96 / fit 58.4 accepted (manager's own guard); 20 px built; tab hit area 18 px | evidence: c89 addendum 2 (3b6ce5ab) | next: C P12-89 build, C P12-91
 
 - 2026-10-28T22:16Z | manager (Claude) | §1h.479: C P12-91 landed (e56d6a40); its four open points ruled as built; A P12-57 phase 5 started | evidence: mgr/mutv/u91a.out, u91b.out, mgr/gates-V.log | next: phase 5, C P12-89 verify
+
+- 2026-10-28T22:24Z | manager (Claude) | §1h.480: C P12-89 landed (8ff00eea); A P12-92 Theme B round 4 started | evidence: mgr/mutv/u89a-c.out, mgr/gates-V.log | next: phase 5, A P12-92
 
 ---
 
