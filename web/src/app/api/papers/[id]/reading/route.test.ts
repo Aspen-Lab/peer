@@ -141,7 +141,9 @@ describe("GET /api/papers/[id]/reading", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
     const body = await res.json();
-    expect(body.provenance.fullText).toBe("none");
+    // P12-58 (rule 2), re-aimed: this answer used to say "none", the value of a settled "no text";
+    // an attempt that has not finished is "pending" now (route.pending.test.ts holds the rest).
+    expect(body.provenance.fullText).toBe("pending");
     expect(body.abstract.sentences.length).toBeGreaterThan(0);
   });
 
