@@ -73,7 +73,9 @@ export interface AccountStepCopy {
  *
  * Both subtitles say "most settings" (R2-fix item 2): a few stay on the device
  * whatever the account — Deep report, Preferred journals and the AI company
- * choice — so "settings" alone promised more than syncs.
+ * choice — so "settings" alone promised more than syncs. The signed-out
+ * subtitle no longer opens with "Sign in to…" (round 3): it repeated the title
+ * "Sign in." word for word right above it.
  */
 export function accountStepCopy(auth: AuthOutcome): AccountStepCopy {
   if (auth === "signed-in") {
@@ -88,7 +90,7 @@ export function accountStepCopy(auth: AuthOutcome): AccountStepCopy {
     kicker: "Optional",
     title: "Sign in.",
     subtitle:
-      "Sign in to keep your topics, saved papers and most settings on every device, and to use your own AI key.",
+      "Keep your topics, saved papers and most settings on every device, and use your own AI key.",
   };
 }
 

@@ -123,15 +123,21 @@ describe("accountStepCopy — the Account step's heading", () => {
 
   // R1-fixB item 2 — CHANGED: the title was "Sign in (optional).".
   // R2-fix item 2 — CHANGED: "settings" became "most settings".
+  // Round 3 — CHANGED: the subtitle began "Sign in to keep…", repeating the title.
   it("signed out and unknown: kicker 'Optional', title 'Sign in.', and the 'most settings' subtitle", () => {
     const invitation = {
       kicker: "Optional",
       title: "Sign in.",
-      subtitle:
-        "Sign in to keep your topics, saved papers and most settings on every device, and to use your own AI key.",
+      subtitle: "Keep your topics, saved papers and most settings on every device, and use your own AI key.",
     };
     expect(accountStepCopy("signed-out")).toEqual(invitation);
     expect(accountStepCopy("unknown")).toEqual(invitation);
+  });
+
+  it("the subtitle does not repeat the title: it never starts with 'Sign in'", () => {
+    for (const auth of ["signed-out", "unknown", "signed-in"] as const) {
+      expect(accountStepCopy(auth).subtitle).not.toMatch(/^sign in/i);
+    }
   });
 
   it("says 'optional' once: in the kicker, never again in the title", () => {
