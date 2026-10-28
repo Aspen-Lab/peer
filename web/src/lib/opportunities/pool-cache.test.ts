@@ -616,8 +616,8 @@ describe("CachedPaperPool.jev — optional record of what Jev did (a reader's Je
  *
  * The single-flight assertion is the one that matters: it is what fails if a
  * later change reaches for the obvious "bypass the cache function" shape, which
- * would let two clicks fire two full builds — two Tavily fan-outs, on the
- * operator's key.
+ * would let two clicks fire two full builds — every source fetch, and at Tier 2
+ * the model rerank, paid twice.
  */
 describe("getOrBuildCachedPool — forced rebuild (R-POOL-2)", () => {
   // RE-AIMED (P9-35), NOT DELETED: the fixtures were a jobs pool under a weekly

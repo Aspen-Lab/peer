@@ -21,7 +21,7 @@ vi.mock("@/lib/opportunities/shared", async (importOriginal) => {
 
 import { runFeedPipeline } from "./pipeline";
 import { withSourceTimeout } from "@/lib/opportunities/shared";
-import { bySourceId, webSearch } from "@/lib/sources";
+import { bySourceId } from "@/lib/sources";
 import type { RawItem } from "@/lib/sources/types";
 import type { CachedPool, PoolCache } from "@/lib/opportunities/pool-cache";
 import { createTrustedPaperCacheScope } from "@/lib/opportunities/private-paper-cache";
@@ -52,11 +52,9 @@ const paper: RawItem = {
 };
 
 const originalAcademicFetch = bySourceId.openalex.fetch;
-const originalWebFetch = webSearch.fetch;
 
 afterEach(() => {
   bySourceId.openalex.fetch = originalAcademicFetch;
-  webSearch.fetch = originalWebFetch;
   withSourceTimeoutSpy.mockReset();
   vi.unstubAllEnvs();
 });
@@ -73,10 +71,13 @@ afterEach(() => {
 // that missing assertion as well as this item's.
 // ═══════════════════════════════════════════════════════════════════════════
 
+// The papers `web` source has no adapter any more (the Tavily one is deleted):
+// a request naming it arms no fetch and no timeout for it at all.
 describe("P0-02 — papers web source stays server-funded-disabled without a capability", () => {
+  // `connectors` is what an old client could still put in the body as
+  // `searchConnectors`; the request type has no such field now, hence the cast.
   async function run(connectors: Record<string, unknown> | undefined) {
     bySourceId.openalex.fetch = vi.fn(async () => [paper]);
-    webSearch.fetch = vi.fn(async () => []);
     withSourceTimeoutSpy.mockReset();
     await runFeedPipeline(
       {
@@ -106,32 +107,33 @@ describe("P0-02 — papers web source stays server-funded-disabled without a cap
   it("does not arm a server-funded web timeout from configured credentials", async () => {
     vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
     const budgets = await run(undefined);
-    expect(budgets.get("web")).toBeUndefined();
+    expect(budgets.has("web")).toBe(false);
     // THE OVERRIDE IS PER-SOURCE, NEVER A GLOBAL DEFAULT CHANGE. Every other
-    // paper source keeps the 8 s it has always had, so the 25 s is only ever
-    // paid when the web source is genuinely slow.
+    // paper source keeps the 8 s it has always had.
+    expect(budgets.has("openalex")).toBe(true);
     expect(budgets.get("openalex")).toBeUndefined();
   });
 
-  it("does not let a connector body value re-enable server-funded web search", async () => {
-    // THIS TEST USED TO ASSERT THE OPPOSITE, and the change of premise is the
+  it("an old client's Tavily connector in the body changes nothing (legacy body value, ignored)", async () => {
+    // THIS TEST ONCE ASSERTED THE OPPOSITE, and the change of premise is the
     // point: a Tavily key once selected a Tavily provider for this source and
-    // kept it on the 8 s default. The paper surface no longer spends the
-    // user's Tavily quota anywhere, so an enabled connector must now be
-    // indistinguishable from no connector at all.
+    // kept it on the 8 s default. Tavily is removed — the request has no
+    // `searchConnectors` and there is no web adapter — so a body that still
+    // carries a Tavily connector must be indistinguishable from one that does
+    // not.
     vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
     const withTavily = await run({
       tavily: { enabled: true, apiKey: "test-key" },
     });
     const without = await run(undefined);
     expect([...withTavily.entries()]).toEqual([...without.entries()]);
-    expect(withTavily.get("web")).toBeUndefined();
+    expect(withTavily.has("web")).toBe(false);
   });
 
   it("does not raise the wall when no Vertex project is configured", async () => {
     vi.stubEnv("GOOGLE_VERTEX_PROJECT", "");
     const budgets = await run(undefined);
-    expect(budgets.get("web")).toBeUndefined();
+    expect(budgets.has("web")).toBe(false);
   });
 });
 

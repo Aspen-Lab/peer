@@ -142,8 +142,8 @@ Stages, in order:
 
 1. **Collect** — fetch from sources concurrently (`Promise.allSettled`). Each source is
    wrapped in `withSourceTimeout` (8s hard wall) so one slow source never stalls the run.
-   Optional parallel work: Tavily web discovery (Tier ≥ 1) and advisor citation-neighborhood
-   discovery (when an advisor is confirmed).
+   Optional parallel work: advisor citation-neighborhood discovery (when an advisor is
+   confirmed).
 2. **Filter to paper sources** — unless the request explicitly includes non-paper context
    sources (`hn`, `web`), only academic sources flow forward.
 3. **Dedupe** — [`dedup.ts`](web/src/lib/feed/dedup.ts) merges the same work across sources.
@@ -173,7 +173,7 @@ and **stage 5 (rerank/distillation)** — the UI shape stays identical across ti
 | Tier | What it uses | Keys needed | In this repo |
 | --- | --- | --- | --- |
 | **0 — Rule engine** (the floor) | Keyword + TF-IDF + recency + source weight + preference ledger | **None** | `web/src/lib/scoring/` — fully implemented |
-| **1 — Local / lightweight** | Tier 0 + heuristic rerank + Tavily discovery | None (Tavily optional) | `rerank.ts`, `tavily-discovery.ts` |
+| **1 — Local / lightweight** | Tier 0 + heuristic rerank | None | `rerank.ts` |
 | **2 — Cloud LLM** | LLM rerank + AI-written digest + deep reports | **User BYOK key** | `tier2-rerank.ts`, `lib/llm/`, `lib/papers/` |
 
 The deployed feed defaults to **Tier 0**. A user who pastes their own key in the UI can
@@ -205,10 +205,10 @@ beyond normalization.
 | `semantic_scholar` | `semantic-scholar.ts` | Optional `SEMANTIC_SCHOLAR_API_KEY` raises its search/enrichment rate limit; the Graph API has no figures field, so it never supplies figures (see Ruling 20). |
 | `dblp` | `dblp.ts` | CS bibliography. |
 | `pubmed` | `pubmed.ts` | Biomedical. |
-| `web` | `web-search.ts` | Brave/Tavily-backed web scouting (non-paper context). |
+| `web` | — (no adapter) | Still a valid id (the database's check constraint lists it), but Peer runs no web search: a request naming it fetches nothing for it. |
 | `hn` | `hn.ts` | Hacker News (non-paper context). |
 
-The five `ACADEMIC_PAPER_SOURCES` are the default. `hn`/`web` are **context** sources only
+The five `ACADEMIC_PAPER_SOURCES` are the default. `hn` is a **context** source only
 included when explicitly requested.
 
 > **Adding a source:** create the adapter implementing `SourceAdapter`, add it to both
@@ -392,7 +392,7 @@ and fire-and-forget cloud sync:
 
 Sync components: `profile-sync.tsx`, `feed-sync.tsx`, `theme-sync.tsx`.
 
-> Local keys (BYOK API keys, Tavily key, Jev key) are stored **only in the browser** (localStorage),
+> Local keys (BYOK API keys, Jev key) are stored **only in the browser** (localStorage),
 > not in Supabase. Keep it that way.
 
 ### Supabase data model

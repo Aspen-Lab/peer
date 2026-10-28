@@ -9,27 +9,9 @@ import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import type { TrustedPaperCacheScope } from "@/lib/opportunities/private-paper-cache";
 import type { NormalizedFeedIntent } from "./intent";
 
-export interface TavilySearchConnector {
-  enabled?: boolean;
-  apiKey?: string;
-}
-
-/**
- * RULING 75 — the Vertex Gemini search provider. It carries **no key**: the
- * credential is the server's own Vertex project, exactly as the LLM path
- * already uses it. `enabled` is an OPT-OUT — absent means "use it when Vertex
- * credentials are present and Tavily is not enabled", which is the ruling's
- * resolution order stated as a default.
- */
-export interface GeminiSearchConnector {
-  enabled?: boolean;
-}
-
-export interface SearchConnectors {
-  tavily?: TavilySearchConnector;
-  gemini?: GeminiSearchConnector;
-}
-
+// `searchConnectors` (a Tavily key and a Gemini-search opt-out) is gone from
+// the request: the route parsed it and nothing read it, since Peer runs no web
+// search for papers. A body that still sends one has it ignored.
 export interface FeedRequest extends ScoringProfile {
   /** Versioned user-declared retrieval meaning; trusted metadata is excluded. */
   intent?: NormalizedFeedIntent;
@@ -39,7 +21,6 @@ export interface FeedRequest extends ScoringProfile {
   weights?: ScoreWeights;
   controls?: FeedControls;
   aiTier?: 0 | 1 | 2;
-  searchConnectors?: SearchConnectors;
   llmOverride?: ProviderOverrideConfig;
   /**
    * Advisor / PI affiliation discovery. When present, the pipeline pulls the

@@ -549,8 +549,8 @@ export async function getOrBuildCachedPool<TPool extends CachedPool>(
    * defective. A **nonce in the key** stores the rebuilt pool where nobody else
    * will ever look, so the user pays for a rebuild and the next ordinary page
    * load still serves the stale pool. A **bypass around this function** skips
-   * the single-flight map below, so two clicks fire two full builds — two
-   * Tavily fan-outs, on the operator's key.
+   * the single-flight map below, so two clicks fire two full builds — every
+   * source fetch, and at Tier 2 the model rerank, paid twice.
    *
    * This third shape gives the user a genuinely fresh pool, gives everyone else
    * that pool on their next load, and still builds **once** for a double click.

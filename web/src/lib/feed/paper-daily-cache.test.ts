@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runFeedPipeline } from "./pipeline";
 import { resolveProvider } from "@/lib/llm/providers/registry";
-import { bySourceId, webSearch } from "@/lib/sources";
+import { bySourceId } from "@/lib/sources";
 import type { RawItem } from "@/lib/sources/types";
 import type { CachedPool, PoolCache } from "@/lib/opportunities/pool-cache";
 import { PAPER_POOL_KEY_PREFIX } from "@/lib/opportunities/pool-cache";
@@ -51,38 +51,25 @@ const secondPaper: RawItem = {
 };
 
 const originalAcademicFetch = bySourceId.openalex.fetch;
-const originalWebFetch = webSearch.fetch;
 
 afterEach(() => {
   bySourceId.openalex.fetch = originalAcademicFetch;
-  webSearch.fetch = originalWebFetch;
   vi.mocked(resolveProvider).mockReset();
   vi.mocked(resolveProvider).mockReturnValue(null);
 });
 
 function stubSources() {
   const academicFetch = vi.fn(async () => [academicPaper, secondPaper]);
-  const searchFetch = vi.fn(async () => [
-    {
-      ...academicPaper,
-      id: "web:https://arxiv.org/abs/2607.12345",
-      source: "web" as const,
-      title: "New Solid-State Electrolytes for High Energy Batteries",
-      url: "https://arxiv.org/abs/2607.12345",
-    },
-  ]);
   bySourceId.openalex.fetch = academicFetch;
-  webSearch.fetch = searchFetch;
-  return { academicFetch, searchFetch };
+  return { academicFetch };
 }
 
+// No search key rides on the request: Tavily is removed, and the request has
+// no field that could carry one.
 const request = {
   topics: ["solid-state battery"],
   sources: ["openalex" as const],
   aiTier: 1 as const,
-  searchConnectors: {
-    tavily: { enabled: true, apiKey: "test-key" },
-  },
 };
 
 const privateScope = createTrustedPaperCacheScope({
@@ -287,7 +274,7 @@ describe("daily paper pool", () => {
   });
 
   it("serves the same papers all day without re-fetching a single source", async () => {
-    const { academicFetch, searchFetch } = stubSources();
+    const { academicFetch } = stubSources();
     const cache = new MemoryPoolCache();
     const now = new Date(2026, 6, 29, 9, 0);
 
@@ -308,11 +295,12 @@ describe("daily paper pool", () => {
     );
     expect(academicFetch).toHaveBeenCalledOnce();
     expect(cache.values.size).toBe(1);
-    // NOT ONE WEB SEARCH, on either call, with a Tavily key sitting right
-    // there in the request. The paper surface's only web spend was a
-    // discovery side-channel whose output nothing read; papers come from the
-    // free academic sources, so the surface now costs zero search quota.
-    expect(searchFetch).not.toHaveBeenCalled();
+    // NOT ONE WEB SEARCH, on either call. The paper surface's only web spend
+    // was a discovery side-channel whose output nothing read, and the Tavily
+    // `web` adapter after it is deleted: there is no web source left to call.
+    // Papers come from the free academic sources, so the surface costs zero
+    // search quota.
+    expect(Object.keys(bySourceId)).not.toContain("web");
     // The pool's build stamp travels with it, so a cached read reports when
     // the papers were actually found rather than when they were served.
     expect(afternoon.meta.generatedAt).toBe(morning.meta.generatedAt);
