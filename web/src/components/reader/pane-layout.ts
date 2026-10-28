@@ -193,7 +193,9 @@ export function fitPanes(request: PaneRequest): PaneFit {
 }
 
 /** P12-07: the calibrated text measure, plus the centre's two 12px insets.
- * Reading scale changes the text budget, never the font to squeeze in panes. */
+ * Reading scale changes the text budget, never the font to squeeze in panes.
+ * (P12-89, ruling §1h.476: the centre's insets are 12px on the left and 20px on the right since then — `.reader-centre`, `globals.css`, the gutter the "Open your notes" tab stands
+ * in — so the two sum to 32, not 24, and the text column at this minimum is 8px under the budget: 468px at 1x. The number below is the ruling's to change, not this comment's.) */
 export function readingCentreMinimum(scale: number): number {
   return Math.ceil(476 * scale + 24);
 }

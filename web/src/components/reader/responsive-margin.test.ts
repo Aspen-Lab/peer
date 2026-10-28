@@ -19,6 +19,8 @@ it("P12-07 the inner line cap grows with reading size as well as the pane budget
 });
 
 describe("P12-07 comfortable reading before extra columns", () => {
+  // (P12-89, ruling §1h.476: the centre's insets are now 12px on the left and 20px on the right, so the text column at the minimum is 8px under the 476px this budget names — 468px at 1x,
+  // measured at 58.0 characters a line at 853 x 480; the title and the assertions below are the P12-07 budget and are left as they were.)
   it("reserves 476px of actual text plus both 12px insets at 1x", () => {
     expect(readingCentreMinimum(1)).toBe(500);
     expect(railMinimumWidth(1)).toBe(852);

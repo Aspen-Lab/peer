@@ -45,7 +45,7 @@ import type { ReactElement, ReactNode } from "react";
 import { MASTHEAD_MIN_VIEWPORT_PX } from "@/components/reader/explain-dock";
 import { hookRuntime } from "@/test-support/hook-runtime";
 import { bottomMarginRectOf, marginRectOf, useMarginStore, type MarginRect } from "@/lib/reader/margin";
-import { fitPanes, railMinimumWidth } from "@/components/reader/pane-layout";
+import { DIVIDER_PX, fitPanes, railMinimumWidth } from "@/components/reader/pane-layout";
 import { useWindows } from "@/lib/reader/windows";
 import type { Paper } from "@/types";
 import { EDGE_TAB_DIVIDER_CLEAR_PX, NotesButton, NotesButtonView, WINDOW_QUERY, opensWindow } from "./notes-button";
@@ -221,9 +221,9 @@ describe("a card standing on a phone: the tab keeps the right edge and ends abov
   // at 768 to 851 wide and wherever the reading step pushes the panes' minimum past the window), P12-77 having left it as it was on purpose. The
   // rule is now that a card standing in the bottom band, at any width, is "no side margin" (the describe at the foot of this file pins it). The
   // side-margin case is kept as it was, and the test is renamed to say so.
-  // (Renamed again, P12-89, E5: "at the margin's left edge" held `left:${left}px`, the face over the margin divider's strip; it is now just inside the margin, the edge plus
-  // `EDGE_TAB_DIVIDER_CLEAR_PX`. Still beside the card, and the band is not written.)
-  it("from md with a side margin (the rail) it is placed beside the card, just inside the margin's left edge, and the band is not written", async () => {
+  // (Renamed again, P12-89, E5: "at the margin's left edge" held `left:${left}px`, the face over the margin divider's strip; it now ends `EDGE_TAB_DIVIDER_CLEAR_PX` left of the strip,
+  // `left` the edge less the strip's 12 px less 2 px. Still beside the card, and the band is not written.)
+  it("from md with a side margin (the rail) it is placed beside the card, left of the margin divider's strip, and the band is not written", async () => {
     log.wide = true;
     useWindows.setState({ windows: [sticky], clock: 1 });
     for (const [rect, left] of [[SIDE, 1000]] as const) {
@@ -231,7 +231,7 @@ describe("a card standing on a phone: the tab keeps the right edge and ends abov
       const tree = await mountButton("edge");
 
       expect(viewOf(tree).props, String(left)).toMatchObject({ beside: true, marginLeft: left, bandTop: undefined });
-      expect(markupOf(tree)).toContain(`left:${left + EDGE_TAB_DIVIDER_CLEAR_PX}px`);
+      expect(markupOf(tree)).toContain(`left:${left - DIVIDER_PX - EDGE_TAB_DIVIDER_CLEAR_PX}px`);
       expect(markupOf(tree)).not.toContain("--tab-band-top:");
     }
   });
@@ -355,9 +355,9 @@ describe("a card standing in the bottom band, at any width: the tab keeps the ri
     }
   });
 
-  // Re-aimed (P12-89, E5): it held `left:${rect.left}px` and `translateX(-100%)` (the face over the margin divider's strip); the tab is beside the card still, and now
-  // just inside the margin's left edge: the edge plus `EDGE_TAB_DIVIDER_CLEAR_PX`, with no translation.
-  it.each(RAILED)("%i x %i at step %f: a side margin (the rail) — beside the card, just inside the margin's left edge, and no band written", async (width, height, step) => {
+  // Re-aimed (P12-89, E5): it held `left:${rect.left}px` (the face over the margin divider's strip) with `translateX(-100%)`; the tab is beside the card still, and its right edge is now
+  // `EDGE_TAB_DIVIDER_CLEAR_PX` left of the strip (`left` = the edge less the strip's 12 px less the clear); the translation is as it was.
+  it.each(RAILED)("%i x %i at step %f: a side margin (the rail) — beside the card, left of the margin divider's strip, and no band written", async (width, height, step) => {
     log.wide = true;
     const rect = registeredAt(width, height, step);
     useMarginStore.setState({ rect });
@@ -366,8 +366,8 @@ describe("a card standing in the bottom band, at any width: the tab keeps the ri
     const html = markupOf(tree);
 
     expect(viewOf(tree).props).toMatchObject({ beside: true, marginLeft: rect.left, bandTop: undefined });
-    expect(html).toContain(`left:${rect.left + EDGE_TAB_DIVIDER_CLEAR_PX}px`);
-    expect(html).not.toContain("translateX");
+    expect(html).toContain(`left:${rect.left - DIVIDER_PX - EDGE_TAB_DIVIDER_CLEAR_PX}px`);
+    expect(html).toContain("translateX(-100%)");
     expect(html).not.toContain("--tab-band-top:");
     expect(classesOf(html)).not.toContain("right-0");
   });

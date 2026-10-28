@@ -29,8 +29,10 @@ const rule = (selector: string) => {
   return CSS.slice(start, CSS.indexOf("\n}", start));
 };
 
-/** The centre's side padding, in px, as the stylesheet states it. */
-const CENTRE_PAD_PX = Number(/padding-inline:\s*(\d+(?:\.\d+)?)px/.exec(rule(".reader-centre"))?.[1]);
+/** The centre's side paddings, in px, as the stylesheet states them: `padding-inline: 12px 20px` (P12-89: the left 12, the right 20 — the gutter the tab stands in). */
+const CENTRE_PADDING = /padding-inline:\s*(\d+(?:\.\d+)?)px\s+(\d+(?:\.\d+)?)px/.exec(rule(".reader-centre"));
+const CENTRE_PAD_LEFT_PX = Number(CENTRE_PADDING?.[1]);
+const CENTRE_PAD_PX = Number(CENTRE_PADDING?.[2]);
 /** The label's size, `--text-caption` (the `eyebrow` face): a vertical label is as wide as its line is tall, never less than its font size. */
 const CAPTION_PX = Number(/--text-caption:\s*(\d+(?:\.\d+)?)px/.exec(CSS)?.[1]);
 /** The frame the tab draws round itself: `--shadow-card` is `0 0 0 1px`, one pixel outside its box on every side. */
@@ -40,12 +42,13 @@ const BORDER_PX = 1;
 /** The `eyebrow` face's line height, as a share of its size (`globals.css`, `@utility eyebrow`: `line-height: 1.4`); `leading-none` is 1. */
 const EYEBROW_LEADING = Number(/@utility eyebrow \{[^}]*line-height:\s*(\d+(?:\.\d+)?)/.exec(CSS)?.[1]);
 
-/** The least clear the tab keeps from the text. */
-const CLEAR_PX = 8;
-/** The least a hit area is across. */
-const HIT_PX = 24;
+/** The least clear the tab keeps from the text, counted from the frame's outer edge. Re-aimed (P12-89, E5): 8 px in the 24 px gutter (P11-34), where the tab stood over the margin divider's
+ *  strip; the tab now stands left of the strip, in the centre's 20 px right padding, which holds it (15 px), its clear of the strip (2 px, `EDGE_TAB_DIVIDER_CLEAR_PX`), its 1 px frame and 2 px. */
+const CLEAR_PX = 2;
+/** The hit area across. Re-aimed (P12-89, E5): 24 px in the 24 px gutter; the padding's room after the face and the clear of the strip is 3 px, a strip that ends at the text's edge, so 18. */
+const HIT_PX = 18;
 
-/** The gutter between the text's right edge and the margin's left edge, at the page's Fit zoom `zoom` (Fit only ever enlarges: ≥ 1). */
+/** The gutter between the text's right edge and the margin's left edge: the divider and the centre's right padding, at the page's Fit zoom `zoom` (Fit only ever enlarges: ≥ 1). */
 const gutterAt = (zoom: number) => (DIVIDER_PX + CENTRE_PAD_PX) * zoom;
 
 /** The windows the shell stands in (css px), with and without a scrollbar's 15 px taken off the grid; the margin's left edge in each. */
@@ -79,71 +82,73 @@ const ext = (html: string) => {
 };
 
 describe("the constants this test stands on are what the shell has", () => {
-  it("the gutter is the divider and the centre's side padding, 24 px at 1x", () => {
+  // Re-aimed (P12-89, E5): it held "the gutter is the divider and the centre's side padding, 24 px at 1x" (12 + 12). The padding is 12 on the left and 20 on the right now, so the gutter is 32.
+  it("the gutter is the divider and the centre's right padding, 32 px at 1x (the padding is 12 on the left, 20 on the right)", () => {
     expect(DIVIDER_PX).toBe(12);
-    expect(CENTRE_PAD_PX).toBe(12);
+    expect(CENTRE_PAD_LEFT_PX).toBe(12);
+    expect(CENTRE_PAD_PX).toBe(20);
     expect(CAPTION_PX).toBe(11.5);
     expect(EYEBROW_LEADING).toBe(1.4);
     expect(FRAME_PX).toBe(1);
-    expect(gutterAt(1)).toBe(24);
+    expect(gutterAt(1)).toBe(32);
   });
 });
 
 describe("the tab beside a card is clear of the text (P11-34, BACKLOG-102)", () => {
-  it("the base's tab, 25.1 px wide, is wider than the gutter leaves it: it has no way to stand 8 px clear of the text", () => {
+  it("the base's tab, 25.1 px wide, is wider than the padding leaves it: it has no way to stand clear of the text and of the divider's strip", () => {
     const html = view({ beside: true, marginLeft: 744 });
 
-    // 24 px of gutter less the 1 px frame and the 8 px of clear is 15 px: the tab is at most that wide.
-    expect(widthOf(html)).toBeLessThanOrEqual(gutterAt(1) - CLEAR_PX - FRAME_PX);
+    // The centre's 20 px right padding less the 2 px of clear of the strip, the 1 px frame and the 2 px of clear of the text is 15 px: the tab is at most that wide. (Re-aimed, P12-89: the
+    // padding was the 24 px gutter less the 8 px clear and the frame, with the divider's strip under the tab.)
+    expect(widthOf(html)).toBeLessThanOrEqual(CENTRE_PAD_PX - EDGE_TAB_DIVIDER_CLEAR_PX - CLEAR_PX - FRAME_PX);
   });
 
-  // Re-aimed (P12-89, E5): this case worked out the tab's left as `marginLeft - width - frame` (the tab ended at the margin's edge, `translateX(-100%)`), a
-  // formula that no longer describes it; the tab's left is now read from its own markup (`left:`, no translation), and the rule it held — at least 8 px from the
-  // text at every Fit zoom, counted from the frame's outer edge — is kept as it was.
-  it.each(margins)("at $viewport px ($bar px scrollbar): at least 8 px from the text at every Fit zoom, counted from the frame's outer edge", ({ left }) => {
-    const html = view({ beside: true, marginLeft: left });
-
-    expect(html).not.toContain("translateX");
+  // Re-aimed (P12-89, E5): "at least 8 px from the text" worked the tab's left out as `marginLeft - width - frame` (the tab ended at the margin's edge, over the divider's strip). The tab's
+  // right edge is now read from its own markup (`left:` with `translateX(-100%)`), at each Fit zoom (the strip is 12 x zoom wide and the page's zoom reaches the view), and the rule is kept
+  // at what the 20 px right padding leaves: CLEAR_PX (2 px, frame included), and the tab is 2 px clear of the strip.
+  it.each(margins)("at $viewport px ($bar px scrollbar): clear of the text at every Fit zoom, counted from the frame's outer edge, and 2 px left of the divider's strip", ({ left }) => {
     for (const zoom of ZOOMS) {
+      const html = view({ beside: true, marginLeft: left, zoom });
+      const width = widthOf(html);
+      const stripLeft = left - DIVIDER_PX * zoom;
       const textRight = left - gutterAt(zoom);
-      const tabLeft = px(html, "left")! - FRAME_PX;
+      const tabRight = px(html, "left")!;
+      const tabLeft = tabRight - width - FRAME_PX;
+      expect(tabRight, `zoom ${zoom}`).toBe(stripLeft - EDGE_TAB_DIVIDER_CLEAR_PX);
       expect(tabLeft - textRight, `zoom ${zoom}`).toBeGreaterThanOrEqual(CLEAR_PX);
     }
   });
 
-  // Re-aimed (P12-89, E5): it held "still ends at the margin's left edge" (`left` = the edge, `translateX(-100%)`), which is the face over the margin divider's 12 px
-  // hit strip. The tab now begins `EDGE_TAB_DIVIDER_CLEAR_PX` inside the margin and is wholly inside the window; "beside the card, not at the window's edge" is kept.
-  it("begins just inside the margin's left edge — beside the card, at the window's pixels, not at its right edge", () => {
-    for (const { left, viewport, bar } of margins) {
+  // Re-aimed (P12-89, E5): it held "still ends at the margin's left edge" (`left` = the edge), the face over the margin divider's 12 px strip. It ends EDGE_TAB_DIVIDER_CLEAR_PX left of the strip now
+  // (`left` = the edge less the strip less the clear); beside the card, not at the window's edge, translated by its own width, wholly inside the window: as it held.
+  it("ends 2 px left of the margin divider's strip — beside the card, never over the strip or the cards", () => {
+    for (const { left } of margins) {
       const html = view({ beside: true, marginLeft: left });
 
-      expect(px(html, "left")).toBe(left + EDGE_TAB_DIVIDER_CLEAR_PX);
-      expect(html).not.toContain("translateX");
+      expect(px(html, "left")).toBe(left - DIVIDER_PX - EDGE_TAB_DIVIDER_CLEAR_PX);
+      expect(html).toContain("translateX(-100%)");
       expect(html).not.toMatch(/\bright-0\b/);
-      // wholly inside the window: its right edge is not past the window's (the margin is at least 280 px wide)
-      expect(left + EDGE_TAB_DIVIDER_CLEAR_PX + widthOf(html), `${viewport} px, ${bar} px bar`).toBeLessThan(viewport - bar);
+      // wholly inside the window: its left edge is a positive number of px
+      expect(left - DIVIDER_PX - EDGE_TAB_DIVIDER_CLEAR_PX - widthOf(html)).toBeGreaterThan(0);
     }
   });
 
-  // Re-aimed (P12-89, E5): the strip stood on the TEXT's side (`before:-left-[10px]`, the tab's left minus 9 px), which now lies over the margin divider's hit strip
-  // (the tab begins 3 px right of the divider's edge, so a 9 px strip on its left reaches 6 px into the divider's 12), and the tab, strip included, took the pointer
-  // there. It is on the CARD's side now (`before:-right-[9px]`, the face's right edge), over the card, where it was impossible while the tab stood under the cards.
-  // The 24 px across and "never reaches the text" are kept: the face and the strip together end well inside the margin, and the strip never reaches left of the tab.
-  it("keeps a hit area of 24 px across: the face and, where the face is narrower, a transparent strip on the card's side — which stays clear of the divider's strip and of the text", () => {
+  // Re-aimed (P12-89, E5): 24 px across (the 15 px face and a 9 px strip) in the 24 px gutter, the face over the divider. The tab stands in the 20 px right padding now: the strip is what the
+  // padding leaves after the face and the 2 px clear of the strip, 3 px, and ends at the text's right edge — 18 px across (`HIT_PX`). It never reaches past the text's edge.
+  it("keeps a hit area of 18 px across: the face and, where the face is narrower, a transparent strip on the text's side — which stops at the text's edge", () => {
     for (const { left } of margins) {
       const html = view({ beside: true, marginLeft: left });
       const hit = widthOf(html) + ext(html);
 
       expect(hit).toBeGreaterThanOrEqual(HIT_PX);
-      // it does not reach left of the face: the whole hit area is right of the margin's edge, so the divider's strip (which ends at that edge) and the text are not under it
-      expect(px(html, "left"), "the face begins inside the margin").toBeGreaterThan(left);
+      // the hit area never reaches into the text: its left end is at or right of the text's right edge (the card side has none: the divider's strip is there)
+      expect(px(html, "left")! - hit).toBeGreaterThanOrEqual(left - gutterAt(1));
       if (ext(html) > 0) {
-        // the strip is placed from the button's padding edge; the button has no right border (`border-r-0`), so it begins at the face's outer right edge when its
-        // right offset is minus its width (`-right-[9px]` for a 9 px strip).
-        const offset = Number(/before:-right-\[(\d+(?:\.\d+)?)px\]/.exec(html)?.[1]);
-        expect(offset, "the strip stands on the card's side").toBe(ext(html));
+        // Re-aimed in the fix (P11-34): the strip is placed from the button's padding edge, which is the border's width inside its outer edge, so it ends at the
+        // face's outer edge when its left offset is its width plus that border (`-left-[10px]` for a 9 px strip); `right-full` would have put it a pixel short.
+        const offset = Number(/before:-left-\[(\d+(?:\.\d+)?)px\]/.exec(html)?.[1]);
+        expect(offset, "the strip stands on the text's side").toBe(ext(html) + BORDER_PX);
         expect(html).toMatch(/before:absolute/);
-        expect(html).not.toMatch(/before:-left-/);
       }
     }
   });
@@ -155,19 +160,18 @@ describe("the tab beside a card is clear of the text (P11-34, BACKLOG-102)", () 
     expect(html).toContain("eyebrow");
     expect(html).toContain("[writing-mode:vertical-rl]");
     expect(html).toContain(">Open your notes<");
-    // Re-aimed (P12-89, E5): it held `z-40`. Beside a card the tab stands over the cards' left edge, so it is over them: `z-[69]`, the top of the stack.
-    expect(html).toContain("z-[69]");
-    expect(html).not.toContain("z-40");
+    expect(html).toContain("z-40");
   });
 });
 
 describe("the two numbers the tab names (added with the fix)", () => {
-  it("the face is what the narrowest gutter leaves after 8 px of clear and the 1 px frame, and it is the width the markup declares", () => {
-    expect(EDGE_TAB_BESIDE_PX).toBe(gutterAt(1) - CLEAR_PX - FRAME_PX);
+  // Re-aimed (P12-89, E5): "what the narrowest gutter leaves after 8 px of clear and the 1 px frame" (24 - 8 - 1); the padding's 20 px less the 2 px clear of the strip, the 2 px clear of the text and the frame.
+  it("the face is what the centre's right padding leaves after the clear of the strip, the clear of the text and the 1 px frame, and it is the width the markup declares", () => {
+    expect(EDGE_TAB_BESIDE_PX).toBe(CENTRE_PAD_PX - EDGE_TAB_DIVIDER_CLEAR_PX - CLEAR_PX - FRAME_PX);
     expect(px(view({ beside: true, marginLeft: 744 }), "width")).toBe(EDGE_TAB_BESIDE_PX);
   });
 
-  it("the hit area is 24 px across: the face and a strip of the difference, 9 px, on the text's side", () => {
+  it("the hit area is 18 px across: the face and a strip of the difference, 3 px, on the text's side", () => {
     expect(EDGE_TAB_HIT_PX).toBe(HIT_PX);
     expect(ext(view({ beside: true, marginLeft: 744 }))).toBe(EDGE_TAB_HIT_PX - EDGE_TAB_BESIDE_PX);
   });

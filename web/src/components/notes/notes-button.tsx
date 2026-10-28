@@ -23,11 +23,12 @@
 //   label showing). So the rule is the band's, not the width's: while a card stands in a registered bottom band, at any width, the tab keeps the
 //   right edge and ends 8 px above the band's top. Beside a card in a side margin (the rail) it is placed as it was.
 //
-//   P12-89 (E5; A P12-88 §7): beside a card the tab no longer stands over the margin's pane divider. The divider's 12 px hit strip ends at the margin's
-//   left edge (`DIVIDER_PX`, `pane-layout.ts`), and the tab, which stood at that edge with its face over the strip (`translateX(-100%)`), hid 146 px of it
-//   and took the pointer there: `default`, and a drag at the tab's height did nothing. It now stands just inside the margin, to the right of the strip
-//   (`EDGE_TAB_DIVIDER_CLEAR_PX`: its frame 2 px clear), above the cards (`z-[69]`) and, where the place it would take is a card's header, below that
-//   header (`clearOfHeaders`): the header rows are read from the page, as the selection's actions read them (`openCards`).
+//   P12-89 (E5; A P12-88 §7; ruling §1h.476): beside a card the tab no longer stands over the margin's pane divider. The divider's hit strip is the 12 px
+//   grid track between the centre and the margin (`DIVIDER_PX`, `pane-layout.ts`; 12 x the page's Fit zoom in the window's px) and ends at the margin's left
+//   edge; the tab stood at that edge (`translateX(-100%)`), its face over the strip for 146 px (1,752 px²), and took the pointer there: `default`, and a drag
+//   at the tab's height did nothing. It now stands LEFT of the strip, in the centre column's right gutter, `EDGE_TAB_DIVIDER_CLEAR_PX` clear of it. The gutter is
+//   the centre's right padding, 20 px (`.reader-centre`, `globals.css`: 12 on the left, 20 on the right, always, so the words never move when a card opens),
+//   which holds the tab (15 px) and its clear (2 px) with 3 px to spare before the text; the tab meets no strip, no text, no card and no header.
 //
 //   `row` — on a phone, a full-width row in the command stack (`DecisionBlock`'s `notesAction`), set like the other commands.
 //   P12-77 (rule 3, E2; reader A-r1 in A P12-71's pack): the row stays, but on a phone it stands near the top of the page, so the reader
@@ -51,9 +52,8 @@ import { buttonVariants } from "@/components/ui/button";
 import { COMMAND } from "@/components/ui/command";
 import { cn } from "@/lib/cn";
 import { legendHeightPx } from "@/components/reader/explain-dock";
-import type { ViewRect } from "@/components/reader/paper-body";
-import { openCards } from "@/components/reader/selection-toolbar";
-import { readPageZoom, useMarginRect, useMarginStore } from "@/lib/reader/margin";
+import { DIVIDER_PX } from "@/components/reader/pane-layout";
+import { readPageZoom, useMarginRect } from "@/lib/reader/margin";
 import { useWindows } from "@/lib/reader/windows";
 import { NotesWindow } from "./notes-window";
 import { usePaperNotes } from "./paper-notes";
@@ -82,37 +82,25 @@ export const TAKE_TITLE = "Take notes on this paper: its title, and your sticky 
  * column and `.reader-centre` are not this file's, and the owner's "the text only re-wraps" holds); a tab that dodged the cards would move as the
  * explain card follows its selection down the page. The face is narrow; the hit area is not: see `EDGE_TAB_HIT_PX`.
  *
- * P12-89 (E5): the tab no longer stands in that gutter — it stands inside the margin, just right of the divider (`EDGE_TAB_DIVIDER_CLEAR_PX`) — so the
- * gutter no longer sets the width. The face stays 15 px: it is the narrowest that holds the label's solid line (11.5 px) and its border, and every px
- * more is a px of the card it stands over (a card's text begins 13 px in: its border and 12 px of padding).
+ * P12-89 (E5): the room is now the centre's right padding (20 px, `globals.css`) and the tab stands in it, left of the divider's strip, not over the strip: the
+ * 15 px face and its 2 px clear of the strip (`EDGE_TAB_DIVIDER_CLEAR_PX`) leave 3 px before the text's right edge.
  */
 export const EDGE_TAB_BESIDE_PX = 15;
 
 /**
- * The hit area of the edge tab beside a card, across: the face and a transparent strip beside it (`before:`), 9 px. P12-89 (E5): the strip is on the
- * CARD's side now. On the text's side (P11-34) it ended at the text's edge, but it lay over the divider's 12 px hit strip, and the tab, strip included, took
- * the pointer there. The card stands under the tab (`z-[69]`), so the strip lies over the card's left padding and the first letters of its lines, in the
- * tab's own rows only (a card's header rows are never under it: `clearOfHeaders`).
+ * The hit area of the edge tab beside a card, across: the face and a transparent strip on the text's side (`before:`), which ends at the text's right edge, never past
+ * it: the strip lies over the centre's blank right padding, and no word and no control is under it. P12-89 (E5): the tab stands 2 px clear of the divider's strip, in the
+ * centre's 20 px right padding (`globals.css`), so the room for the strip is 20 − 15 − 2 = 3 px and the hit area is 18 px across (it was 24 in the 24 px gutter: the tab
+ * stood over the divider then, whose 12 px were the rest). The card's side cannot have one: the divider's strip is there.
  */
-export const EDGE_TAB_HIT_PX = 24;
+export const EDGE_TAB_HIT_PX = 18;
 
 /**
- * P12-89 (E5; A P12-88 §7): beside a card the tab stands this far right of the margin's left edge, which is the right edge of the margin pane divider's
- * 12 px hit strip (`DIVIDER_PX`, `pane-layout.ts`; `pane-divider.tsx`: the strip is the grid track between the centre and the margin). 3 px, so that the
- * tab's frame (`shadow-card`, 1 px outside its box) stands 2 px clear of the strip and its box 3 px: the tab's rect never meets the strip, at any Fit zoom
- * (the margin's left edge is in the window's pixels, and the strip ends at it).
+ * P12-89 (E5; A P12-88 §7; ruling §1h.476): beside a card the tab's right edge stands this far left of the margin pane divider's hit strip, so that its rect never
+ * meets the strip. The strip is the 12 px grid track between the centre and the margin (`DIVIDER_PX`, `pane-layout.ts`), `12 x zoom` px in the window's pixels under
+ * Fit's zoom, and ends at the margin cell's left edge, which is what `useMarginRect()` reports.
  */
-export const EDGE_TAB_DIVIDER_CLEAR_PX = 3;
-
-/** P12-89 (E5): the air kept between the tab and a card's header row when the tab stands below (or above) it, in px. */
-export const EDGE_TAB_HEADER_CLEAR_PX = 4;
-
-/**
- * P12-89 (E5): the tab's stacking beside a card. The cards of the margin stand from `STACK_Z_BASE` (60) to `STACK_Z_MAX` (69; `windows.ts`), and the tab,
- * which stood beside them at `z-40`, now stands over their left edge, so it is over them: 69, the top of the stack, under the selection's actions (`z-[70]`)
- * and the figure lightbox (`z-[80]`). With no card (`z-40`) it is as it was.
- */
-const EDGE_TAB_OVER_CARDS = "z-[69]";
+export const EDGE_TAB_DIVIDER_CLEAR_PX = 2;
 
 /**
  * P11-46 (round 3, Theme B walk E-1; ruling §1h.148): the edge tab never catches a drag that began in the paper. It may only be pressed.
@@ -190,133 +178,6 @@ const EDGE_TAB_FOOT = "[--tab-foot:calc(56px+env(safe-area-inset-bottom,0px))] m
  */
 const EDGE_TAB_BAND = "[--tab-band:var(--tab-band-top,100vh)] [--tab-floor:0px] md:[--tab-floor:3rem]";
 
-// ── Beside a card: where the tab stands, and the card headers it must not cover (P12-89, E5) ───────────────────────────────────────
-
-/**
- * The top of the edge tab, in the window's px, as its class states it (`EDGE_TAB_PLACE`, from `md`, with no band): the 27rem it always had (or the window's
- * middle, if lower), never lower than the legend and the 8 px of air allow (`footPx`: the key legend's height at the page's zoom, `legendHeightPx`), never
- * above the masthead's foot (`floorPx`, 3rem). `remPx` is the root font size the rem lengths are in. A test holds it equal to the class, window by window.
- */
-export function edgeTabTopPx({ viewportHeight, remPx = 16, length, footPx }: { viewportHeight: number; remPx?: number; length: number; footPx: number }): number {
-  const middle = Math.max(27 * remPx, viewportHeight / 2);
-  return Math.max(3 * remPx, Math.min(middle, viewportHeight - footPx - EDGE_TAB_FOOT_CLEAR_PX - length));
-}
-
-/**
- * P12-89 (E5): the tab's top that keeps it off the cards' header rows — or undefined when the place it has (`wanted`) already covers none.
- *
- * `bands` are the header rows of the cards that stand, in the window's px (`readHeaderBands`); `left` and `right` are the tab's own extent across. The tab covers
- * a header when it is within `gap` of it (`EDGE_TAB_HEADER_CLEAR_PX`). Where it would, it moves BELOW the header it meets (below the last of a stack of them
- * that it meets, each in turn): the smallest top under the headers' foot that is clear; failing that, ABOVE (the largest clear top over them); and where no
- * place at all is clear — more headers than the margin has room between — the place that covers the least of them. A top is held between `least` (the
- * masthead's foot) and `most` (8 px above the legend: the tab's foot rule, P12-77), so this never undoes E1.
- */
-export function clearOfHeaders({
-  wanted,
-  length,
-  left,
-  right,
-  bands,
-  least,
-  most,
-  gap = EDGE_TAB_HEADER_CLEAR_PX,
-}: {
-  wanted: number;
-  length: number;
-  left: number;
-  right: number;
-  bands: readonly ViewRect[];
-  least: number;
-  most: number;
-  gap?: number;
-}): number | undefined {
-  const rows = bands.filter((b) => b.right > left && b.left < right && b.bottom > b.top);
-  const covered = (top: number) => rows.reduce((sum, b) => sum + Math.max(0, Math.min(top + length, b.bottom + gap) - Math.max(top, b.top - gap)), 0);
-  if (rows.length === 0 || covered(wanted) === 0) return undefined;
-  const lowest = Math.max(least, most);
-  const held = (top: number) => Math.min(Math.max(top, least), lowest);
-  const places = [...new Set(rows.flatMap((b) => [Math.ceil(b.bottom + gap), Math.floor(b.top - gap - length)]).map(held))];
-  const clear = places.filter((top) => covered(top) === 0);
-  const below = clear.filter((top) => top > wanted).sort((a, b) => a - b);
-  if (below.length > 0) return below[0];
-  const above = clear.filter((top) => top < wanted).sort((a, b) => b - a);
-  if (above.length > 0) return above[0];
-  return places.sort((a, b) => covered(a) - covered(b) || Math.abs(a - wanted) - Math.abs(b - wanted))[0];
-}
-
-/** The cards' header rows as the page draws them, in the window's px: the rows the selection's actions keep clear of too (`openCards`: a card's first element, the explain card's top row, the figure's zoom row). */
-export function readHeaderBands(root: Pick<ParentNode, "querySelectorAll">): ViewRect[] {
-  return openCards(root, true).headers.map(({ box }) => ({ left: box.left, top: box.top, right: box.right, bottom: box.bottom }));
-}
-
-const sameBands = (a: readonly ViewRect[], b: readonly ViewRect[]) =>
-  a.length === b.length && a.every((x, i) => Math.abs(x.top - b[i].top) < 0.5 && Math.abs(x.bottom - b[i].bottom) < 0.5 && Math.abs(x.left - b[i].left) < 0.5 && Math.abs(x.right - b[i].right) < 0.5);
-
-/**
- * The header rows of the standing cards, kept current while `watch` (the tab stands beside a card). They are read from the page once the cards have drawn — a
- * frame after the stack, the margin, the window or a scroll changes (the explain card follows its selection through the stack's store; a stack that scrolls
- * in its own host moves its headers by scroll) — never in render. Without a page to read (the server, a test with no DOM) there are none.
- */
-const NO_BANDS: readonly ViewRect[] = [];
-
-function useHeaderBands(watch: boolean): readonly ViewRect[] {
-  const [bands, setBands] = useState<readonly ViewRect[]>(NO_BANDS);
-  useEffect(() => {
-    if (!watch || typeof window === "undefined" || typeof document === "undefined") return;
-    let alive = true;
-    let queued = false;
-    const read = () => {
-      if (!alive) return;
-      const next = readHeaderBands(document);
-      setBands((old) => (sameBands(old, next) ? old : next));
-    };
-    const later = () => {
-      if (queued) return;
-      if (typeof requestAnimationFrame !== "function") return read();
-      queued = true;
-      requestAnimationFrame(() => {
-        queued = false;
-        read();
-      });
-    };
-    later();
-    const stops = [useWindows.subscribe(later), useMarginStore.subscribe(later)];
-    window.addEventListener("resize", later);
-    window.addEventListener("scroll", later, { capture: true, passive: true });
-    return () => {
-      alive = false;
-      for (const stop of stops) stop();
-      window.removeEventListener("resize", later);
-      window.removeEventListener("scroll", later, { capture: true });
-      // the rows of cards that are gone are not the next card's
-      setBands(NO_BANDS);
-    };
-  }, [watch]);
-  return watch ? bands : NO_BANDS;
-}
-
-/** The root font size, in px: what the rem lengths of the tab's place are in. */
-function rootFontPx(): number {
-  const size = typeof document === "undefined" || typeof getComputedStyle !== "function" ? NaN : Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
-  return Number.isFinite(size) && size > 0 ? size : 16;
-}
-
-/** The top the tab takes beside a card at `marginLeft` when its usual place would cover a card's header, else undefined (see `clearOfHeaders`). */
-export function topBesideCard({ marginLeft, has, zoom, bands, viewportHeight, remPx = 16 }: { marginLeft: number; has: boolean; zoom: number; bands: readonly ViewRect[]; viewportHeight: number; remPx?: number }): number | undefined {
-  const length = EDGE_TAB_LENGTH_PX[has ? "open" : "take"];
-  const footPx = legendHeightPx(zoom);
-  const left = marginLeft + EDGE_TAB_DIVIDER_CLEAR_PX;
-  return clearOfHeaders({
-    wanted: edgeTabTopPx({ viewportHeight, remPx, length, footPx }),
-    length,
-    left,
-    right: left + EDGE_TAB_BESIDE_PX,
-    bands,
-    least: 3 * remPx,
-    most: viewportHeight - footPx - EDGE_TAB_FOOT_CLEAR_PX - length,
-  });
-}
-
 export function NotesButtonView({
   variant,
   has,
@@ -325,7 +186,6 @@ export function NotesButtonView({
   marginLeft,
   zoom = 1,
   bandTop,
-  clearTop,
   onOpen,
 }: {
   variant: "edge" | "row";
@@ -341,8 +201,6 @@ export function NotesButtonView({
   zoom?: number;
   /** While a card stands in the bottom band (a phone, or any width narrower than the panes need): the band's top, in the window's pixels; the tab ends 8 px above it. */
   bandTop?: number;
-  /** P12-89 (E5): beside a card, the top (window px) the tab takes when its usual place would cover a card's header row (`topBesideCard`); else absent. */
-  clearTop?: number;
   onOpen: () => void;
 }) {
   const label = notesLabel(has);
@@ -351,14 +209,12 @@ export function NotesButtonView({
   // P12-77: Fit's zoom makes the legend taller in the window's pixels (it is inside the zoomed page); the tab, outside it, is told how much.
   const taller = zoom !== 1 && Number.isFinite(zoom) && zoom > 0;
   const banded = bandTop !== undefined && Number.isFinite(bandTop);
-  // P12-89: the tab's top is its class's, unless that place would cover a card's header row: then the number `NotesButton` worked out (inline, so it wins).
-  const lowered = squeezed && clearTop !== undefined && Number.isFinite(clearTop);
   const style: CSSProperties | undefined =
     squeezed || taller || banded
       ? {
-          // P12-89 (E5): just inside the margin, right of the divider's strip — not `translateX(-100%)` from the margin's edge, which was over the strip.
-          ...(squeezed ? { left: marginLeft + EDGE_TAB_DIVIDER_CLEAR_PX, width: EDGE_TAB_BESIDE_PX, lineHeight: 1 } : {}),
-          ...(lowered ? { top: clearTop } : {}),
+          // P12-89 (E5): its right edge stands `EDGE_TAB_DIVIDER_CLEAR_PX` left of the margin divider's strip, which ends at the margin's left edge and is `DIVIDER_PX x zoom` wide
+          // in the window's pixels: the tab is in the centre's right padding, not over the strip.
+          ...(squeezed ? { left: marginLeft - DIVIDER_PX * (taller ? zoom : 1) - EDGE_TAB_DIVIDER_CLEAR_PX, transform: "translateX(-100%)", width: EDGE_TAB_BESIDE_PX, lineHeight: 1 } : {}),
           ...(taller ? ({ "--tab-legend": `${legendHeightPx(zoom)}px` } as CSSProperties) : {}),
           ...(banded ? ({ "--tab-band-top": `${bandTop}px` } as CSSProperties) : {}),
         }
@@ -386,20 +242,19 @@ export function NotesButtonView({
       title={has ? undefined : TAKE_TITLE}
       style={style}
       className={cn(
-        // Fixed to the right edge — beside the cards while one stands in the margin (P12-89: just inside the margin, right of the divider's strip, over the
-        // cards' left edge, from its rect; else the card's 360 px) — vertically from 27rem down (or the window's middle, if lower), clear of the upper
+        // Fixed to the right edge — beside the cards instead of under them while one stands in the margin (at the margin's left edge,
+        // from its rect; else the card's 360 px) — vertically from 27rem down (or the window's middle, if lower), clear of the upper
         // right 400px and, P12-77, clear of the foot legend whatever the window's height (`EDGE_TAB_LENGTH_PX`). The label runs down
         // the tab (vertical writing mode), so it is as narrow as a line of type: in that mode `px` pads the tab's top and bottom (the
-        // inline axis) and `py` its two sides, and the tab must not reach into the page's own side margin (24px). Beside a card it is narrower still (`EDGE_TAB_BESIDE_PX`, set on its style),
-        // with no side padding, and a transparent strip on the card's side gives it back its 24 px hit area (`EDGE_TAB_HIT_PX`).
+        // inline axis) and `py` its two sides, and the tab must not reach into the page's own side margin (24px). Beside a card, in the centre's right gutter, left of the divider's strip, it is narrower still (`EDGE_TAB_BESIDE_PX`, set on its style),
+        // with no side padding, and a transparent strip on the text's side gives it back an 18 px hit area (`EDGE_TAB_HIT_PX`).
         beside ? (marginLeft === undefined ? "right-[min(360px,100vw)]" : "") : "right-0",
-        "fixed flex items-center justify-center whitespace-nowrap border border-r-0 border-border-strong bg-surface px-3 shadow-card",
-        squeezed ? EDGE_TAB_OVER_CARDS : "z-40",
+        "fixed z-40 flex items-center justify-center whitespace-nowrap border border-r-0 border-border-strong bg-surface px-3 shadow-card",
         EDGE_TAB_PLACE[has ? "open" : "take"],
         EDGE_TAB_FOOT,
         EDGE_TAB_BAND,
         EDGE_TAB_PHONE,
-        squeezed ? "py-0 before:absolute before:top-0 before:-right-[9px] before:h-full before:w-[9px]" : "py-1",
+        squeezed ? "py-0 before:absolute before:top-0 before:-left-[4px] before:h-full before:w-[3px]" : "py-1",
         // P11-46: a press that began outside the tab passes through it — the tab, strip included, only takes a press that began on it.
         EDGE_TAB_PASSES_DRAG,
         "eyebrow text-text-muted transition-colors hover:bg-surface-hover hover:text-heading [writing-mode:vertical-rl]",
@@ -480,29 +335,19 @@ export function NotesButton({
   const phone = usePhone(variant === "edge");
   const active = variant === "edge" && (standing || shown);
   const banded = active && rect?.presentation === "bottom";
-  const beside = active && !phone && !banded;
-  // P12-89 (E5): beside a card at a registered margin the tab stands inside the margin, over the cards' left edge, so the header rows of the cards that stand are
-  // read from the page, to keep the tab off them.
-  const bands = useHeaderBands(beside && rect?.left !== undefined);
   if (!ready) return null;
   // P12-77: Fit's zoom, read where the tab is drawn (it mounts after the notes store has hydrated, never in the server render). It changes the
   // margin's rect, which this component reads, so the next render has the new one; below 1024 px Fit does nothing and the zoom is 1.
-  const zoom = readPageZoom();
-  const clearTop =
-    beside && rect?.left !== undefined && typeof window !== "undefined"
-      ? topBesideCard({ marginLeft: rect.left, has: own !== undefined, zoom, bands, viewportHeight: window.innerHeight, remPx: rootFontPx() })
-      : undefined;
   return (
     <>
       <NotesButtonView
         variant={variant}
         has={own !== undefined}
         shown={variant === "edge" && shown}
-        beside={beside}
+        beside={active && !phone && !banded}
         marginLeft={rect?.left}
-        zoom={zoom}
+        zoom={readPageZoom()}
         bandTop={banded ? rect?.top : undefined}
-        clearTop={clearTop}
         onOpen={variant === "edge" && shown ? () => setShown(false) : open}
       />
       {variant === "edge" && shown && <NotesWindow paper={paper} onClose={() => setShown(false)} />}

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readingNote } from "@/lib/notes/templates";
 import type { Note } from "@/lib/notes/types";
 import type { Paper } from "@/types";
+import { DIVIDER_PX } from "@/components/reader/pane-layout";
 import { EDGE_TAB_DIVIDER_CLEAR_PX, NOTES_LABEL, NotesButtonView, TAKE_TITLE, notesLabel } from "./notes-button";
 import { useNotesStore } from "@/store/notes";
 import { openPaperNotes } from "./paper-notes";
@@ -53,18 +54,16 @@ describe("NotesButtonView — the tab at the right edge", () => {
   // (`right-[var(--explain-dock-width,0px)]`, a property the dock wrote on the document's root). The cards stand in the margin now: while
   // one stands (the explain card, a sticky, the notes window) the tab stands at the margin's left edge, from its rect; with no margin
   // registered, at the card's 360 px; with no card, on the window's edge.
-  // Re-aimed again (P12-89, E5): the margin case held `left:1080px`, `translateX(-100%)` and `z-40` — the tab's face over the margin divider's 12 px hit strip, and under the
-  // cards. It now stands just inside the margin (the rect's left plus `EDGE_TAB_DIVIDER_CLEAR_PX`, no translation) and over the cards' left edge (`z-[69]`). The case with no
-  // margin registered (the card's 360 px from the right edge, no divider there) and the tab alone are as they were.
-  it("stands beside the cards when one stands in the margin, right of the divider's strip: just inside the margin's left edge from its rect, else at the card's 360 px", () => {
+  // Re-aimed again (P12-89, E5): the margin case held `left:1080px`, the tab's face over the margin divider's 12 px hit strip. Its right edge is now `EDGE_TAB_DIVIDER_CLEAR_PX` left of that strip
+  // (1080 less 12 less 2, in the centre's right padding), with the same translation and `z-40`. The case with no margin registered and the tab alone are as they were.
+  it("stands beside the cards when one stands in the margin, not under them: left of the margin divider's strip from its rect, else at the card's 360 px", () => {
     const beside = renderToStaticMarkup(createElement(NotesButtonView, { variant: "edge", has: false, beside: true, marginLeft: 1080, onOpen: () => {} }));
 
-    // The cards are `z-60` and over; a tab left at `right: 0` would be hidden by them, and one inside the margin has to be over them.
-    expect(beside).toContain(`left:${1080 + EDGE_TAB_DIVIDER_CLEAR_PX}px`);
-    expect(beside).not.toContain("translateX");
+    // The cards are `z-60` and over, the tab `z-40`, so a tab left at `right: 0` would be hidden by them.
+    expect(beside).toContain(`left:${1080 - DIVIDER_PX - EDGE_TAB_DIVIDER_CLEAR_PX}px`);
+    expect(beside).toContain("translateX(-100%)");
     expect(beside).not.toMatch(/\bright-0\b/);
-    expect(beside).toContain("z-[69]");
-    expect(beside).not.toContain("z-40");
+    expect(beside).toContain("z-40");
     const noMargin = renderToStaticMarkup(createElement(NotesButtonView, { variant: "edge", has: false, beside: true, onOpen: () => {} }));
     expect(noMargin).toContain("right-[min(360px,100vw)]");
     expect(noMargin).not.toContain("left:");

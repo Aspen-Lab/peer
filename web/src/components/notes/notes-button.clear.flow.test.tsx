@@ -44,9 +44,11 @@ const paper: Paper = {
 
 const CSS = readFileSync(resolve(process.cwd(), "src/app/globals.css"), "utf8");
 const centreRule = CSS.slice(CSS.indexOf("\n.reader-centre {"), CSS.indexOf("\n}", CSS.indexOf("\n.reader-centre {")));
-/** The gutter at 1x: the divider and the centre's side padding. */
-const GUTTER_PX = DIVIDER_PX + Number(/padding-inline:\s*(\d+(?:\.\d+)?)px/.exec(centreRule)?.[1]);
-const CLEAR_PX = 8;
+/** The gutter at 1x between the text's right edge and the margin's left edge: the divider and the centre's RIGHT padding (`padding-inline: 12px 20px`, P12-89: the second number). */
+const GUTTER_PX = DIVIDER_PX + Number(/padding-inline:\s*\d+(?:\.\d+)?px\s+(\d+(?:\.\d+)?)px/.exec(centreRule)?.[1]);
+/** Re-aimed (P12-89, E5): the least clear from the text was 8 px in the 24 px gutter, where the tab stood over the divider's strip. The tab now stands in the centre's right padding, left of
+ *  the strip, and the padding holds it (15 px), its clear of the strip (2 px) and 3 px of clear before the text: counted from the frame's outer edge (1 px), 2 px. */
+const CLEAR_PX = 2;
 const FRAME_PX = 1;
 const CAPTION_PX = Number(/--text-caption:\s*(\d+(?:\.\d+)?)px/.exec(CSS)?.[1]);
 const EYEBROW_LEADING = Number(/@utility eyebrow \{[^}]*line-height:\s*(\d+(?:\.\d+)?)/.exec(CSS)?.[1]);
@@ -124,10 +126,10 @@ describe("the tab is clear of the text in every state (P11-34)", () => {
   for (const viewport of WINDOWS) {
     describe(`at ${viewport} px`, () => {
       for (const state of STATES) {
-        // Re-aimed (P12-89, E5): the case held "ending at the margin's left edge" (`left` = the edge, `translateX(-100%)`, so the tab's left was `left - width`), which
-        // put the face over the margin divider's strip. The tab now begins `EDGE_TAB_DIVIDER_CLEAR_PX` inside the margin (no translation), so the rule it held — at
-        // least 8 px from the text, counted from the frame's outer edge — is worked out from that left, and is held a great deal more widely (the strip lies between).
-        it(`${state.name}: at least 8 px from the text, beginning just inside the margin's left edge`, async () => {
+        // Re-aimed (P12-89, E5): "at least 8 px from the text, ending at the margin's left edge" (`left` = the edge, so the tab's face was over the margin divider's strip); the tab now
+        // ends `EDGE_TAB_DIVIDER_CLEAR_PX` left of the strip, in the centre's 20 px right padding. The rule it held (clear of the text, counted from the frame's outer edge) is kept at what
+        // the padding leaves, 2 px (`CLEAR_PX` above), and the tab is also held clear of the strip.
+        it(`${state.name}: clear of the text by the padding's room, ending 2 px left of the margin divider's strip`, async () => {
           const rect = marginAt(viewport);
           useMarginStore.setState({ rect });
           useWindows.setState({ windows: state.windows, clock: state.windows.length });
@@ -135,12 +137,12 @@ describe("the tab is clear of the text in every state (P11-34)", () => {
           const html = markupOf(tree);
 
           expect(viewOf(tree).props).toMatchObject({ variant: "edge", beside: true, marginLeft: rect.left });
-          expect(html).not.toContain("translateX");
-          const tabLeft = px(html, "left");
-          expect(tabLeft).toBe(rect.left + EDGE_TAB_DIVIDER_CLEAR_PX);
+          const stripLeft = rect.left - DIVIDER_PX;
+          const tabRight = px(html, "left")!;
+          expect(html).toContain("translateX(-100%)");
+          expect(tabRight).toBe(stripLeft - EDGE_TAB_DIVIDER_CLEAR_PX);
           const textRight = rect.left - GUTTER_PX;
-          expect(tabLeft! - FRAME_PX - textRight).toBeGreaterThanOrEqual(CLEAR_PX);
-          expect(widthOf(html)).toBeGreaterThan(0);
+          expect(tabRight - widthOf(html) - FRAME_PX - textRight).toBeGreaterThanOrEqual(CLEAR_PX);
         });
       }
 

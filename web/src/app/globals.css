@@ -800,10 +800,15 @@ html[data-mode="dark"] {
 /* The centre: the paper's text. Its content is capped at 38em (about 87 characters of Newsreader at 1x) and centred, so a wider window
    adds blank gutter, not 150-character lines, and a pane narrower than the cap re-flows. The prose measures (`.measure`, `.measure-paper`),
    which were lifted on the old spread because its column was sized for the text, are lifted here for the same reason: the cap is the
-   measure. */
+   measure.
+
+   P12-89 (E5; ruling §1h.476): the right padding is 20px, the left 12px, always: at every width and step, a card open or not, so the words never move when a
+   card opens (P11 A8). The edge tab ("Open your notes") stands in that gutter, left of the margin divider's 12px strip, while a card stands: 15px for the tab and 2px
+   clear of the strip need 17px between the text's right edge and the strip, and the centre at its narrowest (1024 and 853px) is all text, so the padding is the
+   gutter. The text column is 8px narrower for it. */
 .reader-centre {
   min-width: 0;
-  padding-inline: 12px;
+  padding-inline: 12px 20px;
 }
 .reader-centre-inner {
   max-width: calc(38em * var(--reading-scale, 1));

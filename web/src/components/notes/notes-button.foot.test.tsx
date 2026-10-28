@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { DOCK_TOP_PX, MASTHEAD_MIN_VIEWPORT_PX, legendHeightPx } from "@/components/reader/explain-dock";
 import { bottomMarginRectOf } from "@/lib/reader/margin";
-import { fitPanes, railMinimumWidth } from "@/components/reader/pane-layout";
+import { DIVIDER_PX, fitPanes, railMinimumWidth } from "@/components/reader/pane-layout";
 import { THUMB_BAR_PX } from "@/components/shell/thumb-bar";
 import { EDGE_TAB_DIVIDER_CLEAR_PX, EDGE_TAB_FOOT_CLEAR_PX, EDGE_TAB_LENGTH_PX, EDGE_TAB_PASSES_DRAG, EDGE_TAB_PHONE_THICKNESS_PX, NOTES_LABEL, NotesButtonView } from "./notes-button";
 
@@ -391,11 +391,12 @@ describe("with a card in the bottom band the tab keeps the right edge and ends 8
       expect(html).not.toContain("left:");
       expect(html).not.toContain("translateX");
       expect(html).not.toContain("width:");
-      // the same call beside the card is the defect: the tab at the band's left edge (x -7 to 8 before P12-89, whose `translateX(-100%)` is gone: now x 11 to 26 — still on the
-      // window's left edge, still not the right edge). Re-aimed with P12-89 (E5): it held `left:8px` and `translateX(-100%)`.
+      // the same call beside the card is the defect: x -7 to 8
+      // (re-aimed, P12-89: beside a card the tab's right edge is the divider's strip's left edge less 2 px, so the same call gives `left:-6px`, the tab at x -21 to -6: off the window's left edge,
+      // and still not the right edge; the translation is as it was)
       const defect = view({ has: true, beside: true, marginLeft: band.left });
-      expect(defect).toContain(`left:${band.left + EDGE_TAB_DIVIDER_CLEAR_PX}px`);
-      expect(defect).not.toContain("translateX");
+      expect(defect).toContain(`left:${band.left - DIVIDER_PX - EDGE_TAB_DIVIDER_CLEAR_PX}px`);
+      expect(defect).toContain("translateX(-100%)");
       expect(classesOf(defect)).not.toContain("right-0");
     }
   });
@@ -447,8 +448,8 @@ describe("with a card in the bottom band the tab keeps the right edge and ends 8
 
       expect(tabAt(html, width, height).top, `${width} x ${height}`).toBe(top);
       expect(html).not.toContain("--tab-band-top:"); // (the class names the property as `var(--tab-band-top,100vh)`; what is not there is a value set on the style)
-      // (re-aimed, P12-89: it held `left:${left}px`; beside a card the tab's left is the margin's edge plus the clear of the divider's strip)
-      expect(html).toContain(`left:${left + EDGE_TAB_DIVIDER_CLEAR_PX}px`);
+      // (re-aimed, P12-89: it held `left:${left}px`; beside a card the tab's right edge is the divider's strip's left edge less the clear of 2 px)
+      expect(html).toContain(`left:${left - DIVIDER_PX - EDGE_TAB_DIVIDER_CLEAR_PX}px`);
     }
   });
 });
@@ -524,16 +525,15 @@ describe("the tab's behaviour is as it was (P12-77 E1)", () => {
     }
   });
 
-  // Re-aimed (P12-89, E5): the second half held "beside a card at the margin's left edge" as `left:1000px` and `translateX(-100%)`, over the margin divider's strip; it is
-  // now just inside the margin (the edge plus `EDGE_TAB_DIVIDER_CLEAR_PX`, no translation), and over the cards' left edge (`z-[69]`). Alone it is as it was.
-  it("stays fixed at the right edge under the cards (z-40), or beside a card just inside the margin's left edge, whatever its top", () => {
+  // Re-aimed (P12-89, E5): the second half held "beside a card at the margin's left edge" as `left:1000px`, the face over the margin divider's strip; it ends 2 px left of the strip now
+  // (1000 less the strip's 12 less 2), with the same translation and the same `z-40`. Alone it is as it was.
+  it("stays fixed at the right edge under the cards (z-40), or beside a card left of the margin divider's strip, whatever its top", () => {
     const alone = view({});
     const beside = view({ beside: true, marginLeft: 1000 });
 
     expect(classesOf(alone)).toEqual(expect.arrayContaining(["fixed", "right-0", "z-40"]));
-    expect(beside).toContain(`left:${1000 + EDGE_TAB_DIVIDER_CLEAR_PX}px`);
-    expect(beside).not.toContain("translateX");
-    expect(classesOf(beside)).toContain("z-[69]");
+    expect(beside).toContain(`left:${1000 - DIVIDER_PX - EDGE_TAB_DIVIDER_CLEAR_PX}px`);
+    expect(beside).toContain("translateX(-100%)");
     expect(classesOf(beside)).not.toContain("right-0");
   });
 
