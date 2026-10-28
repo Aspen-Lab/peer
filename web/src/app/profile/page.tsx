@@ -34,7 +34,7 @@ import { RestoreFromBackup } from "@/components/profile/restore-backup";
 import { useProfileSyncStatus, useSyncGate } from "@/components/profile-sync";
 import { useFeedSyncStatus } from "@/components/feed-sync";
 import { VersionLine } from "@/components/shell/version-line";
-import { AiKeyFields, FEED_AI_PROVIDER_OPTIONS, providerShortLabel } from "@/components/profile/ai-setup";
+import { AiKeyFields, FEED_AI_PROVIDER_OPTIONS, providerShortLabel, showKeySignInNote } from "@/components/profile/ai-setup";
 import { JevSetup } from "@/components/profile/jev-setup";
 import { Toggle } from "@/components/ui/toggle";
 import { FEED_EMPTY_REASON_CODES } from "@/lib/feed/types";
@@ -2141,9 +2141,18 @@ function EditView({
           <p className="text-caption leading-relaxed text-text-muted">
             Peer has no model of its own. Add your own key to turn on ranking
             by a model, relevance reasons and reports. Without one, Peer shows
-            the reading without a model and makes no AI call. Your key stays in
-            this browser; Peer passes it on to the provider you choose and does
-            not keep it.
+            the reading without a model and makes no AI call.
+          </p>
+          {/* Where the key lives. It is never synced (`remoteProfilePayload`
+              leaves it out, and the co-ownership terms forbid storing keys on
+              Peer's server), so it does not come with the account to another
+              device; a confirmed sign-out resets the profile (`logOut`) and the
+              key with it. */}
+          <p className="text-caption leading-relaxed text-text-muted">
+            Your key stays in this browser only. Peer passes it on to the
+            provider you choose and never stores it on its server, so the key
+            does not follow your account to another device or browser: there,
+            paste it again. Signing out removes it from this browser.
           </p>
           <AiKeyFields
             provider={profile.feedAiProvider}
@@ -2152,6 +2161,14 @@ function EditView({
             onApiKeyChange={updateFeedAiApiKey}
             idPrefix="profile-ai"
           />
+          {/* The key field's own note says the key is used only while signed
+              in; this says where to do it. The Account section, with the
+              sign-in buttons, is the first block of this page. */}
+          {showKeySignInNote(profile.feedAiProvider, authOutcome) && (
+            <p className="text-micro leading-relaxed text-text-faint">
+              Sign in under Account at the top of this page.
+            </p>
+          )}
         </div>
       </EditRow>
 
