@@ -120,16 +120,30 @@ describe("AccountSection — signed-out", () => {
     // is now followed by a second `user ? (` branch rather than a bare
     // `: (` — the PROPERTY under test (one shared `disabled={busy}`
     // expression) is unchanged, only the source text it's sliced from.
+    //
+    // OWN-KEY lane 4 — slice markers moved again, because the structure did:
+    // the two buttons now live in the exported `SignInButtons` (reused by the
+    // welcome wizard's Account and AI steps), and the signed-out branch only
+    // renders `<SignInButtons busy={busy} … />`. The PROPERTY is unchanged and
+    // still pinned in two halves: inside `SignInButtons` both buttons read the
+    // one `disabled={busy}` expression, and the Account section hands it its
+    // own single `busy` flag, not a second one.
     const source = readFileSync(
       join(process.cwd(), "src", "components", "account", "account-section.tsx"),
       "utf8",
     );
+    const buttonsStart = source.indexOf("export function SignInButtons(");
+    expect(buttonsStart).toBeGreaterThan(-1);
+    const buttonsBody = source.slice(buttonsStart, source.indexOf("export function Avatar(", buttonsStart));
+    const disabledExprs = buttonsBody.match(/disabled=\{[^}]*\}/g) ?? [];
+    expect(disabledExprs).toEqual(["disabled={busy}", "disabled={busy}"]);
+
     const signedOutBranch = source.slice(
       source.indexOf('authKind === "signed-out" ? ('),
       source.indexOf(") : user ? ("),
     );
-    const disabledExprs = signedOutBranch.match(/disabled=\{[^}]*\}/g) ?? [];
-    expect(disabledExprs).toEqual(["disabled={busy}", "disabled={busy}"]);
+    expect(signedOutBranch).toMatch(/<SignInButtons busy=\{busy\} onSignInGitHub=\{onSignInGitHub\} onSignInGoogle=\{onSignInGoogle\} \/>/);
+    expect(signedOutBranch).not.toMatch(/disabled=/);
   });
 });
 

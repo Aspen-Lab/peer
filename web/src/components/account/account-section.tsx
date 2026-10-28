@@ -164,24 +164,7 @@ export function AccountSectionView({
             Sign in with GitHub or Google to sync saves and reads across your devices.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={onSignInGitHub}
-              disabled={busy}
-              className={buttonVariants({ tone: "surface", size: "md" })}
-            >
-              <GitHubMark />
-              Sign in with GitHub
-            </button>
-            <button
-              type="button"
-              onClick={onSignInGoogle}
-              disabled={busy}
-              className={buttonVariants({ tone: "surface", size: "md" })}
-            >
-              <GoogleMark />
-              Sign in with Google
-            </button>
+            <SignInButtons busy={busy} onSignInGitHub={onSignInGitHub} onSignInGoogle={onSignInGoogle} />
           </div>
         </>
       ) : user ? (
@@ -309,6 +292,47 @@ export function AccountSection({ className = "" }: { className?: string }) {
       onSignOutSubmit={handleSignOutSubmit}
       onStaySignedIn={() => setConfirmingSignOut(false)}
     />
+  );
+}
+
+export interface SignInButtonsProps {
+  /** One flag for both buttons: a fast double-click must not start two OAuth
+   *  redirects, so neither button may be pressed once either has been. */
+  busy: boolean;
+  onSignInGitHub: () => void;
+  onSignInGoogle: () => void;
+}
+
+/**
+ * "Sign in with GitHub" and "Sign in with Google", GitHub first — the one copy
+ * of the two buttons, used by the Account section here and by the welcome
+ * wizard's Account and AI steps. A fragment, so each caller keeps its own
+ * wrapper and spacing (the Account section's markup is unchanged by the split).
+ * Presentational: the caller decides what a press does, including where the
+ * browser comes back to after sign-in.
+ */
+export function SignInButtons({ busy, onSignInGitHub, onSignInGoogle }: SignInButtonsProps) {
+  return (
+    <>
+      <button
+        type="button"
+        onClick={onSignInGitHub}
+        disabled={busy}
+        className={buttonVariants({ tone: "surface", size: "md" })}
+      >
+        <GitHubMark />
+        Sign in with GitHub
+      </button>
+      <button
+        type="button"
+        onClick={onSignInGoogle}
+        disabled={busy}
+        className={buttonVariants({ tone: "surface", size: "md" })}
+      >
+        <GoogleMark />
+        Sign in with Google
+      </button>
+    </>
   );
 }
 

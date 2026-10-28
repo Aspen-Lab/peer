@@ -54,16 +54,18 @@ import { cardShell } from "@/components/ui/card-shell";
 import { cn } from "@/lib/cn";
 import { SURFACE_TOPIC_DESCRIPTIONS } from "@/lib/profile/topic-copy";
 import {
-  STEP_META,
   type StepKey,
+  type StepMeta,
   firstIncompleteStep,
   isStepDone,
+  offersSignIn,
   readPersonaDone,
   stepIndexFromKey,
+  visibleSteps,
 } from "./completeness";
+import { AccountStep, SignInToUseKey } from "./account-step";
 
 const DEFAULT_NAME = "Peer Member";
-const TOPICS_IDX = STEP_META.findIndex((m) => m.key === "topics");
 
 // The persona result lives in localStorage and never changes while this page
 // is mounted (the quiz is its own route) — a no-op subscription is enough.
@@ -83,6 +85,10 @@ export default function WelcomePage() {
   // as not-yet-done rather than done, which is the direction that shows the
   // reader the step instead of hiding it.
   const auth = useSyncGate((s) => s.authOutcome);
+  // The steps this reader is shown: Account is left out where sign-in is not
+  // configured. Decided before the first step paints (the page waits for
+  // `settled` below) and never changes after — see `visibleSteps`.
+  const steps = useMemo(() => visibleSteps(auth), [auth]);
   const store = useProfileStore();
   const completeOnboarding = useProfileStore((s) => s.completeOnboarding);
   // Wait for local hydration AND the initial remote sync before choosing the
@@ -114,16 +120,18 @@ export default function WelcomePage() {
   const [autoStart, setAutoStart] = useState<number | null>(null);
   if (settled && autoStart === null) {
     setAutoStart(
-      stepIndexFromKey(requestedStep) ??
+      stepIndexFromKey(requestedStep, steps) ??
         firstIncompleteStep(profile, readPersonaDone(), auth),
     );
   }
-  const step = manualStep ?? autoStart;
+  const total = steps.length;
+  const chosenStep = manualStep ?? autoStart;
+  const step = chosenStep === null ? null : Math.min(chosenStep, total - 1);
   const setStep = setManualStep;
 
-  const total = STEP_META.length;
-  const key: StepKey | null = step === null ? null : STEP_META[step].key;
+  const key: StepKey | null = step === null ? null : steps[step].key;
   const isLast = step === total - 1;
+  const topicsIdx = steps.findIndex((m) => m.key === "topics");
 
   // Topics is the one gate: the feed needs at least one required topic to
   // build a real first briefing.
@@ -135,17 +143,17 @@ export default function WelcomePage() {
   const done = useMemo(
     () =>
       Object.fromEntries(
-        STEP_META.map((m) => [
+        steps.map((m) => [
           m.key,
           isStepDone(m.key, profile, personaDone, auth),
         ]),
       ) as Record<StepKey, boolean>,
-    [profile, personaDone, auth],
+    [steps, profile, personaDone, auth],
   );
 
   // Jumping is free among the first steps and everywhere once the topics
   // gate is satisfied — the rail never routes around the one requirement.
-  const canJumpTo = (i: number) => i <= TOPICS_IDX || topicsSatisfied;
+  const canJumpTo = (i: number) => i <= topicsIdx || topicsSatisfied;
 
   // Base navigation on the computed `step` — the functional-updater form
   // would see `manualStep`, which stays null until the first manual move.
@@ -241,10 +249,20 @@ export default function WelcomePage() {
           <div className="min-h-[50dvh]" aria-hidden />
         ) : (
           <>
-            <StepRail step={step} done={done} canJumpTo={canJumpTo} onJump={setStep} />
+            <StepRail steps={steps} step={step} done={done} canJumpTo={canJumpTo} onJump={setStep} />
 
             {/* Step body — keyed so the entrance animation replays per step */}
             <div key={key} className="animate-fade-in-up" onKeyDown={handleEnter}>
+              {key === "account" && (
+                <StepFrame
+                  kicker="Optional"
+                  title="Sign in (optional)."
+                  subtitle="Sign in to keep your topics, saved papers and settings on every device, and to use your own AI key."
+                >
+                  <AccountStep auth={auth} />
+                </StepFrame>
+              )}
+
               {key === "basics" && (
                 <StepFrame
                   kicker="Welcome"
@@ -424,6 +442,10 @@ export default function WelcomePage() {
                   <div className="mt-4 space-y-3">
                     <ApiKeyHelp provider={profile.feedAiProvider} />
                     <AiProviderRecommendation />
+                    {/* A key runs only while the reader is signed in, so the
+                        way to sign in sits right above where it is pasted.
+                        Pressing it comes back to this step. */}
+                    {offersSignIn(auth) && <SignInToUseKey />}
                     <AiKeyFields
                       provider={profile.feedAiProvider}
                       apiKey={profile.feedAiApiKey ?? ""}
@@ -487,6 +509,7 @@ export default function WelcomePage() {
                   </div>
 
                   <ReviewList
+                    steps={steps}
                     profile={profile}
                     auth={auth}
                     onJump={setStep}
@@ -530,7 +553,9 @@ export default function WelcomePage() {
                     "disabled:opacity-100 disabled:bg-bg-secondary disabled:text-text-faint/70 disabled:shadow-none disabled:cursor-not-allowed disabled:active:scale-100",
                   )}
                 >
-                  Continue
+                  {key === "account" && auth !== "signed-in"
+                    ? "Continue without signing in"
+                    : "Continue"}
                   <span aria-hidden>→</span>
                 </button>
               )}
@@ -548,22 +573,24 @@ export default function WelcomePage() {
 // get an accent tick, the current step a solid accent node, locked steps
 // (past Topics while the gate is unmet) a real disabled button.
 function StepRail({
+  steps,
   step,
   done,
   canJumpTo,
   onJump,
 }: {
+  steps: readonly StepMeta[];
   step: number;
   done: Record<StepKey, boolean>;
   canJumpTo: (i: number) => boolean;
   onJump: (i: number) => void;
 }) {
-  const total = STEP_META.length;
+  const total = steps.length;
   return (
     <nav aria-label="Setup progress" className="mb-10">
       <ol className="relative flex items-start">
         <span aria-hidden className="absolute left-6 right-6 top-[15px] h-[1.5px] bg-heading/10" />
-        {STEP_META.map((m, i) => {
+        {steps.map((m, i) => {
           const isCurrent = i === step;
           const isDone = done[m.key];
           const locked = !canJumpTo(i);
@@ -624,7 +651,7 @@ function StepRail({
         {step + 1} / {total}
       </p>
       <p aria-live="polite" className="sr-only">
-        Step {step + 1} of {total}: {STEP_META[step].label}
+        Step {step + 1} of {total}: {steps[step].label}
       </p>
     </nav>
   );
@@ -635,15 +662,17 @@ function StepRail({
 // Compact recap of everything captured so far, with jump-to-edit — the user
 // confirms at a glance instead of paging back through steps.
 function ReviewList({
+  steps,
   profile,
   auth,
   onJump,
 }: {
+  steps: readonly StepMeta[];
   profile: UserProfile;
   auth: AuthOutcome;
   onJump: (i: number) => void;
 }) {
-  const rows = STEP_META.slice(0, -1).map((m, i) => ({
+  const rows = steps.slice(0, -1).map((m, i) => ({
     index: i,
     label: m.label,
     summary: summarizeStep(m.key, profile, auth),
@@ -683,6 +712,8 @@ function summarizeStep(
   auth: AuthOutcome,
 ): string {
   switch (key) {
+    case "account":
+      return auth === "signed-in" ? "Signed in" : "Not signed in";
     case "basics": {
       const name =
         profile.displayName && profile.displayName !== DEFAULT_NAME

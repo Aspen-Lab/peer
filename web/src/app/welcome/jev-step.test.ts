@@ -65,8 +65,12 @@ function aiStepCopy(pageText: string): string[] {
 describe("welcome wizard - the Jev block", () => {
   const source = readFileSync(join(process.cwd(), "src/app/welcome/page.tsx"), "utf8");
 
-  it("adds no wizard step: the six steps are the ones that were there, less the retired Data step", () => {
+  // OWN-KEY lane 4: the list gained Account, first (a key runs only while the
+  // reader is signed in). The property here is unchanged: Jev has no step.
+  it("adds no wizard step: the steps are the ones that were there (Account first), less the retired Data step", () => {
+    expect(STEP_META.map((step) => step.key)).not.toContain("jev");
     expect(STEP_META.map((step) => step.key)).toEqual([
+      "account",
       "basics",
       "topics",
       "work",
