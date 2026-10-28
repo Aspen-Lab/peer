@@ -470,3 +470,15 @@ export const UPLOAD_RETRY_EMPTY_MESSAGE = "Could not load this paper right now."
  *  all) — same word `BRIEFING_EMPTY.error.retry` already uses on the home
  *  page's own error state, for the same action in the reader's voice. */
 export const RETRY_LABEL = "Try again";
+
+/**
+ * P12-58 (rule 3): the one line that stands where the abstract-only sentence would while the full
+ * text of the paper has not settled. `pending` is shown while the page is still asking (the
+ * reading route answered before the PDF or the page was read, and the body arrives on its own);
+ * `gaveUp` once three minutes of asking found nothing yet — the existing reload is the way to try
+ * again. Both are words of the page, kept here with the rest (the page picks one; it types none).
+ */
+export const FULL_TEXT_WAIT = {
+  pending: "Peer is still reading the full text. It will appear here on its own.",
+  gaveUp: "Peer could not read the full text yet. Reload the page to try again.",
+} as const;

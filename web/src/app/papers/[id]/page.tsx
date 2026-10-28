@@ -103,7 +103,7 @@ import {
 } from "@/components/reader/reader-layout";
 import { THUMB_BAR_PX, THUMB_BAR_QUERY } from "@/components/shell/thumb-bar";
 import { PAGE_CLASS, SPREAD_GRID } from "@/components/reader/spread";
-import { useReading } from "@/components/reader/use-reading";
+import { sentencesWhileWaiting, useReading } from "@/components/reader/use-reading";
 import { useParagraphGuide } from "@/components/reader/use-paragraph-guide";
 import { PaperNotes } from "@/components/notes/paper-notes";
 import { NotesButton } from "@/components/notes/notes-button";
@@ -725,7 +725,7 @@ function Reader({
   );
   const nextPaper = nav.nextId ? (feedPapers.find((p) => p.id === nav.nextId) ?? null) : null;
 
-  const { reading, fromServer } = useReading(paper);
+  const { reading, fromServer, wait } = useReading(paper);
   // P1-05 (§1f.13): the reader's questions for this paper, so the route follows
   // the field as it writes through. P7-13 (R11b): not on every keystroke — the
   // page's copy is updated 250 ms after the typing stops (and at once on a
@@ -1056,19 +1056,20 @@ function Reader({
         : null,
     [report, deepRequested],
   );
-  const sentences = useMemo(
-    () =>
-      reading
-        ? describeAvailability({
-            reading,
-            report: availability,
-            providerConfigured,
-            profileHasProject,
-            modelFailed: model.failed,
-          })
-        : [],
-    [reading, availability, providerConfigured, profileHasProject, model.failed],
-  );
+  const sentences = useMemo(() => {
+    if (!reading) return [];
+    const described = describeAvailability({
+      reading,
+      report: availability,
+      providerConfigured,
+      profileHasProject,
+      modelFailed: model.failed,
+    });
+    // P12-58 (rule 3): while the full text has not settled, the abstract-only sentence is not true of the
+    // paper — it is not read yet. `sentencesWhileWaiting` puts one calm line in its place (and, after three
+    // minutes of asking, one that says so and points at the reload); a model's own sentence stays.
+    return sentencesWhileWaiting(described, wait, availability !== null);
+  }, [reading, availability, providerConfigured, profileHasProject, model.failed, wait]);
 
   // The plate's own terms — allocated across the briefing when the paper is
   // in it, so the plate here is the plate on the card; alone otherwise.
