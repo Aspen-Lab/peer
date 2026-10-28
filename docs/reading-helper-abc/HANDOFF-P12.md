@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-28T17:45Z
+AS OF        2026-10-28T18:16Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
-LAST RULING  §1h.469   NEXT RULING §1h.470   NEXT ITEM ID P12-89   NEXT FREE PORT 4248
+LAST RULING  §1h.470   NEXT RULING §1h.471   NEXT ITEM ID P12-89   NEXT FREE PORT 4248
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
-RUNNING      (max 2, §1h.443) A P12-88 (Theme B round 3, port 4247) ∥ reader A4-r1 (Theme A round 4, pack r2/a87/pack); branch head 6c5c8347; QUEUE: A P12-57 phase 3 (C1, port 4244) → reader A4-r2 → readers for A P12-88 → B short paragraphs; OWNER: O1
+RUNNING      (max 2, §1h.443) A P12-88 (Theme B round 3, port 4247) ∥ A P12-57 phase 3 (C1, port 4244); branch head e5aaa7d2; QUEUE: readers for A P12-88 → Theme C round 4 measure (C0, after revision 11) → B short paragraphs; DONE: Theme A (§1h.470); OWNER: O1
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
 OWNER'S PDFS P1–P6 (uploads in the manager's session; P4–P6 held out); upload UI only; never commit or quote
 CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB, Haiku, "20 * * * *", enabled, read back 06:23Z; prompt: at most two subagents (§1h.443)
@@ -733,6 +733,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-28T16:21Z | manager (Claude) | §1h.468: C P12-86 landed (8 / 5 red; 658 / 12,349 / 0 failed); A P12-57 phase 3 briefed | evidence: mgr/gates-V.log | next: the next free slot → A P12-57 phase 3
 
 - 2026-10-28T17:45Z | manager (Claude) | §1h.469: A P12-87 Theme A round 4 100 ×3; O8 unpriced (not a guard break); reader A4-r1 running | evidence: P12-87-A report, r2/a87/pack | next: A4-r1, A P12-57 phase 3
+
+- 2026-10-28T18:16Z | manager (Claude) | §1h.470: Theme A round 4 of record 100 ×3 (A4-r1, A4-r2); Theme A DONE (two consecutive); A P12-57 phase 3 started | evidence: r4/readers/A-r1.md, A-r2.md | next: A P12-88, A P12-57 phase 3
 
 ---
 

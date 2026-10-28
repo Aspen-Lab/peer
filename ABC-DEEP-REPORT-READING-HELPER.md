@@ -2438,6 +2438,22 @@ C's deviations are accepted:
 
 **A P12-57 phase 3** starts at the next free slot.
 
+### §1h.470 — 2026-10-28 — THEME A DONE: ROUND 4 OF RECORD 100 ON P1, P2, P3 (TWO CONSECUTIVE AT THE TARGET); C1 PHASE 3 RUNNING
+
+**Theme A round 4, the score of record.** Readers A4-r1 and A4-r2 (blind, pack `r2/a87/pack`) each give **P1, P2, P3 100.00**: 12 / 12 units, no extras, no FAIL. With two readers at 100, the median is 100 whatever a third gives; the third reader is skipped.
+
+**Theme A has met its stop line: round 3 97.92 / 97.92 / 97.92, then round 4 100 / 100 / 100, two consecutive rounds ≥ 97.25 on all three papers.**
+
+**Observations neither reader charged, kept as backlog:**
+- O8, the phone row's return 48–69 px high.
+- The W4 toolbar wrap that puts Indent alone on a second row.
+- Note markers mid-word when a selection ends mid-word.
+- The W2 largest-step overcapacity (§1h.194).
+
+**After the stop:** Theme A changes only by fixes for what the last round found. Any new work on it waits on the owner. The owner's own look at the notes surface is the acceptance above the rubric.
+
+**A P12-57 phase 3** (C1) has started, on `e5aaa7d2`, port 4244.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2748,7 +2764,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-54 | DONE — C (Sonnet); landed (R13b) with the revision at 5 | R13b: one-page figure calls up to 27,000,000 bytes | invented-input test; own mutation; gates | checkpoint P12-54-C-<UTC>.md; manager verifies | briefs/P12-54.md; §1h.429 |
 | P12-55 | DONE — C (Sonnet); landed (R11a, R12a) | R11a ceilings with grid clustering; R12a strokes honour the clip | invented-input tests; 5 re-aimed budget tests named; own mutations; gates | checkpoint P12-55-C-<UTC>.md; manager verifies | briefs/P12-55.md; §1h.429 |
 | P12-56 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | R14a Extended Data; R6b the line before; R15a the bar | invented-input tests; own mutations; gates | checkpoint P12-56-C-<UTC>.md; manager verifies | briefs/P12-56.md; §1h.429 (d), §1h.431 |
-| P12-57 | PHASE 2 DONE — A (Sonnet), report on the branch (d771a376); C1 P1–P5 pass, P6 4/5; phase 3 after C P12-86 (§1h.464) | C1 with the owner's test key: phase 1 harness on P1; phase 2 arms after C P12-53 and Tier 0 land | BYOK path, rows, Google calls, hygiene 0 | report P12-57-A-<UTC>.md | briefs/P12-57.md; §1h.430 |
+| P12-57 | IN_PROGRESS — A (Sonnet), phase 3 (P6 × 5, P4 × 3, P3 × 3), head e5aaa7d2, port 4244 (§1h.470) | C1 with the owner's test key: phase 1 harness on P1; phase 2 arms after C P12-53 and Tier 0 land | BYOK path, rows, Google calls, hygiene 0 | report P12-57-A-<UTC>.md | briefs/P12-57.md; §1h.430 |
 | P12-58 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | D1: upload keeps its document; reading says pending; the page keeps asking | route and hook tests; own mutations; gates | checkpoint P12-58-C-<UTC>.md; manager verifies | briefs/P12-58.md; §1h.432 |
 | P12-59 | DONE — B (Sonnet), report on the branch | the 55 s request; P5's memory by stage; P1 / P3 titles | file:line; three rules each | report P12-59-B-<UTC>.md | briefs/P12-59.md; §1h.432 |
 | P12-60 | DONE — B (Sonnet), report on the branch | open only the figure's page: memory by stage on P5; cache today; three candidates measured | file:line; measures | report P12-60-B-<UTC>.md | briefs/P12-60.md; §1h.433 |
