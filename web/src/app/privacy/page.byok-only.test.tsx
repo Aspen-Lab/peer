@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { defaultProfile } from "@/types";
 import PrivacyPage from "./page";
 
 /**
@@ -65,8 +66,9 @@ describe("/privacy after Peer stopped having a model of its own", () => {
 
   it("carries the date of this change", () => {
     // P4-00c (S2): this branch rewrote "Your questions" and "Explain this" on
-    // 2026-10-07, so the page carries that date now, not at merge time.
-    expect(text()).toContain("Last changed 2026-10-07");
+    // 2026-10-07. Own-key lane 3 added "Check key" and where the key lives to
+    // "Your own model key" on 2026-10-28, so the page carries that date now.
+    expect(text()).toContain("Last changed 2026-10-28");
   });
 });
 
@@ -166,6 +168,125 @@ describe("/privacy - your own Jev key", () => {
     const page = text();
     expect(page).toContain("Your own model key");
     expect(page).toContain("Who else sees a request");
-    expect(page).toContain("Last changed 2026-10-07");
+    expect(page).toContain("Last changed 2026-10-28");
+  });
+});
+
+/**
+ * "Check key", and where the key lives (own-key lane 3, 2026-10-28). Each sentence
+ * the "Your own model key" section gained is pinned to the line that makes it
+ * true, the same way as the Jev key above: read the source, assert the property.
+ */
+describe("/privacy - Check key and where the model key lives", () => {
+  const root = process.cwd();
+  const read = (file: string) => readFileSync(join(root, file), "utf8");
+  /** Source with comments removed, so a sentence is pinned to code, not to a comment about it. */
+  const code = (file: string) =>
+    read(file)
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/(^|[^:])\/\/.*$/gm, "$1");
+  const ROUTE = "src/app/api/ai/check-key/route.ts";
+  const CHECK = "src/lib/llm/key-check.ts";
+
+  const CHECK_SENTENCES =
+    "If you press Check key, your browser sends the key to Peer's server, which makes one short request to that provider to see whether it accepts the key. Peer keeps nothing of it: not the key, not the provider's answer, and no log line that names the key.";
+  const COUNT_SENTENCE =
+    "If you are signed in, the server also counts this account's checks this hour, a number and nothing else, kept so the limit of ten checks an hour can hold.";
+  const ACCOUNT_SENTENCE =
+    "Your key does not travel with your account: Peer never stores it on its server, so on another device you add it again, and signing out removes it from this browser.";
+
+  it("says both, in the model-key section, after the existing sentences (which stay)", () => {
+    const page = text();
+    const section = page.slice(page.indexOf("Your own model key"), page.indexOf("Your own Jev key"));
+    for (const sentence of [CHECK_SENTENCES, COUNT_SENTENCE, ACCOUNT_SENTENCE]) expect(section).toContain(sentence);
+    expect(section).toContain("void feedAiApiKey");
+    expect(section).toContain("The key is used for that request and is not stored.");
+    expect(section.indexOf(CHECK_SENTENCES)).toBeGreaterThan(section.indexOf("The key is used for that request"));
+  });
+
+  it("the check runs behind the shared gate: requireAiRequest(\"key-check\", 10) comes before resolveProvider", () => {
+    const route = code(ROUTE);
+    const gate = route.indexOf('requireAiRequest("key-check", 10)');
+    expect(gate).toBeGreaterThan(0);
+    expect(route.indexOf("resolveProvider(override)")).toBeGreaterThan(gate);
+    // The gate's answer (401 signed out, 429 over the limit) is returned unchanged, first.
+    expect(route).toMatch(/const gate = await requireAiRequest\("key-check", 10\);\s*if \(gate instanceof NextResponse\) return gate;/);
+  });
+
+  it("'that provider': the registry is handed the request's own provider and key, and nothing else from the body", () => {
+    const route = code(ROUTE);
+    expect(route).toContain("const { provider, apiKey } = body as");
+    expect(route).toContain("const override = { provider, apiKey } as ProviderOverrideConfig;");
+    expect(route.match(/resolveProvider\(/g)).toHaveLength(1);
+  });
+
+  it("'one short request': one testConnection per check, and each provider's is a one-line ping with a small cap", () => {
+    const check = code(CHECK);
+    expect(check.match(/testConnection\(\)/g)).toHaveLength(1);
+    expect(code(ROUTE)).not.toContain("testConnection");
+    const testBlock = (file: string) => {
+      const source = code(file);
+      const start = source.lastIndexOf("async testConnection()");
+      return source.slice(start, source.indexOf("\n    },", start));
+    };
+    expect(testBlock("src/lib/llm/providers/openai.ts")).toContain("maxTokens: 32");
+    expect(testBlock("src/lib/llm/providers/qwen.ts")).toContain("maxTokens: 32");
+    expect(testBlock("src/lib/llm/providers/deepseek.ts")).toContain("maxTokens: 32");
+    expect(testBlock("src/lib/llm/providers/anthropic.ts")).toContain("max_tokens: 10");
+    // The reader's-key Gemini provider is the last `testConnection` in its file.
+    const gemini = testBlock("src/lib/llm/providers/gemini.ts");
+    expect(gemini).toContain("KEY_CHECK_SYSTEM_PROMPT");
+    expect(gemini).toContain("maxTokens: KEY_CHECK_MAX_TOKENS");
+    expect(gemini).not.toContain("DIGEST_SYSTEM_PROMPT");
+  });
+
+  it("'not the provider's answer': the response is one word, and the provider's text is read only to choose it", () => {
+    const route = code(ROUTE);
+    // The one success response is the word; every other is the gate's or a fixed 400.
+    expect(route).toContain("return NextResponse.json({ result }, { headers: NO_STORE });");
+    expect(route.match(/NextResponse\.json\(/g)).toHaveLength(2);
+    expect(route).toContain('NextResponse.json({ error: "invalid_request" }');
+    expect(route).not.toMatch(/\.error\b/);
+    // The classifier returns literal words only, and the check returns the classifier's word.
+    const check = code(CHECK);
+    const classify = check.slice(check.indexOf("export function classifyKeyCheckError"), check.indexOf("export async function checkProviderKey"));
+    const returns = [...classify.matchAll(/return ([^;]+);/g)].map((match) => match[1]);
+    expect(returns.length).toBeGreaterThan(0);
+    for (const value of returns) expect(value).toMatch(/^"(?:rejected|busy|unreachable)"$/);
+    expect(check).toContain('return outcome.ok === true ? "ok" : classifyKeyCheckError(outcome.error);');
+  });
+
+  it("'no log line that names the key': neither the route nor the check writes a log line", () => {
+    expect(code(ROUTE)).not.toMatch(/console\./);
+    expect(code(CHECK)).not.toMatch(/console\./);
+    // The providers' own usage line (`logLlmUsage`) carries the model, counts and time, and has no field for a key.
+    const usage = code("src/lib/llm/usage-log.ts");
+    const shape = usage.slice(usage.indexOf("export interface LlmUsage"), usage.indexOf("export function logLlmUsage"));
+    expect(shape).not.toMatch(/key/i);
+  });
+
+  it("'counts this account's checks this hour … ten checks an hour': the gate's limit is 10 and its count is a number under the scope", () => {
+    expect(code(ROUTE)).toContain('requireAiRequest("key-check", 10)');
+    expect(code("src/lib/security/ai-request.ts")).toContain("rateKey(scope, user.id, now)");
+  });
+
+  it("'Peer never stores it on its server': the sync voids it, strips it, and the profile row has no column for it", () => {
+    const sync = read("src/components/profile-sync.tsx");
+    expect(sync).toContain("void feedAiApiKey;");
+    expect(sync).toContain("stripCredentialFields(rest)");
+    expect(read("src/lib/profile/merge.ts")).toMatch(/CREDENTIAL_LIKE_FIELDS = \[[^\]]*"feedAiApiKey"/);
+    const profileRoute = code("src/app/api/profile/route.ts");
+    const rowWriter = profileRoute.slice(profileRoute.indexOf("export function profilePatchToRow"), profileRoute.indexOf("// ── Handlers"));
+    expect(rowWriter.length).toBeGreaterThan(0);
+    expect(rowWriter).not.toMatch(/api_?key/i);
+  });
+
+  it("'signing out removes it from this browser': a confirmed sign-out runs logOut, which resets the profile to one with no key", () => {
+    const sync = code("src/components/profile-sync.tsx");
+    expect(sync).toMatch(/processConfirmedSignOutCookie\(\{[\s\S]*?logOut: \(\) => useProfileStore\.getState\(\)\.logOut\(\),/);
+    expect(sync).toMatch(/export function processConfirmedSignOutCookie[\s\S]*?deps\.logOut\(\);/);
+    const store = code("src/store/profile.ts");
+    expect(store).toMatch(/logOut: \(\) => \{[\s\S]*?profile: defaultProfile,/);
+    expect(defaultProfile.feedAiApiKey).toBe("");
   });
 });
