@@ -345,4 +345,48 @@ describe("a drop cap on the third line of the opening's first paragraph (P12-70,
     expect(outlineOf(0, 4, true, { cap: "S" }).sections?.[0].text).toMatch(/^Snail density/);
     expect(outlineOf(0, 4, true, { cap: "Sn", first: ["ail density rises with wave exposure on the rocky shores", FIRST[1], FIRST[2]] }).sections?.[0].text).toMatch(/^Snail density/);
   });
+
+  describe("a one-letter cap that is a whole word is not joined to the word beside it (ruling §1h.446)", () => {
+    const LINES_2_3 = ["first year, and the counts of the snails were taken at every", "quadrat that we laid on the shore at low tide over two years"];
+    const opening = (v: Variant, where: 1 | 3) => outlineOf(0, 4, true, { ...v, capRow: where }).sections?.[0].text?.split("\n\n")[0] ?? "";
+
+    it("keeps the space when the bare word is printed in the paper and the joined word is printed nowhere", () => {
+      // "A" + "study": the paper prints "a" ("with a count", "is a long-standing question") and never "astudy"
+      const study: Variant = {
+        cap: "A",
+        first: ["study of the rocky shore snails began on three coasts in the", ...LINES_2_3],
+        rest: ["over two years of survey work on the shore, with a count of the snails in each quadrat.", FIRST_REST[1]],
+      };
+      for (const where of [3, 1] as const) {
+        expect(opening(study, where).startsWith("A study of the rocky shore snails began"), `cap on row ${where}`).toBe(true);
+        expect(opening(study, where), `cap on row ${where}`).not.toContain("Astudy");
+      }
+      // "I" + "think", the same: the paper prints "I" ("and I counted") and never "ithink"
+      const think: Variant = {
+        cap: "I",
+        first: ["think the shells of the rocky shore snails grow thick on three coasts in the", ...LINES_2_3],
+        rest: ["over two years of survey work on the shore, and I counted the snails in each quadrat.", FIRST_REST[1]],
+      };
+      for (const where of [3, 1] as const) expect(opening(think, where).startsWith("I think the shells"), `cap on row ${where}`).toBe(true);
+    });
+
+    it("joins when the joined word is printed elsewhere, though the bare word is printed too", () => {
+      // "A" + "lmost": the paper prints "almost" in its second line of the paragraph, and "a" as well
+      const almost: Variant = {
+        cap: "A",
+        first: ["lmost every snail of the rocky shore was counted on three coasts in the", ...LINES_2_3],
+        rest: ["over two years of survey work on the shore, with a count of the snails, and we weighed almost all the shells.", FIRST_REST[1]],
+      };
+      for (const where of [3, 1] as const) {
+        expect(opening(almost, where).startsWith("Almost every snail of the rocky shore"), `cap on row ${where}`).toBe(true);
+        expect(opening(almost, where), `cap on row ${where}`).not.toMatch(/A lmost|Almostevery/);
+      }
+    });
+
+    it("joins as it always did when the bare letter is no word of the paper", () => {
+      // "Q" + "uillwort": no "q" is printed and "quillwort" is printed nowhere else
+      const quillwort: Variant = { cap: "Q", first: ["uillwort snails of the rocky shore began on three coasts in the", ...LINES_2_3] };
+      for (const where of [3, 1] as const) expect(opening(quillwort, where).startsWith("Quillwort snails of the rocky shore began"), `cap on row ${where}`).toBe(true);
+    });
+  });
 });

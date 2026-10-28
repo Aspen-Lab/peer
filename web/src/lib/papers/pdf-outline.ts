@@ -78,10 +78,11 @@ export interface PdfLine {
   lowered?: ReadonlySet<PdfTextItem>;
   /** P12-70: set on a row that holds a drop cap: its largest runs hold one or two characters (`letters`) and every other
    *  run is set at less than 1 / `DROP_CAP_RATIO` of them. `rest` is the size of the largest of the other runs (the
-   *  words beside the cap) and `textX` where they start. A cap that spans several lines stands on the last of them, so
+   *  words beside the cap) and `textX` where they start; `joined` that `lineOf` wrote the letters and the word after them
+   *  as one (the cap opens its row and the word continues it). A cap that spans several lines stands on the last of them, so
    *  its row is not the paragraph's first line (`placeDropCaps`). A row set larger as a whole (a title, a heading)
    *  carries none. */
-  cap?: { rest: number; letters?: string; textX?: number };
+  cap?: { rest: number; letters?: string; textX?: number; joined?: true };
 }
 
 export interface OutlineSection {
@@ -737,6 +738,7 @@ function lineOf(
 ): PdfLine | null {
   // P12-70: a row a drop cap heads, if it is one.
   const capRow = capRowOf(runs);
+  let capWasJoined = false;
   // A PDF stores runs, not words: two runs set apart on the page are two
   // words even where neither carries a space ("Ashish Vaswani" and "Noam
   // Shazeer" arrived as one string until this gap was measured).
@@ -840,6 +842,7 @@ function lineOf(
     const subscript = subLeft > 0 && i >= subFrom && i <= subTo;
     // P12-70: a drop cap is joined to the word it starts ("S" + "econdary"), though the page leaves the gap of its padding.
     const capJoined = capRow !== undefined && i === capRow.next && gap <= capRow.size * CAP_WORD_GAP_EM && CAP_CONTINUES.test(item.str);
+    if (capJoined) capWasJoined = true;
     const joined = isMark || (tied && gap < MARK_REACH_EM * item.height) || i === labelFrom || argument || subscript || capJoined;
     if (!joined && text && Number.isFinite(cursor) && gap > Math.max(1, item.height * 0.18) && !/\s$/.test(text)) {
       text += " ";
@@ -884,7 +887,7 @@ function lineOf(
     size: round(Math.max(...runs.map((i) => i.height))),
     titleSize: characterSize(runs),
     font: longestRun(runs).fontName,
-    ...(capRow ? { cap: { rest: capRow.rest, letters: capRow.letters, textX: round(capRow.textX) } } : {}),
+    ...(capRow ? { cap: { rest: capRow.rest, letters: capRow.letters, textX: round(capRow.textX), ...(capWasJoined ? { joined: true as const } : {}) } } : {}),
   };
 }
 
@@ -1599,6 +1602,16 @@ export function isDropCap(line: PdfLine, body: { size: number; font: string }): 
   );
 }
 
+/**
+ * P12-70 (ruling §1h.446): whether a one-letter cap is a word of its own ("A" before "study", "I" before "think")
+ * and not the first letter of the word beside it ("S" before "nail"). The paper's own words are the witness, as for a
+ * ligature (P12-67): the cap is a word when the bare letter is printed in the paper and the joined word ("astudy") is
+ * printed nowhere else; otherwise it starts the word, as it always did. `vocab` holds the paper's words in lower case.
+ */
+function capIsWord(letters: string, word: string, vocab: Vocabulary): boolean {
+  return vocab.words.has(letters.toLowerCase()) && !vocab.words.has(`${letters}${word}`.toLowerCase());
+}
+
 /** A drop cap spans at most this many lines; the lines it stands beside are looked for this far above its row. */
 const DROP_CAP_LINES_MAX = 4;
 /** A capital's height as a share of its size: how far above its baseline a drop cap reaches. */
@@ -1622,6 +1635,15 @@ const DROP_CAP_LEADING_EM = 1.6;
  */
 function placeDropCaps(lines: PdfLine[], body: { size: number; font: string }): PdfLine[] {
   let out: PdfLine[] | null = null;
+  // P12-70 (ruling §1h.446): the paper's own words, read once (without the caps' letters, which would witness
+  // themselves) when a one-letter cap needs them.
+  let vocab: Vocabulary | undefined;
+  const standsAlone = (letters: string, words: string): boolean => {
+    const word = /^\p{L}+/u.exec(words)?.[0];
+    if (letters.length !== 1 || !word) return false;
+    vocab ??= vocabularyOf(lines.map((l) => (l.cap?.letters && l.text.startsWith(l.cap.letters) ? { ...l, text: l.text.slice(l.cap.letters.length) } : l)));
+    return capIsWord(letters, word, vocab);
+  };
   for (let i = 0; i < lines.length; i++) {
     const row = lines[i];
     const cap = row.cap;
@@ -1638,15 +1660,23 @@ function placeDropCaps(lines: PdfLine[], body: { size: number; font: string }): 
       first = j;
       below = above;
     }
-    if (first < 0) continue;
     const words = row.text.slice(cap.letters.length).trimStart();
+    if (first < 0) {
+      // The cap opens its row and `lineOf` joined it to its word: a cap that is a word of its own ("A", "I") is not.
+      if (cap.joined && standsAlone(cap.letters, words)) {
+        out ??= lines.slice();
+        out[i] = { ...row, text: `${cap.letters} ${words}` };
+      }
+      continue;
+    }
     if (words.length === 0) continue;
     out ??= lines.slice();
     // The lines the cap stands beside are indented by its width; they start where the cap does, or each would open a
     // paragraph of its own (`joinProse` breaks at an indent).
     for (let j = first; j < i; j++) out[j] = { ...lines[j], x: row.x };
     const head = lines[first];
-    out[first] = { ...out[first], text: `${cap.letters}${CAP_CONTINUES.test(head.text) ? "" : " "}${head.text}` };
+    const welds = CAP_CONTINUES.test(head.text) && !standsAlone(cap.letters, head.text);
+    out[first] = { ...out[first], text: `${cap.letters}${welds ? "" : " "}${head.text}` };
     const plain: PdfLine = { ...row, text: words, size: cap.rest };
     delete plain.cap;
     out[i] = plain;
