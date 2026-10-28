@@ -2958,14 +2958,17 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
     });
     const text = joinProse(lifted, { vocab });
     let level: 1 | 2 | undefined;
+    // P12-75 (item 2, §1h.452): a heading whose own words are a part name starts a part, whatever its size; it is never
+    // a sub-heading of the part before it ("Discussion" set smaller than an empty "Results" is not a results child).
+    const partName = heading !== null && PART_NAME.test(heading.replace(GLYPH_LEAD, "").trim());
     if (heading === null || headingNumber(heading) !== null) {
       group = null;
-    } else if (group !== null && !STRONG_BUCKETS.has(canonical) && headingSize < group.size - GROUP_STEP) {
+    } else if (group !== null && !partName && !STRONG_BUCKETS.has(canonical) && headingSize < group.size - GROUP_STEP) {
       canonical = group.canonical;
       level = 2;
     } else {
       group = null;
-      if (text.trim().length === 0 && reading && headingSize > 0 && PART_NAME.test(heading.replace(GLYPH_LEAD, "").trim())) {
+      if (text.trim().length === 0 && reading && headingSize > 0 && partName) {
         group = { canonical, size: headingSize };
         level = 1;
       }

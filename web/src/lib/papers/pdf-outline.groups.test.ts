@@ -447,3 +447,60 @@ describe("buildOutline — a bare 'Experimental' heading is a methods group (P12
     ]);
   });
 });
+
+// P12-75 (item 2, §1h.452): a heading whose own words are a part name is never a sub-heading. It ends the open part and opens
+// its own row, whatever its size ("Discussion" set smaller than an empty "Results" was a results child).
+describe("buildOutline — a part name is never a child (P12-75, item 2)", () => {
+  const resultsThen = (next: Row[]): PdfPageText[] => [
+    page(1, [
+      r(TITLE, "title"),
+      ...prose(...INTRO),
+      r("Results", "head", 20, 14),
+      r("Slow cooling", "sub", 20),
+      ...prose(...RESULTS_ONE),
+      r("Fast cooling", "sub", 20),
+      ...prose(...RESULTS_TWO),
+      ...next,
+    ]),
+  ];
+
+  it("ends an empty 'Results' at a 'Discussion' set smaller than it, which is its own discussion row", () => {
+    const rows = rowsOf(resultsThen([r("Discussion", "head", 20), ...prose(...METHODS)]));
+    expect(rows.map((row) => [row[0], row[1], row[2]])).toEqual([
+      [TITLE, "body", undefined],
+      ["Results", "results", 1],
+      ["Slow cooling", "results", 2],
+      ["Fast cooling", "results", 2],
+      ["Discussion", "discussion", undefined],
+    ]);
+  });
+
+  it("opens a group of its own when that 'Discussion' has sub-headings, whose bucket is the discussion's", () => {
+    const rows = rowsOf(resultsThen([r("Discussion", "head", 20, 12), r("Why the seams matter", "sub", 20, 11), ...prose(...METHODS)]));
+    expect(rows.map((row) => [row[0], row[1], row[2]])).toEqual([
+      [TITLE, "body", undefined],
+      ["Results", "results", 1],
+      ["Slow cooling", "results", 2],
+      ["Fast cooling", "results", 2],
+      ["Discussion", "discussion", 1],
+      ["Why the seams matter", "discussion", 2],
+    ]);
+  });
+
+  it("ends the part at 'Conclusions' as well, and a descriptive heading after it is no child of the part before", () => {
+    const rows = rowsOf(resultsThen([r("Conclusions", "head", 20, 12), ...prose(...END_TWO), r("Afterword", "sub", 20), ...prose(...METHODS)]));
+    expect(rows.map((row) => [row[0], row[1], row[2]])).toEqual([
+      [TITLE, "body", undefined],
+      ["Results", "results", 1],
+      ["Slow cooling", "results", 2],
+      ["Fast cooling", "results", 2],
+      ["Conclusions", "conclusion", undefined],
+      ["Afterword", "body", undefined],
+    ]);
+  });
+
+  it("still takes a descriptive heading set smaller as a child", () => {
+    const rows = rowsOf(resultsThen([r("Why the seams matter", "sub", 20), ...prose(...METHODS)]));
+    expect(rows.map((row) => [row[0], row[1], row[2]]).slice(-1)).toEqual([["Why the seams matter", "results", 2]]);
+  });
+});
