@@ -231,3 +231,27 @@ describe("a line with a lone panel letter b to h is figure text, not a heading (
     expect(textOf(pages)).toContain("a Charge curve b Discharge curve c Rate test");
   });
 });
+
+// ── R5: a quoted key and a colon is source code, not a heading ──────────────────────────────────────────
+
+describe("a line with a quoted key and a colon is no heading (C P12-74, R5)", () => {
+  it("refuses a settings line and a line of source code in a monospace face", () => {
+    for (const text of ["'optimizer': 'adamw' with warmup", '"learning rate": 0.01 and the warmup', "config {'mode': 'fast'} then run"]) {
+      expect(headingOf(line(text, { font: "mono" }), BODY), text).toBeNull();
+    }
+    // a larger size is no way round: the quoted key is the test
+    expect(headingOf(line("'optimizer': 'adamw' with warmup", { font: "mono", size: 12 }), BODY)).toBeNull();
+  });
+
+  it("keeps a heading with a colon, or with an apostrophe, or with a quoted word that no colon follows", () => {
+    for (const text of ["Part Two: Setup of the Cells", "Peer's Guide: the Methods Overview", 'The "Free" Energy Landscape of Films', "Hooke's and Newton's Laws"]) {
+      expect(headingOf(line(text, { font: "display", size: 12 }), BODY), text).toBe(text);
+    }
+  });
+
+  it("end to end: a settings line in a monospace face opens no section", () => {
+    const pages = paperOf([item("'optimizer': 'adamw' with warmup", { y: 654, fontName: "mono" })]);
+    expect(headingsOf(pages)).toEqual(["Introduction"]);
+    expect(textOf(pages)).toContain("'optimizer': 'adamw' with warmup");
+  });
+});
