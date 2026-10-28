@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-28T10:01Z
+AS OF        2026-10-28T10:14Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
-LAST RULING  §1h.451   NEXT RULING §1h.452   NEXT ITEM ID P12-78   NEXT FREE PORT 4248
+LAST RULING  §1h.452   NEXT RULING §1h.453   NEXT ITEM ID P12-78   NEXT FREE PORT 4248
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
-RUNNING      (max 2, §1h.443) C P12-75 (M2 + M5 + M7) ∥ C P12-76 (M8 + M3); QUEUE: A P12-72 (Theme B walk) → 3 readers for Theme A (pack r2/a71/pack) → C P12-77 → C P12-70 item 10 → B short paragraphs → A P12-57 phase 2
+RUNNING      (max 2, §1h.443) C P12-76 (M8 + M3) ∥ blind reader A-r1 (Theme A pack); branch head 7127604d; QUEUE: C P12-75 item 2 → A P12-72 (Theme B walk, after C P12-76 lands) → readers A-r2, A-r3 → C P12-77 → C P12-70 item 10 → B short paragraphs → A P12-57 phase 2
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
 OWNER'S PDFS P1–P6 (uploads in the manager's session; P4–P6 held out); upload UI only; never commit or quote
 CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB, Haiku, "20 * * * *", enabled, read back 06:23Z; prompt: at most two subagents (§1h.443)
@@ -697,6 +697,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-28T09:47Z | manager (Claude) | §1h.450: C P12-74 landed (6 mutations red; 648 / 11,959 / 0 failed); Theme C P1–P3 100, P4 60, P5 77.78, P6 72.22 | evidence: mgr/gates-V.log, mgr/out/P*-c74.json | next: C P12-75, then C P12-76
 
 - 2026-10-28T10:01Z | manager (Claude) | §1h.451: A P12-71 Theme A 97.92 ×3 (E1 0.25); director agrees; readers queued; C P12-77 queued; C P12-76 started | evidence: P12-71-A report, r2/a71/pack | next: C P12-75, C P12-76, A P12-72
+
+- 2026-10-28T10:14Z | manager (Claude) | §1h.452: C P12-75 landed (mutations 1/2/1/3 red, one list word unpinned; 649 / 12,030 / 0 failed); Theme C P1–P4, P6 100, P5 88.89 | evidence: mgr/gates-V.log, mgr/out/P*-c75.json | next: C P12-76, reader A-r1
 
 ---
 

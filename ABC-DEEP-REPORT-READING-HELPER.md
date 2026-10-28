@@ -2111,6 +2111,30 @@ The six pass requirements hold. 12 / 12 units on each paper. One extra, E1, cosm
 
 (c) **C P12-77 is queued:** E1 (the tab clamped above the legend) and O2 (`<u>…</u>` in Markdown; an old `__x__` still reads as before).
 
+### §1h.452 — 2026-10-28 — C P12-75 LANDED; THEME C P1–P4 AND P6 100, P5 88.89; C P12-75 ITEM 2
+
+**C P12-75 is landed** (head `7127604d`; the landed `web/` tree equals V's at `50f7169b`).
+
+**Manager mutations** (sha256 equal after each restore):
+- a numbered heading no longer ends a group → 1 red;
+- a part name with text of its own makes a group → 2;
+- M7's conclusion / summary guard off → 1;
+- `dropStrayHeadings` keeps a lone level-1 row → 3;
+- "preparation" dropped from the M5 word list → 0. The rule itself is pinned (C's M5 off → 13); this one list word is not tested on its own.
+
+**V's full gates:** lint 0 / 144; **649 files, 12,030 tests, 0 failed**; build 0.
+
+**Theme C with C P12-74 + C P12-75** (V's maps; no extras on any paper):
+- **P1 100, P2 100, P3 100, P4 100, P5 88.89 (8 / 9), P6 100.**
+- P4: the Methods group row with seven level-2 children, and the closing split now fires on its signpost paragraph, as B P12-73 predicted.
+- P6: 9 / 9, with the implications row now interpretation.
+
+**The director voids one scorer FAIL on P4.** The sealed locator for its methods part skipped a parenthesis the paper prints after the first word. The part starts at the group row's first child's first paragraph, which is the true start. The private truth is corrected.
+
+P5's closing (M3) and M8 are C P12-76's, running.
+
+**C P12-75 item 2 is briefed:** a bare "Experimental" heading → methods; a part name is never a group's child. It starts when a slot frees.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2439,7 +2463,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-72 | QUEUED — A (Sonnet), fresh walk of Theme B on the landed head (replaces the stale P12-38 walk) | Theme B B1–B12 | rubric units and pass requirements | walk, pack, P12-72-A-<UTC>.md | briefs/P12-72.md; §1h.446 |
 | P12-73 | DONE — B (Sonnet), report on the branch (a4b384e4); ruled §1h.449 | Theme C on P4–P6: M1–M7 by shape | file:line, three candidates each, a C split | report P12-73-B-<UTC>.md | briefs/P12-73.md; §1h.446 |
 | P12-74 | DONE — C (Sonnet); landed at c91e89e9 (§1h.450) | M1 rule A (R1–R5) + M6 block in pdf-outline.ts | invented fixtures; 2 named re-aims; own mutations; gates | checkpoint P12-74-C-<UTC>.md | briefs/P12-74.md; §1h.449 |
-| P12-75 | IN_PROGRESS — C (Sonnet), scratch p12/c75, from db3f7fe5 | M2 group row (level), M5, M7 R7a | invented fixtures; own mutations; gates | checkpoint P12-75-C-<UTC>.md | briefs/P12-75.md; §1h.449 |
+| P12-75 | PARTIAL — C (Sonnet); M2 / M5 / M7 landed at 7127604d (§1h.452); item 2 queued | M2 group row (level), M5, M7 R7a | invented fixtures; own mutations; gates | checkpoint P12-75-C-<UTC>.md | briefs/P12-75.md; §1h.449 |
 | P12-76 | IN_PROGRESS — C (Sonnet), scratch p12/c76, from 44dd2945 | M8 per-page left edge; M3 c3_last on P5 | invented fixtures; own mutations; gates | checkpoint P12-76-C-<UTC>.md | briefs/P12-76.md; §1h.449 |
 | P12-77 | QUEUED — C (Sonnet) | E1 the notes tab above the legend; O2 underline as <u> in Markdown | tests; own mutations; gates | checkpoint P12-77-C-<UTC>.md | briefs/P12-77.md; §1h.451 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
