@@ -8,8 +8,8 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 |---|---|
 | HELD BY | manager session (Claude Code desktop, worktree `.claude/worktrees/objective-wu-e8d6fe`) |
 | BRANCH | `own-key-on-web` (cut from `origin/main` db0f070a after PR #36 merged; name approved by the owner 2026-10-25). Repository `Aspen-Lab/peer`. No push without the owner's word (AGENTS.md). The owner merges the PR himself (R6). |
-| ROUND | 2 — scoring at e267e1f1 (round 1: A 85.4, B 100.0) |
-| CURRENT ITEM | round 2 scoring (3 readers) |
+| ROUND | 2 scored (A 97.92, B 100.0 — B stopped); round 3 scores Theme A only |
+| CURRENT ITEM | R2-fix running; then round 3 (Theme A only) |
 | NEXT TURN | on each worker report: verify → land on the branch → refill up to the cap of two groups |
 | STOPPED BECAUSE | — |
 | TARGET | **97.9 per theme, two consecutive rounds** (the owner, 2026-10-28, R5: "达标线用 97.9，每个主题连续两轮达到就停。") |
@@ -37,6 +37,8 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 - **R16 (2026-10-28), on L1-A (`L1-A-20261028T185241Z.md`).** B8, B10, A12 PASS; B9 PASS with D1 0.25: five stale comments still describe Tavily or the `web` adapter (spend-scans scan 3 and 5, `pipeline.ts` ~1112, `jev-step.test.ts` ~114, `api/feed/route.test.ts` ~324). Accepted for L1-fix (comments only). A12's CHANGELOG entry is the manager's.
 - **R17 (2026-10-28).** Rubric B3 amended to match R14/R15 (no relaxation of safety): the callback accepts only same-site `/welcome` or `/profile` (with a query) or `/papers/<one encoded id>`, for both the cookie and `next`. All three readers flagged the old wording; all three passed B3, so round 1's numbers are the same under either line.
 - **R18 (2026-10-28), round 1 clusters for R1-fixB.** (1) README: the own-key changes and the wizard's Account step (A12 remainder; the CHANGELOG entry landed in 1e4a1a98, the 375 px wrap and the signed-in kicker in R1-fixA); (2) A5 the signed-out Account title "Sign in (optional)." under the kicker "Optional" says it twice → title "Sign in."; (3) A1 the Profile key paragraph reworded without "there, paste it again"; (4) A8 the dialog says "this browser" throughout (the unsynced sentence said "this device"); (5) A9 the reset line says "your API key" for one key.
+- **R19 (2026-10-28). Theme B stops.** Round 1 100.0 and round 2 100.0, both at or above 97.9: two consecutive rounds (R5). Theme B is no longer scored; a later change to its files has A re-check only the lines it could move, and a loss reopens it. Theme A: round 2 is its first round at or above 97.9 (97.92).
+- **R20 (2026-10-28), round 2 clusters for R2-fix.** (1) A5, all three readers: below `sm` the visible label "Skip sign-in" is not in the accessible name — make the accessible name the visible words at each width (no aria-label; hide the other span with CSS so it leaves the accessibility tree). (2) A5, reader 1: "topics, saved papers and settings" overclaims what follows the account — say "most settings" in both Account-step subtitles. Ruled cosmetic, not a breach of pass requirement 2: it is not a privacy claim and the large majority of settings do sync. (3) Director at 375 px: the Welcome review row cuts "… — sign in to use it"; the row's value may wrap to two lines instead of an ellipsis. (4) Reader 3's uncosted note, taken because it is cheap and true: Check key "busy" becomes "The provider is turning requests away for now. Try again later." (no word the copy scan bans).
 
 ## §3 Items
 
@@ -59,7 +61,8 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 | L1-fix | C | LANDED 26accd41 | own-key-lane1 | comments only (diff checked: no non-comment line changed); tsc 0; 190 tests pass |
 | R1-fixA | C | LANDED ac19aa7e, 38aeef1c, 25d64586 | own-key-lane4 | tsc 0; eslint 0 errors; ×3 143 pass / 1 baseline; M17 (signed-in kicker back to Optional) → 2 red; 375 px checked in the browser: "Skip sign-in →" on one line |
 | R1-fixB | C | LANDED 61a47960, 4cbe5388, f1f464e7, 549f52ed, e267e1f1 | own-key-lane4 | five items of R18; tsc 0; ×3 570 pass / 1 baseline; M18 (dialog back to "this device") → 5 red |
-| R2-score | readers ×3 + director | RUNNING at e267e1f1 | own-key-verify (read only) | pack `R2-pack/`; full suite 11185 / 34 failed / 0 new |
+| R2-score | readers ×3 + director | DONE: A 97.92 / B 100.0 (median); Theme B stops (R19) | own-key-verify (read only) | pack `R2-pack/`; full suite 11185 / 34 failed / 0 new |
+| R2-fix | C | RUNNING | own-key-lane4 | `briefs/R2-fix.md` (R20) |
 | L4-fix2 | C | LANDED 4a883c0a | own-key-lane4 | a decoded "/" allowed in a paper return path; M16 (literal "/" allowed) → 4 red |
 | R1-score | readers ×3 + director | DONE: A 85.4 / B 100.0 (median); director 89.58 / 97.73 | `own-key-verify` (read only) | pack: notes `R1-pack/` (static renders, live captures, 375 px screenshot, test evidence); full suite 11175 / 34 failed / 0 new |
 | L2-C | C | LANDED 68163acd, f6cfe7ce, 43e2a404 | `.claude/worktrees/own-key-lane2` | aeba4d49 note under the key field, 187597a6 AI provider row, 495eeba6 paper page sign-in. Manager: tsc 0, eslint 0 errors (44 warnings, pre-existing), touched tests ×3 = 933 pass / 1 fail (jev-setup, CRLF baseline); M5 (note shown for unknown/unconfigured) → 4 red; M6 (keyNeedsSignIn always false) → 1 red (unit level; the page tests take the flag as input); restored byte-identical. Full suite: 10752 tests, 35 failed, **0 new**. |
@@ -97,6 +100,13 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 
 - Every round-1 defect re-checked on the live app and the static pack: CHANGELOG and README entries present (A12 GONE); Account title "Sign in." under "Optional", signed-in kicker "Account" (A5 GONE); 375 px "Skip sign-in →" on one line (A5 GONE, screenshot in `R2-pack/`); Profile key paragraph reworded (A1 GONE); dialog says "this browser" throughout (A8 GONE); reset line counts the keys (A9 GONE); Jev note off the Welcome AI step (A6 GONE); stale Tavily comments reworded (B9 GONE).
 - No new defect found. Theme A 12 / 12 → **100.0**; Theme B 11 / 11 → **100.0**.
+
+## §4f Round 2 — readers
+
+- Reader 2 (`R2-reader-2-20261028T220059Z.md`): **A 97.9** (A5 0.25: below `sm` the button shows "Skip sign-in" but its accessible name stays "Continue without signing in" — the visible words are not in the name, WCAG 2.5.3, so voice control "Skip sign-in" misses it; `account-step.tsx:104-121`, `welcome/page.tsx:556`), **B 100.0**. Pack note: static renders of hook-read auth states omit the signed-out note (known, §4b); the live capture has it.
+- Reader 1 (`R2-reader-1-20261028T220226Z.md`): **A 95.83** (A5 0.25: the Account step says topics, saved papers *and settings* follow the account and names only the keys as staying, but Deep report, Preferred journals and the AI company choice stay on the device — Profile labels the first two "Saved on this device only."; A5 0.25: the same accessible-name mismatch as reader 2), **B 100.0**. Asks for a ruling on whether the "settings" sentence breaches pass requirement 2 (reader scored it imprecise, not false).
+- Reader 3 (`R2-reader-3-20261028T2202Z.md`): **A 97.92** (A5 0.25: the same accessible-name mismatch), **B 100.0**. Not costed: Check key "busy" says "in a minute" though a used-up daily limit will not clear in a minute; slightly clumsy dialog wording; could not check whether the Welcome review row "Gemini key saved — sign in to use it" is cut at 375 px.
+- **Score of record, round 2 (median): Theme A 97.92, Theme B 100.0.** Director (before readers): 100 / 100. After the readers, the director re-checked the review row on the live app at 375 px: it IS cut ("Gemini key saved — sign in t…", `text-overflow: ellipsis`, 206 px of text in 178 px) — a 0.25 the director missed; with it the director's A would be 97.92 too.
 
 ## §5 Log
 
