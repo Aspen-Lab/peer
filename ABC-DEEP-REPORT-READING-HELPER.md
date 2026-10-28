@@ -2095,6 +2095,22 @@ B P12-73's report (`P12-73-B-20261028T0851Z.md`, landed `a4b384e4`) is checked: 
 
 **Backlog (new):** short fragment paragraphs in the prose, mostly figure text that is not a row: of all paragraphs, ≤ 8 words are P3 59 / 104, P4 95 / 157, P5 135 / 336, P6 38 / 239. Theme C does not price them, but they cost the reading. They go to a B after the Theme C Cs.
 
+### §1h.451 — 2026-10-28 — THEME A ROUND 2 (A P12-71): 97.92 ON P1, P2, P3; READERS NEXT; C P12-77
+
+**A P12-71** (Theme A, round 2, fresh walk on `d44aeabb`; report landed `d2de8451`; its four-word runs shared with P1–P6 are 7, all digit runs from the measurements).
+
+The six pass requirements hold. 12 / 12 units on each paper. One extra, E1, cosmetic, 0.25 per paper: at 1024 × 576 and 853 × 480 the fixed notes tab overlaps the fixed key legend, and at 853 × 480 its three-line label runs 16.5 px below the viewport. **A's score: P1 97.92, P2 97.92, P3 97.92.**
+
+(a) **Director:**
+- E1 is checked on the 853 × 480 entry screenshot. The tab is legible and hittable and covers the legend's end, so **the price 0.25 stands**.
+- O2, underline exported as `__x__` (bold in CommonMark, Obsidian and Pandoc), is not priced, because A5 asks for what the format supports. Peer's direction puts portable output first, so it goes to a fix.
+- O1 (the notes text does not follow the reading step), O3 (a tag mid-word), O4 (the notes page's drawer and Escape) and O5 (an empty `.bib` of 1 byte) are backlog notes, not priced.
+- P12-65 and P12-66 are confirmed on the page: 24 cycles lost or resurrected nothing, and 504 of 504 keys landed where they were typed.
+
+(b) **The score of record waits on three blind readers** (P12-R2-reader.md, three papers by §1h.423). They score the pack `/tmp/claude-0/-home-user-peer/9602921a-6ac5-5952-88ce-8364fcd8f733/scratchpad/p12/r2/a71/pack/` as slots free.
+
+(c) **C P12-77 is queued:** E1 (the tab clamped above the legend) and O2 (`<u>…</u>` in Markdown; an old `__x__` still reads as before).
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2419,12 +2435,13 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-68 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | the caption cap 500 → 1,500 in the engine and the view | invented-input test; own mutation; gates | checkpoint P12-68-C-<UTC>.md | briefs/P12-68.md; §1h.440 (c) |
 | P12-69 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | the takedown removes kept figures; the privacy page names them | tests; own mutation; gates | checkpoint P12-69-C-<UTC>.md | briefs/P12-69.md; §1h.441 |
 | P12-70 | PARTIAL — C (Sonnet); items 1–9 landed (14246baa, §1h.448); item 10 queued | integration: the five tests where eight Cs' rules meet | code fixes; named re-aims only where a ruled rule changed the truth; gates | checkpoint P12-70-C-<UTC>.md | briefs/P12-70.md; §1h.442 |
-| P12-71 | IN_PROGRESS — A (Sonnet), head d44aeabb, port 4246, scratch p12/r2/a71 | Theme A A1–A12 | rubric units and pass requirements | walk, pack, P12-71-A-<UTC>.md | briefs/P12-71.md; §1h.446 |
+| P12-71 | DONE — A (Sonnet), report on the branch (d2de8451); 12/12 ×3, E1 0.25, 97.92 ×3; readers pending (§1h.451) | Theme A A1–A12 | rubric units and pass requirements | walk, pack, P12-71-A-<UTC>.md | briefs/P12-71.md; §1h.446 |
 | P12-72 | QUEUED — A (Sonnet), fresh walk of Theme B on the landed head (replaces the stale P12-38 walk) | Theme B B1–B12 | rubric units and pass requirements | walk, pack, P12-72-A-<UTC>.md | briefs/P12-72.md; §1h.446 |
 | P12-73 | DONE — B (Sonnet), report on the branch (a4b384e4); ruled §1h.449 | Theme C on P4–P6: M1–M7 by shape | file:line, three candidates each, a C split | report P12-73-B-<UTC>.md | briefs/P12-73.md; §1h.446 |
 | P12-74 | DONE — C (Sonnet); landed at c91e89e9 (§1h.450) | M1 rule A (R1–R5) + M6 block in pdf-outline.ts | invented fixtures; 2 named re-aims; own mutations; gates | checkpoint P12-74-C-<UTC>.md | briefs/P12-74.md; §1h.449 |
 | P12-75 | IN_PROGRESS — C (Sonnet), scratch p12/c75, from db3f7fe5 | M2 group row (level), M5, M7 R7a | invented fixtures; own mutations; gates | checkpoint P12-75-C-<UTC>.md | briefs/P12-75.md; §1h.449 |
-| P12-76 | QUEUED — C (Sonnet) | M8 per-page left edge; M3 c3_last on P5 | invented fixtures; own mutations; gates | checkpoint P12-76-C-<UTC>.md | briefs/P12-76.md; §1h.449 |
+| P12-76 | IN_PROGRESS — C (Sonnet), scratch p12/c76, from 44dd2945 | M8 per-page left edge; M3 c3_last on P5 | invented fixtures; own mutations; gates | checkpoint P12-76-C-<UTC>.md | briefs/P12-76.md; §1h.449 |
+| P12-77 | QUEUED — C (Sonnet) | E1 the notes tab above the legend; O2 underline as <u> in Markdown | tests; own mutations; gates | checkpoint P12-77-C-<UTC>.md | briefs/P12-77.md; §1h.451 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
 | P11-26 | **DONE 21:0xZ 2026-10-20** — on the branch (§1h.128 (b)); was RUNNING (rules 4, 5 added §1h.127 (c)) since 09:1xZ 2026-10-20 — C, `briefs/P11-26.md`, `scratchpad/p11c26/wt`, port 4127: the explain card keeps its top at the selection (B3); a figure in front of the stack is never a thumbnail (X-3) | round 1 Theme B | §1h.122 (b) 1, 4 | C → the manager | — |
