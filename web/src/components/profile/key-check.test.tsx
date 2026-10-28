@@ -117,13 +117,22 @@ describe("KeyCheckView — the button, the note and the line", () => {
     }
   });
 
-  it("tells a reader confirmed signed out to sign in, which is why the button is disabled", () => {
+  // L2-fix item 4 (R14; L3-A D6, director note N3): the reason the button is disabled for a reader
+  // confirmed signed out already stands beside it (the key field's note on Profile, the sign-in block
+  // above it on the welcome "AI" step), so this line does not say it a third time.
+  it("adds no line for a reader confirmed signed out: the button is disabled and the reason is beside it", () => {
     const markup = view({ authOutcome: "signed-out" });
     expect(buttonDisabled(markup)).toBe(true);
-    expect(visibleText(markup)).toContain("Sign in to check your key.");
-    // Even after an earlier answer: the reason the button cannot be pressed comes first.
+    expect(visibleText(markup)).not.toContain("Sign in to check your key.");
+    expect(keyCheckLine("idle", "gemini", "signed-out")).toBeNull();
+    // An earlier answer, given while signed in, goes with the sign-out.
     expect(visibleText(view({ authOutcome: "signed-out", status: "ok" }))).not.toContain(KEY_CHECK_COPY.ok);
-    expect(keyCheckLine("idle", "gemini", "signed-out")).toBe("Sign in to check your key.");
+    expect(keyCheckLine("ok", "gemini", "signed-out")).toBeNull();
+  });
+
+  it.each(AUTH)("says 'Sign in to check your key.' after Peer's own 401, whatever the page thought (%s)", (authOutcome) => {
+    expect(keyCheckLine("signed-out", "gemini", authOutcome)).toBe("Sign in to check your key.");
+    expect(visibleText(view({ authOutcome, status: "signed-out" }))).toContain("Sign in to check your key.");
   });
 
   it("says nothing extra while the sign-in check has not answered, or with no company chosen", () => {

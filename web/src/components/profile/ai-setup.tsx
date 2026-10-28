@@ -155,6 +155,7 @@ export function AiKeyFields({
   idPrefix = "ai",
   emphasized = false,
   showRegistrationLink = false,
+  signInNote = true,
 }: {
   provider: UserAiProvider;
   apiKey: string;
@@ -163,6 +164,12 @@ export function AiKeyFields({
   idPrefix?: string;
   emphasized?: boolean;
   showRegistrationLink?: boolean;
+  /**
+   * Whether the field says `KEY_SIGN_IN_NOTE` to a signed-out reader. On by
+   * default (Profile). The welcome wizard's AI step turns it off: it already
+   * says so, with the sign-in buttons, in its own block above the field.
+   */
+  signInNote?: boolean;
 }) {
   const guide = provider === "default" ? null : PROVIDER_GUIDES[provider];
   // Read here, not passed in, so the Profile and the welcome wizard both say it
@@ -237,7 +244,7 @@ export function AiKeyFields({
                 : undefined
             }
           />
-          {showKeySignInNote(provider, authOutcome) && (
+          {signInNote && showKeySignInNote(provider, authOutcome) && (
             <p className="text-micro leading-relaxed text-text-faint">
               {KEY_SIGN_IN_NOTE}
             </p>

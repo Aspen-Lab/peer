@@ -12,8 +12,10 @@
 // Two answers come from Peer itself, before any provider is asked, and get lines of
 // their own so the reader is never told the provider did something it did not: this
 // account's hourly limit (the route's 429) and a sign-in that has run out (its 401).
-// A reader confirmed signed out sees "Sign in to check your key." beside the disabled
-// button; while the sign-in check has not answered, nothing extra is said.
+// "Sign in to check your key." shows only after that 401. A reader confirmed signed
+// out finds the button disabled with no extra line: the reason already stands beside
+// it (the key field's note, or the welcome step's sign-in block). While the sign-in
+// check has not answered, nothing extra is said either.
 //
 // What /privacy says about it ("Your own model key") is pinned to the route and to
 // the button's label below.
@@ -70,12 +72,18 @@ export function canCheckKey(provider: UserAiProvider, apiKey: string, authOutcom
 }
 
 /**
- * The line under the button. A reader confirmed signed out is told to sign in, which
- * is why the button cannot be pressed; otherwise nothing before the first check, then
- * what came back. "unknown" (the sign-in check has not answered) adds nothing.
+ * The line under the button: nothing before the first check, then what came back.
+ * "Sign in to check your key." is shown only when Peer itself answered a check with
+ * its 401 (the sign-in ran out since the page loaded). A reader confirmed signed out
+ * is not told it here as well: the button is disabled, and the reason already stands
+ * beside it (the key field's note on Profile, the sign-in block above it on the
+ * welcome "AI" step). A confirmed sign-out still clears an earlier answer, which was
+ * given to a signed-in reader. "unknown" (the sign-in check has not answered) adds
+ * nothing.
  */
 export function keyCheckLine(status: KeyCheckStatus, provider: UserAiProvider, authOutcome: AuthOutcome): string | null {
-  if (provider !== "default" && authOutcome === "signed-out") return KEY_CHECK_COPY["signed-out"];
+  if (status === "signed-out") return KEY_CHECK_COPY["signed-out"];
+  if (provider !== "default" && authOutcome === "signed-out") return null;
   return status === "idle" ? null : KEY_CHECK_COPY[status];
 }
 

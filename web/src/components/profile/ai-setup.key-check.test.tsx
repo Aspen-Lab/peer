@@ -71,13 +71,13 @@ describe("AiKeyFields — the Check key button sits under the key field", () => 
     expect(html).not.toContain("check-key");
   });
 
-  it("comes after the sign-in note when the reader is signed out, and says why it cannot be pressed", () => {
+  it("comes after the sign-in note when the reader is signed out; the note, not a second line, says why it cannot be pressed", () => {
     const html = markup("openai", KEY, "signed-out");
     const note = html.indexOf(KEY_SIGN_IN_NOTE);
     expect(note).toBeGreaterThan(0);
     expect(html.indexOf(`>${KEY_CHECK_COPY.button}</button>`)).toBeGreaterThan(note);
     expect(buttonDisabled(html)).toBe(true);
-    expect(html).toContain(KEY_CHECK_COPY["signed-out"]);
+    expect(html).not.toContain(KEY_CHECK_COPY["signed-out"]);
   });
 
   it("can be pressed for a signed-in reader with a key typed, and not with the key field empty", () => {

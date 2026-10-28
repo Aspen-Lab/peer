@@ -450,6 +450,8 @@ export default function WelcomePage() {
                       idPrefix="welcome-ai"
                       emphasized
                       showRegistrationLink
+                      // The sign-in block above already says a key runs only while signed in.
+                      signInNote={false}
                     />
                     <AiProviderGuide
                       key={profile.feedAiProvider}
