@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { defaultProfile, type UserAiProvider } from "@/types";
 import { FEED_AI_PROVIDER_OPTIONS } from "@/components/profile/ai-setup";
+import { browserKeyLabels } from "@/components/account/account-section";
 import {
   ColorThemePicker,
   DashboardView,
@@ -1025,5 +1026,45 @@ describe("the Profile's second-step buttons are touch targets where there is no 
     // The learned card's pair is `flex items-center gap-3`; the reset panel's is `flex items-center gap-3 ml-auto`.
     expect(learned).toMatch(/<span className="text-caption flex items-center gap-3 shrink-0">/);
     expect(resetSection).toMatch(/<div className="flex items-center gap-3 ml-auto">/);
+  });
+});
+
+// OWN-KEY lane 4: "Confirm reset" calls logOut(), which resets the whole local profile, and with it the reader's model
+// and Jev keys, but the confirmation said only "Reset all signals to defaults?". When this browser holds a key it now
+// adds "This also removes your API keys from this browser." The reset runs inside the page, which this repo cannot render
+// headlessly, so the sentence and its condition are pinned in the source (as above), and the condition's own function,
+// browserKeyLabels, is run for real on each kind of profile.
+describe("Reset profile to defaults - says the keys go too (OWN-KEY lane 4)", () => {
+  const source = readFileSync(join(process.cwd(), "src/app/profile/page.tsx"), "utf8");
+  const start = source.indexOf("{/* ── Reset ──");
+  const resetSection = source.slice(start, source.indexOf("<VersionLine", start));
+  const SENTENCE = "This also removes your API keys from this browser.";
+
+  it("adds the sentence to the confirmation, after the question, only when this browser holds a key", () => {
+    expect(start).toBeGreaterThan(-1);
+    const question = resetSection.indexOf("Reset all signals to defaults?");
+    const sentence = resetSection.indexOf(`{browserKeyLabels(profile).length > 0 && " ${SENTENCE}"}`);
+    expect(question).toBeGreaterThan(-1);
+    expect(sentence).toBeGreaterThan(question);
+    // Shown above the confirm button itself (the section's header comment also names "Confirm reset").
+    expect(sentence).toBeLessThan(resetSection.indexOf("logOut();"));
+    expect(source.match(new RegExp(SENTENCE.replace(/\./g, "\\."), "g")) ?? []).toHaveLength(1);
+  });
+
+  it("is the confirmation of the reset that calls logOut()", () => {
+    expect(resetSection).toMatch(/onClick=\{\(\) => \{\s*logOut\(\);/);
+  });
+
+  it("takes the condition from the Account section's browserKeyLabels, so it and the sign-out dialog agree", () => {
+    expect(source).toMatch(/import \{[^}]*\bbrowserKeyLabels\b[^}]*\} from "@\/components\/account\/account-section"/);
+  });
+
+  it("the condition holds for a model key, a Jev key, or both, and not for a profile without one", () => {
+    const keyedModel = { ...defaultProfile, feedAiProvider: "gemini" as UserAiProvider, feedAiApiKey: "user-owned-key" };
+    const keyedJev = { ...defaultProfile, jevApiKey: "jev-test-not-a-key-0000" };
+    expect(browserKeyLabels(defaultProfile).length > 0).toBe(false);
+    expect(browserKeyLabels(keyedModel).length > 0).toBe(true);
+    expect(browserKeyLabels(keyedJev).length > 0).toBe(true);
+    expect(browserKeyLabels({ ...keyedModel, ...keyedJev, feedAiProvider: "gemini", feedAiApiKey: "k" }).length > 0).toBe(true);
   });
 });

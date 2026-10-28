@@ -29,7 +29,7 @@ import { SURFACE_TOPIC_DESCRIPTIONS } from "@/lib/profile/topic-copy";
 import { IconBook, IconBuilding, IconCheck } from "@/components/icons";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageSpread } from "@/components/ui/page-spread";
-import { AccountSection } from "@/components/account/account-section";
+import { AccountSection, browserKeyLabels } from "@/components/account/account-section";
 import { RestoreFromBackup } from "@/components/profile/restore-backup";
 import { useProfileSyncStatus, useSyncGate } from "@/components/profile-sync";
 import { useFeedSyncStatus } from "@/components/feed-sync";
@@ -341,7 +341,12 @@ export default function ProfilePage() {
           </button>
         ) : (
           <div className="rounded-xl bg-red/[0.05] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_22%,transparent)] px-4 py-3 text-meta flex items-center flex-wrap gap-x-5 gap-y-2">
-            <span className="text-text-muted">Reset all signals to defaults?</span>
+            {/* logOut() resets the whole local profile, the reader's model and Jev keys with it, so the confirmation
+                says so whenever this browser holds one (names only, via browserKeyLabels; the key is never read here). */}
+            <span className="text-text-muted">
+              Reset all signals to defaults?
+              {browserKeyLabels(profile).length > 0 && " This also removes your API keys from this browser."}
+            </span>
             <div className="flex items-center gap-3 ml-auto">
               <button
                 onClick={() => {
