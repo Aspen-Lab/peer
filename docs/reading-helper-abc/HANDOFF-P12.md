@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-28T01:48Z
+AS OF        2026-10-28T01:53Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
-LAST RULING  §1h.436   NEXT RULING §1h.437   NEXT ITEM ID P12-65   NEXT FREE PORT 4245
+LAST RULING  §1h.437   NEXT RULING §1h.438   NEXT ITEM ID P12-67   NEXT FREE PORT 4246
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
-RUNNING      A P12-37 (4240) ∥ A P12-38 (4241) ∥ C P12-47 (R2a/R3a/R5a/R8a) ∥ C P12-63 (closing split on the page) ∥ C P12-64 (titles) ∥ C P12-49 (headings) ∥ C P12-50 (gutter) ∥ C P12-62 (first end-matter part) ∥ B P12-52 (same-note writers, 4243) ∥ C P12-53 (Tier 1) ∥ C P12-55 (ceilings, clip) ∥ A P12-57 (C1 keyed harness, 4244) ∥ C P12-56 (Extended Data, R6b, R15a) ∥ C P12-58 (body arrives) ∥ C P12-61 (kept cut, then page-only)
+RUNNING      A P12-37 (4240) ∥ A P12-38 (4241) ∥ C P12-47 (R2a/R3a/R5a/R8a) ∥ C P12-63 (closing split on the page) ∥ C P12-64 (titles) ∥ C P12-49 (headings) ∥ C P12-50 (gutter) ∥ C P12-62 (first end-matter part) ∥ C P12-65 (no overwrite, 4243) ∥ C P12-66 (focus, 4245) ∥ C P12-53 (Tier 1) ∥ C P12-55 (ceilings, clip) ∥ A P12-57 (C1 keyed harness, 4244) ∥ C P12-56 (Extended Data, R6b, R15a) ∥ C P12-58 (body arrives) ∥ C P12-61 (kept cut, then page-only)
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
 OWNER'S PDFS P1–P6 (uploads in the manager's session; P4–P6 held out); upload UI only; never commit or quote
 CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB, Haiku, "20 * * * *", enabled, read back 17:02Z; prompt now says workaholic mode: resume usage-limited agents and refill the frontier
@@ -661,6 +661,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-28T01:40Z | manager (Claude) | §1h.435: C P12-51 reported (O5, O6, O8); the first end-matter part becomes a part (C P12-62 from C P12-51's head); the rest accepted | evidence: P12-51 checkpoint; briefs/P12-62.md | next: verify C P12-51
 
 - 2026-10-28T01:48Z | manager (Claude) | §1h.436: B P12-60 and B P12-59 landed; C P12-61 told parts 2–3; C P12-48 reported; C P12-63 (its open points) and C P12-64 (titles) dispatched; row start through sub-rows ruled for the scorer | evidence: P12-59 / P12-60 reports; briefs/P12-63..64.md | next: land C50 + C51, verify C48
+
+- 2026-10-28T01:53Z | manager (Claude) | §1h.437: B P12-52 landed — M1 a pagehide overwrite plus a seed-save loop doubling the note to the storage quota; M2 / M3 focus theft and a lost key; C P12-65 and C P12-66 dispatched in parallel | evidence: P12-52 report; briefs/P12-65..66.md | next: land C50 + C51, C48, C49, C53
 
 ---
 
