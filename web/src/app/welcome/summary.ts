@@ -10,9 +10,12 @@ import { isStepDone } from "./completeness";
 /**
  * - A model will run (own key, and signed in or no sign-in configured):
  *   "Gemini key connected".
- * - A key is saved but the reader is not signed in, so it does not run yet:
+ * - A key is saved but the reader is signed out, so it does not run yet:
  *   "Gemini key saved — sign in to use it". This used to read "No key", which
  *   was false: the key is right there in this browser.
+ * - A key is saved and the sign-in check has not answered (`"unknown"`):
+ *   "Gemini key saved", with no instruction — the reader may well be signed
+ *   in, and a signed-in reader must not be told to sign in (L4-fix, N1).
  * - No key: "No key — reading without a model".
  *
  * Only the yes/no of `hasUserLlmOverride` and the provider's name are read,
@@ -21,6 +24,8 @@ import { isStepDone } from "./completeness";
 export function aiStepSummary(profile: UserProfile, auth: AuthOutcome): string {
   const provider = providerShortLabel(profile.feedAiProvider);
   if (isStepDone("ai", profile, false, auth)) return `${provider} key connected`;
-  if (hasUserLlmOverride(profile)) return `${provider} key saved — sign in to use it`;
+  if (hasUserLlmOverride(profile)) {
+    return auth === "signed-out" ? `${provider} key saved — sign in to use it` : `${provider} key saved`;
+  }
   return "No key — reading without a model";
 }

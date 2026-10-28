@@ -15,8 +15,13 @@ describe("aiStepSummary", () => {
     expect(aiStepSummary(keyed, "signed-out")).toBe("Gemini key saved — sign in to use it");
   });
 
-  it("a saved key while the sign-in check is unknown reads the same (no model runs yet)", () => {
-    expect(aiStepSummary(keyed, "unknown")).toBe("Gemini key saved — sign in to use it");
+  // L4-fix (director note N1) — CHANGED: this was "reads the same" as signed
+  // out. While the check has not answered the reader may be signed in, so the
+  // line states the fact and gives no instruction.
+  it("a saved key while the sign-in check is unknown: 'key saved', and no 'sign in'", () => {
+    expect(aiStepSummary(keyed, "unknown")).toBe("Gemini key saved");
+    expect(aiStepSummary(keyed, "unknown")).not.toMatch(/sign in/i);
+    expect(aiStepSummary({ ...keyed, feedAiProvider: "deepseek" }, "unknown")).toBe("DeepSeek key saved");
   });
 
   it("a saved key, signed in: connected, unchanged", () => {
