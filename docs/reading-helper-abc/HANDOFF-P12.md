@@ -94,7 +94,7 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-27T21:10Z
+AS OF        2026-10-28T01:36Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
 LAST RULING  §1h.434   NEXT RULING §1h.435   NEXT ITEM ID P12-62   NEXT FREE PORT 4245
@@ -655,6 +655,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-27T21:02Z | manager (Claude) | §1h.433: the owner — deployed function 2 GB (Standard); asks to open only the figure's page (B P12-60 dispatched, script-only); Extended Data confirmed; supplementary figures in another file are left as text (C P12-56 told) | evidence: briefs/P12-60.md | next: land C46 + C54 (gates running)
 
 - 2026-10-27T21:10Z | manager (Claude) | §1h.434: the owner — opening only the figure's page is mandatory; C P12-61 starts part 1 (the kept cut) now; parts 2–3 by message after B P12-60 | evidence: briefs/P12-61.md | next: land C46 + C54
+
+- 2026-10-28T01:36Z | manager (Claude) | C P12-46 (R6a, R7a) and C P12-54 (R13b) LANDED together, FIGURE_EXTRACTION_REVISION 5 (manager commit; C P12-45 holds 4). Verified in the free copy: diffs read; tsc 0; lint 0 / 144; touched outline + engine tests 3 clean runs with 2 workers (540 + 1 skipped; two default-worker runs had load timeouts); own mutations R6a off → 4 red, R7a off → 4 red, R13b off → 4 red, sha256 equal after restore; full suite (2 workers) 598 + 3 skipped files, 10,973 passed + 3 skipped, 1 timing test (pane-layout fitPanes) that passes alone; build failed once at load 42 with memory full, then 0 on a quiet machine. Real papers: P3 figure route 6 of 6 and the ghost caption gone; P5 2 of 5 (was 0; the rest need C P12-47 and C P12-55). A third limit (session) stopped all workers at about 21:00Z; reset 01:20Z; the container restarted; 16 resumed at 01:23Z | evidence: mgr/gates-c46c54.log, mgr/build-c46c54.log, mgr/out/P3-fig-c46c54.json, mgr/out/P5-fig-c46c54.json | next: verify the Cs as they report
 
 ---
 
