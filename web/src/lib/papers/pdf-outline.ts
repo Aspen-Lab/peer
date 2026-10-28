@@ -57,6 +57,10 @@ export interface PdfLine {
   x: number;
   y: number;
   size: number;
+  /** P12-64: the size most of the line's characters are set in (`characterSize`). `size` is the tallest run's, which
+   *  one oversized letter (a drop cap) lifts for the whole line it stands on; this is not. Read by `titleOf` and by
+   *  the first page's title skip only; a line built by hand without it is read at `size`. */
+  titleSize?: number;
   font: string;
   /** How far the line's runs reach to the right of `x`. `foldStacks` compares the x-ranges of a
    *  fraction's rows by it (P9-13a). */
@@ -865,8 +869,34 @@ function lineOf(
     x: round(runs[0].x),
     y: round(y),
     size: round(Math.max(...runs.map((i) => i.height))),
+    titleSize: characterSize(runs),
     font: longestRun(runs).fontName,
   };
+}
+
+/** P12-64: sizes this close (points) are one size when the title is read: a title wraps onto lines set alike. */
+const TITLE_SIZE_JOIN = 0.6;
+
+/**
+ * P12-64: the size most of a line's characters are set in. Each run weighs its characters (white space not
+ * counted); sizes within `TITLE_SIZE_JOIN` of one another weigh together; the heaviest wins, the larger on a tie, and
+ * is read as the mean of the sizes that weigh with it. A line set in one size reads that size, as `size` does; a 40 pt
+ * drop cap on a line of 9 pt words reads 9, and a 24 pt title line with a raised 12 pt mark still reads 24.
+ */
+function characterSize(runs: readonly PdfTextItem[]): number {
+  const weighed = runs
+    .map((run) => ({ size: run.height, chars: [...run.str.replace(/\s+/g, "")].length }))
+    .filter((run) => run.chars > 0);
+  if (weighed.length === 0) return round(Math.max(...runs.map((run) => run.height)));
+  let best = { anchor: -Infinity, weight: 0, mean: 0 };
+  for (const { size } of weighed) {
+    const near = weighed.filter((run) => Math.abs(run.size - size) <= TITLE_SIZE_JOIN);
+    const weight = near.reduce((n, run) => n + run.chars, 0);
+    if (weight > best.weight || (weight === best.weight && size > best.anchor)) {
+      best = { anchor: size, weight, mean: near.reduce((n, run) => n + run.size * run.chars, 0) / weight };
+    }
+  }
+  return round(best.mean);
 }
 
 /**
@@ -2249,21 +2279,45 @@ export function joinProse(lines: readonly FlowLine[], options: JoinOptions = {})
  */
 const STAMP = /^(?:arXiv:\d{4}\.\d{4,5}|10\.\d{4,9}\/|https?:\/\/)/i;
 
-/** The paper's title: the largest words on its first page, above the body. P12-51: a drop cap (one large
- *  letter or two, on a baseline of its own) is the largest type on the page and is no title. */
+/** P12-64: the size a line is read at for the title: the size most of its characters are set in. */
+const titleSizeOf = (line: PdfLine): number => line.titleSize ?? line.size;
+
+/** P12-64: a row of one or two letters is a drop cap standing alone on its baseline, never a title. */
+const CAP_ROW = /^\p{L}{1,2}$/u;
+
+/** The first page's lines set larger than the body, in classes of one size (`TITLE_SIZE_JOIN`), the largest first. */
+interface TitleClass {
+  size: number;
+  lines: PdfLine[];
+  text: string;
+}
+
+function titleClassesOf(candidates: PdfLine[]): TitleClass[] {
+  const anchors: number[] = [];
+  for (const size of [...new Set(candidates.map(titleSizeOf))].sort((a, b) => b - a)) {
+    if (anchors.length === 0 || size < anchors[anchors.length - 1] - TITLE_SIZE_JOIN) anchors.push(size);
+  }
+  const classes = anchors.map((size): TitleClass => ({ size, lines: [], text: "" }));
+  for (const line of candidates) {
+    const at = anchors.findIndex((anchor) => titleSizeOf(line) >= anchor - TITLE_SIZE_JOIN);
+    classes[at].lines.push(line);
+  }
+  for (const cls of classes) cls.text = cls.lines.map((line) => line.text).join(" ").replace(/\s+/g, " ").trim();
+  return classes.filter((cls) => !cls.lines.every((line) => CAP_ROW.test(line.text.trim())));
+}
+
+/**
+ * The paper's title: the largest words on its first page, above the body.
+ *
+ * P12-64 (rule 1): "largest" is by the size most of a line's characters are set in (`titleSize`), not by its
+ * tallest run, so one oversized letter (a drop cap) no longer lifts the body line it stands on; and a row of
+ * one or two letters that stands alone is a drop cap, not a title.
+ */
 function titleOf(lines: PdfLine[], body: { size: number }): string | null {
-  const first = lines.filter(
-    (line) => line.page === 1 && line.size > body.size * 1.25 && !STAMP.test(line.text) && line.text.trim().length > OPENING_MARK_MAX,
-  );
-  if (first.length === 0) return null;
-  const biggest = Math.max(...first.map((line) => line.size));
-  const title = first
-    .filter((line) => line.size >= biggest - 0.6)
-    .map((line) => line.text)
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return title.length >= 6 ? title : null;
+  const first = lines.filter((line) => line.page === 1 && titleSizeOf(line) > body.size * 1.25 && !STAMP.test(line.text));
+  const [largest] = titleClassesOf(first);
+  if (!largest) return null;
+  return largest.text.length >= 6 ? largest.text : null;
 }
 
 // ── The opening of a paper that names no abstract or introduction (P12-51, O6) ────────────────────────────
@@ -2586,7 +2640,7 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
     }
     lastHeading = null;
     if (!reading) continue;
-    if (title && line.page === 1 && line.size > body.size * 1.25) continue;
+    if (title && line.page === 1 && titleSizeOf(line) > body.size * 1.25) continue;
     const equation = equationOf(line);
     if (equation) {
       // The equation keeps its place in the prose as a marker paragraph,
