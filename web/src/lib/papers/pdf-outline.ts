@@ -76,6 +76,10 @@ export interface PdfLine {
   runs?: readonly PdfTextItem[];
   raised?: ReadonlySet<PdfTextItem>;
   lowered?: ReadonlySet<PdfTextItem>;
+  /** P12-70: set on a row that a drop cap heads: its largest runs hold one or two characters and every other run is set
+   *  at less than 1 / `DROP_CAP_RATIO` of them. `rest` is the size of the largest of the other runs (the first words of
+   *  the paragraph, beside the cap). A row set larger as a whole (a title, a heading) carries none. */
+  cap?: { rest: number };
 }
 
 export interface OutlineSection {
@@ -866,6 +870,7 @@ function lineOf(
   }
   text = text.replace(/\s+/g, " ").trim();
   if (text.length === 0) return null;
+  const cap = capOf(runs, raised, lowered);
   return {
     page,
     text,
@@ -874,6 +879,7 @@ function lineOf(
     size: round(Math.max(...runs.map((i) => i.height))),
     titleSize: characterSize(runs),
     font: longestRun(runs).fontName,
+    ...(cap ? { cap } : {}),
   };
 }
 
@@ -1497,15 +1503,53 @@ const ENTRY_AUTHORS = new RegExp(
 /** A drop cap is set at least this many times the body's size (it stands beside two lines or more). */
 const DROP_CAP_RATIO = 1.8;
 
+/** A drop cap is one or two characters (P12-70, ruling \u00A71h.443: O7's "one or two large letters"). */
+const DROP_CAP_CHARS = 2;
+/** The words beside a drop cap are body-sized: within this share of the body's size above it. */
+const DROP_CAP_REST_RATIO = 1.25;
+/** A run is "at the row's size" from this share of the row's largest height. */
+const SAME_SIZE_SHARE = 0.9;
+
+/**
+ * P12-70: the `cap` of a row (see `PdfLine.cap`), or undefined when the row is not headed by a large mark of one or two
+ * characters ahead of runs set under 1 / `DROP_CAP_RATIO` of it. A row whose runs are all one size has none, and neither
+ * has a row whose large part is a word or more (a title or a heading set large) or whose smaller runs are the
+ * raised or lowered marks of a formula.
+ */
+function capOf(
+  runs: PdfTextItem[],
+  raised?: ReadonlySet<PdfTextItem>,
+  lowered?: ReadonlySet<PdfTextItem>,
+): PdfLine["cap"] | undefined {
+  const seen = runs.filter((run) => run.str.trim());
+  const top = Math.max(0, ...seen.map((run) => run.height));
+  const large = seen.filter((run) => run.height >= top * SAME_SIZE_SHARE);
+  const rest = seen.filter((run) => run.height < top * SAME_SIZE_SHARE);
+  if (rest.length === 0 || rest.some((run) => raised?.has(run) || lowered?.has(run))) return undefined;
+  const characters = large.reduce((n, run) => n + run.str.replace(/\s/g, "").length, 0);
+  const restSize = Math.max(...rest.map((run) => run.height));
+  return characters <= DROP_CAP_CHARS && restSize * DROP_CAP_RATIO <= top ? { rest: round(restSize) } : undefined;
+}
+
 /**
  * Whether this line is a drop cap: the large first letter (or two) of a paragraph, alone on its row or with the
  * first words of the paragraph that the row carries beside it (so the longest run, and the face, are the
  * body's). It is no heading; it belongs to the word it starts.
+ *
+ * P12-70 (ruling \u00A71h.443): the large part of the row is at most two characters (`PdfLine.cap`, set from the row's
+ * runs) and the rest of the row is body-sized. A title or a heading set large in the body's face is one run of
+ * several words, and is not a drop cap.
  */
 export function isDropCap(line: PdfLine, body: { size: number; font: string }): boolean {
   if (line.size < body.size * DROP_CAP_RATIO) return false;
   const text = line.text.trim();
-  return /^\p{L}{1,2}$/u.test(text) || (line.font === body.font && /^\p{Lu}/u.test(text));
+  if (/^\p{L}{1,2}$/u.test(text)) return true;
+  return (
+    line.cap !== undefined &&
+    line.cap.rest <= body.size * DROP_CAP_REST_RATIO &&
+    line.font === body.font &&
+    /^\p{Lu}/u.test(text)
+  );
 }
 
 /** A lead-in is the first sentence of the line, ending with a period; a line of a larger size is a heading. */

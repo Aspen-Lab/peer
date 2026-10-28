@@ -582,15 +582,22 @@ function leadInPaper(): PdfPageText[] {
 // ── Rule 4 (O7): a drop cap and a run-in lead-in are no heading ──────────────────────────────────────────
 
 describe("a drop cap is no heading (P12-49, O7)", () => {
+  // P12-70 (ruling \u00A71h.443), RE-AIMED: a row of words in the body's face is a drop cap only when its large part is one
+  // or two characters (`PdfLine.cap`, set by `lineOf` from the row's runs). The two fixtures below that stand for "the cap
+  // and the words beside it" now say so (`cap: { rest: 10 }`: the words are set at 10 pt); before, any capitalised row at
+  // 1.8 times the body in the body's face was one. The real reading of such a row is pinned by "leaves the paragraph
+  // it starts whole" below, which is unchanged.
+  const WITH_WORDS = { size: 28, cap: { rest: 10 } };
+
   it("is the large first letter of a paragraph with the words the row carries beside it", () => {
-    expect(isDropCap(line("Starting from the observation that", { size: 28 }), BODY)).toBe(true);
+    expect(isDropCap(line("Starting from the observation that", WITH_WORDS), BODY)).toBe(true);
     expect(isDropCap(line("S", { size: 28, font: "display" }), BODY)).toBe(true);
     expect(isDropCap(line("In", { size: 24, font: "display" }), BODY)).toBe(true);
   });
 
   it("is not a heading, welded to its first line or alone", () => {
-    expect(headingOf(line("Starting from the observation that", { size: 28 }), BODY)).toBeNull();
-    expect(headingOf(line("S tarting from the observation that cells", { size: 28 }), BODY)).toBeNull();
+    expect(headingOf(line("Starting from the observation that", WITH_WORDS), BODY)).toBeNull();
+    expect(headingOf(line("S tarting from the observation that cells", WITH_WORDS), BODY)).toBeNull();
     expect(headingOf(line("S", { size: 28, font: "display" }), BODY)).toBeNull();
   });
 
@@ -600,6 +607,37 @@ describe("a drop cap is no heading (P12-49, O7)", () => {
     expect(headingOf(line("Discussion", { size: 15 }), BODY)).toBe("Discussion");
     expect(isDropCap(line("Quillwort Cathodes Under Strain", { size: 28, font: "display" }), BODY)).toBe(false);
     expect(isDropCap(line("starting lower case", { size: 28 }), BODY)).toBe(false);
+  });
+
+  it("is one or two large characters: a heading of several words set large in the body's face is not a drop cap (P12-70)", () => {
+    // three words at twice the body's size, in the body's face, as a title or a section heading is set
+    for (const text of ["Annealing Under Strain", "Quillwort Cathodes Under", "Results and discussion"]) {
+      expect(isDropCap(line(text, { size: 20 }), BODY), text).toBe(false);
+      expect(headingOf(line(text, { size: 20 }), BODY), text).toBe(text);
+    }
+    // ...whatever size it is set at, and whether or not the row has smaller words after it
+    expect(isDropCap(line("Annealing Under Strain", { size: 28 }), BODY)).toBe(false);
+    // a large mark with words beside it that are themselves large is a heading's first word, not a cap
+    expect(isDropCap(line("Starting from the observation that", { size: 28, cap: { rest: 20 } }), BODY)).toBe(false);
+  });
+
+  it("reads such a heading as a section's heading and the cap beside it as no heading, in the same reading (P12-70)", () => {
+    const pages = [
+      firstPage(),
+      pageOf(2, [
+        ["3 Results", { fontName: "display" }],
+        ["Annealing Under Strain", { height: 20 }],
+        ["The films were cycled again and again under the same strain."],
+        ["The fade followed one curve for every film of the series."],
+        ["S", { y: 720, height: 28, width: 16 }],
+        ["tarting from the observation that cells fade under strain, the series was cycled.", { y: 720, x: 116 }],
+        ["Each curve was fitted with a single rate constant, as shown."],
+      ]),
+    ];
+    const headings = headingsOf(pages);
+    expect(headings).toContain("Annealing Under Strain");
+    expect(headings.some((h) => /^S\b|Starting/.test(h ?? ""))).toBe(false);
+    expect(textOf(pages)).toContain("Starting from the observation that cells fade under strain");
   });
 
   it("leaves the paragraph it starts whole: the cap and the rest of its word are one string", () => {
