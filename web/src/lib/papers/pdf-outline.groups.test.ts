@@ -363,3 +363,40 @@ describe("buildOutline — the group row of an unnumbered part (P12-75, M2)", ()
     },
   );
 });
+
+// P12-75 (M5): a methods sub-heading that holds the word "experiments" was bucketed results by its words. Under a part's
+// heading it takes the part's bucket (its own words are the weakest evidence, as a numbered child's are); on its own, with
+// no part heading above it, its words name the procedure and file it as methods.
+describe("buildOutline — a procedure's experiments are methods (P12-75, M5)", () => {
+  const PROCEDURE = "Sample preparation and NMR experiments";
+
+  it("files a sub-heading that holds 'experiments' under its part's bucket", () => {
+    const rows = rowsOf([
+      page(1, [r(TITLE, "title"), ...prose(...INTRO), ...methodsPart("Methods", "head", "sub", [PROCEDURE, "Cycling experiments"])]),
+    ]);
+    expect(rows.map((row) => [row[0], row[1], row[2]])).toEqual([
+      [TITLE, "body", undefined],
+      ["Methods", "methods", 1],
+      [PROCEDURE, "methods", 2],
+      ["Cycling experiments", "methods", 2],
+    ]);
+  });
+
+  it("files a lone heading that names a procedure and its experiments as methods, and one that names only experiments as results", () => {
+    const rows = rowsOf([
+      page(1, [
+        r(TITLE, "title"),
+        ...prose(...INTRO),
+        r(PROCEDURE, "head", 20),
+        ...prose(...METHODS),
+        r("Cycling experiments", "head", 20),
+        ...prose(...RESULTS_ONE),
+      ]),
+    ]);
+    expect(rows.map((row) => [row[0], row[1], row[2]])).toEqual([
+      [TITLE, "body", undefined],
+      [PROCEDURE, "methods", undefined],
+      ["Cycling experiments", "results", undefined],
+    ]);
+  });
+});

@@ -111,6 +111,52 @@ describe("canonicalizeHeading — experimental methods (L1)", () => {
   });
 });
 
+// P12-75 (B P12-73, M5): "Sample preparation and NMR experiments" is a procedure; the unanchored `experiment` line filed it
+// results. A heading that holds `experiment(s)` and also names the procedure (a sample, a specimen, a preparation, a
+// synthesis, a fabrication, an assembly, a measurement, a setup, details) is methods. Without the procedure word, or
+// with the word `experimental` only, it stays as it was.
+describe("canonicalizeHeading — a procedure's experiments are methods (P12-75, M5)", () => {
+  it.each([
+    "Sample preparation and NMR experiments",
+    "Specimen preparation for tensile experiments",
+    "Synthesis and cycling experiments",
+    "Fabrication of the device and transport experiments",
+    "Cell assembly for the experiments",
+    "Sample and measurements for the experiments",
+    "Setup of the experiments",
+    "Details of the experiments",
+    "Details of the experiment",
+    "Cycling experiments: measurement protocol",
+    "SAMPLE PREPARATION AND NMR EXPERIMENTS",
+    "3.2 Sample preparation and NMR experiments",
+  ])("%s → methods", (heading) => {
+    expect(canonicalizeHeading(heading)).toBe("methods");
+  });
+
+  it.each([
+    "Cycling experiments",
+    "Control experiments on seam growth",
+    "Experiments on three films",
+    "Annealing experiments and their outcome",
+    "Experimental results on the seams",
+    "Comparison experiments",
+  ])("%s → results, as before", (heading) => {
+    expect(canonicalizeHeading(heading)).toBe("results");
+  });
+
+  it("does not move a heading that names the procedure without any experiments", () => {
+    expect(canonicalizeHeading("Sample preparation")).toBe("body");
+    expect(canonicalizeHeading("Measurement setup")).toBe("body");
+    expect(canonicalizeHeading("Synthesis")).toBe("body");
+  });
+
+  it("leaves the headings that start with experiment where the anchored lines put them", () => {
+    expect(canonicalizeHeading("Experiments")).toBe("results");
+    expect(canonicalizeHeading("Experiments and sample preparation")).toBe("results");
+    expect(canonicalizeHeading("Experimental details")).toBe("methods");
+  });
+});
+
 // P12-48 (rule L2; B P12-40 R3, Theme C): the notes a journal prints after the argument are apparatus. They had
 // no word of their own: "Reporting summary" was read as a conclusion, and "Online content" and "Additional
 // information" were `body`, with no role tag on the map.

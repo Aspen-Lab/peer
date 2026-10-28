@@ -217,6 +217,12 @@ export function canonicalizeHeading(heading: string): string {
     return "results";
   }
   if (/discussion/.test(lower)) return "discussion";
+  // P12-75 (B P12-73, M5): the experiments a procedure heading names ("Sample preparation and NMR experiments") are done
+  // in the methods; the unanchored `experiment` line below files a heading that holds the word results. The heading
+  // must name the procedure too (a sample, a preparation, a synthesis, a setup ...): "Cycling experiments" stays results.
+  if (/\bexperiments?\b/.test(lower) && /\b(?:sample|specimen|preparation|synthesis|fabrication|assembly|measurements?|setup|details)\b/.test(lower)) {
+    return "methods";
+  }
   if (/evaluation|experiment|benchmark/.test(lower)) return "results";
   if (/method|approach|model|theory|framework|architecture|proposed|our solution|formulation|system design/.test(lower)) {
     return "methods";
