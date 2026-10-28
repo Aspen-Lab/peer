@@ -1,15 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { FIVE_PARTS, inventedPaper, type InventedRow } from "@/test-support/structure-fixtures";
 import { closingPartition, partitionedMap, partOf, type GuidePartition } from "./reading-partition";
-import { applyStructureReview, draftOf, reviewedParts, type Correction } from "./structure-review";
+import { applyStructureReview, draftOf, reviewedParts, type Correction, type StructureDraft } from "./structure-review";
 
 // P12-53 (ruling §1h.424 (a), §1h.428; B P12-42 §8.5): the review laid over the displayed map. A row's role
 // changes only where the review changed it; no row is added, removed or reordered and no id changes (the scroll
 // position cannot move); a changed row carries no mark; and without a review the map is the very object it was.
 // Every paper below is invented.
 
+// Re-aimed (P12-94): a review is laid over parts the rules were unsure of (`low`) only, and these two papers' drafts are sure of every
+// part they have but the ones below. What is tested here is the layering over the rows, not which part may be corrected, so the draft is
+// the rules' own with every part made `low` (same digest). `structure-review.test.ts` tests the refusal and the real low drafts.
+const unsureOf = (d: StructureDraft): StructureDraft => ({ ...d, parts: d.parts.map((p) => ({ ...p, conf: "low" as const })) });
+
 const FIVE = inventedPaper(FIVE_PARTS);
-const draft = draftOf(FIVE.input)!;
+const draft = unsureOf(draftOf(FIVE.input)!);
 const review = (corrections: Correction[], over: { draftDigest?: string } = {}) => ({ corrections, unsure: [], draftDigest: over.draftDigest ?? draft.digest });
 
 // The canonical case: the draft's evidence part starts two early and its fourth part is `method` for what is evidence.
@@ -97,7 +102,7 @@ describe("applyStructureReview — sub-rows, group rows and the partition's rows
     { heading: "3.1 Materials", canonical: "body", truth: [["method", 3]] },
     { heading: "4. Results", canonical: "results", truth: [["evidence", 3]] },
   ]);
-  const nestedDraft = draftOf(NESTED.input)!;
+  const nestedDraft = unsureOf(draftOf(NESTED.input)!);
   const nestedReview = {
     // The experimental part (paragraphs 3-11, one run of method) is evidence, says the review.
     corrections: [{ op: "set_role", part: 1, role: "evidence" }] as Correction[],

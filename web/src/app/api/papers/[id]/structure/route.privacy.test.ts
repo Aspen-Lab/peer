@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { explainDocHash } from "@/lib/papers/explain";
 import { structureReviewCache, structureReviewKey } from "@/lib/papers/structure-review";
-import { FIVE_PARTS, inventedPaper, modelDouble } from "@/test-support/structure-fixtures";
+import { modelDouble } from "@/test-support/structure-fixtures";
+import { LOW_ABSTRACT_FIELDS, lowPaper } from "@/test-support/structure-fixtures-low";
 import { resetCounterStoreForTests } from "@/lib/usage/counters";
 
 // P12-53 (B P12-42 §4 "Privacy"; ruling §1h.424 (b) "private for uploads"): the review of an uploaded PDF is the
@@ -29,7 +30,9 @@ vi.mock("@/lib/papers/full-text", () => ({ getFullText: mocks.getFullText }));
 
 import { POST } from "./route";
 
-const FIVE = inventedPaper(FIVE_PARTS);
+// Re-aimed (P12-94): the paper reviewed is `lowPaper()`, whose draft is wrong where the rules were unsure; the review of the five-part paper
+// (wrong where they were sure) is refused whole and remembers nothing, and these tests need a review that is kept.
+const LOW = lowPaper();
 const UPLOAD = "upload:0123456789abcdef";
 const uploadPaper = {
   id: UPLOAD,
@@ -38,9 +41,8 @@ const uploadPaper = {
   relevanceReason: "",
   venue: "",
   source: "upload" as never,
-  summaryIntro: "",
+  ...LOW_ABSTRACT_FIELDS,
   summaryExperimentKeywords: [],
-  summaryResultDiscussion: "",
   isSaved: false,
 };
 
@@ -62,7 +64,7 @@ beforeEach(() => {
   generateJsonText = vi.fn(async (args: { userPrompt: string }) => modelDouble(args.userPrompt));
   mocks.ownedUpload.mockResolvedValue(null);
   mocks.resolveProvider.mockReturnValue({ id: "gemini", generateJsonText });
-  mocks.getFullText.mockResolvedValue({ status: "ok", doc: FIVE.doc, attempts: [] });
+  mocks.getFullText.mockResolvedValue({ status: "ok", doc: LOW.doc, attempts: [] });
 });
 
 afterEach(() => {
@@ -81,9 +83,9 @@ describe("POST /api/papers/[id]/structure — private uploads", () => {
   });
 
   it("is 404 for another owner's upload even when the same text was reviewed and is in the memory", async () => {
-    structureReviewCache.set(structureReviewKey(explainDocHash(FIVE.doc)), {
+    structureReviewCache.set(structureReviewKey(explainDocHash(LOW.doc)), {
       v: 1,
-      docHash: explainDocHash(FIVE.doc),
+      docHash: explainDocHash(LOW.doc),
       rulesVersion: "x",
       skeletonVersion: "x",
       promptVersion: "x",

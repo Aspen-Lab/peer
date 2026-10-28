@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FIVE_PARTS, inventedPaper, modelDouble, partsOfRoles, type InventedRow } from "@/test-support/structure-fixtures";
+import { lowPaper } from "@/test-support/structure-fixtures-low";
 import {
   applyCorrections,
   buildLookPrompt,
@@ -28,6 +29,7 @@ import {
   type Answer,
   type DraftPart,
   type ReviewRole,
+  type StructureDraft,
   type StructureInput,
 } from "./structure-review";
 
@@ -38,9 +40,16 @@ import {
 
 const FIVE = inventedPaper(FIVE_PARTS);
 
-function part(from: number, to: number, role: ReviewRole, conf: DraftPart["conf"] = "high"): DraftPart {
+// `low` unless said otherwise (P12-94): a correction against a part the rules are sure of (`high`, `medium`) is
+// refused as `confident-draft`, so the tests of every other check use parts a review may correct.
+function part(from: number, to: number, role: ReviewRole, conf: DraftPart["conf"] = "low"): DraftPart {
   return { from, to, role, conf, tags: [] };
 }
+
+// The draft as it would stand if the rules were unsure of every part (same digest): a review is laid over `low` parts
+// only (P12-94), and the tests of what the review does with a draft it may correct (the guards, the pieces, the double's
+// round trip) need one. The real thing, from the rules, is `lowPaper()`: unplaced opening text and a closing split.
+const unsureOf = (d: StructureDraft): StructureDraft => ({ ...d, parts: d.parts.map((p) => ({ ...p, conf: "low" as const })) });
 
 describe("paragraphFeatures — the counts the skeleton shows", () => {
   it("counts figure references, table references, citations, numbers with units, procedural verbs and signposts", () => {
@@ -703,7 +712,7 @@ describe("sanitizeReview — the damage guard: the role setup belongs to the pap
   });
 
   it("is the guard of a kept review too: laid over its draft, the P6 corrections leave no setup piece in the results", () => {
-    const five = draftOf(FIVE.input)!;
+    const five = unsureOf(draftOf(FIVE.input)!);
     const parts = reviewedParts(five, {
       corrections: [
         { op: "split", part: 2, atParagraph: 11, role: "setup" },
@@ -862,7 +871,7 @@ describe("sanitizeReview — no one-paragraph piece: a split cannot cut a piece 
   });
 
   it("is the rule of a kept review too: laid over its draft, the pair leaves no piece in the middle of the results", () => {
-    const five = draftOf(FIVE.input)!;
+    const five = unsureOf(draftOf(FIVE.input)!);
     const review = (corrections: Answer["corrections"]) => reviewedParts(five, { corrections, unsure: [], draftDigest: five.digest });
     const cut: Answer["corrections"] = [
       { op: "split", part: 2, atParagraph: 11, role: "method" },
@@ -1374,9 +1383,183 @@ describe("sanitizeReview / reviewStructure — a refused correction is named by 
   });
 });
 
+describe("sanitizeReview / reviewStructure — no correction against a part the rules are sure of (P12-94)", () => {
+  // Measured on the owner's papers (phase 6): a `set_role` of the closing part to evidence applied with no look; a split of
+  // part 1 (`medium`) beside a `set_role` of it to method, which a second look that sided with the review let through. On the
+  // six papers every look that sided with the review against a `high` or `medium` part was wrong. A correction against a part
+  // the rules are sure of is refused as `confident-draft`; the review changes the map only where the rules were unsure.
+  const draft = [part(0, 5, "setup", "high"), part(6, 20, "evidence", "medium"), part(21, 25, "interpretation", "low"), part(26, 28, "apparatus", "high")];
+  const N = 29;
+  const sum = (counts: Record<string, number | undefined>) => Object.values(counts).reduce<number>((total, n) => total + (n ?? 0), 0);
+
+  it("refuses a set_role of a medium part and of a high part, with the entry's numbers", () => {
+    const result = sanitizeReview({ corrections: [{ op: "set_role", part: 1, role: "method" }, { op: "set_role", part: 3, role: "evidence" }], unsure: [] }, draft, N)!;
+
+    expect(result.answer.corrections).toEqual([]);
+    expect(result.read).toBe(2);
+    expect(result.rejected).toBe(2);
+    expect(result.refused).toEqual({ byOp: { set_role: 2 }, byReason: { "confident-draft": 2 } });
+    expect(result.refusedNumbers).toEqual([
+      { op: "set_role", reason: "confident-draft", part: 1, ordinal: null, role: "method", draftLength: 4, paragraphs: N, from: 6, to: 20 },
+      { op: "set_role", reason: "confident-draft", part: 3, ordinal: null, role: "evidence", draftLength: 4, paragraphs: N, from: 26, to: 28 },
+    ]);
+  });
+
+  it("refuses a split in a medium part and in a high part, and a move_start of a medium part and of a high part", () => {
+    const result = sanitizeReview(
+      {
+        corrections: [
+          { op: "split", part: 1, atParagraph: 12, role: "method" },
+          { op: "split", part: 0, atParagraph: 3, role: "method" },
+          { op: "move_start", part: 1, toParagraph: 8 },
+          { op: "move_start", part: 3, toParagraph: 27 },
+        ],
+      },
+      draft,
+      N,
+    )!;
+
+    expect(result.answer.corrections).toEqual([]);
+    expect(result.refused).toEqual({ byOp: { split: 2, move_start: 2 }, byReason: { "confident-draft": 4 } });
+    expect(result.refusedNumbers.map((entry) => [entry.op, entry.part, entry.ordinal])).toEqual([["split", 1, 12], ["split", 0, 3], ["move_start", 1, 8], ["move_start", 3, 27]]);
+  });
+
+  it("keeps the same three corrections against a low part", () => {
+    const result = sanitizeReview(
+      { corrections: [{ op: "set_role", part: 2, role: "method" }, { op: "split", part: 2, atParagraph: 23, role: "evidence" }, { op: "move_start", part: 2, toParagraph: 23 }] },
+      draft,
+      N,
+    )!;
+
+    expect(result.answer.corrections).toEqual([
+      { op: "set_role", part: 2, role: "method" },
+      { op: "split", part: 2, atParagraph: 23, role: "evidence" },
+      { op: "move_start", part: 2, toParagraph: 23 },
+    ]);
+    expect(result.rejected).toBe(0);
+  });
+
+  it("is the last gate: a correction another check refuses is refused for that reason, as before", () => {
+    const result = sanitizeReview(
+      {
+        corrections: [
+          { op: "set_role", part: 1, role: "evidence" },
+          { op: "move_start", part: 1, toParagraph: 99 },
+          { op: "move_start", part: 0, toParagraph: 2 },
+          { op: "set_role", part: 3, role: "setup" },
+          { op: "split", part: 1, atParagraph: 40, role: "method" },
+          { op: "set_role", part: 1, role: "banana" },
+          { op: "set_role", part: 3, role: "method" },
+        ],
+      },
+      draft,
+      N,
+    )!;
+
+    expect(result.refused.byReason).toEqual({ "same-role": 1, "out-of-range": 2, "part-0": 1, "setup-after-opening": 1, malformed: 1, "confident-draft": 1 });
+    expect(result.refusedNumbers.map((entry) => [entry.reason, entry.part])).toEqual([
+      ["same-role", 1],
+      ["out-of-range", 1],
+      ["part-0", 0],
+      ["setup-after-opening", 3],
+      ["out-of-range", 1],
+      ["malformed", 1],
+      ["confident-draft", 3],
+    ]);
+    expect(sum(result.refused.byReason)).toBe(result.rejected);
+  });
+
+  it("keeps the correction against the low part beside a refused one, and counts both", () => {
+    const result = sanitizeReview({ corrections: [{ op: "set_role", part: 1, role: "method" }, { op: "set_role", part: 2, role: "method" }] }, draft, N)!;
+
+    expect(result.answer.corrections).toEqual([{ op: "set_role", part: 2, role: "method" }]);
+    expect(result.read).toBe(2);
+    expect(result.rejected).toBe(1);
+    expect(reviewStructure({ corrections: [{ op: "set_role", part: 1, role: "method" }, { op: "set_role", part: 2, role: "method" }] }, draft, N)).toMatchObject({
+      fellBack: false,
+      parts: [
+        { from: 0, to: 5, role: "setup" },
+        { from: 6, to: 20, role: "evidence" },
+        { from: 21, to: 25, role: "method" },
+        { from: 26, to: 28, role: "apparatus" },
+      ],
+      rejected: 1,
+    });
+  });
+
+  it("makes a reply of nothing else a fallback `all-refused`, the draft standing, and says why as counts", () => {
+    const reply = { corrections: [{ op: "set_role", part: 1, role: "method" }, { op: "split", part: 1, atParagraph: 12, role: "method" }, { op: "move_start", part: 3, toParagraph: 27 }], unsure: [2] };
+    const result = reviewStructure(reply, draft, N);
+
+    expect(result).toMatchObject({ fellBack: true, cause: "all-refused", answer: null, read: 3, rejected: 3, parts: partsOf(draft) });
+    expect(result.refused).toEqual({ byOp: { set_role: 1, split: 1, move_start: 1 }, byReason: { "confident-draft": 3 } });
+  });
+
+  it("judges the rest of the reply as it did: a correction refused for its part's confidence still takes its place", () => {
+    // 40 corrections against sure parts, then one against a low part: the forty places are taken, as they were when the 40 were kept.
+    const many = Array.from({ length: 45 }, (_, k) => part(k * 2, k * 2 + 1, k % 2 === 0 ? "setup" : "method", k < 40 ? "high" : "low"));
+    const corrections = many.map((_, k) => ({ op: "set_role", part: k, role: k % 2 === 0 ? "evidence" : "apparatus" }));
+    const capped = sanitizeReview({ corrections: corrections.slice(0, 41) }, many, 90)!;
+
+    expect(capped.answer.corrections).toEqual([]);
+    expect(capped.refused.byReason).toEqual({ "confident-draft": 40, "over-cap": 1 });
+    // The part's repeat memory: a second set_role of a sure part is a repeat, as it was.
+    const twice = sanitizeReview({ corrections: [{ op: "set_role", part: 1, role: "method" }, { op: "set_role", part: 1, role: "apparatus" }] }, draft, N)!;
+    expect(twice.refused.byReason).toEqual({ "confident-draft": 1, repeat: 1 });
+    // The pieces check: the move of a sure part's start still shortens the part before it, so the split there is refused for its piece, as it was.
+    const two = [part(0, 9, "evidence", "low"), part(10, 19, "method", "high")];
+    const shortened = sanitizeReview({ corrections: [{ op: "move_start", part: 1, toParagraph: 9 }, { op: "split", part: 0, atParagraph: 8, role: "method" }] }, two, 20)!;
+    expect(shortened.answer.corrections).toEqual([]);
+    expect(shortened.refused.byReason).toEqual({ "confident-draft": 1, "piece-too-short": 1 });
+  });
+
+  it("is the rule of a kept review too: a stored correction against a sure part lays nothing over the map", () => {
+    const five = draftOf(FIVE.input)!;
+    const review = (corrections: Answer["corrections"]) => reviewedParts(five, { corrections, unsure: [], draftDigest: five.digest });
+
+    // The double's own corrections for this paper, which were the canonical fix before P12-94.
+    expect(review([{ op: "move_start", part: 2, toParagraph: 11 }, { op: "set_role", part: 3, role: "evidence" }])).toBeNull();
+    expect(review([])).toEqual(partsOf(five.parts));
+  });
+
+  it("draws no look for an unsure listing of a part the rules were sure of, and a look changes no such part", () => {
+    expect(secondLookTargets(draft, { corrections: [], unsure: [0, 1, 3] })).toEqual([]);
+    expect(secondLookTargets(draft, { corrections: [], unsure: [1, 2, 3] })).toEqual([{ part: 2, why: "unsure" }]);
+    // A look that was drawn for such a part by hand adds nothing.
+    for (const part of [0, 1, 3]) {
+      const target = { part, why: "unsure" as const };
+      expect(resolveLooks(draft, { corrections: [], unsure: [part] }, [{ target, verdict: { verdict: "review", role: "method" } }]).answer.corrections).toEqual([]);
+    }
+  });
+
+  it("reviews the paper whose draft is wrong where the rules were unsure, and refuses the review of the one wrong where they were sure", () => {
+    const low = lowPaper();
+    const lowDraft = draftOf(low.input)!;
+    const lowRaw = JSON.parse(modelDouble(buildReviewPrompt({ skeleton: buildSkeleton(low.input, lowDraft)!, draft: lowDraft }).userPrompt));
+
+    // Part 0 (the unplaced opening) and part 2 (the closing) are `low`: the double's three corrections stand and equal the truth.
+    expect(lowDraft.parts.map((p) => p.conf)).toEqual(["low", "high", "low", "high"]);
+    expect(lowRaw.corrections).toEqual([
+      { op: "move_start", part: 2, toParagraph: 13 },
+      { op: "split", part: 0, atParagraph: 5, role: "setup" },
+      { op: "set_role", part: 0, role: "method" },
+    ]);
+    expect(reviewStructure(lowRaw, lowDraft.parts, lowDraft.paragraphs)).toMatchObject({ fellBack: false, rejected: 0, parts: low.truthParts });
+
+    // `FIVE` is wrong in parts the rules were sure of (`high`): the double's two corrections are refused whole.
+    const fiveDraft = draftOf(FIVE.input)!;
+    const fiveRaw = JSON.parse(modelDouble(buildReviewPrompt({ skeleton: buildSkeleton(FIVE.input, fiveDraft)!, draft: fiveDraft }).userPrompt));
+    expect(fiveRaw.corrections).toHaveLength(2);
+    expect(reviewStructure(fiveRaw, fiveDraft.parts, fiveDraft.paragraphs)).toMatchObject({ fellBack: true, cause: "all-refused", read: 2, rejected: 2, refused: { byReason: { "confident-draft": 2 } } });
+  });
+});
+
 describe("the double's round trip — a draft with a wrong role and a wrong start, corrected to the truth", () => {
   const draft = draftOf(FIVE.input)!;
-  const roundTrip = (input: StructureInput, d = draftOf(input)!) => {
+  // The draft is the rules' own with every part made `low` (see `unsureOf`): the double's corrections are the minimal ones that
+  // turn it into what the heads say, and a review of a part the rules were sure of is refused (P12-94). `lowPaper()` below is
+  // the real thing.
+  const roundTrip = (input: StructureInput, d = unsureOf(draftOf(input)!)) => {
     const prompt = buildReviewPrompt({ skeleton: buildSkeleton(input, d)!, draft: d });
     const raw = modelDouble(prompt.userPrompt);
     return { raw, ...reviewStructure(JSON.parse(raw), d.parts, d.paragraphs) };
@@ -1472,7 +1655,8 @@ describe("the second look — which parts, which paragraphs, what the verdict do
       { part: 4, why: "contradicts-high" },
       { part: 1, why: "contradicts-medium" },
     ]);
-    expect(secondLookTargets(draft, { corrections: [], unsure: [2, 0] })).toEqual([{ part: 2, why: "unsure" }, { part: 0, why: "unsure" }].sort((a, b) => a.part - b.part));
+    // Re-aimed (P12-94): the unsure were parts 2 and 0, and part 0 is `high`: an unsure listing of a part the rules were sure of draws no look.
+    expect(secondLookTargets(draft, { corrections: [], unsure: [2, 0] })).toEqual([{ part: 2, why: "unsure" }]);
     expect(secondLookTargets(draft, { corrections: [{ op: "set_role", part: 2, role: "method" }], unsure: [] })).toEqual([{ part: 2, why: "contradicts-low" }]);
   });
 
@@ -1630,13 +1814,15 @@ describe("the second look — which parts, which paragraphs, what the verdict do
   });
 
   it("leaves an unsure part as the draft, unless the look says `review` and names another role", () => {
-    const target = { part: 0, why: "unsure" as const };
-    const base: Answer = { corrections: [], unsure: [0] };
+    // Re-aimed (P12-94): the unsure part was part 0, which is `high` and now draws no look; it is part 2 (`low`, evidence), and the role
+    // that changes nothing is evidence.
+    const target = { part: 2, why: "unsure" as const };
+    const base: Answer = { corrections: [], unsure: [2] };
 
     expect(resolveLooks(draft, base, [{ target, verdict: { verdict: "draft" } }]).answer.corrections).toEqual([]);
     expect(resolveLooks(draft, base, [{ target, verdict: null }]).answer.corrections).toEqual([]);
     expect(resolveLooks(draft, base, [{ target, verdict: { verdict: "review" } }]).answer.corrections).toEqual([]);
-    expect(resolveLooks(draft, base, [{ target, verdict: { verdict: "review", role: "setup" } }]).answer.corrections).toEqual([]);
-    expect(resolveLooks(draft, base, [{ target, verdict: { verdict: "review", role: "method" } }]).answer.corrections).toEqual([{ op: "set_role", part: 0, role: "method" }]);
+    expect(resolveLooks(draft, base, [{ target, verdict: { verdict: "review", role: "evidence" } }]).answer.corrections).toEqual([]);
+    expect(resolveLooks(draft, base, [{ target, verdict: { verdict: "review", role: "method" } }]).answer.corrections).toEqual([{ op: "set_role", part: 2, role: "method" }]);
   });
 });

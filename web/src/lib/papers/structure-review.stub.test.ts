@@ -79,6 +79,10 @@ describe("the harness stub's `structure` kind — plumbing, valid answers", () =
   });
 
   it("answers one correction of the kind the control names, each one the sanitizer keeps", () => {
+    // Re-aimed (P12-94): the stub's corrections name parts 1 and 2 of the draft, which the rules are sure of here, and the sanitizer
+    // refuses a correction against such a part (`confident-draft`). They are valid against a draft the rules were unsure of (every part
+    // `low`, the same draft otherwise), and it is validity that this test pins.
+    const unsure = draft.parts.map((p) => ({ ...p, conf: "low" as const }));
     const expected: Record<string, unknown> = {
       move: { op: "move_start", part: 1, toParagraph: 7 },
       role: { op: "set_role", part: 1, role: "evidence" },
@@ -88,7 +92,7 @@ describe("the harness stub's `structure` kind — plumbing, valid answers", () =
 
     Object.entries(expected).forEach(([, correction], k) => {
       const parsed = parseModelJson(contents[k]);
-      const result = reviewStructure(parsed, draft.parts, draft.paragraphs);
+      const result = reviewStructure(parsed, unsure, draft.paragraphs);
 
       expect(parsed).toEqual({ corrections: [correction], unsure: [] });
       expect(result.fellBack).toBe(false);

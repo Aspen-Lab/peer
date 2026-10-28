@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { structureReviewCache, type ReviewRole, type StructureDraft, type StructureInput } from "@/lib/papers/structure-review";
 import { FIVE_PARTS, inventedPaper, modelDouble } from "@/test-support/structure-fixtures";
+import { LOW_ABSTRACT_FIELDS, lowPaper } from "@/test-support/structure-fixtures-low";
 import { captureConsole } from "@/test-support/console-capture";
 import { resetCounterStoreForTests } from "@/lib/usage/counters";
 
@@ -45,6 +46,8 @@ vi.mock("@/lib/papers/structure-review", async (importOriginal) => {
 import { POST } from "./route";
 
 const FIVE = inventedPaper(FIVE_PARTS);
+// A paper whose review is kept (P12-94): the draft of `FIVE` is wrong where the rules were sure, which a review cannot correct.
+const LOW = lowPaper();
 
 const paper = {
   id: "arxiv:2610.00033",
@@ -324,9 +327,64 @@ describe("POST /api/papers/[id]/structure — what it logs when the review falls
     expect(text).not.toMatch(/delete|not an object/);
   });
 
+  it("says `all-refused` with `confident-draft` when the only corrections are against parts the rules were sure of, and names them by their numbers (P12-94)", async () => {
+    // Part 1 is the methods (`high`), part 3 "Further analysis" (`high`, bucketed as methods), part 2 the results (`high`, 9 to 17).
+    const reply = JSON.stringify({
+      corrections: [
+        { op: "set_role", part: 3, role: "evidence" },
+        { op: "move_start", part: 2, toParagraph: 11 },
+        { op: "split", part: 2, atParagraph: 14, role: "interpretation" },
+      ],
+      unsure: [],
+    });
+    const { answer, lines, fields, text } = await fellBackWith(reply);
+
+    expect(answer).toEqual({ fellBack: "unusable" });
+    expect(lines).toHaveLength(1);
+    expect(Object.keys(fields).sort()).toEqual(LINE_KEYS);
+    expect(fields).toEqual({
+      promptChars: expect.any(Number),
+      answerChars: reply.length,
+      cause: "all-refused",
+      read: 3,
+      rejected: 3,
+      refusedByOp: { set_role: 1, move_start: 1, split: 1 },
+      refusedByReason: { "confident-draft": 3 },
+      refusedNumbers: [
+        { op: "set_role", reason: "confident-draft", part: 3, ordinal: null, role: "evidence", ...FIVE_BOUNDS, from: 18, to: 21 },
+        { op: "move_start", reason: "confident-draft", part: 2, ordinal: 11, role: null, ...FIVE_BOUNDS, from: 9, to: 17 },
+        { op: "split", reason: "confident-draft", part: 2, ordinal: 14, role: "interpretation", ...FIVE_BOUNDS, from: 9, to: 17 },
+      ],
+    });
+    expect(structureReviewCache.size()).toBe(0);
+    expect(text).not.toMatch(/Invented|tide pools|kelp|Zymurgy/);
+  });
+
+  it("refuses the double's own review of the five-part paper, whose draft is wrong where the rules were sure: `unusable`, both corrections `confident-draft` (P12-94)", async () => {
+    // Before P12-94 these were the canonical fix (a move of the results part's start and a role of the fourth part, each with a look).
+    const consoleText = captureConsole();
+    const debug = vi.spyOn(console, "debug");
+    try {
+      provider = providerOf(async (args) => modelDouble(args.userPrompt));
+      mocks.resolveProvider.mockReturnValue(provider);
+      const body = await json(await call());
+      const fields = debug.mock.calls.find(([label]) => label === UNUSABLE)![1] as Record<string, unknown>;
+
+      expect(body).toEqual({ fellBack: "unusable" });
+      expect(fields).toMatchObject({ cause: "all-refused", read: 2, rejected: 2, refusedByReason: { "confident-draft": 2 } });
+      expect((fields.refusedNumbers as Array<Record<string, unknown>>).map((entry) => [entry.op, entry.part])).toEqual([["move_start", 2], ["set_role", 3]]);
+      // No look was asked: the one call is the review's.
+      expect(provider.generateJsonText).toHaveBeenCalledTimes(1);
+      expect(structureReviewCache.size()).toBe(0);
+    } finally {
+      consoleText.restore();
+    }
+  });
+
   it("says `unsound` when what the corrections made is not a sound structure, with what was read and refused", async () => {
-    // A draft with a part whose role is outside the five, which the rules never make: the net under the other two.
-    mocks.draftOverride = (made) => ({ ...made, parts: made.parts.map((part, k) => (k === 0 ? { ...part, role: "body" as ReviewRole } : part)) });
+    // A draft with a part whose role is outside the five, which the rules never make: the net under the other two. (Re-aimed, P12-94: every
+    // part is made `low` as well, as a correction of a part the rules were sure of would be refused before the structure was built.)
+    mocks.draftOverride = (made) => ({ ...made, parts: made.parts.map((part, k) => ({ ...part, conf: "low" as const, ...(k === 0 ? { role: "body" as ReviewRole } : {}) })) });
     const reply = JSON.stringify({ corrections: [{ op: "set_role", part: 3, role: "evidence" }, { op: "set_role", part: 99, role: "method" }], unsure: [] });
     const { answer, lines, fields } = await fellBackWith(reply);
 
@@ -358,9 +416,11 @@ describe("POST /api/papers/[id]/structure — what it logs when the review falls
     const consoleText = captureConsole();
     const debug = vi.spyOn(console, "debug");
     try {
+      // Re-aimed (P12-94): the paper is `LOW` (wrong where the rules were unsure); the review of `FIVE` is refused whole, and that is an `unusable` line.
+      mocks.getFullText.mockResolvedValue({ status: "ok", doc: LOW.doc, attempts: [] });
       provider = providerOf(async (args) => modelDouble(args.userPrompt));
       mocks.resolveProvider.mockReturnValue(provider);
-      expect((await json(await call())).review).toBeTruthy();
+      expect((await json(await call({ paper: { ...paper, ...LOW_ABSTRACT_FIELDS } }))).review).toBeTruthy();
       structureReviewCache.clear();
       provider = providerOf(async () => {
         throw new Error("upstream said no");

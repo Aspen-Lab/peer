@@ -24,11 +24,13 @@
 //     run (P12-86, P12-91); no split that leaves a piece of fewer than two paragraphs, but a closing
 //     (P12-90); a split at a part's own edge, where the draft already cuts, is no correction at all (P12-91).
 //     A correction that fails a check is dropped, never mended; an answer that is not an answer
-//     leaves the draft exactly (Tier 0 never breaks).
-//   - `secondLookTargets` / `lookParagraphs` / `buildLookPrompt` / `resolveLooks`: a correction against any
-//     part, or a part the model could not judge, gets one more look at that part's own text (at most three
-//     looks, 6,000 characters each); a correction against a part the rules were unsure of (`low`) stands only
-//     if its look sides with the review (P12-94).
+//     leaves the draft exactly (Tier 0 never breaks). No correction stands against a part the rules were sure
+//     of (confidence `high` or `medium`): the review changes the map only where the rules said they were
+//     unsure (P12-94).
+//   - `secondLookTargets` / `lookParagraphs` / `buildLookPrompt` / `resolveLooks`: a correction against a part
+//     the rules were unsure of (`low`), or such a part the model could not judge, gets one more look at that
+//     part's own text (at most three looks, 6,000 characters each), and the correction stands only if its
+//     look sides with the review (P12-94). A part the rules were sure of is never corrected, so never looked at.
 //   - `createStructureReviewCache`: the server's memory, keyed `docHash | rules | skeleton | prompt`; an
 //     entry holds indices, role names and the model's id — no word of the paper.
 //   - `applyStructureReview`: lays the reviewed roles over the map's rows for display. No row is added or
@@ -574,9 +576,22 @@ export type RefusalOp = (typeof REFUSAL_OPS)[number];
  *   - `setup-after-opening`: the role `setup` given to the first part that is not setup or to any part after it, or to a piece cut out of one;
  *   - `piece-too-short`: a split (or a pair of splits on one part) that would leave a piece of fewer than
  *     `REVIEW_CAPS.minPiece` paragraphs (P12-90);
+ *   - `confident-draft`: a correction that every check above passes, against a part the rules are sure of
+ *     (confidence `high` or `medium`): a `move_start` of it, a `set_role` of it, a `split` in it (P12-94);
  *   - `over-cap`: past the first forty corrections.
  */
-export const REFUSAL_REASONS = ["malformed", "out-of-range", "part-0", "same-role", "repeat", "split-cap", "setup-after-opening", "piece-too-short", "over-cap"] as const;
+export const REFUSAL_REASONS = [
+  "malformed",
+  "out-of-range",
+  "part-0",
+  "same-role",
+  "repeat",
+  "split-cap",
+  "setup-after-opening",
+  "piece-too-short",
+  "confident-draft",
+  "over-cap",
+] as const;
 export type RefusalReason = (typeof REFUSAL_REASONS)[number];
 
 /** How many corrections were refused, by op and by reason: only the keys that are not zero, and the two add up alike. */
@@ -683,6 +698,17 @@ function isEdgeSplit(c: unknown, draft: readonly DraftPart[]): boolean {
  * refused for its piece uses up neither a place among the part's three splits nor its repeat memory, nor one of
  * the forty (like the setup guard's refusals). The one piece let through is a closing: the last paragraph of the
  * draft's last evidence part, given the role interpretation, as the rules' own closing split makes.
+ *
+ * No correction against a part the rules are sure of (P12-94): measured, every second look that sided with the
+ * review against a `high` or `medium` part was wrong (a `set_role` of a medium part to method, a `split` in it).
+ * A correction whose part has confidence `high` or `medium` is refused as `confident-draft`: a `move_start` of the
+ * part, a `set_role` of it, a `split` in it. It is the last gate, judged against the draft as given like the
+ * others: a correction that fails any check above is refused for that reason, as before, and one that passes them
+ * all is refused here in place of being kept. A correction refused for its part's confidence otherwise takes its
+ * place in the judging as a kept one did (one of the forty, the part's repeat memory and splits, and, for the
+ * pieces check, its move or split), so that nothing else in the reply is judged differently than before: the
+ * corrections a reply ends with are a subset of those it ended with before, never one more. It is not in the
+ * answer. A reply of nothing else is `all-refused`, as every reply whose corrections were all refused.
  */
 export function sanitizeReview(
   raw: unknown,
@@ -710,7 +736,7 @@ export function sanitizeReview(
     ? [...new Set((raw.unsure as unknown[]).map(whole).filter((n): n is number => n !== null && n < draft.length))]
     : [];
   return {
-    answer: { corrections: judged.kept.map((entry) => entry.correction), unsure },
+    answer: { corrections: judged.kept.filter((entry) => !entry.sure).map((entry) => entry.correction), unsure },
     rejected: judged.rejected,
     read: list.length,
     refused: judged.refused,
@@ -724,14 +750,17 @@ export function sanitizeReview(
  * round, of the splits that leave a short piece, with the room of the part they were judged in: each is refused as
  * `piece-too-short` at the point where it would otherwise have been kept, so it uses up nothing a later correction
  * needs. A kept correction carries its index in the reply; the first refusals are named by their numbers.
+ *
+ * `kept` also holds, flagged `sure`, the corrections refused as `confident-draft` (P12-94): they are counted among
+ * the refused and are not in the answer, but they took their place in the judging (see `sanitizeReview`).
  */
 function judgeCorrections(
   list: readonly unknown[],
   draft: readonly DraftPart[],
   paragraphs: number,
   short: ReadonlyMap<number, { from: number; to: number }>,
-): { kept: Array<{ correction: Correction; index: number }>; rejected: number; refused: Refusals; refusedNumbers: RefusalNumbers[] } {
-  const kept: Array<{ correction: Correction; index: number }> = [];
+): { kept: Array<{ correction: Correction; index: number; sure: boolean }>; rejected: number; refused: Refusals; refusedNumbers: RefusalNumbers[] } {
+  const kept: Array<{ correction: Correction; index: number; sure: boolean }> = [];
   let rejected = 0;
   const refused: Refusals = { byOp: {}, byReason: {} };
   const refusedNumbers: RefusalNumbers[] = [];
@@ -741,6 +770,13 @@ function judgeCorrections(
     refused.byOp[op] = (refused.byOp[op] ?? 0) + 1;
     refused.byReason[reason] = (refused.byReason[reason] ?? 0) + 1;
     if (refusedNumbers.length < REVIEW_CAPS.refusalsNamed) refusedNumbers.push(refusalNumbers(c, reason, draft, paragraphs, room));
+  };
+  // The last gate (P12-94): a correction every check passed, against a part the rules are sure of, is refused instead
+  // of kept; it stays in `kept`, flagged, as the judging of the rest of the reply needs it.
+  const keep = (c: unknown, correction: Correction, index: number): void => {
+    const sure = draft[correction.part].conf !== "low";
+    if (sure) refuse(c, "confident-draft");
+    kept.push({ correction, index, sure });
   };
   const moved = new Set<number>();
   const roled = new Set<number>();
@@ -786,7 +822,7 @@ function judgeCorrections(
         continue;
       }
       moved.add(k);
-      kept.push({ correction: { op: "move_start", part: k, toParagraph: i }, index });
+      keep(c, { op: "move_start", part: k, toParagraph: i }, index);
     } else if (c.op === "set_role") {
       const role = roleFrom(c.role);
       if (role === null) {
@@ -806,7 +842,7 @@ function judgeCorrections(
         continue;
       }
       roled.add(k);
-      kept.push({ correction: { op: "set_role", part: k, role }, index });
+      keep(c, { op: "set_role", part: k, role }, index);
     } else if (c.op === "split") {
       const at = whole(c.atParagraph);
       const role = roleFrom(c.role);
@@ -838,7 +874,7 @@ function judgeCorrections(
       }
       seen.add(at);
       splits.set(k, seen);
-      kept.push({ correction: { op: "split", part: k, atParagraph: at, role }, index });
+      keep(c, { op: "split", part: k, atParagraph: at, role }, index);
     } else {
       refuse(c, "malformed");
     }
@@ -1053,6 +1089,10 @@ export interface LookTarget {
  * of the closing part to evidence was applied with no look at all. A part both corrected and listed `unsure` draws the
  * look its correction needs (`contradicts-low`), not a second one. Strongest contradiction first, then the unsure,
  * then the contradictions of a `low` part, then the part's number; at most three.
+ *
+ * A part listed `unsure` that the rules were `high` or `medium` about draws no look, and changes nothing (P12-94): the
+ * review changes the map only where the rules said they were unsure. Nor can the sanitizer's answer hold a correction
+ * against such a part (`confident-draft`); an answer built by hand still draws the contradiction looks it drew.
  */
 export function secondLookTargets(draft: readonly DraftPart[], answer: Answer): LookTarget[] {
   const rank = { "contradicts-high": 0, "contradicts-medium": 1, unsure: 2, "contradicts-low": 3 } as const;
@@ -1063,7 +1103,7 @@ export function secondLookTargets(draft: readonly DraftPart[], answer: Answer): 
     const had = seen.get(c.part);
     if (had === undefined || rank[why] < rank[had]) seen.set(c.part, why);
   }
-  for (const k of answer.unsure) if (!seen.has(k)) seen.set(k, "unsure");
+  for (const k of answer.unsure) if (!seen.has(k) && draft[k]?.conf === "low") seen.set(k, "unsure");
   return [...seen]
     .map(([part, why]) => ({ part, why }))
     .sort((a, b) => rank[a.why] - rank[b.why] || a.part - b.part)
@@ -1201,8 +1241,9 @@ export interface LookRecord {
 /**
  * The corrections after the looks. For a part the model corrected: the correction stands on `review`, and on
  * `draft` — or on a look that failed or could not be read — the rules stand and the part's corrections go. For a
- * part the model could not judge (`unsure`): it stays as the draft, unless the look says `review` and names a
- * different role, which becomes a `set_role` of that part.
+ * part the model could not judge (`unsure`): it stays as the draft, unless the rules were unsure of it too (`low`) and
+ * the look says `review` and names a different role, which becomes a `set_role` of that part (P12-94: a look changes
+ * no part the rules were sure of).
  *
  * A correction against a part the rules were unsure of (`low`) stands only on a `contradicts-low` look that says
  * `review` (P12-94): with no look at all (the looks are capped at three) it goes too, and so does one whose part was
@@ -1222,7 +1263,7 @@ export function resolveLooks(
   for (const { target, verdict } of looks) {
     records.push({ part: target.part, why: target.why, verdict: verdict ? verdict.verdict : "failed" });
     if (target.why === "unsure") {
-      if (verdict?.verdict === "review" && verdict.role && verdict.role !== draft[target.part].role && !corrections.some((c) => c.part === target.part && c.op === "set_role")) {
+      if (draft[target.part]?.conf === "low" && verdict?.verdict === "review" && verdict.role && verdict.role !== draft[target.part].role && !corrections.some((c) => c.part === target.part && c.op === "set_role")) {
         const add: Correction = { op: "set_role", part: target.part, role: verdict.role };
         corrections.push(add);
         added.add(add);

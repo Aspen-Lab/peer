@@ -8,7 +8,8 @@ import {
   supabaseServerStub,
 } from "@/test-support/route-harness";
 import { structureReviewCache } from "@/lib/papers/structure-review";
-import { FIVE_PARTS, inventedPaper, modelDouble } from "@/test-support/structure-fixtures";
+import { modelDouble } from "@/test-support/structure-fixtures";
+import { LOW_ABSTRACT_FIELDS, lowPaper } from "@/test-support/structure-fixtures-low";
 import { getCounterStore, rateKey, resetCounterStoreForTests } from "@/lib/usage/counters";
 
 // P12-53 (ruling §1h.428; the gist route's gate, `paragraph-guide/route.gate.test.ts`): the sign-in gate on the
@@ -42,7 +43,9 @@ vi.mock("@/lib/papers/full-text", () => ({ getFullText: mocks.getFullText }));
 
 import { POST } from "./route";
 
-const FIVE = inventedPaper(FIVE_PARTS);
+// Re-aimed (P12-94): the paper reviewed is `lowPaper()`, whose draft is wrong where the rules were unsure; the review of the five-part paper
+// (wrong where they were sure) is refused whole and remembers nothing, and these tests need a review that is kept.
+const LOW = lowPaper();
 const paper = {
   id: "arxiv:2610.00032",
   title: "Zymurgy of the tide pools",
@@ -50,9 +53,8 @@ const paper = {
   relevanceReason: "",
   venue: "",
   source: "arxiv" as const,
-  summaryIntro: "A short abstract.",
+  ...LOW_ABSTRACT_FIELDS,
   summaryExperimentKeywords: [],
-  summaryResultDiscussion: "",
   isSaved: false,
 };
 const NOW = new Date("2026-10-27T12:00:00.000Z");
@@ -81,7 +83,7 @@ beforeEach(() => {
   mocks.getUser.mockResolvedValue(signedOut());
   mocks.ownedUpload.mockResolvedValue(null);
   mocks.resolveProvider.mockReturnValue({ id: "gemini", generateJsonText });
-  mocks.getFullText.mockResolvedValue({ status: "ok", doc: FIVE.doc, attempts: [] });
+  mocks.getFullText.mockResolvedValue({ status: "ok", doc: LOW.doc, attempts: [] });
 });
 
 afterEach(() => {

@@ -3,9 +3,9 @@ import { NextRequest } from "next/server";
 import { explainDocHash } from "@/lib/papers/explain";
 import {
   draftOf,
-  partsOf,
   REVIEW_CAPS,
   REVIEW_PROMPT_VERSION,
+  restoreReview,
   reviewedParts,
   SKELETON_VERSION,
   STRUCTURE_RULES_VERSION,
@@ -13,7 +13,8 @@ import {
   structureReviewKey,
   type StructureReviewEntry,
 } from "@/lib/papers/structure-review";
-import { FIVE_PARTS, inventedPaper, modelDouble } from "@/test-support/structure-fixtures";
+import { FIVE_PARTS, inventedPaper, inventedParagraph, modelDouble } from "@/test-support/structure-fixtures";
+import { LOW_ABSTRACT_FIELDS, LOW_ROWS, lowPaper } from "@/test-support/structure-fixtures-low";
 import { captureConsole } from "@/test-support/console-capture";
 import { resetCounterStoreForTests } from "@/lib/usage/counters";
 
@@ -42,8 +43,12 @@ vi.mock("@/lib/papers/full-text", () => ({ getFullText: mocks.getFullText }));
 
 import { POST } from "./route";
 
+// `FIVE` is wrong in parts the rules were sure of, so the review of it is refused whole (P12-94); the prompt tests below use it for
+// its skeleton. `LOW` is wrong where the rules were unsure (the unplaced opening and the closing): the paper most tests review.
 const FIVE = inventedPaper(FIVE_PARTS);
 const draft = draftOf(FIVE.input)!;
+const LOW = lowPaper();
+const lowDraft = draftOf(LOW.input)!;
 
 const paper = {
   id: "arxiv:2610.00031",
@@ -52,9 +57,8 @@ const paper = {
   relevanceReason: "Matches the declared topic.",
   venue: "Peer Review",
   source: "arxiv" as const,
-  summaryIntro: "A survey of the shore.",
+  ...LOW_ABSTRACT_FIELDS,
   summaryExperimentKeywords: ["shore"],
-  summaryResultDiscussion: "Counts of sites.",
   isSaved: false,
 };
 
@@ -94,7 +98,7 @@ beforeEach(() => {
   provider = providerOf();
   mocks.ownedUpload.mockResolvedValue(null);
   mocks.resolveProvider.mockReturnValue(provider);
-  mocks.getFullText.mockResolvedValue({ status: "ok", doc: FIVE.doc, attempts: [] });
+  mocks.getFullText.mockResolvedValue({ status: "ok", doc: LOW.doc, attempts: [] });
 });
 
 afterEach(() => {
@@ -119,6 +123,10 @@ describe("POST /api/papers/[id]/structure — the request", () => {
 });
 
 describe("POST /api/papers/[id]/structure — the review", () => {
+  // Re-aimed (P12-94): the paper is `LOW`, not `FIVE`. The double's corrections for `FIVE` (a move and a role, both against parts the rules were
+  // sure of) are refused whole now, and its two looks were `contradicts-high`; for `LOW` the corrections are against the two parts the rules were
+  // unsure of (a split and a role of the unplaced opening, a move of the closing), and the two looks are `contradicts-low`. The claims are kept: one
+  // call on the report tier, the corrections applied to the draft equal the truth, one look for each part corrected.
   it("asks the model once on the report tier, and answers the corrections: applied to the draft they equal the truth", async () => {
     const response = await call();
     const body = await json(response);
@@ -127,20 +135,23 @@ describe("POST /api/papers/[id]/structure — the review", () => {
     expect(response.status).toBe(200);
     expect(body.cached).toBe(false);
     expect(review.corrections).toEqual([
-      { op: "move_start", part: 2, toParagraph: 11 },
-      { op: "set_role", part: 3, role: "evidence" },
+      { op: "move_start", part: 2, toParagraph: 13 },
+      { op: "split", part: 0, atParagraph: 5, role: "setup" },
+      { op: "set_role", part: 0, role: "method" },
     ]);
-    expect(review.draftDigest).toBe(draft.digest);
-    expect(reviewedParts(draft, review)).toEqual(FIVE.truthParts);
-    // One call for the review, and one look for each of the two corrections against a part the rules were sure of.
+    expect(review.draftDigest).toBe(lowDraft.digest);
+    expect(reviewedParts(lowDraft, review)).toEqual(LOW.truthParts);
+    // One call for the review, and one look for each of the two parts the model corrected that the rules were unsure of.
     const reviews = provider.generateJsonText.mock.calls.filter(([args]) => !isLook(args));
     expect(reviews).toHaveLength(1);
     expect(reviews[0][0]).toMatchObject({ tier: "large", maxTokens: 600 });
     expect(provider.generateJsonText).toHaveBeenCalledTimes(3);
     expect(review.secondLooks).toEqual([
-      { part: 2, why: "contradicts-high", verdict: "review" },
-      { part: 3, why: "contradicts-high", verdict: "review" },
+      { part: 0, why: "contradicts-low", verdict: "review" },
+      { part: 2, why: "contradicts-low", verdict: "review" },
     ]);
+    // What the route answers reads back as it is, the new kind of look included.
+    expect(restoreReview(JSON.parse(JSON.stringify(review)))).toEqual(review);
   });
 
   it("makes the draft the browser makes: the closing split of rule set B reads the record's abstract, and the closing is a `low` part", async () => {
@@ -176,6 +187,7 @@ describe("POST /api/papers/[id]/structure — the review", () => {
   });
 
   it("puts the skeleton and the draft in the prompt, the paragraph heads and no tail, and no title and nothing of the request", async () => {
+    mocks.getFullText.mockResolvedValue({ status: "ok", doc: FIVE.doc, attempts: [] });
     await call({ paper, project: "PROFILE-SENTINEL", llmOverride: { provider: "gemini", apiKey: "USER-NOT-A-KEY" } });
     const [args] = provider.generateJsonText.mock.calls[0];
     const user = JSON.parse(args.userPrompt) as { skeleton: string[]; draft: { parts: string[] } };
@@ -191,6 +203,7 @@ describe("POST /api/papers/[id]/structure — the review", () => {
   });
 
   it("sizes the skeleton against the whole text: the review prompt is a fraction of what the paper would cost", async () => {
+    mocks.getFullText.mockResolvedValue({ status: "ok", doc: FIVE.doc, attempts: [] });
     await call();
     const [args] = provider.generateJsonText.mock.calls[0];
 
@@ -214,9 +227,10 @@ describe("POST /api/papers/[id]/structure — the review", () => {
   });
 
   it("keeps the correction a look confirms and drops the one a look overrules, or cannot read", async () => {
+    // Re-aimed (P12-94): `LOW`'s review holds three corrections (it was two for `FIVE`), against two parts; a look decides each part's.
     const answers: Array<[string, number]> = [
       [JSON.stringify({ verdict: "draft" }), 0],
-      [JSON.stringify({ verdict: "review" }), 2],
+      [JSON.stringify({ verdict: "review" }), 3],
       ["I cannot help with that.", 0],
     ];
     for (const [look, kept] of answers) {
@@ -228,18 +242,20 @@ describe("POST /api/papers/[id]/structure — the review", () => {
     }
   });
 
-  it("refuses a setup piece cut out of the first results part (P12-86): the log counts the refusal and the other correction stands", async () => {
+  // Re-aimed (P12-94): the measured damage was a split as setup and a split as evidence inside the first results part (9 to 17 of `FIVE`), a part the
+  // rules were sure of, which is refused as `confident-draft` now. The guard is shown on a part the rules were unsure of that comes after the opening,
+  // the closing (14 to 16 of `LOW`): the split as setup is refused for the guard's reason, the correction beside it (the opening's role) stands.
+  it("refuses a setup piece cut out of the part after the opening (P12-86): the log counts the refusal and the other correction stands", async () => {
     const consoleText = captureConsole();
     const debug = vi.spyOn(console, "debug");
     try {
-      // The measured damage: a split at 11 as setup and a split at 12 as evidence, inside the first results part.
       provider = providerOf(async (args) =>
         isLook(args)
           ? JSON.stringify({ verdict: "review" })
           : JSON.stringify({
               corrections: [
-                { op: "split", part: 2, atParagraph: 11, role: "setup" },
-                { op: "split", part: 2, atParagraph: 12, role: "evidence" },
+                { op: "split", part: 2, atParagraph: 15, role: "setup" },
+                { op: "set_role", part: 0, role: "method" },
               ],
               unsure: [],
             }),
@@ -248,27 +264,35 @@ describe("POST /api/papers/[id]/structure — the review", () => {
       const review = await reviewOf(await call());
       const fields = debug.mock.calls.find(([label]) => label === "[papers/structure] review")![1] as Record<string, unknown>;
 
-      expect(review.corrections).toEqual([{ op: "split", part: 2, atParagraph: 12, role: "evidence" }]);
-      expect(reviewedParts(draft, review)).toEqual(partsOf(draft.parts));
+      expect(review.corrections).toEqual([{ op: "set_role", part: 0, role: "method" }]);
+      expect(reviewedParts(lowDraft, review)).toEqual([
+        { from: 0, to: 7, role: "method" },
+        { from: 8, to: 13, role: "evidence" },
+        { from: 14, to: 16, role: "interpretation" },
+        { from: 17, to: 19, role: "apparatus" },
+      ]);
       expect(fields).toMatchObject({ corrections: 1, rejected: 1 });
+      expect(fields.refusedNumbers).toEqual([{ op: "split", reason: "setup-after-opening", part: 2, ordinal: 15, role: "setup", draftLength: 4, paragraphs: 20, from: 14, to: 16 }]);
     } finally {
       consoleText.restore();
     }
   });
 
+  // Re-aimed (P12-94): the pair was cut in the first results part of `FIVE` (9 to 17, sure) with a role of part 3 beside it; it is cut in the
+  // unplaced opening of `LOW` (0 to 7, unsure) with a role of the closing beside it. The claims are the same.
   it("refuses a one-paragraph piece cut out of a part (P12-90): the log counts both splits and the other correction stands", async () => {
     const consoleText = captureConsole();
     const debug = vi.spyOn(console, "debug");
     try {
-      // "method" at 11 and "evidence" at 12 inside the first results part (9 to 17), beside a correction elsewhere.
+      // "method" at 5 and "evidence" at 6 inside the opening (0 to 7), beside a correction elsewhere.
       provider = providerOf(async (args) =>
         isLook(args)
           ? JSON.stringify({ verdict: "review" })
           : JSON.stringify({
               corrections: [
-                { op: "split", part: 2, atParagraph: 11, role: "method" },
-                { op: "split", part: 2, atParagraph: 12, role: "evidence" },
-                { op: "set_role", part: 3, role: "evidence" },
+                { op: "split", part: 0, atParagraph: 5, role: "method" },
+                { op: "split", part: 0, atParagraph: 6, role: "evidence" },
+                { op: "set_role", part: 2, role: "evidence" },
               ],
               unsure: [],
             }),
@@ -277,49 +301,77 @@ describe("POST /api/papers/[id]/structure — the review", () => {
       const review = await reviewOf(await call());
       const fields = debug.mock.calls.find(([label]) => label === "[papers/structure] review")![1] as Record<string, unknown>;
 
-      expect(review.corrections).toEqual([{ op: "set_role", part: 3, role: "evidence" }]);
-      expect(reviewedParts(draft, review)).toEqual([
-        { from: 0, to: 5, role: "setup" },
-        { from: 6, to: 8, role: "method" },
-        { from: 9, to: 21, role: "evidence" },
-        { from: 22, to: 25, role: "interpretation" },
-        { from: 26, to: 28, role: "apparatus" },
+      expect(review.corrections).toEqual([{ op: "set_role", part: 2, role: "evidence" }]);
+      expect(reviewedParts(lowDraft, review)).toEqual([
+        { from: 0, to: 7, role: "setup" },
+        { from: 8, to: 16, role: "evidence" },
+        { from: 17, to: 19, role: "apparatus" },
       ]);
       expect(fields).toMatchObject({ corrections: 1, rejected: 2 });
-      // Named by their numbers (P12-90): the results part is 9 to 17 in a draft of six parts and twenty-nine paragraphs.
+      // Named by their numbers (P12-90): the opening is 0 to 7 in a draft of four parts and twenty paragraphs.
       expect(fields.refusedNumbers).toEqual([
-        { op: "split", reason: "piece-too-short", part: 2, ordinal: 11, role: "method", draftLength: 6, paragraphs: 29, from: 9, to: 17 },
-        { op: "split", reason: "piece-too-short", part: 2, ordinal: 12, role: "evidence", draftLength: 6, paragraphs: 29, from: 9, to: 17 },
+        { op: "split", reason: "piece-too-short", part: 0, ordinal: 5, role: "method", draftLength: 4, paragraphs: 20, from: 0, to: 7 },
+        { op: "split", reason: "piece-too-short", part: 0, ordinal: 6, role: "evidence", draftLength: 4, paragraphs: 20, from: 0, to: 7 },
       ]);
     } finally {
       consoleText.restore();
     }
   });
 
-  it("never takes more than three looks, each at most 6,600 characters, and none for a correction against a part the rules were unsure of", async () => {
-    const many = inventedPaper(
-      Array.from({ length: 10 }, (_, k) => ({ heading: `${k + 1} Row ${k}`, canonical: k % 2 === 0 ? "methods" : "results", truth: [[k % 2 === 0 ? "method" : "evidence", 12]] as Array<["method" | "evidence", number]> })),
-    );
-    mocks.getFullText.mockResolvedValue({ status: "ok", doc: many.doc, attempts: [] });
-    const d = draftOf(many.input)!;
-    const swap = (role: string) => (role === "method" ? "evidence" : "method");
-    provider = providerOf(async (args) =>
-      isLook(args)
-        ? JSON.stringify({ verdict: "review" })
-        : JSON.stringify({ corrections: d.parts.map((p, k) => ({ op: "set_role", part: k, role: swap(p.role) })), unsure: [] }),
-    );
-    mocks.resolveProvider.mockReturnValue(provider);
+  it("refuses a correction against a part the rules were sure of, beside one against a part they were unsure of: the log names `confident-draft`, the other stands, one look (P12-94)", async () => {
+    const consoleText = captureConsole();
+    const debug = vi.spyOn(console, "debug");
+    try {
+      // Part 1 is the results (`high`, 8 to 13), part 0 the unplaced opening (`low`).
+      provider = providerOf(async (args) =>
+        isLook(args)
+          ? JSON.stringify({ verdict: "review" })
+          : JSON.stringify({ corrections: [{ op: "set_role", part: 1, role: "method" }, { op: "set_role", part: 0, role: "method" }], unsure: [] }),
+      );
+      mocks.resolveProvider.mockReturnValue(provider);
+      const review = await reviewOf(await call());
+      const fields = debug.mock.calls.find(([label]) => label === "[papers/structure] review")![1] as Record<string, unknown>;
+
+      expect(review.corrections).toEqual([{ op: "set_role", part: 0, role: "method" }]);
+      // The refused one drew no look: one for the part the rules were unsure of.
+      expect(review.secondLooks).toEqual([{ part: 0, why: "contradicts-low", verdict: "review" }]);
+      expect(provider.generateJsonText).toHaveBeenCalledTimes(2);
+      expect(fields).toMatchObject({ corrections: 1, rejected: 1, looks: 1 });
+      expect(fields.refusedNumbers).toEqual([{ op: "set_role", reason: "confident-draft", part: 1, ordinal: null, role: "method", draftLength: 4, paragraphs: 20, from: 8, to: 13 }]);
+      expect(consoleText.text()).not.toMatch(/Invented|tide pools|Zymurgy/);
+    } finally {
+      consoleText.restore();
+    }
+  });
+
+  // Re-aimed (P12-94), was "never takes more than three looks, each at most 6,600 characters, and none for a correction against a part the rules were
+  // unsure of": the paper was ten rows the rules were sure of, and the model corrected every one; those corrections are refused now, and a correction
+  // against a part the rules were unsure of draws a look. The rules are unsure of two parts of a paper at most (the opening nothing places, the
+  // closing), so the route cannot reach the cap of three by itself; the core test pins the cap with a draft of more parts. Kept here: a look for each
+  // part the model corrected that the rules were unsure of, no more than the cap, each at most 6,600 characters of the paper, 60 tokens to answer.
+  it("takes a look for each part the rules were unsure of that the model corrected, never more than three, each at most 6,600 characters", async () => {
+    const padding = " Padding words about nothing in particular.".repeat(30);
+    const paragraphs: Record<number, string> = {};
+    LOW.roles.forEach((role, g) => {
+      if (g !== 14) paragraphs[g] = `${inventedParagraph(role, g)}${padding}`;
+    });
+    const long = lowPaper(LOW_ROWS, paragraphs);
+    mocks.getFullText.mockResolvedValue({ status: "ok", doc: long.doc, attempts: [] });
     const review = await reviewOf(await call());
     const looks = provider.generateJsonText.mock.calls.filter(([args]) => isLook(args));
 
-    expect(looks).toHaveLength(REVIEW_CAPS.secondLooks);
-    expect(review.secondLooks).toHaveLength(3);
+    expect(looks).toHaveLength(2);
+    expect(looks.length).toBeLessThanOrEqual(REVIEW_CAPS.secondLooks);
+    expect(review.secondLooks).toEqual([
+      { part: 0, why: "contradicts-low", verdict: "review" },
+      { part: 2, why: "contradicts-low", verdict: "review" },
+    ]);
     for (const [args] of looks) {
       expect(args.userPrompt.length).toBeLessThanOrEqual(REVIEW_CAPS.lookChars + 3_000);
       expect(args.maxTokens).toBe(60);
     }
-    // The corrections the looks never reached stand (a correction without a look is not a refused one).
-    expect(review.corrections).toHaveLength(10);
+    // The looks agreed: all three corrections stand.
+    expect(review.corrections).toHaveLength(3);
   });
 
   // Re-aimed (P12-94), was "asks no look for a correction against a part the rules were unsure of, and keeps it": it asks one, and keeps
@@ -348,15 +400,28 @@ describe("POST /api/papers/[id]/structure — the review", () => {
     }
   });
 
+  // Re-aimed (P12-94): the part the model could not judge was part 3 of `FIVE` ("Further analysis", sure); a part the rules were sure of draws no look
+  // for an unsure listing now, so it is part 0 of `LOW` (the unplaced opening, unsure): its paragraphs say method, mostly.
   it("looks again at a part the model could not judge, and a look that names another role changes it", async () => {
-    provider = providerOf(async (args) => (isLook(args) ? modelDouble(args.userPrompt) : JSON.stringify({ corrections: [], unsure: [3] })));
+    provider = providerOf(async (args) => (isLook(args) ? modelDouble(args.userPrompt) : JSON.stringify({ corrections: [], unsure: [0] })));
     mocks.resolveProvider.mockReturnValue(provider);
     const review = await reviewOf(await call());
 
-    // Part 3 is "Further analysis", heading-bucketed as methods; its paragraphs say evidence.
-    expect(review.unsure).toEqual([3]);
-    expect(review.secondLooks).toEqual([{ part: 3, why: "unsure", verdict: "review" }]);
-    expect(review.corrections).toEqual([{ op: "set_role", part: 3, role: "evidence" }]);
+    expect(review.unsure).toEqual([0]);
+    expect(review.secondLooks).toEqual([{ part: 0, why: "unsure", verdict: "review" }]);
+    expect(review.corrections).toEqual([{ op: "set_role", part: 0, role: "method" }]);
+  });
+
+  it("asks no look for a part the model could not judge when the rules were sure of it, and changes nothing (P12-94)", async () => {
+    // Part 1 is the results (`high`), part 3 the references (`high`).
+    provider = providerOf(async (args) => (isLook(args) ? modelDouble(args.userPrompt) : JSON.stringify({ corrections: [], unsure: [1, 3] })));
+    mocks.resolveProvider.mockReturnValue(provider);
+    const review = await reviewOf(await call());
+
+    expect(review.unsure).toEqual([1, 3]);
+    expect(review.secondLooks).toEqual([]);
+    expect(review.corrections).toEqual([]);
+    expect(provider.generateJsonText).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -385,11 +450,12 @@ describe("POST /api/papers/[id]/structure — when the review fails the draft st
 
   it("applies the valid corrections of an answer that also holds refused ones", async () => {
     provider = providerOf(async (args) =>
-      isLook(args) ? JSON.stringify({ verdict: "review" }) : JSON.stringify({ corrections: [{ op: "set_role", part: 99, role: "method" }, { op: "set_role", part: 3, role: "evidence" }] }),
+      isLook(args) ? JSON.stringify({ verdict: "review" }) : JSON.stringify({ corrections: [{ op: "set_role", part: 99, role: "method" }, { op: "set_role", part: 0, role: "method" }] }),
     );
     mocks.resolveProvider.mockReturnValue(provider);
 
-    expect((await reviewOf(await call())).corrections).toEqual([{ op: "set_role", part: 3, role: "evidence" }]);
+    // Re-aimed (P12-94): the valid correction was a role of part 3 of `FIVE` (sure); it is the role of part 0 of `LOW` (unsure).
+    expect((await reviewOf(await call())).corrections).toEqual([{ op: "set_role", part: 0, role: "method" }]);
   });
 
   it("answers fellBack timeout after 30 seconds, with nothing remembered, and ignores a late answer", async () => {
@@ -471,7 +537,8 @@ describe("POST /api/papers/[id]/structure — the server's memory", () => {
     await call({ paper: { ...paper, title: "Another title altogether" }, project: "x" });
     expect(provider.generateJsonText).toHaveBeenCalledTimes(calls);
 
-    const other = inventedPaper(FIVE_PARTS.slice(0, 5));
+    // Re-aimed (P12-94): another text whose review is kept, which the first five rows of `FIVE` are not any more (refused whole).
+    const other = lowPaper(LOW_ROWS.slice(0, 2));
     mocks.getFullText.mockResolvedValue({ status: "ok", doc: other.doc, attempts: [] });
     await call();
     expect(provider.generateJsonText.mock.calls.length).toBeGreaterThan(calls);
@@ -479,8 +546,8 @@ describe("POST /api/papers/[id]/structure — the server's memory", () => {
   });
 
   it("misses for an entry made under another version of the rules, the skeleton or the prompt", async () => {
-    const docHash = explainDocHash(FIVE.doc);
-    const stale = { v: 1, docHash, rulesVersion: "old", skeletonVersion: "old", promptVersion: "old", draftDigest: draft.digest, corrections: [], unsure: [], secondLooks: [], model: "x", reviewedAt: 0 } as StructureReviewEntry;
+    const docHash = explainDocHash(LOW.doc);
+    const stale = { v: 1, docHash, rulesVersion: "old", skeletonVersion: "old", promptVersion: "old", draftDigest: lowDraft.digest, corrections: [], unsure: [], secondLooks: [], model: "x", reviewedAt: 0 } as StructureReviewEntry;
     for (const key of [structureReviewKey(docHash).replace(/rules:[^|]+/, "rules:old"), structureReviewKey(docHash).replace(/skel:[^|]+/, "skel:old"), structureReviewKey(docHash).replace(/prompt:.+$/, "prompt:old")]) {
       structureReviewCache.set(key, stale);
     }
@@ -491,7 +558,7 @@ describe("POST /api/papers/[id]/structure — the server's memory", () => {
   });
 
   it("counts a hit only for the draft it was made against: the same document under another abstract is asked again", async () => {
-    const docHash = explainDocHash(FIVE.doc);
+    const docHash = explainDocHash(LOW.doc);
     structureReviewCache.set(structureReviewKey(docHash), {
       v: 1,
       docHash,
@@ -509,15 +576,15 @@ describe("POST /api/papers/[id]/structure — the server's memory", () => {
 
     expect(body.cached).toBe(false);
     expect(provider.generateJsonText).toHaveBeenCalled();
-    expect(structureReviewCache.get(structureReviewKey(docHash))?.draftDigest).toBe(draft.digest);
+    expect(structureReviewCache.get(structureReviewKey(docHash))?.draftDigest).toBe(lowDraft.digest);
   });
 
   it("holds the finished review only, under the document's key: indices, roles and the model's id, no word of the paper", async () => {
     await call();
-    const entry = structureReviewCache.get(structureReviewKey(explainDocHash(FIVE.doc)))!;
+    const entry = structureReviewCache.get(structureReviewKey(explainDocHash(LOW.doc)))!;
 
     expect(entry.model).toBe("gemini/large");
-    expect(entry.docHash).toBe(explainDocHash(FIVE.doc));
+    expect(entry.docHash).toBe(explainDocHash(LOW.doc));
     expect(JSON.stringify(entry)).not.toMatch(/Invented|tide pools|Introduction|Methods|Results|Zymurgy|Further analysis/);
   });
 });
@@ -571,7 +638,7 @@ describe("POST /api/papers/[id]/structure — what it logs", () => {
       expect(lines).toHaveLength(1);
       const fields = lines[0][1] as Record<string, unknown>;
       expect(Object.keys(fields).sort()).toEqual(["answerChars", "corrections", "looks", "mode", "paragraphs", "parts", "promptChars", "refusedNumbers", "rejected"]);
-      expect(fields).toMatchObject({ paragraphs: 29, parts: 6, mode: "A", corrections: 2, looks: 2, refusedNumbers: [] });
+      expect(fields).toMatchObject({ paragraphs: 20, parts: 4, mode: "A", corrections: 3, looks: 2, refusedNumbers: [] });
       expect(consoleText.text()).not.toMatch(/Invented|tide pools|kelp|Introduction|Methods|Results|Zymurgy|Further analysis/);
     } finally {
       consoleText.restore();
