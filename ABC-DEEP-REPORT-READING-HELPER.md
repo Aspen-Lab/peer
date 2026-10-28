@@ -2063,6 +2063,22 @@ Next, as slots free (max 2): A P12-71 (Theme A) and A P12-72 (Theme B) walk this
 
 **Item 10 (queued for C P12-70 when a slot frees):** C P12-70's open risk. A paper that prints a one-letter symbol on its own (a unit "S", a variable "T") would witness that letter as a word and split "S" + "econdary". So only "A" and "I" may be a one-letter word: English has no other, and a two-letter fact of the language is not a dictionary. The paper's own words stay the witness.
 
+### §1h.449 — 2026-10-28 — B P12-73 RULED: C P12-74 (M1, M6), C P12-75 (M2, M5, M7), C P12-76 (M8, M3); M4 VOID (P6 7/9)
+
+B P12-73's report (`P12-73-B-20261028T0851Z.md`, landed `a4b384e4`) is checked: its four-word runs shared with P1–P6 are 7, all common phrases or digit runs, none a quotation. It reproduced the manager's maps byte for byte and did not read the sealed truth. Rulings:
+
+(a) **M4 is void.** The scorer's P6 locator had "Li ion" where the paper prints a superscript charge (NFKC "Li+ ion"). The part starts at its row's first paragraph and **passes**: P6 is **7 / 9**, not 6 / 9. The manager's private truth file is corrected.
+
+(b) **M1:** package A (R1–R5). **M6:** "block". → **C P12-74** (both in `pdf-outline.ts` and the same test file). Re-aims `pdf-outline.headings.test.ts:376` and `:441`, named.
+
+(c) **M2:** option A (the group row, a new optional `level`), with **M5** both structural and lexical (`experiment` + a preparation word → methods) and **M7 R7a** (`implication`, `outlook` → discussion; no positional rule — §1h.437(a)'s role for P6's row follows from its own word) → **C P12-75**. B's note on `model` / `validation` is backlog.
+
+(d) **M8** (per-page left edge) and **M3 on P5** (c3_last: the last paragraph of ≥ 60 words with an outlook cue closes a paper that names no discussion or conclusion, after the existing rule) → **C P12-76**. c3_last is a Tier-0 judgement; Tier 1 may refine it. M3 on P4 needs no code: it follows from C P12-74 + C P12-75.
+
+(e) **M6b** (Nature running heads in two alternating forms below the 40 % threshold; junk paragraphs, not rows) is backlog for a later C. It is not priced by Theme C.
+
+(f) **Order under two slots:** A P12-71 is walking. C P12-74 starts now; C P12-75 and C P12-76 next; then A P12-72 (Theme B); then C P12-70 item 10. The three Theme C Cs are combined and measured on P1–P6 together (B's package: P3–P6 0 extras, P4 5/5, P5 9/9, P6 9/9 if the starts match the truth).
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2389,7 +2405,10 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-70 | PARTIAL — C (Sonnet); items 1–9 landed (14246baa, §1h.448); item 10 queued | integration: the five tests where eight Cs' rules meet | code fixes; named re-aims only where a ruled rule changed the truth; gates | checkpoint P12-70-C-<UTC>.md | briefs/P12-70.md; §1h.442 |
 | P12-71 | IN_PROGRESS — A (Sonnet), head d44aeabb, port 4246, scratch p12/r2/a71 | Theme A A1–A12 | rubric units and pass requirements | walk, pack, P12-71-A-<UTC>.md | briefs/P12-71.md; §1h.446 |
 | P12-72 | QUEUED — A (Sonnet), fresh walk of Theme B on the landed head (replaces the stale P12-38 walk) | Theme B B1–B12 | rubric units and pass requirements | walk, pack, P12-72-A-<UTC>.md | briefs/P12-72.md; §1h.446 |
-| P12-73 | IN_PROGRESS — B (Sonnet), scratch p12/b73, head 97b84eb9 | Theme C on P4–P6: M1–M7 by shape | file:line, three candidates each, a C split | report P12-73-B-<UTC>.md | briefs/P12-73.md; §1h.446 |
+| P12-73 | DONE — B (Sonnet), report on the branch (a4b384e4); ruled §1h.449 | Theme C on P4–P6: M1–M7 by shape | file:line, three candidates each, a C split | report P12-73-B-<UTC>.md | briefs/P12-73.md; §1h.446 |
+| P12-74 | IN_PROGRESS — C (Sonnet), scratch p12/c74 | M1 rule A (R1–R5) + M6 block in pdf-outline.ts | invented fixtures; 2 named re-aims; own mutations; gates | checkpoint P12-74-C-<UTC>.md | briefs/P12-74.md; §1h.449 |
+| P12-75 | QUEUED — C (Sonnet) | M2 group row (level), M5, M7 R7a | invented fixtures; own mutations; gates | checkpoint P12-75-C-<UTC>.md | briefs/P12-75.md; §1h.449 |
+| P12-76 | QUEUED — C (Sonnet) | M8 per-page left edge; M3 c3_last on P5 | invented fixtures; own mutations; gates | checkpoint P12-76-C-<UTC>.md | briefs/P12-76.md; §1h.449 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
 | P11-26 | **DONE 21:0xZ 2026-10-20** — on the branch (§1h.128 (b)); was RUNNING (rules 4, 5 added §1h.127 (c)) since 09:1xZ 2026-10-20 — C, `briefs/P11-26.md`, `scratchpad/p11c26/wt`, port 4127: the explain card keeps its top at the selection (B3); a figure in front of the stack is never a thumbnail (X-3) | round 1 Theme B | §1h.122 (b) 1, 4 | C → the manager | — |
