@@ -1,6 +1,8 @@
 import { existsSync } from "node:fs";
 import { rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
+import { figurePdf } from "@/lib/figures/figure-pdf.test-helper";
 
 // P1-03b (§1f.16): this file writes its fixtures straight into the upload
 // directory, which a fresh checkout does not have, so it passed or failed
@@ -17,11 +19,37 @@ const uploadDir = await vi.hoisted(async () => {
   return dir;
 });
 
+// P12-69: a removal of an upload's kept figure folder that fails on demand, for the one test that needs a
+// folder that will not go. Only a path under `figure-cuts` is touched; every other removal is the real one.
+const fault = vi.hoisted(() => ({ rm: false }));
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return {
+    ...actual,
+    rm: (...args: Parameters<typeof actual.rm>) =>
+      fault.rm && String(args[0]).includes("figure-cuts") ? Promise.reject(new Error("rm failed")) : actual.rm(...args),
+  };
+});
+
 afterAll(async () => {
   delete process.env.PEER_PRIVATE_UPLOAD_DIR;
   await rm(uploadDir, { recursive: true, force: true });
 });
-import { docPath, metaPath, pdfPath, readUploadDoc, readUploadMeta, sha16, uploadDocKey, writeUploadDoc, writeUploadMeta } from "@/lib/papers/upload-store";
+import {
+  docPath,
+  metaPath,
+  pdfPath,
+  readUploadDoc,
+  readUploadFigureCut,
+  readUploadMeta,
+  readUploadPageFile,
+  sha16,
+  uploadDocKey,
+  writeUploadDoc,
+  writeUploadFigureCut,
+  writeUploadMeta,
+  writeUploadPageFile,
+} from "@/lib/papers/upload-store";
 import { ownedUpload } from "@/lib/papers/upload-access";
 
 import { POST } from "./route";
@@ -220,5 +248,122 @@ describe("POST /api/admin/uploads/block", () => {
     } finally {
       await rm(metaPath(hash16), { force: true });
     }
+  });
+
+  // P12-69 (§1h.441; C P12-61's note 1): P12-61 keeps the pictures cut from an upload, and the page files
+  // they were cut from, in a folder beside it. They are derived from the PDF being taken down, so the
+  // takedown removes them at once, as `deleteUpload` does, and not on the purge's next pass.
+  describe("the pictures cut from the upload and its page files (P12-69)", () => {
+    const SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+    /** A PNG-shaped byte string: the signature, then `fill` repeated. Never a real picture. */
+    const fakePng = (fill: number) => Buffer.from([...SIGNATURE, ...new Array<number>(64).fill(fill)]);
+    /** A whole (tiny, invented) PDF of one page. */
+    const pagePdf = (marker: string) => figurePdf([{ text: [[marker, 72, 100, 10]] }]);
+    const folder = (hash16: string) => path.join(uploadDir, "figure-cuts", hash16);
+
+    async function keepUpload(hash16: string, ownerKey: string, documentKey: string): Promise<void> {
+      await writeFile(pdfPath(hash16), Buffer.from("%PDF-1.4 fixture"), { mode: 0o600 });
+      await writeUploadMeta(hash16, {
+        hash16, fileName: "paper.pdf", title: "A Real Paper", uploadedAt: "2026-10-28T00:00:00.000Z",
+        textStatus: "ok", status: "ready", revision: 1, ownerKey, documentKey,
+        expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+      });
+    }
+
+    async function keepCuts(hash16: string, fill: number): Promise<void> {
+      await writeUploadFigureCut(hash16, 1, "Figure 1", { png: fakePng(fill), width: 400, height: 300 });
+      await writeUploadFigureCut(hash16, 2, "Figure 3", { png: fakePng(fill + 1) });
+      await writeUploadPageFile(hash16, 1, pagePdf(`page one ${fill}`));
+      await writeUploadPageFile(hash16, 2, pagePdf(`page two ${fill}`));
+    }
+
+    async function forget(...hashes: string[]): Promise<void> {
+      fault.rm = false;
+      for (const hash16 of hashes) {
+        await rm(pdfPath(hash16), { force: true });
+        await rm(metaPath(hash16), { force: true });
+        await rm(folder(hash16), { recursive: true, force: true });
+      }
+    }
+
+    it("removes the kept figure pictures and the page files with the PDF at once, and another upload's stay", async () => {
+      process.env.ADMIN_TOKEN = "correct-token";
+      const hash16 = sha16(Buffer.from("p12-69: block removes the cuts"));
+      const other = sha16(Buffer.from("p12-69: another upload keeps its cuts"));
+      await keepUpload(hash16, "owner-under-test-p12-69", "doc-key-p12-69");
+      await keepUpload(other, "owner-under-test-p12-69-other", "doc-key-p12-69-other");
+      await keepCuts(hash16, 10);
+      await keepCuts(other, 20);
+      // Before: the pictures and the page files are there to be removed.
+      expect((await readUploadFigureCut(hash16, 1, "Figure 1"))?.png.byteLength).toBeGreaterThan(0);
+      expect(await readUploadPageFile(hash16, 2)).not.toBeNull();
+      expect(existsSync(folder(hash16))).toBe(true);
+
+      try {
+        const res = await call({ hash16 }, { authorization: "Bearer correct-token" });
+        expect(res.status).toBe(200);
+        expect((await res.json()).blocked).toBe(true);
+
+        // After: no picture, no page file, no folder.
+        expect(await readUploadFigureCut(hash16, 1, "Figure 1")).toBeNull();
+        expect(await readUploadFigureCut(hash16, 2, "Figure 3")).toBeNull();
+        expect(await readUploadPageFile(hash16, 1)).toBeNull();
+        expect(await readUploadPageFile(hash16, 2)).toBeNull();
+        expect(existsSync(folder(hash16))).toBe(false);
+        expect(existsSync(pdfPath(hash16))).toBe(false);
+        expect((await readUploadMeta(hash16))?.status).toBe("blocked");
+
+        // Another upload's pictures and page files are not touched.
+        expect((await readUploadFigureCut(other, 1, "Figure 1"))?.png[8]).toBe(20);
+        expect((await readUploadFigureCut(other, 2, "Figure 3"))?.png[8]).toBe(21);
+        expect(await readUploadPageFile(other, 1)).not.toBeNull();
+        expect(await readUploadPageFile(other, 2)).not.toBeNull();
+        expect((await readUploadMeta(other))?.status).toBe("ready");
+      } finally {
+        await forget(hash16, other);
+      }
+    });
+
+    it("blocks an upload that has no kept pictures or page files, as before", async () => {
+      process.env.ADMIN_TOKEN = "correct-token";
+      const hash16 = sha16(Buffer.from("p12-69: nothing kept beside the upload"));
+      await keepUpload(hash16, "owner-under-test-p12-69-none", "doc-key-p12-69-none");
+      expect(existsSync(folder(hash16))).toBe(false);
+      try {
+        const res = await call({ hash16 }, { authorization: "Bearer correct-token" });
+        expect(res.status).toBe(200);
+        expect((await readUploadMeta(hash16))?.status).toBe("blocked");
+        expect(existsSync(pdfPath(hash16))).toBe(false);
+      } finally {
+        await forget(hash16);
+      }
+    });
+
+    it("logs a failure to remove them and still blocks: the PDF is gone, the record is the minimal blocked one", async () => {
+      process.env.ADMIN_TOKEN = "correct-token";
+      const hash16 = sha16(Buffer.from("p12-69: the folder will not go"));
+      await keepUpload(hash16, "owner-under-test-p12-69-fail", "doc-key-p12-69-fail");
+      await keepCuts(hash16, 30);
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      fault.rm = true;
+      try {
+        const res = await call({ hash16 }, { authorization: "Bearer correct-token" });
+        expect(res.status).toBe(200);
+        expect(await res.json()).toMatchObject({ blocked: true, hash16 });
+        // The removal failed, so the folder is still there ...
+        expect(existsSync(folder(hash16))).toBe(true);
+        // ... it was said, and the block was not undone.
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(String(warn.mock.calls[0]?.[0])).toContain("figure cuts");
+        expect(existsSync(pdfPath(hash16))).toBe(false);
+        const stored = await readUploadMeta(hash16);
+        expect(stored?.status).toBe("blocked");
+        expect(stored?.title).toBe("");
+        expect(stored?.preferenceSignals).toEqual([]);
+      } finally {
+        warn.mockRestore();
+        await forget(hash16);
+      }
+    });
   });
 });

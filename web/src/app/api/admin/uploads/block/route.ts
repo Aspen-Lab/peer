@@ -16,6 +16,7 @@ import {
   isValidHash16,
   readUploadMeta,
   removeUploadDoc,
+  removeUploadFigureCuts,
   removeUploadPdf,
   writeUploadMeta,
   type UploadMeta,
@@ -69,9 +70,18 @@ export async function POST(req: Request) {
   // `<hash16>.doc.json` sidecar, `upload-store.ts`) are the per-hash16 objects
   // an upload leaves in its storage (confirmed 9-16: full-text/figure
   // extraction for `upload:` ids never writes a shared or per-request cache
-  // file into upload storage). Removing both is removing every derived file.
+  // file into upload storage). Since P12-61 it also keeps, in a folder of its
+  // own beside them, the pictures cut from its figures and the one-page files
+  // they were cut from. Removing all of these is removing every derived file.
   await removeUploadPdf(hash16);
   await removeUploadDoc(hash16);
+  // P12-69: the cut pictures and page files go now, as `deleteUpload` removes
+  // them, not at the purge's next pass. A failure to remove them is said and
+  // does not undo the takedown: the block below is what refuses the upload,
+  // and the purge removes the folder of a blocked upload within a day.
+  await removeUploadFigureCuts(hash16).catch((error) => {
+    console.warn("[admin] could not remove a taken-down upload's figure cuts:", error);
+  });
 
   // A minimal record, deliberately smaller than a live `UploadMeta`: kept
   // ONLY so this hash16 can never be re-claimed by a future upload of the
