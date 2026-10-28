@@ -215,3 +215,7 @@ C0 (no key) on `web/` tree 54f4b003: P1–P6 each 100. Consecutive rounds at the
 ## Scores — Theme C1 phase 3 (§1h.472)
 
 P3 3 / 3, P4 3 / 3 (fallbacks), P6 4 / 5 (one damaged run): C1 not yet 100 % on P6.
+
+## Scores of record — Theme B round 3 (§1h.474)
+
+A P12-88 on `921dbd8b`; readers B3-r1 and B3-r2: P1 95.83, P2 95.83, P3 95.83 (E2 standing + E5). Consecutive rounds at the target: 0.
