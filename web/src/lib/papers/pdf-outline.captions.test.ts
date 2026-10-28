@@ -258,3 +258,198 @@ describe("a number-led line ends a caption only when it is set at 0.95 of the bo
     expect(outline.sections?.map((s) => s.heading)).toEqual(["1 Introduction"]);
   });
 });
+
+describe("a caption goes on through its title's face change (C P12-82, K1, R1-B)", () => {
+  // The shapes a real caption is printed in, invented: a bold title and the text face. The face of a line is the face
+  // of its longest run, so a first line whose bold title is longer than its text-face tail reads as bold, and the
+  // text-face line under it as another face. The paper's prose is at 10 points on a 12-point grid (pitch 12).
+  const TITLE = "titlebold";
+  const TAIL = "captext";
+  const piece = (str: string, y: number, at: Partial<PdfTextItem> = {}) => item(str, { y, ...at });
+  const captionsOf = (outline: ReturnType<typeof buildOutline>) => (outline.figureCaptions ?? []).map((c) => c.caption);
+
+  // The tails of a caption, in the order they are printed.
+  const T1 = "Measured at ten depths in the spring and summer,";
+  const T2 = "and averaged over the three plots of each cover.";
+  const W1 = "spring and summer of the second year of the trial.";
+
+  it("takes the whole caption whose bold title is longer than the text-face tail of its first line (P3's Fig. 1 shape)", () => {
+    const title = "Figure 1: Soil moisture under the three covers across the spring and summer. ";
+    const outline = paper([
+      piece(title, 654, { height: 8, fontName: TITLE }),
+      piece("Weekly means, n = 3.", 654, { height: 8, fontName: TAIL, x: 100 + title.length * 4.6 }),
+      piece(T1, 642, { height: 8, fontName: TAIL }),
+      piece(T2, 630, { height: 8, fontName: TAIL }),
+    ]);
+    expect(captionsOf(outline)).toEqual([`Soil moisture under the three covers across the spring and summer. Weekly means, n = 3. ${T1} ${T2}`]);
+    // Set at 8 points on the paper's 12-point grid, its leading is not the page pitch's (9.6 for 8 points): its own is.
+    expect(proseOf(outline)).not.toContain("Measured at ten depths");
+    expect(proseOf(outline)).not.toContain("averaged over the three plots");
+    expect(proseOf(outline)).toContain("Recurrent neural networks");
+  });
+
+  it("takes the text-face lines under a title wrapped onto two lines, set smaller than the body (P4's and P5's shape)", () => {
+    const outline = paper([
+      piece("Figure 4: Soil moisture under the three covers across the", 654, { height: 7.4, fontName: TITLE }),
+      piece(W1, 642, { height: 7.4, fontName: TITLE }),
+      // The caption's text face is the body's own face, set smaller.
+      piece(T1, 630, { height: 7 }),
+      piece(T2, 618, { height: 7 }),
+    ]);
+    expect(captionsOf(outline)).toEqual([`Soil moisture under the three covers across the ${W1} ${T1} ${T2}`]);
+    expect(proseOf(outline)).not.toContain("Measured at ten depths");
+  });
+
+  it("ends a caption at a body paragraph in the body's face and size, however the title is wrapped", () => {
+    const outline = paper([
+      piece("Figure 5: Soil moisture under the three covers across the", 654, { fontName: TITLE }),
+      piece(W1, 642, { fontName: TITLE }),
+      piece("The deeper layers hold more water than the straw does in every", 630),
+      piece("one of the four seasons, which the second plot confirms in turn.", 618),
+    ]);
+    expect(captionsOf(outline)).toEqual([`Soil moisture under the three covers across the ${W1}`]);
+    expect(proseOf(outline)).toContain("The deeper layers hold more water than the straw does in every one of the four seasons");
+  });
+
+  it("ends a caption at its second change of face after the first line, at the body's size", () => {
+    const outline = paper([
+      piece("Figure 6: Soil moisture under the three covers across the", 654, { fontName: TITLE }),
+      piece(W1, 642, { fontName: TAIL }),
+      piece(T2, 630, { fontName: "italic" }),
+    ]);
+    expect(captionsOf(outline)).toEqual([`Soil moisture under the three covers across the ${W1}`]);
+    expect(proseOf(outline)).toContain(T2);
+  });
+
+  it("ends a caption at its second change of face even when the line is set smaller than the body", () => {
+    // Bold, bold, text face (the one change, smaller than the body), then a third face: the third ends it.
+    const outline = paper([
+      piece("Figure 7: Soil moisture under the three covers across the", 654, { height: 8, fontName: TITLE }),
+      piece(W1, 642, { height: 8, fontName: TITLE }),
+      piece(T1, 630, { height: 8, fontName: TAIL }),
+      piece(T2, 618, { height: 8, fontName: "italic" }),
+    ]);
+    expect(captionsOf(outline)).toEqual([`Soil moisture under the three covers across the ${W1} ${T1}`]);
+    expect(proseOf(outline)).toContain(T2);
+  });
+
+  it("ends a caption that goes back to its first face after the one change", () => {
+    const outline = paper([
+      piece("Figure 8: Soil moisture under the three covers across the", 654, { height: 8, fontName: TITLE }),
+      piece(W1, 642, { height: 8, fontName: TITLE }),
+      piece(T1, 630, { height: 8, fontName: TAIL }),
+      piece(T2, 618, { height: 8, fontName: TITLE }),
+    ]);
+    expect(captionsOf(outline)).toEqual([`Soil moisture under the three covers across the ${W1} ${T1}`]);
+    expect(proseOf(outline)).toContain(T2);
+  });
+
+  it("holds the change to the caption's own leading: a text-face line at another gap than the title's lines ends it", () => {
+    // Title lines 12 apart; the line in the text face 17 below (1.4 pitches): not the caption's leading.
+    const outline = paper([
+      piece("Figure 9: Soil moisture under the three covers across the", 654, { height: 8, fontName: TITLE }),
+      piece(W1, 642, { height: 8, fontName: TITLE }),
+      piece(T1, 625, { height: 8, fontName: TAIL }),
+    ]);
+    expect(captionsOf(outline)).toEqual([`Soil moisture under the three covers across the ${W1}`]);
+    expect(proseOf(outline)).toContain(T1);
+    // And under a one-line title, with the line after at the leading of its own block: 17 below the title is not 12.
+    const first = paper([
+      piece("Figure 9: Soil moisture under the three covers across the", 654, { height: 8, fontName: TITLE }),
+      piece(W1, 637, { height: 8, fontName: TAIL }),
+      piece(T1, 625, { height: 8, fontName: TAIL }),
+    ]);
+    expect(captionsOf(first)).toEqual(["Soil moisture under the three covers across the"]);
+  });
+
+  describe("continuesCaption, told what the caption has shown", () => {
+    const BODY10 = { size: 10, font: "body" };
+    const title1 = line("Figure 1: Soil moisture under the three covers, set in bold.", { y: 330, size: 8, font: TITLE });
+    const title2 = line("Second line of the title, set in bold.", { y: 318, size: 8, font: TITLE });
+    const tail = (y: number, over: Partial<PdfLine> = {}) => line("Measured weekly at ten depths in the spring.", { y, size: 8, font: TAIL, ...over });
+    const goes = (previous: PdfLine, next: PdfLine, lines: PdfLine[], after?: PdfLine, pitch = 12) =>
+      continuesCaption(previous, next, pitch, BODY10, new Set(), { lines, after });
+
+    it("reads the leading of a one-line caption from the line after: its own, within a line pitch and a half", () => {
+      // The page pitch is 12 (9.6 for 8 points); the caption is set 12 apart and the page's 9.6 would not hold it.
+      expect(continuesCaption(title1, tail(318), 12, BODY10, new Set())).toBe(false);
+      expect(goes(title1, tail(318), [title1], tail(306))).toBe(true);
+      // A line after in another face, another size or too far below is no measure: the page's pitch decides, as it did.
+      expect(goes(title1, tail(318), [title1], tail(306, { font: "other" }))).toBe(false);
+      expect(goes(title1, tail(318), [title1], tail(306, { size: 10 }))).toBe(false);
+      expect(goes(title1, tail(318), [title1], tail(290))).toBe(false);
+      expect(goes(title1, tail(320.4), [title1], tail(290)), "9.6 below the title is the page's leading").toBe(true);
+      expect(goes(title1, tail(318), [title1], undefined)).toBe(false);
+    });
+
+    it("reads the leading of a longer caption from its last two lines", () => {
+      const lines = [title1, title2];
+      expect(goes(title2, tail(306), lines)).toBe(true);
+      expect(goes(title2, tail(306 + 2), lines), "10 below, 17% under").toBe(true);
+      expect(goes(title2, tail(306 - 2), lines), "14 below, 17% over").toBe(true);
+      expect(goes(title2, tail(306 - 4), lines), "16 below").toBe(false);
+      expect(goes(title2, tail(306 + 4), lines), "8 below").toBe(false);
+    });
+
+    it("lets one change of face by after the first line only to a line smaller than the body", () => {
+      const lines = [title1, title2];
+      expect(goes(title2, tail(306, { size: 8 }), lines)).toBe(true);
+      expect(goes(title2, tail(306, { size: 8.5 }), lines)).toBe(true);
+      // The body is 10; a line under it by 0.6 or more is smaller (the line must also be within 0.6 of the title's size).
+      expect(goes({ ...title2, size: 9.3 }, tail(306, { size: 9.3 }), lines)).toBe(true);
+      expect(goes({ ...title2, size: 9.5 }, tail(306, { size: 9.5 }), lines)).toBe(false);
+      expect(goes({ ...title2, size: 10 }, tail(306, { size: 10 }), lines)).toBe(false);
+    });
+
+    it("lets a change by right after the first line at the caption's own size, the body's included", () => {
+      const open = line("Figure 2: Soil moisture under the three covers, set in bold.", { y: 330, size: 10, font: TITLE });
+      const next = line("Measured weekly at ten depths in the spring.", { y: 318, size: 10, font: TAIL });
+      const after = line("and averaged over the three plots of each cover.", { y: 306, size: 10, font: TAIL });
+      expect(goes(open, next, [open], after)).toBe(true);
+    });
+
+    it("lets only one change by: a caption that has changed face does not change again, smaller or not", () => {
+      const first = line("Figure 3: Soil moisture under the three covers, set in bold.", { y: 330, size: 8, font: TITLE });
+      const second = tail(318);
+      const lines = [first, second];
+      expect(goes(second, tail(306, { font: "italic" }), lines)).toBe(false);
+      expect(goes(second, tail(306, { font: TITLE }), lines)).toBe(false);
+      expect(goes(second, tail(306), lines), "the same face goes on").toBe(true);
+      const third = tail(306);
+      expect(goes(third, tail(294), [first, second, third])).toBe(true);
+    });
+  });
+
+  it("end to end: a caption that goes on through its title's face change keeps the next caption of a list a caption (R6b)", () => {
+    // Figure 1's text lines are in the body's face and size, 15 below each other and the title, and end without a stop;
+    // Figure 2 follows the last of them, 15 below. A line that opens with a label directly under open prose is the next
+    // words of a sentence unless it is under a caption's own line: Figure 1's chain has to reach the line above.
+    const wide = "Measured at ten depths in the spring and summer on all of the three plots,";
+    const wide2 = "averaged over the plots of each cover and compared with the open ground,";
+    const outline = paper([
+      piece("Figure 1: Soil moisture under the three covers across the spring and summer. ", 654, { fontName: TITLE }),
+      piece(wide, 639),
+      piece(wide2, 624),
+      piece("Figure 2: Soil temperature under the three covers across the year", 609, { fontName: TAIL }),
+    ]);
+    expect(labelsOf(outline)).toEqual(["Figure 1", "Figure 2"]);
+    expect(captionsOf(outline)[0]).toBe(`Soil moisture under the three covers across the spring and summer. ${wide} ${wide2}`);
+  });
+
+  it("end to end: the lines of a caption are not figure text, so the tick labels under it do not become a run with them", () => {
+    // A figure's panel text is lifted from the prose when three or more short lines stand together beside a caption.
+    // The two short text-face lines of this caption are caption (they are taken in), and the two tick labels after it
+    // are too few to be a run: they stay in the prose. Were the caption's lines counted in, four would be lifted out.
+    const outline = paper([
+      piece("Figure 3: Soil moisture under the three covers across the spring and summer. ", 654, { height: 8, fontName: TITLE }),
+      piece("in each of the plots", 642, { height: 8, fontName: TAIL }),
+      piece("of the three covers", 630, { height: 8, fontName: TAIL }),
+      piece("0.5", 618, { height: 8, fontName: "tick" }),
+      piece("1.0", 606, { height: 8, fontName: "tick" }),
+    ]);
+    expect(captionsOf(outline)).toEqual(["Soil moisture under the three covers across the spring and summer. in each of the plots of the three covers"]);
+    const prose = proseOf(outline);
+    expect(prose).toContain("0.5");
+    expect(prose).toContain("1.0");
+  });
+});

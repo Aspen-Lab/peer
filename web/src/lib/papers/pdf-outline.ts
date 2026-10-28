@@ -333,18 +333,41 @@ export function linePitch(lines: PdfLine[]): number {
   return gaps[Math.floor(gaps.length * 0.25)];
 }
 
-/** How far the gap under a caption's first line may stand from one line pitch, as a share of it,
- *  for the line below to be read as the caption's own second line (R7a). */
+/** How far the gap under a caption's line may stand from the caption's own leading (or, where it has none to measure
+ *  yet, from one line pitch), as a share of it, for the line below to be read as the caption's own next line (R7a). */
 const TITLE_PITCH_TOLERANCE = 0.2;
+/** A line is "smaller than the body" for a caption's face change past its first line when it is set this many points
+ *  under the body's size or more: prose in the body's size is never smaller than itself (P12-82, R1-B). */
+const TITLE_SMALLER_BY = 0.6;
 
 /**
- * P12-46 (R7a): whether `next`, in another face than `previous`, is still the caption's second line.
- * Only when `previous` is the caption's first line (it opens with the label: a later line never
- * does, `continuesCaption` ends the caption at one that does) and the gap to `next` is one line pitch,
- * the paper's pitch for the size the caption is set in, within `TITLE_PITCH_TOLERANCE`; with no pitch
- * to measure (0) it is not. The size is held to the first line's by `continuesCaption` right after.
- * What this lets by is a bold title line over text-face lines at the leading of one block; the prose
- * that resumes under a figure, in another face, sits further below or at another leading, and stays out.
+ * What `continuesCaption` is told of the caption it is extending (P12-82, R1-B): the face change, the leading and
+ * the size are all read against what the caption has shown so far, not against the paper alone.
+ */
+export interface CaptionContext {
+  /** The caption's lines so far, in order: the line that opens it first, `previous` last. */
+  lines: readonly PdfLine[];
+  /** The line after `next` on the page, if any: where the caption has one line so far, its leading is the gap under `next`. */
+  after?: PdfLine;
+}
+
+/**
+ * P12-46 (R7a), widened by P12-82 (R1-B): whether `next`, in another face than `previous`, is still the caption's next line.
+ *
+ * A caption changes face once, anywhere in it: a bold title, then text in the paper's face (the bold run is the longest
+ * of the first line, so that line reads as bold and the regular line under it as another face). The change is let by
+ * when the caption has not changed face yet, and
+ *  - right after its first line (the line that opens with the label), at the caption's size (`continuesCaption` holds
+ *    that); or
+ *  - later (a title wrapped onto two lines, then the text face) only to a line set smaller than the body: prose
+ *    resumes at the body's size, so a caption's second face must be smaller than that to be told from it.
+ * Either way the gap must be the caption's OWN leading, within `TITLE_PITCH_TOLERANCE`. That is the gap between its
+ * last two lines; with one line so far, the gap under `next` where the line after it goes on in `next`'s face and size
+ * and within a line pitch and a half; and only with neither, the paper's pitch for the size (with no pitch to measure,
+ * 0, the change is not let by). The page's pitch alone cut a caption set at 10.5 points of leading on a paper whose
+ * 25th-percentile gap, figure text rows included, was 8.7. The prose that resumes under a figure sits further below or
+ * at another leading, and stays out.
+ * With no `context` the caption is taken not to have changed face yet and to have `previous` for its only line.
  */
 function titleFaceChange(
   previous: PdfLine,
@@ -352,9 +375,18 @@ function titleFaceChange(
   gap: number,
   pitch: number,
   body: { size: number; font: string },
+  context?: CaptionContext,
 ): boolean {
-  if (pitch <= 0 || !captionOf(previous)) return false;
-  const leading = body.size > 0 ? pitch * (next.size / body.size) : pitch;
+  const lines = context?.lines ?? [previous];
+  if (lines.some((line, i) => i > 0 && line.font !== lines[i - 1].font)) return false;
+  if (!captionOf(previous) && !(next.size <= body.size - TITLE_SMALLER_BY)) return false;
+  const after = context?.after;
+  const measured = after && after.page === next.page && after.font === next.font && Math.abs(after.size - next.size) <= 0.6 ? next.y - after.y : 0;
+  let leading: number;
+  if (lines.length >= 2) leading = lines[lines.length - 2].y - previous.y;
+  else if (measured > 0 && (pitch <= 0 || measured <= pitch * 1.5)) leading = measured;
+  else leading = pitch > 0 ? (body.size > 0 ? pitch * (next.size / body.size) : pitch) : 0;
+  if (leading <= 0) return false;
   return Math.abs(gap - leading) <= leading * TITLE_PITCH_TOLERANCE;
 }
 
@@ -372,9 +404,10 @@ function titleFaceChange(
  *
  * C P12-74 (R4): a numbered heading ends a caption only when it is set at 0.95 of the body or more (`NUMBERED_SIZE_RATIO`).
  *
- * P12-46 (R7a): one change of face is let by, directly after the caption's FIRST line: a caption set
- * with a bold title line over lines in the text face is one caption (`titleFaceChange`). A second
- * change of face, or a first one that the size or the pitch do not bear out, ends it as before.
+ * P12-46 (R7a), P12-82 (R1-B): one change of face is let by, anywhere in the caption (`titleFaceChange`): a caption set
+ * with a bold title over lines in the text face is one caption, whether the title is one line or wraps onto two.
+ * A second change of face, or a first one that the size or the leading do not bear out, ends it as before.
+ * `context` is what the caption has shown so far; the callers that read a caption line by line (`captionEnd`) pass it.
  */
 export function continuesCaption(
   previous: PdfLine,
@@ -382,12 +415,13 @@ export function continuesCaption(
   pitch: number,
   body: { size: number; font: string },
   furniture: Set<string>,
+  context?: CaptionContext,
 ): boolean {
   if (next.page !== previous.page) return false;
   const gap = previous.y - next.y;
   if (gap <= 0) return false;
   if (pitch > 0 && gap > pitch * 1.5) return false;
-  if (next.font !== previous.font && !titleFaceChange(previous, next, gap, pitch, body)) return false;
+  if (next.font !== previous.font && !titleFaceChange(previous, next, gap, pitch, body, context)) return false;
   if (Math.abs(next.size - previous.size) > 0.6) return false;
   const text = next.text.trim();
   if (!text) return false;
@@ -396,9 +430,32 @@ export function continuesCaption(
   // C P12-74 (R4): a numbered line ends a caption only at 0.95 of the body or more; a caption's own middle line that
   // opens with a number and a unit ("25 C and 45 C ...") is set as small as the rest of it and goes on.
   if (NUMBERED_HEADING.test(text) && text.length <= HEADING_MAX && next.size >= body.size * NUMBERED_SIZE_RATIO) return false;
-  // The face test above is what distinguishes caption from prose; `body` only sizes the leading
+  // The face test above is what distinguishes caption from prose; `body` only sizes the face change
   // `titleFaceChange` looks for.
   return true;
+}
+
+/**
+ * P12-82 (R1-B): the index of the last line of the caption that opens at `read[start]`: the lines `continuesCaption`
+ * takes in turn, each told what the caption has shown so far. The one place a caption's extent is read, so that the
+ * reading (`buildOutline`), the figure text it leaves out (`figureTextOf`) and the chain `inCaption` follows agree.
+ * `until` stops the walk at that index (the caller only asks whether the caption reaches it).
+ */
+function captionEnd(
+  read: PdfLine[],
+  start: number,
+  pitch: number,
+  body: { size: number; font: string },
+  furniture: Set<string>,
+  until: number = read.length - 1,
+): number {
+  const lines = [read[start]];
+  let end = start;
+  while (end < until && continuesCaption(read[end], read[end + 1], pitch, body, furniture, { lines, after: read[end + 2] })) {
+    end++;
+    lines.push(read[end]);
+  }
+  return end;
 }
 
 /**
@@ -1516,10 +1573,11 @@ function followsOpenProse(
   return above.text.trim().length > 0 && !endsSentence(above.text) && !endsParagraph(read, index - 1, pitch, body, leftOut);
 }
 
-/** Whether `read[last]` is a line of a caption, by the chain `buildOutline` reads one by: back from it, over the lines
- *  that `continuesCaption` takes as the next of the one above, to a line that opens a caption. A line that opens like
- *  a caption but follows open prose is a caption exactly when the line above it is in one (a list of captions that
- *  end without a stop: each follows the last line of the one before). */
+/** Whether `read[last]` is a line of a caption, by the chain `buildOutline` reads one by: back from it to the line that
+ *  opens a caption, which must run on to it (`captionEnd`; P12-82: a caption is read forward from its opener, since
+ *  what it has shown so far decides whether it goes on). A line that opens like a caption but follows open prose is a
+ *  caption exactly when the line above it is in one (a list of captions that end without a stop: each follows the last
+ *  line of the one before). */
 function inCaption(
   read: PdfLine[],
   last: number,
@@ -1528,12 +1586,13 @@ function inCaption(
   furniture: Set<string>,
   leftOut?: (index: number) => boolean,
 ): boolean {
+  // The last line of the stretch of caption being traced back to its opener.
+  let reach = last;
   for (let j = last, steps = 0; j >= 0 && steps < CAPTION_LOOKBACK; j--, steps++) {
-    if (captionOf(read[j])) {
-      if (!followsOpenProse(read, j, pitch, body, furniture, leftOut)) return true;
-    } else if (j === 0 || !continuesCaption(read[j - 1], read[j], pitch, body, furniture)) {
-      return false;
-    }
+    if (!captionOf(read[j])) continue;
+    if (captionEnd(read, j, pitch, body, furniture, reach) < reach) return false;
+    if (!followsOpenProse(read, j, pitch, body, furniture, leftOut)) return true;
+    reach = j - 1;
   }
   return false;
 }
@@ -2852,12 +2911,8 @@ function figureTextOf(
     if (skipped[i] || !captionOf(read[i])) continue;
     captions.push(read[i]);
     taken.add(i);
-    let previous = read[i];
-    while (i + 1 < read.length && continuesCaption(previous, read[i + 1], pitch, body, furniture)) {
-      previous = read[i + 1];
-      taken.add(i + 1);
-      i++;
-    }
+    const end = captionEnd(read, i, pitch, body, furniture);
+    while (i < end) taken.add(++i);
   }
   const figure = new Set<number>();
   if (captions.length === 0) return figure;
@@ -3035,15 +3090,9 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
       // returns. The old reading took the first line and stopped, and a
       // caption arrived as "Medical image analysis pipeline showing
       // preprocessing," — a clause with its sentence cut off.
-      const rest: string[] = [];
-      let previous = line;
-      while (i + 1 < read.length) {
-        const nextLine = read[i + 1];
-        if (!continuesCaption(previous, nextLine, pitch, body, furniture)) break;
-        rest.push(nextLine.text.trim());
-        previous = nextLine;
-        i++;
-      }
+      const end = captionEnd(read, i, pitch, body, furniture);
+      const rest = read.slice(i + 1, end + 1).map((l) => l.text.trim());
+      i = end;
       const full = foldLines([caption.caption ?? "", ...rest], vocab).replace(/\s+/g, " ").trim().slice(0, CAPTION_MAX);
       if (full.length > 0) figureCaptions.push({ ...caption, caption: full });
       continue;
