@@ -381,16 +381,21 @@ describe("restoreLigatures — rule 2: the title, the headings, the bodies and t
 /**
  * A real, minimal PDF like `minimalPdf`'s, but the font is the way the symptom's papers have it: the ligatures are
  * glyphs named only by their code ("uniE103"), so pdf.js reads each as a private-use character. Each distinct
- * private-use character in the text becomes the font's own byte 1, 2, 3, …
+ * private-use character in the text becomes the font's own byte 1, 2, 3, … The two Unicode ligatures U+FB01 and
+ * U+FB02 are coded the same way under their standard glyph names ("fi", "fl"), as the font of a paper that maps
+ * some of its ligatures has them.
  */
 function ligaturePdf(pages: Run[][]): Buffer {
+  const isCoded = (ch: string) => (ch >= "\uE000" && ch <= "\uF8FF") || ch === "\uFB01" || ch === "\uFB02";
+  const glyphName = (ch: string) =>
+    ch === "\uFB01" ? "/fi" : ch === "\uFB02" ? "/fl" : `/uni${ch.charCodeAt(0).toString(16).toUpperCase()}`;
   const codes = new Map<string, number>();
   for (const runs of pages) {
     for (const [text] of runs) {
-      for (const ch of text) if (ch >= "\uE000" && ch <= "\uF8FF" && !codes.has(ch)) codes.set(ch, codes.size + 1);
+      for (const ch of text) if (isCoded(ch) && !codes.has(ch)) codes.set(ch, codes.size + 1);
     }
   }
-  const names = [...codes.keys()].map((ch) => `/uni${ch.charCodeAt(0).toString(16).toUpperCase()}`).join(" ");
+  const names = [...codes.keys()].map(glyphName).join(" ");
   const encoding = names
     ? `<< /Type /Encoding /BaseEncoding /WinAnsiEncoding /Differences [1 ${names}] >>`
     : "/WinAnsiEncoding";
@@ -509,6 +514,170 @@ describe("extractPdfTextFromBytes — a font that sets its ligatures as private-
     const text = result.doc?.sections.map((section) => section.text).join("\n") ?? "";
     expect(text).toContain("The first survey was different from the later ones in a way the notes explain.");
     expect(text).toContain("A tide has an effect on the sand, and the effect is easy to see at low water.");
+  });
+});
+
+// ── §1h.443: the codes are repaired on the page text, before the outline reads it ─────────────────────────────
+
+describe("extractPdfTextFromBytes — the ligatures are repaired before the outline and page 1's text are made (P12-67, §1h.443)", () => {
+  const DOI = "https://doi.org/10.1234/peer.ligature.0001";
+  const UFL = String.fromCharCode(0xfb02); // a real Unicode ligature, fl
+  const PLAIN_METHODS: Run[] = prose(
+    [
+      "The first survey counted the stones; the figure of ten sites was kept for later.",
+      "We took the flow to be steady, and the influence of the wind to be small.",
+      "The effect was different at the pools, where the tide came in more slowly.",
+    ],
+    100,
+  );
+  /**
+   * A paper that closes its argument with an acknowledgements part and then prints a conflict-of-interest part
+   * whose heading has the fl ligature in it. The first end-matter heading closes the argument and stays out; the
+   * ones after it are read by what they name, so the second one is a part only if its heading reads as what it is.
+   */
+  const pages = (methods: Run[], first = "Tidal"): Run[][] => [
+    [
+      [`${first} ${FL}ow at Invented Shorelines`, 72, 80, 18],
+      [DOI, 72, 110, 9],
+      ["Abstract", 72, 140, 14],
+      ...prose(
+        [
+          `We study how the ${FL}ow of water shapes an invented shoreline across ten visits.`,
+          `The ${FI}rst survey was di${FF}erent from the later ones in a way the notes explain.`,
+        ],
+        160,
+      ),
+      ["1 Introduction", 72, 210, 11],
+      ...prose(
+        [
+          `Every ${FI}gure in this paper shows the in${FL}uence of the tide on the beach.`,
+          `A tide has an e${FF}ect on the sand, and the e${FF}ect is easy to see at low water.`,
+        ],
+        230,
+      ),
+    ],
+    [
+      ["2 Methods", 72, 80, 11],
+      ...methods,
+      ["3 Results", 72, 200, 11],
+      ...prose(["The pools filled more slowly than the marsh did at every visit."], 220),
+      ["Acknowledgements", 72, 270, 14, true],
+      ...prose(["We thank the invented harbour office for the loan of its boats."], 290),
+      [`Con${FL}ict of Interest`, 72, 340, 14, true],
+      ...prose(["The authors declare that they have no competing interests in this work."], 360),
+    ],
+  ];
+  const puaIn = (text: string) => (text.match(/[\uE000-\uF8FF]/g) ?? []).length;
+  const statement = (doc: { sections: { heading: string; canonical: string; text: string }[] } | undefined) =>
+    doc?.sections.find((section) => /interest/i.test(section.heading));
+
+  it("buckets a back-matter heading on its repaired words, and page 1's text holds no private-use character", async () => {
+    const result = await extractPdfTextFromBytes(ligaturePdf(pages(PLAIN_METHODS)));
+
+    expect(result.ok).toBe(true);
+    expect(result.doc?.sections.map((section) => [section.heading, section.canonical])).toEqual([
+      ["Abstract", "abstract"],
+      ["1 Introduction", "introduction"],
+      ["2 Methods", "methods"],
+      ["3 Results", "results"],
+      // "Acknowledgements" is the first end-matter heading: it closes the argument and stays out, as it always did
+      ["Conflict of Interest", "acknowledgments"],
+    ]);
+    expect(statement(result.doc)?.text).toBe("The authors declare that they have no competing interests in this work.");
+    // the title and the DOI search read page 1 repaired
+    expect(puaIn(result.page1Text ?? "")).toBe(0);
+    expect(result.page1Text).toContain("Tidal flow at Invented Shorelines");
+    expect(result.page1Text).toContain("10.1234/peer.ligature.0001");
+    expect(result.page1Text).toContain("The first survey was different from the later ones");
+    expect(result.doc?.title).toBe("Tidal flow at Invented Shorelines");
+    expect(puaIn(JSON.stringify(result.doc))).toBe(0);
+  });
+
+  it("learns from a word the paper sets with a mapped ligature glyph, which pdf.js reads as its letters", async () => {
+    // The only plain evidence for the fl code is "flow" and "influence", set with the real fl glyph (U+FB02).
+    const bytes = ligaturePdf(
+      pages(
+        prose(
+          [
+            `We took the ${UFL}ow to be steady, and the in${UFL}uence of the wind to be small.`,
+            "The first survey counted the stones; the figure of ten sites was kept for later.",
+            "The effect was different at the pools, where the tide came in more slowly.",
+          ],
+          100,
+        ),
+      ),
+    );
+    const raw = (await readPages(bytes)).flatMap((page) => page.items.map((item) => item.str)).join("");
+    expect(raw).toContain("We took the flow to be steady");
+    expect(raw).not.toContain(UFL);
+
+    const result = await extractPdfTextFromBytes(bytes);
+
+    expect(result.ok).toBe(true);
+    expect(statement(result.doc)?.canonical).toBe("acknowledgments");
+    expect(puaIn(result.page1Text ?? "")).toBe(0);
+  });
+
+  it("still repairs a glyph that pdf.js hands over as an item of its own, once the outline has joined the line", async () => {
+    // The ligature glyphs are set in a face of their own, so each is an item by itself ("Every ", "<fi>", "gure in…"):
+    // alone in its item it is not inside a word and the page-level pass cannot read it. The outline joins the line,
+    // and the document-level pass learns from the joined words and restores them.
+    const line = (text: string, top: number): Run[] => {
+      const runs: Run[] = [];
+      let x = 72;
+      for (const piece of text.split(/([\uE000-\uF8FF])/).filter(Boolean)) {
+        runs.push([piece, x, top, 11, /[\uE000-\uF8FF]/.test(piece)]);
+        // the synthetic font's advances: 0.556 em a character, 0.278 em a space
+        x += ([...piece].reduce((sum, ch) => sum + (ch === " " ? 278 : 556), 0) * 11) / 1000;
+      }
+      return runs;
+    };
+    const bytes = ligaturePdf([
+      [
+        ["Tidal Flow at Invented Shorelines", 72, 80, 18],
+        ["Abstract", 72, 140, 14],
+        ...line(`We study how the ${FL}ow of water shapes an invented shoreline across ten visits.`, 160),
+        ...line(`The ${FI}rst survey was di${FF}erent from the later ones in a way the notes explain.`, 174),
+        ["1 Introduction", 72, 210, 11],
+        ...line(`Every ${FI}gure in this paper shows the in${FL}uence of the tide on the beach.`, 230),
+        ...line(`A tide has an e${FF}ect on the sand, and the e${FF}ect is easy to see at low water.`, 244),
+      ],
+      [["2 Methods", 72, 80, 11], ...PLAIN_METHODS],
+    ]);
+    const items = (await readPages(bytes)).flatMap((page) => page.items.map((item) => item.str));
+    expect(items).toContain(FI);
+    expect(items).toContain(FL);
+
+    const result = await extractPdfTextFromBytes(bytes);
+
+    expect(result.ok).toBe(true);
+    const text = result.doc?.sections.map((section) => section.text).join("\n") ?? "";
+    expect(text).toContain("We study how the flow of water shapes an invented shoreline across ten visits.");
+    expect(text).toContain("The first survey was different from the later ones in a way the notes explain.");
+    expect(text).toContain("Every figure in this paper shows the influence of the tide on the beach.");
+    expect(text).toContain("A tide has an effect on the sand, and the effect is easy to see at low water.");
+    expect(puaIn(JSON.stringify(result.doc))).toBe(0);
+  });
+
+  it("leaves a code that has one confirming word where it is: its heading is not a part, page 1 keeps the code", async () => {
+    // "flow" is the only word with the fl code that the paper also prints plainly (the title has it too).
+    const only: Run[] = prose(["The first survey counted the stones; the figure of ten sites was kept for later."], 100);
+    const bytes = ligaturePdf([
+      [
+        [`Tidal ${FL}ow at Invented Shorelines`, 72, 80, 18],
+        ["Abstract", 72, 140, 14],
+        ...prose([`We study how the flow of water shapes an invented shoreline across ten visits.`], 160),
+        ["1 Introduction", 72, 210, 11],
+        ...prose([`Every ${FL}ict was settled without a word, and the ${FL}ow carried on regardless.`], 230),
+      ],
+      ...pages(only).slice(1),
+    ]);
+    const result = await extractPdfTextFromBytes(bytes);
+
+    expect(result.ok).toBe(true);
+    expect(statement(result.doc)).toBeUndefined();
+    expect(puaIn(result.page1Text ?? "")).toBeGreaterThan(0);
+    expect(result.page1Text).toContain(`Tidal ${FL}ow at Invented Shorelines`);
   });
 });
 

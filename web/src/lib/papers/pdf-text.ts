@@ -25,7 +25,7 @@ import { readFile } from "node:fs/promises";
 import { cleanPaperText } from "@/lib/text/clean";
 import { buildOutline, gutterPrior, linesOfPageWith, type PdfOutline, type PdfPageText } from "./pdf-outline";
 import { dropStrayHeadings, withSectionIds } from "./html-text";
-import { restoreLigatures } from "./ligatures";
+import { applyLigatures, learnLigatures, restoreLigatures } from "./ligatures";
 import type { ExtractedDocument, ExtractedSection, ExtractedFigureCaption } from "./html-text";
 import { pictureNumber } from "./reading";
 import { FIGURE_EXTRACTION_REVISION } from "@/lib/figures/figure-revision";
@@ -190,6 +190,31 @@ export async function readPages(bytes: Buffer): Promise<PdfPageText[]> {
   return pages;
 }
 
+/**
+ * P12-67 (§1h.443): the pages' text with the ligatures a font stored as private-use glyphs read as letters again,
+ * before anything reads it. A font that sets fi / fl / ff / ffi / ffl as glyphs with no Unicode mapping leaves a
+ * private-use character in their place; the paper's own words say which letters each one is (`ligatures.ts`), so
+ * the codes are learned from the text items of every page and applied to the same items. The outline then buckets
+ * a heading on its repaired words ("Con\uE104ict of interest" is the conflict-of-interest part, with the role that
+ * has), and the title and the DOI search read page 1 repaired. (pdf.js already hands a real Unicode ligature,
+ * U+FB01 and the like, over as its letters, so a paper whose other font maps its ligatures needs nothing here.)
+ * Pages with no such code come back as the same array.
+ */
+function withPageLigatures(pages: PdfPageText[]): PdfPageText[] {
+  function* words() {
+    for (const page of pages) for (const item of page.items) yield item.str;
+  }
+  const learned = learnLigatures(words());
+  if (learned.size === 0) return pages;
+  return pages.map((page) => ({
+    ...page,
+    items: page.items.map((item) => {
+      const str = applyLigatures(item.str, learned);
+      return str === item.str ? item : { ...item, str };
+    }),
+  }));
+}
+
 function normalize(extractor: PdfOutline): ExtractedDocument {
   // Numbered subsections took their parent's bucket in the outline's `flush()` (one inheritor told every
   // heading, text or not, P7-18) — the sections arrive with it, and no second pass runs here (P10-33,
@@ -234,11 +259,11 @@ function normalize(extractor: PdfOutline): ExtractedDocument {
     pageCount,
     reason: extractor.reason ?? null,
   };
-  // P12-67 (§1h.439): the one place every section's heading and text, every caption and the title have passed
-  // through, and both callers (a link, an upload) arrive here. A font that sets fi / fl / ff / ffi / ffl as glyphs
-  // with no Unicode mapping leaves a private-use character in their place; the paper's own words say which
-  // letters each one is (`ligatures.ts`), and the document comes out with them. A paper without such a character
-  // comes back as the same object.
+  // P12-67 (§1h.439): the second pass, on the finished document, for what the first (`withPageLigatures`, on the
+  // page text before the outline) could not read: a glyph pdf.js hands over as an item of its own is not inside a
+  // word until the outline has joined the line. It is the one place every section's heading and text, every
+  // caption and the title have passed through, and both callers (a link, an upload) arrive here. A paper whose
+  // page-level pass restored every code comes back as the same object.
   return restoreLigatures(doc);
 }
 
@@ -329,7 +354,7 @@ export async function tryExtractPdfText(url: string): Promise<PdfTextResult> {
   }
 
   try {
-    const pages = await readPages(download.bytes);
+    const pages = withPageLigatures(await readPages(download.bytes));
     const outline = buildOutline(pages);
     if (!outline.sections || outline.sections.length === 0) {
       // A scan carries pictures of words, not words: say that, rather than
@@ -359,7 +384,7 @@ export async function tryExtractPdfText(url: string): Promise<PdfTextResult> {
  */
 export async function extractPdfTextFromBytes(bytes: Buffer): Promise<PdfTextResult> {
   try {
-    const pages = await readPages(bytes);
+    const pages = withPageLigatures(await readPages(bytes));
     // Page 1's lines as printed, joined with spaces, before any of them is set
     // aside as the cover. Read in the columns the outline reads them in (P7-10:
     // the paper's own gutter, for a first page too sparse to show one), so a
