@@ -211,3 +211,7 @@ A P12-87 on `48d14081`; readers A4-r1 and A4-r2: P1 100, P2 100, P3 100. Consecu
 ## Scores of record — Theme C round 4 (§1h.471)
 
 C0 (no key) on `web/` tree 54f4b003: P1–P6 each 100. Consecutive rounds at the target (C0): 3. C1: phase 3 running.
+
+## Scores — Theme C1 phase 3 (§1h.472)
+
+P3 3 / 3, P4 3 / 3 (fallbacks), P6 4 / 5 (one damaged run): C1 not yet 100 % on P6.

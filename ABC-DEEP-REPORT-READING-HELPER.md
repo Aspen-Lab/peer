@@ -2472,6 +2472,21 @@ C's deviations are accepted:
 
 (d) **Theme C round 4 (C0, no key)** on the landed `web/` tree `54f4b003` (C P12-82 … C P12-86, revision 11): **every part right on all six papers, no extras, 100 × 6.** The only change from round 3 is P3's heading in capitals (C P12-83). C0 has three consecutive rounds at the target. C1 phase 3 is running.
 
+### §1h.472 — 2026-10-28 — C1 PHASE 3: P3 3/3, P4 3/3, P6 4/5 (THE SAME SPLIT SHAPE); C P12-90
+
+**A P12-57 phase 3** (report landed `93ba0c7b`; 11 runs on `e5aaa7d2`; 30 calls, 114 of 150 spent; no quota answer; key hits 0).
+
+C1, scored by the manager against the ruled truth:
+- **P3: 3 / 3 exact.** All reviewed; no fallback this time.
+- **P4: 3 / 3 exact.** All fell back: cause `all-refused`, one correction read and refused as out-of-range, the same 95-character reply each run.
+- **P6: 4 / 5.** Run 4 is damage again, by the same shape as phase 2's: two splits in the first results part, one paragraph apart, now with the role method instead of setup (C P12-86 refuses setup). A short row's majority flips.
+
+**C1 is still not 100 % on P6.** The guard must take the shape, not the role → **C P12-90**:
+- no review split leaves a piece shorter than 2 paragraphs, except a closing interpretation paragraph at the end of the last evidence part;
+- a refused correction logs its numbers, so P4's out-of-range one can be read.
+
+Then phase 4: P6 × 5 and P4 × 2, within the 36 calls left.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2782,7 +2797,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-54 | DONE — C (Sonnet); landed (R13b) with the revision at 5 | R13b: one-page figure calls up to 27,000,000 bytes | invented-input test; own mutation; gates | checkpoint P12-54-C-<UTC>.md; manager verifies | briefs/P12-54.md; §1h.429 |
 | P12-55 | DONE — C (Sonnet); landed (R11a, R12a) | R11a ceilings with grid clustering; R12a strokes honour the clip | invented-input tests; 5 re-aimed budget tests named; own mutations; gates | checkpoint P12-55-C-<UTC>.md; manager verifies | briefs/P12-55.md; §1h.429 |
 | P12-56 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | R14a Extended Data; R6b the line before; R15a the bar | invented-input tests; own mutations; gates | checkpoint P12-56-C-<UTC>.md; manager verifies | briefs/P12-56.md; §1h.429 (d), §1h.431 |
-| P12-57 | IN_PROGRESS — A (Sonnet), phase 3 (P6 × 5, P4 × 3, P3 × 3), head e5aaa7d2, port 4244 (§1h.470) | C1 with the owner's test key: phase 1 harness on P1; phase 2 arms after C P12-53 and Tier 0 land | BYOK path, rows, Google calls, hygiene 0 | report P12-57-A-<UTC>.md | briefs/P12-57.md; §1h.430 |
+| P12-57 | PHASE 3 DONE — A (Sonnet), report on the branch (93ba0c7b); P6 4/5; phase 4 after C P12-90 (§1h.472) | C1 with the owner's test key: phase 1 harness on P1; phase 2 arms after C P12-53 and Tier 0 land | BYOK path, rows, Google calls, hygiene 0 | report P12-57-A-<UTC>.md | briefs/P12-57.md; §1h.430 |
 | P12-58 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | D1: upload keeps its document; reading says pending; the page keeps asking | route and hook tests; own mutations; gates | checkpoint P12-58-C-<UTC>.md; manager verifies | briefs/P12-58.md; §1h.432 |
 | P12-59 | DONE — B (Sonnet), report on the branch | the 55 s request; P5's memory by stage; P1 / P3 titles | file:line; three rules each | report P12-59-B-<UTC>.md | briefs/P12-59.md; §1h.432 |
 | P12-60 | DONE — B (Sonnet), report on the branch | open only the figure's page: memory by stage on P5; cache today; three candidates measured | file:line; measures | report P12-60-B-<UTC>.md | briefs/P12-60.md; §1h.433 |
@@ -2815,6 +2830,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-87 | DONE — A (Sonnet), report on the branch (6c5c8347); 36/36, no extras, 100 ×3; readers running (§1h.469) | Theme A A1–A12 + E3 re-check | rubric | walk, pack, P12-87-A-<UTC>.md | briefs/P12-87.md; §1h.467 |
 | P12-88 | DONE — A (Sonnet), report on the branch (1f906d66); 12/12 ×3, E2 + E5, 95.83 ×3; readers running (§1h.471) | Theme B B1–B12 + round 2's marks | rubric | walk, pack, P12-88-A-<UTC>.md | briefs/P12-88.md; §1h.467 |
 | P12-89 | QUEUED — C (Sonnet) | E5: the notes tab never stands over the margin's pane divider | tests; own mutation; gates | checkpoint P12-89-C-<UTC>.md | briefs/P12-89.md; §1h.471 |
+| P12-90 | IN_PROGRESS — C (Sonnet), scratch p12/c90 | Tier 1: no one-paragraph review piece (except a closing); refused corrections log their numbers | invented fixtures; own mutations; gates | checkpoint P12-90-C-<UTC>.md | briefs/P12-90.md; §1h.472 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
 | P11-26 | **DONE 21:0xZ 2026-10-20** — on the branch (§1h.128 (b)); was RUNNING (rules 4, 5 added §1h.127 (c)) since 09:1xZ 2026-10-20 — C, `briefs/P11-26.md`, `scratchpad/p11c26/wt`, port 4127: the explain card keeps its top at the selection (B3); a figure in front of the stack is never a thumbnail (X-3) | round 1 Theme B | §1h.122 (b) 1, 4 | C → the manager | — |
