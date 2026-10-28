@@ -1998,6 +1998,47 @@ C P12-67's upstream move landed in the batch-2 copy (`mgr/v3`: the page-level pa
 
 Running (max 2, §1h.443): C P12-70 item 8 ∥ C P12-69.
 
+### §1h.446 — 2026-10-28 — C P12-69 AND ITEM 8 VERIFIED; P3 8/8 (81.25 WITH EXTRAS); P4–P6 FIRST SIGHT 3/5, 7/9, 6/9; B P12-73
+
+(a) **C P12-69 verified** on V (`p504/wt`; its four commits cherry-picked).
+- Manager mutations: the takedown no longer removes the cuts → 3 red; the privacy sentence loses its clause → 1 red. sha256 equal after restore.
+- Its tests ×3 green; tsc 0.
+- Its six red tests at `08f3f22a` are the ones V already fixes (§1h.445).
+
+(b) **C P12-70 item 8 verified.**
+- V takes `f629788e` and the addendum. Its `b5742cf5` is dropped: it is the same re-aim as the manager's `b9f960a2`.
+- Theme C on V: **P1 5 / 5, P2 5 / 5, P3 8 / 8 parts.** P3's opening now starts with the whole first word.
+- Manager mutations on V:
+  - C P12-70 items 1–6: the token → 4 red; `leftOut` → 3; `endsParagraph` → 3.
+  - Item 8: the cap not joined → 1; `isDropCap` without the rest-size check → 1.
+  - **`capRowOf`'s two-letter limit → 0 red.** §1h.443(c) is unpinned, so it goes to **C P12-70 item 9**, together with C P12-70's own open point: a one-letter cap that is a word ("A study").
+- C P12-53: part 0 moves → 1; an all-refused answer kept → 6; the upload's paper check → 1; the upload-changed 410 → 1.
+- C P12-67: no word list → 8; no twice-the-runner-up → 4; a lone code replaced → 1; no "ft" → 8. One equivalent mutant: keeping the first code of a two-code word changes nothing, because the word still carries the other code, which no plain or listed word does.
+- Every file restored, sha256 equal. Evidence: `mgr/mutv/results.txt`.
+
+(c) **Theme C's extras costed on P1–P3** (rubric §1h.423: a row that is not a part costs 0.5):
+- P1: 0 extras (numbered parents, sub-rows and back-matter headings with the right roles) → **100**.
+- P2: 0 → **100**.
+- P3: 3 rows headed by figure text or a number-led body line → (8 − 1.5) / 8 = **81.25**.
+- Not a row, and not costed in Theme C: P3's opening holds a page-1 affiliation footnote as a paragraph.
+
+(d) **Theme C first sight on the held-out P4–P6** (V's rules; truth opened now; counts by §1h.437(a): N = 5, 9, 9):
+- **P4 3 / 5, P5 7 / 9, P6 6 / 9 parts** (all 0 before the rules).
+- With the extras costed, about **0, 33 and 22**. The exact extras come from the B's counts.
+- The mechanisms (shape only):
+  - M1: figure text and number-led body lines read as headings;
+  - M2: no Methods row, and its sub-sections' roles wrong or `body`;
+  - M3: no closing split on P4 / P5;
+  - M4: one P6 part's start lost;
+  - M5: a methods sub-section bucketed results;
+  - M6: P3's affiliation footnote;
+  - M7: P6's implications section's role.
+- These go to **B P12-73** (read-only; P4–P6 in place). The held-out status ends with this measure; the papers now serve as development inputs, by shape only.
+
+(e) **Fresh A walks** P12-71 (Theme A, port 4246) and P12-72 (Theme B, port 4247) are briefed by script on the landed head; they start as slots free (max 2, §1h.443).
+
+Running: C P12-70 item 9 ∥ B P12-73. V's full gates (C P12-69 + item 8) are running; V lands when they are green.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2320,8 +2361,11 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-66 | REPORTED — C (Sonnet); in the manager's combined copy 0c4e38c0 | M2 / M3: focus stays where the reader types | function-level tests; Playwright h / h2 / b / c rows; own mutations; gates | checkpoint P12-66-C-<UTC>.md | briefs/P12-66.md; §1h.437 |
 | P12-67 | REPORTED — C (Sonnet); upstream move + follow-up (ft, word list) in V; test re-aimed to P12-62 by the manager b9f960a2 (§1h.445) | private-use ligature glyphs read as letters (learned from the paper's own words) | invented-input tests; own mutations; gates | checkpoint P12-67-C-<UTC>.md | briefs/P12-67.md; §1h.439 |
 | P12-68 | REPORTED — C (Sonnet); verified in mgr/v3 batch 2 | the caption cap 500 → 1,500 in the engine and the view | invented-input test; own mutation; gates | checkpoint P12-68-C-<UTC>.md | briefs/P12-68.md; §1h.440 (c) |
-| P12-69 | IN_PROGRESS — C (Sonnet), scratch p12/c69 (§1h.443 slot 2) | the takedown removes kept figures; the privacy page names them | tests; own mutation; gates | checkpoint P12-69-C-<UTC>.md | briefs/P12-69.md; §1h.441 |
-| P12-70 | IN_PROGRESS — C (Sonnet), scratch p12/c70; items 1–7 in V; item 8 the real drop-cap shape (§1h.445) | integration: the five tests where eight Cs' rules meet | code fixes; named re-aims only where a ruled rule changed the truth; gates | checkpoint P12-70-C-<UTC>.md | briefs/P12-70.md; §1h.442 |
+| P12-69 | REPORTED — C (Sonnet); verified on V (route → 3 red, page → 1 red) (§1h.446) | the takedown removes kept figures; the privacy page names them | tests; own mutation; gates | checkpoint P12-69-C-<UTC>.md | briefs/P12-69.md; §1h.441 |
+| P12-70 | IN_PROGRESS — C (Sonnet); items 1–8 verified on V; item 9 the two-letter pin and a one-letter cap word (§1h.446) | integration: the five tests where eight Cs' rules meet | code fixes; named re-aims only where a ruled rule changed the truth; gates | checkpoint P12-70-C-<UTC>.md | briefs/P12-70.md; §1h.442 |
+| P12-71 | QUEUED — A (Sonnet), fresh walk of Theme A on the landed head (replaces the stale P12-37 walk) | Theme A A1–A12 | rubric units and pass requirements | walk, pack, P12-71-A-<UTC>.md | briefs/P12-71.md; §1h.446 |
+| P12-72 | QUEUED — A (Sonnet), fresh walk of Theme B on the landed head (replaces the stale P12-38 walk) | Theme B B1–B12 | rubric units and pass requirements | walk, pack, P12-72-A-<UTC>.md | briefs/P12-72.md; §1h.446 |
+| P12-73 | IN_PROGRESS — B (Sonnet), scratch p12/b73, head 97b84eb9 | Theme C on P4–P6: M1–M7 by shape | file:line, three candidates each, a C split | report P12-73-B-<UTC>.md | briefs/P12-73.md; §1h.446 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
 | P11-26 | **DONE 21:0xZ 2026-10-20** — on the branch (§1h.128 (b)); was RUNNING (rules 4, 5 added §1h.127 (c)) since 09:1xZ 2026-10-20 — C, `briefs/P11-26.md`, `scratchpad/p11c26/wt`, port 4127: the explain card keeps its top at the selection (B3); a figure in front of the stack is never a thumbnail (X-3) | round 1 Theme B | §1h.122 (b) 1, 4 | C → the manager | — |
