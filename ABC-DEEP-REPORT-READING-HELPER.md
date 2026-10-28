@@ -2566,6 +2566,36 @@ The refused corrections' numbers (C P12-90's log) explain both:
 
 Then **phase 5:** P6 × 5 and P4 × 1, exactly the 17 calls left.
 
+### §1h.478 — 2026-10-28 — C P12-89: THE W3 MEASURE 57.96 (FIT 58.4) ACCEPTED; 20 PX PADDING BUILT; THE TAB'S 18 PX HIT AREA
+
+**C P12-89 stopped at the line (addendum 2, worktree `3b6ce5ab`, not landed).**
+
+With the 20 px right padding, the W3 body (853 × 480, default step) reads:
+- **57.96 characters a line** on its 12 invented paragraphs. It was 59.86 with 12 px: 0.04 under the manager's 58 line.
+- **58.4 on a 1 px sweep's fit**: about 1.1 characters for the 8 px. The median stays at 59.
+
+**Ruling:**
+1. **The 58 line was the manager's own guard, not the owner's or the rubric's**, and the C was right to stop on it as written.
+   - The cost it guarded is 1.1 to 1.9 characters at one width.
+   - It stays inside the readable measure (about 45 to 75 characters).
+   - It buys a margin divider whose whole strip answers with a card open (E5).
+   - **Option 1 is taken: 20 px.**
+   - Option 2 (17 px) is refused: it leaves the tab touching the text.
+   - Option 3 (`readingCentreMinimum` + 32) is refused: it turns W3's side margin into the bottom band. That is a layout change the owner did not ask for, and it touches O1.
+2. **The tab's hit area is 18 px across** (15 px face + 3 px toward the text), not P11-34's 24.
+   - This is the compromise already taken for the phone tab (20 px, C P12-77).
+   - It is not priced here; the round-4 A measures it against the rubric like any other control.
+3. **The two comments one inset off** may be corrected by C P12-89, comment lines only:
+   - `pane-layout.ts` (`readingCentreMinimum`'s comment);
+   - `responsive-margin.test.ts`.
+4. **Build now:**
+   - Apply the patch.
+   - Drop `e65cb81f`'s header-dodge code and its tests; name each re-aimed test with why.
+   - Run the gates and one own mutation per rule.
+   - Write the checkpoint.
+
+   Rule 2 (`98f600fc`) stands.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
