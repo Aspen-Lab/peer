@@ -50,7 +50,7 @@ import {
 import { readingToMarkdown } from "@/lib/papers/reading-markdown";
 import type { Claim, PaperReport } from "@/lib/papers/report";
 import type { Route } from "next";
-import { aiAvailability, explainWindowAvailable } from "@/lib/feed/ai-tier";
+import { aiAvailability, explainWindowAvailable, keyNeedsSignIn } from "@/lib/feed/ai-tier";
 import { useSyncGate } from "@/components/profile-sync";
 import { PaperPlate, isSameFigure, leadCaption, leadFigurePending } from "@/components/cards/paper-plate";
 import { SwipeableCard } from "@/components/cards/swipe-card";
@@ -806,6 +806,8 @@ function Reader({
   const authOutcome = useSyncGate((s) => s.authOutcome);
   const aiMode = aiAvailability(profile, authOutcome);
   const providerConfigured = aiMode !== "none";
+  // A key saved while signed out is not used: the sentence and its link ask for a sign-in, not a key.
+  const signInForKey = keyNeedsSignIn(profile, authOutcome);
   // P8-06: the always-on explain window is the one surface that does not wait for the sign-in check when the reader's key is
   // their own local one — it is in the first paint, with its 376 px (`explainWindowAvailable`, `lib/feed/ai-tier.ts`).
   const explainCanAsk = explainWindowAvailable(profile, authOutcome);
@@ -1061,9 +1063,10 @@ function Reader({
             providerConfigured,
             profileHasProject,
             modelFailed: model.failed,
+            keyNeedsSignIn: signInForKey,
           })
         : [],
-    [reading, availability, providerConfigured, profileHasProject, model.failed],
+    [reading, availability, providerConfigured, profileHasProject, model.failed, signInForKey],
   );
 
   // The plate's own terms — allocated across the briefing when the paper is
@@ -1339,7 +1342,9 @@ function Reader({
   const recommendation =
     nav.index !== NONE && profile.researchTopics.length > 0 ? reason : null;
   // No provider means the sentence names a key; the link is the way to one.
-  // A record-only page names no key, so it gets no link.
+  // A record-only page names no key, so it gets no link. With a key saved and
+  // the reader signed out (`signInForKey`) the sentence asks for a sign-in and
+  // the same link reads "Sign in".
   const sectionsRead =
     reading.provenance.fullText === "html" || reading.provenance.fullText === "pdf";
   const showAddKey =
@@ -1504,6 +1509,7 @@ function Reader({
             uploadAction={uploadAction}
             doi={paper.doi}
             showAddKey={showAddKey}
+            keyNeedsSignIn={signInForKey}
             uploadStatus={upload ? <PrivatePdfStatus upload={upload}
               attachedToTitle={!paper.id.startsWith("upload:") ? paper.title : undefined}
               onDeleted={() => {

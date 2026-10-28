@@ -87,3 +87,15 @@ export function explainWindowAvailable(profile: UserProfile, auth: AuthOutcome):
 export function feedsUseAi(profile: UserProfile, auth: AuthOutcome): boolean {
   return aiAvailability(profile, auth) !== "none";
 }
+
+/**
+ * The one state where a reader who is told "no model" already has a key: it is
+ * saved, and the reader is confirmed signed out, so `aiAvailability` is
+ * `"none"` and a sign-in, not a key, is what is missing. The paper page then
+ * says the blocks "need you to sign in" and offers "Sign in" in place of "Add a
+ * key". Still checking (`"unknown"`) is not this state: the page keeps today's
+ * words until the check answers.
+ */
+export function keyNeedsSignIn(profile: UserProfile, auth: AuthOutcome): boolean {
+  return hasUserLlmOverride(profile) && auth === "signed-out";
+}

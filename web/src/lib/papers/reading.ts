@@ -914,18 +914,27 @@ function presentSentence(reading: PaperReading): string {
 }
 
 /**
+ * What the model-only blocks wait on: a key, or — for a reader who saved a key
+ * but is signed out, whose key Peer does not use (`aiAvailability`) — a sign-in.
+ */
+function keyNeed(keyNeedsSignIn: boolean): string {
+  return keyNeedsSignIn ? "you to sign in" : "a key";
+}
+
+/**
  * "What it means for your project and a next step need a key." At the
  * abstract tier a next step needs the full text as well, so only the block a
- * key alone unlocks is named there.
+ * key alone unlocks is named there. With a key saved and the reader signed
+ * out: "… need you to sign in."
  */
-function keyClause(reading: PaperReading, sectionsRead: boolean): string {
+function keyClause(reading: PaperReading, sectionsRead: boolean, keyNeedsSignIn: boolean): string {
   const blocks = reading.omitted
     .filter((entry) => entry.reason === "needs_key")
     .map((entry) => entry.block)
     .filter((block) => sectionsRead || block === "forYou");
   if (blocks.length === 0) return "";
   const verb = blocks.length > 1 ? "need" : "needs";
-  return `${capitalize(joinList(blocks.map((block) => BLOCK_PHRASE[block])))} ${verb} a key.`;
+  return `${capitalize(joinList(blocks.map((block) => BLOCK_PHRASE[block])))} ${verb} ${keyNeed(keyNeedsSignIn)}.`;
 }
 
 function sourcePhrase(provenance: ReadingProvenance): string {
@@ -936,7 +945,7 @@ function sourcePhrase(provenance: ReadingProvenance): string {
 }
 
 /** The sentence about what Peer read, with no model in the picture. */
-function readingSentence(reading: PaperReading, providerConfigured: boolean): string {
+function readingSentence(reading: PaperReading, providerConfigured: boolean, keyNeedsSignIn: boolean): string {
   const { provenance } = reading;
   const sectionsRead = provenance.fullText === "html" || provenance.fullText === "pdf";
 
@@ -946,7 +955,7 @@ function readingSentence(reading: PaperReading, providerConfigured: boolean): st
 
   // A configured key means the model, not the reader, is what the missing
   // blocks wait on; the model's own sentence takes over once it answers.
-  const key = providerConfigured ? "" : keyClause(reading, sectionsRead);
+  const key = providerConfigured ? "" : keyClause(reading, sectionsRead, keyNeedsSignIn);
   const withKey = (sentence: string) => (key ? `${sentence} ${key}` : sentence);
 
   if (sectionsRead) {
@@ -985,7 +994,7 @@ function readingSentence(reading: PaperReading, providerConfigured: boolean): st
   const needKey = reading.omitted
     .filter((entry) => entry.reason === "needs_key" && entry.block === "forYou")
     .map((entry) => BLOCK_PHRASE[entry.block]);
-  return `Abstract only. ${capitalize(joinList([...needFullText, ...needKey]))} need the full text and a key.`;
+  return `Abstract only. ${capitalize(joinList([...needFullText, ...needKey]))} need the full text and ${keyNeed(keyNeedsSignIn)}.`;
 }
 
 /** Map a report's `sourceKind` to the same names the reading uses. */
@@ -1063,6 +1072,9 @@ function modelSentence(reading: PaperReading, report: AvailabilityReport): strin
  * read (or what the model read), then, when a model answered, whether a
  * project is set. The page joins them; it never adds a sentence of its own.
  * `report` is null when there is no model layer — including a `noLlm` report.
+ * `keyNeedsSignIn`: the reader has a key saved but is signed out, so Peer does
+ * not use it (`aiAvailability`) and the model-only blocks wait on a sign-in,
+ * not on a key. Absent or false, every sentence is as it was.
  */
 export function describeAvailability(input: {
   reading: PaperReading;
@@ -1070,14 +1082,15 @@ export function describeAvailability(input: {
   providerConfigured: boolean;
   profileHasProject: boolean;
   modelFailed: boolean;
+  keyNeedsSignIn?: boolean;
 }): string[] {
-  const { reading, report, providerConfigured, profileHasProject, modelFailed } = input;
+  const { reading, report, providerConfigured, profileHasProject, modelFailed, keyNeedsSignIn = false } = input;
   if (report) {
     const out = [modelSentence(reading, report)];
     if (!profileHasProject) out.push(PROFILE_EMPTY);
     return out;
   }
-  const out = [readingSentence(reading, providerConfigured)];
+  const out = [readingSentence(reading, providerConfigured, keyNeedsSignIn)];
   if (modelFailed) out.push(MODEL_FAILED);
   return out;
 }

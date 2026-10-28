@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { ADD_KEY_HREF } from "./add-key-destination";
+import { ADD_KEY_HREF, SIGN_IN_HREF } from "./add-key-destination";
 
 /**
  * **The constant is worth nothing if a call site can quietly retype the
@@ -80,6 +80,16 @@ describe("one add-a-key destination, one place", () => {
       .sort();
 
     expect(survivors).toEqual([]);
+  });
+
+  // `dead-links.test.ts` cannot resolve a destination held in a constant, so the
+  // sign-in link's is resolved here: the Profile page, whose first block is the
+  // Account section with the sign-in buttons.
+  it("the sign-in destination for a reader with a key who is signed out is the Profile page, a real route", () => {
+    expect(SIGN_IN_HREF).toBe("/profile");
+    expect(fs.existsSync(path.join(process.cwd(), "src/app/profile/page.tsx"))).toBe(true);
+    const profile = fs.readFileSync(path.join(process.cwd(), "src/app/profile/page.tsx"), "utf8");
+    expect(profile).toContain("<AccountSection");
   });
 
   // A "no reference left to `/settings`" case was written for the earlier

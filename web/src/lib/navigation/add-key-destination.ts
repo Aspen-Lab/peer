@@ -23,3 +23,13 @@
  * honest; a dead one is not. Never point this at a placeholder.
  */
 export const ADD_KEY_HREF = "/welcome?step=ai";
+
+/**
+ * Where a reader who has a key but is signed out is sent to sign in. Peer uses
+ * the key only for a signed-in reader (`aiAvailability`), so for them the call
+ * to action is "Sign in", not "Add a key": a key is already there. The Profile
+ * page's first block is the Account section, with the GitHub and Google sign-in
+ * buttons; `dead-links.test.ts` cannot see a destination held in a constant, so
+ * `add-key-destination.test.ts` pins this one as it pins `ADD_KEY_HREF`.
+ */
+export const SIGN_IN_HREF = "/profile";
