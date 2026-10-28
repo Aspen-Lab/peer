@@ -41,21 +41,30 @@ const ALLOWED_RETURN_PATHS: ReadonlySet<string> = new Set(["/welcome", "/profile
 const CONTROL_CHARACTER = /[\u0000-\u001f\u007f-\u009f]/;
 
 const PAPER_PREFIX = "/papers/";
-/** One URI-encoded paper id: no "/", "?", "#", backslash or space can appear. */
+/** One URI-encoded paper id: no literal "/", "?", "#", backslash or space can
+ *  appear (an encoded one, such as `%2F`, can — see `isPaperReturnPath`). */
 const PAPER_SEGMENT = /^[A-Za-z0-9%._~:-]+$/;
 /** Every "%" must start a two-digit escape. */
 const BROKEN_ESCAPE = /%(?![0-9A-Fa-f]{2})/;
 
 /**
- * `/papers/<one segment>` and nothing more: no further "/", no query, no
- * fragment. The segment is the paper id as the paper's own link encodes it
- * (`/papers/openalex%3AW123`). Refused besides: a broken "%" escape, a
- * segment that decodes to "." or ".." (a dot segment, plain or as `%2e`, which
- * a browser resolves away), and one that decodes to a "/" or a backslash.
- * Those last could not leave Peer's host (the value still starts with
- * `/papers/`), but a paper link never needs them to land somewhere sensible,
- * and refusing is the safer side: a paper whose id holds a "/" (`%2F`) comes
- * back to `/`, as every sign-in did before.
+ * `/papers/<one segment>` and nothing more: no literal "/" after the prefix,
+ * no query, no fragment. The segment is the paper id as the paper's own link
+ * encodes it (`/papers/openalex%3AW123`).
+ *
+ * An ENCODED "/" (`%2F`) inside the segment is allowed (R15): dblp ids
+ * (`dblp:journals/corr/abs-2101-00001`) and old arXiv ids
+ * (`arxiv:hep-th/9901001`) hold one, and their papers must come back after
+ * sign-in too. It is safe: a browser splits a path only on a literal "/", so
+ * `%2F` stays inside the one segment, the value still starts with `/papers/`,
+ * and the callback joins it to its own origin.
+ *
+ * Refused: a broken "%" escape; a backslash or a control character, raw (see
+ * `safeReturnPath`) or decoded; a segment that decodes to "." or ".." (a dot
+ * segment, plain or as `%2e`, which a browser resolves away); and one that
+ * decodes to start with "/" (`%2F%2Fevil.com`). That last could still only
+ * land on Peer's own host, but no paper id starts with "/", so refusing it
+ * costs nothing and is the safer side.
  */
 function isPaperReturnPath(value: string): boolean {
   if (!value.startsWith(PAPER_PREFIX)) return false;
@@ -68,7 +77,8 @@ function isPaperReturnPath(value: string): boolean {
     return false;
   }
   if (decoded === "." || decoded === "..") return false;
-  if (/[/\\]/.test(decoded) || CONTROL_CHARACTER.test(decoded)) return false;
+  if (decoded.startsWith("/")) return false;
+  if (decoded.includes("\\") || CONTROL_CHARACTER.test(decoded)) return false;
   return true;
 }
 

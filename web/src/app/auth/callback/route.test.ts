@@ -121,11 +121,24 @@ describe("GET /auth/callback — where a successful sign-in lands", () => {
     expect(clearingLine(response)).toMatch(/Max-Age=0/i);
   });
 
-  it("refuses a paper cookie that hides a slash or a dot-dot", async () => {
+  it("refuses a paper cookie whose id starts with an encoded slash, is a dot-dot, or has a second segment", async () => {
     for (const value of ["/papers/%2F%2Fevil.com", "/papers/%2e%2e", "/papers/a/b"]) {
       const response = await GET(callback("?code=abc", withCookie(encodeURIComponent(value))));
       expect(response.headers.get("location"), value).toBe("https://peer.test/");
     }
+  });
+
+  // R15 — a dblp id or an old arXiv id holds a "/", encoded as %2F inside the
+  // one segment; the callback lands on that paper, on Peer's own host.
+  it.each([
+    "/papers/dblp%3Ajournals%2Fcorr%2Fabs-2101-00001",
+    "/papers/arxiv%3Ahep-th%2F9901001",
+  ])("follows a paper cookie whose id holds an encoded slash: %s", async (value) => {
+    const response = await GET(
+      callback("?code=abc", withCookie(encodeURIComponent(value), { "x-forwarded-host": "peer.homes" })),
+    );
+    expect(response.headers.get("location")).toBe(`https://peer.homes${value}`);
+    expect(new URL(response.headers.get("location") ?? "").host).toBe("peer.homes");
   });
 });
 

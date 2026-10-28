@@ -891,6 +891,16 @@ describe("signInReturnTo — the Profile page's ?return= (R14)", () => {
     expect(signInReturnTo(fromLink("arxiv:2401.01234"))).toBe("/papers/arxiv%3A2401.01234");
   });
 
+  // R15 — CHANGED: this used to assert that a paper whose id holds a "/" is
+  // refused. Such ids are real (dblp, old arXiv), so their papers come back too.
+  it("ids that hold a '/' come back too: dblp, an old arXiv id, a DOI", () => {
+    expect(signInReturnTo(fromLink("dblp:journals/corr/abs-2101-00001"))).toBe(
+      "/papers/dblp%3Ajournals%2Fcorr%2Fabs-2101-00001",
+    );
+    expect(signInReturnTo(fromLink("arxiv:hep-th/9901001"))).toBe("/papers/arxiv%3Ahep-th%2F9901001");
+    expect(signInReturnTo(fromLink("doi:10.1038/nature123"))).toBe("/papers/doi%3A10.1038%2Fnature123");
+  });
+
   it("the other safe places pass too", () => {
     expect(signInReturnTo("/welcome?step=ai")).toBe("/welcome?step=ai");
     expect(signInReturnTo("/profile")).toBe("/profile");
@@ -900,8 +910,6 @@ describe("signInReturnTo — the Profile page's ?return= (R14)", () => {
     for (const value of [null, undefined, "", "//evil.com", "@evil.com", "https://evil.com", "/papers/a/b", "/papers/%2F%2Fevil.com", "/"]) {
       expect(signInReturnTo(value)).toBeUndefined();
     }
-    // A paper whose id holds a "/" is refused (an encoded slash), so it lands on / as before.
-    expect(signInReturnTo(fromLink("doi:10.1038/nature123"))).toBeUndefined();
   });
 });
 

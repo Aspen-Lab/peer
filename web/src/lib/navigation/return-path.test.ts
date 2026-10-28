@@ -101,6 +101,36 @@ describe("safeReturnPath — one paper page (R14)", () => {
     expect(safeReturnPath(value)).toBe("/papers/openalex%3AW123");
   });
 
+  // R15 — lane 2's exact link: the paper's "Sign in" goes to
+  // `/profile?return=` + encodeURIComponent('/papers/' + encodeURIComponent(paper.id)).
+  // dblp ids and old arXiv ids hold a "/", which arrives as %2F inside the one
+  // segment; those papers must come back too.
+  it.each([
+    ["openalex:W1", "/papers/openalex%3AW1"],
+    ["dblp:journals/corr/abs-2101-00001", "/papers/dblp%3Ajournals%2Fcorr%2Fabs-2101-00001"],
+    ["arxiv:hep-th/9901001", "/papers/arxiv%3Ahep-th%2F9901001"],
+  ])("lane 2's link for %s comes back through URLSearchParams and is accepted", (id, expected) => {
+    const link = `/profile?return=${encodeURIComponent("/papers/" + encodeURIComponent(id))}`;
+    const value = new URLSearchParams(link.slice(link.indexOf("?"))).get("return");
+    expect(value).toBe(expected);
+    expect(safeReturnPath(value)).toBe(expected);
+  });
+
+  it("an encoded slash stays inside the one segment: the URL keeps Peer's host and a single /papers/ segment", () => {
+    for (const value of [
+      "/papers/dblp%3Ajournals%2Fcorr%2Fabs-2101-00001",
+      "/papers/arxiv%3Ahep-th%2F9901001",
+      "/papers/..%2F..%2Fwelcome",
+      "/papers/a%2F%2Fevil.com",
+    ]) {
+      expect(safeReturnPath(value), value).toBe(value);
+      const url = new URL(`https://peer.homes${value}`);
+      expect(url.host).toBe("peer.homes");
+      expect(url.pathname).toBe(value);
+      expect(url.pathname.split("/")).toHaveLength(3); // "", "papers", the id
+    }
+  });
+
   it.each([
     ["the bare prefix", "/papers/"],
     ["no prefix slash", "/papers"],
@@ -115,11 +145,13 @@ describe("safeReturnPath — one paper page (R14)", () => {
     ["an encoded dot-dot", "/papers/%2e%2e"],
     ["an upper-case encoded dot-dot", "/papers/%2E%2E"],
     ["a half-encoded dot-dot", "/papers/.%2e"],
-    ["an encoded slash pair", "/papers/%2F%2Fevil.com"],
-    ["an encoded slash", "/papers/a%2Fb"],
-    ["a lower-case encoded slash", "/papers/a%2fb"],
-    ["an encoded traversal", "/papers/..%2F..%2Fwelcome"],
+    // R15: an encoded "/" inside the id is allowed now (see the dblp and
+    // arXiv tests below); one that STARTS the decoded id is still refused.
+    ["an encoded slash pair at the start", "/papers/%2F%2Fevil.com"],
+    ["a lower-case encoded slash pair at the start", "/papers/%2f%2fevil.com"],
+    ["one encoded slash at the start", "/papers/%2Fx"],
     ["an encoded backslash", "/papers/%5Cevil.com"],
+    ["an encoded backslash mid-way", "/papers/a%5cb"],
     ["an encoded control character", "/papers/a%0d%0aX"],
     ["an encoded NUL", "/papers/a%00"],
     ["a broken escape", "/papers/a%2"],
