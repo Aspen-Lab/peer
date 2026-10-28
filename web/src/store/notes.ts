@@ -331,6 +331,31 @@ function mergeStickyContent(base: readonly Block[], mine: readonly Block[], thei
   return out;
 }
 
+/**
+ * P12-65 (M1a): the blocks an editor holds for the whole note (`mine`), grown from `base` — the blocks it started from or last
+ * wrote — over a store that has moved on since (`theirs`: a sticky wrote its words, a highlight was made). By block id, as the
+ * sticky's own write does (`mergeStickyContent`): a block only the store changed keeps the store's version, a block only the
+ * editor changed keeps the editor's, a block both changed has the words of both. A save never puts a stale copy over a newer one.
+ * When the store is still what the editor started from nobody wrote meanwhile: the editor's blocks, exactly as they are. Else the
+ * editor's own order stands for the blocks it holds (a block it moved stays where it put it) and a block only the store holds
+ * (another writer's) sits after its neighbour. A block the editor deleted and the store left alone is gone; one the store changed
+ * stays. Pure.
+ */
+export function mergeWholeNote(base: readonly Block[], mine: readonly Block[], theirs: readonly Block[]): Block[] {
+  if (JSON.stringify(base) === JSON.stringify(theirs)) return mine.slice();
+  const merged = mergeStickyContent(base, mine, theirs);
+  const held = new Set(mine.map((b) => b.id));
+  const byId = new Map(merged.map((b) => [b.id, b]));
+  const out = mine.filter((b) => byId.has(b.id)).map((b) => byId.get(b.id)!);
+  merged.forEach((b, i) => {
+    if (held.has(b.id)) return;
+    const prev = i > 0 ? merged[i - 1].id : null;
+    const at = prev === null ? -1 : out.findIndex((x) => x.id === prev);
+    out.splice(at + 1, 0, b);
+  });
+  return out;
+}
+
 interface NotesState {
   /** Explicit editor undo; keeps the same group identity and ranges. */
   restoreHighlightGroup: (noteId: string, block: Block) => void;
@@ -338,8 +363,12 @@ interface NotesState {
   addHighlightGroup: (noteId: string, at: { paperId: string; segments: readonly (PassageSegment & { paragraphText: string })[]; colour?: HighlightColourId }) => { id: string; created: boolean } | null;
   notes: Record<string, Note>;
   add: (note: Note) => void;
-  /** Write the editor's state back. Stamps `updatedAt`. */
-  save: (id: string, patch: Partial<Pick<Note, "title" | "blocks" | "sources">>, at?: string) => void;
+  /** Write the editor's state back. Stamps `updatedAt`.
+   *  P12-65 (M1a): `base` is the blocks the saver started from or last wrote; given with `blocks`, the blocks are merged by id
+   *  into what the store holds now (`mergeWholeNote`) rather than replacing it, so a copy that went stale while another writer
+   *  wrote is never put over the newer one. Without `base` the blocks replace the store's, as before: the callers that have none
+   *  are the rail's title save (no blocks) and the fixtures of the tests. The editor's saves and the notes window's seed carry one. */
+  save: (id: string, patch: Partial<Pick<Note, "title" | "blocks" | "sources">>, at?: string, base?: readonly Block[]) => void;
   remove: (id: string) => void;
   /** P10-09a: the paper's own note — made from its template the first time, without navigating — and its id.
    *  Both "Take notes" paths (a sticky, the notes window) call it. */
@@ -526,10 +555,11 @@ export const useNotesStore = create<NotesState>()(
         return { id: made.id, created: true };
       },
       add: (note) => set((s) => ({ notes: { ...s.notes, [note.id]: note } })),
-      save: (id, patch, at = new Date().toISOString()) =>
+      save: (id, patch, at = new Date().toISOString(), base) =>
         set((s) => {
           const note = s.notes[id];
           if (!note) return s;
+          if (patch.blocks && base) patch = { ...patch, blocks: mergeWholeNote(base, patch.blocks, note.blocks) };
           if (patch.blocks) {
             // Group metadata changes only through its explicit actions. An editor
             // snapshot may predate a new group or its latest colour/repair.
