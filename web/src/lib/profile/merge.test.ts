@@ -7,6 +7,7 @@ import {
   stripCredentialFields,
   stripLegacyOpportunityFields,
   LEGACY_OPPORTUNITY_FIELDS,
+  LEGACY_TAVILY_FIELDS,
   dirtySingleValueFields,
   singleValueSnapshot,
   listUnionChanged,
@@ -102,9 +103,16 @@ describe("mergeProfileAtSignIn", () => {
   });
 
   it("never reads a credential field off remote even if somehow present — structurally excluded from every list", () => {
-    const local = profile({ tavilyApiKey: "local-secret" });
-    const remote = { tavilyApiKey: "should-never-appear" } as Partial<UserProfile>;
+    const local = profile({ feedAiApiKey: "local-secret", jevApiKey: "local-jev" });
+    // `tavilyApiKey` is a legacy name (Tavily is removed), hence the cast.
+    const remote = {
+      feedAiApiKey: "should-never-appear",
+      jevApiKey: "should-never-appear",
+      tavilyApiKey: "should-never-appear",
+    } as Partial<UserProfile>;
     const { patch } = mergeProfileAtSignIn(local, remote);
+    expect(patch).not.toHaveProperty("feedAiApiKey");
+    expect(patch).not.toHaveProperty("jevApiKey");
     expect(patch).not.toHaveProperty("tavilyApiKey");
   });
 
@@ -609,8 +617,8 @@ describe("preferenceLedgerChanged (§1bk.8 AMENDMENT)", () => {
 // since restoring a named file is itself the deliberate user action).
 describe("stripCredentialFields", () => {
   it("removes all seven credential-like fields, even when every one is present with a real value", () => {
-    // The Adzuna and USAJobs names are no longer fields of UserProfile; the strip
-    // is by name, so a blob or a backup written before is still cleaned.
+    // The Tavily, Adzuna and USAJobs names are no longer fields of UserProfile;
+    // the strip is by name, so a blob or a backup written before is still cleaned.
     const stripped = stripCredentialFields({
       displayName: "Aspen",
       tavilyApiKey: "tvly-secret",
@@ -626,16 +634,18 @@ describe("stripCredentialFields", () => {
 });
 
 // P9-32 (rulings 60, R3): the events and jobs feeds are stopped, so the profile
-// holds nothing for them. A blob or a backup written before can still carry the
+// holds nothing for them; Tavily web search is removed, so it holds no Tavily
+// switch or key either. A blob or a backup written before can still carry the
 // old fields; this is the one place that names them.
 describe("stripLegacyOpportunityFields", () => {
-  it("removes the event and job topic lists, the Adzuna and USAJobs credentials and the events/jobs halves of the active snapshot, and nothing else", () => {
+  it("removes the event and job topic lists, the Adzuna and USAJobs credentials, the Tavily switch and key and the events/jobs halves of the active snapshot, and nothing else", () => {
     const legacy = {
       displayName: "Aspen",
       researchTopics: ["battery materials"],
       careerStage: "Postdoc",
       locationPreferences: ["Chicago"],
       tavilyEnabled: true,
+      tavilyApiKey: "tvly-secret",
       eventRequiredTopics: ["battery conferences"],
       eventExploreTopics: ["workshops"],
       jobRequiredTopics: ["battery scientist"],
@@ -658,7 +668,6 @@ describe("stripLegacyOpportunityFields", () => {
       researchTopics: ["battery materials"],
       careerStage: "Postdoc",
       locationPreferences: ["Chicago"],
-      tavilyEnabled: true,
       activeSearchInputs: {
         papers: { required: ["battery materials"], explore: [] },
         careerStage: "Postdoc",
@@ -681,6 +690,10 @@ describe("stripLegacyOpportunityFields", () => {
         "usajobsUserAgent",
       ].sort(),
     );
+  });
+
+  it("names exactly the two Tavily fields", () => {
+    expect([...LEGACY_TAVILY_FIELDS].sort()).toEqual(["tavilyApiKey", "tavilyEnabled"]);
   });
 
   it("does not edit what it was given, and hands a profile that holds none of them back as it was", () => {
@@ -816,11 +829,24 @@ describe("mergeProfileFromBackup", () => {
 
   it("a file containing only credential fields restores nothing (count 0, empty patch)", () => {
     const local = profile({});
+    // `tavilyApiKey` is a legacy name (Tavily is removed), hence the cast.
     const { patch, restoredFieldCount } = mergeProfileFromBackup(local, {
       tavilyApiKey: "tvly-secret",
       feedAiApiKey: "sk-secret",
-    });
+    } as Partial<UserProfile>);
     expect(patch).toEqual({});
     expect(restoredFieldCount).toBe(0);
+  });
+
+  it("installs neither the removed Tavily switch nor its key from an old backup, and counts neither as restored", () => {
+    const local = profile({});
+    const oldBackup = {
+      displayName: "Restored Name",
+      tavilyEnabled: true,
+      tavilyApiKey: "tvly-secret",
+    } as Partial<UserProfile>;
+    const { patch, restoredFieldCount } = mergeProfileFromBackup(local, oldBackup);
+    expect(patch).toEqual({ displayName: "Restored Name" });
+    expect(restoredFieldCount).toBe(1);
   });
 });

@@ -43,7 +43,8 @@
 // OldPapers/BroadSurveys, deepReportEnabled) are not in that list and are
 // left to their existing behaviour (untouched by this module — the
 // pre-existing `hydrateFromRemote` "install if defined" wins for those, same
-// as before this fix). Credentials (tavily*/adzuna*/usajobs*/feedAi*) are
+// as before this fix). Credentials (feedAi*/jev*, and the legacy
+// tavily*/adzuna*/usajobs* names an old blob can still carry) are
 // never read from `remote` at all — the server never returns them (see
 // route.ts's `profileRowToProfile`) — so they are structurally excluded
 // here, matching the binding "never part of any merge direction".
@@ -494,9 +495,10 @@ export function mergeProfileAtSignIn(
  *  backup file, under any circumstance. Checked again by test against the full
  *  merge output, not just at this one call site.
  *
- *  The Adzuna and USAJobs names stay in this list after those fields left
- *  `UserProfile` (the jobs feed they served is stopped): the strip is by name
- *  at runtime, and a backup file or a blob written before can still carry one. */
+ *  The Tavily, Adzuna and USAJobs names stay in this list after those fields
+ *  left `UserProfile` (Tavily web search is removed; the jobs feed Adzuna and
+ *  USAJobs served is stopped): the strip is by name at runtime, and a backup
+ *  file or a blob written before can still carry one. */
 const CREDENTIAL_LIKE_FIELDS = [
   "tavilyApiKey",
   "adzunaAppId",
@@ -509,8 +511,8 @@ const CREDENTIAL_LIKE_FIELDS = [
 
 /** The explicit strip step the guide requires between parsing a backup file
  *  and installing anything from it — `defaultProfile` (and therefore
- *  `parseExportedProfile`'s own allow-list) still carries the Tavily, model and
- *  Jev keys, so a raw restore would let them back in unless this runs first.
+ *  `parseExportedProfile`'s own allow-list) still carries the model and Jev
+ *  keys, so a raw restore would let them back in unless this runs first.
  *  The same step runs on the way OUT (`exportProfileDocument`), so a file never
  *  holds one either. */
 export function stripCredentialFields(
@@ -541,15 +543,26 @@ export const LEGACY_OPPORTUNITY_FIELDS = [
 ] as const;
 
 /**
+ * The Tavily web-search switch and key. Tavily is removed: no screen set them,
+ * the paper request never sent them and the source that read them is deleted,
+ * so neither is a field of `UserProfile` any more. A blob saved on a device
+ * before, or a backup file, can still carry them, so the same by-name strip
+ * as `LEGACY_OPPORTUNITY_FIELDS` drops them (the key is also on
+ * `CREDENTIAL_LIKE_FIELDS`, so a backup export or import never carries it).
+ */
+export const LEGACY_TAVILY_FIELDS = ["tavilyEnabled", "tavilyApiKey"] as const;
+
+/**
  * A copy of a profile (or a persisted blob, or a patch) with every
- * `LEGACY_OPPORTUNITY_FIELDS` key removed and the `events` / `jobs` halves of
- * `activeSearchInputs` removed. Nothing else is touched: Career stage, Looking
- * toward, the locations and the Tavily fields are the reader's own and stay.
- * Never edits its argument.
+ * `LEGACY_OPPORTUNITY_FIELDS` and `LEGACY_TAVILY_FIELDS` key removed and the
+ * `events` / `jobs` halves of `activeSearchInputs` removed. Nothing else is
+ * touched: Career stage, Looking toward and the locations are the reader's
+ * own and stay. Never edits its argument.
  */
 export function stripLegacyOpportunityFields<T extends object>(profile: T): T {
   const clean: Record<string, unknown> = { ...(profile as Record<string, unknown>) };
   for (const field of LEGACY_OPPORTUNITY_FIELDS) delete clean[field];
+  for (const field of LEGACY_TAVILY_FIELDS) delete clean[field];
   const active = clean.activeSearchInputs;
   if (active && typeof active === "object" && !Array.isArray(active)) {
     const { events, jobs, ...rest } = active as Record<string, unknown>;

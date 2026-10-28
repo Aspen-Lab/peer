@@ -93,6 +93,14 @@ describe("the profile holds nothing for events and jobs (P9-32)", () => {
     }
   });
 
+  it("Tavily is removed: defaultProfile has no Tavily switch or key, and the store no setter for either", () => {
+    expect(defaultProfile).not.toHaveProperty("tavilyEnabled");
+    expect(defaultProfile).not.toHaveProperty("tavilyApiKey");
+    const state = useProfileStore.getState();
+    expect(state).not.toHaveProperty("updateTavilyEnabled");
+    expect(state).not.toHaveProperty("updateTavilyApiKey");
+  });
+
   it("editing the paper topics writes the paper lists and no other list", () => {
     const before = useProfileStore.getState().profile;
 
@@ -206,10 +214,44 @@ describe("profile persistence migration", () => {
       industryVsAcademia: "academia",
       locationPreferences: ["Chicago"],
       authorisedCountries: ["Canada"],
-      tavilyEnabled: true,
-      tavilyApiKey: "tvly-device-key",
     });
     expect(JSON.stringify(migrated)).not.toMatch(/event-required|job-required|adzuna-secret|usajobs-secret/);
+  });
+
+  it("a v8 profile loses the removed Tavily switch and key and keeps everything else (v9)", () => {
+    const v8Blob = {
+      ...defaultProfile,
+      displayName: "Device owner",
+      researchTopics: ["paper-required"],
+      careerStage: "Postdoc",
+      feedAiProvider: "openai",
+      feedAiApiKey: "model-test-sentinel-not-a-key-0000",
+      tavilyEnabled: true,
+      tavilyApiKey: "tvly-device-key",
+    };
+    const persisted = { profile: v8Blob, lastSynced: { displayName: "Device owner" }, syncedAccountId: "user-1" };
+    const before = JSON.stringify(persisted);
+
+    const migrated = migrateProfileStore(persisted) as {
+      profile: Record<string, unknown>;
+      lastSynced: unknown;
+      syncedAccountId: unknown;
+    };
+
+    expect(migrated.profile).not.toHaveProperty("tavilyEnabled");
+    expect(migrated.profile).not.toHaveProperty("tavilyApiKey");
+    expect(JSON.stringify(migrated)).not.toContain("tvly-device-key");
+    expect(migrated.profile).toMatchObject({
+      displayName: "Device owner",
+      researchTopics: ["paper-required"],
+      careerStage: "Postdoc",
+      feedAiProvider: "openai",
+      feedAiApiKey: "model-test-sentinel-not-a-key-0000",
+    });
+    expect(migrated.lastSynced).toEqual({ displayName: "Device owner" });
+    expect(migrated.syncedAccountId).toBe("user-1");
+    expect(JSON.stringify(persisted)).toBe(before);
+    expect(migrateProfileStore(migrated)).toEqual(migrated);
   });
 
   it("a v7 profile's active snapshot keeps its Papers half and drops the events and jobs halves", () => {
@@ -294,6 +336,51 @@ describe("profile persistence migration", () => {
       // and what is written back holds none of it either
       mod.useProfileStore.getState().updateDisplayName("Rewritten");
       expect(stored).not.toMatch(/event-required|job-required|adzuna|usajobs|eventRequiredTopics|jobExploreTopics/);
+      expect(stored).not.toMatch(/tavily|tvly-device-key/i);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("rehydrating a v8 blob from storage runs the migration (the store is at v9) and installs a profile with no Tavily field", async () => {
+    // zustand calls `migrate` only when the stored version differs from the
+    // store's, so this fails if the version is left at 8.
+    let stored = JSON.stringify({
+      state: {
+        profile: {
+          ...defaultProfile,
+          displayName: "Device owner",
+          researchTopics: ["paper-required"],
+          tavilyEnabled: true,
+          tavilyApiKey: "tvly-device-key",
+        },
+      },
+      version: 8,
+    });
+    const storage: StateStorage = {
+      getItem: () => stored,
+      setItem: (_name, value) => {
+        stored = value;
+      },
+      removeItem: () => {
+        stored = "";
+      },
+    };
+    vi.stubGlobal("window", { localStorage: storage });
+    try {
+      vi.resetModules();
+      const mod = await import("./profile");
+      await mod.useProfileStore.persist.rehydrate();
+
+      const hydrated = mod.useProfileStore.getState().profile as unknown as Record<string, unknown>;
+      expect(hydrated).not.toHaveProperty("tavilyEnabled");
+      expect(hydrated).not.toHaveProperty("tavilyApiKey");
+      expect(hydrated.displayName).toBe("Device owner");
+      expect(hydrated.researchTopics).toEqual(["paper-required"]);
+      // and what is written back holds neither, at the new version
+      mod.useProfileStore.getState().updateDisplayName("Rewritten");
+      expect(stored).not.toMatch(/tavily|tvly-device-key/i);
+      expect(JSON.parse(stored).version).toBe(9);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -1068,16 +1155,16 @@ describe("a backup file carries no credential", () => {
     ...defaultProfile,
     displayName: "Peter",
     researchTopics: ["LCO"],
-    tavilyApiKey: "tvly-secret",
     feedAiProvider: "openai",
     feedAiApiKey: "sk-secret",
     jevApiKey: JEV,
   };
-  // The Adzuna and USAJobs credentials are no longer part of UserProfile, but a
-  // profile saved on a device before can still hold them: the export strips
-  // them by name all the same.
+  // The Tavily, Adzuna and USAJobs credentials are no longer part of
+  // UserProfile, but a profile saved on a device before can still hold them:
+  // the export strips them by name all the same.
   const legacyCredentialProfile = {
     ...credentialProfile,
+    tavilyApiKey: "tvly-secret",
     adzunaAppId: "adzuna-id",
     adzunaAppKey: "adzuna-secret",
     usajobsApiKey: "usajobs-secret",
@@ -1124,5 +1211,40 @@ describe("a backup file carries no credential", () => {
     expect(profile.displayName).toBe("Peter");
     expect(profile.jevApiKey).toBe("");
     expect(profile.feedAiApiKey).toBe("");
+  });
+
+  // Tavily is removed. A backup written before can still name its switch and
+  // key: neither is written into a new file, and neither is installed from an
+  // old one.
+  it("exportProfileDocument writes neither the removed Tavily switch nor its key, from a profile that still holds them", () => {
+    const legacy = {
+      ...credentialProfile,
+      tavilyEnabled: true,
+      tavilyApiKey: "legacy-tavily-sentinel-not-a-key",
+    } as unknown as UserProfile;
+    const document = exportProfileDocument(legacy);
+    expect(document.profile).not.toHaveProperty("tavilyEnabled");
+    expect(document.profile).not.toHaveProperty("tavilyApiKey");
+    expect(JSON.stringify(document)).not.toContain("legacy-tavily-sentinel-not-a-key");
+    expect(document.profile.displayName).toBe("Peter");
+  });
+
+  it("importProfile installs neither the removed Tavily switch nor its key from an old backup file", () => {
+    useProfileStore.setState({ profile: { ...defaultProfile } });
+    const oldBackup = {
+      format: PROFILE_EXPORT_FORMAT,
+      profile: {
+        displayName: "Peter",
+        tavilyEnabled: true,
+        tavilyApiKey: "legacy-tavily-sentinel-not-a-key",
+      },
+    };
+    expect(parseExportedProfile(oldBackup)).toEqual({ displayName: "Peter" });
+    expect(useProfileStore.getState().importProfile(oldBackup)).toBe(true);
+    const profile = useProfileStore.getState().profile as unknown as Record<string, unknown>;
+    expect(profile.displayName).toBe("Peter");
+    expect(profile).not.toHaveProperty("tavilyEnabled");
+    expect(profile).not.toHaveProperty("tavilyApiKey");
+    expect(JSON.stringify(profile)).not.toContain("legacy-tavily-sentinel-not-a-key");
   });
 });

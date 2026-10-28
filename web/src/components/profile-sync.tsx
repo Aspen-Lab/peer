@@ -136,37 +136,34 @@ async function fetchRemoteForSync(): Promise<
 }
 
 /**
- * Local keys (the model key, the Jev key, Tavily, and — SIGNIN-MERGE §1aj —
- * the Adzuna/USAJobs credentials of the stopped jobs feed) never leave the
- * device.
+ * Local keys (the model key, the Jev key, and — SIGNIN-MERGE §1aj — the
+ * Adzuna/USAJobs credentials of the stopped jobs feed and the removed Tavily
+ * key) never leave the device.
  *
- * The Adzuna/USAJobs fields are no longer part of `UserProfile` (no screen sets
- * them, and the feed they served is stopped), so they in practice never hold a
- * value — but a restored backup file (see the profile page's "Restore from a
- * backup file" control) or a blob saved before CAN carry a real one, and
- * without the by-name strip below it would ride along in the very next
- * debounced PUT body. `profilePatchToRow` has no column for any of the four, so
- * it could not reach the database either way, but it would still leave the
- * browser in plaintext over the wire and land in a request body / server log —
- * exactly what "never uploaded" means to prevent. Proven by
- * web/src/components/profile-sync.test.tsx.
+ * The Adzuna/USAJobs and Tavily fields are no longer part of `UserProfile` (no
+ * screen sets them; the feed Adzuna and USAJobs served is stopped and Tavily
+ * web search is removed), so they in practice never hold a value — but a
+ * restored backup file (see the profile page's "Restore from a backup file"
+ * control) or a blob saved before CAN carry a real one, and without the
+ * by-name strip below it would ride along in the very next debounced PUT body.
+ * `profilePatchToRow` has no column for any of them, so it could not reach the
+ * database either way, but it would still leave the browser in plaintext over
+ * the wire and land in a request body / server log — exactly what "never
+ * uploaded" means to prevent. Proven by web/src/components/profile-sync.test.tsx.
  *
- * The same strip drops the event and job topic lists and the events/jobs halves
- * of `activeSearchInputs` that such a blob can still hold (rulings 60): nothing
- * about those stopped feeds is pushed either.
+ * The same strip drops the event and job topic lists, the events/jobs halves
+ * of `activeSearchInputs` (rulings 60) and the Tavily switch that such a blob
+ * can still hold: nothing about those stopped feeds or that removed search is
+ * pushed either.
  */
 export function remoteProfilePayload(profile: UserProfile): Partial<UserProfile> {
   const {
-    tavilyEnabled,
-    tavilyApiKey,
     feedAiProvider,
     feedAiApiKey,
     jevApiKey,
     standingQuestions,
     ...rest
   } = profile;
-  void tavilyEnabled;
-  void tavilyApiKey;
   void feedAiProvider;
   void feedAiApiKey;
   // The reader's Jev key never leaves the browser except in the paper request

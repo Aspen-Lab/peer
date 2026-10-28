@@ -116,8 +116,6 @@ const fullyPopulatedProfile: UserProfile = {
   digestChannel: "email",
   digestFrequency: "weekly",
   digestEmail: "alice@example.edu",
-  tavilyEnabled: true,
-  tavilyApiKey: "tvly-secret",
   feedAiProvider: "openai",
   feedAiApiKey: "sk-secret",
   // An invented string. It is not, and never was, a key.
@@ -177,10 +175,11 @@ describe("remoteProfilePayload — full field enumeration (§1bk.8 AMENDMENT)", 
         "softTopics",
       ].sort(),
     );
-    // Never present, regardless of how populated the profile is — the nine
-    // fields remoteProfilePayload destructures out before recomputing
-    // feedIntent (§1aj credential redaction, unaffected by this amendment;
-    // `jevApiKey` joined the list when Jev became the reader's own key).
+    // Never present, regardless of how populated the profile is — the fields
+    // remoteProfilePayload destructures out before recomputing feedIntent and
+    // the legacy names it strips by name (§1aj credential redaction, unaffected
+    // by this amendment; `jevApiKey` joined the list when Jev became the
+    // reader's own key; the Tavily names are no longer fields at all).
     for (const credentialKey of [
       "tavilyEnabled",
       "tavilyApiKey",
@@ -275,6 +274,24 @@ describe("remoteProfilePayload — credential redaction (§1aj)", () => {
     for (const value of ["conference-topic", "job-topic", "adzuna-secret", "usajobs-secret"]) {
       expect(text).not.toContain(value);
     }
+    expect(payload.displayName).toBe("Aspen");
+  });
+
+  // Tavily web search is removed: `tavilyEnabled` and `tavilyApiKey` are no
+  // longer fields of UserProfile. A blob read before the store's v9 migration,
+  // or a restored old backup, can still hold them, and the push strips both by
+  // name.
+  it("never carries the removed Tavily switch or key from a profile that still holds them", () => {
+    const legacy = {
+      ...defaultProfile,
+      displayName: "Aspen",
+      tavilyEnabled: true,
+      tavilyApiKey: "legacy-tavily-sentinel-not-a-key",
+    } as unknown as UserProfile;
+    const payload = remoteProfilePayload(legacy);
+    expect(payload).not.toHaveProperty("tavilyEnabled");
+    expect(payload).not.toHaveProperty("tavilyApiKey");
+    expect(JSON.stringify(payload)).not.toContain("legacy-tavily-sentinel-not-a-key");
     expect(payload.displayName).toBe("Aspen");
   });
 
@@ -702,11 +719,13 @@ describe("nextSyncBaselines — the P3 retry guard as one pure function (§1bk.9
   });
 
   it("on success, lastPushed still excludes credentials — reuses remoteProfilePayload's redaction (§1aj)", () => {
-    const profile: UserProfile = {
+    // `tavilyApiKey` is no longer a field (Tavily is removed); a legacy blob can
+    // still carry it, hence the cast.
+    const profile = {
       ...defaultProfile,
       tavilyApiKey: "tvly-secret",
       feedAiApiKey: "sk-secret",
-    };
+    } as UserProfile;
     const result = nextSyncBaselines(true, profile, { lastSynced: null, lastPushed: null });
     expect(result.lastPushed).not.toHaveProperty("tavilyApiKey");
     expect(result.lastPushed).not.toHaveProperty("feedAiApiKey");

@@ -70,7 +70,9 @@ describe("profile.questionsTuneRecommendations — storage and backup", () => {
       expect(mod.useProfileStore.getState().profile.questionsTuneRecommendations).toBe(false);
       mod.useProfileStore.getState().updateQuestionsTuneRecommendations(false);
       const written = JSON.parse(read());
-      expect(written.version).toBe(8);
+      // The store's current version (9 since the Tavily fields were dropped):
+      // writing the switch does not move it.
+      expect(written.version).toBe(9);
       expect(written.state.profile.questionsTuneRecommendations).toBe(false);
     } finally {
       vi.unstubAllGlobals();
