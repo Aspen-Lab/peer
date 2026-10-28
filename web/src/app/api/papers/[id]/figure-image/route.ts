@@ -20,6 +20,15 @@
 // page's biggest picture, says which figure; a figure the page does not carry
 // is a 404, and the page shows the caption alone, which is the truth.
 //
+// P12-61 (§1h.434, the owner: "必须要这么做"): a figure view never opens the
+// whole PDF twice. An upload's first successful cut is kept beside the upload,
+// owner-private (`upload-store.ts`, keyed by the upload's hash, the page, the
+// label and `FIGURE_EXTRACTION_REVISION`), and a later look at the same figure
+// is answered from the kept picture after the owner check — the PDF is not
+// read and the engine does not run. A cut that failed (no such figure, the
+// engine would not load) is never kept. A public paper is unchanged: it has
+// its edge cache, and nothing about it is stored here.
+//
 // No model, no key. The body is the PNG's bytes, never a `data:` URL.
 
 import { NextResponse, type NextRequest } from "next/server";
@@ -28,7 +37,13 @@ import { getFullText } from "@/lib/papers/full-text";
 import { getPdfBytes } from "@/lib/papers/pdf-text";
 import { rawItemToPaper } from "@/lib/feed/mapper";
 import { extractPdfFigures } from "@/lib/figures/pdf-engine";
-import { bareUploadId, claimsUploadId, readUploadPdf } from "@/lib/papers/upload-store";
+import {
+  bareUploadId,
+  claimsUploadId,
+  readUploadFigureCut,
+  readUploadPdf,
+  writeUploadFigureCut,
+} from "@/lib/papers/upload-store";
 import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
 
 export const runtime = "nodejs";
@@ -64,6 +79,18 @@ function reject(status: number, error: string, headers: Record<string, string> =
   return NextResponse.json({ error }, { status, headers });
 }
 
+/** The picture itself: a public paper's with its edge cache, an upload's private and `no-store`. */
+function picture(png: Uint8Array, privately: boolean) {
+  return new NextResponse(Buffer.from(png), {
+    headers: {
+      ...(privately ? PRIVATE_UPLOAD_HEADERS : CACHE_HEADERS),
+      ...FIGURE_ENGINE,
+      "Content-Type": "image/png",
+      "Content-Length": String(png.byteLength),
+    },
+  });
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const paperId = decodeURIComponent(id);
@@ -76,6 +103,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const label = figureLabel(req.nextUrl.searchParams.get("fig"));
   if (label === null) return reject(400, "fig required", refusal);
 
+  const label = `Figure ${fig}`;
+  // The upload whose cut is kept once it is made; null for a public paper.
+  let keepFor: string | null = null;
   let bytes: Uint8Array;
   if (privately) {
     // P0-05 / P0-08: only the canonical `upload:<hash16>` is an upload id, and
@@ -85,6 +115,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const meta = hash16 ? await ownedUpload(hash16) : null;
     if (!hash16 || !meta) return reject(404, "Upload not found.", refusal);
     if (meta.pageCount && page > meta.pageCount) return reject(404, "No such page", refusal);
+    // Owner checked: a picture cut before is answered as it was cut, and
+    // neither the PDF nor the engine is touched.
+    const kept = await readUploadFigureCut(hash16, page, label);
+    if (kept) return picture(kept.png, true);
+    keepFor = hash16;
     const stored = await readUploadPdf(hash16);
     if (!stored) return reject(404, "Upload not found.", refusal);
     bytes = new Uint8Array(stored);
@@ -131,12 +166,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return reject(404, extracted.reason ?? `No ${label} on page ${page}`, engineRan);
   }
 
-  return new NextResponse(Buffer.from(found.png), {
-    headers: {
-      ...(privately ? PRIVATE_UPLOAD_HEADERS : CACHE_HEADERS),
-      ...FIGURE_ENGINE,
-      "Content-Type": "image/png",
-      "Content-Length": String(found.png.byteLength),
-    },
-  });
+  // Only a cut that produced a picture is kept, and keeping it never fails the answer.
+  if (keepFor) {
+    try {
+      await writeUploadFigureCut(keepFor, page, label, { png: found.png, width: found.width, height: found.height });
+    } catch (err) {
+      console.warn("[figure-image] could not keep the cut:", err);
+    }
+  }
+
+  return picture(found.png, privately);
 }

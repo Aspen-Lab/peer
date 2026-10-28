@@ -7,6 +7,7 @@
 // invented PDFs. Only the public paper's lookup, its full text and its PDF
 // download are stubbed — those are the network.
 import { rm } from "node:fs/promises";
+import { join } from "node:path";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { barChart, bodyText, figurePdf, panel, pngInfo, type FigurePage } from "@/lib/figures/figure-pdf.test-helper";
@@ -148,7 +149,10 @@ async function widthOf(res: Response): Promise<number> {
   return info.width;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  // P12-61: an upload's first cut is kept beside it, and the upload here is the same bytes in every
+  // test — so each test starts with nothing kept, and a test that expects the engine to run does run it.
+  await rm(join(uploadDir, "figure-cuts"), { recursive: true, force: true });
   mocks.fetchPaperById.mockReset();
   mocks.getFullText.mockReset();
   mocks.getPdfBytes.mockReset();
