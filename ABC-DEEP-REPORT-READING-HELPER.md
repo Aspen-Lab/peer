@@ -1984,6 +1984,10 @@ The owner, 2026-10-28 (chat, verbatim): "暂时不要全部的agent一起开工�
 (c) C P12-49's `isDropCap` is too broad (any large body-face line starting with a capital): narrowed to one or two large letters by C P12-70 (item 6).
 (d) C P12-56 ran `git checkout -- .` once in its own scratch "before" tree, against its brief; no deliverable was touched — recorded as a rule slip.
 
+### §1h.444 — 2026-10-28 — THEME C ON BATCHES 1 + 2: P1 4/5, P2 5/5, P3 7/8; THE TWO LEFT
+
+C P12-67's upstream move landed in the batch-2 copy (`mgr/v3`: the page-level pass off → 2 red; sha256 equal after restore). **Theme C measured on batches 1 + 2 with the page's closing split applied** (the scratch harness now does what the page does): **P1 4 / 5, P2 5 / 5, P3 7 / 8 parts strict** (extras not yet costed). The two left: (a) **P1's results part** — 15 ligature glyphs remain: U+E104 is "fl" in words the paper never prints without the ligature (influence, conflicts, fluctuations, reflected), so the paper's own words cannot confirm it, and U+E09D is "ft" (after, software, shifting), which is not among the candidates → **C P12-67 follow-up (queued)**: add "ft" (and the other two-letter f-ligatures a font may set) to the candidates, and a small built-in list of common English and scientific words as a second witness when the paper prints no plain form (no dependency; the same vote rules); (b) **P3's opening** — its first line carries a 4× drop cap welded to body text, so C P12-51's opening starts a line late and the introduction's first sentence is lost → C P12-70 item 7 (a body-face line whose character-weighted size is the body's is prose; the cap re-joins its word).
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
