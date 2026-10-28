@@ -9,7 +9,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 | HELD BY | manager session (Claude Code desktop, worktree `.claude/worktrees/objective-wu-e8d6fe`) |
 | BRANCH | `own-key-on-web` (cut from `origin/main` db0f070a after PR #36 merged; name approved by the owner 2026-10-25). Repository `Aspen-Lab/peer`. No push without the owner's word (AGENTS.md). The owner merges the PR himself (R6). |
 | ROUND | 0 — implementation of lanes 1–4; round 1 scores after all four land |
-| CURRENT ITEM | L3-fix and L4-A running; L1–L4 landed; L2-A, L1-A queued |
+| CURRENT ITEM | L4-A and L2-A running; L1–L4 + L3-fix landed (tip full suite: see log); L1-A queued; then scoring round 1 |
 | NEXT TURN | on each worker report: verify → land on the branch → refill up to the cap of two groups |
 | STOPPED BECAUSE | — |
 | TARGET | **97.9 per theme, two consecutive rounds** (the owner, 2026-10-28, R5: "达标线用 97.9，每个主题连续两轮达到就停。") |
@@ -51,10 +51,10 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 | L1-C | C | LANDED a235c48a, fa965331, 2b6665a6 | `.claude/worktrees/own-key-lane1` | 9381d8cd hydrate ignores device-only fields, 98a92ef7 Tavily out of the profile (store v9), 6590bfe1 Tavily web source + unread searchConnectors deleted. Manager: tsc 0, eslint 0, affected tests ×3 = 1626 pass / 3 fail (reader-panes, reading-prefs, scan 5 — all baseline); M7 (hydrate installs feedAiApiKey again) → 2 red; M8 (legacy strip forgets tavilyApiKey) → 5 red; restored byte-identical. Lane's own full suite: same 35 as baseline. |
 | L1-A | A | QUEUED (cap) | — | — |
 | L2-C | C | LANDED 68163acd, f6cfe7ce, 43e2a404 | `.claude/worktrees/own-key-lane2` | aeba4d49 note under the key field, 187597a6 AI provider row, 495eeba6 paper page sign-in. Manager: tsc 0, eslint 0 errors (44 warnings, pre-existing), touched tests ×3 = 933 pass / 1 fail (jev-setup, CRLF baseline); M5 (note shown for unknown/unconfigured) → 4 red; M6 (keyNeedsSignIn always false) → 1 red (unit level; the page tests take the flag as input); restored byte-identical. Full suite: 10752 tests, 35 failed, **0 new**. |
-| L2-A | A | QUEUED (cap) | — | — |
+| L2-A | A | RUNNING (started when L3-fix finished) | own-key-lane2 (read only) | — |
 | L3-C | C | LANDED 7b68634f, 14961cb2 | `.claude/worktrees/own-key-lane3` | 06e101c8 route + privacy, 1ac28885 KeyCheck. Manager in own-key-verify: tsc 0, eslint 0 on 13 files, touched tests ×3 = 272 pass / 2 fail (both baseline: privacy standing, upload record); M1 provider resolved before the gate → 6 red; M2 key rendered in the status line → 2 red; both restored byte-identical. Full suite: 10790 tests, 34 failed, **0 new** vs baseline, 1 fixed (scan 5, R8). |
 | L3-A | A | DONE | own-key-lane3 (read only) | `L3-A-20261028T1725Z.md`: A10 FAIL 2.0, A11 FAIL 0.75, B5 PASS; D1–D7; gate: KeyCheck unmounted |
-| L3-fix | C | RUNNING (lane 3's C resumed, worktree reset to the branch tip) | `.claude/worktrees/own-key-lane3` | brief `briefs/L3-fix.md` (R7 + R12 + mount) |
+| L3-fix | C | LANDED 411bf87b, 4721b099, 0b39f6f6 | `.claude/worktrees/own-key-lane3` | items 1–5 of `briefs/L3-fix.md`. Deviations accepted: /privacy "at most one log line" (fetch providers log only when the provider answers); Anthropic's check now logs like the others; provider 408 = unreachable; a confirmed sign-out replaces an earlier result line. Manager: tsc 0, eslint 0 errors (8 old warnings), affected tests ×3 = 622 pass / 3 fail (baseline); M9 (no-credit decision removed) → 8 red; M10 (Anthropic retries back on) → 1 red; M11 (mount removed) → 9 red; restored byte-identical. |
 | L4-C | C | LANDED 27c1d03a, 2fc2367b, a6278be9, 395e5cfe, acbc8adf | `.claude/worktrees/own-key-lane4` | 15ec36a6 return path + open redirect, 73eff44d Account step + AI-step sign-in, 780cd45d AI summary, 1285860a sign-out dialog, 5708ad40 reset text. Manager: tsc 0, eslint 0 errors (49 warnings, pre-existing), touched tests ×3 = 334/334; M3 equivalent (R10), M3b → 4 red, M3c → 4 red, M4 (keys ignored in signOutPrompt) → 3 red; all restored byte-identical. Full suite: 10814 tests, 35 failed, **0 new** vs baseline. |
 | L4-A | A | RUNNING (started when L1-C finished) | own-key-lane4 (read only) | — |
 | L1-A … L4-A | A | QUEUED | — | — |
@@ -75,6 +75,8 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 - 2026-10-28 | 43e2a404 | manager | dev server needs a real node_modules (R11); branch worktree npm ci; /welcome Account + AI steps and /privacy render on localhost:3000, no console errors. L3-A reported 2.75; R12; L3-fix started in the freed slot.
 - 2026-10-28 | b92851a7 | manager | L1-C reported (3 commits); L4-A started in the freed slot; L1 verified (tsc, eslint, ×3, two mutations); L1 landed by cherry-pick; combined full suite started.
 - 2026-10-28 | 2b6665a6 | manager | tip with L1–L4: tsc 0; full suite 11002 tests, 34 failed, **0 new**, 1 fixed (scan 5).
+- 2026-10-28 | 0b39f6f6 | manager | L3-fix reported; L2-A started in the freed slot; L3-fix verified (three mutations) and landed; tip full suite started.
+- 2026-10-28 | 0b39f6f6 | manager | tip full suite after L3-fix: tsc 0; 11055 tests, 34 failed, **0 new**, 1 fixed (scan 5).
 
 ## §6 Clock
 
