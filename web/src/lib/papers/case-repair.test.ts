@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { CASE_MIN_HITS, CASE_MIN_LETTERS, learnCaseFonts, withPageCase } from "./case-repair";
 import { minimalPdf, prose, type Run } from "./minimal-pdf.test-helper";
 import type { PdfPageText } from "./pdf-outline";
-import { extractPdfTextFromBytes, readPages } from "./pdf-text";
+import { extractPdfTextFromBytes, readPages, tryExtractPdfText } from "./pdf-text";
 
 // P12-83 (§1h.463, B P12-80 K2, R2-C): a font whose own map turns capital letters into lowercase ones is read as
 // capitals again, from the paper's own evidence. Every paper below is invented; the shapes are the ones the symptom
@@ -374,6 +374,8 @@ const PAPER: Run[][] = [
 ];
 
 describe("extractPdfTextFromBytes — the capitals a font's map reads as lowercase are read as capitals (P12-83)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
   it("reads the damaged PDF the way pdf.js gives it, and the document the way the same file with a right map reads", async () => {
     const damaged = damagedPdf(PAPER, true);
     const control = damagedPdf(PAPER, false);
@@ -395,6 +397,18 @@ describe("extractPdfTextFromBytes — the capitals a font's map reads as lowerca
     expect(all).toContain("SEM Results");
     expect(all).toContain(CAPTION.replace("Figure 1: ", ""));
     expect(all).not.toMatch(/\bsEM\b|\blCO\b|DFt\b/);
+  });
+
+  it("reads a PDF fetched from a link the same way (tryExtractPdfText)", async () => {
+    const control = await extractPdfTextFromBytes(damagedPdf(PAPER, false));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(new Uint8Array(damagedPdf(PAPER, true)), { status: 200, headers: { "content-type": "application/pdf" } })),
+    );
+    const result = await tryExtractPdfText("https://example.org/p12-83-damaged-case.pdf");
+    expect(result.ok).toBe(true);
+    expect(result.doc).toEqual(control.doc);
+    expect(JSON.stringify(result.doc)).toContain("SEM Results");
   });
 
   it("reads a PDF with no such font exactly as before", async () => {
