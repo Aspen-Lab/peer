@@ -57,7 +57,7 @@
 // as PyMuPDF). It is loaded here, lazily, and nowhere else.
 
 import { closeSync, fstatSync, openSync, readSync, statSync } from "node:fs";
-import type { Device, Document, Image, Matrix, Page, Path, Rect, StrokeState, Stream } from "mupdf";
+import type { Device, Document, Image, Matrix, Page, Path, PDFDocument, PDFObject, Rect, StrokeState, Stream } from "mupdf";
 
 type Mupdf = typeof import("mupdf");
 
