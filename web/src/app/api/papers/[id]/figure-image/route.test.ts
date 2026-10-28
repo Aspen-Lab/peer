@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => ({
   getFullText: vi.fn(),
   getPdfBytes: vi.fn(),
   extractPdfFigures: vi.fn(),
-  readUploadPdf: vi.fn(),
+  withUploadPdfSource: vi.fn(),
 }));
 
 vi.mock("next/headers", () => ({
@@ -45,7 +45,7 @@ vi.mock("@/lib/papers/pdf-text", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/papers/pdf-text")>()),
   getPdfBytes: mocks.getPdfBytes,
 }));
-// The engine and the upload store's byte read are the real ones, watched.
+// The engine and the upload store's reader of the stored PDF are the real ones, watched.
 vi.mock("@/lib/figures/pdf-engine", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/figures/pdf-engine")>();
   mocks.extractPdfFigures.mockImplementation(actual.extractPdfFigures);
@@ -53,8 +53,8 @@ vi.mock("@/lib/figures/pdf-engine", async (importOriginal) => {
 });
 vi.mock("@/lib/papers/upload-store", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/papers/upload-store")>();
-  mocks.readUploadPdf.mockImplementation(actual.readUploadPdf);
-  return { ...actual, readUploadPdf: mocks.readUploadPdf };
+  mocks.withUploadPdfSource.mockImplementation(actual.withUploadPdfSource);
+  return { ...actual, withUploadPdfSource: mocks.withUploadPdfSource };
 });
 
 import { GET } from "./route";
@@ -157,7 +157,7 @@ beforeEach(async () => {
   mocks.getFullText.mockReset();
   mocks.getPdfBytes.mockReset();
   mocks.extractPdfFigures.mockClear();
-  mocks.readUploadPdf.mockClear();
+  mocks.withUploadPdfSource.mockClear();
   mocks.token.value = undefined;
   publicPaper();
 });
@@ -192,7 +192,7 @@ describe("GET /api/papers/[id]/figure-image — the parameters", () => {
     const res = await call(UPLOAD_ID, "?page=0&fig=3");
     expect(res.status).toBe(400);
     expect(res.headers.get("Cache-Control")).toBe(PRIVATE_CACHE);
-    expect(mocks.readUploadPdf).not.toHaveBeenCalled();
+    expect(mocks.withUploadPdfSource).not.toHaveBeenCalled();
   });
 });
 
@@ -288,8 +288,9 @@ describe("GET /api/papers/[id]/figure-image — an upload", () => {
     expect(mocks.fetchPaperById).not.toHaveBeenCalled();
     expect(mocks.getFullText).not.toHaveBeenCalled();
     expect(mocks.getPdfBytes).not.toHaveBeenCalled();
+    // P12-61 (part 3), re-aimed: an upload's PDF reaches the engine as a file to read from, not as bytes in memory.
     expect(mocks.extractPdfFigures).toHaveBeenCalledWith(
-      expect.any(Uint8Array),
+      expect.objectContaining({ filePath: expect.any(String) }),
       expect.objectContaining({ onlyPage: 2, label: "Figure 4" }),
     );
   });
@@ -314,7 +315,7 @@ describe("GET /api/papers/[id]/figure-image — an upload", () => {
     expect(res.headers.get("Cache-Control")).toBe(PRIVATE_CACHE);
     expect(res.headers.get("Content-Type")).not.toBe("image/png");
     expect(res.headers.get("X-Peer-Figure-Engine")).toBeNull();
-    expect(mocks.readUploadPdf).not.toHaveBeenCalled();
+    expect(mocks.withUploadPdfSource).not.toHaveBeenCalled();
     expect(mocks.extractPdfFigures).not.toHaveBeenCalled();
     expect(mocks.fetchPaperById).not.toHaveBeenCalled();
   });
@@ -358,7 +359,7 @@ describe("GET /api/papers/[id]/figure-image — an upload", () => {
 
   it("answers 404, privately, when the stored bytes are gone", async () => {
     await storeUpload(OWNER);
-    mocks.readUploadPdf.mockResolvedValueOnce(null);
+    mocks.withUploadPdfSource.mockResolvedValueOnce(null);
     const res = await call(UPLOAD_ID, "?page=2&fig=3");
     expect(res.status).toBe(404);
     expect(res.headers.get("Cache-Control")).toBe(PRIVATE_CACHE);

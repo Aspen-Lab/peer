@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => ({
   getPdfBytes: vi.fn(),
   extractPdfFigures: vi.fn(),
   readUploadPdf: vi.fn(),
+  withUploadPdfSource: vi.fn(),
   readUploadFigureCut: vi.fn(),
   writeUploadFigureCut: vi.fn(),
 }));
@@ -65,11 +66,13 @@ vi.mock("@/lib/figures/pdf-engine", async (importOriginal) => {
 vi.mock("@/lib/papers/upload-store", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/papers/upload-store")>();
   mocks.readUploadPdf.mockImplementation(actual.readUploadPdf);
+  mocks.withUploadPdfSource.mockImplementation(actual.withUploadPdfSource);
   mocks.readUploadFigureCut.mockImplementation(actual.readUploadFigureCut);
   mocks.writeUploadFigureCut.mockImplementation(actual.writeUploadFigureCut);
   return {
     ...actual,
     readUploadPdf: mocks.readUploadPdf,
+    withUploadPdfSource: mocks.withUploadPdfSource,
     readUploadFigureCut: mocks.readUploadFigureCut,
     writeUploadFigureCut: mocks.writeUploadFigureCut,
   };
@@ -78,6 +81,7 @@ vi.mock("@/lib/papers/upload-store", async (importOriginal) => {
 import { GET } from "./route";
 import {
   deleteUpload,
+  pdfPath,
   purgeExpiredUploads,
   readUploadMeta,
   sha16,
@@ -172,6 +176,7 @@ beforeEach(async () => {
   mocks.getPdfBytes.mockReset();
   mocks.extractPdfFigures.mockClear();
   mocks.readUploadPdf.mockClear();
+  mocks.withUploadPdfSource.mockClear();
   mocks.readUploadFigureCut.mockClear();
   mocks.writeUploadFigureCut.mockClear();
   mocks.token.value = undefined;
@@ -191,7 +196,7 @@ describe("GET /api/papers/[id]/figure-image — an upload's kept cut (P12-61)", 
     const firstBytes = await bytesOf(first);
 
     expect(first.status).toBe(200);
-    expect(mocks.readUploadPdf).toHaveBeenCalledTimes(1);
+    expect(mocks.withUploadPdfSource).toHaveBeenCalledTimes(1);
     expect(mocks.extractPdfFigures).toHaveBeenCalledTimes(1);
     expect(mocks.writeUploadFigureCut).toHaveBeenCalledTimes(1);
     expect(await keptObjects()).toHaveLength(1);
@@ -204,15 +209,34 @@ describe("GET /api/papers/[id]/figure-image — an upload's kept cut (P12-61)", 
     expect(widthOf(secondBytes)).toBeGreaterThan(NARROW - 4);
     expect(widthOf(secondBytes)).toBeLessThan(NARROW + 4);
     // The PDF was read once, the engine ran once, and nothing more was kept.
-    expect(mocks.readUploadPdf).toHaveBeenCalledTimes(1);
+    expect(mocks.withUploadPdfSource).toHaveBeenCalledTimes(1);
     expect(mocks.extractPdfFigures).toHaveBeenCalledTimes(1);
     expect(mocks.writeUploadFigureCut).toHaveBeenCalledTimes(1);
     expect(mocks.readUploadFigureCut).toHaveBeenCalledTimes(2);
     expect(await keptObjects()).toHaveLength(1);
+    // The whole PDF was never read into memory.
+    expect(mocks.readUploadPdf).not.toHaveBeenCalled();
     // Nothing public was touched either.
     expect(mocks.fetchPaperById).not.toHaveBeenCalled();
     expect(mocks.getFullText).not.toHaveBeenCalled();
     expect(mocks.getPdfBytes).not.toHaveBeenCalled();
+  });
+
+  it("gives the engine the stored file itself to read from — never the PDF's bytes, never a copy of the file", async () => {
+    await storeUpload(OWNER);
+
+    expect((await call(UPLOAD_ID, "?page=2&fig=3")).status).toBe(200);
+
+    expect(mocks.extractPdfFigures).toHaveBeenCalledTimes(1);
+    expect(mocks.extractPdfFigures.mock.calls[0][0]).toEqual({ filePath: pdfPath(HASH) });
+    expect(mocks.readUploadPdf).not.toHaveBeenCalled();
+  });
+
+  it("lets a failure to fetch the stored PDF through as it always did — it is not taken for the engine's failure", async () => {
+    await storeUpload(OWNER);
+    mocks.withUploadPdfSource.mockRejectedValueOnce(new Error("the bucket is down"));
+    await expect(call(UPLOAD_ID, "?page=2&fig=3")).rejects.toThrow("the bucket is down");
+    expect(await keptObjects()).toEqual([]);
   });
 
   it("answers the kept picture with the same private, no-store headers as the first answer", async () => {
@@ -243,7 +267,7 @@ describe("GET /api/papers/[id]/figure-image — an upload's kept cut (P12-61)", 
     const narrow = await bytesOf(await call(UPLOAD_ID, "?page=2&fig=4"));
     const chart = await bytesOf(await call(UPLOAD_ID, "?page=3&fig=5"));
     expect(mocks.extractPdfFigures).toHaveBeenCalledTimes(3);
-    expect(mocks.readUploadPdf).toHaveBeenCalledTimes(3);
+    expect(mocks.withUploadPdfSource).toHaveBeenCalledTimes(3);
     expect(await keptObjects()).toHaveLength(3);
 
     // Each is then answered from its own kept picture — never another figure's.
@@ -251,7 +275,7 @@ describe("GET /api/papers/[id]/figure-image — an upload's kept cut (P12-61)", 
     const narrowAgain = await bytesOf(await call(UPLOAD_ID, "?page=2&fig=4"));
     const chartAgain = await bytesOf(await call(UPLOAD_ID, "?page=3&fig=5"));
     expect(mocks.extractPdfFigures).toHaveBeenCalledTimes(3);
-    expect(mocks.readUploadPdf).toHaveBeenCalledTimes(3);
+    expect(mocks.withUploadPdfSource).toHaveBeenCalledTimes(3);
     expect(Buffer.compare(wideAgain, wide)).toBe(0);
     expect(Buffer.compare(narrowAgain, narrow)).toBe(0);
     expect(Buffer.compare(chartAgain, chart)).toBe(0);
@@ -263,19 +287,19 @@ describe("GET /api/papers/[id]/figure-image — an upload's kept cut (P12-61)", 
     await storeUpload(OWNER);
     await call(UPLOAD_ID, "?page=2&fig=3");
     await call(UPLOAD_ID, "?page=2&fig=3");
-    expect(mocks.readUploadPdf).toHaveBeenCalledTimes(1);
+    expect(mocks.withUploadPdfSource).toHaveBeenCalledTimes(1);
     expect(mocks.extractPdfFigures).toHaveBeenCalledTimes(1);
 
     revision.value = "5";
     const recut = await call(UPLOAD_ID, "?page=2&fig=3");
 
     expect(recut.status).toBe(200);
-    expect(mocks.readUploadPdf).toHaveBeenCalledTimes(2);
+    expect(mocks.withUploadPdfSource).toHaveBeenCalledTimes(2);
     expect(mocks.extractPdfFigures).toHaveBeenCalledTimes(2);
     expect(await keptObjects()).toHaveLength(2);
     // And the new cut is kept in its turn.
     await call(UPLOAD_ID, "?page=2&fig=3");
-    expect(mocks.readUploadPdf).toHaveBeenCalledTimes(2);
+    expect(mocks.withUploadPdfSource).toHaveBeenCalledTimes(2);
 
     await purgeExpiredUploads();
     const left = await keptObjects();
@@ -408,7 +432,7 @@ describe("GET /api/papers/[id]/figure-image — an upload's kept cut (P12-61)", 
       expect(res.headers.get("Cache-Control")).toBe(PRIVATE_CACHE);
     }
     expect(mocks.readUploadFigureCut).not.toHaveBeenCalled();
-    expect(mocks.readUploadPdf).not.toHaveBeenCalled();
+    expect(mocks.withUploadPdfSource).not.toHaveBeenCalled();
     expect(mocks.writeUploadFigureCut).not.toHaveBeenCalled();
   });
 });
@@ -432,7 +456,8 @@ describe("GET /api/papers/[id]/figure-image — a public paper is unchanged by t
       sourceLink: { url: "https://arxiv.org/pdf/2610.00001", kind: "pdf", label: "arxiv", rank: 1 },
       attempts: [],
     });
-    mocks.getPdfBytes.mockResolvedValue({ bytes: Buffer.from(PDF) });
+    const downloaded = Buffer.from(PDF);
+    mocks.getPdfBytes.mockResolvedValue({ bytes: downloaded });
 
     const first = await call(PUBLIC_ID, "?page=2&fig=3");
     const second = await call(PUBLIC_ID, "?page=2&fig=3");
@@ -446,6 +471,9 @@ describe("GET /api/papers/[id]/figure-image — a public paper is unchanged by t
     }
     expect(mocks.getPdfBytes).toHaveBeenCalledTimes(2);
     expect(mocks.extractPdfFigures).toHaveBeenCalledTimes(2);
+    // The downloaded bytes themselves reach the engine: no second copy of the PDF is made on the way.
+    expect(mocks.extractPdfFigures.mock.calls[0][0]).toBe(downloaded);
+    expect(mocks.withUploadPdfSource).not.toHaveBeenCalled();
     expect(mocks.readUploadFigureCut).not.toHaveBeenCalled();
     expect(mocks.writeUploadFigureCut).not.toHaveBeenCalled();
     expect(existsSync(path.join(uploadDir, "figure-cuts"))).toBe(false);

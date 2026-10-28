@@ -29,6 +29,12 @@
 // engine would not load) is never kept. A public paper is unchanged: it has
 // its edge cache, and nothing about it is stored here.
 //
+// P12-61 (§1h.434, part 3): no whole copy of the PDF is held. An upload's PDF
+// is handed to the engine as a file (`withUploadPdfSource`: the stored file
+// itself on disk, a private temp file removed afterwards from the bucket) and
+// MuPDF reads from it only what the page needs; a public paper's downloaded
+// bytes go to the engine as they are, read through a stream, not copied twice.
+//
 // No model, no key. The body is the PNG's bytes, never a `data:` URL.
 
 import { NextResponse, type NextRequest } from "next/server";
@@ -36,12 +42,12 @@ import { fetchPaperById } from "@/lib/papers/fetch-by-id";
 import { getFullText } from "@/lib/papers/full-text";
 import { getPdfBytes } from "@/lib/papers/pdf-text";
 import { rawItemToPaper } from "@/lib/feed/mapper";
-import { extractPdfFigures } from "@/lib/figures/pdf-engine";
+import { extractPdfFigures, type PdfEngineResult, type PdfSource } from "@/lib/figures/pdf-engine";
 import {
   bareUploadId,
   claimsUploadId,
   readUploadFigureCut,
-  readUploadPdf,
+  withUploadPdfSource,
   writeUploadFigureCut,
 } from "@/lib/papers/upload-store";
 import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
@@ -103,9 +109,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const label = figureLabel(req.nextUrl.searchParams.get("fig"));
   if (label === null) return reject(400, "fig required", refusal);
 
+  // The engine's one call for this figure. A failure of the engine is a result here, not a throw, so that a
+  // failure to fetch the PDF (which is not the engine's) is not taken for one.
+  const cut = async (source: PdfSource): Promise<{ extracted: PdfEngineResult | null }> => {
+    try {
+      return { extracted: await extractPdfFigures(source, { maxPages: MAX_PAGE, maxFigures: 1, onlyPage: page, label }) };
+    } catch (err) {
+      console.warn("[figure-image] extract failed:", err);
+      return { extracted: null };
+    }
+  };
   // The upload whose cut is kept once it is made; null for a public paper.
   let keepFor: string | null = null;
-  let bytes: Uint8Array;
+  let ran: { extracted: PdfEngineResult | null } | null;
   if (privately) {
     // P0-05 / P0-08: only the canonical `upload:<hash16>` is an upload id, and
     // only its owner is answered. A spelling that merely claims to be one is
@@ -119,9 +135,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const kept = await readUploadFigureCut(hash16, page, label);
     if (kept) return picture(kept.png, true);
     keepFor = hash16;
-    const stored = await readUploadPdf(hash16);
-    if (!stored) return reject(404, "Upload not found.", refusal);
-    bytes = new Uint8Array(stored);
+    ran = await withUploadPdfSource(hash16, cut);
+    if (!ran) return reject(404, "Upload not found.", refusal);
   } else {
     const raw = await fetchPaperById(paperId);
     if (!raw) return reject(404, "Paper not found");
@@ -142,23 +157,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const pdf = await getPdfBytes(link.url);
     if ("error" in pdf) return reject(502, pdf.error);
-    bytes = new Uint8Array(pdf.bytes);
+    ran = await cut(pdf.bytes);
   }
 
-  // From here the engine runs, and every answer says so.
+  // From here the engine has run, and every answer says so.
   const engineRan = { ...refusal, ...FIGURE_ENGINE };
-  let extracted: Awaited<ReturnType<typeof extractPdfFigures>>;
-  try {
-    extracted = await extractPdfFigures(bytes, {
-      maxPages: MAX_PAGE,
-      maxFigures: 1,
-      onlyPage: page,
-      label,
-    });
-  } catch (err) {
-    console.warn("[figure-image] extract failed:", err);
-    return reject(502, "Could not read the page", engineRan);
-  }
+  const extracted = ran.extracted;
+  if (!extracted) return reject(502, "Could not read the page", engineRan);
 
   const found = extracted.figures[0];
   if (!found || found.png.byteLength === 0) {
