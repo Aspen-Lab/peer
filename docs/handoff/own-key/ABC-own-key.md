@@ -9,7 +9,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 | HELD BY | manager session (Claude Code desktop, worktree `.claude/worktrees/objective-wu-e8d6fe`) |
 | BRANCH | `own-key-on-web` (cut from `origin/main` db0f070a after PR #36 merged; name approved by the owner 2026-10-25). Repository `Aspen-Lab/peer`. No push without the owner's word (AGENTS.md). The owner merges the PR himself (R6). |
 | ROUND | 0 — implementation of lanes 1–4; round 1 scores after all four land |
-| CURRENT ITEM | L1-C and L3-A running; L2 verified (full suite running); L4-A, L2-A queued |
+| CURRENT ITEM | L1-C and L3-fix running; L2, L3, L4 landed; L4-A, L2-A queued |
 | NEXT TURN | on each worker report: verify → land on the branch → refill up to the cap of two groups |
 | STOPPED BECAUSE | — |
 | TARGET | **97.9 per theme, two consecutive rounds** (the owner, 2026-10-28, R5: "达标线用 97.9，每个主题连续两轮达到就停。") |
@@ -29,6 +29,8 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 - **R8 (2026-10-28).** Re-aimed test, accepted: spend-scans scan 5 "reports the guarded count" now sorts the walked list before comparing; the untouched tree failed it on Windows only for directory order (`papers/report` before `papers/[id]`). Same names, same count check; 8 → 9 with `ai/check-key`.
 - **R9 (2026-10-28), on L4-C's worry that keys may survive sign-out.** Checked: `shouldClearOnConfirmedSignOut` needs `syncedAccountId !== null`, and `profile-sync.tsx:912` records the owner eagerly at every confirmed sign-in, before the pull. A reader who signs out was signed in on this browser, so the id is set and `logOut()` runs: the dialog's and /privacy's "signing out removes it from this browser" hold. Residual edge, accepted: if the auth check after sign-out fails (network), the 60 s cookie waits for the next load. No change.
 - **R10 (2026-10-28).** L4 mutation M3 (drop the "//" / "/\\" prefix check in `safeReturnPath`) left the tests green: an equivalent mutant, because the exact allow-list (`/welcome`, `/profile`) refuses those values anyway; the prefix check stays as defence in depth. M3b (drop the allow-list) → 4 red; M3c (callback forwards `next` unchecked) → 4 red.
+- **R11 (2026-10-28).** Turbopack refuses a `node_modules` junction that points outside the project ("Symlink [project]/node_modules is invalid, it points out of the filesystem root"; the dev server exited 1 after 14 s, no orphan left). The branch worktree gets its own `npm ci`; lanes and `own-key-verify` keep their junction / install (tests and tsc are unaffected). The Browser pane twice refused `localhost:3000` while the server was down; retry once after the install, else render-check by HTTP.
+- **R12 (2026-10-28), on L3-A (`L3-A-20261028T1725Z.md`, A10 2.0 + A11 0.75 = 2.75).** All seven defects are accepted for L3-fix (`briefs/L3-fix.md`): D1–D3 as R7, with the no-credit detectors widened (Anthropic "credit balance is too low", Qwen `Arrearage`) and run before the status switch; D4 the /privacy Check key paragraph rewritten to name the one log line (`LlmUsage`: provider, model, tokens, time, ok) instead of "keeps nothing"; D5 Anthropic `maxRetries: 0` for the check; D6 "Sign in to check your key." when signed out; D7 an empty 200 is `ok`, and a non-transient provider error gets its own `error` line instead of "Try again". The gate (KeyCheck mounted nowhere) closes in the same pass.
 
 ## §3 Items
 
@@ -47,11 +49,11 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 | id | role | status | worktree | evidence |
 |---|---|---|---|---|
 | L1-C | C | RUNNING (resumed 2026-10-28 when L4-C finished) | `.claude/worktrees/own-key-lane1` | — |
-| L2-C | C | DONE, VERIFIED (full suite pending) | `.claude/worktrees/own-key-lane2` | aeba4d49 note under the key field, 187597a6 AI provider row, 495eeba6 paper page sign-in. Manager: tsc 0, eslint 0 errors (44 warnings, pre-existing), touched tests ×3 = 933 pass / 1 fail (jev-setup, CRLF baseline); M5 (note shown for unknown/unconfigured) → 4 red; M6 (keyNeedsSignIn always false) → 1 red (unit level; the page tests take the flag as input); restored byte-identical. |
+| L2-C | C | LANDED 68163acd, f6cfe7ce, 43e2a404 | `.claude/worktrees/own-key-lane2` | aeba4d49 note under the key field, 187597a6 AI provider row, 495eeba6 paper page sign-in. Manager: tsc 0, eslint 0 errors (44 warnings, pre-existing), touched tests ×3 = 933 pass / 1 fail (jev-setup, CRLF baseline); M5 (note shown for unknown/unconfigured) → 4 red; M6 (keyNeedsSignIn always false) → 1 red (unit level; the page tests take the flag as input); restored byte-identical. Full suite: 10752 tests, 35 failed, **0 new**. |
 | L2-A | A | QUEUED (cap) | — | — |
 | L3-C | C | LANDED 7b68634f, 14961cb2 | `.claude/worktrees/own-key-lane3` | 06e101c8 route + privacy, 1ac28885 KeyCheck. Manager in own-key-verify: tsc 0, eslint 0 on 13 files, touched tests ×3 = 272 pass / 2 fail (both baseline: privacy standing, upload record); M1 provider resolved before the gate → 6 red; M2 key rendered in the status line → 2 red; both restored byte-identical. Full suite: 10790 tests, 34 failed, **0 new** vs baseline, 1 fixed (scan 5, R8). |
-| L3-A | A | RUNNING (started when L2-C finished) | own-key-lane3 (read only) | — |
-| L3-fix | C | QUEUED after L3-A (R7) | — | — |
+| L3-A | A | DONE | own-key-lane3 (read only) | `L3-A-20261028T1725Z.md`: A10 FAIL 2.0, A11 FAIL 0.75, B5 PASS; D1–D7; gate: KeyCheck unmounted |
+| L3-fix | C | RUNNING (lane 3's C resumed, worktree reset to the branch tip) | `.claude/worktrees/own-key-lane3` | brief `briefs/L3-fix.md` (R7 + R12 + mount) |
 | L4-C | C | LANDED 27c1d03a, 2fc2367b, a6278be9, 395e5cfe, acbc8adf | `.claude/worktrees/own-key-lane4` | 15ec36a6 return path + open redirect, 73eff44d Account step + AI-step sign-in, 780cd45d AI summary, 1285860a sign-out dialog, 5708ad40 reset text. Manager: tsc 0, eslint 0 errors (49 warnings, pre-existing), touched tests ×3 = 334/334; M3 equivalent (R10), M3b → 4 red, M3c → 4 red, M4 (keys ignored in signOutPrompt) → 3 red; all restored byte-identical. Full suite: 10814 tests, 35 failed, **0 new** vs baseline. |
 | L4-A | A | QUEUED (cap) | — | — |
 | L1-A … L4-A | A | QUEUED | — | — |
@@ -67,6 +69,9 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 - 2026-10-28 | 14961cb2 | manager | L4-C reported (5 commits); L1-C resumed into the freed slot; L4 verified (tsc, eslint, ×3, four mutations); rulings R9, R10.
 - 2026-10-28 | acbc8adf | manager | L4 full suite 0 new failures; L4 landed (5 cherry-picks).
 - 2026-10-28 | acbc8adf | manager | L2-C reported (3 commits); L3-A started in the freed slot; L2 verified (tsc, eslint, ×3, two mutations).
+- 2026-10-28 | 43e2a404 | manager | L2 full suite 0 new; L2 landed (3 cherry-picks, clean). Combined tip tsc 0; full suite started.
+- 2026-10-28 | 43e2a404 | manager | combined tip (L2+L3+L4) full suite: 10994 tests, 34 failed, **0 new**, 1 fixed (scan 5).
+- 2026-10-28 | 43e2a404 | manager | dev server needs a real node_modules (R11); branch worktree npm ci; /welcome Account + AI steps and /privacy render on localhost:3000, no console errors. L3-A reported 2.75; R12; L3-fix started in the freed slot.
 
 ## §6 Clock
 
