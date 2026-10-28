@@ -8,8 +8,8 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 |---|---|
 | HELD BY | manager session (Claude Code desktop, worktree `.claude/worktrees/objective-wu-e8d6fe`) |
 | BRANCH | `own-key-on-web` (cut from `origin/main` db0f070a after PR #36 merged; name approved by the owner 2026-10-25). Repository `Aspen-Lab/peer`. No push without the owner's word (AGENTS.md). The owner merges the PR himself (R6). |
-| ROUND | 1 scored (A 85.4, B 100.0); round 2 after R1-fixB |
-| CURRENT ITEM | R1-fixB running; then round 2 scoring |
+| ROUND | 2 — scoring at e267e1f1 (round 1: A 85.4, B 100.0) |
+| CURRENT ITEM | round 2 scoring (3 readers) |
 | NEXT TURN | on each worker report: verify → land on the branch → refill up to the cap of two groups |
 | STOPPED BECAUSE | — |
 | TARGET | **97.9 per theme, two consecutive rounds** (the owner, 2026-10-28, R5: "达标线用 97.9，每个主题连续两轮达到就停。") |
@@ -58,7 +58,8 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 | L1-A | A | DONE | own-key-lane1 (read only) | `L1-A-20261028T185241Z.md`: B8, B10, A12 PASS; B9 D1 0.25 (stale comments) |
 | L1-fix | C | LANDED 26accd41 | own-key-lane1 | comments only (diff checked: no non-comment line changed); tsc 0; 190 tests pass |
 | R1-fixA | C | LANDED ac19aa7e, 38aeef1c, 25d64586 | own-key-lane4 | tsc 0; eslint 0 errors; ×3 143 pass / 1 baseline; M17 (signed-in kicker back to Optional) → 2 red; 375 px checked in the browser: "Skip sign-in →" on one line |
-| R1-fixB | C | RUNNING | own-key-lane4 | `briefs/R1-fixB.md` (R18) |
+| R1-fixB | C | LANDED 61a47960, 4cbe5388, f1f464e7, 549f52ed, e267e1f1 | own-key-lane4 | five items of R18; tsc 0; ×3 570 pass / 1 baseline; M18 (dialog back to "this device") → 5 red |
+| R2-score | readers ×3 + director | RUNNING at e267e1f1 | own-key-verify (read only) | pack `R2-pack/`; full suite 11185 / 34 failed / 0 new |
 | L4-fix2 | C | LANDED 4a883c0a | own-key-lane4 | a decoded "/" allowed in a paper return path; M16 (literal "/" allowed) → 4 red |
 | R1-score | readers ×3 + director | DONE: A 85.4 / B 100.0 (median); director 89.58 / 97.73 | `own-key-verify` (read only) | pack: notes `R1-pack/` (static renders, live captures, 375 px screenshot, test evidence); full suite 11175 / 34 failed / 0 new |
 | L2-C | C | LANDED 68163acd, f6cfe7ce, 43e2a404 | `.claude/worktrees/own-key-lane2` | aeba4d49 note under the key field, 187597a6 AI provider row, 495eeba6 paper page sign-in. Manager: tsc 0, eslint 0 errors (44 warnings, pre-existing), touched tests ×3 = 933 pass / 1 fail (jev-setup, CRLF baseline); M5 (note shown for unknown/unconfigured) → 4 red; M6 (keyNeedsSignIn always false) → 1 red (unit level; the page tests take the flag as input); restored byte-identical. Full suite: 10752 tests, 35 failed, **0 new**. |
@@ -92,6 +93,11 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 - Reader 2 (`R1-reader-2-20261028T190043Z.md`): **A 85.4** (A12 1.0 — CHANGELOG and also README: nothing on Check key, the sign-out dialog, needing to sign in to use a key, Tavily removed, and the README's wizard order lacks Account; A5 0.25 Optional twice; A5 0.25 375 px wrap; A1 0.25 borderline "there, paste it again"), **B 100.0**. Pass requirement 2 on the letter (same as reader 1), costed once under A12.
 - **Score of record, round 1 (median of three readers): Theme A 85.4, Theme B 100.0.** Director: A 89.58, B 97.73. Theme B: first round at or above 97.9. Theme A: below.
 
+## §4e Round 2 — director's score at e267e1f1 (written before reading any reader)
+
+- Every round-1 defect re-checked on the live app and the static pack: CHANGELOG and README entries present (A12 GONE); Account title "Sign in." under "Optional", signed-in kicker "Account" (A5 GONE); 375 px "Skip sign-in →" on one line (A5 GONE, screenshot in `R2-pack/`); Profile key paragraph reworded (A1 GONE); dialog says "this browser" throughout (A8 GONE); reset line counts the keys (A9 GONE); Jev note off the Welcome AI step (A6 GONE); stale Tavily comments reworded (B9 GONE).
+- No new defect found. Theme A 12 / 12 → **100.0**; Theme B 11 / 11 → **100.0**.
+
 ## §5 Log
 
 - 2026-10-28 | db0f070a | manager | branch cut; four lane worktrees; baselines run; four Cs spawned.
@@ -116,6 +122,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 - 2026-10-28 | 61492242 | manager | tip +L2-fix full suite: tsc 0; 11168 tests, 34 failed, **0 new**. Reader brief `briefs/R1-reader.md` written.
 - 2026-10-28 | 84dbc1c6 | manager | L4-fix2 landed (4a883c0a); round-1 pack built; readers ×3 started; L1-A reported (R16); L1-fix started; CHANGELOG entry 1e4a1a98; director's score A 89.58 / B 97.73 (§4c).
 - 2026-10-28 | 2eae0788 | manager | round 1 scored A 85.4 / B 100.0; R17, R18; R1-fixA landed; R1-fixB started. Tip full suite: tsc 0; 11180 tests, 34 failed, **0 new**. R1-fixB's C stopped on the usage limit ("resets 4:20pm") before editing anything; resumed by message at 16:41 CDT after three clock ticks.
+- 2026-10-28 | e267e1f1 | manager | R1-fixB landed; dev server restarted (the app had stopped it; no orphan); round-2 pack built; full suite 11185 / 34 failed / 0 new; readers ×3 started; director 100.0 / 100.0 (§4e).
 
 ## §6 Clock
 
