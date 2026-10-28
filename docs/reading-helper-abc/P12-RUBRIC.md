@@ -223,3 +223,7 @@ A P12-88 on `921dbd8b`; readers B3-r1 and B3-r2: P1 95.83, P2 95.83, P3 95.83 (E
 ## Scores — Theme C1 phase 4 (§1h.477)
 
 P6 4 / 5 (one damaged run, a set_role of the first results part), P4 2 / 2 (fallbacks): C1 not yet 100 % on P6.
+
+## Scores — Theme C1 phase 5 (§1h.481)
+
+P6 5 / 5 exact (3 reviewed, 2 all-refused fallbacks; no row moved), P4 1 / 1 exact (reviewed, 0 corrections). Consecutive passes toward the stop line: P3 2, P4 2+, P1 1, P2 1, P5 1, P6 1. The confirming round is phase 6 (P1–P6 × 5 on one head).

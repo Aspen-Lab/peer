@@ -2656,6 +2656,39 @@ All three go to the round-4 A.
 
 → **A P12-92 (Theme B round 4)** starts on `8ff00eea`.
 
+### §1h.481 — 2026-10-28 — C1 PHASE 5: P6 5/5 EXACT, P4 REVIEWED EXACT; AN ALL-REFUSED REPLY STAYS A FALLBACK; THE CONFIRMING ROUND (PHASE 6, P1–P6 × 5), THE MANAGER'S CALL CEILING 150 → 245
+
+**A P12-57 phase 5** (report landed `ffe1bb29`; 6 runs on `795aed09`; 15 calls, 148 of 150 spent; no quota answer; key hits 0; no four-word run of the papers in the report).
+
+C1, scored by the manager (`score-c1.py`):
+- **P6 5 / 5 exact.** Every run is 9 / 9 parts, with no row unlike the reviewed C0 map.
+  - Three runs were reviewed with 0 corrections.
+  - Two fell back as `unusable` / `all-refused`.
+  - The two corrections that did damage in phases 3 and 4 came back and were refused:
+    - a `set_role` of part 1 to setup (run 3);
+    - the pair of splits at 11 and 12 (run 4, now `piece-too-short`).
+- **P4 1 / 1 exact.** Reviewed with 0 corrections, with no fallback, as C P12-91's rule 2 meant.
+
+**Ruled:**
+1. **A reply whose every correction is refused stays a fallback** (`unusable`, cause `all-refused`). The model disagreed with the draft, and none of its disagreement was safe to apply, so "the review agreed" would be untrue. The page shows the same map either way. A split at a part's own edge is the one case of agreement (§1h.477).
+2. **The C1 count.** By the stop line, every paper must reach 100 % in two consecutive scored rounds.
+   - Since phase 2, C P12-86, C P12-90 and C P12-91 only refuse more.
+   - The draft is exact on all six papers (C0 100 since round 2). So a refused correction can never cost an exact map, and an earlier pass stands as a lower bound on today's code.
+   - That gives these consecutive passes:
+
+     | Paper | Passes | Count |
+     |---|---|---|
+     | P3 | phases 2 and 3 | 2 |
+     | P4 | phases 2 to 5 | 2+ |
+     | P1, P2, P5 | phase 2 | 1 |
+     | P6 | phase 5 | 1 |
+3. **The confirming round, A P12-57 phase 6:** P1–P6 × 5 on one head, the current one, so the round of record stands on a single tree.
+   - It needs about 85 calls: P4 takes 2 a run, the others 3.
+   - **The manager's own ceiling of 150 calls (§1h.462) is raised to 245** for this round alone. That ceiling was a guard set by the manager, not by the owner.
+   - Any 429, quota or billing answer still stops at once. The key stays BYOK only and is never printed.
+   - Phases 2 to 5 spent 55 to 66 thousand input tokens per phase.
+   - The owner is told.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2966,7 +2999,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-54 | DONE — C (Sonnet); landed (R13b) with the revision at 5 | R13b: one-page figure calls up to 27,000,000 bytes | invented-input test; own mutation; gates | checkpoint P12-54-C-<UTC>.md; manager verifies | briefs/P12-54.md; §1h.429 |
 | P12-55 | DONE — C (Sonnet); landed (R11a, R12a) | R11a ceilings with grid clustering; R12a strokes honour the clip | invented-input tests; 5 re-aimed budget tests named; own mutations; gates | checkpoint P12-55-C-<UTC>.md; manager verifies | briefs/P12-55.md; §1h.429 |
 | P12-56 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | R14a Extended Data; R6b the line before; R15a the bar | invented-input tests; own mutations; gates | checkpoint P12-56-C-<UTC>.md; manager verifies | briefs/P12-56.md; §1h.429 (d), §1h.431 |
-| P12-57 | PHASE 5 RUNNING — A (Sonnet) on e56d6a40; P6 × 5, P4 × 1; 17 calls | C1 with the owner's test key: phase 1 harness on P1; phase 2 arms after C P12-53 and Tier 0 land | BYOK path, rows, Google calls, hygiene 0 | report P12-57-A-<UTC>.md | briefs/P12-57.md; §1h.430 |
+| P12-57 | PHASE 6 RUNNING — A (Sonnet); phase 5 report ffe1bb29: P6 5/5, P4 1/1; phase 6 P1–P6 × 5, ceiling 245 (§1h.481) | C1 with the owner's test key: phase 1 harness on P1; phase 2 arms after C P12-53 and Tier 0 land | BYOK path, rows, Google calls, hygiene 0 | report P12-57-A-<UTC>.md | briefs/P12-57.md; §1h.430 |
 | P12-58 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | D1: upload keeps its document; reading says pending; the page keeps asking | route and hook tests; own mutations; gates | checkpoint P12-58-C-<UTC>.md; manager verifies | briefs/P12-58.md; §1h.432 |
 | P12-59 | DONE — B (Sonnet), report on the branch | the 55 s request; P5's memory by stage; P1 / P3 titles | file:line; three rules each | report P12-59-B-<UTC>.md | briefs/P12-59.md; §1h.432 |
 | P12-60 | DONE — B (Sonnet), report on the branch | open only the figure's page: memory by stage on P5; cache today; three candidates measured | file:line; measures | report P12-60-B-<UTC>.md | briefs/P12-60.md; §1h.433 |
