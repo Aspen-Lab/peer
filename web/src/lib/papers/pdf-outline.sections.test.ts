@@ -858,6 +858,33 @@ describe("the first end-matter heading opens its section, as the later ones do (
     expect(textOf([page(1, rows)])).not.toContain("kept in this part");
   });
 
+  // §1h.440: an appendix that opens the end matter begins the appendix as a later one does, so the headings
+  // inside it that name an argument part ("Additional results", "Methods") are not read as parts of the argument.
+  it.each(["Appendix A Proofs", "Supplementary Material"])(
+    "reads no part of the argument after %s when it opens the end matter, and still reads the notes after it",
+    (opener) => {
+      const rows: Row[] = [
+        ...BODY_ROWS,
+        r(opener, "head", 20),
+        r("Everything the paper could not hold is kept in this part of the file."),
+        r("Additional results", "sub", 20),
+        r("More cells were cycled and the extra curves are shown below for the reader."),
+        r("Methods", "head", 20),
+        r("Each cell was built in a glove box by the same hand on the same day of the week."),
+        r("Acknowledgements", "head", 20),
+        r(THANKS),
+      ];
+      expect(bucketsOf([page(1, rows)])).toEqual([
+        ["1 Introduction", "introduction"],
+        ["2 Results", "results"],
+        ["Acknowledgements", "acknowledgments"],
+      ]);
+      const text = textOf([page(1, rows)]);
+      for (const appendixText of ["kept in this part", "extra curves", "glove box"]) expect(text).not.toContain(appendixText);
+      expect(text).toContain(THANKS);
+    },
+  );
+
   it("adds no row for a first end-matter heading with nothing under it, numbered or not", () => {
     const empty = (heading: string, kind: Kind): PdfPageText[] => [
       page(1, [...BODY_ROWS, r(heading, kind, 20), r("References", "head", 20), ...prose(...REFERENCES)]),

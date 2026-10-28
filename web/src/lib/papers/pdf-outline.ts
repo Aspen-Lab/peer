@@ -2457,8 +2457,8 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
   // first end-matter heading is named the same way, as a note, the references or an appendix. `resumed`: the
   // current stretch is a part of the argument, whose sub-headings are read; `opensTail`: the heading that
   // closed the argument, which stays closed when a wrapped second line joins it (and is named again by the
-  // joined words); `appendix`: an appendix after the first end-matter heading has begun, and no heading
-  // after it opens a part of the argument again.
+  // joined words); `appendix`: an appendix has begun (P12-62: the first end-matter heading may be one), and
+  // no heading after it opens a part of the argument again.
   let tail = false;
   let reading = true;
   let resumed = false;
@@ -2571,10 +2571,8 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
       if (tail) {
         // The heading that closed the argument ends it by definition, and is named like the ones after it.
         let part = tailPartOf(heading, canonical, opensTail || ends);
-        if (!opensTail) {
-          if (part === "appendix") appendix = true;
-          else if (part === "argument" && appendix) part = null;
-        }
+        if (part === "appendix") appendix = true;
+        else if (part === "argument" && appendix) part = null;
         if (part !== null) {
           reading = part === "note" || part === "argument";
           resumed = part === "argument";
