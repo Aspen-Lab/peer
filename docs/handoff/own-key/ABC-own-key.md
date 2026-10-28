@@ -162,3 +162,15 @@ Session cron (CronCreate) `20 * * * *`, session-only, auto-expires after 7 days 
 4. Refill up to two groups in R1's order.
 5. After all four lanes land: mount `KeyCheck` in `AiKeyFields`, write one CHANGELOG entry, run scoring round 1 (RUBRIC.md).
 6. Never push, merge or sign in locally without the owner's word.
+
+## §8 Backlog (seen, not costed; not fixed after the loop ended)
+
+| id | what | seen by | why not now |
+|---|---|---|---|
+| BL-1 | While the sign-in check has not answered, a signed-in reader can see "Sign in to use your key" (AI step) or the signed-out Account copy for a moment | R3 readers 1 and 2 | a behaviour change in Theme B's area (B1); uncosted; needs a decision on what to show while auth is unknown |
+| BL-2 | /privacy's Check key log-line list omits the fixed label `path=test` | R3 reader 3 | true as written; a change to /privacy needs its pins; uncosted |
+| BL-3 | "AI key" (Welcome) vs "API key" (fields, Account step) | R3 reader 3 | pre-existing title "Connect an AI key (optional)."; a wording sweep |
+| BL-4 | The sign-out dialog moves from "keys" to "it" between sentences when one key is saved | R3 reader 1 | uncosted; follows the singular rule of R13 |
+| BL-5 | "Sign in under Account at the top of this page." sits below the Check key row, not beside the note it completes | R3 reader 1 | uncosted layout order |
+| BL-6 | The AI step's subtitle and callout both say "shows the reading without a model" | R3 reader 1 | older copy, untouched by this work |
+| BL-7 | Static renders cannot show hook-read auth states (zustand serves `unknown` on the server) | readers, rounds 2–3 | a render-tool limit; live captures cover it |
