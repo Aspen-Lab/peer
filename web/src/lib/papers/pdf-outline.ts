@@ -1400,20 +1400,28 @@ function opensMidSentence(
   pitch: number,
   body: { size: number; font: string },
   furniture: Set<string>,
+  leftOut?: (index: number) => boolean,
 ): boolean {
-  return followsOpenProse(read, index, pitch, body, furniture) && !inCaption(read, index - 1, pitch, body, furniture);
+  return followsOpenProse(read, index, pitch, body, furniture, leftOut) && !inCaption(read, index - 1, pitch, body, furniture, leftOut);
 }
 
+/**
+ * `leftOut` (P12-70): the lines the reading leaves out of the prose (margin print, the dated box, the text of a
+ * figure's panels). A line left out is not open prose: it is not the first half of a sentence a label line goes on
+ * with, whatever its size and face. (C P12-51's figure text is set in the body's own size and face when it is a few
+ * words of a plot's axis, and stands directly above the caption.)
+ */
 function followsOpenProse(
   read: PdfLine[],
   index: number,
   pitch: number,
   body: { size: number; font: string },
   furniture: Set<string>,
+  leftOut?: (index: number) => boolean,
 ): boolean {
   const line = read[index];
   const above = index > 0 ? read[index - 1] : undefined;
-  if (!above || above.page !== line.page || above.block || isFurniture(above, furniture)) return false;
+  if (!above || above.page !== line.page || above.block || isFurniture(above, furniture) || leftOut?.(index - 1)) return false;
   const gap = above.y - line.y;
   if (gap <= 0 || gap > (pitch > 0 ? pitch : body.size * 1.2) * 1.5) return false;
   if (Math.abs(above.x - line.x) > body.size * SAME_COLUMN_EMS) return false;
@@ -1431,10 +1439,11 @@ function inCaption(
   pitch: number,
   body: { size: number; font: string },
   furniture: Set<string>,
+  leftOut?: (index: number) => boolean,
 ): boolean {
   for (let j = last, steps = 0; j >= 0 && steps < CAPTION_LOOKBACK; j--, steps++) {
     if (captionOf(read[j])) {
-      if (!followsOpenProse(read, j, pitch, body, furniture)) return true;
+      if (!followsOpenProse(read, j, pitch, body, furniture, leftOut)) return true;
     } else if (j === 0 || !continuesCaption(read[j - 1], read[j], pitch, body, furniture)) {
       return false;
     }
@@ -1452,9 +1461,10 @@ export function captionAt(
   pitch: number,
   body: { size: number; font: string },
   furniture: Set<string>,
+  leftOut?: (index: number) => boolean,
 ): OutlineCaption | null {
   const caption = captionOf(read[index]);
-  return caption && !opensMidSentence(read, index, pitch, body, furniture) ? caption : null;
+  return caption && !opensMidSentence(read, index, pitch, body, furniture, leftOut) ? caption : null;
 }
 
 /**
@@ -2740,7 +2750,7 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
   for (let i = 0; i < read.length; i++) {
     const line = read[i];
     if (skipped[i] || figureText.has(i)) continue;
-    const caption = captionAt(read, i, pitch, body, furniture);
+    const caption = captionAt(read, i, pitch, body, furniture, (j) => skipped[j] || figureText.has(j));
     if (caption) {
       // A caption belongs to the figure pool, not to the prose it interrupts.
       // It is as many lines as it was printed on: the lines under it at the
