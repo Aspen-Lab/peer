@@ -24,6 +24,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 import type { PaperReading, ReadingFigure, ReadingSection } from "@/lib/papers/reading";
 import { GIST_QUESTION, MAX_STRONG_ROWS, type RouteResult, type RouteSection, type RouteTier } from "@/lib/papers/reading-map";
+import { isPlaceholderHeading } from "@/lib/papers/reading-roles";
 import type { QuestionAnswers } from "@/lib/papers/report";
 import { Equation, MathText } from "./math";
 import { Band } from "@/components/ui/band";
@@ -1172,11 +1173,16 @@ function Section({
   // P10-04 (review 3.3): a group heading ("2 Results" holding only "2.1 …") has no paragraphs, no equation
   // and no figure: it is its heading alone, with its anchor, and nothing under it before its first child.
   const alone = section.paragraphs.length === 0 && equations.length === 0 && figures.length === 0;
+  // P12-63 (rule 4; ruling §1h.436 (c)): the opening of a paper that prints no heading above its first text carries the extractors' placeholder
+  // ("Body") for a heading. It is not a word of the paper, so none is printed; the section keeps its anchor and its paragraphs, and the map's row
+  // for it is labelled by its role (`inferRoles`, A1). Only the first section: the placeholder is what the opening is given.
+  const unheaded = index === 0 && isPlaceholderHeading(section.heading);
   return (
     <section id={sectionAnchor(index)} className="mt-8 scroll-mt-20 first:mt-6">
       {/* P1-05: the route marks the heading — an attribute and a tint,
           nothing else — and never the paragraphs under it. */}
       {/* P11-27 (rule 2): the heading is a block of its own — its anchor id and marker, and the notes and highlights taken on its words. */}
+      {!unheaded && (
       <h3
         id={paragraphAnchor(index, headingBlock(section))}
         {...{ [ANCHOR_BLOCK_ATTRIBUTE]: "heading" }}
@@ -1185,6 +1191,7 @@ function Section({
       >
         <NotedText text={section.heading} spots={noteAnchors?.[paragraphAnchor(index, headingBlock(section))]} />
       </h3>
+      )}
       {!alone && (
       <div className="font-reading text-title leading-[1.65] text-text-muted measure-paper space-y-4 reading-justify">
         {following(-1)}

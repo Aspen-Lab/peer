@@ -109,9 +109,18 @@ export const INTRODUCTION_LABEL = "Introduction";
  *  "Body". The PDF outline emits that section with `heading` undefined; `normalize` fills the placeholder in. */
 const NO_HEADING = "Body";
 
+/**
+ * Whether a heading is the placeholder the extractors write for a section that has no heading of its own (or an empty one).
+ * P12-63 (rule 4): the paper's body prints no heading for such an opening - the placeholder is not a word of the paper -
+ * and reads it from here, so the map's rule (A1) and the body's agree on what the placeholder is.
+ */
+export function isPlaceholderHeading(heading: string): boolean {
+  const text = heading.trim();
+  return text === "" || text === NO_HEADING;
+}
+
 function hasNoHeading(row: ReadingMapSection): boolean {
-  const heading = row.heading.trim();
-  return heading === "" || heading === NO_HEADING;
+  return isPlaceholderHeading(row.heading);
 }
 
 /** Where the paper's introduction stands among its top-level rows: named (`front: false`), or the front text. */
