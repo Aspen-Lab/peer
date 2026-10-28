@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { canonicalizeHeading, withInheritedBuckets, withSectionIds, type ExtractedDocument } from "./html-text";
-import { buildOutline, captionAt, type PdfLine, type PdfPageText, type PdfTextItem } from "./pdf-outline";
+import { buildOutline, captionAt, isDropCap, linesOfPageWith, type PdfLine, type PdfPageText, type PdfTextItem } from "./pdf-outline";
 import { buildReadingMap, readableSections } from "./reading-map";
 import { closingPartition } from "./reading-partition";
 
@@ -218,8 +218,18 @@ describe("a drop cap on the third line of the opening's first paragraph (P12-70,
   const line = (str: string, before = PITCH, at: Partial<PdfTextItem> = {}): Row => row(before, text(str, 0, at));
   const paragraph = (lines: string[], before = 24): Row[] => lines.map((str, i) => line(str, i === 0 ? before : PITCH));
 
+  /** What a test changes of the paper: the large mark (`cap`), the paragraph's first three lines and the rest of it, and the row the cap stands in (3 by default, 1 for the usual cap). */
+  interface Variant {
+    cap?: string;
+    first?: string[];
+    rest?: string[];
+    capRow?: 1 | 3;
+  }
   /** `capDrop`: how far the cap's baseline stands under the words' (a cap rarely sits to the hundredth); `capGap`: the padding between the cap and the words. */
-  function nature(capDrop = 0, capGap = 4, indented = true): PdfTextItem[][] {
+  function nature(capDrop = 0, capGap = 4, indented = true, v: Variant = {}): PdfTextItem[][] {
+    const cap = v.cap ?? "S";
+    const first = v.first ?? FIRST;
+    const after = v.rest ?? FIRST_REST;
     const rows: Row[] = [
       line("ARTICLE", 0, { height: 20, fontName: "display", width: 90 }),
       line("https://doi.org/10.0000/s00000-000-00000-0", 20, { height: 8, width: 160 }),
@@ -229,14 +239,18 @@ describe("a drop cap on the third line of the opening's first paragraph (P12-70,
       line("Department of Shore Ecology, University of Tarn, Elmstead", 12, { height: 7, width: 200 }),
       line("Institute of Cells, Fenwick Hall, Elmstead", 8, { height: 7, width: 160 }),
       ...SUMMARY_LINES.map((str, i) => line(str, i === 0 ? 20 : PITCH, { height: 9.5, fontName: "display" })),
-      line(FIRST[0], 28, { x: indented ? INDENT : 100 }),
-      line(FIRST[1], PITCH, { x: indented ? INDENT : 100 }),
-      row(
-        PITCH,
-        text("S", -capDrop, { x: 100, height: CAP, width: INDENT - 100 - capGap }),
-        text(FIRST[2], 0, { x: INDENT }),
-      ),
-      ...FIRST_REST.map((str) => line(str)),
+      ...(v.capRow === 1
+        ? [
+            row(28, text(cap, -capDrop, { x: 100, height: CAP, width: INDENT - 100 - capGap }), text(first[0], 0, { x: INDENT })),
+            line(first[1], PITCH, { x: INDENT }),
+            line(first[2], PITCH, { x: INDENT }),
+          ]
+        : [
+            line(first[0], 28, { x: indented ? INDENT : 100 }),
+            line(first[1], PITCH, { x: indented ? INDENT : 100 }),
+            row(PITCH, text(cap, -capDrop, { x: 100, height: CAP, width: INDENT - 100 - capGap }), text(first[2], 0, { x: INDENT })),
+          ]),
+      ...after.map((str) => line(str)),
       ...paragraph([ANNOUNCE]),
       line(SNAILS, 30, { height: 11, fontName: "display", width: 190 }),
       ...paragraph(plain(14, 1), 16),
@@ -253,7 +267,9 @@ describe("a drop cap on the third line of the opening's first paragraph (P12-70,
     ];
     return pages(rows).map((p) => p.items);
   }
-  const outlineOf = (capDrop = 0, capGap = 4, indented = true) => buildOutline(nature(capDrop, capGap, indented).map((items, i) => ({ page: i + 1, items })));
+  const pagesOf = (capDrop = 0, capGap = 4, indented = true, v: Variant = {}): PdfPageText[] =>
+    nature(capDrop, capGap, indented, v).map((items, i) => ({ page: i + 1, items }));
+  const outlineOf = (capDrop = 0, capGap = 4, indented = true, v: Variant = {}) => buildOutline(pagesOf(capDrop, capGap, indented, v));
 
   /** The outline's sections as the reading would receive them (a section with no heading is "Body"), as a document. */
   function documentOf(outline: ReturnType<typeof buildOutline>): ExtractedDocument {
@@ -308,5 +324,25 @@ describe("a drop cap on the third line of the opening's first paragraph (P12-70,
     const split = closingPartition(map, body, null);
     expect(split).toMatchObject({ sectionId: storms.id, closing: true });
     expect(split?.parts.map((part) => part.role)).toEqual(["results", "conclusion"]);
+  });
+
+  it("is no drop cap when the large part of the row is a word of three letters or more, and nothing is moved from it (ruling §1h.443 (c))", () => {
+    // "Sna" is 41.6 pt, in the body's face, with body-sized words after it in the same row: a large first word welded to
+    // its line, not one or two large letters. The two lines above it are indented as if it were a cap.
+    const word: Variant = { cap: "Sna", first: ["il density rises with wave exposure on the rocky shores", FIRST[1], FIRST[2]] };
+    const lines = pagesOf(0, 4, true, word).flatMap((page) => linesOfPageWith(page, null));
+    const row = lines.find((l) => l.size > 40)!;
+    expect(row.text.startsWith("Sna")).toBe(true);
+    expect(row.cap).toBeUndefined();
+    expect(isDropCap(row, { size: 9.3, font: "body" })).toBe(false);
+    // ...and the reading takes nothing from the row to the line above: the first line stays "il density ...", the word is not joined to it
+    const outline = outlineOf(0, 4, true, word);
+    const all = (outline.sections ?? []).flatMap((s) => [s.heading ?? "", s.text ?? ""]).join("\n");
+    expect(all).toContain("il density rises with wave exposure on the rocky shores");
+    expect(all).not.toContain("Snail density rises with wave exposure on");
+    expect(all).not.toMatch(/Sna(?:il)? ?il density rises with wave exposure on/);
+    // one or two letters are a cap and three are not, the rest of the row being the same
+    expect(outlineOf(0, 4, true, { cap: "S" }).sections?.[0].text).toMatch(/^Snail density/);
+    expect(outlineOf(0, 4, true, { cap: "Sn", first: ["ail density rises with wave exposure on the rocky shores", FIRST[1], FIRST[2]] }).sections?.[0].text).toMatch(/^Snail density/);
   });
 });
