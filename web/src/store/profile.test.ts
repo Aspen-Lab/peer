@@ -1018,6 +1018,47 @@ describe("the reader's Jev key", () => {
   });
 });
 
+// The model provider and the model key are device-only like the Jev key: the
+// sync payload voids them and the server has no column for them, and the store
+// does not trust that — whatever a remote payload carries, they stay as this
+// browser has them.
+describe("the reader's model provider and model key", () => {
+  // An invented string. It is not, and never was, a key.
+  const LOCAL = "model-test-sentinel-not-a-key-0000";
+  const REMOTE = "a-key-a-server-row-must-not-install";
+
+  beforeEach(() => {
+    useProfileStore.setState({ profile: { ...defaultProfile } });
+  });
+
+  it("a remote profile can never set feedAiApiKey, and never clears it", () => {
+    const before = useProfileStore.getState().profile;
+    useProfileStore.getState().hydrateFromRemote({ feedAiApiKey: REMOTE, displayName: "Remote Name" });
+    expect(useProfileStore.getState().profile).toEqual({ ...before, displayName: "Remote Name" });
+    expect(useProfileStore.getState().profile.feedAiApiKey).toBe("");
+
+    useProfileStore.getState().updateFeedAiProvider("openai");
+    useProfileStore.getState().updateFeedAiApiKey(LOCAL);
+    for (const remote of [REMOTE, "", "   "]) {
+      useProfileStore.getState().hydrateFromRemote({ feedAiApiKey: remote });
+      expect(useProfileStore.getState().profile.feedAiApiKey, JSON.stringify(remote)).toBe(LOCAL);
+    }
+  });
+
+  it("a remote profile can never set feedAiProvider, and never resets it (so it cannot clear the key either)", () => {
+    const before = useProfileStore.getState().profile;
+    useProfileStore.getState().hydrateFromRemote({ feedAiProvider: "anthropic", displayName: "Remote Name" });
+    expect(useProfileStore.getState().profile).toEqual({ ...before, displayName: "Remote Name" });
+    expect(useProfileStore.getState().profile.feedAiProvider).toBe("default");
+
+    useProfileStore.getState().updateFeedAiProvider("openai");
+    useProfileStore.getState().updateFeedAiApiKey(LOCAL);
+    useProfileStore.getState().hydrateFromRemote({ feedAiProvider: "default" });
+    useProfileStore.getState().hydrateFromRemote({ feedAiProvider: "gemini", feedAiApiKey: REMOTE });
+    expect(useProfileStore.getState().profile).toMatchObject({ feedAiProvider: "openai", feedAiApiKey: LOCAL });
+  });
+});
+
 // D6 — a backup file must not carry a credential: a restore cannot install one
 // (`stripCredentialFields`), so writing one into the file only puts a secret in
 // a place the reader may email, sync or paste.

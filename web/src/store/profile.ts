@@ -704,10 +704,11 @@ export const useProfileStore = create<ProfileState>()(
           if (remote.digestChannel !== undefined) merged.digestChannel = remote.digestChannel;
           if (remote.digestEmail !== undefined) merged.digestEmail = remote.digestEmail;
           if (remote.digestFrequency !== undefined) merged.digestFrequency = remote.digestFrequency;
-          if (remote.tavilyEnabled !== undefined) merged.tavilyEnabled = remote.tavilyEnabled;
-          if (remote.tavilyApiKey !== undefined) merged.tavilyApiKey = remote.tavilyApiKey;
-          if (remote.feedAiProvider !== undefined) merged.feedAiProvider = remote.feedAiProvider;
-          if (remote.feedAiApiKey !== undefined) merged.feedAiApiKey = remote.feedAiApiKey;
+          // Device-only fields are never read from a remote payload, exactly
+          // like the Jev key: the model provider and key and the Tavily switch
+          // and key live in this browser alone. The sync payload voids them and
+          // the server has no column for them, but this store does not rely on
+          // that — a remote row can neither set nor clear them.
           if (remote.deepReportEnabled !== undefined) merged.deepReportEnabled = remote.deepReportEnabled;
           if (remote.colorTheme !== undefined) {
             // The server may still hold a pre-v2 single-name theme
