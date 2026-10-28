@@ -39,11 +39,12 @@ vi.mock("@/lib/reader/windows", async (importOriginal) => {
   return { ...actual, useWindows: Object.assign(read, actual.useWindows) };
 });
 
-import { useEffect, useState } from "react";
+import { createElement, useEffect, useState } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactElement, ReactNode } from "react";
 import { MASTHEAD_MIN_VIEWPORT_PX } from "@/components/reader/explain-dock";
 import { hookRuntime } from "@/test-support/hook-runtime";
-import { useMarginStore } from "@/lib/reader/margin";
+import { bottomMarginRectOf, useMarginStore, type MarginRect } from "@/lib/reader/margin";
 import { useWindows } from "@/lib/reader/windows";
 import type { Paper } from "@/types";
 import { NotesButton, NotesButtonView, WINDOW_QUERY, opensWindow } from "./notes-button";
@@ -158,5 +159,96 @@ describe("a press on the edge tab on a phone goes to the notes page (P12-77 rule
     expect(opensWindow()).toBe(true);
     expect(opensWindow(() => false)).toBe(false);
     expect(opensWindow((query) => query === WINDOW_QUERY)).toBe(true);
+  });
+});
+
+// P12-77 (ruling §1h.455, item 2): on a phone, with a card standing, the tab stays at the window's right edge and ends 8 px above the band's top.
+//
+// Under 48rem the page registers the narrow reader's band (`ResponsiveMargin`: `presentation: "bottom"`, left 8, across the foot of the window) and
+// `NotesButton` used to hand its `left` to the tab as the margin's left edge: the tab stood "beside" a margin that is not at the right, at
+// `left: 8px; translateX(-100%)`, x -7 to 8 (measured on the real markup and stylesheet). Now under md it is not beside anything, and the band's top is
+// its foot. From md the placement is as it was (including between 768 and 1023, where the same band is registered: not changed by this ruling).
+const sticky = { id: "s1", kind: "sticky" as const, title: "Note 1", order: 1 };
+const BAND: MarginRect = bottomMarginRectOf(390, 844, 1);
+const SIDE: MarginRect = { left: 1000, width: 400, top: 48, bottom: 860 };
+
+/** The markup of the tab as `NotesButton` last handed it its props. */
+const markupOf = (tree: ReactNode) => renderToStaticMarkup(createElement(NotesButtonView, viewOf(tree).props as Parameters<typeof NotesButtonView>[0]));
+const classesOf = (html: string) => (/class="([^"]*)"/.exec(html)?.[1] ?? "").split(/\s+/);
+
+describe("a card standing on a phone: the tab keeps the right edge and ends above the band (§1h.455 item 2)", () => {
+  it("under md, with the band registered and a card standing: not beside it, on the right edge, and its foot is the band's top", async () => {
+    log.wide = false;
+    useMarginStore.setState({ rect: BAND });
+    useWindows.setState({ windows: [sticky], clock: 1 });
+    const tree = await mountButton("edge");
+
+    expect(viewOf(tree).props).toMatchObject({ variant: "edge", beside: false, bandTop: BAND.top });
+    const html = markupOf(tree);
+    expect(classesOf(html)).toContain("right-0");
+    expect(html).not.toContain("left:");
+    expect(html).not.toContain("translateX");
+    expect(html).not.toContain("right-[min(360px,100vw)]");
+    expect(html).toContain(`--tab-band-top:${BAND.top}px`);
+  });
+
+  it("under md with no card standing: on the right edge, no band written", async () => {
+    log.wide = false;
+    useMarginStore.setState({ rect: BAND });
+    const tree = await mountButton("edge");
+
+    expect(viewOf(tree).props).toMatchObject({ beside: false, bandTop: undefined });
+    expect(markupOf(tree)).not.toContain("--tab-band-top:");
+  });
+
+  it("under md with a card standing and no band (a side margin, or none): still on the right edge, and no band to end above", async () => {
+    log.wide = false;
+    useWindows.setState({ windows: [sticky], clock: 1 });
+    for (const rect of [SIDE, null]) {
+      useMarginStore.setState({ rect });
+      const tree = await mountButton("edge");
+
+      expect(viewOf(tree).props, String(rect?.left)).toMatchObject({ beside: false, bandTop: undefined });
+      expect(classesOf(markupOf(tree))).toContain("right-0");
+    }
+  });
+
+  it("from md it is placed as it was: beside the card at the margin's left edge (the side margin, or the band's 8 between 768 and 1023), and the band is not written", async () => {
+    log.wide = true;
+    useWindows.setState({ windows: [sticky], clock: 1 });
+    for (const [rect, left] of [[SIDE, 1000], [BAND, 8]] as const) {
+      useMarginStore.setState({ rect });
+      const tree = await mountButton("edge");
+
+      expect(viewOf(tree).props, String(left)).toMatchObject({ beside: true, marginLeft: left, bandTop: undefined });
+      expect(markupOf(tree)).toContain(`left:${left}px`);
+      expect(markupOf(tree)).not.toContain("--tab-band-top:");
+    }
+  });
+
+  it("the row is never beside a card and never has a band, on a phone or not", async () => {
+    log.wide = false;
+    useMarginStore.setState({ rect: BAND });
+    useWindows.setState({ windows: [sticky], clock: 1 });
+    const tree = await mountButton("row");
+
+    expect(viewOf(tree).props).toMatchObject({ variant: "row", beside: false, bandTop: undefined });
+    expect(log.queries).toEqual([]);
+  });
+
+  it("follows the window across md: it listens for the query's change and lets go on unmount", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("window", {
+      matchMedia: () => ({
+        matches: false,
+        addEventListener: (type: string) => calls.push(`add ${type}`),
+        removeEventListener: (type: string) => calls.push(`remove ${type}`),
+      }),
+    });
+    const mounted = await hookRuntime.mount(() => NotesButton({ variant: "edge", paper }));
+
+    expect(calls).toEqual(["add change"]);
+    mounted.unmount();
+    expect(calls).toEqual(["add change", "remove change"]);
   });
 });

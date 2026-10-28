@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { DOCK_TOP_PX, MASTHEAD_MIN_VIEWPORT_PX, legendHeightPx } from "@/components/reader/explain-dock";
+import { bottomMarginRectOf } from "@/lib/reader/margin";
 import { fitPanes } from "@/components/reader/pane-layout";
 import { THUMB_BAR_PX } from "@/components/shell/thumb-bar";
 import { EDGE_TAB_FOOT_CLEAR_PX, EDGE_TAB_LENGTH_PX, EDGE_TAB_PASSES_DRAG, NOTES_LABEL, NotesButtonView } from "./notes-button";
@@ -171,6 +172,9 @@ describe("the constants this test stands on are what the shell has (P12-77 E1)",
 
     expect(classes).toContain(`[--tab-foot:calc(${THUMB_BAR_PX}px+env(safe-area-inset-bottom,0px))]`);
     expect(classes).toContain("md:[--tab-foot:var(--tab-legend,var(--legend-h))]");
+    // the least top: the masthead's foot (3rem) where there is a masthead, from md; the window's top under it, where there is none
+    expect(classes).toContain("[--tab-floor:0px]");
+    expect(classes).toContain(`md:[--tab-floor:${DOCK_TOP_PX / 16}rem]`);
   });
 });
 
@@ -184,7 +188,7 @@ describe("the tab's foot stays at least 8 px above the legend's top, at every wi
 
           expect(foot - tab.bottom, "the gap above the legend (or the thumb bar)").toBeGreaterThanOrEqual(EDGE_TAB_FOOT_CLEAR_PX);
           expect(tab.bottom, "never below the window").toBeLessThanOrEqual(w.height);
-          expect(tab.top, "never above the masthead's foot").toBeGreaterThanOrEqual(DOCK_TOP_PX);
+          expect(tab.top, "never above the masthead's foot (from md, where there is a masthead)").toBeGreaterThanOrEqual(w.width >= MASTHEAD_MIN_VIEWPORT_PX ? DOCK_TOP_PX : 0);
         });
       }
     }
@@ -196,7 +200,7 @@ describe("the tab's foot stays at least 8 px above the legend's top, at every wi
         for (const label of LABELS) {
           const tab = tabAt(view({ has: label.has }), width, height);
           expect(footTop(width, height) - tab.bottom, `${width} x ${height} ${label.name}`).toBeGreaterThanOrEqual(EDGE_TAB_FOOT_CLEAR_PX);
-          expect(tab.top, `${width} x ${height} ${label.name}`).toBeGreaterThanOrEqual(DOCK_TOP_PX);
+          expect(tab.top, `${width} x ${height} ${label.name}`).toBeGreaterThanOrEqual(width >= MASTHEAD_MIN_VIEWPORT_PX ? DOCK_TOP_PX : 0);
         }
       }
     }
@@ -270,6 +274,54 @@ describe("the label stays on one line, as long as the tab is (P12-77 E1)", () =>
     expect(html).toContain("[writing-mode:vertical-rl]");
     expect(html).toContain("eyebrow");
     expect(classesOf(html)).toEqual(expect.arrayContaining(["items-center", "justify-center"]));
+  });
+});
+
+// P12-77 (ruling §1h.455, item 2): on a phone the cards stand in a band across the foot of the window, not in a margin at the right. The tab stays on the
+// right edge whatever a card does and ends 8 px above the band's top while one stands: the rule of E1 with the band as the foot. From md the band
+// is not read. (`NotesButton` writes `--tab-band-top` only on a phone, only while a card stands: `notes-button.phone.flow.test.tsx`.)
+describe("a card standing on a phone: the tab's foot is the band's top (§1h.455 item 2)", () => {
+  // the band as the page registers it, for the phones that exist (width x height): portrait and landscape, small and large
+  const PHONES = [[390, 844], [375, 667], [360, 640], [320, 568], [667, 375], [767, 1024]] as const;
+
+  it.each(PHONES)("%i x %i: the tab ends at least 8 px above the band's top, both labels, and stays inside the window", (width, height) => {
+    const band = bottomMarginRectOf(width, height, 1);
+
+    for (const label of LABELS) {
+      const tab = tabAt(view({ has: label.has, bandTop: band.top }), width, height);
+
+      expect(band.top - tab.bottom, `${label.name}`).toBeGreaterThanOrEqual(EDGE_TAB_FOOT_CLEAR_PX);
+      expect(tab.top, `${label.name}: inside the window`).toBeGreaterThanOrEqual(0);
+      expect(footTop(width, height) - tab.bottom, `${label.name}: and still clear of the thumb bar`).toBeGreaterThanOrEqual(EDGE_TAB_FOOT_CLEAR_PX);
+    }
+  });
+
+  it("at 390 x 844 the band begins at 384.6 and the tab (Open your notes) stands from 230.6 to 376.6: exactly 8 px above it; it is where it was while no card stands", () => {
+    const band = bottomMarginRectOf(390, 844, 1);
+
+    expect(band.top).toBeCloseTo(384.6, 1);
+    const withCard = tabAt(view({ bandTop: band.top }), 390, 844);
+    expect(withCard.top).toBeCloseTo(230.6, 1);
+    expect(withCard.bottom).toBeCloseTo(376.6, 1);
+    expect(tabAt(view({}), 390, 844)).toMatchObject({ top: 432, bottom: 578 });
+  });
+
+  it("where the tab already clears the band it does not move: a band that begins below the tab's own foot changes nothing", () => {
+    const free = tabAt(view({}), 390, 844);
+
+    expect(tabAt(view({ bandTop: 800 }), 390, 844)).toEqual(free);
+  });
+
+  it("from md the band is not read: the tab is placed as it was, whatever bandTop says", () => {
+    for (const [width, height] of [[768, 576], [853, 480], [1024, 576], [1440, 900]] as const) {
+      expect(tabAt(view({ bandTop: 100 }), width, height), `${width} x ${height}`).toEqual(tabAt(view({}), width, height));
+    }
+  });
+
+  it("writes the band on the tab's style (--tab-band-top) and nothing when there is none", () => {
+    expect(styleProps(view({ bandTop: 384.6 }))["--tab-band-top"]).toBe("384.6px");
+    expect(view({})).not.toContain("--tab-band-top:");
+    expect(view({})).not.toContain("style=");
   });
 });
 

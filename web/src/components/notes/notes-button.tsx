@@ -15,6 +15,8 @@
 //   text does not move. See `EDGE_TAB_BESIDE_PX`.
 //   P11-46 (round 3, Theme B walk E-1): the tab, strip included, takes only a press that began on it; a drag that began in the paper
 //   passes through it and ends at the line's end (`EDGE_TAB_PASSES_DRAG`).
+//   P12-77 (ruling §1h.455, item 2): under md there is no margin at the right — the cards stand in a band across the foot of the window — so
+//   there the tab stays on the window's right edge whatever a card does, and ends 8 px above the band's top while one stands (`EDGE_TAB_BAND`).
 //
 //   `row` — on a phone, a full-width row in the command stack (`DecisionBlock`'s `notesAction`), set like the other commands.
 //   P12-77 (rule 3, E2; reader A-r1 in A P12-71's pack): the row stays, but on a phone it stands near the top of the page, so the reader
@@ -30,7 +32,7 @@
 // the right (`notes-window.tsx`) instead of navigating, and while the window stands the tab stands beside it
 // (360 px in), a second press closing it. The phone's row, and (P12-77) its edge tab, navigate to the notes page.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import type { Paper } from "@/types";
 import type { QuestionAnswers } from "@/lib/papers/report";
@@ -123,12 +125,22 @@ export const EDGE_TAB_LENGTH_PX = { take: 66, open: 146 } as const;
 export const EDGE_TAB_FOOT_CLEAR_PX = 8;
 
 const EDGE_TAB_PLACE = {
-  take: "h-[66px] top-[max(3rem,min(max(27rem,50vh),calc(100vh-var(--tab-foot)-8px-66px)))]",
-  open: "h-[146px] top-[max(3rem,min(max(27rem,50vh),calc(100vh-var(--tab-foot)-8px-146px)))]",
+  take: "h-[66px] top-[max(var(--tab-floor),min(max(27rem,50vh),calc(100vh-var(--tab-foot)-8px-66px),calc(var(--tab-band)-8px-66px)))]",
+  open: "h-[146px] top-[max(var(--tab-floor),min(max(27rem,50vh),calc(100vh-var(--tab-foot)-8px-146px),calc(var(--tab-band)-8px-146px)))]",
 } as const;
 
 /** What stands at the window's foot: the thumb bar under `md` (the tab is offered on a phone too: P12-77 rule 3), the key legend from it (its height, `--tab-legend` where Fit has made it taller). */
 const EDGE_TAB_FOOT = "[--tab-foot:calc(56px+env(safe-area-inset-bottom,0px))] md:[--tab-foot:var(--tab-legend,var(--legend-h))]";
+
+/**
+ * P12-77 (ruling §1h.455, item 2): the foot of the tab on a phone is also the top of the card band, while a card stands. Under `md` there is no
+ * margin at the right: the cards stand in a band across the foot of the window (`bottomMarginRectOf`, `margin.ts`), so the tab stays on the
+ * window's right edge whatever the card does (it is not stood "beside" a margin that is not there) and ends 8 px above the band's top
+ * (`--tab-band-top`, written on the tab while a card stands) as it ends above the legend. From `md` the band is not read (`--tab-band` is
+ * the window's height, which clamps nothing) and the tab is placed as it was, beside the card. The least `top` is the masthead's foot from `md`,
+ * where there is a masthead, and the window's top under it, where there is none.
+ */
+const EDGE_TAB_BAND = "[--tab-band:var(--tab-band-top,100vh)] md:[--tab-band:100vh] [--tab-floor:0px] md:[--tab-floor:3rem]";
 
 export function NotesButtonView({
   variant,
@@ -137,6 +149,7 @@ export function NotesButtonView({
   beside = false,
   marginLeft,
   zoom = 1,
+  bandTop,
   onOpen,
 }: {
   variant: "edge" | "row";
@@ -150,6 +163,8 @@ export function NotesButtonView({
   marginLeft?: number;
   /** The page's Fit zoom, where it is not 1: the foot legend is that much taller in the window's pixels, and the tab keeps clear of it. */
   zoom?: number;
+  /** On a phone, while a card stands: the top of the band the cards stand in, in the window's pixels; the tab ends 8 px above it. */
+  bandTop?: number;
   onOpen: () => void;
 }) {
   const label = notesLabel(has);
@@ -157,11 +172,13 @@ export function NotesButtonView({
   const squeezed = beside && marginLeft !== undefined;
   // P12-77: Fit's zoom makes the legend taller in the window's pixels (it is inside the zoomed page); the tab, outside it, is told how much.
   const taller = zoom !== 1 && Number.isFinite(zoom) && zoom > 0;
+  const banded = bandTop !== undefined && Number.isFinite(bandTop);
   const style: CSSProperties | undefined =
-    squeezed || taller
+    squeezed || taller || banded
       ? {
           ...(squeezed ? { left: marginLeft, transform: "translateX(-100%)", width: EDGE_TAB_BESIDE_PX, lineHeight: 1 } : {}),
           ...(taller ? ({ "--tab-legend": `${legendHeightPx(zoom)}px` } as CSSProperties) : {}),
+          ...(banded ? ({ "--tab-band-top": `${bandTop}px` } as CSSProperties) : {}),
         }
       : undefined;
   if (variant === "row") {
@@ -197,6 +214,7 @@ export function NotesButtonView({
         "fixed z-40 flex items-center justify-center whitespace-nowrap border border-r-0 border-border-strong bg-surface px-3 shadow-card",
         EDGE_TAB_PLACE[has ? "open" : "take"],
         EDGE_TAB_FOOT,
+        EDGE_TAB_BAND,
         squeezed ? "py-0 before:absolute before:top-0 before:-left-[10px] before:h-full before:w-[9px]" : "py-1",
         // P11-46: a press that began outside the tab passes through it — the tab, strip included, only takes a press that began on it.
         EDGE_TAB_PASSES_DRAG,
@@ -222,6 +240,23 @@ const browserMatches = (query: string): boolean =>
  */
 export function opensWindow(matches: (query: string) => boolean = browserMatches): boolean {
   return matches(WINDOW_QUERY);
+}
+
+/**
+ * P12-77 (ruling §1h.455, item 2): is the window under `md` — a phone? Read when the tab is drawn (the first render has the answer: the tab
+ * is drawn only after the notes store has hydrated, never in the server render) and kept as the window crosses 48rem. Only the edge tab asks.
+ */
+function usePhone(asks: boolean): boolean {
+  const [phone, setPhone] = useState(() => asks && !opensWindow());
+  useEffect(() => {
+    if (!asks || typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const wide = window.matchMedia(WINDOW_QUERY);
+    const sync = () => setPhone(!wide.matches);
+    sync();
+    wide.addEventListener?.("change", sync);
+    return () => wide.removeEventListener?.("change", sync);
+  }, [asks]);
+  return phone;
 }
 
 /** The paper's notes as a button: the right-edge tab and, for a phone, also the command-stack row. */
@@ -252,6 +287,10 @@ export function NotesButton({
   const open = () => (variant === "edge" && opensWindow() ? openWindow() : openPage());
   const rect = useMarginRect();
   const standing = useWindows((s) => s.windows.length > 0);
+  // P12-77 (ruling §1h.455, item 2): on a phone the cards stand in a band across the foot (`presentation: "bottom"`, left 8), not in a margin at
+  // the right, so the tab does not stand "beside" it (that put it at the band's left edge, x −7 to 8): it stays on the window's right edge and
+  // ends 8 px above the band's top while a card stands. From `md` it is placed as it was.
+  const phone = usePhone(variant === "edge");
   if (!ready) return null;
   // P12-77: Fit's zoom, read where the tab is drawn (it mounts after the notes store has hydrated, never in the server render). It changes the
   // margin's rect, which this component reads, so the next render has the new one; below 1024 px Fit does nothing and the zoom is 1.
@@ -261,9 +300,10 @@ export function NotesButton({
         variant={variant}
         has={own !== undefined}
         shown={variant === "edge" && shown}
-        beside={variant === "edge" && (standing || shown)}
+        beside={variant === "edge" && !phone && (standing || shown)}
         marginLeft={rect?.left}
         zoom={readPageZoom()}
+        bandTop={variant === "edge" && phone && standing && rect?.presentation === "bottom" ? rect.top : undefined}
         onOpen={variant === "edge" && shown ? () => setShown(false) : open}
       />
       {variant === "edge" && shown && <NotesWindow paper={paper} onClose={() => setShown(false)} />}
