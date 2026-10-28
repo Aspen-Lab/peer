@@ -20,8 +20,9 @@
 //     characters; a still smaller B, then none ("too_large": the draft stands).
 //   - `sanitizeReview` / `applyCorrections` / `reviewStructure`: the answer is made whole by code, none
 //     of it is hoped for — `move_start`, `set_role`, `split` and `unsure` only; at most 40; every index in
-//     range and in order; five roles only (`body` is refused). A correction that fails a check is dropped,
-//     never mended; an answer that is not an answer leaves the draft exactly (Tier 0 never breaks).
+//     range and in order; five roles only (`body` is refused); the role `setup` only for the paper's opening
+//     run (P12-86). A correction that fails a check is dropped, never mended; an answer that is not an answer
+//     leaves the draft exactly (Tier 0 never breaks).
 //   - `secondLookTargets` / `lookParagraphs` / `buildLookPrompt` / `resolveLooks`: a correction against a
 //     high- or medium-confidence part, or a part the model could not judge, gets one more look at that
 //     part's own text (at most three looks, 6,000 characters each).
@@ -551,6 +552,14 @@ const roleFrom = (value: unknown): ReviewRole | null => {
  * 1. The answer, correction by correction, against the DRAFT as given. Null is "not an answer at all" (not an
  * object, no `corrections` array): the draft stands and nothing is kept. `rejected` counts what was dropped,
  * `read` how many corrections were in the answer.
+ *
+ * The damage guard (P12-86): the role `setup` is the paper's OPENING run, so it is never given to anything
+ * after it. The opening is the draft's leading parts of role setup; `openingEnd` is the first part that is not
+ * one (the draft's length when every part is). A `set_role` to setup is refused for any part after that first
+ * one (the first one itself may become setup: that moves the opening's end), and a `split` that makes a setup
+ * piece is refused in that part and every part after it (a piece cut out of the middle of a part cannot
+ * continue the opening). Measured: a split at paragraph 11 as setup and a split at 12 as evidence, inside the
+ * first results part, flipped that row's majority to setup. The refusal is counted with the others.
  */
 export function sanitizeReview(
   raw: unknown,
@@ -563,6 +572,8 @@ export function sanitizeReview(
   const moved = new Set<number>();
   const roled = new Set<number>();
   const splits = new Map<number, Set<number>>();
+  const firstNotSetup = draft.findIndex((part) => part.role !== "setup");
+  const openingEnd = firstNotSetup === -1 ? draft.length : firstNotSetup;
   for (const c of raw.corrections as unknown[]) {
     if (out.length >= REVIEW_CAPS.corrections) {
       rejected += 1;
@@ -589,7 +600,7 @@ export function sanitizeReview(
       out.push({ op: "move_start", part: k, toParagraph: i });
     } else if (c.op === "set_role") {
       const role = roleFrom(c.role);
-      if (role === null || role === draft[k].role || roled.has(k)) {
+      if (role === null || role === draft[k].role || roled.has(k) || (role === "setup" && k > openingEnd)) {
         rejected += 1;
         continue;
       }
@@ -599,7 +610,15 @@ export function sanitizeReview(
       const at = whole(c.atParagraph);
       const role = roleFrom(c.role);
       const seen = splits.get(k) ?? new Set<number>();
-      if (at === null || role === null || at <= draft[k].from || at > draft[k].to || seen.has(at) || seen.size >= REVIEW_CAPS.splitsPerPart) {
+      if (
+        at === null ||
+        role === null ||
+        at <= draft[k].from ||
+        at > draft[k].to ||
+        seen.has(at) ||
+        seen.size >= REVIEW_CAPS.splitsPerPart ||
+        (role === "setup" && k >= openingEnd)
+      ) {
         rejected += 1;
         continue;
       }

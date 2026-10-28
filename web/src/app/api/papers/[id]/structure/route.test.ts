@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { explainDocHash } from "@/lib/papers/explain";
 import {
   draftOf,
+  partsOf,
   REVIEW_CAPS,
   REVIEW_PROMPT_VERSION,
   reviewedParts,
@@ -224,6 +225,34 @@ describe("POST /api/papers/[id]/structure — the review", () => {
       mocks.resolveProvider.mockReturnValue(provider);
 
       expect((await reviewOf(await call())).corrections).toHaveLength(kept);
+    }
+  });
+
+  it("refuses a setup piece cut out of the first results part (P12-86): the log counts the refusal and the other correction stands", async () => {
+    const consoleText = captureConsole();
+    const debug = vi.spyOn(console, "debug");
+    try {
+      // The measured damage: a split at 11 as setup and a split at 12 as evidence, inside the first results part.
+      provider = providerOf(async (args) =>
+        isLook(args)
+          ? JSON.stringify({ verdict: "review" })
+          : JSON.stringify({
+              corrections: [
+                { op: "split", part: 2, atParagraph: 11, role: "setup" },
+                { op: "split", part: 2, atParagraph: 12, role: "evidence" },
+              ],
+              unsure: [],
+            }),
+      );
+      mocks.resolveProvider.mockReturnValue(provider);
+      const review = await reviewOf(await call());
+      const fields = debug.mock.calls.find(([label]) => label === "[papers/structure] review")![1] as Record<string, unknown>;
+
+      expect(review.corrections).toEqual([{ op: "split", part: 2, atParagraph: 12, role: "evidence" }]);
+      expect(reviewedParts(draft, review)).toEqual(partsOf(draft.parts));
+      expect(fields).toMatchObject({ corrections: 1, rejected: 1 });
+    } finally {
+      consoleText.restore();
     }
   });
 

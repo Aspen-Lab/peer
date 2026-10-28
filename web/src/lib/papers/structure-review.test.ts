@@ -14,6 +14,7 @@ import {
   partsOf,
   resolveLooks,
   REVIEW_CAPS,
+  reviewedParts,
   reviewPromptFixedText,
   reviewStructure,
   sanitizeReview,
@@ -507,7 +508,7 @@ describe("sanitizeReview — the answer, correction by correction, against the d
           { op: "split", part: 2, atParagraph: 11, role: "method" },
           { op: "split", part: 2, atParagraph: 21, role: "method" },
           { op: "split", part: 2, atParagraph: 14 },
-          { op: "split", part: 2, atParagraph: 14, role: "setup" },
+          { op: "split", part: 2, atParagraph: 14, role: "interpretation" },
           { op: "split", part: 2, atParagraph: 14, role: "evidence" },
           { op: "split", part: 2, atParagraph: 15, role: "evidence" },
           { op: "split", part: 2, atParagraph: 16, role: "evidence" },
@@ -520,7 +521,7 @@ describe("sanitizeReview — the answer, correction by correction, against the d
 
     expect(answer.answer.corrections).toEqual([
       { op: "set_role", part: 1, role: "evidence" },
-      { op: "split", part: 2, atParagraph: 14, role: "setup" },
+      { op: "split", part: 2, atParagraph: 14, role: "interpretation" },
       { op: "split", part: 2, atParagraph: 15, role: "evidence" },
       { op: "split", part: 2, atParagraph: 16, role: "evidence" },
     ]);
@@ -534,6 +535,116 @@ describe("sanitizeReview — the answer, correction by correction, against the d
     expect(answer.answer.corrections).toHaveLength(40);
     expect(answer.rejected).toBe(10);
     expect(answer.read).toBe(50);
+  });
+});
+
+describe("sanitizeReview — the damage guard: the role setup belongs to the paper's opening run (P12-86)", () => {
+  // The measured damage (P6, one run of five): `split` at paragraph 11 with role setup, then `split` at 12 with role
+  // evidence, inside the first results part, flipped that row's majority to setup.
+  const draft = [part(0, 5, "setup"), part(6, 20, "evidence"), part(21, 28, "interpretation")];
+  const N = 29;
+  const cut = (c: unknown, d: readonly DraftPart[] = draft) => sanitizeReview({ corrections: [c] }, d, d[d.length - 1].to + 1)!;
+
+  it("refuses a split that cuts a setup piece out of the first results part, counts it with the other refusals, and keeps the rest", () => {
+    const raw = {
+      corrections: [
+        { op: "split", part: 1, atParagraph: 11, role: "setup" },
+        { op: "split", part: 1, atParagraph: 12, role: "evidence" },
+      ],
+    };
+    const answer = sanitizeReview(raw, draft, N)!;
+
+    expect(answer.answer.corrections).toEqual([{ op: "split", part: 1, atParagraph: 12, role: "evidence" }]);
+    expect(answer.rejected).toBe(1);
+    expect(answer.read).toBe(2);
+
+    // Whole: the structure is the draft's own, with no setup piece in the middle of the results.
+    const result = reviewStructure(raw, draft, N);
+    expect(result.fellBack).toBe(false);
+    expect(result.parts).toEqual(partsOf(draft));
+    expect(result.rejected).toBe(1);
+  });
+
+  it("refuses the role setup for a split in any part after the opening, and for a set_role of any part after the first that is not setup", () => {
+    const longer = [part(0, 5, "setup"), part(6, 10, "method"), part(11, 20, "evidence"), part(21, 28, "interpretation")];
+    for (const k of [1, 2, 3]) {
+      expect(cut({ op: "split", part: k, atParagraph: longer[k].from + 1, role: "setup" }, longer).answer.corrections).toEqual([]);
+    }
+    for (const k of [2, 3]) {
+      expect(cut({ op: "set_role", part: k, role: "setup" }, longer).answer.corrections).toEqual([]);
+      expect(cut({ op: "set_role", part: k, role: " Setup " }, longer).rejected).toBe(1);
+    }
+    expect(cut({ op: "set_role", part: 2, role: "setup" }, draft).answer.corrections).toEqual([]);
+    expect(cut({ op: "split", part: 2, atParagraph: 25, role: "setup" }).answer.corrections).toEqual([]);
+  });
+
+  it("still applies a correction that moves the setup part's end, sets a later part to method, or gives the first part after the opening the role setup", () => {
+    expect(cut({ op: "move_start", part: 1, toParagraph: 8 }).answer.corrections).toEqual([{ op: "move_start", part: 1, toParagraph: 8 }]);
+    expect(cut({ op: "set_role", part: 2, role: "method" }).answer.corrections).toEqual([{ op: "set_role", part: 2, role: "method" }]);
+    expect(cut({ op: "set_role", part: 1, role: "setup" }).answer.corrections).toEqual([{ op: "set_role", part: 1, role: "setup" }]);
+    expect(cut({ op: "split", part: 1, atParagraph: 12, role: "method" }).answer.corrections).toEqual([{ op: "split", part: 1, atParagraph: 12, role: "method" }]);
+    // Inside the opening run itself, a split is judged as it always was.
+    expect(cut({ op: "split", part: 0, atParagraph: 3, role: "method" }).answer.corrections).toEqual([{ op: "split", part: 0, atParagraph: 3, role: "method" }]);
+    expect(cut({ op: "split", part: 0, atParagraph: 3, role: "setup" }).answer.corrections).toEqual([{ op: "split", part: 0, atParagraph: 3, role: "setup" }]);
+
+    // Applied: the opening's end moves, the later part is method, the opening takes the first results part whole.
+    expect(reviewStructure({ corrections: [{ op: "move_start", part: 1, toParagraph: 8 }, { op: "set_role", part: 2, role: "method" }] }, draft, N).parts).toEqual([
+      { from: 0, to: 7, role: "setup" },
+      { from: 8, to: 20, role: "evidence" },
+      { from: 21, to: 28, role: "method" },
+    ]);
+    expect(reviewStructure({ corrections: [{ op: "set_role", part: 1, role: "setup" }] }, draft, N).parts).toEqual([
+      { from: 0, to: 20, role: "setup" },
+      { from: 21, to: 28, role: "interpretation" },
+    ]);
+  });
+
+  it("finds the opening in the draft as given: a draft that does not open with setup lets only its first part become setup", () => {
+    const unopened = [part(0, 10, "method"), part(11, 20, "evidence"), part(21, 28, "interpretation")];
+
+    expect(cut({ op: "set_role", part: 0, role: "setup" }, unopened).answer.corrections).toEqual([{ op: "set_role", part: 0, role: "setup" }]);
+    expect(cut({ op: "set_role", part: 1, role: "setup" }, unopened).answer.corrections).toEqual([]);
+    expect(cut({ op: "split", part: 0, atParagraph: 4, role: "setup" }, unopened).answer.corrections).toEqual([]);
+    // A draft that is all setup has nothing after its opening.
+    const only = [part(0, 28, "setup")];
+    expect(cut({ op: "split", part: 0, atParagraph: 4, role: "method" }, only).answer.corrections).toHaveLength(1);
+  });
+
+  it("holds when the same correction is asked again: the refused split does not use up a split of the part", () => {
+    const answer = sanitizeReview(
+      {
+        corrections: [
+          { op: "split", part: 1, atParagraph: 11, role: "setup" },
+          { op: "split", part: 1, atParagraph: 11, role: "interpretation" },
+          { op: "split", part: 1, atParagraph: 12, role: "setup" },
+          { op: "split", part: 1, atParagraph: 13, role: "setup" },
+          { op: "split", part: 1, atParagraph: 14, role: "setup" },
+          { op: "split", part: 1, atParagraph: 15, role: "method" },
+        ],
+      },
+      draft,
+      N,
+    )!;
+
+    expect(answer.answer.corrections).toEqual([
+      { op: "split", part: 1, atParagraph: 11, role: "interpretation" },
+      { op: "split", part: 1, atParagraph: 15, role: "method" },
+    ]);
+    expect(answer.rejected).toBe(4);
+  });
+
+  it("is the guard of a kept review too: laid over its draft, the P6 corrections leave no setup piece in the results", () => {
+    const five = draftOf(FIVE.input)!;
+    const parts = reviewedParts(five, {
+      corrections: [
+        { op: "split", part: 2, atParagraph: 11, role: "setup" },
+        { op: "split", part: 2, atParagraph: 12, role: "evidence" },
+      ],
+      unsure: [],
+      draftDigest: five.digest,
+    });
+
+    expect(parts).toEqual(partsOf(five.parts));
   });
 });
 
