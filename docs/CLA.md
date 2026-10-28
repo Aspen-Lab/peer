@@ -1,11 +1,12 @@
 # Peer Contributor License Agreement
 
-> **Status: DRAFT — not in force.** Section 4.3 of the owners' co-ownership
+> **Status: IN FORCE since 2026-10-27.** Section 4.3 of the owners' co-ownership
 > agreement requires a contributor license agreement "in a form approved by both
-> Parties" before any outside contribution is merged. This text becomes the
-> agreement only when both owners have approved it in writing and this status
-> line is changed to say so, with the date. Until then, no contribution from
-> anyone other than the two owners can be merged.
+> Parties" before any outside contribution is merged. Both owners approved this
+> text in writing by email; the second approval, from Xiaoyang Wang, is dated
+> 2026-10-27, and that is the date this agreement took effect. A contribution
+> from anyone other than the two owners can be merged only after its author has
+> agreed to it as section 8 describes.
 
 This agreement is between **you** (the person submitting a contribution) and the
 two owners of Peer, **Baichuan Wang and Xiaoyang Wang, jointly** (the "Owners").
@@ -62,8 +63,8 @@ U.S. federal law.
 
 ## 8. How to agree
 
-Once this agreement is in force, post this sentence as a comment on your pull
-request, from the GitHub account that made the commits:
+To agree, post this sentence as a comment on your pull request, from the GitHub
+account that made the commits:
 
 > I have read the Peer Contributor License Agreement and I agree to it.
 
