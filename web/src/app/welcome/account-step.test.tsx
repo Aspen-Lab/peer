@@ -110,15 +110,22 @@ describe("accountStepCopy — the Account step's heading", () => {
     expect(accountStepCopy("unknown").kicker).toBe("Optional");
   });
 
-  it("signed out and unknown: the invitation, unchanged", () => {
+  // R1-fixB item 2 — CHANGED: the title was "Sign in (optional).".
+  it("signed out and unknown: kicker 'Optional', title 'Sign in.', the same subtitle", () => {
     const invitation = {
       kicker: "Optional",
-      title: "Sign in (optional).",
+      title: "Sign in.",
       subtitle:
         "Sign in to keep your topics, saved papers and settings on every device, and to use your own AI key.",
     };
     expect(accountStepCopy("signed-out")).toEqual(invitation);
     expect(accountStepCopy("unknown")).toEqual(invitation);
+  });
+
+  it("says 'optional' once: in the kicker, never again in the title", () => {
+    for (const auth of ["signed-out", "unknown", "signed-in"] as const) {
+      expect(accountStepCopy(auth).title).not.toMatch(/optional/i);
+    }
   });
 
   it("never asks a signed-in reader to sign in", () => {

@@ -68,7 +68,9 @@ export interface AccountStepCopy {
  * again (L4-fix, R13 D1), and that the keys are the one thing that does not
  * follow the account. Its kicker is then "Account" (R1-fixA item 2): "Optional"
  * above "You are signed in." read as if being signed in were optional. Signed
- * out or not yet known, the invitation as before, kicker "Optional".
+ * out or not yet known, the invitation: kicker "Optional", title "Sign in."
+ * (R1-fixB item 2: the title was "Sign in (optional).", so "optional" was said
+ * twice, once by the kicker right above it).
  */
 export function accountStepCopy(auth: AuthOutcome): AccountStepCopy {
   if (auth === "signed-in") {
@@ -81,7 +83,7 @@ export function accountStepCopy(auth: AuthOutcome): AccountStepCopy {
   }
   return {
     kicker: "Optional",
-    title: "Sign in (optional).",
+    title: "Sign in.",
     subtitle:
       "Sign in to keep your topics, saved papers and settings on every device, and to use your own AI key.",
   };
