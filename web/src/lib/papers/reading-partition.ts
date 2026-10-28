@@ -280,7 +280,7 @@ function longWordsOf(text: string): Set<string> {
 }
 
 /** Whether a paragraph is the closing: a summary cue, no figure or table reference, and at least
- *  `CLOSING.abstractShare` of its long words among the abstract's. A paragraph with no long word is not. */
+ *  `CLOSING.abstractShare` of its long words among the echo's (the abstract's). A paragraph with no long word is not. */
 function isClosing(paragraph: string, abstractWords: ReadonlySet<string>): boolean {
   if (!SUMMARY_CUE.test(paragraph) || FIGURE_REFERENCE.test(paragraph)) return false;
   const own = longWordsOf(paragraph);
@@ -291,18 +291,41 @@ function isClosing(paragraph: string, abstractWords: ReadonlySet<string>): boole
 }
 
 /**
+ * The words the closing must echo. The paper's abstract when the reading has one (a long word in it); else the last
+ * paragraph of the paper's setup part before `before` - the paper's own announcement of what it shows (P12-63, rule 2;
+ * ruling §1h.436 (c)): a Nature-style article prints no abstract in its text, and its introduction ends on "here we show
+ * ...". The setup part is the last introduction row before `before` that holds a paragraph, or, where the paper names no
+ * introduction, the last row of role setup there. Neither gives a word: no echo, and no split.
+ */
+function echoOf(abstract: string | null | undefined, map: ReadingMap, body: BodyLike, before: number): Set<string> {
+  const stated = longWordsOf(abstract ?? "");
+  if (stated.size > 0) return stated;
+  let introduction = -1;
+  let setup = -1;
+  for (let k = 0; k < before; k++) {
+    const row = map.sections[k];
+    if (row.role !== "setup" || body[k].paragraphs.length === 0) continue;
+    setup = k;
+    if (row.canonical === "introduction") introduction = k;
+  }
+  const from = introduction >= 0 ? introduction : setup;
+  return from < 0 ? stated : longWordsOf(body[from].paragraphs[body[from].paragraphs.length - 1]);
+}
+
+/**
  * Rule set B's closing split: the partition of the last evidence row of a paper that names no discussion or
  * conclusion, at the first of its last `CLOSING.lastParagraphs` paragraphs that has (a) a summary cue, (b) no figure
- * or table reference and (c) at least `CLOSING.abstractShare` of its long words among the abstract's long words — or
- * null. The row is divided in two, the paragraphs before the closing and the closing to the row's end; the first
+ * or table reference and (c) at least `CLOSING.abstractShare` of its long words among the echo's long words — or
+ * null. The echo is the abstract, and, where the paper prints none, the last paragraph of its setup part (`echoOf`).
+ * The row is divided in two, the paragraphs before the closing and the closing to the row's end; the first
  * keeps the paper's own heading and role, the second is a row of the role interpretation under the role's own label
  * (`partitionedMap` draws both). The body is not touched.
  *
  * `map` and `body` are the reading's (`PaperReading.map` and `.body`, row k ↔ body section k) and `abstract` the
- * paper's abstract as one text; with no abstract (nothing with a long word in it) there is no split. Null as well
- * when the map names a discussion or a conclusion, when it already carries a partition, when there is no evidence
- * row, when that row is the unheaded paper's trunk (the model's), has rows under it, or would leave nothing above
- * the closing (the closing is never the whole row).
+ * paper's abstract as one text; with no abstract (nothing with a long word in it) and no setup part to take the echo
+ * from there is no split. Null as well when the map names a discussion or a conclusion, when it already carries a
+ * partition, when there is no evidence row, when that row is the unheaded paper's trunk (the model's), has rows
+ * under it, or would leave nothing above the closing (the closing is never the whole row).
  */
 export function closingPartition(
   map: ReadingMap,
@@ -310,8 +333,6 @@ export function closingPartition(
   abstract: string | null | undefined,
 ): GuidePartition | null {
   if (!body || body.length !== map.sections.length) return null;
-  const abstractWords = longWordsOf(abstract ?? "");
-  if (abstractWords.size === 0) return null;
   if (map.sections.some((row) => row.canonical === "discussion" || row.canonical === "conclusion" || partOf(row) !== undefined)) return null;
 
   let at = -1;
@@ -324,9 +345,11 @@ export function closingPartition(
   if (body[at].id !== row.id || row.paragraphs.length !== text.length) return null;
   if (map.sections.some((other) => other.parentId === row.id)) return null;
   if (unheadedTrunk(body)?.sectionId === row.id) return null;
+  const echo = echoOf(abstract, map, body, at);
+  if (echo.size === 0) return null;
 
   for (let k = Math.max(1, text.length - CLOSING.lastParagraphs); k < text.length; k++) {
-    if (isClosing(text[k], abstractWords)) {
+    if (isClosing(text[k], echo)) {
       return {
         sectionId: row.id,
         closing: true,

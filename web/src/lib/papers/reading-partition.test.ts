@@ -870,8 +870,12 @@ describe("closingPartition — the closing of a paper that names no discussion o
     });
   });
 
-  it("has no split without an abstract, or with one that has no long word", () => {
-    const { map, body } = splitOf(natureStyle());
+  // P12-63 (rule 2), RE-AIMED (§1c): was "has no split without an abstract, or with one that has no long word", on `natureStyle()`. That paper has a
+  // setup part, and a paper with no abstract now takes its echo from the last paragraph of the setup part (`reading-partition.echo.test.ts` holds
+  // that); the rule's "neither -> no split" is what this holds, on a paper with no setup part (named results, methods and references, no introduction).
+  // Every assertion is kept.
+  it("has no split without an abstract, or with one that has no long word, where the paper has no setup part to take the echo from", () => {
+    const { map, body } = splitOf(shore([["Results", [...plain(3), SUMMARY, OUTLOOK]], ["Methods", plain(3)], ["References", plain(3)]]));
 
     expect(closingPartition(map, body, undefined)).toBeNull();
     expect(closingPartition(map, body, null)).toBeNull();
