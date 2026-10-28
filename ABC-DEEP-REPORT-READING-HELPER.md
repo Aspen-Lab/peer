@@ -2243,6 +2243,28 @@ Then Theme A round 3: a fresh A walk on the landed head and three readers.
 
 (b) **Theme A round 3, reader A3-r1** (blind, pack `r2/a78/pack`): P1, P2, P3 each **97.92**. It charges one extra, X1 = A P12-78's E3, cosmetic 0.25 on each paper. No FAIL. Readers A3-r2 and A3-r3 follow; the median is the score of record. C P12-79 (E3) is running.
 
+### §1h.459 — 2026-10-28 — THEME B ROUND 2 (A P12-72): P1 95.83, P2 95.83, P3 83.33; B P12-80; O1 TO THE OWNER
+
+**A P12-72** (Theme B, round 2, fresh walk on `ccfa098b`; report landed `e420c898`; its four-word runs shared with P1–P6 are 6, digit runs and one common phrase).
+- The six pass requirements hold. **P1 12 / 12, P2 12 / 12, P3 11 / 12.**
+- **B7 FAILs on P3:** the figure card shows Fig. 1's caption cut mid-sentence at 135 characters and Fig. 6's at 63. The Summary thumbnail shows Fig. 1's 1,174.
+- Extras:
+  - E1, the notes tab over the legend, 0.25 on each paper. It was walked before C P12-77 and is gone since (A P12-78).
+  - E2, the standing §1h.168 cost, 0.25 on each paper.
+  - E3 (P3), acronyms in the wrong case in captions, a map row and a heading: SE → "sE", DFT → "DFt". 0.25.
+  - E4 (P3), Fig. 2's left strip cut and a running-head sliver on Fig. 4. 0.25.
+- **A's score: P1 95.83, P2 95.83, P3 83.33.**
+
+(a) **Theme B round 2 is below the target, and no reading can lift it.** P3 with B7 failed and no extra at all is 11 / 12 = 91.67. The blind readers are skipped for this round (§1h.443's two slots go to the fixes); the consecutive count stays 0.
+
+(b) **B P12-80** (running, read-only, head `e420c898`): K1 the card's caption cut on P3 (two caption sources; which line ends the inline caption early), K2 the acronym case damage (the parse step, file:line), K3 Fig. 2's and Fig. 4's bounds.
+
+(c) **O2, the Explain card's body chains the wheel to the page** after its end (2,700 px), where the sticky, the notes window and the figure card use `overscroll-contain`. It goes to a one-line C (`explain-box.tsx` / `margin-card.tsx`), queued. Unpriced in round 2. B3's "the paper does not move" asks it.
+
+(d) **O1, the margin divider at 853 × 480 has a 1 px range** (rail 48, centre floor 500, margin floor 280). By the letter of B1 it is PASS (visible, the cursor, the floors). But A notes that the owner's own window at 150 % zoom is about this size, where the divider does nothing. **This is the owner's decision** (item 3): accept the floors, lower the margin's floor at narrow widths, lower the centre's 60-character floor (§1h.197), or not offer the divider where it cannot move. It is put to the owner; until then B1 is scored by its letter.
+
+(e) O3 / O4 (peek and thumbnail at W2 / W3), O6 (figure labels as body paragraphs on P2 and P3, P2's page-1 interleave) and O8 are backlog with the short-paragraph item (§1h.450).
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2568,7 +2590,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-69 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | the takedown removes kept figures; the privacy page names them | tests; own mutation; gates | checkpoint P12-69-C-<UTC>.md | briefs/P12-69.md; §1h.441 |
 | P12-70 | DONE — C (Sonnet); items 1–10 landed (item 10 at db9b8235, §1h.456) | integration: the five tests where eight Cs' rules meet | code fixes; named re-aims only where a ruled rule changed the truth; gates | checkpoint P12-70-C-<UTC>.md | briefs/P12-70.md; §1h.442 |
 | P12-71 | DONE — A (Sonnet), report on the branch (d2de8451); 12/12 ×3, E1 0.25, 97.92 ×3; readers pending (§1h.451) | Theme A A1–A12 | rubric units and pass requirements | walk, pack, P12-71-A-<UTC>.md | briefs/P12-71.md; §1h.446 |
-| P12-72 | IN_PROGRESS — A (Sonnet), head ccfa098b, port 4247, scratch p12/r2/a72 | Theme B B1–B12 | rubric units and pass requirements | walk, pack, P12-72-A-<UTC>.md | briefs/P12-72.md; §1h.446 |
+| P12-72 | DONE — A (Sonnet), report on the branch (e420c898); P1 95.83, P2 95.83, P3 83.33 (B7 P3) (§1h.459) | Theme B B1–B12 | rubric units and pass requirements | walk, pack, P12-72-A-<UTC>.md | briefs/P12-72.md; §1h.446 |
 | P12-73 | DONE — B (Sonnet), report on the branch (a4b384e4); ruled §1h.449 | Theme C on P4–P6: M1–M7 by shape | file:line, three candidates each, a C split | report P12-73-B-<UTC>.md | briefs/P12-73.md; §1h.446 |
 | P12-74 | DONE — C (Sonnet); landed at c91e89e9 (§1h.450) | M1 rule A (R1–R5) + M6 block in pdf-outline.ts | invented fixtures; 2 named re-aims; own mutations; gates | checkpoint P12-74-C-<UTC>.md | briefs/P12-74.md; §1h.449 |
 | P12-75 | DONE — C (Sonnet); M2 / M5 / M7 and item 2 landed (item 2 at e5f21d9d, §1h.454) | M2 group row (level), M5, M7 R7a | invented fixtures; own mutations; gates | checkpoint P12-75-C-<UTC>.md | briefs/P12-75.md; §1h.449 |
@@ -2576,6 +2598,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-77 | DONE — C (Sonnet); landed at 4653a1d6 (§1h.455) | E1 the notes tab above the legend; O2 underline as <u> in Markdown | tests; own mutations; gates | checkpoint P12-77-C-<UTC>.md | briefs/P12-77.md; §1h.451 |
 | P12-78 | DONE — A (Sonnet), report on the branch (4b6b614f); 12/12 ×3, E3 0.25, 97.92 ×3; readers running (§1h.457) | Theme A A1–A12 + round-2 marks re-checked | rubric units and pass requirements | walk, pack, P12-78-A-<UTC>.md | briefs/P12-78.md; §1h.455 |
 | P12-79 | IN_PROGRESS — C (Sonnet), scratch p12/c79, from 25bca3b4 | E3: with a card in the bottom band the notes tab keeps the right edge at every width | tests; own mutation; gates | checkpoint P12-79-C-<UTC>.md | briefs/P12-79.md; §1h.457 |
+| P12-80 | IN_PROGRESS — B (Sonnet), scratch p12/b80, head e420c898 | Theme B P3: K1 card caption cut, K2 acronym case, K3 figure bounds | file:line, three candidates each, a C split | report P12-80-B-<UTC>.md | briefs/P12-80.md; §1h.459 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
 | P11-26 | **DONE 21:0xZ 2026-10-20** — on the branch (§1h.128 (b)); was RUNNING (rules 4, 5 added §1h.127 (c)) since 09:1xZ 2026-10-20 — C, `briefs/P11-26.md`, `scratchpad/p11c26/wt`, port 4127: the explain card keeps its top at the selection (B3); a figure in front of the stack is never a thumbnail (X-3) | round 1 Theme B | §1h.122 (b) 1, 4 | C → the manager | — |

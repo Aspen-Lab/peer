@@ -191,3 +191,7 @@ A P12-71 on `d44aeabb`; readers A-r1 and A-r2 (median): P1 95.83, P2 95.83 (belo
 ## Scores of record — Theme C round 3 (§1h.458), head `25bca3b4`
 
 C0 (no key): P1–P6 each 100 (maps identical to round 2's). Consecutive rounds at the target (C0): 2. C1 (with the key): not yet measured — A P12-57 phase 2.
+
+## Scores of record — Theme B round 2 (§1h.459)
+
+A P12-72 on `ccfa098b`: P1 95.83, P2 95.83, P3 83.33 (B7 FAIL on P3); below the target whatever the readers (P3 ≤ 91.67 with no extras), readers skipped. Consecutive rounds at the target: 0.
