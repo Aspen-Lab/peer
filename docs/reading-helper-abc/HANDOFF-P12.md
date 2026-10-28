@@ -94,10 +94,10 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-28T21:45Z
+AS OF        2026-10-28T21:48Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
-LAST RULING  §1h.475   NEXT RULING §1h.476   NEXT ITEM ID P12-91   NEXT FREE PORT 4248
+LAST RULING  §1h.476   NEXT RULING §1h.477   NEXT ITEM ID P12-91   NEXT FREE PORT 4248
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
 RUNNING      (max 2, §1h.443) C P12-89 (E5 rules 1 + 2) ∥ A P12-57 phase 4 (C1, port 4244); branch head e8af6ed1; QUEUE: Theme B round 4 (after C P12-89) → B short paragraphs; DONE: Theme A, Theme C0; OWNER: O1
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
@@ -745,6 +745,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-28T21:38Z | manager (Claude) | §1h.474: Theme B round 3 of record 95.83 ×3 (two readers); A P12-57 phase 4 started | evidence: r3/readers/B-r1.md, B-r2.md | next: C P12-89, phase 4
 
 - 2026-10-28T21:45Z | manager (Claude) | §1h.475: C P12-89 rule 2 stands; rule 1 revised (tab left of the strip, gutter measured first) | evidence: C P12-89's report | next: C P12-89's gutter table, phase 4
+
+- 2026-10-28T21:48Z | manager (Claude) | §1h.476: the gutter is 12 px in short windows; the centre's right padding 12 → 20, the tab in the gutter (C P12-89 continues) | evidence: P12-89-C addendum | next: C P12-89, phase 4
 
 ---
 

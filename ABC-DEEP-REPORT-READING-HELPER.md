@@ -2531,6 +2531,20 @@ C P12-89 reported rules 1 and 2 (`e65cb81f`, `98f600fc`, checkpoint `c4e930c0`).
 
 Nothing of C P12-89 lands until then.
 
+### §1h.476 — 2026-10-28 — C P12-89: THE GUTTER IS 12 PX IN SHORT WINDOWS; THE CENTRE'S RIGHT PADDING 12 → 20, THE TAB IN THE GUTTER
+
+C P12-89's gutter measure (addendum `28af957b`): from the paper text's right edge to the margin strip, the gutter is 45 px at 1440 × 900 default and 70 px at its largest step, but **12 px** at 1024 × 576 and 853 × 480 default (side margin). That is the centre's own 12 px padding, so the revised rule 1 cannot be built as it stands.
+
+C's options:
+1. Accept the in-margin overlaps (text, headers).
+2. Return to the old place and accept E5.
+3. Use another place in short windows.
+4. Widen the centre's padding.
+
+Options 1 and 2 leave an extra in every round, and Theme B already carries the standing §1h.168 cost, so it could never pass. Option 3 has no clear place in short windows: the right edge is over the cards.
+
+**Ruled: option 4 with the revised rule 1.** The centre column's right padding goes from 12 px to 20 px, always. The words never move when a card opens (P11 A8). The cost is 8 px of text width: at W3 default about 476 → 468 px. C re-measures the character count against §1h.197's floor of about 60 and stops below 58. Beside a card the tab stands left of the strip, 2 px clear, meeting no text, card or header. Rule 2 stands.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
