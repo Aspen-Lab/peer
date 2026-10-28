@@ -103,7 +103,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const label = figureLabel(req.nextUrl.searchParams.get("fig"));
   if (label === null) return reject(400, "fig required", refusal);
 
-  const label = `Figure ${fig}`;
   // The upload whose cut is kept once it is made; null for a public paper.
   let keepFor: string | null = null;
   let bytes: Uint8Array;
