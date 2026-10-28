@@ -26,6 +26,7 @@ import { cleanPaperText } from "@/lib/text/clean";
 import { buildOutline, gutterPrior, linesOfPageWith, type PdfOutline, type PdfPageText } from "./pdf-outline";
 import { dropStrayHeadings, withSectionIds } from "./html-text";
 import { applyLigatures, learnLigatures, restoreLigatures } from "./ligatures";
+import { withPageCase } from "./case-repair";
 import type { ExtractedDocument, ExtractedSection, ExtractedFigureCaption } from "./html-text";
 import { pictureNumber } from "./reading";
 import { FIGURE_EXTRACTION_REVISION } from "@/lib/figures/figure-revision";
@@ -356,7 +357,9 @@ export async function tryExtractPdfText(url: string): Promise<PdfTextResult> {
   }
 
   try {
-    const pages = withPageLigatures(await readPages(download.bytes));
+    // P12-83 (§1h.463): a font whose own map reads capitals as lowercase ("sE" for "SE") is read as capitals again
+    // from the paper's own evidence (`case-repair.ts`), before the ligatures and before the outline reads anything.
+    const pages = withPageLigatures(withPageCase(await readPages(download.bytes)));
     const outline = buildOutline(pages);
     if (!outline.sections || outline.sections.length === 0) {
       // A scan carries pictures of words, not words: say that, rather than
@@ -386,7 +389,8 @@ export async function tryExtractPdfText(url: string): Promise<PdfTextResult> {
  */
 export async function extractPdfTextFromBytes(bytes: Buffer): Promise<PdfTextResult> {
   try {
-    const pages = withPageLigatures(await readPages(bytes));
+    // P12-83 (§1h.463): the capitals a font's own map reads as lowercase, repaired first (`case-repair.ts`).
+    const pages = withPageLigatures(withPageCase(await readPages(bytes)));
     // Page 1's lines as printed, joined with spaces, before any of them is set
     // aside as the cover. Read in the columns the outline reads them in (P7-10:
     // the paper's own gutter, for a first page too sparse to show one), so a
