@@ -67,7 +67,6 @@ import {
   SignInToUseKey,
   SkipSignInLabel,
   accountStepCopy,
-  continueButtonName,
 } from "./account-step";
 import { aiStepSummary } from "./summary";
 
@@ -553,7 +552,6 @@ export default function WelcomePage() {
                   onClick={next}
                   disabled={!canContinue}
                   aria-describedby={key === "topics" && !topicsSatisfied ? "topics-gate-note" : undefined}
-                  aria-label={continueButtonName(skipSignIn)}
                   className={cn(
                     buttonVariants({ tone: "primary", size: "lg" }),
                     "bg-heading hover:bg-heading/90 px-6",

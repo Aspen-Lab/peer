@@ -90,34 +90,28 @@ export function accountStepCopy(auth: AuthOutcome): AccountStepCopy {
 }
 
 /** The wizard's Next button on the Account step, until the reader signs in:
- *  its accessible name at every width. */
+ *  its words below the `sm` breakpoint, and from `sm` up. */
+export const SKIP_SIGN_IN = "Skip sign-in";
 export const CONTINUE_WITHOUT_SIGNING_IN = "Continue without signing in";
 
 /**
  * The words on that button (R1-fixA item 1). At 375 px the full label wrapped
  * and left "in" alone on a second line, so below the `sm` breakpoint the
  * button says "Skip sign-in"; from `sm` up it says "Continue without signing
- * in". Both spans are hidden from assistive technology: the button carries
- * `aria-label={CONTINUE_WITHOUT_SIGNING_IN}`, so its name is the same at
- * every width (see `continueButtonName`).
+ * in".
+ *
+ * R2-fix item 1 (WCAG 2.5.3, Label in Name): the words on screen ARE the
+ * button's name. No `aria-label` and no `aria-hidden`: CSS hides the span that
+ * should not show (`display: none` takes it out of the accessibility tree), so
+ * a voice-control user who says "Skip sign-in" on a phone reaches the button.
  */
 export function SkipSignInLabel() {
   return (
     <>
-      <span aria-hidden className="sm:hidden">
-        Skip sign-in
-      </span>
-      <span aria-hidden className="hidden sm:inline">
-        {CONTINUE_WITHOUT_SIGNING_IN}
-      </span>
+      <span className="sm:hidden">{SKIP_SIGN_IN}</span>
+      <span className="hidden sm:inline">{CONTINUE_WITHOUT_SIGNING_IN}</span>
     </>
   );
-}
-
-/** The Next button's `aria-label`: set only while it reads "Skip sign-in" /
- *  "Continue without signing in"; otherwise its words are its name. */
-export function continueButtonName(skipSignIn: boolean): string | undefined {
-  return skipSignIn ? CONTINUE_WITHOUT_SIGNING_IN : undefined;
 }
 
 /** The Account step's body: who is signed in (the heading already says that

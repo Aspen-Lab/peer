@@ -16,10 +16,10 @@ import {
   AI_STEP_RETURN_TO,
   AccountStepView,
   CONTINUE_WITHOUT_SIGNING_IN,
+  SKIP_SIGN_IN,
   SignInToUseKeyView,
   SkipSignInLabel,
   accountStepCopy,
-  continueButtonName,
   type AccountStepViewProps,
 } from "./account-step";
 
@@ -201,12 +201,15 @@ describe("welcome page — the Account step and the AI step's block (source)", (
     expect(page.indexOf('key === "account" && (')).toBeLessThan(page.indexOf('key === "basics" && ('));
   });
 
-  // R1-fixA item 1 — CHANGED marker: the label is now SkipSignInLabel (two
-  // spans by breakpoint) plus an aria-label, pinned in the describe below.
-  it("labels Next for skipping sign-in on the Account step until the reader is signed in", () => {
+  // R1-fixA item 1 — the label is SkipSignInLabel (two spans by breakpoint).
+  // R2-fix item 1 — CHANGED: the button no longer carries an aria-label; its
+  // words are its name (pinned in the describe below).
+  it("labels Next for skipping sign-in on the Account step until the reader is signed in, with no aria-label", () => {
     expect(page).toContain('const skipSignIn = key === "account" && auth !== "signed-in";');
     expect(flat(page)).toContain('{skipSignIn ? <SkipSignInLabel /> : "Continue"}');
-    expect(page).toContain("aria-label={continueButtonName(skipSignIn)}");
+    const footer = page.slice(page.indexOf("onClick={next}"), page.indexOf("</footer>"));
+    expect(footer).not.toContain("aria-label");
+    expect(page).not.toContain("continueButtonName");
   });
 
   it("puts 'Sign in to use your key' above the key fields, only for a reader it applies to", () => {
@@ -231,48 +234,68 @@ describe("welcome page — the Account step and the AI step's block (source)", (
 
 // R1-fixA item 1 — at 375 px "Continue without signing in" wrapped and left
 // "in" alone on a second line. Below `sm` the button says "Skip sign-in";
-// from `sm` up, "Continue without signing in"; its accessible name is
-// "Continue without signing in" at every width.
-describe("the Account step's Next button: one line on a phone, one name everywhere", () => {
+// from `sm` up, "Continue without signing in".
+// R2-fix item 1 — CHANGED (WCAG 2.5.3, Label in Name): the name used to be an
+// aria-label, "Continue without signing in" at every width, so on a phone the
+// name did not hold the visible words. Now there is no aria-label and no
+// aria-hidden: CSS hides the span that should not show, and `display: none`
+// leaves the accessibility tree, so the name at each width is the words on screen.
+describe("the Account step's Next button: one line on a phone, and its name is its words", () => {
   /** The button exactly as the wizard builds it. */
   const nextButton = (skipSignIn: boolean) =>
     renderToStaticMarkup(
       createElement(
         "button",
-        { type: "button", "aria-label": continueButtonName(skipSignIn) },
+        { type: "button" },
         skipSignIn ? createElement(SkipSignInLabel) : "Continue",
         createElement("span", { "aria-hidden": true }, "→"),
       ),
     );
 
-  /** The accessible name of a rendered button: its aria-label, else its text
-   *  without the aria-hidden parts. */
-  const accessibleName = (html: string) => {
-    const label = html.match(/^<button[^>]*aria-label="([^"]*)"/);
-    if (label) return label[1];
+  /**
+   * The accessible name at a width, the way a browser builds it here: no
+   * aria-label, so the text, without aria-hidden parts and without the spans
+   * Tailwind hides at that width (`hidden` below sm unless `sm:inline`…,
+   * `sm:hidden` from sm up).
+   */
+  const nameAt = (html: string, width: "phone" | "sm") => {
+    expect(html).not.toMatch(/aria-label=/);
+    const shown = (classes: string) => {
+      const tokens = classes.split(/\s+/);
+      if (width === "phone") return !tokens.includes("hidden");
+      return !tokens.includes("sm:hidden");
+    };
     return html
       .replace(/<span aria-hidden="true"[^>]*>.*?<\/span>/gs, "")
+      .replace(/<span class="([^"]*)">(.*?)<\/span>/gs, (_m, classes: string, text: string) => (shown(classes) ? text : ""))
       .replace(/<[^>]+>/g, "")
       .trim();
   };
 
-  it("renders 'Skip sign-in' below sm and 'Continue without signing in' from sm up, each hidden from assistive technology", () => {
+  it("renders 'Skip sign-in' below sm and 'Continue without signing in' from sm up, neither hidden from assistive technology", () => {
     const html = renderToStaticMarkup(createElement(SkipSignInLabel));
     expect(html).toBe(
-      '<span aria-hidden="true" class="sm:hidden">Skip sign-in</span>' +
-        '<span aria-hidden="true" class="hidden sm:inline">Continue without signing in</span>',
+      '<span class="sm:hidden">Skip sign-in</span>' +
+        '<span class="hidden sm:inline">Continue without signing in</span>',
     );
-  });
-
-  it("has the accessible name 'Continue without signing in' whichever span shows", () => {
+    expect(html).not.toContain("aria-hidden");
+    expect(SKIP_SIGN_IN).toBe("Skip sign-in");
     expect(CONTINUE_WITHOUT_SIGNING_IN).toBe("Continue without signing in");
-    expect(accessibleName(nextButton(true))).toBe("Continue without signing in");
   });
 
-  it("everywhere else Next keeps its own words, 'Continue', as its name (no aria-label)", () => {
+  it("the markup carries no aria-label", () => {
+    expect(nextButton(true)).not.toContain("aria-label");
+  });
+
+  it("on a phone the name is 'Skip sign-in', the words on screen; from sm up it is 'Continue without signing in'", () => {
+    expect(nameAt(nextButton(true), "phone")).toBe("Skip sign-in");
+    expect(nameAt(nextButton(true), "sm")).toBe("Continue without signing in");
+  });
+
+  it("every other step's Next is unchanged: 'Continue' at every width, no aria-label", () => {
     const html = nextButton(false);
-    expect(html).not.toContain("aria-label");
-    expect(accessibleName(html)).toBe("Continue");
-    expect(html).not.toContain("Skip sign-in");
+    expect(html).toBe('<button type="button">Continue<span aria-hidden="true">→</span></button>');
+    expect(nameAt(html, "phone")).toBe("Continue");
+    expect(nameAt(html, "sm")).toBe("Continue");
   });
 });
