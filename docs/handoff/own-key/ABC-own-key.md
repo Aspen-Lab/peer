@@ -8,8 +8,8 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 |---|---|
 | HELD BY | manager session (Claude Code desktop, worktree `.claude/worktrees/objective-wu-e8d6fe`) |
 | BRANCH | `own-key-on-web` (cut from `origin/main` db0f070a after PR #36 merged; name approved by the owner 2026-10-25). Repository `Aspen-Lab/peer`. No push without the owner's word (AGENTS.md). The owner merges the PR himself (R6). |
-| ROUND | 1 — scoring at 4a883c0a |
-| CURRENT ITEM | round 1 readers and R1-fixA running |
+| ROUND | 1 scored (A 85.4, B 100.0); round 2 after R1-fixB |
+| CURRENT ITEM | R1-fixB running; then round 2 scoring |
 | NEXT TURN | on each worker report: verify → land on the branch → refill up to the cap of two groups |
 | STOPPED BECAUSE | — |
 | TARGET | **97.9 per theme, two consecutive rounds** (the owner, 2026-10-28, R5: "达标线用 97.9，每个主题连续两轮达到就停。") |
@@ -35,6 +35,8 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 - **R14 (2026-10-28), on L2-A (`L2-A-20261028T1822Z.md`; five 0.25 defects, Theme A 1.25).** All accepted. L2-fix (`briefs/L2-fix.md`): D5 + N2 split the signed-out-with-key paper sentence; D1 the paper link shows only when the sentence names a key or a sign-in (this also changes the old no-key PDF-no-text case — ruled); D2 the paper's "Sign in" returns to the paper via `/profile?return=/papers/<id>` (contract with L4-fix item 6: `safeReturnPath` accepts `/papers/<one segment>`, Profile's Account passes a valid `return` as `returnTo`); D3 + N3 + L3-A D6 `AiKeyFields signInNote={false}` on Welcome and KeyCheck's signed-out line only after a 401; D4 the Profile key paragraph drops the account and sign-out sentences where sign-in is unconfigured.
 - **R15 (2026-10-28), on L4-fix's deviations.** Accepted: item 4 (a signed-out reader can never finish the AI step, so the rule became "only a brand-new reader starts on Account; everyone else resumes where the wizard opened before"); the kicker stays "Optional"; a double-encoded id is a literal id on Peer's host. NOT accepted: refusing `%2F` in a paper id. dblp ids (`journals/corr/…`) and old arXiv ids (`hep-th/9901001`) contain "/", so those papers would not come back after sign-in. A decoded "/" inside the one segment is safe: the raw value still starts with `/papers/`, holds no literal "/" or "\\" after it, and the callback joins it to its own origin. Queued as L4-fix2: accept a decoded "/" in the segment; keep refusing a literal "/", "\\", control characters, broken escapes, "." and ".."; tests with a dblp id and an old arXiv id.
 - **R16 (2026-10-28), on L1-A (`L1-A-20261028T185241Z.md`).** B8, B10, A12 PASS; B9 PASS with D1 0.25: five stale comments still describe Tavily or the `web` adapter (spend-scans scan 3 and 5, `pipeline.ts` ~1112, `jev-step.test.ts` ~114, `api/feed/route.test.ts` ~324). Accepted for L1-fix (comments only). A12's CHANGELOG entry is the manager's.
+- **R17 (2026-10-28).** Rubric B3 amended to match R14/R15 (no relaxation of safety): the callback accepts only same-site `/welcome` or `/profile` (with a query) or `/papers/<one encoded id>`, for both the cookie and `next`. All three readers flagged the old wording; all three passed B3, so round 1's numbers are the same under either line.
+- **R18 (2026-10-28), round 1 clusters for R1-fixB.** (1) README: the own-key changes and the wizard's Account step (A12 remainder; the CHANGELOG entry landed in 1e4a1a98, the 375 px wrap and the signed-in kicker in R1-fixA); (2) A5 the signed-out Account title "Sign in (optional)." under the kicker "Optional" says it twice → title "Sign in."; (3) A1 the Profile key paragraph reworded without "there, paste it again"; (4) A8 the dialog says "this browser" throughout (the unsynced sentence said "this device"); (5) A9 the reset line says "your API key" for one key.
 
 ## §3 Items
 
@@ -55,9 +57,10 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 | L1-C | C | LANDED a235c48a, fa965331, 2b6665a6 | `.claude/worktrees/own-key-lane1` | 9381d8cd hydrate ignores device-only fields, 98a92ef7 Tavily out of the profile (store v9), 6590bfe1 Tavily web source + unread searchConnectors deleted. Manager: tsc 0, eslint 0, affected tests ×3 = 1626 pass / 3 fail (reader-panes, reading-prefs, scan 5 — all baseline); M7 (hydrate installs feedAiApiKey again) → 2 red; M8 (legacy strip forgets tavilyApiKey) → 5 red; restored byte-identical. Lane's own full suite: same 35 as baseline. |
 | L1-A | A | DONE | own-key-lane1 (read only) | `L1-A-20261028T185241Z.md`: B8, B10, A12 PASS; B9 D1 0.25 (stale comments) |
 | L1-fix | C | LANDED 26accd41 | own-key-lane1 | comments only (diff checked: no non-comment line changed); tsc 0; 190 tests pass |
-| R1-fixA | C | RUNNING (lane 4's C resumed at 26accd41) | own-key-lane4 | `briefs/R1-fixA.md`: 375 px label, signed-in kicker, Jev note on Welcome |
+| R1-fixA | C | LANDED ac19aa7e, 38aeef1c, 25d64586 | own-key-lane4 | tsc 0; eslint 0 errors; ×3 143 pass / 1 baseline; M17 (signed-in kicker back to Optional) → 2 red; 375 px checked in the browser: "Skip sign-in →" on one line |
+| R1-fixB | C | RUNNING | own-key-lane4 | `briefs/R1-fixB.md` (R18) |
 | L4-fix2 | C | LANDED 4a883c0a | own-key-lane4 | a decoded "/" allowed in a paper return path; M16 (literal "/" allowed) → 4 red |
-| R1-score | readers ×3 + director | RUNNING at 4a883c0a | `own-key-verify` (read only) | pack: notes `R1-pack/` (static renders, live captures, 375 px screenshot, test evidence); full suite 11175 / 34 failed / 0 new |
+| R1-score | readers ×3 + director | DONE: A 85.4 / B 100.0 (median); director 89.58 / 97.73 | `own-key-verify` (read only) | pack: notes `R1-pack/` (static renders, live captures, 375 px screenshot, test evidence); full suite 11175 / 34 failed / 0 new |
 | L2-C | C | LANDED 68163acd, f6cfe7ce, 43e2a404 | `.claude/worktrees/own-key-lane2` | aeba4d49 note under the key field, 187597a6 AI provider row, 495eeba6 paper page sign-in. Manager: tsc 0, eslint 0 errors (44 warnings, pre-existing), touched tests ×3 = 933 pass / 1 fail (jev-setup, CRLF baseline); M5 (note shown for unknown/unconfigured) → 4 red; M6 (keyNeedsSignIn always false) → 1 red (unit level; the page tests take the flag as input); restored byte-identical. Full suite: 10752 tests, 35 failed, **0 new**. |
 | L2-A | A | DONE | own-key-lane2 (read only) | `L2-A-20261028T1822Z.md`: A1–A4 PASS with five 0.25 defects (D1–D5) |
 | L2-fix | C | LANDED d94b0a09, e2cdf9e3, 61492242 | `.claude/worktrees/own-key-lane2` | items 1–5. Manager: tsc 0, eslint 0 errors, touched tests ×3 = 552 pass / 1 fail (jev-setup baseline); M14 (signInNote ignored) → 3 red; M15 (link back to the old rule) → 3 red; restored. Deviation accepted: the paper link encodes the id with encodeURIComponent (an id with "/" stays one segment). Noted, not taken: `JEV_SIGN_IN_NOTE` still shows on Welcome for a signed-out reader with a Jev key — scored in round 1. |
@@ -81,6 +84,13 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 - Theme A (12): A5 "Continue without signing in" wraps "in" onto a second line at 375 px (screenshot in `R1-pack/`) 0.25; A5 the signed-in Account step keeps the kicker "Optional" above "You are signed in." 0.25; A6 a signed-out reader with a saved Jev key also sees `JEV_SIGN_IN_NOTE` on the AI step, a third sign-in line 0.25; A12 no CHANGELOG entry at the round commit 0.5 (written since, 1e4a1a98). Σ 1.25 → 100 × 10.75 / 12 = **89.58**.
 - Theme B (11): B9 five stale comments (L1-A D1) 0.25. Σ 0.25 → 100 × 10.75 / 11 = **97.73**.
 - A2 on Welcome: the note is hidden there by ruling R14 (the block above replaces it); not costed by the director. If a reader costs it, it is ruled under R14 and both numbers are reported.
+
+## §4d Round 1 — readers
+
+- Reader 1 (`R1-reader-1-20261028T190004Z.md`): **A 85.4** (A12 1.0 no CHANGELOG entry — also a narrow breach of pass requirement 2 through the /privacy footer "ship in the changelog"; A1 0.25 "…: there, paste it again."; A5 0.25 375 px wrap; A8 0.25 "this browser" then "this device" in the both-dialog), **B 100.0**. Flag: B3's rubric line says only /welcome or /profile; the code (R14/R15) also accepts `/papers/<id>`.
+- Reader 3 (`R1-reader-3-20261028T1900Z.md`): **A 85.4** (A12 1.0; A5 0.25 "OPTIONAL" kicker over "Sign in (optional)." says it twice, and "Optional" over "You are signed in."; A5 0.25 375 px wrap; A9 0.25 the reset line says "your API keys" for a single key), **B 100.0**. Same B3 flag. A2 scored on the live capture.
+- Reader 2 (`R1-reader-2-20261028T190043Z.md`): **A 85.4** (A12 1.0 — CHANGELOG and also README: nothing on Check key, the sign-out dialog, needing to sign in to use a key, Tavily removed, and the README's wizard order lacks Account; A5 0.25 Optional twice; A5 0.25 375 px wrap; A1 0.25 borderline "there, paste it again"), **B 100.0**. Pass requirement 2 on the letter (same as reader 1), costed once under A12.
+- **Score of record, round 1 (median of three readers): Theme A 85.4, Theme B 100.0.** Director: A 89.58, B 97.73. Theme B: first round at or above 97.9. Theme A: below.
 
 ## §5 Log
 

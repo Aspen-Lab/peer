@@ -60,4 +60,4 @@ Target: **97.9** per theme (the owner, 2026-10-28, state file R5: "达标线用 
 
 | round | commit | Theme A | Theme B | consecutive at target | evidence |
 |---|---|---|---|---|---|
-| — | — | — | — | — | — |
+| 1 | 4a883c0a | **85.4** (readers 85.4 / 85.4 / 85.4; director 89.58) | **100.0** (readers 100 / 100 / 100; director 97.73) | A 0, B 1 | readers `R1-reader-{1,2,3}-*.md`; pack `R1-pack/`; R17, R18 |
