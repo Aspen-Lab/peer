@@ -25,7 +25,7 @@ export interface StepMeta {
 /**
  * Every step the wizard can show, in order. Account comes first: a reader's
  * own model key works only while they are signed in, and signing in is what
- * keeps topics, saved papers and settings on every device, so a new reader is
+ * keeps topics, saved papers and most settings on every device, so a new reader is
  * offered it before typing anything. It stays optional ("Continue without
  * signing in"). Where sign-in is not configured at all the step is left out —
  * see `visibleSteps`.

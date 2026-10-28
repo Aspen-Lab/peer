@@ -16,7 +16,7 @@ Your own AI key: easier to set up, checkable, and safe to leave behind.
 - **Check key.** Under the API key field, on Profile and in Welcome, "Check key"
   asks your provider once whether it accepts the key and tells you what it
   said: the key works, it was not accepted, its account has no credit left, the
-  provider is busy, or it could not be reached. The check is one short request
+  provider is turning requests away for now, or it could not be reached. The check is one short request
   on your key, which your provider may bill.
 - **Where your key lives, said where you type it.** Profile's AI provider row
   now says the key stays in this browser only and does not follow your account
