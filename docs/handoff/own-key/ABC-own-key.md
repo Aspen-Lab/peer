@@ -9,7 +9,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 | HELD BY | manager session (Claude Code desktop, worktree `.claude/worktrees/objective-wu-e8d6fe`) |
 | BRANCH | `own-key-on-web` (cut from `origin/main` db0f070a after PR #36 merged; name approved by the owner 2026-10-25). Repository `Aspen-Lab/peer`. No push without the owner's word (AGENTS.md). The owner merges the PR himself (R6). |
 | ROUND | 0 — implementation of lanes 1–4; round 1 scores after all four land |
-| CURRENT ITEM | L2-C and L1-C running; L3 landed (A queued); L4 verified, full suite running (A queued) |
+| CURRENT ITEM | L1-C and L3-A running; L2 verified (full suite running); L4-A, L2-A queued |
 | NEXT TURN | on each worker report: verify → land on the branch → refill up to the cap of two groups |
 | STOPPED BECAUSE | — |
 | TARGET | **97.9 per theme, two consecutive rounds** (the owner, 2026-10-28, R5: "达标线用 97.9，每个主题连续两轮达到就停。") |
@@ -47,11 +47,12 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 | id | role | status | worktree | evidence |
 |---|---|---|---|---|
 | L1-C | C | RUNNING (resumed 2026-10-28 when L4-C finished) | `.claude/worktrees/own-key-lane1` | — |
-| L2-C | C | RUNNING (resumed 2026-10-28 when L3-C finished) | `.claude/worktrees/own-key-lane2` | — |
+| L2-C | C | DONE, VERIFIED (full suite pending) | `.claude/worktrees/own-key-lane2` | aeba4d49 note under the key field, 187597a6 AI provider row, 495eeba6 paper page sign-in. Manager: tsc 0, eslint 0 errors (44 warnings, pre-existing), touched tests ×3 = 933 pass / 1 fail (jev-setup, CRLF baseline); M5 (note shown for unknown/unconfigured) → 4 red; M6 (keyNeedsSignIn always false) → 1 red (unit level; the page tests take the flag as input); restored byte-identical. |
+| L2-A | A | QUEUED (cap) | — | — |
 | L3-C | C | LANDED 7b68634f, 14961cb2 | `.claude/worktrees/own-key-lane3` | 06e101c8 route + privacy, 1ac28885 KeyCheck. Manager in own-key-verify: tsc 0, eslint 0 on 13 files, touched tests ×3 = 272 pass / 2 fail (both baseline: privacy standing, upload record); M1 provider resolved before the gate → 6 red; M2 key rendered in the status line → 2 red; both restored byte-identical. Full suite: 10790 tests, 34 failed, **0 new** vs baseline, 1 fixed (scan 5, R8). |
-| L3-A | A | QUEUED (cap) | — | — |
+| L3-A | A | RUNNING (started when L2-C finished) | own-key-lane3 (read only) | — |
 | L3-fix | C | QUEUED after L3-A (R7) | — | — |
-| L4-C | C | DONE, VERIFIED (full suite pending) | `.claude/worktrees/own-key-lane4` | 15ec36a6 return path + open redirect, 73eff44d Account step + AI-step sign-in, 780cd45d AI summary, 1285860a sign-out dialog, 5708ad40 reset text. Manager: tsc 0, eslint 0 errors (49 warnings, pre-existing), touched tests ×3 = 334/334; M3 equivalent (R10), M3b → 4 red, M3c → 4 red, M4 (keys ignored in signOutPrompt) → 3 red; all restored byte-identical. |
+| L4-C | C | LANDED 27c1d03a, 2fc2367b, a6278be9, 395e5cfe, acbc8adf | `.claude/worktrees/own-key-lane4` | 15ec36a6 return path + open redirect, 73eff44d Account step + AI-step sign-in, 780cd45d AI summary, 1285860a sign-out dialog, 5708ad40 reset text. Manager: tsc 0, eslint 0 errors (49 warnings, pre-existing), touched tests ×3 = 334/334; M3 equivalent (R10), M3b → 4 red, M3c → 4 red, M4 (keys ignored in signOutPrompt) → 3 red; all restored byte-identical. Full suite: 10814 tests, 35 failed, **0 new** vs baseline. |
 | L4-A | A | QUEUED (cap) | — | — |
 | L1-A … L4-A | A | QUEUED | — | — |
 | R1-score | blind readers ×3 + director | QUEUED | — | — |
@@ -64,6 +65,8 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 - 2026-10-28 | cb6e0dd0 | manager | L3-C reported; L2-C resumed into the freed slot; L3 verified in own-key-verify (tsc, eslint, ×3, two mutations); rulings R7, R8.
 - 2026-10-28 | 14961cb2 | manager | L3 full suite 0 new failures; L3 landed (cherry-pick 06e101c8→7b68634f, 1ac28885→14961cb2). L3-A waits for a slot.
 - 2026-10-28 | 14961cb2 | manager | L4-C reported (5 commits); L1-C resumed into the freed slot; L4 verified (tsc, eslint, ×3, four mutations); rulings R9, R10.
+- 2026-10-28 | acbc8adf | manager | L4 full suite 0 new failures; L4 landed (5 cherry-picks).
+- 2026-10-28 | acbc8adf | manager | L2-C reported (3 commits); L3-A started in the freed slot; L2 verified (tsc, eslint, ×3, two mutations).
 
 ## §6 Clock
 
