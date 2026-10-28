@@ -78,14 +78,20 @@ describe("P12-28: defensible typed caption pairing", () => {
     expect(await boxes(page, "Figure 2")).toEqual([[50, 110, 560, 260]]);
   });
 
+  // Re-aimed (P12-84 R3-B): the same page and the same two columns, one box per caption; only the right box's left edge
+  // moves, from 340 to 310. `panel(40, ...)` draws its fourth square (44 x 44 pt, under the piece floor) at x 310 to 354,
+  // past the panel's own frame, so it overlaps the raster's left edge: a small mark on a figure's edge now joins that figure
+  // (the left panel is 90 pt away from it, so it is the raster's). Nothing crosses between the columns.
   it("preserves two columns with distinct captions, including a raster", async () => {
     const page: FigurePage = {
       text: [["Figure 1. Left panel.", 40, 268, 9], ["Figure 2. Right raster.", 340, 268, 9]],
       shapes: [...panel(40, 100, 180, 150), { kind: "image", x: 340, top: 100, w: 180, h: 150 }],
     };
-    expect(await boxes(page)).toEqual([[40, 100, 220, 250], [340, 100, 520, 250]]);
+    expect(await boxes(page)).toEqual([[40, 100, 220, 250], [310, 100, 520, 250]]);
   });
 
+  // Re-aimed (P12-84 R3-B), as the test above: the right box is [310, 100, 520, 250], the raster and the left panel's fourth
+  // square that overlaps its left edge; the captions, their continuation and the left box are as they were.
   it("keeps column labels and continuation when another column interrupts the sorted lines", async () => {
     const page: FigurePage = {
       text: [["Figure 1. Left start.", 40, 268, 9], ["Figure 2. Right start.", 340, 268, 9], ["Left continuation words.", 40, 282, 9]],
@@ -95,7 +101,7 @@ describe("P12-28: defensible typed caption pairing", () => {
     const pick = async (label?: string) => (await extractPdfFigures(pdf, { ...options, measureOnly: true, ...(label ? { onlyPage: 1, label, maxFigures: 1 } : {}) })).figures.map(({ box, caption }) => ({ box, caption }));
     const expected = [
       { box: [40, 100, 220, 250], caption: "Figure 1. Left start. Left continuation words." },
-      { box: [340, 100, 520, 250], caption: "Figure 2. Right start." },
+      { box: [310, 100, 520, 250], caption: "Figure 2. Right start." },
     ];
     expect(await pick()).toEqual(expected);
     expect(await pick("Figure 1")).toEqual([expected[0]]);

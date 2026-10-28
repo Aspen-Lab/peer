@@ -896,37 +896,89 @@ function furnitureInk(texts: TextBlock[], boxes: Rect[], pageRect: Rect): Rect[]
 // letter, falls outside the crop. A short line of text within 6 pt of an accepted, captioned region joins it, and
 // then whatever is within 6 pt of the grown region, until none is left. A line is figure text and not body text
 // when it is at most 60 characters, is not a typed caption or a line of the caption's own block, sits on the
-// figure's side of the caption (above it, for a caption below), lies inside the region's width widened by 6 pt,
+// figure's side of the caption (above it, for a caption below), lies inside the region's width widened by 24 pt,
 // does not share its block with a line over 60 characters (the short last line of a paragraph is body), and is not
 // furniture (P12-84, R3-C: a running head is never figure text, whatever chain of lines leads up to it).
+//
+// P12-84, R3-B (B P12-80 K3a): a figure's own edge labels sit just outside it. A rotated row label of 7.5 pt whose
+// near edge is 6 pt from a raster protrudes 13.5 pt, and a tick label whose first glyph the 10 pt padding cut
+// protrudes 12: the 6 pt width bound left them out, so a line now joins when it reaches up to 24 pt past a side of
+// the region (it is still within 6 pt of it, on each axis). Past the old 6 pt the join has to be the nearest
+// figure's and may not take in another captioned region, a caption line or a body line, so a wider reach does not
+// cross a narrow gutter into the other column. A small vector mark joins in the same way (a legend square, an
+// arrow, a bracket): a cluster under the piece floor (`PIECE_MIN_AREA`), not page-wide, within 6 pt of the region
+// on each axis, on the figure's side of the caption, no furniture, the nearest figure's and taking in no other
+// region, caption or body line, and at most `MAX_FIGURE_MARKS` for a figure. A mark is a cluster, so a rule of no
+// height is none (it is the drawing's own, or the page's). Lines and marks join in turn until neither grows the
+// region, so a legend square 16 pt out joins once the rotated labels between it and the figure have.
 
-/** How near a line must be to the region, in points, on each axis; also how far past its sides it may reach. */
+/** How near a line or a mark must be to the region, in points, on each axis; also how far past its sides a line reached until P12-84. */
 const FIGURE_TEXT_REACH = 6;
+/** P12-84 (R3-B): how far past a side of the region, in points, a line's far edge may be (6 until then). */
+const FIGURE_TEXT_EDGE_REACH = 24;
+/** P12-84 (R3-B): the most marks one figure takes in, so that a chain of small clusters (the outlined glyphs of a
+ *  page of vector text) cannot carry a region across the page. */
+const MAX_FIGURE_MARKS = 64;
+/** P12-84 (R3-B): a mark is no wider and no taller than this share of the page. */
+const MARK_MAX_SHARE = 0.5;
 /** The longest line, in characters, that is figure text; a block holding a longer line is body text. */
 const FIGURE_TEXT_CHARS = 60;
 
-/** Grows each accepted, captioned region by the figure-text lines around it; true when any region changed. */
-function absorbFigureText(candidates: Candidate[], texts: TextBlock[], pageRect: Rect): boolean {
+/** The small vector marks of a page: its clusters under the piece floor that are not page-wide. */
+const smallMarks = (clusters: Rect[] | null, pageRect: Rect): Rect[] =>
+  (clusters ?? []).filter((r) => area(r) < PIECE_MIN_AREA && width(r) <= MARK_MAX_SHARE * width(pageRect) && height(r) <= MARK_MAX_SHARE * height(pageRect));
+
+const containsRect = (outer: Rect, r: Rect) => r[0] >= outer[0] && r[2] <= outer[2] && r[1] >= outer[1] && r[3] <= outer[3];
+/** How far apart two rectangles are, in points: the length of the gap between them (0 where they touch or overlap). */
+const distanceBetween = (a: Rect, b: Rect) => Math.hypot(gapBetween(a[0], a[2], b[0], b[2]), gapBetween(a[1], a[3], b[1], b[3]));
+
+/** Grows each accepted, captioned region by the figure-text lines and the small marks around it; true when any region changed. */
+function absorbFigureText(candidates: Candidate[], texts: TextBlock[], marks: Rect[], pageRect: Rect): boolean {
   const bodyBlocks = new Set(texts.filter((line) => line.text.length > FIGURE_TEXT_CHARS).map((line) => line.blockId));
+  const hosts = candidates.filter((candidate) => candidate.explicit && candidate.captionIndex >= 0);
+  const fixedLines = texts.filter((line) => bodyBlocks.has(line.blockId) || isTypedCaption(line.text));
   let changed = false;
-  for (const host of candidates) {
-    if (!host.explicit || host.captionIndex < 0) continue;
+  for (const host of hosts) {
     const caption = texts[host.captionIndex];
     const captionIsBelow = caption.rect[1] + caption.rect[3] > host.rect[1] + host.rect[3];
-    const onFigureSide = (line: TextBlock) => (captionIsBelow ? line.rect[1] < caption.rect[1] - 1 : line.rect[3] > caption.rect[3] + 1);
+    const onFigureSide = (r: Rect) => (captionIsBelow ? r[1] < caption.rect[1] - 1 : r[3] > caption.rect[3] + 1);
+    // R3-B: a join past the old reach belongs to the nearest figure and takes in no other region, caption or body line.
+    const contested = (item: Rect, grown: Rect) => {
+      const mine = distanceBetween(host.rect, item);
+      return (
+        hosts.some((other) => other !== host && (distanceBetween(other.rect, item) < mine || coverageGain(host.rect, grown, other.rect) > 0.01)) ||
+        fixedLines.some((line) => coverageGain(host.rect, grown, line.rect) > 0.01)
+      );
+    };
+    const pool = marks.filter((mark) => !containsRect(host.rect, mark) && !isFurniture(mark, pageRect));
+    let taken = 0;
     let grew = true;
     while (grew) {
       grew = false;
       for (const line of texts) {
         if (line.text.length > FIGURE_TEXT_CHARS || bodyBlocks.has(line.blockId) || isTypedCaption(line.text)) continue;
-        if (line.blockId === caption.blockId || !onFigureSide(line) || isFurniture(line.rect, pageRect)) continue;
+        if (line.blockId === caption.blockId || !onFigureSide(line.rect) || isFurniture(line.rect, pageRect)) continue;
         const near =
           gapBetween(host.rect[0], host.rect[2], line.rect[0], line.rect[2]) <= FIGURE_TEXT_REACH &&
           gapBetween(host.rect[1], host.rect[3], line.rect[1], line.rect[3]) <= FIGURE_TEXT_REACH;
-        const withinWidth = line.rect[0] >= host.rect[0] - FIGURE_TEXT_REACH && line.rect[2] <= host.rect[2] + FIGURE_TEXT_REACH;
-        const inside = line.rect[0] >= host.rect[0] && line.rect[2] <= host.rect[2] && line.rect[1] >= host.rect[1] && line.rect[3] <= host.rect[3];
-        if (!near || !withinWidth || inside) continue;
-        host.rect = unionOf(host.rect, line.rect);
+        const sideReach = Math.max(0, host.rect[0] - line.rect[0], line.rect[2] - host.rect[2]);
+        if (!near || sideReach > FIGURE_TEXT_EDGE_REACH || containsRect(host.rect, line.rect)) continue;
+        const grown = unionOf(host.rect, line.rect);
+        if (sideReach > FIGURE_TEXT_REACH && contested(line.rect, grown)) continue;
+        host.rect = grown;
+        grew = changed = true;
+      }
+      for (const mark of pool) {
+        if (taken >= MAX_FIGURE_MARKS) break;
+        if (containsRect(host.rect, mark) || !onFigureSide(mark)) continue;
+        const near =
+          gapBetween(host.rect[0], host.rect[2], mark[0], mark[2]) <= FIGURE_TEXT_REACH &&
+          gapBetween(host.rect[1], host.rect[3], mark[1], mark[3]) <= FIGURE_TEXT_REACH;
+        if (!near) continue;
+        const grown = unionOf(host.rect, mark);
+        if (contested(mark, grown)) continue;
+        host.rect = grown;
+        taken++;
         grew = changed = true;
       }
     }
@@ -999,7 +1051,7 @@ function candidateRegions(
   // pieces of its band (an orphan caption starts a region of its own), and then the short figure-text lines around
   // what the region has become.
   const withBands = growFromCaptions(defensible, texts, collectPieces(images, clusters, pageRect), pageRect);
-  if (absorbFigureText(defensible, texts, pageRect) || withBands) defensible.sort(byPlace);
+  if (absorbFigureText(defensible, texts, smallMarks(clusters, pageRect), pageRect) || withBands) defensible.sort(byPlace);
   for (const candidate of defensible) candidate.stretch = regionStretch(candidate.rect, placed);
   return { candidates: defensible, drawingLimit: overflow || clusters === null, boxes };
 }

@@ -78,8 +78,15 @@ describe("P12-47 R9a + R10a: a Figure caption below its figure takes in the piec
     expect(await boxesOf({ text: [[CAPTION, 60, 345, 9]], shapes: [HOST, far, near] })).toEqual([[60, 52, 300, 330]]);
     expect(await boxesOf({ text: [[CAPTION, 60, 345, 9], body], shapes: [HOST, far, near] })).toEqual([[60, 112, 300, 330]]);
     // A shorter line, or a narrower one, is not body-like.
+    // Re-aimed (P12-84 R3-B): the 57-character line runs 7.35 pt past the region's right edge, which the 6 pt width bound
+    // left out; the bound is 24 pt now, so the region holds the line and ends at 307.35, not 300. What this test pins, the
+    // band's top (52: the line does not stop the band), is as it was.
     const short: TextRun = ["A short label of under seventy characters, not body text.", 60, 105, 10];
-    expect(await boxesOf({ text: [[CAPTION, 60, 345, 9], short], shapes: [HOST, far, near] })).toEqual([[60, 52, 300, 330]]);
+    const widened = await boxesOf({ text: [[CAPTION, 60, 345, 9], short], shapes: [HOST, far, near] });
+    expect(widened).toHaveLength(1);
+    const [left, top, right, bottom] = widened[0]!;
+    expect([left, top, bottom]).toEqual([60, 52, 330]);
+    expect(right).toBeCloseTo(307.35, 1);
   });
 
   it("stops at another typed caption above it", async () => {
@@ -257,13 +264,20 @@ describe("P12-47 R3a: short figure-text lines within 6 pt join the region", () =
     closeTo(await boxOf(belowChart("Time (s)", 4, 215), belowChart("Arbitrary units", first - 400 + 5, 215)), [110, 240, 380, first + 5 + (ASCENT + DESCENT) * 9]);
   });
 
-  it("stays inside the region's width widened by 6 pt", async () => {
-    // All 4 pt under the drawing. One starting 8 pt left of it, or ending 8 pt right of it, is out; one 5 pt left
-    // is in, and the region grows to hold the whole line.
+  // Re-aimed (P12-84 R3-B) from "stays inside the region's width widened by 6 pt": a rotated row label whose near edge is
+  // 6 pt from a figure protrudes more than 6 pt (B P12-80 K3a), so the width bound is 24 pt now; the line must still be
+  // within 6 pt of the region on each axis. The four positions of the old test are kept: the two that were out at 8 pt
+  // (a line starting 8 pt left of the region, one ending 15 pt right of it) are in, and the bound itself is pinned at 25 / 23 pt.
+  it("stays inside the region's width widened by 24 pt", async () => {
+    // All 4 pt under the drawing.
     const bottom = 400 + 4 + (ASCENT + DESCENT) * 9;
-    closeTo(await boxOf(belowChart("Time (s)", 4, 102)), [110, 240, 380, 400]);
+    closeTo(await boxOf(belowChart("Time (s)", 4, 85)), [110, 240, 380, 400]);
+    closeTo(await boxOf(belowChart("Time (s)", 4, 87)), [87, 240, 380, bottom]);
+    closeTo(await boxOf(belowChart("Time (s)", 4, 102)), [102, 240, 380, bottom]);
     closeTo(await boxOf(belowChart("Time (s)", 4, 105)), [105, 240, 380, bottom]);
-    closeTo(await boxOf(belowChart("Time (s)", 4, 395 - TIME_WIDTH)), [110, 240, 380, 400]);
+    closeTo(await boxOf(belowChart("Time (s)", 4, 405 - TIME_WIDTH)), [110, 240, 380, 400]);
+    closeTo(await boxOf(belowChart("Time (s)", 4, 403 - TIME_WIDTH)), [110, 240, 403, bottom]);
+    closeTo(await boxOf(belowChart("Time (s)", 4, 395 - TIME_WIDTH)), [110, 240, 395, bottom]);
     closeTo(await boxOf(belowChart("Time (s)", 4, 385 - TIME_WIDTH)), [110, 240, 385, bottom]);
   });
 
