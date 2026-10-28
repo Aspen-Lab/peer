@@ -460,6 +460,7 @@ export async function removeUploadDoc(hash16: string): Promise<void> {
 
 const FIGURE_CUT_DIR = "figure-cuts";
 const FIGURE_CUT_HEADER_MAX = 512;
+const FIGURE_CUT_NAME_RE = /^p\d{1,6}-[0-9a-f]{16}-r([0-9A-Za-z._-]{1,32})\.cut$/;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 /** What a kept cut holds: the PNG's bytes, and the pixel size the engine drew it at, when it said. */
@@ -557,6 +558,35 @@ export async function removeUploadFigureCuts(hash16: string): Promise<void> {
   if (objects.length > 0) await backend.remove(objects.map((object) => `${folder}/${object.name}`));
 }
 
+/**
+ * The purge's pass over the cut pictures: the folder of an upload that is gone
+ * or taken down is removed whole; in a live upload's folder, an object of
+ * another revision or one that is not a cut at all (a `.tmp` leftover) is.
+ */
+async function sweepFigureCuts(): Promise<void> {
+  const backend = uploadBackend();
+  const folders = (await backend.listFolders(FIGURE_CUT_DIR).catch(() => [])).filter(isValidHash16);
+  for (const hash16 of folders) {
+    try {
+      const owner = await readUploadMeta(hash16);
+      if (!owner || owner.status === "blocked" || owner.status === "deleted") {
+        await removeUploadFigureCuts(hash16);
+        continue;
+      }
+      const folder = figureCutFolder(hash16);
+      const names = (await backend.list(folder)).map((object) => object.name);
+      const current = names.filter((name) => FIGURE_CUT_NAME_RE.exec(name)?.[1] === FIGURE_EXTRACTION_REVISION);
+      if (current.length === 0) await removeUploadFigureCuts(hash16);
+      else {
+        const stale = names.filter((name) => !current.includes(name));
+        if (stale.length > 0) await backend.remove(stale.map((name) => `${folder}/${name}`));
+      }
+    } catch (error) {
+      console.warn("[upload] could not sweep an upload's figure cuts:", error);
+    }
+  }
+}
+
 export async function deleteUpload(meta: UploadMeta): Promise<void> {
   const backend = uploadBackend();
   // Remove permission/metadata first, then the file, then the text Peer
@@ -564,6 +594,11 @@ export async function deleteUpload(meta: UploadMeta): Promise<void> {
   await backend.remove([metaName(meta.hash16)]);
   await backend.remove([pdfName(meta.hash16)]);
   await removeUploadDoc(meta.hash16);
+  // P12-61: and the pictures cut from it. A failure here must not stop the rest
+  // of the deletion; the purge removes the folder of an upload that is gone.
+  await removeUploadFigureCuts(meta.hash16).catch((error) => {
+    console.warn("[upload] could not remove an upload's figure cuts:", error);
+  });
   for (const paperId of meta.paperIds ?? []) {
     if (meta.ownerKey && await attachedUploadHash(meta.ownerKey, paperId) === meta.hash16) {
       await backend.remove([attachmentName(meta.ownerKey, paperId)]).catch(() => undefined);
@@ -608,6 +643,8 @@ export async function purgeExpiredUploads(): Promise<void> {
     const meta = await readUploadMeta(name.slice(0, 16));
     if (meta?.expiresAt && Date.parse(meta.expiresAt) <= Date.now()) await deleteUpload(meta);
   }
+  // P12-61: after the loop, so an expired upload's cuts are already gone with it.
+  await sweepFigureCuts();
   if (backend.kind === "supabase") await purgeAbandonedStagedUploads();
 }
 
