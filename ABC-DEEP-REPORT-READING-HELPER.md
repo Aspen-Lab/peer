@@ -2413,6 +2413,15 @@ C's deviations are accepted:
 
 (c) **Theme B round 3** is a fresh A walk on this head (P12-88). It starts now, beside A P12-87 (Theme A round 4).
 
+### §1h.468 — 2026-10-28 — C P12-86 LANDED (THE REVIEW'S DAMAGE GUARD, THE FALLBACK'S CAUSE)
+
+**C P12-86 is landed** (head `e024cc39`; the landed `web/` tree equals V's at `27412269`).
+- Manager mutations: the split guard off → 8 red; the set_role guard off → 5 red. sha256 equal.
+- V's full gates: lint 0 / 144; **658 files, 12,349 tests, 0 failed**; build 0.
+- C's re-aim is named: `structure-review.test.ts`'s three-splits case uses interpretation, because setup is now refused there.
+
+**A P12-57 phase 3** (brief appended: P6 × 5, P4 × 3, P3 × 3 on this head, with the fallback's cause in `dev.log`; within the 66 calls left) starts at the next free slot. Both slots now hold the round walks A P12-87 and A P12-88.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -2752,7 +2761,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-83 | DONE — C (Sonnet); landed with revision 11 at 69e5e2ef (§1h.467) | K2: a font's lowercased capitals repaired from the document (R2-C) | invented fixtures; own mutations; gates | checkpoint P12-83-C-<UTC>.md | briefs/P12-83.md; §1h.463 |
 | P12-84 | DONE — C (Sonnet); landed at 6371b78e (§1h.466) | K3: figure bounds without furniture, with edge labels (R3-C, R3-B) | invented fixtures; own mutations; gates | checkpoint P12-84-C-<UTC>.md | briefs/P12-84.md; §1h.463 |
 | P12-85 | DONE — C (Sonnet); landed with C P12-82 at 1f672ccf (§1h.465) | the closing split's echo skips fragments (≥ 40 words) | invented fixtures; own mutation; gates | checkpoint P12-85-C-<UTC>.md | briefs/P12-85.md; §1h.464 |
-| P12-86 | REPORTED — C (Sonnet), head 74c09bc2 (on 7e668184); manager verifying (§1h.467) | Tier 1: no setup role after the opening run (damage guard); the fallback's cause logged as counts | invented fixtures; own mutations; gates | checkpoint P12-86-C-<UTC>.md | briefs/P12-86.md; §1h.464 |
+| P12-86 | DONE — C (Sonnet); landed at e024cc39 (§1h.468) | Tier 1: no setup role after the opening run (damage guard); the fallback's cause logged as counts | invented fixtures; own mutations; gates | checkpoint P12-86-C-<UTC>.md | briefs/P12-86.md; §1h.464 |
 | P12-87 | IN_PROGRESS — A (Sonnet), Theme A round 4, head 48d14081, port 4246 | Theme A A1–A12 + E3 re-check | rubric | walk, pack, P12-87-A-<UTC>.md | briefs/P12-87.md; §1h.467 |
 | P12-88 | IN_PROGRESS — A (Sonnet), Theme B round 3, head 69e5e2ef, port 4247 | Theme B B1–B12 + round 2's marks | rubric | walk, pack, P12-88-A-<UTC>.md | briefs/P12-88.md; §1h.467 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
