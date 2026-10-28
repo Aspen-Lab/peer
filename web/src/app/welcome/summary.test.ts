@@ -64,3 +64,33 @@ describe("aiStepSummary", () => {
     expect(page).toMatch(/case "ai":\s*return aiStepSummary\(profile, auth\);/);
   });
 });
+
+// R2-fix item 3 — at 375 px the review list cut its value with an ellipsis, so
+// the AI row read "Gemini key saved — sign in t…" and lost the instruction. The
+// value cell now wraps: a long value takes a second line. The list lives inside
+// the page, which this repo cannot render headlessly, so the cell's classes are
+// read from the source, the way the page's other tests read it.
+describe("the review list's value cell wraps instead of cutting the text", () => {
+  const page = readFileSync(join(process.cwd(), "src/app/welcome/page.tsx"), "utf8");
+  const list = page.slice(page.indexOf("function ReviewList("), page.indexOf("function summarizeStep("));
+  const cell = list.match(/<span className="([^"]*)">\s*\{row\.summary\}\s*<\/span>/);
+
+  it("control: the cell holding {row.summary} is found inside ReviewList", () => {
+    expect(list.length).toBeGreaterThan(0);
+    expect(cell).not.toBeNull();
+  });
+
+  it("breaks long words and wraps: no truncate, no whitespace-nowrap, no ellipsis, no line clamp", () => {
+    const classes = (cell?.[1] ?? "").split(/\s+/);
+    expect(classes).toContain("break-words");
+    expect(classes).toContain("min-w-0"); // lets the flex child shrink so the text can wrap
+    for (const cut of ["truncate", "whitespace-nowrap", "text-ellipsis", "overflow-hidden"]) {
+      expect(classes).not.toContain(cut);
+    }
+    expect(classes.some((c) => c.startsWith("line-clamp"))).toBe(false);
+  });
+
+  it("the row that motivated it is whole: the signed-out AI summary keeps its instruction", () => {
+    expect(aiStepSummary(keyed, "signed-out")).toBe("Gemini key saved — sign in to use it");
+  });
+});

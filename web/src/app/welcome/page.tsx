@@ -691,7 +691,9 @@ function ReviewList({
             <span className={cn("eyebrow text-text-faint", "w-[72px] shrink-0")}>
               {row.label}
             </span>
-            <span className="flex-1 min-w-0 truncate text-meta text-text-muted">
+            {/* Wraps, never cut (R2-fix item 3): at 375 px the AI row used to
+                read "Gemini key saved — sign in t…", losing the instruction. */}
+            <span className="flex-1 min-w-0 break-words text-meta text-text-muted">
               {row.summary}
             </span>
             <button
