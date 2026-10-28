@@ -110,7 +110,7 @@ import { NotesButton } from "@/components/notes/notes-button";
 import { PAPER_BODY_ID } from "@/components/reader/paper-body";
 import { QuestionField, focusFirstEmptyQuestion } from "@/components/reader/question-field";
 import { ReadingMapView, readingRoute } from "@/components/reader/reading-map";
-import { partitionedMap, withPartitionMarks } from "@/lib/papers/reading-partition";
+import { closingPartition, partitionedMap, withPartitionMarks } from "@/lib/papers/reading-partition";
 import { useDebouncedQuestions } from "@/components/reader/use-debounced-questions";
 import { SectionLinks } from "@/components/reader/evidence-quote";
 import { ReaderTabs } from "@/components/reader/reader-tabs";
@@ -827,13 +827,20 @@ function Reader({
   // laid over with it (the trunk's row becomes the parts' rows; the body is untouched, §1h.79 (c)), and
   // the route the map AND the body read has each part's mark folded in beside the real ids', derived
   // from the grades of the paragraphs inside it, so the two never disagree on a paragraph.
-  const shownMap = useMemo(
-    () => (reading?.map ? partitionedMap(reading.map, reading.body, paragraphPartition) : undefined),
+  // P12-63 (§1h.436 (c)): where the model has made no partition, the rules' own closing split of a headed paper's last results part
+  // (`closingPartition`: its echo is the paper's abstract, else the last paragraph of its setup part). The model's partition applies
+  // only to an unheaded paper's trunk, the closing split only to a headed paper's last results row, so the two never meet.
+  const overlayPartition = useMemo(
+    () => paragraphPartition ?? (reading?.map ? closingPartition(reading.map, reading.body, reading.abstract.sentences.join(" ")) : null),
     [reading, paragraphPartition],
   );
+  const shownMap = useMemo(
+    () => (reading?.map ? partitionedMap(reading.map, reading.body, overlayPartition) : undefined),
+    [reading, overlayPartition],
+  );
   const route = useMemo(
-    () => withPartitionMarks(mergedRoute, reading?.map, reading?.body, paragraphPartition),
-    [mergedRoute, reading?.map, reading?.body, paragraphPartition],
+    () => withPartitionMarks(mergedRoute, reading?.map, reading?.body, overlayPartition),
+    [mergedRoute, reading?.map, reading?.body, overlayPartition],
   );
   const projectText = useMemo(
     () => [profile.currentProject, profile.currentChallenges].filter(Boolean).join("\n"),
