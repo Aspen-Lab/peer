@@ -94,13 +94,20 @@ describe("AccountStepView — signed in", () => {
 });
 
 describe("accountStepCopy — the Account step's heading", () => {
-  it("signed in: says so, and that the keys stay in this browser", () => {
+  // R1-fixA item 2 — CHANGED: the signed-in kicker was "Optional".
+  it("signed in: kicker 'Account', says so, and that the keys stay in this browser", () => {
     expect(accountStepCopy("signed-in")).toEqual({
-      kicker: "Optional",
+      kicker: "Account",
       title: "You are signed in.",
       subtitle:
         "Your topics, saved papers and settings now follow your account. Your API keys stay in this browser.",
     });
+  });
+
+  it("only a signed-in reader loses the 'Optional' kicker", () => {
+    expect(accountStepCopy("signed-in").kicker).not.toBe("Optional");
+    expect(accountStepCopy("signed-out").kicker).toBe("Optional");
+    expect(accountStepCopy("unknown").kicker).toBe("Optional");
   });
 
   it("signed out and unknown: the invitation, unchanged", () => {
