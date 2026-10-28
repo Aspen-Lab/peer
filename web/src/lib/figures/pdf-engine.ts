@@ -136,9 +136,12 @@ const MIN_GRID_CELL = 4;
 const MAX_GRID_CELL = 48;
 const MAX_GRID_SIDE = 512;
 
-const CAPTION_RE = /^\s*fig(?:ure)?\.?\s*(\d+[a-z]?)\b/i;
+// P12-56 (R14a): an "Extended Data" prefix before Fig. / Figure is a numbering of its own ("Extended Data Fig. 3"
+// is not "Fig. 3"): group 1 is the prefix, group 2 the number. "Supplementary Fig. 3" and "Fig. S3" are neither:
+// they are figures of another file, and a PDF that prints none of them has no region to find.
+const CAPTION_RE = /^\s*(extended\s+data\s+)?fig(?:ure)?\.?\s*(\d+[a-z]?)\b/i;
 const OTHER_CAPTION_RE = /^\s*(?:table|scheme|chart)\.?\s*\d+[a-z]?\b/i;
-const LABEL_RE = /^\s*(?:fig(?:ure)?\.?\s*)?(\d+[a-z]?)\s*$/i;
+const LABEL_RE = /^\s*(?:(extended\s+data\s+)?fig(?:ure)?\.?\s*)?(\d+[a-z]?)\s*$/i;
 const MIN_WIDTH = 120;
 const MIN_HEIGHT = 120;
 const MIN_AREA = 20_000;
@@ -1040,15 +1043,15 @@ function renderRegion(
 
 // ── The call ─────────────────────────────────────────────────────────────
 
-/** A label's figure number: "Figure 3", "Fig. 3", "3" and "3A" -> "3" / "3a". */
+/** A label's figure number: "Figure 3", "Fig. 3", "3" and "3A" -> "3" / "3a"; "Extended Data Fig. 3" -> "ed3". */
 function labelKey(label: string): string | null {
   const match = LABEL_RE.exec(label);
-  return match ? match[1].toLowerCase() : null;
+  return match ? `${match[1] ? "ed" : ""}${match[2].toLowerCase()}` : null;
 }
 
 const captionKey = (caption: string | null): string | null => {
   const match = caption ? CAPTION_RE.exec(caption) : null;
-  return match ? match[1].toLowerCase() : null;
+  return match ? `${match[1] ? "ed" : ""}${match[2].toLowerCase()}` : null;
 };
 
 const roundTo = (value: number, places = 2) => Math.round(value * 10 ** places) / 10 ** places;
@@ -1219,9 +1222,12 @@ function errorMessage(error: unknown): string {
 export async function measurePdfFigure(
   bytes: Uint8Array,
   page: number,
-  fig: number,
+  fig: number | string,
 ): Promise<{ width: number; height: number } | null> {
-  const { figures } = await extractPdfFigures(bytes, { maxPages: 300, maxFigures: 1, onlyPage: page, label: `Figure ${fig}`, measureOnly: true });
+  // P12-56 (R14a): a number is "Figure 3"; the token `ed3` is "Extended Data Fig. 3". Any other string names nothing.
+  const label = typeof fig === "number" ? `Figure ${fig}` : /^ed[1-9]\d{0,2}$/.test(fig) ? `Extended Data Fig. ${fig.slice(2)}` : null;
+  if (label === null) return null;
+  const { figures } = await extractPdfFigures(bytes, { maxPages: 300, maxFigures: 1, onlyPage: page, label, measureOnly: true });
   const found = figures[0];
   return found && found.width > 0 && found.height > 0 ? { width: found.width, height: found.height } : null;
 }

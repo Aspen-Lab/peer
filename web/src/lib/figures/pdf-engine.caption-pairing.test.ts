@@ -242,3 +242,48 @@ describe("P12-28: defensible typed caption pairing", () => {
     expect((await extractPdfFigures(pdf, { ...options, onlyPage: 1, label: "Figure 4", maxFigures: 1 })).figures).toEqual([]);
   });
 });
+
+describe("P12-56 (R14a): an Extended Data caption is a typed caption of its own numbering", () => {
+  // Panel A has an Extended Data caption right under it; panel B, below, has "Figure 4". Before R14a the
+  // Extended Data line was no typed caption, so A (the typed caption within reach being B's) took "Figure 4"
+  // as well, lost it to the nearer B and was dropped.
+  const twoPanels: FigurePage = {
+    text: [["Extended Data Fig. 1 | Invented extended panel.", 100, 212, 9], ["Figure 4. Invented main panel.", 100, 392, 9]],
+    shapes: [...panel(100, 60, 370, 130), ...panel(100, 240, 370, 130)],
+  };
+
+  it("lists both panels, each with its own caption, in the whole pool", async () => {
+    const result = await extractPdfFigures(figurePdf([twoPanels]), options);
+    expect(result.figures.map((f) => f.caption)).toEqual(["Extended Data Fig. 1 | Invented extended panel.", "Figure 4. Invented main panel."]);
+  });
+
+  it("draws the region of the label it is asked for: 'Extended Data Fig. 1' the upper panel, 'Figure 4' the lower, 'Figure 1' none", async () => {
+    expect(await boxes(twoPanels, "Extended Data Fig. 1")).toEqual([[100, 60, 470, 190]]);
+    expect(await boxes(twoPanels, "Extended Data Figure 1")).toEqual([[100, 60, 470, 190]]);
+    expect(await boxes(twoPanels, "Figure 4")).toEqual([[100, 240, 470, 370]]);
+    expect(await boxes(twoPanels, "Figure 1")).toEqual([]);
+    expect(await boxes(twoPanels, "Fig. 1")).toEqual([]);
+  });
+
+  it("does not take 'Supplementary Fig. 4' or 'Fig. S4' for a caption of Figure 4: the label of another file's figure finds nothing", async () => {
+    const page: FigurePage = {
+      text: [["Supplementary Fig. 4 | Invented panel of another file.", 100, 212, 9]],
+      shapes: panel(100, 60, 370, 130),
+    };
+    expect(await boxes(page, "Figure 4")).toEqual([]);
+    expect(await boxes(page, "Figure S4")).toEqual([]);
+    expect(await boxes(page, "Supplementary Fig. 4")).toEqual([]);
+    const sPage: FigurePage = { text: [["Fig. S4 | Invented panel of another file.", 100, 212, 9]], shapes: panel(100, 60, 370, 130) };
+    expect(await boxes(sPage, "Figure 4")).toEqual([]);
+    expect(await boxes(sPage, "Figure S4")).toEqual([]);
+  });
+
+  it("a nearby Extended Data caption vetoes a farther Figure caption for a region, as a nearby Table does", async () => {
+    const page: FigurePage = {
+      text: [["Extended Data Fig. 2 | Invented extended panel.", 100, 212, 9], ["Figure 6. A farther caption in reach.", 100, 392, 9]],
+      shapes: panel(100, 60, 370, 130),
+    };
+    expect(await boxes(page, "Extended Data Fig. 2")).toEqual([[100, 60, 470, 190]]);
+    expect(await boxes(page, "Figure 6")).toEqual([]);
+  });
+});

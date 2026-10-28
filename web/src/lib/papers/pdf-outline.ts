@@ -225,6 +225,9 @@ const CAPTION = /^(fig(?:ure)?|table|scheme|chart)\s*\.?\s*(\d{1,3}|[IVXL]{1,5})
  *  flag: it asks for a capital letter, and under `i` a small letter is one too. */
 const anyCase = (word: string): string => [...word].map((c) => `[${c.toLowerCase()}${c.toUpperCase()}]`).join("");
 
+/** A panel mark in a bracket, "(a)", "(B)", "(a,b)", "(a-c)", "(ii)": one or two letters, or a short list of them. */
+const PANEL_MARK = String.raw`\(\s*\p{L}{1,2}(?:\s*[,\u2013-]\s*\p{L}{1,2})*\s*\)`;
+
 /**
  * P12-46 (R6a): `CAPTION`, and a separator after the label's number. A caption's number is followed by
  * a full stop, a colon, a bar or a dash (the dashes are the hyphen, the Unicode hyphens and dashes
@@ -232,9 +235,13 @@ const anyCase = (word: string): string => [...word].map((c) => `[${c.toLowerCase
  * capital letter ("Table 1 Scores of …"); or by nothing, the label standing alone on its line with its
  * words on the next. A body line that opens with a citation does not have one: "Fig. 8) is consistent
  * with …", "Fig. 3, left, …", "Fig. 2; the …", "Figure 3 shows …" (a small letter after the space).
- * The groups are `CAPTION`'s: label, number, words; the words are cut from the line as they always were,
- * except that a bar is cut with the full stop and the colon (P12-56, R15a): Nature sets "Fig. 1 | Title",
- * and the bar is the separator, not the first word of the title.
+ * The groups are an optional "Extended Data" prefix, then `CAPTION`'s: label, number, words; the words are cut
+ * from the line as they always were, except that a bar is cut with the full stop and the colon (P12-56, R15a):
+ * Nature sets "Fig. 1 | Title", and the bar is the separator, not the first word of the title.
+ *
+ * P12-56 (R14a): "Extended Data Fig. 3 | Title" is a caption of its own numbering. The prefix is read before
+ * "Fig." and "Figure" only (`captionOf` refuses it before "Table"); "Supplementary Fig. 3" and "Fig. S3" are
+ * not a label this pattern knows: they are figures of another file, and a PDF that does not print one lists none.
  * `CAPTION` itself stays as it was: `headingOf` uses it to keep a line that opens with a figure's label
  * out of the headings, caption or not.
  *
@@ -244,11 +251,9 @@ const anyCase = (word: string): string => [...word].map((c) => `[${c.toLowerCase
  * citations. A citation that is a panel mark and a capital ("Fig. 1 (a) Observed ...") after a line
  * that does not end a sentence is refused by `opensMidSentence`, not by this pattern.
  */
-/** A panel mark in a bracket, "(a)", "(B)", "(a,b)", "(a-c)", "(ii)": one or two letters, or a short list of them. */
-const PANEL_MARK = String.raw`\(\s*\p{L}{1,2}(?:\s*[,\u2013-]\s*\p{L}{1,2})*\s*\)`;
-
 const CAPTION_SEPARATED = new RegExp(
-  `^(${anyCase("fig")}(?:${anyCase("ure")})?|${anyCase("table")}|${anyCase("scheme")}|${anyCase("chart")})` +
+  `^(?:(${anyCase("extended")}\\s+${anyCase("data")})\\s+)?` +
+    `(${anyCase("fig")}(?:${anyCase("ure")})?|${anyCase("table")}|${anyCase("scheme")}|${anyCase("chart")})` +
     String.raw`\s*\.?\s*(\d{1,3}|[IVXLivxl]{1,5})\b` +
     String.raw`(?=\s*(?:$|[.:|\u2010-\u2015\u2212-])|\s+\p{Lu}|\s+${PANEL_MARK}\s*(?:$|\p{Lu}|[.:|\u2010-\u2015\u2212-]))` +
     String.raw`\s*[.:|—–-]?\s*(.*)$`,
@@ -1182,11 +1187,16 @@ function wrapsHeading(previous: PdfLine | null, line: PdfLine, text: string): bo
 export function captionOf(line: PdfLine): OutlineCaption | null {
   const m = line.text.match(CAPTION_SEPARATED);
   if (!m) return null;
-  const ordinal = /^\d+$/.test(m[2]) ? Number(m[2]) : undefined;
+  const extended = m[1] !== undefined;
+  // "Extended Data Table 1" is not read: only figures have a second numbering here.
+  if (extended && !/^fig/i.test(m[2])) return null;
+  // An Extended Data figure's number is its own: it takes no ordinal, so nothing that finds a caption by its
+  // ordinal (the binder's model answer) can take "Extended Data Fig. 3" for "Fig. 3".
+  const ordinal = !extended && /^\d+$/.test(m[3]) ? Number(m[3]) : undefined;
   return {
     ordinal,
-    label: `${m[1]} ${m[2]}`.replace(/\s+/g, " ").trim(),
-    caption: m[3].trim(),
+    label: `${extended ? "Extended Data " : ""}${m[2]} ${m[3]}`.replace(/\s+/g, " ").trim(),
+    caption: m[4].trim(),
     page: line.page,
   };
 }

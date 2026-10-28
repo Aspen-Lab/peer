@@ -1,5 +1,7 @@
 // GET /api/papers/[id]/figure-image?page=N&fig=K — the picture of "Figure K"
-// on page N of a paper's PDF.
+// on page N of a paper's PDF. `fig=ed3` (P12-56, R14a) is "Extended Data Fig. 3": the
+// letters `ed` and plain digits, nothing else; "Supplementary Fig. 3" and "Fig. S3" are
+// another file's figures and are refused like any other token.
 //
 // The reading places each figure by the page its caption was read from and
 // the number in its label, and points here for the picture. This route finds
@@ -49,6 +51,15 @@ function wholeNumber(raw: string | null, max: number): number | null {
   return value <= max ? value : null;
 }
 
+/** The label the engine looks for, for a `fig` value: "Figure 3" for `3`, "Extended Data Fig. 3" for `ed3`
+ *  (R14a), or null for anything else. The `ed` is lower case and the digits are plain, as a number's are. */
+function figureLabel(raw: string | null): string | null {
+  const extended = raw !== null && raw.startsWith("ed");
+  const n = wholeNumber(extended ? raw.slice(2) : raw, MAX_FIGURE);
+  if (n === null) return null;
+  return extended ? `Extended Data Fig. ${n}` : `Figure ${n}`;
+}
+
 function reject(status: number, error: string, headers: Record<string, string> = NO_STORE) {
   return NextResponse.json({ error }, { status, headers });
 }
@@ -62,8 +73,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const page = wholeNumber(req.nextUrl.searchParams.get("page"), MAX_PAGE);
   if (page === null) return reject(400, "page required", refusal);
-  const fig = wholeNumber(req.nextUrl.searchParams.get("fig"), MAX_FIGURE);
-  if (fig === null) return reject(400, "fig required", refusal);
+  const label = figureLabel(req.nextUrl.searchParams.get("fig"));
+  if (label === null) return reject(400, "fig required", refusal);
 
   let bytes: Uint8Array;
   if (privately) {
@@ -108,7 +119,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       maxPages: MAX_PAGE,
       maxFigures: 1,
       onlyPage: page,
-      label: `Figure ${fig}`,
+      label,
     });
   } catch (err) {
     console.warn("[figure-image] extract failed:", err);
@@ -117,7 +128,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const found = extracted.figures[0];
   if (!found || found.png.byteLength === 0) {
-    return reject(404, extracted.reason ?? `No Figure ${fig} on page ${page}`, engineRan);
+    return reject(404, extracted.reason ?? `No ${label} on page ${page}`, engineRan);
   }
 
   return new NextResponse(Buffer.from(found.png), {

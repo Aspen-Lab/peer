@@ -8,7 +8,15 @@ import { extractPdfFigures, MAX_PDF_BYTES } from "./pdf-engine";
 
 const FETCH_TIMEOUT_MS = 10_000;
 const MAX_PDF_PAGES = 24;
-const MAX_PDF_FIGURES = 12;
+/**
+ * The whole-document pool's figures, in document order. P12-56 (R14a): 24, from 12. A Nature paper prints up to ten
+ * Extended Data figures after its eight or so main ones, and at 12 the pool stopped before the last of them, so a
+ * report that bound one found no picture for it. 24 is the ceiling the sizing already has (`MEASURE_MAX` in
+ * `pdf-text.ts`). The work it adds is one render per figure past the twelfth (a PNG of at most 4.5 megapixels,
+ * about a megabyte as a `data:` URL) on a paper that has them; the clock (`EXTRACTION_BUDGET_MS`) and the 24 pages
+ * read still bound the call, and a paper of 12 figures or fewer is read exactly as before.
+ */
+const MAX_PDF_FIGURES = 24;
 const FETCH_VERSION = "2026-05-01-pdf-vision";
 const OPEN_ACCESS_HOST_PATTERNS = [
   /(^|\.)pmc\.ncbi\.nlm\.nih\.gov$/i,
