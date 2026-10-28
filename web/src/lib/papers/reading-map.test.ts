@@ -924,3 +924,68 @@ describe("buildReadingMap — the paper's hierarchy (P10-04, A10)", () => {
     expect(groupTotals(buildReadingMap(doc([{ heading: "1. A", text: filler(10) }, { heading: "1.1 B", text: filler(10) }]))).size).toBe(0);
   });
 });
+
+// P12-75 (B P12-73, M2): a paper that numbers nothing (a Nature-style one) prints "Methods" with no text of its own and
+// its sub-headings under it. The outline now keeps that heading as a row with no words (`level` 1) and its sub-headings
+// at `level` 2; the map reads the level the section carries, as a group row of a numbered paper is read.
+describe("buildReadingMap — an unnumbered part's group row (P12-75, M2)", () => {
+  const unnumbered = () =>
+    doc([
+      { heading: "Introduction", canonical: "introduction", text: filler(60) },
+      { heading: "Slow cooling spares the grain edges", text: filler(120) },
+      { heading: "Methods", canonical: "methods", text: "", level: 1, page: 9 },
+      { heading: "Film growth", canonical: "methods", text: filler(40), level: 2 },
+      { heading: "Cell assembly", canonical: "methods", text: filler(31), level: 2 },
+      { heading: "Data availability", canonical: "acknowledgments", text: filler(10) },
+    ]);
+
+  it("keeps the part's heading with no paragraphs when its sub-headings follow, and drops the ones that stand for nothing", () => {
+    const rendered = readableSections(unnumbered());
+    expect(rendered.map((r) => r.section.heading)).toEqual([
+      "Introduction", "Slow cooling spares the grain edges", "Methods", "Film growth", "Cell assembly", "Data availability",
+    ]);
+    expect(rendered[2].paragraphs).toEqual([]);
+    expect(rendered.map((r) => r.id)).toEqual(["s0", "s1", "s2", "s3", "s4", "s5"]);
+
+    // A part heading with no sub-heading after it (the next section is not level 2), an empty sub-heading, and an
+    // empty heading with no level: all strays, as before.
+    const strays = readableSections(doc([
+      { heading: "Methods", canonical: "methods", text: "", level: 1 },
+      { heading: "Results", canonical: "results", text: filler(10) },
+      { heading: "Film growth", canonical: "methods", text: "", level: 2 },
+      { heading: "Data availability", canonical: "acknowledgments", text: filler(10) },
+      { heading: "Discussion", canonical: "discussion", text: "" },
+      { heading: "Cell assembly", canonical: "methods", text: filler(10), level: 2 },
+    ]));
+    expect(strays.map((r) => r.section.heading)).toEqual(["Results", "Data availability", "Cell assembly"]);
+  });
+
+  it("reads the level the section carries: the part at 1, its sub-headings at 2 under it, the next unnumbered heading at 1", () => {
+    const map = buildReadingMap(unnumbered());
+    expect(map.sections.map((r) => [r.heading, r.level, r.parentId])).toEqual([
+      ["Introduction", 1, undefined],
+      ["Slow cooling spares the grain edges", 1, undefined],
+      ["Methods", 1, undefined],
+      ["Film growth", 2, "s2"],
+      ["Cell assembly", 2, "s2"],
+      ["Data availability", 1, undefined],
+    ]);
+  });
+
+  it("gives the part its bucket's role, with no words of its own, and sums its sub-headings with groupTotals", () => {
+    const map = buildReadingMap(unnumbered());
+    const part = map.sections[2];
+    expect([part.role, part.words, part.minutes, part.paragraphs, part.page]).toEqual(["method", 0, 0, [], 9]);
+    expect(map.sections.slice(3, 5).map((r) => r.role)).toEqual(["method", "method"]);
+    expect([...groupTotals(map).keys()]).toEqual(["s2"]);
+    expect(groupTotals(map).get("s2")).toEqual({ words: 71, minutes: 1 });
+  });
+
+  it("leaves a numbered paper's levels to its numbers: the level a section carries is for the unnumbered", () => {
+    const map = buildReadingMap(doc([
+      { heading: "2. RESULTS", text: "" },
+      { heading: "2.1. Growth", text: filler(10) },
+    ]));
+    expect(map.sections.map((r) => [r.level, r.parentId])).toEqual([[1, undefined], [2, "s0"]]);
+  });
+});

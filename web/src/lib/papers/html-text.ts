@@ -28,6 +28,13 @@ export interface ExtractedSection {
   text: string;
   /** PDFs only: the page the section's heading sits on. HTML has no pages. */
   page?: number;
+  /**
+   * PDFs only (P12-75): the depth of an unnumbered heading the outline put under a part. 1 is a part's own heading
+   * that holds only sub-headings ("Methods", then at once its first sub-heading), kept as a row with no words;
+   * 2 is a sub-heading set smaller than it, which took its bucket. Absent on every other section, whose depth
+   * the heading's number gives.
+   */
+  level?: 1 | 2;
 }
 
 /** A section as an extractor builds it, before it has its place in the
@@ -257,10 +264,13 @@ export function numbersHeading(parent: string, child: string): boolean {
  * heading) and goes, as every empty heading used to. The next section is judged as it stands in `sections`,
  * before this drops anything, so "2." survives a chain of empty levels ("2.", "2.1", "2.1.1 …").
  */
-export function dropStrayHeadings<T extends { heading?: string; text?: string }>(sections: readonly T[]): T[] {
+export function dropStrayHeadings<T extends { heading?: string; text?: string; level?: 1 | 2 }>(sections: readonly T[]): T[] {
   return sections.filter((section, index) => {
     if ((section.text ?? "").trim().length > 0) return true;
     const next = sections[index + 1];
+    // P12-75: a part's heading with no text of its own and no number ("Methods") stays when the section after it is
+    // one of its sub-headings (`level` 2); one without sub-headings under it is a stray, as any empty heading is.
+    if (section.level === 1 && next?.level === 2) return true;
     return Boolean(section.heading && next?.heading && numbersHeading(section.heading, next.heading));
   });
 }
@@ -271,7 +281,7 @@ export function dropStrayHeadings<T extends { heading?: string; text?: string }>
  * Comparison Across Budgets" under the same parent is not methods, whatever
  * the word "model" in it suggests.
  */
-const STRONG_BUCKETS = new Set([
+export const STRONG_BUCKETS = new Set([
   "limitations",
   "references",
   "acknowledgments",

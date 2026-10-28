@@ -482,3 +482,56 @@ describe("extractPdfTextFromPath's buckets — subsections of a numbered heading
     expect(sentence).not.toContain("no methods section");
   });
 });
+
+// P12-75 (B P12-73, M2): a paper that numbers nothing prints "Methods" with no text of its own and its sub-headings
+// set smaller under it. The outline keeps the heading as a row with no words (`level` 1) and gives each sub-heading the
+// bucket and `level` 2; `normalize` carries both to the document the reading map reads.
+describe("extractPdfTextFromPath's unnumbered part — a group row and its sub-headings (P12-75, M2)", () => {
+  const unnumbered: Run[][] = [
+    [
+      ["Slow Annealing Keeps Quillwort Films Whole", 72, 70, 18],
+      ...prose(
+        [
+          "Quillwort cathodes degrade through slow loss of lithium at the grain edges of the film.",
+          "We follow the loss over four hundred cycles and ask which edge goes first in each sample.",
+        ],
+        110,
+      ),
+      ["Slow cooling spares the grain edges", 72, 160, 14, true],
+      ...prose(
+        [
+          "The capacity of the annealed films held at ninety percent of its first value over the run.",
+          "Films that were cooled quickly lost a third of their capacity before the hundredth cycle.",
+        ],
+        180,
+      ),
+    ],
+    [
+      ["Methods", 72, 80, 14, true],
+      ["Film growth", 72, 105, 12, true],
+      ...prose(["Films were grown on polished steel discs in a furnace held at a fixed temperature."], 125),
+      ["Cell assembly", 72, 160, 12, true],
+      ...prose(["Cells were sealed in a glove box and cycled between two voltages at a constant current."], 180),
+      ["Data availability", 72, 230, 14, true],
+      ...prose(["The numbers behind every figure are kept with the authors and are shared on request."], 250),
+    ],
+  ];
+
+  it("keeps 'Methods' as an empty section at level 1 and its two sub-headings at level 2, in the methods bucket, with ids in order", async () => {
+    const result = await extractPdfTextFromPath(await onDisk("unnumbered-methods.pdf", unnumbered));
+
+    expect(result.ok).toBe(true);
+    const sections = result.doc?.sections ?? [];
+    expect(sections.map((s) => [s.heading, s.canonical, s.level])).toEqual([
+      ["Slow Annealing Keeps Quillwort Films Whole", "body", undefined],
+      ["Slow cooling spares the grain edges", "body", undefined],
+      ["Methods", "methods", 1],
+      ["Film growth", "methods", 2],
+      ["Cell assembly", "methods", 2],
+      ["Data availability", "acknowledgments", undefined],
+    ]);
+    expect(sections.map((s) => s.id)).toEqual(["s0", "s1", "s2", "s3", "s4", "s5"]);
+    expect(sections[2]).toMatchObject({ text: "", page: 2 });
+    expect(sections.filter((s) => !("level" in s)).length).toBe(3);
+  });
+});

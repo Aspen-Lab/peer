@@ -27,7 +27,7 @@
 // nothing, and says so, rather than inventing sections.
 import { blockMarker } from "@/lib/text/math";
 
-import { bucketInheritor, canonicalizeHeading, dropStrayHeadings, headingNumber } from "./html-text";
+import { bucketInheritor, canonicalizeHeading, dropStrayHeadings, headingNumber, STRONG_BUCKETS } from "./html-text";
 
 /** One run of text from the PDF's text layer. */
 export interface PdfTextItem {
@@ -90,6 +90,9 @@ export interface OutlineSection {
   canonical?: string;
   page?: number;
   text?: string;
+  /** P12-75: 1 for the heading of a part that holds only sub-headings and has no number ("Methods", then at once its first
+   *  sub-heading: a row with no words); 2 for a sub-heading set smaller than it, which took its bucket. Absent otherwise. */
+  level?: 1 | 2;
 }
 
 export interface OutlineCaption {
@@ -2860,6 +2863,16 @@ function figureTextOf(
 }
 
 /**
+ * P12-75 (B P12-73, M2): the whole heading names a part of the argument. A heading that is one of these, has no number and
+ * no text of its own, only sub-headings under it, is the part's group row ("Methods" in a paper that numbers nothing).
+ * Only the whole heading counts: a descriptive heading that holds one of the words is not a part name.
+ */
+const PART_NAME =
+  /^(?:(?:online|extended)\s+)?(?:(?:materials?|experimental)\s+(?:and|&)\s+)?(?:methods?|methodology|experimental(?:\s+(?:section|procedures?|details?|methods?|part))?)$|^results(?:\s+(?:and|&)\s+discussions?)?$|^discussions?$|^conclusions?$|^introduction$/i;
+/** P12-75: a sub-heading is smaller than its part's heading by more than this many points. */
+const GROUP_STEP = 0.3;
+
+/**
  * The whole reading: pages of text items in, a document out. `reason` is set
  * — and everything else left empty — when the PDF carries no text to read.
  * `prior` is the paper's usual column gutter, which a page too sparse to show
@@ -2911,6 +2924,12 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
   let resumed = false;
   let opensTail = false;
   let appendix = false;
+  // P12-75 (M2): the part an unnumbered, empty named heading opens ("Methods", then at once its first sub-heading): the
+  // bucket it gives and the size its heading was set in. The unnumbered headings that follow it, set smaller, are its
+  // sub-headings and take the bucket (as numbered ones take their parent's); a heading as large, a numbered one or one
+  // that names a structural bucket (limitations, references, acknowledgments, supplementary, abstract) ends it.
+  let group: { canonical: string; size: number } | null = null;
+  let headingSize = 0;
 
   // P7-18 (F3): every heading takes its place in the numbering, a heading with nothing under it
   // too ("2. RESULTS AND DISCUSSION" holds only its subsections and is no section), so "2.1 …"
@@ -2925,8 +2944,24 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
       return blockMarker(equations.length - 1);
     });
     const text = joinProse(lifted, { vocab });
+    let level: 1 | 2 | undefined;
+    if (heading === null || headingNumber(heading) !== null) {
+      group = null;
+    } else if (group !== null && !STRONG_BUCKETS.has(canonical) && headingSize < group.size - GROUP_STEP) {
+      canonical = group.canonical;
+      level = 2;
+    } else {
+      group = null;
+      if (text.trim().length === 0 && reading && headingSize > 0 && PART_NAME.test(heading.replace(GLYPH_LEAD, "").trim())) {
+        group = { canonical, size: headingSize };
+        level = 1;
+      }
+    }
     if (text.trim().length > 0) {
-      sections.push({ heading: heading ?? undefined, canonical, page, text });
+      sections.push({ heading: heading ?? undefined, canonical, page, text, ...(level === 2 ? { level } : {}) });
+    } else if (heading !== null && reading && level === 1) {
+      // P12-75: the group row, with no words. `dropStrayHeadings` keeps it only when a sub-heading with text follows.
+      sections.push({ heading, canonical, page, text: "", level });
     } else if (heading !== null && reading && headingNumber(heading) !== null) {
       // P10-04 (review 3.3): a numbered heading with nothing under it may be the paper's own group
       // heading ("2. RESULTS AND DISCUSSION", then "2.1 …"). Kept here with empty text; `dropStrayHeadings`
@@ -2995,6 +3030,7 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
       } else {
         flush();
         heading = next;
+        headingSize = line.size;
         page = line.page;
         opensTail = false;
       }

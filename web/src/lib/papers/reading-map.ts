@@ -101,7 +101,9 @@ export function readableSections(doc: ExtractedDocument): ReadableSection[] {
     const { paragraphs, equations } = sectionParagraphs(section, lifted);
     if (paragraphs.length === 0 && equations.length === 0) {
       const next = doc.sections[index + 1];
-      if (!next || !numbersHeading(section.heading, next.heading)) return;
+      // P12-75: an unnumbered part heading that holds only its sub-headings ("Methods") is a group row as a numbered one is.
+      const heads = section.level === 1 && next?.level === 2;
+      if (!heads && (!next || !numbersHeading(section.heading, next.heading))) return;
     }
     out.push({ id: section.id ?? `s${index}`, section, paragraphs, equations });
   });
@@ -282,7 +284,8 @@ export function readingMapOf(rendered: readonly ReadableSection[]): ReadingMap {
   const sections = rendered.map(({ id, section, paragraphs }): ReadingMapSection => {
     const words = paragraphs.reduce((sum, paragraph) => sum + wordCount(paragraph), 0);
     totalWords += words;
-    const level = levelOf(section.heading);
+    // P12-75: an unnumbered part heading and its sub-headings carry the depth the outline gave them.
+    const level = section.level ?? levelOf(section.heading);
     while (open.length > 0 && open[open.length - 1].level >= level) open.pop();
     const parentId = open[open.length - 1]?.id;
     open.push({ id, level });

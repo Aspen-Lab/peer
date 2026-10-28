@@ -229,6 +229,8 @@ function normalize(extractor: PdfOutline): ExtractedDocument {
         canonical: section.canonical || "body",
         text: cleanPaperText(section.text),
         ...(typeof section.page === "number" ? { page: section.page } : {}),
+        // P12-75: a part's heading that holds only sub-headings, and its sub-headings, keep the depth the outline gave.
+        ...(section.level === 1 || section.level === 2 ? { level: section.level } : {}),
       })),
     ),
   );

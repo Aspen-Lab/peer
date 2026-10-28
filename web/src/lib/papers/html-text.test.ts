@@ -4,6 +4,7 @@ import {
   bucketInheritor,
   canonicalizeHeading,
   chooseHtmlExtractor,
+  dropStrayHeadings,
   looksLikeFullText,
   parseCaption,
   resolveBase,
@@ -710,5 +711,43 @@ describe("extractPmc — a nested section is its own (P10-40, BACKLOG-35)", () =
     expect(out.sections.map((s) => s.heading)).toEqual(["Methods", "Sampling"]);
     expect(out.sections[0].text).toContain("Box: the watering schedule.");
     expect(out.sections[1].text).toBe("Probes sat in each plot.");
+  });
+});
+
+// P12-75 (B P12-73, M2): an unnumbered part's heading with no text of its own ("Methods", then at once its first
+// sub-heading) is kept by the outline at `level` 1, and each sub-heading under it is `level` 2. `dropStrayHeadings`
+// keeps such a part heading when the section after it is one of its sub-headings, and drops it as it drops any
+// empty heading when nothing of its own follows.
+describe("dropStrayHeadings — an unnumbered part's heading (P12-75)", () => {
+  type Row = { heading: string; text: string; level?: 1 | 2 };
+  const headings = (rows: Row[]) => dropStrayHeadings(rows).map((row) => row.heading);
+
+  it("keeps a part heading with no text when the next section is its sub-heading", () => {
+    expect(
+      headings([
+        { heading: "Slow cooling", text: "Films held their capacity." },
+        { heading: "Methods", text: "", level: 1 },
+        { heading: "Film growth", text: "Films were grown on discs.", level: 2 },
+        { heading: "Cell assembly", text: "Cells were sealed in a box.", level: 2 },
+      ]),
+    ).toEqual(["Slow cooling", "Methods", "Film growth", "Cell assembly"]);
+  });
+
+  it("drops a part heading with no text when the next section is not a sub-heading, or when none follows", () => {
+    expect(headings([{ heading: "Methods", text: "", level: 1 }, { heading: "Data availability", text: "On request." }])).toEqual(["Data availability"]);
+    expect(headings([{ heading: "Methods", text: "", level: 1 }, { heading: "Results", text: "", level: 1 }, { heading: "Film growth", text: "Discs.", level: 2 }])).toEqual(["Results", "Film growth"]);
+    expect(headings([{ heading: "Data availability", text: "On request." }, { heading: "Methods", text: "", level: 1 }])).toEqual(["Data availability"]);
+  });
+
+  it("drops an empty sub-heading, and an empty heading with no level even when a sub-heading follows it", () => {
+    expect(
+      headings([
+        { heading: "Methods", text: "", level: 1 },
+        { heading: "Film growth", text: "", level: 2 },
+        { heading: "Cell assembly", text: "Cells were sealed in a box.", level: 2 },
+        { heading: "Our approach", text: "" },
+        { heading: "Statistics", text: "Medians are given.", level: 2 },
+      ]),
+    ).toEqual(["Methods", "Cell assembly", "Statistics"]);
   });
 });
