@@ -19,13 +19,16 @@
 //     nothing below one is a figure of its own; a caption with no region at
 //     all needs three such pieces whose union passes them;
 //   * the short figure-text lines within 6 pt of such a region (an axis title,
-//     a panel letter) join it too; the last line of a body paragraph does not;
+//     a panel letter) join it too; the last line of a body paragraph does not,
+//     and neither does a running head (P12-84: a line or a rule of 20 pt and
+//     more wholly in the page's top 46.5 pt is furniture, never figure text);
 //   * a caption is its typed line and the lines that continue it, and it ends
 //     at the first line set apart by more than 1.4 of its own line pitch;
 //   * a figure is the region plus 10 pt (less, where its caption starts inside
-//     that padding: the clip then stops half a point short of the caption),
-//     rendered at 2.8x (about 200 DPI), stepped down by 0.2 to stay at or
-//     under 4.5 megapixels.
+//     that padding: the clip then stops half a point short of the caption, and
+//     less where the padding would take in a running head or its rule: the
+//     clip then starts a point under that ink), rendered at 2.8x (about 200
+//     DPI), stepped down by 0.2 to stay at or under 4.5 megapixels.
 //
 // The timeout design (chosen, measured, and why). The helper was killed at 25
 // s by `execFile`. In-process there is no kill switch for a call already inside
@@ -857,6 +860,36 @@ function growFromCaptions(candidates: Candidate[], texts: TextBlock[], pieces: R
   return changed;
 }
 
+// ── Furniture: a running head and its rule (P12-84, K3, R3-C) ─────────────
+//
+// B P12-80 K3: a line of the page's running head is a short line like an axis title, and a figure that starts a few
+// points under it took the head in (a region whose top was the head's); and the 10 pt padding of a clip reaches the
+// head's rule, or its text, when the figure starts less than 10 pt under them. A zero-height rule is no cluster
+// (`clusterDrawings` keeps only clusters taller than 3 pt), so the furniture is read from the page's lines and from
+// its raw drawing boxes, not from its clusters. Furniture is a line or a box wholly in the top band (its bottom at
+// most half a point past `BAND_FURNITURE`) and at least 20 pt wide: a narrower mark up there (a tick label, a panel
+// letter of a figure that starts at the page's top) is the figure's. Furniture never joins a figure, and the clip
+// of a figure under it starts a point below the ink, not 10 pt above the figure. Only the top band is furniture:
+// the page has no foot band here, and a caption is bounded by R5a.
+
+/** The narrowest line or box, in points, that is furniture when it lies wholly in the top band. */
+const FURNITURE_MIN_WIDTH = 20;
+/** How far past `BAND_FURNITURE` a furniture line's box may end, in points (a head's descenders). */
+const FURNITURE_BAND_SLACK = 0.5;
+/** How far under furniture ink the clip starts, in points: a rule's box is its centre line, and the stroke has a width. */
+const FURNITURE_CLEARANCE = 1;
+
+/** Is this line or box a running head or its rule: wholly in the page's top band and at least 20 pt wide? */
+const isFurniture = (r: Rect, pageRect: Rect) => r[3] <= pageRect[1] + BAND_FURNITURE + FURNITURE_BAND_SLACK && width(r) >= FURNITURE_MIN_WIDTH;
+
+/** The page's furniture ink: its lines and its drawing boxes (thin rules included) that are furniture. */
+function furnitureInk(texts: TextBlock[], boxes: Rect[], pageRect: Rect): Rect[] {
+  const ink: Rect[] = [];
+  for (const line of texts) if (isFurniture(line.rect, pageRect)) ink.push(line.rect);
+  for (const box of boxes) if (isFurniture(box, pageRect)) ink.push(box);
+  return ink;
+}
+
 // ── Figure text: the short lines a captioned region takes in (P12-47, R3a) ─
 //
 // B P12-39 M3: a drawing's region is its path boxes, so an axis title just past the last axis line, or a panel
@@ -864,7 +897,8 @@ function growFromCaptions(candidates: Candidate[], texts: TextBlock[], pieces: R
 // then whatever is within 6 pt of the grown region, until none is left. A line is figure text and not body text
 // when it is at most 60 characters, is not a typed caption or a line of the caption's own block, sits on the
 // figure's side of the caption (above it, for a caption below), lies inside the region's width widened by 6 pt,
-// and does not share its block with a line over 60 characters (the short last line of a paragraph is body).
+// does not share its block with a line over 60 characters (the short last line of a paragraph is body), and is not
+// furniture (P12-84, R3-C: a running head is never figure text, whatever chain of lines leads up to it).
 
 /** How near a line must be to the region, in points, on each axis; also how far past its sides it may reach. */
 const FIGURE_TEXT_REACH = 6;
@@ -872,7 +906,7 @@ const FIGURE_TEXT_REACH = 6;
 const FIGURE_TEXT_CHARS = 60;
 
 /** Grows each accepted, captioned region by the figure-text lines around it; true when any region changed. */
-function absorbFigureText(candidates: Candidate[], texts: TextBlock[]): boolean {
+function absorbFigureText(candidates: Candidate[], texts: TextBlock[], pageRect: Rect): boolean {
   const bodyBlocks = new Set(texts.filter((line) => line.text.length > FIGURE_TEXT_CHARS).map((line) => line.blockId));
   let changed = false;
   for (const host of candidates) {
@@ -885,7 +919,7 @@ function absorbFigureText(candidates: Candidate[], texts: TextBlock[]): boolean 
       grew = false;
       for (const line of texts) {
         if (line.text.length > FIGURE_TEXT_CHARS || bodyBlocks.has(line.blockId) || isTypedCaption(line.text)) continue;
-        if (line.blockId === caption.blockId || !onFigureSide(line)) continue;
+        if (line.blockId === caption.blockId || !onFigureSide(line) || isFurniture(line.rect, pageRect)) continue;
         const near =
           gapBetween(host.rect[0], host.rect[2], line.rect[0], line.rect[2]) <= FIGURE_TEXT_REACH &&
           gapBetween(host.rect[1], host.rect[3], line.rect[1], line.rect[3]) <= FIGURE_TEXT_REACH;
@@ -900,7 +934,15 @@ function absorbFigureText(candidates: Candidate[], texts: TextBlock[]): boolean 
   return changed;
 }
 
-function candidateRegions(mupdf: Mupdf, page: Page, pageRect: Rect, texts: TextBlock[], images: ImageBlock[]): { candidates: Candidate[]; drawingLimit: boolean } {
+/** The candidate regions of a page, and the page's drawing boxes (P12-84: the furniture of the clip is read from them,
+ *  so the page is not walked twice). */
+function candidateRegions(
+  mupdf: Mupdf,
+  page: Page,
+  pageRect: Rect,
+  texts: TextBlock[],
+  images: ImageBlock[],
+): { candidates: Candidate[]; drawingLimit: boolean; boxes: Rect[] } {
   const candidates: Candidate[] = [];
   const placed = images.map(placedImage).filter((image): image is PlacedImage => image !== null);
 
@@ -957,9 +999,9 @@ function candidateRegions(mupdf: Mupdf, page: Page, pageRect: Rect, texts: TextB
   // pieces of its band (an orphan caption starts a region of its own), and then the short figure-text lines around
   // what the region has become.
   const withBands = growFromCaptions(defensible, texts, collectPieces(images, clusters, pageRect), pageRect);
-  if (absorbFigureText(defensible, texts) || withBands) defensible.sort(byPlace);
+  if (absorbFigureText(defensible, texts, pageRect) || withBands) defensible.sort(byPlace);
   for (const candidate of defensible) candidate.stretch = regionStretch(candidate.rect, placed);
-  return { candidates: defensible, drawingLimit: overflow || clusters === null };
+  return { candidates: defensible, drawingLimit: overflow || clusters === null, boxes };
 }
 
 // ── Rendering a region ───────────────────────────────────────────────────
@@ -981,6 +1023,7 @@ function renderRegion(
   stretch: number,
   measureOnly = false,
   captionRect: Rect | null = null,
+  furniture: readonly Rect[] = [],
 ): { png: Uint8Array; width: number; height: number } | null {
   const clip: Rect = [
     Math.max(pageRect[0], rect[0] - CLIP_PADDING),
@@ -996,6 +1039,12 @@ function renderRegion(
     } else if (captionRect[3] > clip[1]) {
       clip[1] = Math.min(rect[1], captionRect[3] + CAPTION_CLEARANCE);
     }
+  }
+  // P12-84 (K3, R3-C): nor is it for the running head. Furniture ink over the region (its bottom at or above the
+  // region's top, over the clip's columns) that the padding would take in ends the clip's top a point under it.
+  for (const ink of furniture) {
+    if (ink[3] > rect[1] || ink[2] <= clip[0] || ink[0] >= clip[2]) continue;
+    clip[1] = Math.max(clip[1], Math.min(rect[1], ink[3] + FURNITURE_CLEARANCE));
   }
   if (isEmpty(clip) || width(clip) <= 1 || height(clip) <= 1) return null;
 
@@ -1247,7 +1296,8 @@ function readPage(
     const bounds = page.getBounds();
     const pageRect: Rect = [bounds[0], bounds[1], bounds[2], bounds[3]];
     const { texts, images } = readPageStructure(page);
-    const { candidates, drawingLimit } = candidateRegions(mupdf, page, pageRect, texts, images);
+    const { candidates, drawingLimit, boxes } = candidateRegions(mupdf, page, pageRect, texts, images);
+    const furniture = furnitureInk(texts, boxes, pageRect);
     for (const candidate of candidates) {
       if (figures.length >= room) break;
       if (wanted !== null && captionKey(candidate.caption) !== wanted) continue;
@@ -1255,7 +1305,7 @@ function readPage(
       let rendered: ReturnType<typeof renderRegion> = null;
       try {
         const captionRect = candidate.captionIndex >= 0 ? texts[candidate.captionIndex].rect : null;
-        rendered = renderRegion(mupdf, page, pageRect, candidate.rect, candidate.stretch, measureOnly, captionRect);
+        rendered = renderRegion(mupdf, page, pageRect, candidate.rect, candidate.stretch, measureOnly, captionRect, furniture);
       } catch (error) {
         console.warn("[figures/pdf-engine] a region would not render:", error);
       }
