@@ -41,6 +41,7 @@ import {
   hasUnsyncedChanges,
   shouldWarnBeforeSignOut,
   handleSignOutSubmitCore,
+  signOutKeysCopy,
   signOutKeysSentence,
   signOutPrompt,
   type AccountSectionViewProps,
@@ -627,6 +628,38 @@ describe("AccountSectionView — the sign-out dialog (OWN-KEY lane 4)", () => {
     expect(html).not.toContain(" and your ");
   });
 
+  // L4-fix (R13, D2): one key, singular words throughout.
+  it("one key: the title, the reason, the next step and the button are all singular", () => {
+    for (const labels of [["Gemini"], ["Jev"]]) {
+      const html = dialog("keys", labels);
+      expect(html).toMatch(/<h2 id="sign-out-title"[^>]*>Sign out and remove your key\?<\/h2>/);
+      expect(html).toContain(
+        "<p>Peer keeps keys only in this browser, never on its server. If it stayed after you signed out, the next person to use this browser could run requests on your key, billed to you.</p>",
+      );
+      expect(html).toContain("<p>When you sign in again, here or on another device, paste it again.</p>");
+      expect(html).toContain(">Sign out and remove key</button>");
+      expect(html).not.toMatch(/remove your keys|remove keys|If they stayed|on your keys|paste them/);
+    }
+  });
+
+  it("one key with unsynced changes too: singular keys words, plus the unsynced sentence", () => {
+    const html = dialog("both", ["Jev"]);
+    expect(html).toContain("Sign out and remove your key?");
+    expect(html).toContain("Signing out removes your Jev key from this browser.");
+    expect(html).toContain(UNSYNCED);
+    expect(html).toContain(">Sign out and remove key</button>");
+  });
+
+  it("two keys keep the plural wording", () => {
+    expect(signOutKeysCopy(["Gemini", "Jev"])).toEqual({
+      title: "Sign out and remove your keys?",
+      removes: KEYS_SENTENCE,
+      why: WHY,
+      again: AGAIN,
+      confirm: "Sign out and remove keys",
+    });
+  });
+
   it("both: the keys sentences and the unsynced sentence, in one dialog with one form", () => {
     const html = dialog("both", ["Gemini", "Jev"]);
     expect(html).toContain("Sign out and remove your keys?");
@@ -668,11 +701,20 @@ describe("AccountSectionView — the sign-out dialog (OWN-KEY lane 4)", () => {
     };
     const labels = browserKeyLabels(profile);
     expect(labels).toEqual(["Gemini", "Jev"]);
-    for (const prompt of ["keys", "both"] as const) {
-      const html = dialog(prompt, labels);
-      for (const key of [MODEL_KEY, JEV_KEY]) {
-        for (let i = 0; i + 4 <= key.length; i++) {
-          expect(html).not.toContain(key.slice(i, i + 4));
+    // Two keys, and each key alone (the singular wording), with and without
+    // unsynced changes.
+    const oneEach = [
+      browserKeyLabels({ ...profile, jevApiKey: "" }),
+      browserKeyLabels({ ...profile, feedAiProvider: "default", feedAiApiKey: "" }),
+    ];
+    expect(oneEach).toEqual([["Gemini"], ["Jev"]]);
+    for (const set of [labels, ...oneEach]) {
+      for (const prompt of ["keys", "both"] as const) {
+        const html = dialog(prompt, set);
+        for (const key of [MODEL_KEY, JEV_KEY]) {
+          for (let i = 0; i + 4 <= key.length; i++) {
+            expect(html).not.toContain(key.slice(i, i + 4));
+          }
         }
       }
     }

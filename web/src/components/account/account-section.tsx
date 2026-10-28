@@ -147,6 +147,34 @@ export function signOutKeysSentence(keyLabels: readonly string[]): string {
   return `Signing out removes ${list} from this browser.`;
 }
 
+export interface SignOutKeysCopy {
+  title: string;
+  removes: string;
+  why: string;
+  again: string;
+  confirm: string;
+}
+
+/**
+ * The keys part of the sign-out dialog, in the singular for one key and the
+ * plural for more (L4-fix, R13 D2: "your Gemini key" then "paste them again"
+ * read wrong). Built from the key NAMES only.
+ */
+export function signOutKeysCopy(keyLabels: readonly string[]): SignOutKeysCopy {
+  const one = keyLabels.length === 1;
+  return {
+    title: one ? "Sign out and remove your key?" : "Sign out and remove your keys?",
+    removes: signOutKeysSentence(keyLabels),
+    why: one
+      ? "Peer keeps keys only in this browser, never on its server. If it stayed after you signed out, the next person to use this browser could run requests on your key, billed to you."
+      : "Peer keeps keys only in this browser, never on its server. If they stayed after you signed out, the next person to use this browser could run requests on your keys, billed to you.",
+    again: one
+      ? "When you sign in again, here or on another device, paste it again."
+      : "When you sign in again, here or on another device, paste them again.",
+    confirm: one ? "Sign out and remove key" : "Sign out and remove keys",
+  };
+}
+
 /** What `handleSignOutSubmitCore` needs, every side effect injected — same
  *  DI shape this codebase already uses throughout profile-sync.tsx
  *  (`PullBeforePushDeps`, `FlushBeforeSignOutDeps`) — so the re-entrancy
@@ -332,6 +360,7 @@ export function SignOutDialog({ prompt, keyLabels, onStaySignedIn }: SignOutDial
 
   const removesKeys = (prompt === "keys" || prompt === "both") && keyLabels.length > 0;
   const unsynced = prompt === "unsynced" || prompt === "both";
+  const keysCopy = signOutKeysCopy(keyLabels);
 
   return (
     <dialog
@@ -346,16 +375,14 @@ export function SignOutDialog({ prompt, keyLabels, onStaySignedIn }: SignOutDial
       className="fixed inset-0 m-auto w-[min(92vw,440px)] rounded-xl border border-border bg-surface p-6 text-text shadow-card backdrop:bg-black/40"
     >
       <h2 id="sign-out-title" className="font-display text-body-lg text-heading">
-        {removesKeys ? "Sign out and remove your keys?" : "Sign out now?"}
+        {removesKeys ? keysCopy.title : "Sign out now?"}
       </h2>
       <div id="sign-out-body" className="mt-3 space-y-3 text-body-sm text-text-muted">
         {removesKeys && (
           <>
-            <p>{signOutKeysSentence(keyLabels)}</p>
-            <p>
-              Peer keeps keys only in this browser, never on its server. If they stayed after you signed out, the next person to use this browser could run requests on your keys, billed to you.
-            </p>
-            <p>When you sign in again, here or on another device, paste them again.</p>
+            <p>{keysCopy.removes}</p>
+            <p>{keysCopy.why}</p>
+            <p>{keysCopy.again}</p>
           </>
         )}
         {unsynced && (
@@ -377,7 +404,7 @@ export function SignOutDialog({ prompt, keyLabels, onStaySignedIn }: SignOutDial
             required for the sign-out itself to work. */}
         <form method="POST" action="/auth/signout">
           <button type="submit" className={buttonVariants({ tone: "dangerSoft", size: "sm" })}>
-            {removesKeys ? "Sign out and remove keys" : "Sign out anyway"}
+            {removesKeys ? keysCopy.confirm : "Sign out anyway"}
           </button>
         </form>
       </div>
