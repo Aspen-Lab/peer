@@ -48,7 +48,7 @@ import { bottomMarginRectOf, marginRectOf, useMarginStore, type MarginRect } fro
 import { fitPanes, railMinimumWidth } from "@/components/reader/pane-layout";
 import { useWindows } from "@/lib/reader/windows";
 import type { Paper } from "@/types";
-import { NotesButton, NotesButtonView, WINDOW_QUERY, opensWindow } from "./notes-button";
+import { EDGE_TAB_DIVIDER_CLEAR_PX, NotesButton, NotesButtonView, WINDOW_QUERY, opensWindow } from "./notes-button";
 import { NotesWindow } from "./notes-window";
 
 const paper: Paper = {
@@ -221,7 +221,9 @@ describe("a card standing on a phone: the tab keeps the right edge and ends abov
   // at 768 to 851 wide and wherever the reading step pushes the panes' minimum past the window), P12-77 having left it as it was on purpose. The
   // rule is now that a card standing in the bottom band, at any width, is "no side margin" (the describe at the foot of this file pins it). The
   // side-margin case is kept as it was, and the test is renamed to say so.
-  it("from md with a side margin (the rail) it is placed as it was: beside the card at the margin's left edge, and the band is not written", async () => {
+  // (Renamed again, P12-89, E5: "at the margin's left edge" held `left:${left}px`, the face over the margin divider's strip; it is now just inside the margin, the edge plus
+  // `EDGE_TAB_DIVIDER_CLEAR_PX`. Still beside the card, and the band is not written.)
+  it("from md with a side margin (the rail) it is placed beside the card, just inside the margin's left edge, and the band is not written", async () => {
     log.wide = true;
     useWindows.setState({ windows: [sticky], clock: 1 });
     for (const [rect, left] of [[SIDE, 1000]] as const) {
@@ -229,7 +231,7 @@ describe("a card standing on a phone: the tab keeps the right edge and ends abov
       const tree = await mountButton("edge");
 
       expect(viewOf(tree).props, String(left)).toMatchObject({ beside: true, marginLeft: left, bandTop: undefined });
-      expect(markupOf(tree)).toContain(`left:${left}px`);
+      expect(markupOf(tree)).toContain(`left:${left + EDGE_TAB_DIVIDER_CLEAR_PX}px`);
       expect(markupOf(tree)).not.toContain("--tab-band-top:");
     }
   });
@@ -353,7 +355,9 @@ describe("a card standing in the bottom band, at any width: the tab keeps the ri
     }
   });
 
-  it.each(RAILED)("%i x %i at step %f: a side margin (the rail) — beside the card at the margin's left edge, as it always was, and no band written", async (width, height, step) => {
+  // Re-aimed (P12-89, E5): it held `left:${rect.left}px` and `translateX(-100%)` (the face over the margin divider's strip); the tab is beside the card still, and now
+  // just inside the margin's left edge: the edge plus `EDGE_TAB_DIVIDER_CLEAR_PX`, with no translation.
+  it.each(RAILED)("%i x %i at step %f: a side margin (the rail) — beside the card, just inside the margin's left edge, and no band written", async (width, height, step) => {
     log.wide = true;
     const rect = registeredAt(width, height, step);
     useMarginStore.setState({ rect });
@@ -362,8 +366,8 @@ describe("a card standing in the bottom band, at any width: the tab keeps the ri
     const html = markupOf(tree);
 
     expect(viewOf(tree).props).toMatchObject({ beside: true, marginLeft: rect.left, bandTop: undefined });
-    expect(html).toContain(`left:${rect.left}px`);
-    expect(html).toContain("translateX(-100%)");
+    expect(html).toContain(`left:${rect.left + EDGE_TAB_DIVIDER_CLEAR_PX}px`);
+    expect(html).not.toContain("translateX");
     expect(html).not.toContain("--tab-band-top:");
     expect(classesOf(html)).not.toContain("right-0");
   });

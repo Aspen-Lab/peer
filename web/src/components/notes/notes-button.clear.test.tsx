@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { DIVIDER_PX, fitPanes } from "@/components/reader/pane-layout";
-import { EDGE_TAB_BESIDE_PX, EDGE_TAB_HIT_PX, NotesButtonView } from "./notes-button";
+import { EDGE_TAB_BESIDE_PX, EDGE_TAB_DIVIDER_CLEAR_PX, EDGE_TAB_HIT_PX, NotesButtonView } from "./notes-button";
 
 // P11-34 (BACKLOG-102; round 2, Theme A readers r1, r2, r3): the right-edge tab ("Open your notes") stood flush against the centre
 // column's text whenever a card stood in the margin. With a card standing the tab is placed at the margin's left edge, beside the cards,
@@ -97,43 +97,53 @@ describe("the tab beside a card is clear of the text (P11-34, BACKLOG-102)", () 
     expect(widthOf(html)).toBeLessThanOrEqual(gutterAt(1) - CLEAR_PX - FRAME_PX);
   });
 
+  // Re-aimed (P12-89, E5): this case worked out the tab's left as `marginLeft - width - frame` (the tab ended at the margin's edge, `translateX(-100%)`), a
+  // formula that no longer describes it; the tab's left is now read from its own markup (`left:`, no translation), and the rule it held — at least 8 px from the
+  // text at every Fit zoom, counted from the frame's outer edge — is kept as it was.
   it.each(margins)("at $viewport px ($bar px scrollbar): at least 8 px from the text at every Fit zoom, counted from the frame's outer edge", ({ left }) => {
     const html = view({ beside: true, marginLeft: left });
-    const width = widthOf(html);
 
+    expect(html).not.toContain("translateX");
     for (const zoom of ZOOMS) {
       const textRight = left - gutterAt(zoom);
-      const tabLeft = left - width - FRAME_PX;
+      const tabLeft = px(html, "left")! - FRAME_PX;
       expect(tabLeft - textRight, `zoom ${zoom}`).toBeGreaterThanOrEqual(CLEAR_PX);
     }
   });
 
-  it("still ends at the margin's left edge — beside the card, never under it or over it", () => {
-    for (const { left } of margins) {
+  // Re-aimed (P12-89, E5): it held "still ends at the margin's left edge" (`left` = the edge, `translateX(-100%)`), which is the face over the margin divider's 12 px
+  // hit strip. The tab now begins `EDGE_TAB_DIVIDER_CLEAR_PX` inside the margin and is wholly inside the window; "beside the card, not at the window's edge" is kept.
+  it("begins just inside the margin's left edge — beside the card, at the window's pixels, not at its right edge", () => {
+    for (const { left, viewport, bar } of margins) {
       const html = view({ beside: true, marginLeft: left });
 
-      expect(px(html, "left")).toBe(left);
-      expect(html).toContain("translateX(-100%)");
+      expect(px(html, "left")).toBe(left + EDGE_TAB_DIVIDER_CLEAR_PX);
+      expect(html).not.toContain("translateX");
       expect(html).not.toMatch(/\bright-0\b/);
-      // wholly inside the window: its left edge is a positive number of px
-      expect(left - widthOf(html)).toBeGreaterThan(0);
+      // wholly inside the window: its right edge is not past the window's (the margin is at least 280 px wide)
+      expect(left + EDGE_TAB_DIVIDER_CLEAR_PX + widthOf(html), `${viewport} px, ${bar} px bar`).toBeLessThan(viewport - bar);
     }
   });
 
-  it("keeps a hit area of 24 px across: the face and, where the face is narrower, a transparent strip on the text's side — which stops at the text's edge", () => {
+  // Re-aimed (P12-89, E5): the strip stood on the TEXT's side (`before:-left-[10px]`, the tab's left minus 9 px), which now lies over the margin divider's hit strip
+  // (the tab begins 3 px right of the divider's edge, so a 9 px strip on its left reaches 6 px into the divider's 12), and the tab, strip included, took the pointer
+  // there. It is on the CARD's side now (`before:-right-[9px]`, the face's right edge), over the card, where it was impossible while the tab stood under the cards.
+  // The 24 px across and "never reaches the text" are kept: the face and the strip together end well inside the margin, and the strip never reaches left of the tab.
+  it("keeps a hit area of 24 px across: the face and, where the face is narrower, a transparent strip on the card's side — which stays clear of the divider's strip and of the text", () => {
     for (const { left } of margins) {
       const html = view({ beside: true, marginLeft: left });
       const hit = widthOf(html) + ext(html);
 
       expect(hit).toBeGreaterThanOrEqual(HIT_PX);
-      // the hit area is never wider than the gutter: it does not reach into the text (the card side is under the card, so the strip is on the text's side only)
-      expect(hit).toBeLessThanOrEqual(gutterAt(1));
+      // it does not reach left of the face: the whole hit area is right of the margin's edge, so the divider's strip (which ends at that edge) and the text are not under it
+      expect(px(html, "left"), "the face begins inside the margin").toBeGreaterThan(left);
       if (ext(html) > 0) {
-        // Re-aimed in the fix (P11-34): the strip is placed from the button's padding edge, which is the border's width inside its outer edge, so it ends at the
-        // face's outer edge when its left offset is its width plus that border (`-left-[10px]` for a 9 px strip); `right-full` would have put it a pixel short.
-        const offset = Number(/before:-left-\[(\d+(?:\.\d+)?)px\]/.exec(html)?.[1]);
-        expect(offset, "the strip stands on the text's side").toBe(ext(html) + BORDER_PX);
+        // the strip is placed from the button's padding edge; the button has no right border (`border-r-0`), so it begins at the face's outer right edge when its
+        // right offset is minus its width (`-right-[9px]` for a 9 px strip).
+        const offset = Number(/before:-right-\[(\d+(?:\.\d+)?)px\]/.exec(html)?.[1]);
+        expect(offset, "the strip stands on the card's side").toBe(ext(html));
         expect(html).toMatch(/before:absolute/);
+        expect(html).not.toMatch(/before:-left-/);
       }
     }
   });
@@ -145,7 +155,9 @@ describe("the tab beside a card is clear of the text (P11-34, BACKLOG-102)", () 
     expect(html).toContain("eyebrow");
     expect(html).toContain("[writing-mode:vertical-rl]");
     expect(html).toContain(">Open your notes<");
-    expect(html).toContain("z-40");
+    // Re-aimed (P12-89, E5): it held `z-40`. Beside a card the tab stands over the cards' left edge, so it is over them: `z-[69]`, the top of the stack.
+    expect(html).toContain("z-[69]");
+    expect(html).not.toContain("z-40");
   });
 });
 

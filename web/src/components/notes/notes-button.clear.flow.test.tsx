@@ -34,7 +34,7 @@ import { hookRuntime } from "@/test-support/hook-runtime";
 import { useMarginStore, type MarginRect } from "@/lib/reader/margin";
 import { EXPLAIN_WINDOW_ID, NOTES_WINDOW_ID, useWindows, type FloatingWindow } from "@/lib/reader/windows";
 import type { Paper } from "@/types";
-import { NotesButton, NotesButtonView } from "./notes-button";
+import { EDGE_TAB_DIVIDER_CLEAR_PX, NotesButton, NotesButtonView } from "./notes-button";
 
 const paper: Paper = {
   id: "openalex:W1", title: "Seaweed mulch and soil water", authors: [], relevanceReason: "", venue: "", source: "other",
@@ -124,7 +124,10 @@ describe("the tab is clear of the text in every state (P11-34)", () => {
   for (const viewport of WINDOWS) {
     describe(`at ${viewport} px`, () => {
       for (const state of STATES) {
-        it(`${state.name}: at least 8 px from the text, ending at the margin's left edge`, async () => {
+        // Re-aimed (P12-89, E5): the case held "ending at the margin's left edge" (`left` = the edge, `translateX(-100%)`, so the tab's left was `left - width`), which
+        // put the face over the margin divider's strip. The tab now begins `EDGE_TAB_DIVIDER_CLEAR_PX` inside the margin (no translation), so the rule it held — at
+        // least 8 px from the text, counted from the frame's outer edge — is worked out from that left, and is held a great deal more widely (the strip lies between).
+        it(`${state.name}: at least 8 px from the text, beginning just inside the margin's left edge`, async () => {
           const rect = marginAt(viewport);
           useMarginStore.setState({ rect });
           useWindows.setState({ windows: state.windows, clock: state.windows.length });
@@ -132,9 +135,12 @@ describe("the tab is clear of the text in every state (P11-34)", () => {
           const html = markupOf(tree);
 
           expect(viewOf(tree).props).toMatchObject({ variant: "edge", beside: true, marginLeft: rect.left });
-          expect(px(html, "left")).toBe(rect.left);
+          expect(html).not.toContain("translateX");
+          const tabLeft = px(html, "left");
+          expect(tabLeft).toBe(rect.left + EDGE_TAB_DIVIDER_CLEAR_PX);
           const textRight = rect.left - GUTTER_PX;
-          expect(rect.left - widthOf(html) - FRAME_PX - textRight).toBeGreaterThanOrEqual(CLEAR_PX);
+          expect(tabLeft! - FRAME_PX - textRight).toBeGreaterThanOrEqual(CLEAR_PX);
+          expect(widthOf(html)).toBeGreaterThan(0);
         });
       }
 

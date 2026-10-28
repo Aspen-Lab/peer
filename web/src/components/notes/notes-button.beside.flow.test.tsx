@@ -35,7 +35,7 @@ import { hookRuntime } from "@/test-support/hook-runtime";
 import { useMarginStore, type MarginRect } from "@/lib/reader/margin";
 import { useWindows } from "@/lib/reader/windows";
 import type { Paper } from "@/types";
-import { NotesButton, NotesButtonView } from "./notes-button";
+import { EDGE_TAB_DIVIDER_CLEAR_PX, NotesButton, NotesButtonView } from "./notes-button";
 
 const paper: Paper = {
   id: "openalex:W1", title: "Seaweed mulch and soil water", authors: [], relevanceReason: "", venue: "", source: "other",
@@ -89,14 +89,16 @@ afterEach(() => {
 const sticky = { id: "s1", kind: "sticky" as const, title: "Note 1", order: 1 };
 
 describe("NotesButton feeds the tab its place (P11-14, A P11-19 C1)", () => {
-  it("with a card standing in the stack and a margin registered, the tab stands at the margin's left edge, beside the card", async () => {
+  // Re-aimed (P12-89, E5): "at the margin's left edge" with `left:1000px` and `translateX(-100%)` put the tab's face over the margin divider's 12 px hit strip
+  // (x 988 to 1000 here); it now stands just inside the margin, `EDGE_TAB_DIVIDER_CLEAR_PX` right of that edge, with no translation. Still beside the card, fed from the rect.
+  it("with a card standing in the stack and a margin registered, the tab stands just inside the margin's left edge, right of the divider's strip, beside the card", async () => {
     useWindows.setState({ windows: [sticky], clock: 1 });
     const tree = await mountButton("edge");
 
     expect(viewOf(tree).props).toMatchObject({ variant: "edge", beside: true, marginLeft: 1000, shown: false });
     const html = markupOf(tree);
-    expect(html).toContain("left:1000px");
-    expect(html).toContain("translateX(-100%)");
+    expect(html).toContain(`left:${1000 + EDGE_TAB_DIVIDER_CLEAR_PX}px`);
+    expect(html).not.toContain("translateX");
     expect(html).not.toMatch(/\bright-0\b/);
   });
 
@@ -127,7 +129,8 @@ describe("NotesButton feeds the tab its place (P11-14, A P11-19 C1)", () => {
     expect(viewOf(tree).props).toMatchObject({ variant: "edge", shown: true, beside: true, marginLeft: 1000 });
     const html = markupOf(tree);
     expect(html).toContain('aria-expanded="true"');
-    expect(html).toContain("left:1000px");
+    // (re-aimed with the first case above, P12-89: the tab's `left` is the margin's edge plus the clear of the divider's strip)
+    expect(html).toContain(`left:${1000 + EDGE_TAB_DIVIDER_CLEAR_PX}px`);
     expect(html).not.toMatch(/\bright-0\b/);
   });
 

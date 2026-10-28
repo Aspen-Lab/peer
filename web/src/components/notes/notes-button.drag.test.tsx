@@ -28,7 +28,7 @@ import { hookRuntime } from "@/test-support/hook-runtime";
 import { useMarginStore, type MarginRect } from "@/lib/reader/margin";
 import { EXPLAIN_WINDOW_ID, NOTES_WINDOW_ID, useWindows, type FloatingWindow } from "@/lib/reader/windows";
 import type { Paper } from "@/types";
-import { EDGE_TAB_BESIDE_PX, EDGE_TAB_HIT_PX, NotesButton, NotesButtonView } from "./notes-button";
+import { EDGE_TAB_BESIDE_PX, EDGE_TAB_DIVIDER_CLEAR_PX, EDGE_TAB_HIT_PX, NotesButton, NotesButtonView } from "./notes-button";
 
 // P11-46 (round 3, Theme B walk, E-1; ruling §1h.148): the edge tab's transparent hit strip (P11-34, `before:`, 9 px on the text's side) begins
 // at the text column's right edge. With a card open at 1024 to 1366 px the gutter between that edge and the margin is 24 px, so the strip lies
@@ -142,13 +142,16 @@ describe("a drag that began in the paper is not caught by the tab (P11-46, §1h.
 });
 
 describe("pressing the tab is as it was (P11-46)", () => {
-  it("the hit area is still 24 px across beside a card: the 15 px face and a 9 px strip on the text's side, placed as before", () => {
+  // Re-aimed (P12-89, E5): the 9 px strip was on the text's side (`before:-left-[10px]`); there it lies over the margin divider's hit strip, which the tab must not
+  // take the pointer from. It is on the card's side now (`before:-right-[9px]`). The hit area (24 px across: the 15 px face and a 9 px strip) is as it was.
+  it("the hit area is still 24 px across beside a card: the 15 px face and a 9 px strip, now on the card's side", () => {
     const html = view({ beside: true, marginLeft: 744 });
 
     expect(EDGE_TAB_HIT_PX).toBe(24);
     expect(EDGE_TAB_BESIDE_PX).toBe(15);
     expect(html).toContain("before:absolute");
-    expect(html).toContain("before:-left-[10px]");
+    expect(html).toContain("before:-right-[9px]");
+    expect(html).not.toContain("before:-left-");
     expect(html).toContain("before:w-[9px]");
     expect(html).toMatch(/[;"]width:15px/);
   });
@@ -159,10 +162,13 @@ describe("pressing the tab is as it was (P11-46)", () => {
     expect(html.match(/<button\b/g)).toHaveLength(1);
     expect(html).toContain('aria-expanded="true"');
     expect(html).toContain('type="button"');
-    expect(html).toContain("left:744px");
-    expect(html).toContain("translateX(-100%)");
+    // Re-aimed (P12-89, E5): its place was `left:744px` with `translateX(-100%)` and `z-40`; it is now just inside the margin (the edge plus the clear of the divider's
+    // strip, no translation) and over the cards' left edge (`z-[69]`). One button, its press and its state are untouched.
+    expect(html).toContain(`left:${744 + EDGE_TAB_DIVIDER_CLEAR_PX}px`);
+    expect(html).not.toContain("translateX");
     expect(html).not.toContain("tabindex");
-    expect(classesOf(html)).toContain("z-40");
+    expect(classesOf(html)).toContain("z-[69]");
+    expect(classesOf(html)).not.toContain("z-40");
   });
 
   it("the tab with no card keeps its place and its size: the window's edge, the 25 px tab, no strip, and the same pass-through", () => {
