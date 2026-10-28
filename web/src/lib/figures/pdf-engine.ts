@@ -1281,6 +1281,15 @@ function errorMessage(error: unknown): string {
 }
 
 /**
+ * The engine label a figure target names (P12-56, R14a; P12-70: one reading for `measurePdfFigure` and
+ * `measurePdfFigures`): a number is "Figure 3"; the token `ed3` is "Extended Data Fig. 3". Any other string names nothing.
+ */
+function figureLabelOf(fig: number | string): string | null {
+  if (typeof fig === "number") return `Figure ${fig}`;
+  return /^ed[1-9]\d{0,2}$/.test(fig) ? `Extended Data Fig. ${fig.slice(2)}` : null;
+}
+
+/**
  * P10-34: the picture the figure route would draw for "Figure `fig`" on `page`, measured and not drawn — its
  * width and height in pixels (the PNG's own), or null where the route would find nothing. The same call the
  * route makes (one page, one label), so the size is the route's picture's; nothing is rendered, so it costs
@@ -1291,8 +1300,7 @@ export async function measurePdfFigure(
   page: number,
   fig: number | string,
 ): Promise<{ width: number; height: number } | null> {
-  // P12-56 (R14a): a number is "Figure 3"; the token `ed3` is "Extended Data Fig. 3". Any other string names nothing.
-  const label = typeof fig === "number" ? `Figure ${fig}` : /^ed[1-9]\d{0,2}$/.test(fig) ? `Extended Data Fig. ${fig.slice(2)}` : null;
+  const label = figureLabelOf(fig);
   if (label === null) return null;
   const { figures } = await extractPdfFigures(bytes, { maxPages: 300, maxFigures: 1, onlyPage: page, label, measureOnly: true });
   const found = figures[0];
@@ -1384,7 +1392,7 @@ function sameBounds(a: Page, b: Page): boolean {
  */
 export async function measurePdfFigures(
   source: PdfSource,
-  targets: ReadonlyArray<{ page: number; fig: number }>,
+  targets: ReadonlyArray<{ page: number; fig: number | string }>,
   budgetMs: number = EXTRACTION_BUDGET_MS,
 ): Promise<Array<{ width: number; height: number } | null | undefined>> {
   const deadline = performance.now() + Math.min(budgetMs, EXTRACTION_BUDGET_MS);
@@ -1405,7 +1413,8 @@ export async function measurePdfFigures(
     const pageCount = Math.min(doc.countPages(), 300);
     const sizes: Array<{ width: number; height: number } | null | undefined> = [];
     for (const target of targets) {
-      const wanted = labelKey(`Figure ${target.fig}`);
+      const label = figureLabelOf(target.fig);
+      const wanted = label === null ? null : labelKey(label);
       if (performance.now() > deadline) {
         sizes.push(undefined);
         continue;

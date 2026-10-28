@@ -313,10 +313,10 @@ export async function withFigureSizes(doc: ExtractedDocument, bytes: Uint8Array)
     if (missing.length > 0) {
       // P12-61 (part 3): one open of the PDF for all the captions, not one per caption.
       const { measurePdfFigures } = await import("@/lib/figures/pdf-engine");
-      const tried = new Map<string, { page: number; fig: number }>();
+      const tried = new Map<string, { page: number; fig: number | string }>();
       for (const cap of missing) {
         const key = `${cap.page}/${pictureNumber(cap.label)}`;
-        if (!tried.has(key)) tried.set(key, { page: cap.page as number, fig: pictureNumber(cap.label) as number });
+        if (!tried.has(key)) tried.set(key, { page: cap.page as number, fig: pictureNumber(cap.label) as number | string });
       }
       try {
         const keys = [...tried.keys()];
