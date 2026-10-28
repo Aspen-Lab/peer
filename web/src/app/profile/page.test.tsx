@@ -1039,16 +1039,40 @@ describe("Reset profile to defaults - says the keys go too (OWN-KEY lane 4)", ()
   const start = source.indexOf("{/* ── Reset ──");
   const resetSection = source.slice(start, source.indexOf("<VersionLine", start));
   const SENTENCE = "This also removes your API keys from this browser.";
+  const ONE_KEY = "This also removes your API key from this browser.";
+
+  // R1-fixB item 5 (A9) — CHANGED: the line now counts the keys (one key: "your API key"). The expression that
+  // writes it is cut out of the source and run on 0, 1 and 2 key names, so both forms are proven, not only quoted.
+  const question = resetSection.indexOf("Reset all signals to defaults?");
+  const exprStart = resetSection.indexOf("{browserKeyLabels(profile).length > 0 &&", question);
+  const exprEnd = resetSection.indexOf("</span>", exprStart);
+  const expression = resetSection.slice(exprStart + 1, resetSection.lastIndexOf("}", exprEnd));
+  const lineFor = (keyCount: number): unknown =>
+    new Function("browserKeyLabels", "profile", `return (${expression});`)(
+      () => Array.from({ length: keyCount }, (_, i) => `Key${i}`),
+      {},
+    );
 
   it("adds the sentence to the confirmation, after the question, only when this browser holds a key", () => {
     expect(start).toBeGreaterThan(-1);
-    const question = resetSection.indexOf("Reset all signals to defaults?");
-    const sentence = resetSection.indexOf(`{browserKeyLabels(profile).length > 0 && " ${SENTENCE}"}`);
     expect(question).toBeGreaterThan(-1);
-    expect(sentence).toBeGreaterThan(question);
+    expect(exprStart).toBeGreaterThan(question);
     // Shown above the confirm button itself (the section's header comment also names "Confirm reset").
-    expect(sentence).toBeLessThan(resetSection.indexOf("confirmProfileReset({"));
+    expect(exprStart).toBeLessThan(resetSection.indexOf("confirmProfileReset({"));
     expect(source.match(new RegExp(SENTENCE.replace(/\./g, "\\."), "g")) ?? []).toHaveLength(1);
+    expect(source.match(new RegExp(ONE_KEY.replace(/\./g, "\\."), "g")) ?? []).toHaveLength(1);
+  });
+
+  it("no key: nothing is added", () => {
+    expect(lineFor(0)).toBe(false);
+  });
+
+  it("one key: 'This also removes your API key from this browser.'", () => {
+    expect(lineFor(1)).toBe(` ${ONE_KEY}`);
+  });
+
+  it("two keys: 'This also removes your API keys from this browser.'", () => {
+    expect(lineFor(2)).toBe(` ${SENTENCE}`);
   });
 
   // L4-fix (R13, D4) — CHANGED marker: "Confirm reset" no longer calls logOut()

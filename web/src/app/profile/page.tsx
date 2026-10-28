@@ -345,7 +345,10 @@ export default function ProfilePage() {
                 says so whenever this browser holds one (names only, via browserKeyLabels; the key is never read here). */}
             <span className="text-text-muted">
               Reset all signals to defaults?
-              {browserKeyLabels(profile).length > 0 && " This also removes your API keys from this browser."}
+              {browserKeyLabels(profile).length > 0 &&
+                (browserKeyLabels(profile).length === 1
+                  ? " This also removes your API key from this browser."
+                  : " This also removes your API keys from this browser.")}
             </span>
             <div className="flex items-center gap-3 ml-auto">
               <button
