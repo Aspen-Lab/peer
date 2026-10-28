@@ -190,7 +190,7 @@ describe("/privacy - Check key and where the model key lives", () => {
   const CHECK = "src/lib/llm/key-check.ts";
 
   const CHECK_SENTENCES =
-    "If you press Check key, your browser sends the key to Peer's server, which makes one short request to that provider to see whether it accepts the key. Peer keeps nothing of it: not the key, not the provider's answer, and no log line that names the key.";
+    "If you press Check key, your browser sends the key to Peer's server, which makes one short request to that provider to see whether it accepts the key. Peer keeps neither the key nor the provider's answer. The server writes at most one log line for the check — the provider, the model, the token counts, how long it took and whether it worked — and never the key or anything you wrote.";
   const COUNT_SENTENCE =
     "If you are signed in, the server also counts this account's checks this hour, a number and nothing else, kept so the limit of ten checks an hour can hold.";
   const ACCOUNT_SENTENCE =
@@ -269,13 +269,70 @@ describe("/privacy - Check key and where the model key lives", () => {
     expect(check).toContain('return outcome.ok === true ? "ok" : classifyKeyCheckError(outcome.error);');
   });
 
-  it("'no log line that names the key': neither the route nor the check writes a log line", () => {
-    expect(code(ROUTE)).not.toMatch(/console\./);
-    expect(code(CHECK)).not.toMatch(/console\./);
-    // The providers' own usage line (`logLlmUsage`) carries the model, counts and time, and has no field for a key.
+  it("'Peer keeps neither the key nor the provider's answer': no store, cache or log in the route or the check", () => {
+    for (const file of [ROUTE, CHECK]) {
+      expect(code(file)).not.toMatch(/console\.|getCounterStore|from\("|localStorage|new Map\b/);
+    }
+  });
+
+  it("'at most one log line … the provider, the model, the token counts, how long it took and whether it worked … never the key or anything you wrote': the line is LlmUsage, and nothing else", () => {
     const usage = code("src/lib/llm/usage-log.ts");
     const shape = usage.slice(usage.indexOf("export interface LlmUsage"), usage.indexOf("export function logLlmUsage"));
-    expect(shape).not.toMatch(/key/i);
+    // provider, model, the call site's fixed name ("test" for a check), the token counts, the time, ok.
+    const fields = [...shape.matchAll(/^\s*(\w+)\??:/gm)].map((match) => match[1]);
+    expect(fields).toEqual(["provider", "model", "path", "inputTokens", "outputTokens", "thinkingTokens", "latencyMs", "ok"]);
+    expect(shape).not.toMatch(/key|prompt|text|content|user/i);
+    // The line prints those fields and nothing else.
+    const writer = usage.slice(usage.indexOf("export function logLlmUsage"), usage.indexOf("export function now"));
+    const printed = [...new Set([...writer.matchAll(/\bu\.(\w+)/g)].map((match) => match[1]))].sort();
+    expect(printed).toEqual([...fields].sort());
+    expect(writer.match(/console\.\w+\(/g)).toEqual(["console.log("]);
+  });
+
+  it("'at most one log line': every provider's check goes through its one logged call, once, and the route and the check write none of their own", () => {
+    expect(code(ROUTE)).not.toMatch(/console\./);
+    expect(code(CHECK)).not.toMatch(/console\./);
+    const testBlock = (file: string) => {
+      const source = code(file);
+      const start = source.lastIndexOf("async testConnection()");
+      return source.slice(start, source.indexOf("\n    },", start));
+    };
+    /** The body of a module-level function, up to the next top-level declaration. */
+    const fn = (file: string, name: string) => {
+      const source = code(file);
+      const start = source.indexOf(`function ${name}(`);
+      const end = /\n\}\r?\n/.exec(source.slice(start));
+      return source.slice(start, start + (end?.index ?? 0));
+    };
+    // OpenAI, Qwen and DeepSeek: one fetch, logged once on an answer (ok or ERR); a fetch that
+    // never answers (a network failure, a timeout) writes none — hence "at most".
+    for (const [file, call] of [
+      ["src/lib/llm/providers/openai.ts", "callOpenAIChat"],
+      ["src/lib/llm/providers/qwen.ts", "callQwenChat"],
+      ["src/lib/llm/providers/deepseek.ts", "callDeepseekChat"],
+    ] as const) {
+      expect(testBlock(file).match(new RegExp(`\\b${call}\\(`, "g"))).toHaveLength(1);
+      expect(testBlock(file)).toContain(`userPrompt: '{"ping":true}'`);
+      const body = fn(file, call);
+      expect(body.match(/\bfetch\(/g)).toHaveLength(1);
+      expect(body.match(/logLlmUsage\(/g)).toHaveLength(2);
+    }
+    // Anthropic: one request with retries off, logged once whichever way it goes.
+    const anthropic = testBlock("src/lib/llm/providers/anthropic.ts");
+    expect(anthropic).toContain("{ maxRetries: 0 }");
+    expect(anthropic.match(/client\.messages\.create\(/g)).toHaveLength(1);
+    expect(anthropic).toContain('logAnthropic(model, "test", response.usage, started, true);');
+    expect(anthropic).toContain('logAnthropic(model, "test", undefined, started, false);');
+    expect(anthropic).toContain('content: "ping"');
+    expect(fn("src/lib/llm/providers/anthropic.ts", "logAnthropic")).toContain("logLlmUsage({");
+    // Gemini (the reader's key): one call through `callApiModel`, which logs on either outcome.
+    const gemini = testBlock("src/lib/llm/providers/gemini.ts");
+    expect(gemini.match(/\bcallApiModel\(/g)).toHaveLength(1);
+    expect(gemini).toContain("KEY_CHECK_USER_PROMPT");
+    const geminiSource = code("src/lib/llm/providers/gemini.ts");
+    const callApiModel = geminiSource.slice(geminiSource.indexOf("const callApiModel = async"), geminiSource.indexOf("const callApiVisionModel"));
+    expect(callApiModel.match(/logGemini\(/g)).toHaveLength(2);
+    expect(fn("src/lib/llm/providers/gemini.ts", "logGemini")).toContain("logLlmUsage({");
   });
 
   it("'counts this account's checks this hour … ten checks an hour': the gate's limit is 10 and its count is a number under the scope", () => {

@@ -116,13 +116,15 @@ const SECTIONS = [
     // (`app/api/ai/check-key/route.ts`, `lib/llm/key-check.ts`) and from where the key is
     // kept and cleared (`remoteProfilePayload` and `processConfirmedSignOutCookie` in
     // `components/profile-sync.tsx`, `logOut` in `store/profile.ts`, the profile route's row
-    // writer). `page.byok-only.test.tsx` pins each sentence to those lines.
+    // writer), and the Check key paragraph's log line from `lib/llm/usage-log.ts` (`LlmUsage`), which
+    // every provider's `testConnection` writes through. `page.byok-only.test.tsx` pins each sentence
+    // to those lines.
     label: "Your own model key",
     body: [
       "Peer has no model of its own. Ranking by a model, relevance reasons, digest bullets and model reports run only if you add your own provider key; without one you read the briefing without a model.",
       "Your key stays in your browser. It is deliberately excluded from everything Peer syncs to its server — the one line that does it is a `void feedAiApiKey` in the sync code, there so a future edit has to remove it on purpose.",
       "When you ask for something a model does, your browser sends the request to Peer's server with your key attached, and the server passes it to the provider you chose. The key is used for that request and is not stored.",
-      "If you press Check key, your browser sends the key to Peer's server, which makes one short request to that provider to see whether it accepts the key. Peer keeps nothing of it: not the key, not the provider's answer, and no log line that names the key. If you are signed in, the server also counts this account's checks this hour, a number and nothing else, kept so the limit of ten checks an hour can hold.",
+      "If you press Check key, your browser sends the key to Peer's server, which makes one short request to that provider to see whether it accepts the key. Peer keeps neither the key nor the provider's answer. The server writes at most one log line for the check — the provider, the model, the token counts, how long it took and whether it worked — and never the key or anything you wrote. If you are signed in, the server also counts this account's checks this hour, a number and nothing else, kept so the limit of ten checks an hour can hold.",
       "Your key does not travel with your account: Peer never stores it on its server, so on another device you add it again, and signing out removes it from this browser.",
     ],
   },
