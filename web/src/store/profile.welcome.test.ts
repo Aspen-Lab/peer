@@ -75,9 +75,9 @@ describe("profile.welcomeSkipped — storage", () => {
   it("the flag is written to the stored profile and survives a reload, with no version change", async () => {
     const { mod, read } = await rehydrateFrom({ ...defaultProfile });
     mod.useProfileStore.getState().skipWelcome();
-    // The store's current version (8 since the events/jobs fields were dropped, P9-32):
-    // setting the flag itself does not move it.
-    expect(read().version).toBe(8);
+    // The store's current version (9 since the Tavily fields were dropped; 8 was
+    // the events/jobs fields, P9-32): setting the flag itself does not move it.
+    expect(read().version).toBe(9);
     expect(read().state.profile.welcomeSkipped).toBe(true);
 
     const again = await rehydrateFrom(read().state.profile);

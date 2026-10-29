@@ -322,8 +322,9 @@ describe("/api/feed web source (Peer funds no search of its own)", () => {
   // The route used to answer 401/503 to any request naming the `web` source,
   // because the only search it could run was one Peer would have paid for.
   // Peer pays for no search, so there is nothing left to refuse: `web` is an
-  // ordinary source name, and what it can fetch is decided by the reader's own
-  // keys alone (none reach the papers pipeline), not by a server credential.
+  // ordinary source name that the route passes on, but it names no adapter, so
+  // a request naming it fetches nothing for it — on no key, the reader's or a
+  // server's.
   function pipelineRequest(): Record<string, unknown> {
     const call = mocks.runFeedPipeline.mock.calls[0];
     expect(call).toBeDefined();

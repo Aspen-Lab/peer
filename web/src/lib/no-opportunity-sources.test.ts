@@ -77,11 +77,13 @@ describe("no job or event source or pipeline is in the tree", () => {
   });
 
   it("no non-test source or script names the host of a job board or an events feed", () => {
-    // The hosts the deleted clients called. Tavily is not here: the paper `web`
-    // source shares it. The build guard bans the credential names on Vercel
+    // The hosts the deleted clients called. Tavily joined the list when the
+    // paper `web` source, which shared its host, was deleted with the rest of
+    // Tavily. The build guard bans the credential names on Vercel
     // (`assert-byok-production-env.mjs`) and `spend-scans.test.ts` scans for
     // their reads; this is the third rail — the address itself.
     const HOSTS = [
+      "api.tavily.com",
       "jsearch.p.rapidapi.com",
       "himalayas.app",
       "remotive.com",

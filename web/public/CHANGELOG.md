@@ -6,6 +6,40 @@ All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
 Jobs and events code removed; Peer is a paper briefing.
 
+Your own AI key: easier to set up, easier to check, and removed from this browser when you sign out.
+
+- **Sign in from the walkthrough.** Welcome now opens with an optional Account
+  step (Sign in with GitHub or Google, or "Continue without signing in", which reads "Skip sign-in" on a phone), and
+  the AI step offers the same buttons when you are signed out, because Peer uses
+  your key only while you are signed in. After signing in you come back to the
+  step you left. A paper's "Sign in" link brings you back to that paper.
+- **Check key.** Under the API key field, on Profile and in Welcome, "Check key"
+  asks your provider once whether it accepts the key and tells you what it
+  said: the key works, it was not accepted, its account has no credit left, the
+  provider is turning requests away for now, it answered with an error, or it
+  could not be reached. The check is one short request
+  on your key, which your provider may bill.
+- **Where your key lives, said where you type it.** Profile's AI provider row
+  now says the key stays in this browser only and does not follow your account
+  to another device or browser, and that signing out removes it.
+- **Signing out says what happens to your keys.** With a key saved, Sign out
+  first asks, names the keys, and says why they are removed: so the next person
+  to use this browser cannot run requests on them. A confirmed sign-out now
+  always removes them, and "Reset profile to defaults" says it removes them too.
+- **A paper asks for the right thing.** If you have a key but are signed out, a
+  paper says what needs you to sign in, instead of asking for a key you already
+  added, and the link after it appears only when the sentence asks for something.
+- **Your account cannot touch your keys.** A profile pulled from your account
+  can never set or clear your model key, your choice of AI company or your Jev
+  key.
+- **Tavily is gone.** No setting, no stored key (an old one is cleared on your
+  next visit, and an old backup file cannot bring it back), and no web-search
+  source.
+- **Sign-in only comes back to Peer.** The sign-in callback returns only to
+  Peer's own Welcome, Profile and paper pages.
+- **/privacy.** "Your own model key" now describes Check key, and says that a
+  key does not travel with your account.
+
 ## v0.45.0 — 2026-10-06
 
 Paper screening with your own Jev key.

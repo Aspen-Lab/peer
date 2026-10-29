@@ -14,6 +14,11 @@
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
+import {
+  AFTER_SIGN_IN_COOKIE_MAX_AGE_SECONDS,
+  AFTER_SIGN_IN_COOKIE_NAME,
+  safeReturnPath,
+} from "@/lib/navigation/return-path";
 
 export type AuthState =
   | { kind: "unconfigured" }
@@ -60,9 +65,32 @@ export function userAvatar(user: User): string | null {
   return (user.user_metadata?.avatar_url as string | undefined) ?? null;
 }
 
-/** GitHub OAuth; the browser leaves for the callback, so nothing to unset. */
-export async function signInWithGitHub(): Promise<void> {
+/**
+ * Where the callback should send the browser after this sign-in.
+ *
+ * With a `returnTo` (the welcome wizard passes its own step), a short-lived
+ * first-party cookie carries it across the provider's pages; the callback
+ * checks it with `safeReturnPath`, follows it and deletes it. It holds a path
+ * and nothing secret, so it is readable by the page (not HttpOnly). A value
+ * that fails the same check is never written.
+ *
+ * Without one, a cookie left behind by an earlier, abandoned sign-in (the
+ * reader started from the wizard and turned back at the provider) is cleared,
+ * so this sign-in lands on `/` exactly as it always has.
+ */
+function rememberReturnPath(returnTo: string | undefined): void {
+  if (typeof document === "undefined") return;
+  const path = safeReturnPath(returnTo);
+  document.cookie = path
+    ? `${AFTER_SIGN_IN_COOKIE_NAME}=${encodeURIComponent(path)}; Max-Age=${AFTER_SIGN_IN_COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax`
+    : `${AFTER_SIGN_IN_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax`;
+}
+
+/** GitHub OAuth; the browser leaves for the callback, so nothing to unset.
+ *  `returnTo`: where to land after sign-in (see `rememberReturnPath`). */
+export async function signInWithGitHub(returnTo?: string): Promise<void> {
   if (!supabase) return;
+  rememberReturnPath(returnTo);
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   await supabase.auth.signInWithOAuth({
     provider: "github",
@@ -77,10 +105,12 @@ export async function signInWithGitHub(): Promise<void> {
  * account (documented parameter, values none/consent/select_account:
  * https://developers.google.com/identity/protocols/oauth2/web-server). No
  * `access_type`/`offline` — Peer never calls a Google API again after
- * sign-in, so there is no refresh token to ask for.
+ * sign-in, so there is no refresh token to ask for. `returnTo`: as for
+ * GitHub, where to land after sign-in.
  */
-export async function signInWithGoogle(): Promise<void> {
+export async function signInWithGoogle(returnTo?: string): Promise<void> {
   if (!supabase) return;
+  rememberReturnPath(returnTo);
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   await supabase.auth.signInWithOAuth({
     provider: "google",

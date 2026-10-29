@@ -344,19 +344,15 @@ export interface UserProfile {
    * so the server-side cron can read it.
    */
   digestEmail?: string;
+  // The Tavily web-search switch and key (`tavilyEnabled`, `tavilyApiKey`) are
+  // gone: no screen set them and nothing read them. A blob saved on a device
+  // before, or an old backup file, can still carry them; the store's migration,
+  // the sync payload and a backup export or restore strip them by name
+  // (`lib/profile/merge.ts`).
   /**
-   * Optional per-user Tavily web-search switch and key. Kept in local browser
-   * state (never synced to the shared profile row) so users can bring their own
-   * key without writing secrets server-side. No screen sets them now: the
-   * onboarding step that did went with the stopped events and jobs feeds, and
-   * the fields stay for a device or a backup that holds one.
-   */
-  tavilyEnabled: boolean;
-  tavilyApiKey?: string;
-  /**
-   * Optional per-user AI override for Tier 2 reranking. Also local-only so
-   * users can bring their own normal API key without syncing secrets to the
-   * shared profile row.
+   * Optional per-user AI override for Tier 2 reranking. Local-only (kept in
+   * browser state, never synced to the shared profile row) so users can bring
+   * their own normal API key without writing secrets server-side.
    */
   feedAiProvider: UserAiProvider;
   feedAiApiKey?: string;
@@ -437,8 +433,6 @@ export const defaultProfile: UserProfile = {
   digestChannel: "inapp",
   digestFrequency: "daily",
   digestEmail: "",
-  tavilyEnabled: false,
-  tavilyApiKey: "",
   feedAiProvider: "default",
   feedAiApiKey: "",
   jevApiKey: "",

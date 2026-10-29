@@ -42,6 +42,7 @@ import { mergeTerms, paperDefinedTermsInReading, routeTermScope, termScopeKey, t
 import { placeEvidence } from "@/lib/papers/evidence";
 import {
   PDF_NO_TEXT_MESSAGE,
+  availabilityAsksForKey,
   describeAvailability,
   sharedTerms,
   type AvailabilityReport,
@@ -50,7 +51,8 @@ import {
 import { readingToMarkdown } from "@/lib/papers/reading-markdown";
 import type { Claim, PaperReport } from "@/lib/papers/report";
 import type { Route } from "next";
-import { aiAvailability, explainWindowAvailable } from "@/lib/feed/ai-tier";
+import { aiAvailability, explainWindowAvailable, keyNeedsSignIn } from "@/lib/feed/ai-tier";
+import { paperReturnPath } from "@/lib/navigation/add-key-destination";
 import { useSyncGate } from "@/components/profile-sync";
 import { PaperPlate, isSameFigure, leadCaption, leadFigurePending } from "@/components/cards/paper-plate";
 import { SwipeableCard } from "@/components/cards/swipe-card";
@@ -806,6 +808,8 @@ function Reader({
   const authOutcome = useSyncGate((s) => s.authOutcome);
   const aiMode = aiAvailability(profile, authOutcome);
   const providerConfigured = aiMode !== "none";
+  // A key saved while signed out is not used: the sentence and its link ask for a sign-in, not a key.
+  const signInForKey = keyNeedsSignIn(profile, authOutcome);
   // P8-06: the always-on explain window is the one surface that does not wait for the sign-in check when the reader's key is
   // their own local one — it is in the first paint, with its 376 px (`explainWindowAvailable`, `lib/feed/ai-tier.ts`).
   const explainCanAsk = explainWindowAvailable(profile, authOutcome);
@@ -1061,9 +1065,10 @@ function Reader({
             providerConfigured,
             profileHasProject,
             modelFailed: model.failed,
+            keyNeedsSignIn: signInForKey,
           })
         : [],
-    [reading, availability, providerConfigured, profileHasProject, model.failed],
+    [reading, availability, providerConfigured, profileHasProject, model.failed, signInForKey],
   );
 
   // The plate's own terms — allocated across the briefing when the paper is
@@ -1338,15 +1343,17 @@ function Reader({
   // it to have matched; a deep link has no reason to show.
   const recommendation =
     nav.index !== NONE && profile.researchTopics.length > 0 ? reason : null;
-  // No provider means the sentence names a key; the link is the way to one.
-  // A record-only page names no key, so it gets no link.
-  const sectionsRead =
-    reading.provenance.fullText === "html" || reading.provenance.fullText === "pdf";
-  const showAddKey =
-    !providerConfigured &&
-    !report &&
-    reading.omitted.some((entry) => entry.reason === "needs_key") &&
-    !(reading.provenance.abstract === "none" && !sectionsRead);
+  // The link follows the sentence: it is drawn only when the sentence on screen
+  // names a key (the link is the way to one) or, with a key saved and the reader
+  // signed out (`signInForKey`), a sign-in (the link reads "Sign in" and comes
+  // back here). A sentence that asks for neither — a record-only page, a PDF
+  // with no text, a model on the page — gets no link.
+  const showAddKey = availabilityAsksForKey({
+    reading,
+    report: availability,
+    providerConfigured,
+    keyNeedsSignIn: signInForKey,
+  });
 
   const keyResults = report?.resultsAndSignificance.keyResults ?? [];
   const methods = report?.whatItProposes.methods ?? [];
@@ -1504,6 +1511,8 @@ function Reader({
             uploadAction={uploadAction}
             doi={paper.doi}
             showAddKey={showAddKey}
+            keyNeedsSignIn={signInForKey}
+            signInReturnTo={paperReturnPath(paper.id)}
             uploadStatus={upload ? <PrivatePdfStatus upload={upload}
               attachedToTitle={!paper.id.startsWith("upload:") ? paper.title : undefined}
               onDeleted={() => {

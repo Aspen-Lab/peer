@@ -442,8 +442,8 @@ describe("/privacy — Say it plainly (P4-01)", () => {
     expect(entry).toContain(`“${PLAIN.button}”`);
   });
 
-  it("keeps the date: this entry is dated 2026-10-07, the day the page last changed", () => {
-    expect(html).toContain("Last changed 2026-10-07");
+  it("keeps the date: the page last changed 2026-10-28 (\"Check key\" in Your own model key), after this entry's 2026-10-07", () => {
+    expect(html).toContain("Last changed 2026-10-28");
   });
 
   it("holds no 'skip' or 'don't read' wording, no allowance and no plan (the copy rules)", () => {

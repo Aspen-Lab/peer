@@ -29,7 +29,14 @@ vi.mock("@google/genai", async (importOriginal) => ({
   },
 }));
 
-import { createGeminiApiProvider } from "./gemini";
+import {
+  KEY_CHECK_MAX_TOKENS,
+  KEY_CHECK_SYSTEM_PROMPT,
+  KEY_CHECK_USER_PROMPT,
+  GEMINI_API_CHAIN_IDS,
+  createGeminiApiProvider,
+} from "./gemini";
+import { DIGEST_SYSTEM_PROMPT } from "./types";
 
 // Invented strings. None of them is, or ever was, a key.
 const KEY_A = "gemini-key-handling-FAKE-A-do-not-use";
@@ -91,6 +98,38 @@ describe("createGeminiApiProvider — the reader's key is used for the request a
     await expect(oneRequest(provider)).rejects.toThrow();
 
     expect(sdk.constructed).toEqual([]);
+  });
+});
+
+// "Check key" runs `testConnection` on the reader's own key, and the provider may
+// bill it: the check is one model, one line of system prompt, a short cap.
+describe("createGeminiApiProvider — testConnection is the smallest request that proves the key", () => {
+  it("sends one request, to the first model, with a one-line system prompt and a 32-token cap", async () => {
+    const result = await createGeminiApiProvider(KEY_A).testConnection();
+
+    expect(result).toEqual({ ok: true });
+    expect(sdk.constructed).toEqual([{ apiKey: KEY_A }]);
+    expect(sdk.generateContent).toHaveBeenCalledTimes(1);
+    const [args] = sdk.generateContent.mock.calls[0] as [
+      { model: string; contents: string; config: { systemInstruction: string; maxOutputTokens?: number } },
+    ];
+    expect(args.model).toBe(GEMINI_API_CHAIN_IDS[0]);
+    expect(args.contents).toBe(KEY_CHECK_USER_PROMPT);
+    expect(args.config.systemInstruction).toBe(KEY_CHECK_SYSTEM_PROMPT);
+    expect(args.config.systemInstruction).not.toBe(DIGEST_SYSTEM_PROMPT);
+    expect(KEY_CHECK_SYSTEM_PROMPT.length).toBeLessThan(40);
+    // The first model's thinking is turned off, so the cap is the cap and no headroom is added.
+    expect(args.config.maxOutputTokens).toBe(KEY_CHECK_MAX_TOKENS);
+    expect(KEY_CHECK_MAX_TOKENS).toBe(32);
+  });
+
+  it("reports a refusal as not ok, and does not try the next model", async () => {
+    sdk.generateContent.mockRejectedValueOnce(new Error("API key not valid"));
+
+    const result = await createGeminiApiProvider(KEY_A).testConnection();
+
+    expect(result.ok).toBe(false);
+    expect(sdk.generateContent).toHaveBeenCalledTimes(1);
   });
 });
 

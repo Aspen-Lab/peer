@@ -20,6 +20,12 @@ import type { AuthState } from "./use-auth-user";
 
 const mocks = vi.hoisted(() => ({
   authState: { kind: "signed-out" } as AuthState,
+  // R14 — the Profile page's query string, as the section reads it.
+  search: "",
+}));
+
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(mocks.search),
 }));
 
 vi.mock("./use-auth-user", () => ({
@@ -36,13 +42,25 @@ vi.mock("./use-auth-user", () => ({
 import {
   AccountSection,
   AccountSectionView,
+  browserKeyLabels,
+  confirmProfileReset,
   hasUnsyncedChanges,
   shouldWarnBeforeSignOut,
   handleSignOutSubmitCore,
+  signInReturnTo,
+  SignInButtons,
+  signOutKeysCopy,
+  signOutKeysSentence,
+  signOutPrompt,
   type AccountSectionViewProps,
+  type ConfirmProfileResetDeps,
+  type SignOutPrompt,
   type SignOutSubmitDeps,
   type SignOutGuard,
 } from "./account-section";
+import { defaultProfile, type UserProfile } from "@/types";
+import { useProfileStore } from "@/store/profile";
+import { isAccountSwitch, processConfirmedSignOutCookie } from "@/components/profile-sync";
 
 function render(state: AuthState): string {
   mocks.authState = state;
@@ -120,16 +138,34 @@ describe("AccountSection — signed-out", () => {
     // is now followed by a second `user ? (` branch rather than a bare
     // `: (` — the PROPERTY under test (one shared `disabled={busy}`
     // expression) is unchanged, only the source text it's sliced from.
+    //
+    // OWN-KEY lane 4 — slice markers moved again, because the structure did:
+    // the two buttons now live in the exported `SignInButtons` (reused by the
+    // welcome wizard's Account and AI steps), and the signed-out branch only
+    // renders `<SignInButtons busy={busy} … />`. The PROPERTY is unchanged and
+    // still pinned in two halves: inside `SignInButtons` both buttons read the
+    // one `disabled={busy}` expression, and the Account section hands it its
+    // own single `busy` flag, not a second one.
     const source = readFileSync(
       join(process.cwd(), "src", "components", "account", "account-section.tsx"),
       "utf8",
     );
+    const buttonsStart = source.indexOf("export function SignInButtons(");
+    expect(buttonsStart).toBeGreaterThan(-1);
+    const buttonsBody = source.slice(buttonsStart, source.indexOf("export function Avatar(", buttonsStart));
+    const disabledExprs = buttonsBody.match(/disabled=\{[^}]*\}/g) ?? [];
+    expect(disabledExprs).toEqual(["disabled={busy}", "disabled={busy}"]);
+
     const signedOutBranch = source.slice(
       source.indexOf('authKind === "signed-out" ? ('),
       source.indexOf(") : user ? ("),
     );
-    const disabledExprs = signedOutBranch.match(/disabled=\{[^}]*\}/g) ?? [];
-    expect(disabledExprs).toEqual(["disabled={busy}", "disabled={busy}"]);
+    // R14 — CHANGED marker: the two handlers now also hand on the checked
+    // return path (`signInReturnTo`); the single `busy` is unchanged.
+    expect(signedOutBranch).toMatch(
+      /<SignInButtons\s+busy=\{busy\}\s+onSignInGitHub=\{\(\) => onSignInGitHub\(signInReturnTo\)\}\s+onSignInGoogle=\{\(\) => onSignInGoogle\(signInReturnTo\)\}\s*\/>/,
+    );
+    expect(signedOutBranch).not.toMatch(/disabled=/);
   });
 });
 
@@ -224,8 +260,15 @@ describe("AccountSection's handleSignOutSubmit wrapper wiring (§1bt point 3, §
   // finding: the round-2 refactor proved the core calls onWarn, but nothing
   // pinned that the WRAPPER's onWarn actually opens the "Stay signed in" /
   // "Sign out anyway" confirmation (a no-op onWarn passed the whole suite).
-  it("wires onWarn to open the existing sign-out confirmation (setConfirmingSignOut(true))", () => {
-    expect(body).toMatch(/onWarn:\s*\(\)\s*=>\s*setConfirmingSignOut\(true\)/);
+  // OWN-KEY lane 4 — CHANGED marker, because the structure did: the dialog
+  // now also names the keys signing out removes, so onWarn carries WHICH
+  // dialog to open ("unsynced" | "keys" | "both") and the wrapper keeps that
+  // instead of a bare boolean. The property is the same: the wrapper's onWarn
+  // opens the confirmation (a no-op onWarn still fails here), and it now also
+  // hands the core this browser's key names.
+  it("wires onWarn to open the sign-out confirmation with the prompt the core chose (setPendingSignOut(prompt)), and passes the key names", () => {
+    expect(body).toMatch(/onWarn:\s*\(prompt\)\s*=>\s*setPendingSignOut\(prompt\)/);
+    expect(body).toMatch(/^\s*keyLabels,\s*$/m);
   });
 
   it("(ACCOUNT-SWITCH §1bt.8) sets busy(true) before delegating to the core, and busy(false) in a finally — the VISIBLE half of the double-submit guard, so a stuck flush never leaves the button disabled forever", () => {
@@ -409,8 +452,10 @@ describe("AccountSectionView — P6 sign-out warning, both branches by props (§
   it("a pending warning (confirmingSignOut=true): shows the exact sentence and both buttons instead of the plain Sign out control", () => {
     const html = renderAccountView({ confirmingSignOut: true });
 
+    // R1-fixB item 4 (A8) — CHANGED: the sentence said "this device"; the
+    // dialog now names one place throughout, "this browser".
     expect(html).toContain(
-      "Some changes on this device haven’t reached your account yet. Signing out removes them from this device.",
+      "Some changes in this browser haven’t reached your account yet. Signing out removes them from this browser.",
     );
     // Still exactly one form — "Sign out anyway" posts to the real
     // endpoint, today's exact mechanism, just reached one click later;
@@ -422,10 +467,17 @@ describe("AccountSectionView — P6 sign-out warning, both branches by props (§
     expect(html).toMatch(/<button type="button"[^>]*>Stay signed in<\/button>/);
   });
 
-  it("the warning is announced (role=alert), not just styled", () => {
+  // OWN-KEY lane 4 — CHANGED: the warning moved from an inline `role="alert"`
+  // box into a modal `<dialog>` opened with showModal(). A modal is announced
+  // as a dialog when it opens (its name and description, then the focused
+  // "Stay signed in"); `alertdialog` is the dialog form of `alert`, and an
+  // inner `role="alert"` would only read the same words twice. The property
+  // pinned is the same: the warning is announced, not just styled.
+  it("the warning is announced (a modal alertdialog with a name and a description), not just styled", () => {
     const html = renderAccountView({ confirmingSignOut: true });
-    expect(html).toMatch(/role="alert"/);
-    expect(renderAccountView({ confirmingSignOut: false })).not.toMatch(/role="alert"/);
+    expect(html).toMatch(/<dialog[^>]*role="alertdialog"/);
+    expect(html).toMatch(/<dialog[^>]*aria-labelledby="sign-out-title"[^>]*aria-describedby="sign-out-body"/);
+    expect(renderAccountView({ confirmingSignOut: false })).not.toMatch(/role="alert/);
   });
 });
 
@@ -438,5 +490,511 @@ describe("AccountSection — signed-in (additive only — unchanged by adding Go
     expect(html).toContain("person@example.test");
     expect((html.match(/<form/g) ?? []).length).toBe(1);
     expect(html).toContain("Sign out");
+  });
+});
+
+// OWN-KEY lane 4 — signing out also removes the reader's model and Jev keys
+// from this browser (the local profile is reset), so the sign-out dialog now
+// says so before it happens. One dialog covers unsynced changes, keys, or
+// both; "none" still signs out at once, exactly as before.
+describe("signOutPrompt — what signing out would take", () => {
+  it.each([
+    [false, [], "none"],
+    [true, [], "unsynced"],
+    [false, ["Gemini"], "keys"],
+    [false, ["Jev"], "keys"],
+    [true, ["Gemini", "Jev"], "both"],
+  ] as const)("unsynced=%s, keys=%j → %s", (unsynced, keyLabels, expected) => {
+    expect(signOutPrompt({ unsynced, keyLabels })).toBe(expected);
+  });
+});
+
+describe("browserKeyLabels — names of the keys this browser holds, never the keys", () => {
+  const withKeys = (patch: Partial<UserProfile>): UserProfile => ({ ...defaultProfile, ...patch });
+
+  it("no key → no label", () => {
+    expect(browserKeyLabels(defaultProfile)).toEqual([]);
+  });
+
+  it("a model key is named by its provider's short name", () => {
+    expect(browserKeyLabels(withKeys({ feedAiProvider: "gemini", feedAiApiKey: "user-owned-key" }))).toEqual(["Gemini"]);
+    expect(browserKeyLabels(withKeys({ feedAiProvider: "anthropic", feedAiApiKey: "user-owned-key" }))).toEqual(["Claude"]);
+  });
+
+  it("a Jev key is named Jev, after the model key", () => {
+    expect(browserKeyLabels(withKeys({ jevApiKey: "jev-test-not-a-key-0000" }))).toEqual(["Jev"]);
+    expect(
+      browserKeyLabels(withKeys({ feedAiProvider: "openai", feedAiApiKey: "k", jevApiKey: "jev-test-not-a-key-0000" })),
+    ).toEqual(["OpenAI", "Jev"]);
+  });
+
+  it("asks the same questions as the rest of Peer: a provider with a blank key, a key with no provider, or a malformed Jev value is no key", () => {
+    expect(browserKeyLabels(withKeys({ feedAiProvider: "gemini", feedAiApiKey: "   " }))).toEqual([]);
+    expect(browserKeyLabels(withKeys({ feedAiProvider: "default", feedAiApiKey: "user-owned-key" }))).toEqual([]);
+    expect(browserKeyLabels(withKeys({ jevApiKey: "two words" }))).toEqual([]);
+    expect(browserKeyLabels(withKeys({ jevApiKey: "" }))).toEqual([]);
+  });
+});
+
+describe("signOutKeysSentence", () => {
+  it("lists one key, or two joined by 'and'", () => {
+    expect(signOutKeysSentence(["Gemini"])).toBe("Signing out removes your Gemini key from this browser.");
+    expect(signOutKeysSentence(["Jev"])).toBe("Signing out removes your Jev key from this browser.");
+    expect(signOutKeysSentence(["Gemini", "Jev"])).toBe(
+      "Signing out removes your Gemini key and your Jev key from this browser.",
+    );
+  });
+});
+
+describe("handleSignOutSubmitCore — keys prompt too (OWN-KEY lane 4)", () => {
+  function run(overrides: Partial<SignOutSubmitDeps>) {
+    const warned: SignOutPrompt[] = [];
+    let submitted = 0;
+    const deps: SignOutSubmitDeps = {
+      requestFlush: async () => true,
+      feedPushFailed: false,
+      confirmingSignOut: false,
+      onWarn: (prompt) => {
+        warned.push(prompt);
+      },
+      onSubmitForm: () => {
+        submitted += 1;
+      },
+      ...overrides,
+    };
+    return handleSignOutSubmitCore(deps, { current: false }).then(() => ({ warned, submitted }));
+  }
+
+  it("nothing unsynced and no key → submits at once, as before", async () => {
+    expect(await run({ keyLabels: [] })).toEqual({ warned: [], submitted: 1 });
+    expect(await run({})).toEqual({ warned: [], submitted: 1 });
+  });
+
+  it("a key, nothing unsynced → the keys dialog, no submit", async () => {
+    expect(await run({ keyLabels: ["Gemini"] })).toEqual({ warned: ["keys"], submitted: 0 });
+  });
+
+  it("unsynced only → the unsynced dialog, as before", async () => {
+    expect(await run({ requestFlush: async () => false })).toEqual({ warned: ["unsynced"], submitted: 0 });
+  });
+
+  it("both → one dialog saying both", async () => {
+    expect(await run({ feedPushFailed: true, keyLabels: ["Gemini", "Jev"] })).toEqual({
+      warned: ["both"],
+      submitted: 0,
+    });
+  });
+
+  it("still flushes first, and still only once on a double submit", async () => {
+    let flushes = 0;
+    let release: ((v: boolean) => void) | null = null;
+    const deps: SignOutSubmitDeps = {
+      requestFlush: () => {
+        flushes += 1;
+        return new Promise<boolean>((resolve) => {
+          release = resolve;
+        });
+      },
+      feedPushFailed: false,
+      confirmingSignOut: false,
+      keyLabels: ["Jev"],
+      onWarn: () => {},
+      onSubmitForm: () => {},
+    };
+    const guard: SignOutGuard = { current: false };
+    const first = handleSignOutSubmitCore(deps, guard);
+    const second = handleSignOutSubmitCore(deps, guard);
+    expect(flushes).toBe(1);
+    release!(true);
+    await Promise.all([first, second]);
+    expect(flushes).toBe(1);
+  });
+});
+
+describe("AccountSectionView — the sign-out dialog (OWN-KEY lane 4)", () => {
+  const KEYS_SENTENCE = "Signing out removes your Gemini key and your Jev key from this browser.";
+  const WHY =
+    "Peer keeps keys only in this browser, never on its server. If they stayed after you signed out, the next person to use this browser could run requests on your keys, billed to you.";
+  const AGAIN = "When you sign in again, here or on another device, paste them again.";
+  const UNSYNCED =
+    "Some changes in this browser haven’t reached your account yet. Signing out removes them from this browser.";
+
+  // R1-fixB item 4 (A8): one word for the place, in every dialog.
+  it("names the place 'this browser' throughout, never 'this device', in the unsynced, keys and both dialogs", () => {
+    for (const [prompt, labels] of [
+      ["unsynced", []],
+      ["keys", ["Gemini"]],
+      ["keys", ["Gemini", "Jev"]],
+      ["both", ["Jev"]],
+      ["both", ["Gemini", "Jev"]],
+    ] as const) {
+      const html = dialog(prompt, [...labels]);
+      expect(html, `${prompt} ${labels.join("+")}`).not.toContain("this device");
+      expect(html).toContain("this browser");
+    }
+  });
+
+  const dialog = (prompt: Exclude<SignOutPrompt, "none">, labels: string[]) =>
+    renderAccountView({ confirmingSignOut: true, signOutPrompt: prompt, signOutKeyLabels: labels });
+
+  it("keys: the title, the three sentences, and 'Sign out and remove keys'", () => {
+    const html = dialog("keys", ["Gemini", "Jev"]);
+    expect(html).toMatch(/<h2 id="sign-out-title"[^>]*>Sign out and remove your keys\?<\/h2>/);
+    expect(html).toContain(`<p>${KEYS_SENTENCE}</p>`);
+    expect(html).toContain(WHY);
+    expect(html).toContain(AGAIN);
+    expect(html).not.toContain(UNSYNCED);
+    expect(html).toMatch(
+      /<form[^>]*action="\/auth\/signout"[^>]*method="POST"[^>]*><button type="submit"[^>]*>Sign out and remove keys<\/button><\/form>/,
+    );
+    expect(html).toMatch(/<button type="button"[^>]*>Stay signed in<\/button>/);
+    expect(html).not.toContain("Sign out anyway");
+  });
+
+  it("one key reads 'your Gemini key'", () => {
+    const html = dialog("keys", ["Gemini"]);
+    expect(html).toContain("<p>Signing out removes your Gemini key from this browser.</p>");
+    expect(html).not.toContain(" and your ");
+  });
+
+  // L4-fix (R13, D2): one key, singular words throughout.
+  it("one key: the title, the reason, the next step and the button are all singular", () => {
+    for (const labels of [["Gemini"], ["Jev"]]) {
+      const html = dialog("keys", labels);
+      expect(html).toMatch(/<h2 id="sign-out-title"[^>]*>Sign out and remove your key\?<\/h2>/);
+      expect(html).toContain(
+        "<p>Peer keeps keys only in this browser, never on its server. If it stayed after you signed out, the next person to use this browser could run requests on your key, billed to you.</p>",
+      );
+      expect(html).toContain("<p>When you sign in again, here or on another device, paste it again.</p>");
+      expect(html).toContain(">Sign out and remove key</button>");
+      expect(html).not.toMatch(/remove your keys|remove keys|If they stayed|on your keys|paste them/);
+    }
+  });
+
+  it("one key with unsynced changes too: singular keys words, plus the unsynced sentence", () => {
+    const html = dialog("both", ["Jev"]);
+    expect(html).toContain("Sign out and remove your key?");
+    expect(html).toContain("Signing out removes your Jev key from this browser.");
+    expect(html).toContain(UNSYNCED);
+    expect(html).toContain(">Sign out and remove key</button>");
+  });
+
+  it("two keys keep the plural wording", () => {
+    expect(signOutKeysCopy(["Gemini", "Jev"])).toEqual({
+      title: "Sign out and remove your keys?",
+      removes: KEYS_SENTENCE,
+      why: WHY,
+      again: AGAIN,
+      confirm: "Sign out and remove keys",
+    });
+  });
+
+  it("both: the keys sentences and the unsynced sentence, in one dialog with one form", () => {
+    const html = dialog("both", ["Gemini", "Jev"]);
+    expect(html).toContain("Sign out and remove your keys?");
+    expect(html).toContain(KEYS_SENTENCE);
+    expect(html).toContain(UNSYNCED);
+    expect((html.match(/<dialog/g) ?? []).length).toBe(1);
+    expect((html.match(/<form/g) ?? []).length).toBe(1);
+    expect(html).toContain(">Sign out and remove keys</button>");
+  });
+
+  it("unsynced only: the original sentence and 'Sign out anyway', no word about keys", () => {
+    const html = dialog("unsynced", []);
+    expect(html).toContain(UNSYNCED);
+    expect(html).toContain(">Sign out anyway</button>");
+    expect(html).not.toMatch(/\bkeys?\b/i);
+  });
+
+  it("puts 'Stay signed in' first, so the modal's first focus is the safe choice", () => {
+    const html = dialog("both", ["Gemini", "Jev"]);
+    expect(html.indexOf("Stay signed in")).toBeLessThan(html.indexOf("Sign out and remove keys"));
+  });
+
+  it("is a native dialog, closed in the markup until showModal() opens it", () => {
+    const html = dialog("keys", ["Jev"]);
+    expect(html).toMatch(/<dialog[^>]*role="alertdialog"/);
+    expect(html).not.toMatch(/<dialog[^>]*\bopen\b/);
+  });
+
+  it("never renders any piece of a key: a 40-character model key and Jev key, through browserKeyLabels, leave no 4-character slice in the markup", () => {
+    const MODEL_KEY = "Xq7Wz2Rk9Tm4Vb6Np1Ls8Hd3Jf5Gc0Yt7Ue2Ia9O";
+    const JEV_KEY = "Pm3Kw8Zr1Qx6Vn4Bt9Hs2Lc7Jd5Ff0Gy3Ua8Ie1W";
+    expect(MODEL_KEY).toHaveLength(40);
+    expect(JEV_KEY).toHaveLength(40);
+    const profile: UserProfile = {
+      ...defaultProfile,
+      feedAiProvider: "gemini",
+      feedAiApiKey: MODEL_KEY,
+      jevApiKey: JEV_KEY,
+    };
+    const labels = browserKeyLabels(profile);
+    expect(labels).toEqual(["Gemini", "Jev"]);
+    // Two keys, and each key alone (the singular wording), with and without
+    // unsynced changes.
+    const oneEach = [
+      browserKeyLabels({ ...profile, jevApiKey: "" }),
+      browserKeyLabels({ ...profile, feedAiProvider: "default", feedAiApiKey: "" }),
+    ];
+    expect(oneEach).toEqual([["Gemini"], ["Jev"]]);
+    for (const set of [labels, ...oneEach]) {
+      for (const prompt of ["keys", "both"] as const) {
+        const html = dialog(prompt, set);
+        for (const key of [MODEL_KEY, JEV_KEY]) {
+          for (let i = 0; i + 4 <= key.length; i++) {
+            expect(html).not.toContain(key.slice(i, i + 4));
+          }
+        }
+      }
+    }
+  });
+});
+
+describe("SignOutDialog wiring (source) — Esc stays, focus starts on Stay signed in, a real POST", () => {
+  const source = readFileSync(
+    join(process.cwd(), "src", "components", "account", "account-section.tsx"),
+    "utf8",
+  );
+  const dialogSource = source.slice(
+    source.indexOf("export function SignOutDialog("),
+    source.indexOf("export function AccountSection("),
+  );
+
+  it("opens with showModal() and focuses Stay signed in", () => {
+    expect(dialogSource).toContain("dialog.showModal();");
+    expect(dialogSource).toContain("stayRef.current?.focus();");
+    expect(dialogSource).toMatch(/ref=\{stayRef\}[\s\S]*?onClick=\{onStaySignedIn\}[\s\S]*?Stay signed in/);
+  });
+
+  it("Esc (the dialog's cancel) means stay signed in", () => {
+    expect(dialogSource).toMatch(/onCancel=\{\(event\) => \{\s*event\.preventDefault\(\);\s*onStaySignedIn\(\);/);
+  });
+
+  it("confirms with the plain form POST, no fetch", () => {
+    expect(dialogSource).toContain('<form method="POST" action="/auth/signout">');
+    expect(dialogSource).not.toMatch(/fetch\(/);
+  });
+
+  it("the wrapper reads key names from the profile store through browserKeyLabels, nothing else of the keys", () => {
+    const wrapper = source.slice(source.indexOf("export function AccountSection("));
+    expect(wrapper).toContain("useMemo(() => browserKeyLabels(profile), [profile])");
+    expect(wrapper).not.toMatch(/feedAiApiKey|jevApiKey/);
+  });
+});
+
+// OWN-KEY lane 4 (R13, D4) — the sign-out dialog promises the keys go. A
+// "Reset profile to defaults" while signed in used to null the recorded owner,
+// so a later sign-out skipped the clear and the key stayed (and the next
+// account inherited it). Two fixes, each enough on its own: the reset records
+// the signed-in account again (confirmProfileReset), and a confirmed sign-out
+// always clears the keys (clearDeviceKeys, in processConfirmedSignOutCookie).
+describe("confirmProfileReset — signed in ⇒ owner recorded (R13, D4)", () => {
+  function run(overrides: Partial<ConfirmProfileResetDeps>) {
+    const calls: string[] = [];
+    confirmProfileReset({
+      logOut: () => calls.push("logOut"),
+      setSyncedAccountId: (id) => calls.push(`owner:${id}`),
+      authOutcome: "signed-in",
+      authUserId: "user-a",
+      ...overrides,
+    });
+    return calls;
+  }
+
+  it("signed in: resets, then records the same account again", () => {
+    expect(run({})).toEqual(["logOut", "owner:user-a"]);
+  });
+
+  it("not signed in, or no id yet: resets and records nobody", () => {
+    expect(run({ authOutcome: "signed-out", authUserId: null })).toEqual(["logOut"]);
+    expect(run({ authOutcome: "unknown", authUserId: null })).toEqual(["logOut"]);
+    expect(run({ authOutcome: "unconfigured", authUserId: null })).toEqual(["logOut"]);
+    expect(run({ authOutcome: "signed-in", authUserId: null })).toEqual(["logOut"]);
+  });
+});
+
+describe("the reviewer's sequence: reset while signed in → paste a key → sign out → the key is gone (R13, D4)", () => {
+  const MODEL = "seq-model-key-sentinel-not-a-key-0000000";
+  const JEV = "seq-jev-key-sentinel-not-a-key-000000000";
+
+  function pasteKeys() {
+    const store = useProfileStore.getState();
+    store.updateFeedAiProvider("gemini");
+    store.updateFeedAiApiKey(MODEL);
+    store.updateJevApiKey(JEV);
+    expect(browserKeyLabels(useProfileStore.getState().profile)).toEqual(["Gemini", "Jev"]);
+  }
+
+  function signOutAndReload(clearDeviceKeys: () => void) {
+    // POST /auth/signout set the cookie; the next load confirms "signed-out".
+    processConfirmedSignOutCookie({
+      cookiePresent: true,
+      authOutcome: "signed-out",
+      syncedAccountId: useProfileStore.getState().syncedAccountId,
+      logOut: () => useProfileStore.getState().logOut(),
+      clearDeviceKeys,
+      deleteCookie: () => {},
+    });
+  }
+
+  function expectNoKey() {
+    const { profile } = useProfileStore.getState();
+    expect(browserKeyLabels(profile)).toEqual([]);
+    expect(JSON.stringify(profile)).not.toContain(MODEL);
+    expect(JSON.stringify(profile)).not.toContain(JEV);
+  }
+
+  function signedInAsA() {
+    useProfileStore.setState({ profile: { ...defaultProfile }, lastSynced: null, syncedAccountId: "user-a" });
+  }
+
+  it("with both fixes: the key is gone, and a second account signing in inherits nothing", () => {
+    signedInAsA();
+    confirmProfileReset({
+      logOut: () => useProfileStore.getState().logOut(),
+      setSyncedAccountId: useProfileStore.getState().setSyncedAccountId,
+      authOutcome: "signed-in",
+      authUserId: "user-a",
+    });
+    expect(useProfileStore.getState().syncedAccountId).toBe("user-a");
+    pasteKeys();
+    signOutAndReload(() => useProfileStore.getState().clearDeviceKeys());
+    expectNoKey();
+    // Account B signs in on this browser next (onSession's own step: wipe on
+    // a switch): whatever the switch check says, no key is left for B.
+    if (isAccountSwitch(useProfileStore.getState().syncedAccountId, "user-b")) {
+      useProfileStore.getState().logOut();
+    }
+    expectNoKey();
+  });
+
+  it("the reset fix alone is enough: the owner is recorded, so the full clear runs", () => {
+    signedInAsA();
+    confirmProfileReset({
+      logOut: () => useProfileStore.getState().logOut(),
+      setSyncedAccountId: useProfileStore.getState().setSyncedAccountId,
+      authOutcome: "signed-in",
+      authUserId: "user-a",
+    });
+    pasteKeys();
+    signOutAndReload(() => {}); // as if the key clear were missing
+    expectNoKey();
+  });
+
+  it("the sign-out fix alone is enough: the old reset (owner nulled) still ends with no key", () => {
+    signedInAsA();
+    useProfileStore.getState().logOut(); // the reset as it was: the owner is forgotten
+    expect(useProfileStore.getState().syncedAccountId).toBeNull();
+    pasteKeys();
+    signOutAndReload(() => useProfileStore.getState().clearDeviceKeys());
+    expectNoKey();
+    // and B is not seen as a switch (no owner), which is exactly why the key
+    // clear must not wait for one.
+    expect(isAccountSwitch(useProfileStore.getState().syncedAccountId, "user-b")).toBe(false);
+    expectNoKey();
+  });
+});
+
+// R14 — a paper's "Sign in" link sends a signed-out reader with a key to
+// `/profile?return=<encodeURIComponent("/papers/" + encodedId)>`. The Account
+// section reads `return`, and when safeReturnPath accepts it, hands it to both
+// sign-in buttons as `returnTo`; otherwise today's sign-in, exactly.
+describe("signInReturnTo — the Profile page's ?return= (R14)", () => {
+  const fromLink = (id: string) =>
+    new URLSearchParams(`?return=${encodeURIComponent(`/papers/${encodeURIComponent(id)}`)}`).get("return");
+
+  it("a paper link's return value comes back as that paper's path", () => {
+    expect(signInReturnTo(fromLink("openalex:W123"))).toBe("/papers/openalex%3AW123");
+    expect(signInReturnTo(fromLink("arxiv:2401.01234"))).toBe("/papers/arxiv%3A2401.01234");
+  });
+
+  // R15 — CHANGED: this used to assert that a paper whose id holds a "/" is
+  // refused. Such ids are real (dblp, old arXiv), so their papers come back too.
+  it("ids that hold a '/' come back too: dblp, an old arXiv id, a DOI", () => {
+    expect(signInReturnTo(fromLink("dblp:journals/corr/abs-2101-00001"))).toBe(
+      "/papers/dblp%3Ajournals%2Fcorr%2Fabs-2101-00001",
+    );
+    expect(signInReturnTo(fromLink("arxiv:hep-th/9901001"))).toBe("/papers/arxiv%3Ahep-th%2F9901001");
+    expect(signInReturnTo(fromLink("doi:10.1038/nature123"))).toBe("/papers/doi%3A10.1038%2Fnature123");
+  });
+
+  it("the other safe places pass too", () => {
+    expect(signInReturnTo("/welcome?step=ai")).toBe("/welcome?step=ai");
+    expect(signInReturnTo("/profile")).toBe("/profile");
+  });
+
+  it("no parameter, or one safeReturnPath refuses, is undefined: today's sign-in", () => {
+    for (const value of [null, undefined, "", "//evil.com", "@evil.com", "https://evil.com", "/papers/a/b", "/papers/%2F%2Fevil.com", "/"]) {
+      expect(signInReturnTo(value)).toBeUndefined();
+    }
+  });
+});
+
+describe("AccountSectionView — both sign-in buttons are handed the return path (R14, through the view's props)", () => {
+  /** The view is a plain function of its props: call it and find the
+   *  SignInButtons element it renders, then press its two handlers. */
+  function findSignInButtons(node: unknown): { onSignInGitHub: () => void; onSignInGoogle: () => void } | null {
+    if (!node || typeof node !== "object") return null;
+    if (Array.isArray(node)) {
+      for (const child of node) {
+        const found = findSignInButtons(child);
+        if (found) return found;
+      }
+      return null;
+    }
+    const element = node as { type?: unknown; props?: { children?: unknown } & Record<string, unknown> };
+    if (element.type === SignInButtons) return element.props as unknown as ReturnType<typeof findSignInButtons>;
+    return findSignInButtons(element.props?.children);
+  }
+
+  function press(signInReturnTo: string | undefined) {
+    const calls: Array<[string, string | undefined]> = [];
+    const tree = AccountSectionView({
+      authKind: "signed-out",
+      user: null,
+      busy: false,
+      confirmingSignOut: false,
+      signInReturnTo,
+      onSignInGitHub: (to) => calls.push(["github", to]),
+      onSignInGoogle: (to) => calls.push(["google", to]),
+      onSignOutSubmit: () => {},
+      onStaySignedIn: () => {},
+    });
+    const buttons = findSignInButtons(tree);
+    expect(buttons).not.toBeNull();
+    buttons!.onSignInGitHub();
+    buttons!.onSignInGoogle();
+    return calls;
+  }
+
+  it("a checked paper path reaches both GitHub and Google", () => {
+    expect(press("/papers/openalex%3AW123")).toEqual([
+      ["github", "/papers/openalex%3AW123"],
+      ["google", "/papers/openalex%3AW123"],
+    ]);
+  });
+
+  it("without one, both get undefined: the sign-in that lands on /, as today", () => {
+    expect(press(undefined)).toEqual([
+      ["github", undefined],
+      ["google", undefined],
+    ]);
+  });
+
+  it("the markup is the same with or without a return path (nothing about it is shown)", () => {
+    const withReturn = renderAccountView({ authKind: "signed-out", user: null, signInReturnTo: "/papers/a" });
+    const without = renderAccountView({ authKind: "signed-out", user: null });
+    expect(withReturn).toBe(without);
+  });
+
+  it("the wired section reads ?return= and still renders the two buttons", () => {
+    mocks.search = `?return=${encodeURIComponent("/papers/openalex%3AW123")}`;
+    try {
+      const html = render({ kind: "signed-out" });
+      expect(html).toContain("Sign in with GitHub");
+      expect(html).toContain("Sign in with Google");
+    } finally {
+      mocks.search = "";
+    }
   });
 });

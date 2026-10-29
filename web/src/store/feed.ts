@@ -769,9 +769,8 @@ export function paperFeedRequestBody(
         : undefined,
     topN: profile.paperCount,
     aiTier: paperAiAvailable ? 2 : 0,
-    // NO `searchConnectors`. The Tavily toggle stays in the profile, but the
-    // paper surface has nothing left to spend it on, so it does not ask for
-    // the key.
+    // NO `searchConnectors` and no search key of any kind: Peer runs no web
+    // search for papers, and the profile holds no search key to send.
     llmOverride: useOwnKey
       ? {
           provider: profile.feedAiProvider,

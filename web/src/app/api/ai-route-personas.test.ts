@@ -42,6 +42,7 @@ vi.mock("@/lib/llm/providers/registry", async (importOriginal) => {
 import { POST as digestPost } from "./digest/route";
 import { GET as figureGet } from "./figure/route";
 import { POST as papersReportPost } from "./papers/report/route";
+import { POST as checkKeyPost } from "./ai/check-key/route";
 import { getCounterStore, rateKey, resetCounterStoreForTests } from "@/lib/usage/counters";
 
 /**
@@ -209,13 +210,15 @@ describe("the AI routes, driven through the real handlers", () => {
  * cap. Each route's `requireAiRequest(scope, limit)` is that bound. The explain
  * and paragraph-guide gates are held in their own gate suites; these two were
  * held by nothing, so a limit of 200 or a scope swapped between the two left the
- * whole suite green (A's mutations M9 and M10).
+ * whole suite green (A's mutations M9 and M10). "Check key" (`ai/check-key`, ten
+ * checks an hour under `key-check`) joined them when it was added: each check is a
+ * request on the reader's own key.
  *
  * Each case drives the real handler as a signed-in reader with a pinned clock
  * (the key carries the UTC hour), and reads the counter store the way the gate
  * writes it: `rate:<scope>:<user>:<hour>`, and no other key.
  */
-describe("the hourly limit of the report and figure routes", () => {
+describe("the hourly limit of the report, figure and key-check routes", () => {
   const NOW = new Date("2026-10-07T09:20:00.000Z");
   // The rest of the UTC hour, in seconds: what the 429's `Retry-After` carries.
   const RETRY_AFTER = "2400";
@@ -245,6 +248,22 @@ describe("the hourly limit of the report and figure routes", () => {
       limit: 60,
       call: () =>
         figureGet(new NextRequest("http://localhost/api/figure?id=paper-1&url=https%3A%2F%2Fexample.org%2Fp")),
+    },
+    {
+      // "Check key": one short request on the reader's own key. The registry hands
+      // back a stub whose check passes, so a call the gate lets through is a 200 and
+      // nothing reaches the network.
+      name: "POST /api/ai/check-key",
+      scope: "key-check",
+      limit: 10,
+      call: () => {
+        mocks.resolveProvider.mockReturnValue({
+          id: "openai",
+          generateDigest: vi.fn(),
+          testConnection: async () => ({ ok: true }),
+        });
+        return checkKeyPost(request("/api/ai/check-key", { provider: "openai", apiKey: USER_SENTINEL }));
+      },
     },
   ];
 

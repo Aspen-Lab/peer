@@ -140,17 +140,27 @@ export function createAnthropicProvider(
       return block.text.trim();
     },
 
+    // "Check key" (`app/api/ai/check-key`) runs this on the reader's own key. One check is
+    // one request: the SDK's default retries (two, on a 408, 409, 429, 5xx or a dropped
+    // connection) are turned off for it, and only for it. It writes the same one usage line
+    // as every other call, under path "test", whether the provider accepted or refused.
     async testConnection(): Promise<{ ok: boolean; error?: string }> {
       const client = getClient(apiKey);
       if (!client) return { ok: false, error: "ANTHROPIC_API_KEY not set" };
+      const started = now();
       try {
-        await client.messages.create({
-          model,
-          max_tokens: 10,
-          messages: [{ role: "user", content: "ping" }],
-        });
+        const response = await client.messages.create(
+          {
+            model,
+            max_tokens: 10,
+            messages: [{ role: "user", content: "ping" }],
+          },
+          { maxRetries: 0 },
+        );
+        logAnthropic(model, "test", response.usage, started, true);
         return { ok: true };
       } catch (err) {
+        logAnthropic(model, "test", undefined, started, false);
         return { ok: false, error: String(err) };
       }
     },

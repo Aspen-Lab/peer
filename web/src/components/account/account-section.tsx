@@ -21,10 +21,17 @@
 // warn-before-sign-out decision) is pulled out into the pure
 // `shouldWarnBeforeSignOut` below instead.
 
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { safeReturnPath } from "@/lib/navigation/return-path";
 import type { User } from "@supabase/supabase-js";
+import type { UserProfile } from "@/types";
 import { buttonVariants } from "@/components/ui/button";
+import { useProfileStore } from "@/store/profile";
+import { hasUserLlmOverride } from "@/lib/feed/ai-tier";
+import { parseJevApiKey } from "@/lib/decisions/jev-key";
+import { providerShortLabel } from "@/components/profile/ai-setup";
 import {
   signInWithGitHub,
   signInWithGoogle,
@@ -33,7 +40,7 @@ import {
   userName,
   type AuthState,
 } from "./use-auth-user";
-import { requestProfileFlush } from "@/components/profile-sync";
+import { requestProfileFlush, type AuthOutcome } from "@/components/profile-sync";
 import { useFeedSyncStatus } from "@/components/feed-sync";
 
 /**
@@ -67,6 +74,120 @@ export function hasUnsyncedChanges(profilePushFailed: boolean, feedPushFailed: b
   return profilePushFailed || feedPushFailed;
 }
 
+/**
+ * OWN-KEY lane 4 — what signing out would take from this browser, and so
+ * whether to ask first. Signing out resets the local profile (the
+ * `peer_signed_out` cookie → the profile store's `logOut()`), and the
+ * reader's model and Jev keys live only there: they go too, and the reader
+ * must paste them again after signing back in. That is the right default on a
+ * shared computer, but it must not happen unannounced.
+ *
+ * - `"none"`: nothing unsynced, no key — sign out at once, exactly as before.
+ * - `"unsynced"`: the original P6 warning, alone.
+ * - `"keys"`: the keys this browser holds will be removed.
+ * - `"both"`: both, in one dialog.
+ */
+export type SignOutPrompt = "none" | "unsynced" | "keys" | "both";
+
+export function signOutPrompt({
+  unsynced,
+  keyLabels,
+}: {
+  unsynced: boolean;
+  keyLabels: readonly string[];
+}): SignOutPrompt {
+  const keys = keyLabels.length > 0;
+  if (unsynced && keys) return "both";
+  if (unsynced) return "unsynced";
+  if (keys) return "keys";
+  return "none";
+}
+
+/**
+ * The NAMES of the keys this browser holds, in the order the dialog lists
+ * them: the model key by its provider's short name ("Gemini"), then "Jev".
+ * Only the same yes/no questions the rest of Peer asks are put to the profile
+ * (`hasUserLlmOverride`, `parseJevApiKey`), and only names come out — no part
+ * of a key ever reaches what this returns.
+ */
+export function browserKeyLabels(profile: UserProfile): string[] {
+  const labels: string[] = [];
+  if (hasUserLlmOverride(profile)) labels.push(providerShortLabel(profile.feedAiProvider));
+  if (parseJevApiKey(profile.jevApiKey) !== undefined) labels.push("Jev");
+  return labels;
+}
+
+/**
+ * R14 — the Profile page's `return` query parameter, as a sign-in's
+ * `returnTo`: the value when `safeReturnPath` accepts it (a paper's "Sign in"
+ * link sends `/profile?return=<encodeURIComponent("/papers/" + encodedId)>`,
+ * which `URLSearchParams` hands over decoded once), else `undefined`, which
+ * keeps today's sign-in exactly.
+ */
+export function signInReturnTo(returnParam: string | null | undefined): string | undefined {
+  return safeReturnPath(returnParam) ?? undefined;
+}
+
+export interface ConfirmProfileResetDeps {
+  logOut: () => void;
+  setSyncedAccountId: (id: string | null) => void;
+  authOutcome: AuthOutcome;
+  authUserId: string | null;
+}
+
+/**
+ * OWN-KEY lane 4 (R13, D4) — Profile's "Confirm reset". `logOut()` resets the
+ * profile and also forgets which account owns this device's data, while the
+ * reader stays signed in; nothing recorded the owner again until the next
+ * auth event. A sign-out in that window then skipped the clear that needs an
+ * owner, and a key pasted after the reset stayed. So a signed-in reader's
+ * account is recorded again at once: "signed in ⇒ owner recorded" holds.
+ */
+export function confirmProfileReset(deps: ConfirmProfileResetDeps): void {
+  deps.logOut();
+  if (deps.authOutcome === "signed-in" && deps.authUserId) {
+    deps.setSyncedAccountId(deps.authUserId);
+  }
+}
+
+/** "Signing out removes your Gemini key and your Jev key from this browser." */
+export function signOutKeysSentence(keyLabels: readonly string[]): string {
+  const keys = keyLabels.map((label) => `your ${label} key`);
+  const list =
+    keys.length <= 2
+      ? keys.join(" and ")
+      : `${keys.slice(0, -1).join(", ")} and ${keys[keys.length - 1]}`;
+  return `Signing out removes ${list} from this browser.`;
+}
+
+export interface SignOutKeysCopy {
+  title: string;
+  removes: string;
+  why: string;
+  again: string;
+  confirm: string;
+}
+
+/**
+ * The keys part of the sign-out dialog, in the singular for one key and the
+ * plural for more (L4-fix, R13 D2: "your Gemini key" then "paste them again"
+ * read wrong). Built from the key NAMES only.
+ */
+export function signOutKeysCopy(keyLabels: readonly string[]): SignOutKeysCopy {
+  const one = keyLabels.length === 1;
+  return {
+    title: one ? "Sign out and remove your key?" : "Sign out and remove your keys?",
+    removes: signOutKeysSentence(keyLabels),
+    why: one
+      ? "Peer keeps keys only in this browser, never on its server. If it stayed after you signed out, the next person to use this browser could run requests on your key, billed to you."
+      : "Peer keeps keys only in this browser, never on its server. If they stayed after you signed out, the next person to use this browser could run requests on your keys, billed to you.",
+    again: one
+      ? "When you sign in again, here or on another device, paste it again."
+      : "When you sign in again, here or on another device, paste them again.",
+    confirm: one ? "Sign out and remove key" : "Sign out and remove keys",
+  };
+}
+
 /** What `handleSignOutSubmitCore` needs, every side effect injected — same
  *  DI shape this codebase already uses throughout profile-sync.tsx
  *  (`PullBeforePushDeps`, `FlushBeforeSignOutDeps`) — so the re-entrancy
@@ -76,7 +197,11 @@ export interface SignOutSubmitDeps {
   requestFlush: () => Promise<boolean>;
   feedPushFailed: boolean;
   confirmingSignOut: boolean;
-  onWarn: () => void;
+  /** OWN-KEY lane 4 — the names of the keys this browser holds
+   *  (`browserKeyLabels`); none means only unsynced changes can prompt. */
+  keyLabels?: readonly string[];
+  /** Told which dialog to show: unsynced changes, keys, or both. */
+  onWarn: (prompt: Exclude<SignOutPrompt, "none">) => void;
   onSubmitForm: () => void;
 }
 
@@ -111,8 +236,11 @@ export async function handleSignOutSubmitCore(
   try {
     const profileFlushed = await deps.requestFlush();
     const stillUnsynced = hasUnsyncedChanges(!profileFlushed, deps.feedPushFailed);
-    if (shouldWarnBeforeSignOut(stillUnsynced, deps.confirmingSignOut)) {
-      deps.onWarn();
+    // OWN-KEY lane 4 — keys this browser holds prompt too; "none" (nothing
+    // unsynced, no key) still submits exactly as before.
+    const prompt = signOutPrompt({ unsynced: stillUnsynced, keyLabels: deps.keyLabels ?? [] });
+    if (prompt !== "none" && shouldWarnBeforeSignOut(true, deps.confirmingSignOut)) {
+      deps.onWarn(prompt);
       return;
     }
     deps.onSubmitForm();
@@ -126,11 +254,22 @@ export interface AccountSectionViewProps {
   authKind: AuthState["kind"];
   user: User | null;
   busy: boolean;
-  /** True once "Sign out" has been pressed while unsynced changes exist —
-   *  swaps the sign-out control for the warning + two-button choice. */
+  /** True once "Sign out" has been pressed while unsynced changes exist (or,
+   *  since OWN-KEY lane 4, while this browser holds a key) — swaps the
+   *  sign-out control for the sign-out dialog and its two-button choice. */
   confirmingSignOut: boolean;
-  onSignInGitHub: () => void;
-  onSignInGoogle: () => void;
+  /** Which dialog: what signing out would take. Defaults to `"unsynced"`, the
+   *  original warning. */
+  signOutPrompt?: Exclude<SignOutPrompt, "none">;
+  /** The names of the keys this browser holds (`browserKeyLabels`) — names
+   *  only; this view is never handed a key. */
+  signOutKeyLabels?: readonly string[];
+  /** R14 — where a sign-in from here comes back to, already checked by
+   *  `safeReturnPath` (`signInReturnTo`); undefined keeps today's sign-in,
+   *  which lands on `/`. Both buttons are handed it. */
+  signInReturnTo?: string;
+  onSignInGitHub: (returnTo?: string) => void;
+  onSignInGoogle: (returnTo?: string) => void;
   /** Wired to the plain "Sign out" form's `onSubmit`. Whether it actually
    *  intercepts the submit (vs. letting the real `POST /auth/signout` go
    *  through, unchanged from today) is entirely the wrapper's decision —
@@ -145,6 +284,9 @@ export function AccountSectionView({
   user,
   busy,
   confirmingSignOut,
+  signOutPrompt: prompt = "unsynced",
+  signOutKeyLabels = [],
+  signInReturnTo,
   onSignInGitHub,
   onSignInGoogle,
   onSignOutSubmit,
@@ -164,24 +306,11 @@ export function AccountSectionView({
             Sign in with GitHub or Google to sync saves and reads across your devices.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={onSignInGitHub}
-              disabled={busy}
-              className={buttonVariants({ tone: "surface", size: "md" })}
-            >
-              <GitHubMark />
-              Sign in with GitHub
-            </button>
-            <button
-              type="button"
-              onClick={onSignInGoogle}
-              disabled={busy}
-              className={buttonVariants({ tone: "surface", size: "md" })}
-            >
-              <GoogleMark />
-              Sign in with Google
-            </button>
+            <SignInButtons
+              busy={busy}
+              onSignInGitHub={() => onSignInGitHub(signInReturnTo)}
+              onSignInGoogle={() => onSignInGoogle(signInReturnTo)}
+            />
           </div>
         </>
       ) : user ? (
@@ -194,27 +323,11 @@ export function AccountSectionView({
             )}
           </div>
           {confirmingSignOut ? (
-            <div className="ml-auto flex flex-col items-end gap-2" role="alert">
-              <p className="text-caption text-text-muted text-right max-w-[32ch]">
-                Some changes on this device haven&rsquo;t reached your account yet. Signing out removes them from this device.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={onStaySignedIn}
-                  className={buttonVariants({ tone: "surface", size: "sm" })}
-                >
-                  Stay signed in
-                </button>
-                {/* Today's exact mechanism (P6): a real POST, no fetch/JS
-                    required for the sign-out itself to work. */}
-                <form method="POST" action="/auth/signout">
-                  <button type="submit" className={buttonVariants({ tone: "dangerSoft", size: "sm" })}>
-                    Sign out anyway
-                  </button>
-                </form>
-              </div>
-            </div>
+            <SignOutDialog
+              prompt={prompt}
+              keyLabels={signOutKeyLabels}
+              onStaySignedIn={onStaySignedIn}
+            />
           ) : (
             <form method="POST" action="/auth/signout" className="ml-auto" onSubmit={onSignOutSubmit}>
               {/* ACCOUNT-SWITCH (§1bt.8 AMENDMENT (c)) — disabled while the
@@ -244,11 +357,102 @@ export function AccountSectionView({
   );
 }
 
+export interface SignOutDialogProps {
+  prompt: Exclude<SignOutPrompt, "none">;
+  keyLabels: readonly string[];
+  onStaySignedIn: () => void;
+}
+
+/**
+ * OWN-KEY lane 4 — the one sign-out dialog: unsynced changes, keys, or both.
+ * A native modal `<dialog>` (the pattern of briefing/upload-consent-dialog.tsx):
+ * `showModal()` on mount, focus on "Stay signed in", and Esc — the dialog's
+ * `cancel` — means stay signed in. The confirm button submits the real
+ * `<form method="POST" action="/auth/signout">`, as the old inline warning
+ * did; nothing here fetches.
+ */
+export function SignOutDialog({ prompt, keyLabels, onStaySignedIn }: SignOutDialogProps) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const stayRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog && !dialog.open) dialog.showModal();
+    stayRef.current?.focus();
+  }, []);
+
+  const removesKeys = (prompt === "keys" || prompt === "both") && keyLabels.length > 0;
+  const unsynced = prompt === "unsynced" || prompt === "both";
+  const keysCopy = signOutKeysCopy(keyLabels);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      role="alertdialog"
+      aria-labelledby="sign-out-title"
+      aria-describedby="sign-out-body"
+      onCancel={(event) => {
+        event.preventDefault();
+        onStaySignedIn();
+      }}
+      className="fixed inset-0 m-auto w-[min(92vw,440px)] rounded-xl border border-border bg-surface p-6 text-text shadow-card backdrop:bg-black/40"
+    >
+      <h2 id="sign-out-title" className="font-display text-body-lg text-heading">
+        {removesKeys ? keysCopy.title : "Sign out now?"}
+      </h2>
+      <div id="sign-out-body" className="mt-3 space-y-3 text-body-sm text-text-muted">
+        {removesKeys && (
+          <>
+            <p>{keysCopy.removes}</p>
+            <p>{keysCopy.why}</p>
+            <p>{keysCopy.again}</p>
+          </>
+        )}
+        {unsynced && (
+          // R1-fixB item 4 (A8): "this browser", as the key sentences above say
+          // it — the dialog names one place throughout (was "this device").
+          <p>
+            Some changes in this browser haven&rsquo;t reached your account yet. Signing out removes them from this browser.
+          </p>
+        )}
+      </div>
+      <div className="mt-6 flex flex-wrap justify-end gap-2">
+        <button
+          ref={stayRef}
+          type="button"
+          onClick={onStaySignedIn}
+          className={buttonVariants({ tone: "surface", size: "sm" })}
+        >
+          Stay signed in
+        </button>
+        {/* Today's exact mechanism (P6): a real POST, no fetch/JS
+            required for the sign-out itself to work. */}
+        <form method="POST" action="/auth/signout">
+          <button type="submit" className={buttonVariants({ tone: "dangerSoft", size: "sm" })}>
+            {removesKeys ? keysCopy.confirm : "Sign out anyway"}
+          </button>
+        </form>
+      </div>
+    </dialog>
+  );
+}
+
 export function AccountSection({ className = "" }: { className?: string }) {
   const auth = useAuthUser();
   const [busy, setBusy] = useState(false);
-  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
+  // OWN-KEY lane 4 — which sign-out dialog is up ("none": no dialog). Was a
+  // plain `confirmingSignOut` boolean; the dialog now also says which keys
+  // signing out removes, so it has to know what it is warning about.
+  const [pendingSignOut, setPendingSignOut] = useState<SignOutPrompt>("none");
+  const confirmingSignOut = pendingSignOut !== "none";
+  const profile = useProfileStore((s) => s.profile);
+  // Names only ("Gemini", "Jev"): the key itself never leaves the store here.
+  const keyLabels = useMemo(() => browserKeyLabels(profile), [profile]);
   const feedPushFailed = useFeedSyncStatus((s) => s.pushFailed);
+  // R14 — `/profile?return=/papers/<id>` (a paper's "Sign in" link): come back
+  // there after sign-in. Anything `safeReturnPath` refuses, or no parameter,
+  // leaves the sign-in exactly as it was (no returnTo, lands on `/`).
+  const searchParams = useSearchParams();
+  const returnTo = signInReturnTo(searchParams?.get("return"));
   // ACCOUNT-SWITCH (§1bt.8 AMENDMENT (c)) — the LOGICAL half of the
   // double-submit guard; a ref (not state) because it must be correct
   // synchronously across two calls that can both start before React
@@ -279,7 +483,8 @@ export function AccountSection({ className = "" }: { className?: string }) {
           requestFlush: requestProfileFlush,
           feedPushFailed,
           confirmingSignOut,
-          onWarn: () => setConfirmingSignOut(true),
+          keyLabels,
+          onWarn: (prompt) => setPendingSignOut(prompt),
           // form.submit() (never .requestSubmit()) does not re-fire this
           // handler, so this cannot loop.
           onSubmitForm: () => form.submit(),
@@ -298,17 +503,61 @@ export function AccountSection({ className = "" }: { className?: string }) {
       user={auth.kind === "signed-in" ? auth.user : null}
       busy={busy}
       confirmingSignOut={confirmingSignOut}
-      onSignInGitHub={() => {
+      signOutPrompt={confirmingSignOut ? pendingSignOut : undefined}
+      signOutKeyLabels={keyLabels}
+      signInReturnTo={returnTo}
+      onSignInGitHub={(to) => {
         setBusy(true);
-        void signInWithGitHub();
+        void signInWithGitHub(to);
       }}
-      onSignInGoogle={() => {
+      onSignInGoogle={(to) => {
         setBusy(true);
-        void signInWithGoogle();
+        void signInWithGoogle(to);
       }}
       onSignOutSubmit={handleSignOutSubmit}
-      onStaySignedIn={() => setConfirmingSignOut(false)}
+      onStaySignedIn={() => setPendingSignOut("none")}
     />
+  );
+}
+
+export interface SignInButtonsProps {
+  /** One flag for both buttons: a fast double-click must not start two OAuth
+   *  redirects, so neither button may be pressed once either has been. */
+  busy: boolean;
+  onSignInGitHub: () => void;
+  onSignInGoogle: () => void;
+}
+
+/**
+ * "Sign in with GitHub" and "Sign in with Google", GitHub first — the one copy
+ * of the two buttons, used by the Account section here and by the welcome
+ * wizard's Account and AI steps. A fragment, so each caller keeps its own
+ * wrapper and spacing (the Account section's markup is unchanged by the split).
+ * Presentational: the caller decides what a press does, including where the
+ * browser comes back to after sign-in.
+ */
+export function SignInButtons({ busy, onSignInGitHub, onSignInGoogle }: SignInButtonsProps) {
+  return (
+    <>
+      <button
+        type="button"
+        onClick={onSignInGitHub}
+        disabled={busy}
+        className={buttonVariants({ tone: "surface", size: "md" })}
+      >
+        <GitHubMark />
+        Sign in with GitHub
+      </button>
+      <button
+        type="button"
+        onClick={onSignInGoogle}
+        disabled={busy}
+        className={buttonVariants({ tone: "surface", size: "md" })}
+      >
+        <GoogleMark />
+        Sign in with Google
+      </button>
+    </>
   );
 }
 

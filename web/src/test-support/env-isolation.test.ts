@@ -24,9 +24,10 @@ import { shouldStripLiveChannelsEnv, shouldStripJevSmokeEnv } from "../../vitest
  *     `NODE_ENV=test` no longer stops it. Any suite that reaches
  *     `resolveProvider()` without mocking the registry would then make a real,
  *     billed model call on every run of the gate.
- *   - `TAVILY_API_KEY` is the system search key. `resolveSearchProvider` selects
- *     Tavily on `Boolean(key)` alone, so a suite that drives a pipeline would
- *     spend real search credits.
+ *   - `TAVILY_API_KEY` was the system search key. Tavily is removed and no code
+ *     reads it (`lib/security/spend-scans.test.ts` fails on a read), but it
+ *     stays deleted here: if a read ever came back, a suite that drives a
+ *     pipeline would spend real search credits.
  *
  * The split architecture here goes one step further than a shared allow-list:
  * the shared `vitest.config.ts` injects NO local env into the ~100 deterministic

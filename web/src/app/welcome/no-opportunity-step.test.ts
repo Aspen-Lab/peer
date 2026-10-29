@@ -14,8 +14,11 @@ const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const page = read("src/app/welcome/page.tsx");
 
 describe("the welcome wizard asks for no events or jobs", () => {
-  it("has no Data step: six steps, in order, none labelled Data", () => {
+  // OWN-KEY lane 4: Account joined the list, first; the property pinned here
+  // (no Data step, and the paper steps in their order) is unchanged.
+  it("has no Data step: Account then six steps, in order, none labelled Data", () => {
     expect(STEP_META.map((step) => step.key)).toEqual([
+      "account",
       "basics",
       "topics",
       "work",
@@ -24,6 +27,7 @@ describe("the welcome wizard asks for no events or jobs", () => {
       "persona",
     ]);
     expect(STEP_META.map((step) => step.label)).toEqual([
+      "Account",
       "Basics",
       "Topics",
       "Work",

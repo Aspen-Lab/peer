@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { bySourceId } from "@/lib/sources";
+import { bySourceId, isRegisteredSource, type RegisteredSourceId } from "@/lib/sources";
 import type { SourceId, RawItem } from "@/lib/sources/types";
 import { DblpBotCheckError } from "@/lib/sources/dblp";
 import { withSourceTimeout } from "@/lib/opportunities/shared";
@@ -557,9 +557,10 @@ interface BuiltPaperPool {
  * free academic sources below, which have no monthly ceiling.
  *
  * That made it 4 searches a day, per user, per topic set, bought against the
- * user's OWN Tavily plan (the key is theirs, not the server's), for a number
- * nothing displayed. Deleting it is the only change here that gives search
- * quota back, and it costs the surface nothing it was actually using.
+ * user's OWN Tavily plan (the key was theirs, not the server's), for a number
+ * nothing displayed. Deleting it gave that search quota back and cost the
+ * surface nothing it was actually using. Tavily itself is since removed: no
+ * profile field, request field or source holds a Tavily key any more.
  */
 // P2-S3 (Round 3) — F-A-P2-03, ABC-JEV-INTEGRATION.md §1c/§1p.A/G. Tags each
 // item with the channel that admitted it, ON THE ITEM rather than on the
@@ -594,18 +595,16 @@ async function buildPaperPool(
   // signature narrow and additive.
   jevScreen?: JevScreenFn,
 ): Promise<BuiltPaperPool> {
-  const sources = req.sources ?? defaultSources();
+  // **THE PAPER SURFACE DOES NOT SPEND ANYONE'S SEARCH QUOTA, AT ALL.** Papers
+  // come from the five free academic sources; the one Tavily channel this
+  // surface had was deleted for buying a number nothing displayed, and the
+  // Tavily `web` adapter after it. `web` is still a valid source name (the
+  // database's check constraint lists it), but it has no adapter, so a request
+  // that names it fetches nothing for it and records no status for it. Peer
+  // holds no search credential of its own, and no request carries one.
+  const sources = (req.sources ?? defaultSources()).filter(isRegisteredSource);
   const perSourceLimit = req.perSourceLimit ?? 60;
   const includeNonPaperResults = shouldIncludeNonPaperResults(req);
-
-  // **THE PAPER SURFACE DOES NOT SPEND ANYONE'S SEARCH QUOTA, AT ALL.** Events
-  // and jobs genuinely need web search — their listings exist only on the open
-  // web. Papers do not: they come from the five free academic sources, and the
-  // one Tavily channel this surface had was deleted for buying a number nothing
-  // displayed. The optional `web` source below is dark by product choice: it is
-  // handed no `webSearch` options, so it carries no key and returns nothing.
-  // Peer holds no search credential of its own to fall back to, and
-  // `store/feed.ts` sends no `searchConnectors` for papers by design.
 
   const fetchPromise = Promise.allSettled(
     sources.map((s) =>
@@ -1112,9 +1111,10 @@ async function claimSourceRetry(
  * Scoped to the five academic paper sources only (`ACADEMIC_PAPER_SOURCES`):
  * "web"/"hn" are a deliberate scope boundary recorded in this slice's
  * checkpoint, not retried here rather than risking a second, divergent
- * limiter (the `web` source is dark and carries no search options at all, see
- * `buildPaperPool` above). They still get honest `sourceStatus`/`meta.errors`
- * from the build; they are just never auto-retried.
+ * limiter. `web` has no adapter (see `buildPaperPool` above), so a build
+ * attempts and records nothing for it; `hn` still gets an honest
+ * `sourceStatus`/`meta.errors` entry from the build, and is just never
+ * auto-retried.
  *
  * Never runs Tier 2 (no LLM call): a retry only restores candidates a real
  * Tier-0/Tier-1 score can already rank, and a degraded-cache READ must never
@@ -1178,8 +1178,9 @@ async function retryFailedSources(
   if (!statusMap) return pool;
 
   const eligible = (Object.keys(statusMap) as SourceId[]).filter(
-    (sourceId) =>
+    (sourceId): sourceId is RegisteredSourceId =>
       ACADEMIC_PAPER_SOURCES.includes(sourceId) &&
+      isRegisteredSource(sourceId) &&
       isEligibleForRetry(statusMap[sourceId], now),
   );
   if (eligible.length === 0) return pool;

@@ -385,6 +385,8 @@ export const BUTTON = {
   skip: "Skip",
   copy: "Copy",
   addKey: "Add a key",
+  /** In place of `addKey` for a reader who saved a key but is signed out: the key is there, the sign-in is not. */
+  signIn: "Sign in",
 };
 
 /** The swipe reveal under the plate — the card's own labels. */

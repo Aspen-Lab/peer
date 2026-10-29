@@ -19,15 +19,6 @@ export interface SourceQuery {
   avoid?: string[];
   timeWindow?: SearchBrief["timeWindow"];
   limit?: number;
-  /**
-   * The reader's own search key, when they sent one. Peer funds no search of
-   * its own: with no key here a web-search source returns nothing.
-   */
-  webSearch?: {
-    tavilyApiKey?: string;
-    includeDomains?: string[];
-    excludeDomains?: string[];
-  };
 }
 
 export interface RawItem {

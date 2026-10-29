@@ -9,6 +9,7 @@ import { aiAvailability } from "@/lib/feed/ai-tier";
 import type { AuthOutcome } from "@/components/profile-sync";
 
 export type StepKey =
+  | "account"
   | "basics"
   | "topics"
   | "work"
@@ -16,7 +17,21 @@ export type StepKey =
   | "ai"
   | "persona";
 
-export const STEP_META: { key: StepKey; label: string }[] = [
+export interface StepMeta {
+  key: StepKey;
+  label: string;
+}
+
+/**
+ * Every step the wizard can show, in order. Account comes first: a reader's
+ * own model key works only while they are signed in, and signing in is what
+ * keeps topics, saved papers and most settings on every device, so a new reader is
+ * offered it before typing anything. It stays optional ("Continue without
+ * signing in"). Where sign-in is not configured at all the step is left out —
+ * see `visibleSteps`.
+ */
+export const STEP_META: StepMeta[] = [
+  { key: "account", label: "Account" },
   { key: "basics", label: "Basics" },
   { key: "topics", label: "Topics" },
   { key: "work", label: "Work" },
@@ -25,10 +40,44 @@ export const STEP_META: { key: StepKey; label: string }[] = [
   { key: "persona", label: "Persona" },
 ];
 
-/** Resolve a shareable walkthrough query such as `/welcome?step=ai`. */
-export function stepIndexFromKey(key: string | null): number | null {
+/**
+ * The steps this reader's wizard shows: all of them, less Account where
+ * sign-in is not configured (a self-hosted copy has no account to offer).
+ *
+ * `"unknown"` keeps the step. The page shows no step until the profile has
+ * settled, and by then a deployment without sign-in has already said
+ * `"unconfigured"` (it is known at once, with no request); a check still
+ * unanswered after that can only end in signed-in or signed-out, both of which
+ * show the step. So the list is decided once and the step never flashes in or
+ * out.
+ */
+export function visibleSteps(auth: AuthOutcome): StepMeta[] {
+  return auth === "unconfigured"
+    ? STEP_META.filter((step) => step.key !== "account")
+    : STEP_META;
+}
+
+/**
+ * Whether to offer the sign-in buttons: not signed in, on a deployment that
+ * has sign-in. `"unknown"` offers them too — `aiAvailability` reads it as no
+ * model, so "sign in to use your key" stays true for that reader.
+ */
+export function offersSignIn(auth: AuthOutcome): boolean {
+  return auth === "signed-out" || auth === "unknown";
+}
+
+/**
+ * Resolve a shareable walkthrough query such as `/welcome?step=ai`, as an
+ * index into the steps the reader is shown (`visibleSteps`). A key that is not
+ * in that list — a retired step, or Account where sign-in is not configured —
+ * is `null`, and the wizard opens at the first unfinished step instead.
+ */
+export function stepIndexFromKey(
+  key: string | null,
+  steps: readonly StepMeta[] = STEP_META,
+): number | null {
   if (!key) return null;
-  const index = STEP_META.findIndex((step) => step.key === key);
+  const index = steps.findIndex((step) => step.key === key);
   return index === -1 ? null : index;
 }
 
@@ -51,11 +100,13 @@ export function isStepDone(
   key: StepKey,
   profile: UserProfile,
   personaDone: boolean,
-  // Only the `ai` step reads it. Defaults to "signed-out" so an unchanged
-  // caller sees the answer for a reader who is not signed in.
+  // Only the `account` and `ai` steps read it. Defaults to "signed-out" so an
+  // unchanged caller sees the answer for a reader who is not signed in.
   auth: AuthOutcome = "signed-out",
 ): boolean {
   switch (key) {
+    case "account":
+      return auth === "signed-in";
     case "basics":
       // A typed name is the reliable sentinel; the pill fields are deviation
       // proxies (a real PhD-Y3/"both" user who typed no name reads un-done,
@@ -107,17 +158,30 @@ export function readPersonaDone(): boolean {
 }
 
 /**
- * Where the wizard should open: the first step whose data is missing. A fully
- * set-up profile lands on the last step (persona), where "Enter Peer" is
- * immediately available — review, don't redo.
+ * Where the wizard should open: the first step whose data is missing, as an
+ * index into `visibleSteps(auth)`. A fully set-up profile lands on the last
+ * step (persona), where "Enter Peer" is immediately available — review, don't
+ * redo. A reader who is not signed in (where sign-in exists) has Account
+ * unfinished, so a new reader opens on it, first.
+ *
+ * L4-fix (R13, D3): Account opens the wizard only for a new reader — one who
+ * has finished no other step. A returning reader resumes exactly where the
+ * wizard opened before Account existed: the first other unfinished step, or
+ * the last step when all of them are done. (For a signed-out reader that is
+ * at the latest the AI step — a key does not run until they sign in, so it is
+ * never done for them — where "Sign in to use your key" now waits.) The
+ * closing review still lists "Account — Not signed in" with its Edit link,
+ * and the rail still reaches it.
  */
 export function firstIncompleteStep(
   profile: UserProfile,
   personaDone: boolean,
   auth: AuthOutcome = "signed-out",
 ): number {
-  const i = STEP_META.findIndex(
-    (m) => !isStepDone(m.key, profile, personaDone, auth),
-  );
-  return i === -1 ? STEP_META.length - 1 : i;
+  const steps = visibleSteps(auth);
+  const undone = (m: StepMeta) => !isStepDone(m.key, profile, personaDone, auth);
+  const others = steps.filter((m) => m.key !== "account");
+  const started = others.some((m) => !undone(m));
+  const next = (started ? others : steps).find(undone);
+  return next ? steps.indexOf(next) : steps.length - 1;
 }

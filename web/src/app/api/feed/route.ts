@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runFeedPipeline } from "@/lib/feed/pipeline";
-import type { FeedMeta, FeedRequest, FeedResponse, FeedEmptyReasonCode, SearchConnectors } from "@/lib/feed/types";
+import type { FeedMeta, FeedRequest, FeedResponse, FeedEmptyReasonCode } from "@/lib/feed/types";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import type { SourceId } from "@/lib/sources/types";
 import type { ScoredItem } from "@/lib/scoring/types";
@@ -563,40 +563,6 @@ function cleanOptionalString(input: unknown): string | undefined {
     : undefined;
 }
 
-function parseSearchConnectors(input: unknown): SearchConnectors | undefined {
-  if (!input || typeof input !== "object") return undefined;
-  const maybeObject = input as Record<string, unknown>;
-  const tavilyRaw =
-    maybeObject.tavily && typeof maybeObject.tavily === "object"
-      ? (maybeObject.tavily as Record<string, unknown>)
-      : null;
-  if (!tavilyRaw) return undefined;
-
-  const enabled =
-    typeof tavilyRaw.enabled === "boolean" ? tavilyRaw.enabled : undefined;
-  const apiKey = cleanOptionalString(tavilyRaw.apiKey);
-  const tavily =
-    enabled === undefined && apiKey === undefined
-      ? undefined
-      : { enabled, apiKey };
-
-  // RULING 75 — the gemini connector carries no key (the credential is the
-  // server's own Vertex project) and only ever expresses an OPT-OUT. An absent
-  // connector means "use it when Vertex is present and Tavily is not enabled".
-  const gemini = parseGeminiConnector(maybeObject.gemini);
-
-  if (!tavily && !gemini) return undefined;
-  return { ...(tavily ? { tavily } : {}), ...(gemini ? { gemini } : {}) };
-}
-
-function parseGeminiConnector(
-  input: unknown,
-): { enabled: boolean } | undefined {
-  if (!input || typeof input !== "object") return undefined;
-  const enabled = (input as Record<string, unknown>).enabled;
-  return typeof enabled === "boolean" ? { enabled } : undefined;
-}
-
 function parseLlmOverride(input: unknown): ProviderOverrideConfig | undefined {
   if (!input || typeof input !== "object") return undefined;
   const value = input as Record<string, unknown>;
@@ -747,7 +713,8 @@ export async function POST(req: NextRequest) {
       sourceWeights: body.sourceWeights,
       controls: body.controls,
       aiTier,
-      searchConnectors: parseSearchConnectors(body.searchConnectors),
+      // No `searchConnectors`: Peer runs no web search, so a body's
+      // `searchConnectors` (an old client's Tavily key) is never read.
       llmOverride,
       affiliation: parseAffiliation(body.affiliation),
       excludeIds: parseExcludeIds(body.excludeIds),

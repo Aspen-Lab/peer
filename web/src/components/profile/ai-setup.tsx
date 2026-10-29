@@ -7,6 +7,8 @@
 import { useState } from "react";
 import type { UserAiProvider } from "@/types";
 import { SecretInput } from "@/components/ui";
+import { useSyncGate, type AuthOutcome } from "@/components/profile-sync";
+import { KeyCheck } from "@/components/profile/key-check";
 import {
   PROVIDER_MODELS,
   type UserCloudAiProvider,
@@ -123,6 +125,42 @@ export function providerKeyPlaceholder(p: UserAiProvider): string {
 }
 
 /**
+ * What a signed-out reader is told under the key field. A model runs on the
+ * reader's key only while they are signed in (`aiAvailability`, where a
+ * confirmed sign-out is `"none"` whatever key is saved), so a key typed here
+ * while signed out does nothing until they sign in. The Jev field says the same
+ * of its own key (`JEV_SIGN_IN_NOTE`).
+ */
+export const KEY_SIGN_IN_NOTE = "Peer uses your key only while you are signed in.";
+
+/**
+ * Where the reader's model key lives, as the Profile's "AI provider" row says
+ * it. The key is never synced (`remoteProfilePayload` leaves it out, and the
+ * co-ownership terms forbid storing keys on Peer's server), so it does not come
+ * with the account to another device, and a confirmed sign-out resets the
+ * profile (`logOut`) and the key with it. On a copy with no sign-in at all
+ * (`"unconfigured"`) there is no account and no signing out, so those two
+ * sentences are left out.
+ */
+export function keyHomeText(authOutcome: AuthOutcome): string {
+  const stays =
+    "Your key stays in this browser only. Peer passes it on to the provider you choose and never stores it on its server";
+  return authOutcome === "unconfigured"
+    ? `${stays}.`
+    : `${stays}, so it does not follow your account: on another device or browser, paste it again. Signing out removes it from this browser.`;
+}
+
+/**
+ * Whether the sign-in note stands under the key field: only while the key field
+ * is shown (a company is chosen) and the reader is confirmed signed out, whether
+ * or not a key is typed yet. Still checking (`"unknown"`), signed in, or a copy
+ * with no sign-in at all (`"unconfigured"`, where the key is used) says nothing.
+ */
+export function showKeySignInNote(provider: UserAiProvider, authOutcome: AuthOutcome): boolean {
+  return provider !== "default" && authOutcome === "signed-out";
+}
+
+/**
  * The provider <select> + conditional API-key <input>. The one piece of AI
  * setup that must look and behave identically on the feed and in onboarding.
  */
@@ -134,6 +172,7 @@ export function AiKeyFields({
   idPrefix = "ai",
   emphasized = false,
   showRegistrationLink = false,
+  signInNote = true,
 }: {
   provider: UserAiProvider;
   apiKey: string;
@@ -142,8 +181,17 @@ export function AiKeyFields({
   idPrefix?: string;
   emphasized?: boolean;
   showRegistrationLink?: boolean;
+  /**
+   * Whether the field says `KEY_SIGN_IN_NOTE` to a signed-out reader. On by
+   * default (Profile). The welcome wizard's AI step turns it off: it already
+   * says so, with the sign-in buttons, in its own block above the field.
+   */
+  signInNote?: boolean;
 }) {
   const guide = provider === "default" ? null : PROVIDER_GUIDES[provider];
+  // Read here, not passed in, so the Profile and the welcome wizard both say it
+  // without either call site changing.
+  const authOutcome = useSyncGate((s) => s.authOutcome);
   const fields = (
     <>
       {emphasized && (
@@ -213,6 +261,13 @@ export function AiKeyFields({
                 : undefined
             }
           />
+          {signInNote && showKeySignInNote(provider, authOutcome) && (
+            <p className="text-micro leading-relaxed text-text-faint">
+              {KEY_SIGN_IN_NOTE}
+            </p>
+          )}
+          {/* "Check key": asks the chosen provider once whether it takes this key. */}
+          <KeyCheck provider={provider} apiKey={apiKey} idPrefix={idPrefix} />
         </div>
       )}
     </>

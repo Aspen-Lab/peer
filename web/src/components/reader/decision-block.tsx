@@ -24,7 +24,10 @@
 // a map of fourteen rows — and in one column they follow the details, as the last thing of the block, where they always stood.
 
 import Link from "next/link";
-import { ADD_KEY_HREF } from "@/lib/navigation/add-key-destination";
+// `typedRoutes` (next.config.ts) checks every <Link href> at build time; the
+// sign-in link is built from the paper's id, so it is cast like the masthead's.
+import type { Route } from "next";
+import { ADD_KEY_HREF, signInHref } from "@/lib/navigation/add-key-destination";
 import type { Ref, ReactNode } from "react";
 import { IconLink } from "@/components/icons";
 import { cn } from "@/lib/cn";
@@ -89,8 +92,13 @@ interface DetailsProps {
   /** The clock `paper`'s age is read against. */
   now?: number;
   doi?: string;
-  /** No provider configured and the sentence names a key. */
+  /** The sentence names a key or a sign-in (`availabilityAsksForKey`): the link follows it. */
   showAddKey: boolean;
+  /** The reader has a key saved but is signed out, so the sentence asks them to sign in: the link reads "Sign in" and goes to the
+   *  Profile, whose first block is the Account section, in place of "Add a key". Absent or false, the link is "Add a key", as it was. */
+  keyNeedsSignIn?: boolean;
+  /** Where "Sign in" brings the reader back to once signed in: the paper's own path (`paperReturnPath`). Absent, the plain Profile. */
+  signInReturnTo?: string;
   uploadStatus?: ReactNode;
 }
 
@@ -125,7 +133,7 @@ function Commands({ onRead, readLabel, source, isSaved, onSave, onSkip, onCopy, 
   );
 }
 
-function Details({ sentences, paper, recommendation, now = 0, uploadAction, doi, showAddKey, uploadStatus }: DetailsProps) {
+function Details({ sentences, paper, recommendation, now = 0, uploadAction, doi, showAddKey, keyNeedsSignIn = false, signInReturnTo, uploadStatus }: DetailsProps) {
   // From 1024 css px the sentence is a note in the left pane, set at the pane's size with a rule beside it, and the reading controls are
   // at the top of that pane. Below it the sentence is prose in the reading column, and the controls follow the private-PDF line. Either
   // way it follows the commands (P7-14, R2), at the same distance.
@@ -147,13 +155,13 @@ function Details({ sentences, paper, recommendation, now = 0, uploadAction, doi,
           <>
             {" "}
             <Link
-              href={ADD_KEY_HREF}
+              href={(keyNeedsSignIn ? signInHref(signInReturnTo) : ADD_KEY_HREF) as Route}
               className={cn(
                 "text-text-faint underline decoration-border-strong underline-offset-4 hover:text-heading transition-colors ",
                 TOUCH_INLINE,
               )}
             >
-              {BUTTON.addKey}
+              {keyNeedsSignIn ? BUTTON.signIn : BUTTON.addKey}
             </Link>
           </>
         )}

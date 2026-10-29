@@ -14,6 +14,7 @@ import {
   promoteSearchInputs,
   useProfileStore,
 } from "./profile";
+import { useJevScreeningStore } from "./jev-screening";
 
 const profileFixture: UserProfile = {
   ...defaultProfile,
@@ -91,6 +92,14 @@ describe("the profile holds nothing for events and jobs (P9-32)", () => {
     for (const action of LEGACY_STORE_ACTIONS) {
       expect(state, action).not.toHaveProperty(action);
     }
+  });
+
+  it("Tavily is removed: defaultProfile has no Tavily switch or key, and the store no setter for either", () => {
+    expect(defaultProfile).not.toHaveProperty("tavilyEnabled");
+    expect(defaultProfile).not.toHaveProperty("tavilyApiKey");
+    const state = useProfileStore.getState();
+    expect(state).not.toHaveProperty("updateTavilyEnabled");
+    expect(state).not.toHaveProperty("updateTavilyApiKey");
   });
 
   it("editing the paper topics writes the paper lists and no other list", () => {
@@ -206,10 +215,44 @@ describe("profile persistence migration", () => {
       industryVsAcademia: "academia",
       locationPreferences: ["Chicago"],
       authorisedCountries: ["Canada"],
-      tavilyEnabled: true,
-      tavilyApiKey: "tvly-device-key",
     });
     expect(JSON.stringify(migrated)).not.toMatch(/event-required|job-required|adzuna-secret|usajobs-secret/);
+  });
+
+  it("a v8 profile loses the removed Tavily switch and key and keeps everything else (v9)", () => {
+    const v8Blob = {
+      ...defaultProfile,
+      displayName: "Device owner",
+      researchTopics: ["paper-required"],
+      careerStage: "Postdoc",
+      feedAiProvider: "openai",
+      feedAiApiKey: "model-test-sentinel-not-a-key-0000",
+      tavilyEnabled: true,
+      tavilyApiKey: "tvly-device-key",
+    };
+    const persisted = { profile: v8Blob, lastSynced: { displayName: "Device owner" }, syncedAccountId: "user-1" };
+    const before = JSON.stringify(persisted);
+
+    const migrated = migrateProfileStore(persisted) as {
+      profile: Record<string, unknown>;
+      lastSynced: unknown;
+      syncedAccountId: unknown;
+    };
+
+    expect(migrated.profile).not.toHaveProperty("tavilyEnabled");
+    expect(migrated.profile).not.toHaveProperty("tavilyApiKey");
+    expect(JSON.stringify(migrated)).not.toContain("tvly-device-key");
+    expect(migrated.profile).toMatchObject({
+      displayName: "Device owner",
+      researchTopics: ["paper-required"],
+      careerStage: "Postdoc",
+      feedAiProvider: "openai",
+      feedAiApiKey: "model-test-sentinel-not-a-key-0000",
+    });
+    expect(migrated.lastSynced).toEqual({ displayName: "Device owner" });
+    expect(migrated.syncedAccountId).toBe("user-1");
+    expect(JSON.stringify(persisted)).toBe(before);
+    expect(migrateProfileStore(migrated)).toEqual(migrated);
   });
 
   it("a v7 profile's active snapshot keeps its Papers half and drops the events and jobs halves", () => {
@@ -294,6 +337,51 @@ describe("profile persistence migration", () => {
       // and what is written back holds none of it either
       mod.useProfileStore.getState().updateDisplayName("Rewritten");
       expect(stored).not.toMatch(/event-required|job-required|adzuna|usajobs|eventRequiredTopics|jobExploreTopics/);
+      expect(stored).not.toMatch(/tavily|tvly-device-key/i);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("rehydrating a v8 blob from storage runs the migration (the store is at v9) and installs a profile with no Tavily field", async () => {
+    // zustand calls `migrate` only when the stored version differs from the
+    // store's, so this fails if the version is left at 8.
+    let stored = JSON.stringify({
+      state: {
+        profile: {
+          ...defaultProfile,
+          displayName: "Device owner",
+          researchTopics: ["paper-required"],
+          tavilyEnabled: true,
+          tavilyApiKey: "tvly-device-key",
+        },
+      },
+      version: 8,
+    });
+    const storage: StateStorage = {
+      getItem: () => stored,
+      setItem: (_name, value) => {
+        stored = value;
+      },
+      removeItem: () => {
+        stored = "";
+      },
+    };
+    vi.stubGlobal("window", { localStorage: storage });
+    try {
+      vi.resetModules();
+      const mod = await import("./profile");
+      await mod.useProfileStore.persist.rehydrate();
+
+      const hydrated = mod.useProfileStore.getState().profile as unknown as Record<string, unknown>;
+      expect(hydrated).not.toHaveProperty("tavilyEnabled");
+      expect(hydrated).not.toHaveProperty("tavilyApiKey");
+      expect(hydrated.displayName).toBe("Device owner");
+      expect(hydrated.researchTopics).toEqual(["paper-required"]);
+      // and what is written back holds neither, at the new version
+      mod.useProfileStore.getState().updateDisplayName("Rewritten");
+      expect(stored).not.toMatch(/tavily|tvly-device-key/i);
+      expect(JSON.parse(stored).version).toBe(9);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -1018,6 +1106,47 @@ describe("the reader's Jev key", () => {
   });
 });
 
+// The model provider and the model key are device-only like the Jev key: the
+// sync payload voids them and the server has no column for them, and the store
+// does not trust that — whatever a remote payload carries, they stay as this
+// browser has them.
+describe("the reader's model provider and model key", () => {
+  // An invented string. It is not, and never was, a key.
+  const LOCAL = "model-test-sentinel-not-a-key-0000";
+  const REMOTE = "a-key-a-server-row-must-not-install";
+
+  beforeEach(() => {
+    useProfileStore.setState({ profile: { ...defaultProfile } });
+  });
+
+  it("a remote profile can never set feedAiApiKey, and never clears it", () => {
+    const before = useProfileStore.getState().profile;
+    useProfileStore.getState().hydrateFromRemote({ feedAiApiKey: REMOTE, displayName: "Remote Name" });
+    expect(useProfileStore.getState().profile).toEqual({ ...before, displayName: "Remote Name" });
+    expect(useProfileStore.getState().profile.feedAiApiKey).toBe("");
+
+    useProfileStore.getState().updateFeedAiProvider("openai");
+    useProfileStore.getState().updateFeedAiApiKey(LOCAL);
+    for (const remote of [REMOTE, "", "   "]) {
+      useProfileStore.getState().hydrateFromRemote({ feedAiApiKey: remote });
+      expect(useProfileStore.getState().profile.feedAiApiKey, JSON.stringify(remote)).toBe(LOCAL);
+    }
+  });
+
+  it("a remote profile can never set feedAiProvider, and never resets it (so it cannot clear the key either)", () => {
+    const before = useProfileStore.getState().profile;
+    useProfileStore.getState().hydrateFromRemote({ feedAiProvider: "anthropic", displayName: "Remote Name" });
+    expect(useProfileStore.getState().profile).toEqual({ ...before, displayName: "Remote Name" });
+    expect(useProfileStore.getState().profile.feedAiProvider).toBe("default");
+
+    useProfileStore.getState().updateFeedAiProvider("openai");
+    useProfileStore.getState().updateFeedAiApiKey(LOCAL);
+    useProfileStore.getState().hydrateFromRemote({ feedAiProvider: "default" });
+    useProfileStore.getState().hydrateFromRemote({ feedAiProvider: "gemini", feedAiApiKey: REMOTE });
+    expect(useProfileStore.getState().profile).toMatchObject({ feedAiProvider: "openai", feedAiApiKey: LOCAL });
+  });
+});
+
 // D6 — a backup file must not carry a credential: a restore cannot install one
 // (`stripCredentialFields`), so writing one into the file only puts a secret in
 // a place the reader may email, sync or paste.
@@ -1027,16 +1156,16 @@ describe("a backup file carries no credential", () => {
     ...defaultProfile,
     displayName: "Peter",
     researchTopics: ["LCO"],
-    tavilyApiKey: "tvly-secret",
     feedAiProvider: "openai",
     feedAiApiKey: "sk-secret",
     jevApiKey: JEV,
   };
-  // The Adzuna and USAJobs credentials are no longer part of UserProfile, but a
-  // profile saved on a device before can still hold them: the export strips
-  // them by name all the same.
+  // The Tavily, Adzuna and USAJobs credentials are no longer part of
+  // UserProfile, but a profile saved on a device before can still hold them:
+  // the export strips them by name all the same.
   const legacyCredentialProfile = {
     ...credentialProfile,
+    tavilyApiKey: "tvly-secret",
     adzunaAppId: "adzuna-id",
     adzunaAppKey: "adzuna-secret",
     usajobsApiKey: "usajobs-secret",
@@ -1083,5 +1212,82 @@ describe("a backup file carries no credential", () => {
     expect(profile.displayName).toBe("Peter");
     expect(profile.jevApiKey).toBe("");
     expect(profile.feedAiApiKey).toBe("");
+  });
+
+  // Tavily is removed. A backup written before can still name its switch and
+  // key: neither is written into a new file, and neither is installed from an
+  // old one.
+  it("exportProfileDocument writes neither the removed Tavily switch nor its key, from a profile that still holds them", () => {
+    const legacy = {
+      ...credentialProfile,
+      tavilyEnabled: true,
+      tavilyApiKey: "legacy-tavily-sentinel-not-a-key",
+    } as unknown as UserProfile;
+    const document = exportProfileDocument(legacy);
+    expect(document.profile).not.toHaveProperty("tavilyEnabled");
+    expect(document.profile).not.toHaveProperty("tavilyApiKey");
+    expect(JSON.stringify(document)).not.toContain("legacy-tavily-sentinel-not-a-key");
+    expect(document.profile.displayName).toBe("Peter");
+  });
+
+  it("importProfile installs neither the removed Tavily switch nor its key from an old backup file", () => {
+    useProfileStore.setState({ profile: { ...defaultProfile } });
+    const oldBackup = {
+      format: PROFILE_EXPORT_FORMAT,
+      profile: {
+        displayName: "Peter",
+        tavilyEnabled: true,
+        tavilyApiKey: "legacy-tavily-sentinel-not-a-key",
+      },
+    };
+    expect(parseExportedProfile(oldBackup)).toEqual({ displayName: "Peter" });
+    expect(useProfileStore.getState().importProfile(oldBackup)).toBe(true);
+    const profile = useProfileStore.getState().profile as unknown as Record<string, unknown>;
+    expect(profile.displayName).toBe("Peter");
+    expect(profile).not.toHaveProperty("tavilyEnabled");
+    expect(profile).not.toHaveProperty("tavilyApiKey");
+    expect(JSON.stringify(profile)).not.toContain("legacy-tavily-sentinel-not-a-key");
+  });
+});
+
+// OWN-KEY lane 4 (R13, D4): a confirmed sign-out always removes this browser's
+// API keys, owner recorded or not. `clearDeviceKeys` is that removal and
+// nothing more: the rest of the profile, the sync baseline and the recorded
+// owner are left exactly as they were.
+describe("clearDeviceKeys", () => {
+  const MODEL = "model-key-test-sentinel-not-a-key-000000";
+  const JEV = "jev-key-test-sentinel-not-a-key-00000000";
+
+  it("blanks the model key and the Jev key, puts the provider back to default, and clears the Jev report", () => {
+    useProfileStore.setState({
+      profile: { ...defaultProfile, researchTopics: ["kept-topic"], displayName: "Kept Name" },
+      syncedAccountId: "user-a",
+      lastSynced: null,
+    });
+    const store = useProfileStore.getState();
+    store.updateFeedAiProvider("gemini");
+    store.updateFeedAiApiKey(MODEL);
+    store.updateJevApiKey(JEV);
+    useJevScreeningStore.setState({ report: { status: "applied", screened: 3, of: 5 } });
+
+    useProfileStore.getState().clearDeviceKeys();
+
+    const after = useProfileStore.getState();
+    expect(after.profile.feedAiProvider).toBe("default");
+    expect(after.profile.feedAiApiKey ?? "").toBe("");
+    expect(after.profile.jevApiKey ?? "").toBe("");
+    expect(useJevScreeningStore.getState().report).toBeNull();
+    expect(JSON.stringify(after.profile)).not.toContain(MODEL);
+    expect(JSON.stringify(after.profile)).not.toContain(JEV);
+    // Nothing else moves.
+    expect(after.profile.researchTopics).toEqual(["kept-topic"]);
+    expect(after.profile.displayName).toBe("Kept Name");
+    expect(after.syncedAccountId).toBe("user-a");
+  });
+
+  it("is harmless on a profile with no key", () => {
+    useProfileStore.setState({ profile: { ...defaultProfile, researchTopics: ["t"] } });
+    useProfileStore.getState().clearDeviceKeys();
+    expect(useProfileStore.getState().profile).toEqual({ ...defaultProfile, researchTopics: ["t"] });
   });
 });

@@ -144,8 +144,6 @@ interface ProfileState {
   updateDigestChannel: (c: DigestChannel) => void;
   updateDigestFrequency: (f: DigestFrequency) => void;
   updateDigestEmail: (email: string) => void;
-  updateTavilyEnabled: (value: boolean) => void;
-  updateTavilyApiKey: (value: string) => void;
   updateFeedAiProvider: (value: UserProfile["feedAiProvider"]) => void;
   updateFeedAiApiKey: (value: string) => void;
   /** The reader's own Jev key: trimmed, blank clears it. Never synced. */
@@ -173,18 +171,27 @@ interface ProfileState {
   resetOnboarding: () => void;
   /** Replace local state with a server snapshot. Undefined fields keep local values. */
   hydrateFromRemote: (remote: Partial<UserProfile>) => void;
+  /**
+   * Remove this browser's API keys and nothing else: the model provider back
+   * to "default", the model key and the Jev key blank, and the Jev screening
+   * report (it describes a key that is gone). Run on every confirmed sign-out,
+   * even when no account is recorded as this device's owner, so the sign-out
+   * dialog's "removes your keys" always holds.
+   */
+  clearDeviceKeys: () => void;
   logOut: () => void;
 }
 
 /**
- * Brings a persisted `peer-profile` blob up to the current shape. The step that
- * matters most is the v8 one (the events and jobs feeds are stopped): whatever
- * version the blob is, the event and job topic lists, the Adzuna and USAJobs
- * credentials and the events/jobs halves of the active snapshot are dropped —
- * they are no longer part of the profile, and nothing may keep storing,
- * syncing or reading them. It is idempotent, so it needs no version switch.
- * The reader's own words (Career stage, Looking toward, locations, work
- * authorisation) and the Tavily fields are kept.
+ * Brings a persisted `peer-profile` blob up to the current shape. The steps
+ * that matter most are v8 (the events and jobs feeds are stopped) and v9
+ * (Tavily web search is removed): whatever version the blob is, the event and
+ * job topic lists, the Adzuna and USAJobs credentials, the events/jobs halves
+ * of the active snapshot and the Tavily switch and key are dropped — they are
+ * no longer part of the profile, and nothing may keep storing, syncing or
+ * reading them. It is idempotent, so it needs no version switch. The reader's
+ * own words (Career stage, Looking toward, locations, work authorisation) are
+ * kept.
  */
 export function migrateProfileStore(persisted: unknown): unknown {
   if (!persisted || typeof persisted !== "object") return persisted;
@@ -311,12 +318,17 @@ interface ExportedProfileDocument {
  * key and every other credential-like field (`stripCredentialFields`, the same
  * list a restore refuses to install) are left out of the document: a file the
  * reader may email, sync or paste is the wrong place for a secret, and a
- * restore could not use it anyway.
+ * restore could not use it anyway. Nor does it carry a field the profile no
+ * longer has (`stripLegacyOpportunityFields`: the stopped feeds' fields and the
+ * removed Tavily switch and key), should the profile still hold one.
  */
 export function exportProfileDocument(
   profile: UserProfile,
 ): ExportedProfileDocument {
-  return { format: PROFILE_EXPORT_FORMAT, profile: stripCredentialFields(profile) };
+  return {
+    format: PROFILE_EXPORT_FORMAT,
+    profile: stripLegacyOpportunityFields(stripCredentialFields(profile)),
+  };
 }
 
 /** Returns the profile from an exported document, or null if it is not one. */
@@ -611,12 +623,6 @@ export const useProfileStore = create<ProfileState>()(
         set((s) => ({ profile: { ...s.profile, digestFrequency: f } })),
       updateDigestEmail: (email) =>
         set((s) => ({ profile: { ...s.profile, digestEmail: email } })),
-      updateTavilyEnabled: (value) =>
-        set((s) => ({ profile: { ...s.profile, tavilyEnabled: value } })),
-      updateTavilyApiKey: (value) =>
-        set((s) => ({
-          profile: { ...s.profile, tavilyApiKey: value.trim() || undefined },
-        })),
       updateFeedAiProvider: (value) =>
         set((s) => ({
           profile: {
@@ -704,10 +710,11 @@ export const useProfileStore = create<ProfileState>()(
           if (remote.digestChannel !== undefined) merged.digestChannel = remote.digestChannel;
           if (remote.digestEmail !== undefined) merged.digestEmail = remote.digestEmail;
           if (remote.digestFrequency !== undefined) merged.digestFrequency = remote.digestFrequency;
-          if (remote.tavilyEnabled !== undefined) merged.tavilyEnabled = remote.tavilyEnabled;
-          if (remote.tavilyApiKey !== undefined) merged.tavilyApiKey = remote.tavilyApiKey;
-          if (remote.feedAiProvider !== undefined) merged.feedAiProvider = remote.feedAiProvider;
-          if (remote.feedAiApiKey !== undefined) merged.feedAiApiKey = remote.feedAiApiKey;
+          // Device-only fields are never read from a remote payload, exactly
+          // like the Jev key: the model provider and key live in this browser
+          // alone. The sync payload voids them and the server has no column
+          // for them, but this store does not rely on that — a remote row can
+          // neither set nor clear them.
           if (remote.deepReportEnabled !== undefined) merged.deepReportEnabled = remote.deepReportEnabled;
           if (remote.colorTheme !== undefined) {
             // The server may still hold a pre-v2 single-name theme
@@ -729,6 +736,19 @@ export const useProfileStore = create<ProfileState>()(
         set((s) => ({ profile: { ...s.profile, ...installable } }));
         if (installable.colorTheme) applyColorTheme(installable.colorTheme);
         return true;
+      },
+
+      clearDeviceKeys: () => {
+        useJevScreeningStore.getState().clear();
+        set((s) => ({
+          profile: {
+            ...s.profile,
+            // The same blank values a fresh profile has.
+            feedAiProvider: defaultProfile.feedAiProvider,
+            feedAiApiKey: defaultProfile.feedAiApiKey,
+            jevApiKey: defaultProfile.jevApiKey,
+          },
+        }));
       },
 
       logOut: () => {
@@ -812,7 +832,11 @@ export const useProfileStore = create<ProfileState>()(
       //     v3 step that copied the paper topics into them is gone). It drops
       //     whatever version the blob is at, so it replaces the version switch
       //     the earlier steps needed.
-      version: 8,
+      // v9: Tavily web search is removed. The same migration also drops
+      //     `tavilyEnabled` and `tavilyApiKey`; the bump is what makes zustand
+      //     run it for a v8 blob (it calls `migrate` only when the stored
+      //     version differs).
+      version: 9,
       migrate: (persisted) => migrateProfileStore(persisted) as ProfileState,
       // Build the promoted snapshot as part of the state installed by
       // hydration, so subscribers can never observe hydrated pending inputs

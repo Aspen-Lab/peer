@@ -29,12 +29,12 @@ import { SURFACE_TOPIC_DESCRIPTIONS } from "@/lib/profile/topic-copy";
 import { IconBook, IconBuilding, IconCheck } from "@/components/icons";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageSpread } from "@/components/ui/page-spread";
-import { AccountSection } from "@/components/account/account-section";
+import { AccountSection, browserKeyLabels, confirmProfileReset } from "@/components/account/account-section";
 import { RestoreFromBackup } from "@/components/profile/restore-backup";
 import { useProfileSyncStatus, useSyncGate } from "@/components/profile-sync";
 import { useFeedSyncStatus } from "@/components/feed-sync";
 import { VersionLine } from "@/components/shell/version-line";
-import { AiKeyFields, FEED_AI_PROVIDER_OPTIONS, providerShortLabel } from "@/components/profile/ai-setup";
+import { AiKeyFields, FEED_AI_PROVIDER_OPTIONS, keyHomeText, providerShortLabel, showKeySignInNote } from "@/components/profile/ai-setup";
 import { JevSetup } from "@/components/profile/jev-setup";
 import { Toggle } from "@/components/ui/toggle";
 import { FEED_EMPTY_REASON_CODES } from "@/lib/feed/types";
@@ -341,11 +341,27 @@ export default function ProfilePage() {
           </button>
         ) : (
           <div className="rounded-xl bg-red/[0.05] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_22%,transparent)] px-4 py-3 text-meta flex items-center flex-wrap gap-x-5 gap-y-2">
-            <span className="text-text-muted">Reset all signals to defaults?</span>
+            {/* logOut() resets the whole local profile, the reader's model and Jev keys with it, so the confirmation
+                says so whenever this browser holds one (names only, via browserKeyLabels; the key is never read here). */}
+            <span className="text-text-muted">
+              Reset all signals to defaults?
+              {browserKeyLabels(profile).length > 0 &&
+                (browserKeyLabels(profile).length === 1
+                  ? " This also removes your API key from this browser."
+                  : " This also removes your API keys from this browser.")}
+            </span>
             <div className="flex items-center gap-3 ml-auto">
               <button
                 onClick={() => {
-                  logOut();
+                  // logOut(), then record the signed-in account again, so a later sign-out still clears this
+                  // browser (R13, D4; confirmProfileReset says why).
+                  const { authOutcome, authUserId } = useSyncGate.getState();
+                  confirmProfileReset({
+                    logOut,
+                    setSyncedAccountId: useProfileStore.getState().setSyncedAccountId,
+                    authOutcome,
+                    authUserId,
+                  });
                   setShowLogout(false);
                   setMode("view");
                 }}
@@ -2136,9 +2152,13 @@ function EditView({
           <p className="text-caption leading-relaxed text-text-muted">
             Peer has no model of its own. Add your own key to turn on ranking
             by a model, relevance reasons and reports. Without one, Peer shows
-            the reading without a model and makes no AI call. Your key stays in
-            this browser; Peer passes it on to the provider you choose and does
-            not keep it.
+            the reading without a model and makes no AI call.
+          </p>
+          {/* Where the key lives (`keyHomeText`): never synced, so it does not
+              follow the account, and gone on sign-out; on a copy with no
+              sign-in, the account and sign-out sentences are left out. */}
+          <p className="text-caption leading-relaxed text-text-muted">
+            {keyHomeText(authOutcome)}
           </p>
           <AiKeyFields
             provider={profile.feedAiProvider}
@@ -2147,6 +2167,14 @@ function EditView({
             onApiKeyChange={updateFeedAiApiKey}
             idPrefix="profile-ai"
           />
+          {/* The key field's own note says the key is used only while signed
+              in; this says where to do it. The Account section, with the
+              sign-in buttons, is the first block of this page. */}
+          {showKeySignInNote(profile.feedAiProvider, authOutcome) && (
+            <p className="text-micro leading-relaxed text-text-faint">
+              Sign in under Account at the top of this page.
+            </p>
+          )}
         </div>
       </EditRow>
 
