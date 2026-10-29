@@ -1258,6 +1258,19 @@ const FURNITURE_MIN_PAGES = 3;
 /** The page's top or bottom band: this many of its rows from either edge. A head and a rule, a folio and a
  *  journal line, an author line above them: three. Wording mid-page, or the fifth row down, is the body's. */
 const FURNITURE_BAND_ROWS = 3;
+/** A running head is on this share of the pages of the paper (P12-97, R-F: the pages that carry text). */
+const FURNITURE_SHARE = 0.4;
+/** A page carries text when it has this many lines: a page of figure text, a plate or a title page has fewer, and
+ *  prints no running head (P12-97, R-F). */
+const FURNITURE_TEXT_PAGE_LINES = 15;
+
+/** How many pages a running head is a share of: those that carry text, or, when none does, all of them. */
+function pagesWithText(lines: PdfLine[], pageCount: number): number {
+  const perPage = new Map<number, number>();
+  for (const { page } of lines) perPage.set(page, (perPage.get(page) ?? 0) + 1);
+  const carrying = [...perPage.values()].filter((n) => n >= FURNITURE_TEXT_PAGE_LINES).length;
+  return carrying > 0 ? Math.min(carrying, pageCount) : pageCount;
+}
 
 /** Which band of its page a line stands in — the top one or the bottom one (`FURNITURE_BAND_ROWS` rows from an
  *  edge, rows being the page's distinct baselines to the nearest 3 points, so two columns' lines share one) —
@@ -1282,6 +1295,18 @@ function bandOf(lines: PdfLine[]): (line: PdfLine) => "top" | "bottom" | null {
 
 /** A running head by its words alone: the digits (a folio, a volume) and the case are not part of it. */
 const headKey = (text: string): string => text.replace(/\d+/g, "#").replace(/\s+/g, " ").trim().toLowerCase();
+
+/**
+ * A running head by its words, with whatever stands beyond its first and last letter taken off (P12-97, R-F): the
+ * page number, a bar, a volume or a date at either end. A journal prints its foot with the folio on the right of an
+ * odd page and on the left of an even one, and each side is a head of its own to `headKey`, on half the pages.
+ * A line with no letter in it (a bare folio) keeps its key.
+ */
+const footKey = (text: string): string => {
+  const words = headKey(text);
+  const core = words.replace(/^[^\p{L}]+/u, "").replace(/[^\p{L}]+$/u, "");
+  return core.length > 0 ? core : words;
+};
 
 /** A head stands within this many points of a height it was seen at (P12-49, O4): the pages of a paper do not
  *  set it on one baseline to the hundredth, and a row of two columns' heads has two. */
@@ -1329,8 +1354,13 @@ function wholeWords(whole: string, part: string): boolean {
   return false;
 }
 
-/** Lines that repeat across pages in the page's top or bottom band, on at least three pages (and 40% of them):
- *  running heads, folios, preprint stamps. They are the page's furniture, not the paper's words.
+/** Lines that repeat across pages in the page's top or bottom band, on at least three pages (and 40% of the pages
+ *  that carry text): running heads, folios, preprint stamps. They are the page's furniture, not the paper's words.
+ *
+ *  P12-97 (R-F): a head is known by the words between its first and last letter, so a foot that prints its page
+ *  number on the right of an odd page and on the left of an even one is one head, not two on half the pages each;
+ *  and the share is of the pages that have 15 lines or more, not of the figure-only and supplement pages that print
+ *  no head (all pages, when none has so many).
  *
  *  P12-49 (O4): a head is known by its normalised words and the band it stands in, **whatever its column or its
  *  exact height**. It was keyed by its words and its height rounded to 6 pt, so a head that two pages set a point
@@ -1342,7 +1372,7 @@ export function furnitureOf(lines: PdfLine[], pageCount: number): Set<string> {
   for (const line of lines) {
     const band = line.text.length > 120 ? null : bandIn(line);
     if (band === null) continue;
-    const words = headKey(line.text);
+    const words = footKey(line.text);
     const key = `${band}:${words}`;
     const entry = seen.get(key) ?? { words, pages: new Set<number>(), heights: [] };
     entry.pages.add(line.page);
@@ -1350,7 +1380,7 @@ export function furnitureOf(lines: PdfLine[], pageCount: number): Set<string> {
     seen.set(key, entry);
   }
   const repeated = new RunningHeads();
-  const threshold = Math.max(FURNITURE_MIN_PAGES, Math.ceil(pageCount * 0.4));
+  const threshold = Math.max(FURNITURE_MIN_PAGES, Math.ceil(pagesWithText(lines, pageCount) * FURNITURE_SHARE));
   for (const [key, { words, pages, heights }] of seen) {
     if (pages.size < threshold) continue;
     repeated.add(key);
@@ -1363,9 +1393,8 @@ export function furnitureOf(lines: PdfLine[], pageCount: number): Set<string> {
  *  the two heads a row holds in two columns, or the two of them set as one line). */
 export function isFurniture(line: PdfLine, furniture: Set<string>): boolean {
   if (FOLIO.test(line.text)) return true;
-  const words = headKey(line.text);
   // A Set that is not `furnitureOf`'s knows the words only.
-  return furniture instanceof RunningHeads ? furniture.covers(words, line.y) : furniture.has(words);
+  return furniture instanceof RunningHeads ? furniture.covers(footKey(line.text), line.y) : furniture.has(headKey(line.text));
 }
 
 /** Small print beyond a page's text is a footer or a stamp up to this many rows (3 pt apart); past it, it is a
