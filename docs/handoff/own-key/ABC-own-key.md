@@ -9,7 +9,7 @@ The manager is the only writer of this file. Plan of record: the owner's answers
 | HELD BY | manager session (Claude Code desktop, worktree `.claude/worktrees/objective-wu-e8d6fe`) |
 | BRANCH | `own-key-on-web` (cut from `origin/main` db0f070a after PR #36 merged; name approved by the owner 2026-10-25). Repository `Aspen-Lab/peer`. No push without the owner's word (AGENTS.md). The owner merges the PR himself (R6). |
 | ROUND | 3 scored — A 97.92 (second consecutive), B stopped at 100.0 — LOOP ENDED |
-| CURRENT ITEM | done; waiting on the owner for push / PR |
+| CURRENT ITEM | PR open: https://github.com/Aspen-Lab/peer/pull/39 (owner's word, 2026-10-28: "推送 own-key-on-web 并开 PR 到 main … 合并我自己来。"); Auto-fix on; the owner merges |
 | NEXT TURN | on each worker report: verify → land on the branch → refill up to the cap of two groups |
 | STOPPED BECAUSE | every theme at or above 97.9 in two consecutive rounds (R22) |
 | TARGET | **97.9 per theme, two consecutive rounds** (the owner, 2026-10-28, R5: "达标线用 97.9，每个主题连续两轮达到就停。") |
