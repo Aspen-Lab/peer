@@ -2762,6 +2762,28 @@ The model stub the walks use answers against parts 1 and 2. On a paper where tho
 
 → **A P12-57 phase 7: P5 × 5 on `84534087`.**
 
+### §1h.484 — 2026-10-29 — THE OWNER DECIDES O1: A DRAG FLOOR OF ABOUT 50 CHARACTERS; THE DEFAULT LAYOUT UNCHANGED; B1 AT W3 NEEDS A USEFUL RANGE FROM ROUND 5; C P12-95
+
+**The owner decided O1** ("同意", 2026-10-29), taking the manager's recommended option 1: at narrow widths the centre column's floor drops to about 50 characters, so the margin divider has a useful range at 853 px.
+
+**As ruled for the build (C P12-95):**
+- **A new drag floor:** about 50 characters, with the insets included, measured at 48 to 52 in Chromium.
+- **The dividers' room** uses the drag floor.
+- **The default layout is unchanged.**
+  - With nothing saved, `fitPanes` keeps the reading budget. A first visit at 853 still shows the margin at 281 and the text at 468 px (57.96 characters).
+  - A width the reader saved may take the centre down to the drag floor.
+- **Registration is unchanged:** the side margin against the band (`railMinimumWidth`).
+- **Why the default is kept:** the owner's words ask for a usable divider, not a narrower default text. So only the reader's own drag goes below the reading budget.
+
+**Scoring:**
+- **Round 4** (A P12-92) walked `d2d2b8b4`, before this decision, and stays scored by B1's letter (§1h.471).
+- **From round 5 on,** B1's W3 cell needs a useful range: an outward drag that grows the margin by at least 32 px (two arrow steps). A 1 px range is a FAIL of B1 at W3.
+- This is recorded as a rubric amendment.
+
+**Order:**
+- C P12-95 starts when a slot frees, after A P12-57 phase 8, which is short and on the C1 line.
+- Round 5 walks the head with C P12-95.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -3109,6 +3131,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-91 | DONE — landed e56d6a40; manager mutations 3 / 8 red; 12,381 tests | Tier 1: no set_role setup from the first non-setup part; a split at a part's own edge is a no-op | invented fixtures; own mutations; gates | checkpoint P12-91-C-<UTC>.md | briefs/P12-91.md; §1h.477 |
 | P12-92 | IN_PROGRESS — A (Sonnet), scratch p12/r2/a92, port 4247 | Theme B round 4 on the landed head | the walk, the matrix, E5 / E2 / O1 re-measured | P12-92-A-<UTC>.md | briefs/P12-92.md; §1h.480 |
 | P12-94 | DONE — landed 84534087; manager mutations 14 / 4 red; 12,534 tests; subset test 30,000 cases | Tier 1: no correction against a high / medium part; a low part's correction needs a look that agrees | invented fixtures; differential subset test; own mutations; gates | checkpoint P12-94-C-<UTC>.md | briefs/P12-94.md; §1h.482 |
+| P12-95 | QUEUED — C (Sonnet), scratch p12/c95 | Theme B, owner's O1: drag floor ~50 chars; default layout unchanged | Chromium measure; default-fit pin; own mutations; gates | checkpoint P12-95-C-<UTC>.md | briefs/P12-95.md; §1h.484 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
 | P11-26 | **DONE 21:0xZ 2026-10-20** — on the branch (§1h.128 (b)); was RUNNING (rules 4, 5 added §1h.127 (c)) since 09:1xZ 2026-10-20 — C, `briefs/P11-26.md`, `scratchpad/p11c26/wt`, port 4127: the explain card keeps its top at the selection (B3); a figure in front of the stack is never a thumbnail (X-3) | round 1 Theme B | §1h.122 (b) 1, 4 | C → the manager | — |
