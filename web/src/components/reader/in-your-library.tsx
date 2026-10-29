@@ -31,9 +31,9 @@ export function InYourLibrary({ paper }: { paper: Paper }) {
   if (related.length === 0 && topics.length === 0) return null;
 
   return (
-    <Band label={LIBRARY.heading}>
+    <Band label={LIBRARY.heading} gap="none" className="mt-8">
       {related.length > 0 ? (
-        <ul className="mt-4 space-y-3 measure-paper">
+        <ul className="reader-related-list mt-4 measure-paper">
           {related.map((r) => (
             <li key={r.id} className="flex flex-col gap-1">
               <Link
@@ -49,7 +49,7 @@ export function InYourLibrary({ paper }: { paper: Paper }) {
           ))}
         </ul>
       ) : (
-        <p className="annotation mt-4 text-text-faint">{LIBRARY.none}</p>
+        <p className="mt-4 text-body-sm text-text-muted">{LIBRARY.none}</p>
       )}
 
       {topics.length > 0 && (
@@ -60,7 +60,7 @@ export function InYourLibrary({ paper }: { paper: Paper }) {
               <li key={t}>
                 <Link
                   href={`/search?q=${encodeURIComponent(t)}`}
-                  className="inline-flex items-center px-2 py-1 text-body-sm text-text-muted shadow-[inset_0_0_0_1px_var(--color-border-strong)] transition-colors hover:bg-bg-secondary/70 hover:text-heading"
+                  className="reader-topic inline-flex items-center px-2 py-1 text-body-sm text-text-muted transition-colors hover:text-heading"
                 >
                   {t}
                 </Link>

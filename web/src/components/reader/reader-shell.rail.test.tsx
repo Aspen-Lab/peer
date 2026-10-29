@@ -181,20 +181,20 @@ describe("the first visit (D6, amended by ruling §1h.115 item 4): pinned at eve
 
   // Re-aimed: was "is the rail below 1144, with the margin and the centre keeping their widths". The owner's laptop at 125 % is 1093
   // css px, where the rail hid the title, the commands and the map on arrival.
-  it("is pinned below 1144 too, the margin and then the pane giving way: 320 · 309 at 1093, 280 · 280 at 1024; both dividers stand", () => {
+  it("is pinned below 1144 too, the margin and then the pane giving way: 320 · 309 at 1093, 280 · 280 at 1024; only the left divider stands", () => {
     env.win.innerWidth = 1093;
     const at1093 = open().look();
     expect(at1093.state).toBe("pinned");
     expect(at1093.pane.props.inert).toBe(false);
     expect(at1093.rail.props.hidden).toBe(true);
-    expect(at1093.vars).toMatchObject({ "--left-pane-w": "320px", "--margin-w": "309px" });
-    expect(at1093.dividers.map((d) => d.props.pane)).toEqual(["left", "margin"]);
+    expect(at1093.vars).toMatchObject({ "--left-pane-w": "320px", "--margin-w": "0px" });
+    expect(at1093.dividers.map((d) => d.props.pane)).toEqual(["left"]);
 
     env.win.innerWidth = 1024;
     const at1024 = open().look();
     expect(at1024.state).toBe("pinned");
-    expect(at1024.vars).toMatchObject({ "--left-pane-w": "280px", "--margin-w": "280px" });
-    expect(at1024.dividers.map((d) => d.props.pane)).toEqual(["left", "margin"]);
+    expect(at1024.vars).toMatchObject({ "--left-pane-w": "320px", "--margin-w": "0px" });
+    expect(at1024.dividers.map((d) => d.props.pane)).toEqual(["left"]);
     // Nothing is written: the first visit's pin is the shell's answer, not a choice the reader made.
     expect(useReaderPanesStore.getState()).toMatchObject({ leftPinned: undefined, leftWidth: undefined, marginWidth: undefined });
   });
@@ -205,8 +205,8 @@ describe("the first visit (D6, amended by ruling §1h.115 item 4): pinned at eve
       env.win.innerWidth = width;
       const page = open().look();
       expect(page.state).toBe("rail");
-      expect(page.vars["--margin-w"]).toBe("360px");
-      expect(page.dividers.map((d) => d.props.pane)).toEqual(["margin"]);
+      expect(page.vars["--margin-w"]).toBe("0px");
+      expect(page.dividers.map((d) => d.props.pane)).toEqual([]);
     }
   });
 
@@ -233,42 +233,39 @@ describe("a window too narrow for the remembered widths", () => {
     useReaderPanesStore.setState({ leftPinned: true, leftWidth: 400, marginWidth: 450 });
     env.win.innerWidth = 1024;
     const page = open();
-    expect(page.look().vars).toMatchObject({ "--left-pane-w": "280px", "--margin-w": "280px" });
+    expect(page.look().vars).toMatchObject({ "--left-pane-w": "400px", "--margin-w": "0px" });
     expect(useReaderPanesStore.getState()).toMatchObject({ leftWidth: 400, marginWidth: 450 });
 
     env.resizeTo(1920);
-    expect(page.look().vars).toMatchObject({ "--left-pane-w": "400px", "--margin-w": "450px" });
+    expect(page.look().vars).toMatchObject({ "--left-pane-w": "400px", "--margin-w": "0px" });
     expect(useReaderPanesStore.getState()).toMatchObject({ leftWidth: 400, marginWidth: 450 });
   });
 
   it("hands each divider the room the other pane leaves, so the centre keeps its 440 px", () => {
     useReaderPanesStore.setState({ leftPinned: true });
-    const [left, margin] = open().look().dividers;
-    expect(left.props.room).toEqual({ viewport: 1440, other: 360 });
-    expect(margin.props.room).toEqual({ viewport: 1440, other: 320 });
+    const [left] = open().look().dividers;
+    expect(left.props.room).toEqual({ viewport: 1440, other: 0 });
   });
 
-  it("the margin's room is the rail's 48 px when the left pane is the rail", () => {
+  it("no divider is shown when the left pane is folded", () => {
     useReaderPanesStore.setState({ leftPinned: false });
-    const [margin] = open().look().dividers;
-    expect(margin.props.room).toEqual({ viewport: 1440, other: 48 });
+    expect(open().look().dividers).toEqual([]);
   });
 });
 
 describe("the dividers write the reader's choice, once", () => {
-  it("the left divider's commit is the left pane's width in the store; the margin's is the margin's", () => {
+  it("the left divider commits the left pane width", () => {
     useReaderPanesStore.setState({ leftPinned: true });
-    const [left, margin] = open().look().dividers;
+    const [left] = open().look().dividers;
     call(left.props.onCommit, 400);
-    call(margin.props.onCommit, 450);
-    expect(useReaderPanesStore.getState()).toMatchObject({ leftWidth: 400, marginWidth: 450 });
+    expect(useReaderPanesStore.getState()).toMatchObject({ leftWidth: 400, marginWidth: undefined });
   });
 
-  it("both dividers write to the grid element, by the custom property the grid reads", () => {
+  it("the divider writes the left pane custom property", () => {
     useReaderPanesStore.setState({ leftPinned: true });
-    const [left, margin] = open().look().dividers;
-    expect([left.props.variable, margin.props.variable]).toEqual(["--left-pane-w", "--margin-w"]);
-    expect(left.props.target).toBe(margin.props.target);
+    const [left] = open().look().dividers;
+    expect(left.props.variable).toBe("--left-pane-w");
+    expect(left.props.target).toBeDefined();
   });
 });
 
@@ -311,7 +308,7 @@ describe("the peek (D6): hover rests 150 ms, 250 ms after leaving, Escape", () =
     stagedRuntime.event(() => call(page.look().cell.props.onPointerEnter, mouse));
     wait(PEEK_OPEN_MS);
     // The widths the grid is given do not change with the state; globals.css keys the left track on data-left-state.
-    expect(page.look().vars).toMatchObject({ "--left-pane-w": "320px", "--margin-w": "360px" });
+    expect(page.look().vars).toMatchObject({ "--left-pane-w": "320px", "--margin-w": "0px" });
     expect(page.look().shell.props["data-left-state"]).toBe("peek");
   });
 

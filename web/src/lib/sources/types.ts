@@ -33,6 +33,8 @@ export interface RawItem {
    * J. Simons +5" and could not say where any of them were.
    */
   leadAffiliation?: string;
+  /** OpenAlex institution ID for the first author, when available. */
+  leadInstitutionId?: string;
   abstract?: string;
   /** Semantic Scholar's machine-written one-liner. Never merged into `abstract`; shown labelled. */
   tldr?: string;

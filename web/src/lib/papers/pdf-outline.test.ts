@@ -234,6 +234,28 @@ describe("a hyphen at a line's end follows the document's own words (P9-09, clus
     ]);
     expect((outline.sections ?? []).map((s) => s.heading)).toContain("2.1 Growth Under Supersaturations");
   });
+
+  it("keeps a lowercase continuation in a numbered heading at body size", () => {
+    const outline = readOne([
+      filler(726), filler(714),
+      item("3.4 Training and open-ended", { y: 680, fontName: "display" }),
+      item("responses", { y: 668, fontName: "display" }),
+      filler(644), filler(632), filler(620),
+    ]);
+    expect((outline.sections ?? []).map((s) => s.heading)).toContain("3.4 Training and open-ended responses");
+  });
+
+  it("keeps a long alternate-font line at normal paragraph spacing in the prose", () => {
+    const outline = readOne([
+      filler(726), filler(714),
+      item("Each response received a point.", { y: 702 }),
+      item("Incorrect and uncertain responses received no points in the score", { y: 690, fontName: "alternate" }),
+      item("for the descriptive analysis.", { y: 678 }),
+      filler(666), filler(654),
+    ]);
+    expect((outline.sections ?? []).map((s) => s.heading)).not.toContain("Incorrect and uncertain responses received no points in the score");
+    expect((outline.sections ?? []).map((s) => s.text).join(" ")).toContain("Incorrect and uncertain responses received no points in the score");
+  });
 });
 
 // ── P9-09 (cluster H): no space where the page cut a token ─────────────────────────────────────────

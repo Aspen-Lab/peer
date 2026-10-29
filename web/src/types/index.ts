@@ -92,6 +92,8 @@ export interface Paper {
   authors: string[];
   /** Where the first author works, when the record says so. */
   leadAffiliation?: string;
+  /** OpenAlex institution ID for the first author, when available. */
+  leadInstitutionId?: string;
   relevanceReason: string;
   venue: string;
   source: PaperSource;
@@ -165,6 +167,8 @@ export interface Paper {
 // ── User Profile ──
 
 export type CareerStage =
+  | "Undergraduate"
+  | "Master's student"
   | "PhD Year 1"
   | "PhD Year 2"
   | "PhD Year 3"
@@ -464,6 +468,8 @@ export const themeAccentOptions: {
 ];
 
 export const careerStages: CareerStage[] = [
+  "Undergraduate",
+  "Master's student",
   "PhD Year 1",
   "PhD Year 2",
   "PhD Year 3",

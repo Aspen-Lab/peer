@@ -285,3 +285,24 @@ describe("fitPanes — what gives way when the window is too narrow for the reme
     expect(fitPanes({ viewport: Number.NaN }).centre).toBe(CENTRE_MIN_PX);
   });
 });
+
+describe("reading without a reserved right column", () => {
+  it("keeps the left pane at its normal width and gives the rest to the paper", () => {
+    expect(fitPanes({ viewport: 1024, hasMargin: false })).toMatchObject({
+      left: 320,
+      leftTrack: 320,
+      margin: 0,
+      centre: 692,
+      pinned: true,
+    });
+  });
+
+  it("respects a folded sidebar without reserving space for the right column", () => {
+    expect(fitPanes({ viewport: 1024, hasMargin: false, leftPinned: false })).toMatchObject({
+      leftTrack: 48,
+      margin: 0,
+      centre: 964,
+      pinned: false,
+    });
+  });
+});

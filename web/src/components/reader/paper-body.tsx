@@ -29,6 +29,7 @@ import { Equation, MathText } from "./math";
 import { Band } from "@/components/ui/band";
 import { openFigure, useFigureOpen } from "@/lib/reader/figure-viewer";
 import { paragraphKey } from "@/store/plain-rewrites";
+import "./paper-body-reading.css";
 import { repairAnchors, resolveAnchors, useLostPassages } from "@/store/notes";
 import { captionBlock, captionText, headingBlock, setBodyOnShow } from "@/lib/notes/anchor-blocks";
 import { ASK, BODY, ROUTE } from "./copy";

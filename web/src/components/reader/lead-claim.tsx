@@ -26,7 +26,7 @@ export function LeadClaim({ sentence }: { sentence: string }) {
           "the paper said this, not the machine" — and Peer's no-invention rule
           outranks the everything-at-400 rule when the two collide. Do not
           sweep it. */}
-      <p className="font-reading font-medium text-heading text-display-sm leading-[1.28] tracking-[-0.01em] measure-lede mt-4">
+      <p className="reader-lead-prose font-reading text-heading measure-paper mt-4">
         {sentence}
       </p>
       <p className="annotation text-text-faint mt-3">{LEAD_CLAIM}</p>

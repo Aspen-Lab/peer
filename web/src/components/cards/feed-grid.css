@@ -1,0 +1,16 @@
+.briefing-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: stretch; }
+@media (min-width: 640px) { .briefing-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .briefing-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1700px) { .briefing-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 2200px) { .briefing-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+.briefing-grid > [data-paper-id] { min-width: 0; }
+.briefing-grid .feed-card-swipe, .briefing-grid .feed-card-swipe > div:last-child { height: 100%; }
+.briefing-grid .feed-card { display: flex; flex-direction: column; height: 100%; }
+.briefing-grid .feed-card-cover { position: relative; aspect-ratio: 2.4 / 1; width: 100%; flex: none; overflow: hidden; }
+.briefing-grid .feed-card-placeholder { display: grid; height: 100%; place-items: center; color: var(--color-text-faint); opacity: .55; }
+.briefing-grid .feed-card-cover:has(> .tile-cover) .feed-card-placeholder { display: none; }
+.briefing-grid .feed-card-cover > .tile-cover { width: 100%; height: 100%; aspect-ratio: auto; }
+.briefing-grid .feed-card-content { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.briefing-grid .feed-card-content > h3 { min-height: 2.4em; }
+.briefing-grid .feed-card-availability { margin-top: auto; }
+.briefing-grid .feed-card-content > .tile-chrome { margin-top: 12px; }

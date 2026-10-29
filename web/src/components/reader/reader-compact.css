@@ -1,0 +1,248 @@
+/* A reading page gives the paper room, not a permanent empty third column. */
+.reader-shell {
+  grid-template-columns: var(--left-w) 12px minmax(0, 1fr);
+}
+/* The outline is navigation; the paper itself is a single document. */
+.reader-centre-inner { max-width: 46rem; }
+.reader-document { padding: 0 0 5rem; }
+.reader-document-tools {
+  display: flex;
+  justify-content: flex-end;
+  min-height: 38px;
+  margin-bottom: 20px;
+}
+.reader-document-title [data-pane-title] {
+  display: block;
+  max-width: 100%;
+  margin: 0;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  font-size: clamp(30px, 3.2vw, 42px);
+  line-height: 1.16;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+.reader-document-commands .reader-command-stack { max-width: none; margin-top: 22px; }
+.reader-document-commands .reader-open-actions,
+.reader-document-commands .reader-quick-actions { display: inline-flex; vertical-align: middle; }
+.reader-document-commands .reader-quick-actions { margin: 0 0 0 12px; }
+.reader-document-details [data-pane-bibliography] { margin-top: 28px; }
+.reader-document-details [data-pane-upload] { margin-top: 18px; }
+.reader-document-details > p:empty { display: none; }
+.reader-document-figure { max-width: 38rem; margin-top: 32px; }
+.reader-document .reader-tabs { margin-top: 32px; }
+.reader-document [data-ask-field] > label {
+  color: var(--color-text-muted);
+  font: 500 13px/1.4 var(--font-sans);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.reader-document [data-ask-field] > label > span { display: none; }
+.reader-document [data-ask-bar] {
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-bg-secondary);
+}
+.reader-document [data-ask-bar]:focus-within {
+  border-color: var(--color-text-muted);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-heading) 12%, transparent);
+}
+.reader-left [data-map-title] { margin-top: 2px; }
+.reader-outline-empty { padding-top: 24px; font: 13px/1.5 var(--font-sans); color: var(--color-text-muted); }
+.reader-outline-empty span { font-weight: 600; }
+.reader-outline-empty p { margin-top: 10px; color: var(--color-text-faint); }
+@media (max-width: 1200px) {
+  .reader-document-commands .reader-quick-actions { display: flex; margin: 8px 0 0; }
+}
+/* A non-layout anchor places tools as overlays when requested. */
+.reader-margin {
+  position: fixed;
+  right: 0;
+  top: 0;
+  width: min(360px, 100vw);
+  height: 1px;
+  pointer-events: none;
+}
+.reader-left [data-pane-title] {
+  font-size: 24px;
+  line-height: 1.2;
+}
+.reader-left[data-mode="whole"] [data-pane-title] {
+  -webkit-line-clamp: unset;
+}
+.reader-action.reader-action {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: normal;
+  line-height: 1.25;
+  text-transform: none;
+  border-radius: 6px;
+}
+.reader-open-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.reader-primary-action,
+.reader-source-action,
+.reader-quick-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  border: 0;
+  cursor: pointer;
+  transition: background-color 150ms, color 150ms;
+}
+.reader-primary-action {
+  flex: 0 0 auto;
+  padding: 0 14px;
+  background: var(--color-heading);
+  color: var(--color-bg);
+}
+.reader-primary-action:hover { opacity: .86; }
+.reader-primary-source { flex: 1 1 auto; justify-content: flex-start; min-width: 0; }
+.reader-source-action {
+  flex: 0 1 auto;
+  justify-content: flex-start;
+  min-width: 0;
+  padding: 0 8px;
+  color: var(--color-text-muted);
+  background: transparent;
+}
+.reader-source-action:hover,
+.reader-quick-action:hover {
+  color: var(--color-heading);
+  background: var(--color-surface-hover);
+}
+.reader-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  margin-top: 8px;
+}
+.reader-quick-action {
+  padding: 0 6px;
+  color: var(--color-text-muted);
+  background: transparent;
+}
+.reader-quick-action[aria-pressed="true"] { color: var(--color-accent); }
+.reader-command-stack :is(button, a):focus-visible,
+.reader-tab:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.reader-tabs {
+  border-bottom: 1px solid var(--color-border-strong);
+}
+.reader-tab {
+  min-height: 40px;
+  margin-bottom: -1px;
+  padding: 0 0 10px;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-muted);
+  font: 500 14px/1.25 var(--font-sans);
+  text-transform: none;
+  cursor: pointer;
+}
+.reader-tab:hover { color: var(--color-heading); }
+.reader-tab-selected {
+  color: var(--color-heading);
+  border-bottom-color: var(--color-accent);
+}
+.reader-controls [aria-pressed="true"] {
+  box-shadow: none;
+  background: var(--color-surface-hover);
+}
+.reader-sidebar-facts {
+  width: 100%;
+  border-collapse: collapse;
+  font: 400 13px/1.5 var(--font-sans);
+}
+.reader-sidebar-facts tr { border-bottom: 1px solid var(--color-border-strong); }
+.reader-sidebar-facts tr:first-child { border-top: 1px solid var(--color-border-strong); }
+.reader-sidebar-facts th, .reader-sidebar-facts td { padding: 9px 0; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.reader-sidebar-facts th { width: 76px; padding-right: 10px; color: var(--color-text-muted); font-weight: 400; }
+.reader-sidebar-facts td { color: var(--color-text); }
+.reader-sidebar-facts td > div { margin-top: 0; }
+.reader-sidebar-facts td > div > p { margin: 0; font: inherit; color: inherit; }
+@media (hover: none) {
+  .reader-primary-action, .reader-source-action, .reader-quick-action { min-height: 44px; }
+}
+
+/* Document hierarchy comes from type and spacing, not rules around each row. */
+.reader-document-title [data-pane-title] { font-size: clamp(32px, 3vw, 40px); line-height: 1.18; }
+.reader-document-tools { margin-bottom: 12px; }
+.reader-document-commands .reader-command-stack { margin-top: 18px; }
+.reader-document .reader-action.reader-action { font-size: 15px; }
+.reader-document .reader-primary-action { min-height: 42px; padding-inline: 16px; }
+.reader-document-details [data-pane-bibliography] { margin-top: 24px; }
+.reader-document .reader-sidebar-facts {
+  border-collapse: separate;
+  border-spacing: 0 3px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.reader-document .reader-sidebar-facts tr,
+.reader-document .reader-sidebar-facts tr:first-child { border: 0; }
+.reader-document .reader-sidebar-facts th,
+.reader-document .reader-sidebar-facts td {
+  padding: 8px 14px;
+  background: var(--color-surface);
+}
+.reader-document .reader-sidebar-facts th {
+  width: 128px;
+  padding-right: 20px;
+  background: color-mix(in srgb, var(--color-text) 5%, var(--color-surface));
+  border-radius: 6px 0 0 6px;
+}
+.reader-document .reader-sidebar-facts td { border-radius: 0 6px 6px 0; }
+.reader-extra-details { margin-top: 0; }
+.reader-extra-details > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  color: var(--color-text-muted);
+  font: 500 15px/1.5 var(--font-sans);
+  cursor: pointer;
+  list-style: none;
+}
+.reader-extra-details > summary::-webkit-details-marker { display: none; }
+.reader-extra-details > summary::before { content: '›'; font-size: 18px; line-height: 1; }
+.reader-extra-details[open] > summary::before { transform: rotate(90deg); }
+.reader-extra-details > summary:hover { color: var(--color-heading); }
+.reader-extra-details > summary:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+.reader-document .reader-tabs {
+  width: fit-content;
+  gap: 3px;
+  margin-top: 26px;
+  padding: 4px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--color-bg-secondary);
+}
+.reader-document .reader-tab {
+  min-height: 36px;
+  margin: 0;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 6px;
+  font-size: 15px;
+}
+.reader-document .reader-tab-selected {
+  color: var(--color-heading);
+  background: var(--color-surface-hover);
+}
+.reader-document [data-ask-field] { margin-top: 20px; }
+.reader-document [data-ask-field] > label { font-size: 15px; }
+.reader-document [data-ask-bar] { border: 0; background: var(--color-surface); }
+.reader-document [data-ask-line] { font: 16px/1.5 var(--font-sans); }
+.reader-document [data-ask-bar] button { font-family: var(--font-sans); font-size: 14px; }
+.reader-document .eyebrow + span[aria-hidden="true"] { display: none; }
+.reader-document #paper-body h2.eyebrow { font-size: 18px; }
+.reader-document #paper-body h2.eyebrow > span { display: none; }

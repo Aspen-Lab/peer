@@ -92,12 +92,13 @@ describe("the gaps in the zone (reader-layout.tsx, decision-block.tsx)", () => {
       }),
     );
 
-  it("the commands' and the strip's top gaps read --pane-gap, 12 px and 16 px when the pane sets nothing", () => {
-    const fixed = page(true);
-    const zone = fixed.slice(fixed.indexOf("data-reader-left-fixed"), fixed.indexOf("data-reader-left-scroll"));
-    expect(zone).toContain("[&amp;&gt;*&gt;:first-child]:mt-[var(--pane-gap,0.75rem)]");
-    expect(zone).toContain("[&amp;&gt;:first-child]:mt-[calc(var(--pane-gap,0.75rem)_+_0.25rem)]");
-    expect(zone).not.toMatch(/\bmt-3\b|\[&amp;&gt;:first-child\]:mt-4/);
+  it("places the commands and tabs in the document rather than the sidebar", () => {
+    const html = page(true);
+    const sidebar = html.slice(html.indexOf("data-reader-left="), html.indexOf("data-reader-centre"));
+    const document = html.slice(html.indexOf("data-reader-centre"));
+    expect(sidebar).not.toContain('data-mark="DECISION"');
+    expect(document.indexOf('data-mark="TITLE"')).toBeLessThan(document.indexOf('data-mark="DECISION"'));
+    expect(document.indexOf('data-mark="DECISION"')).toBeLessThan(document.indexOf('data-mark="TABS"'));
   });
 
   it("one column has no pane, so it names no --pane-gap at all", () => {

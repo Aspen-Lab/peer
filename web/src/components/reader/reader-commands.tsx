@@ -1,39 +1,15 @@
 "use client";
 
-// The decision's commands, as one stack with one edge.
-//
-// They used to be five pills in a two-up grid of natural widths, and the
-// grid's tracks were sized by their content: the moment the source link and
-// the upload shared a cell, that cell was wider than the whole panel, so Save
-// and Copy were pushed across the gutter and printed over the reading column.
-// A stack of full-width rows cannot do that — every row is the panel's width
-// by construction, whatever its label says.
-//
-//   [t] Read it here                    ← the first command, the accent
-//   [o] Open on arXiv                ↗  ← leaves the page
-//   [s] Save  ·  [x] Skip  ·  [c] Copy   ← the verdicts in one row; Skip only where the page gives it (P1-08)
-//   Notes                               ← a phone's way into the paper's notes (P7-14, R9; from md the page has a tab at the right edge)
-//   ↑  Upload full article PDF          ← where the reader brings the text
+// Reading and the source come first; the remaining actions share a compact,
+// wrapping toolbar that fits both the narrow desktop pane and a phone.
 
 import type { ReactNode } from "react";
-import { buttonVariants } from "@/components/ui/button";
-import { IconArrowUpRight } from "@/components/icons";
-import { Kbd } from "@/components/ui/kbd";
+import { IconArrowRight, IconArrowUpRight, IconBook, IconBookmark, IconCopy } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import type { PaperReading } from "@/lib/papers/reading";
 import { BUTTON } from "./copy";
 
-/**
- * A command, not a button: the key comes first and names it, the word says
- * what the key does, and the type is the mono the rest of the machine's own
- * voice is set in.
- */
-export const COMMAND = "eyebrow";
-const TOUCH_TARGET = "[@media(hover:none)]:min-h-11";
-/** A full-width row: key and word on the left edge, the way a menu reads. */
-const ROW = "w-full justify-start px-3";
-/** A cell of the verdict row: the commands share the row equally, two or three. */
-const CELL = "w-full px-2";
+export const COMMAND = "reader-action";
 
 export function ReaderCommands({
   onRead,
@@ -57,24 +33,23 @@ export function ReaderCommands({
   onSkip?: () => void;
   onCopy: () => void;
   onOpen: () => void;
-  /** P7-14 (R9): the notes row a phone has in place of the right-edge tab (it hides itself from `md`). */
+  /** Opens the paper's notes on their own page. */
   notesAction?: ReactNode;
   uploadAction?: ReactNode;
 }) {
   return (
     // One column up to a phone's width; the panel's own width on the spread.
-    <div className="mt-5 grid max-w-sm gap-2 xl:max-w-none">
+    <div className="reader-command-stack mt-5 max-w-sm xl:max-w-none">
       {/* Where Peer has read the paper, reading it HERE is the first command
           and the source is the second. */}
+      <div className="reader-open-actions">
       {onRead && (
         <button
           type="button"
           onClick={onRead}
-          className={cn(buttonVariants({ tone: "primary", size: "lg" }), COMMAND, ROW, TOUCH_TARGET)}
+          className={cn(COMMAND, "reader-primary-action")}
         >
-          <Kbd pointerOnly className="mr-1">
-            t
-          </Kbd>
+          <IconBook size={16} />
           {readLabel ?? "Read it here"}
         </button>
       )}
@@ -85,59 +60,48 @@ export function ReaderCommands({
           rel="noopener noreferrer"
           onClick={onOpen}
           className={cn(
-            buttonVariants({ tone: onRead ? "soft" : "primary", size: "lg" }),
             COMMAND,
-            ROW,
-            TOUCH_TARGET,
+            onRead ? "reader-source-action" : "reader-primary-action reader-primary-source",
           )}
         >
-          <Kbd pointerOnly className="mr-1">
-            o
-          </Kbd>
           <span className="min-w-0 truncate">{source.label}</span>
           {/* The one icon on a command: it marks a destination — this leaves
               the page — where the keys only name themselves. */}
           <IconArrowUpRight size={12} className="ml-auto shrink-0" />
         </a>
       )}
-      {/* The row has as many tracks as it has commands: an uploaded PDF's page
-          has no Skip (P1-08), so its row is two tracks, not two cells and an
-          empty third. */}
-      <div className={`grid ${onSkip ? "grid-cols-3" : "grid-cols-2"} gap-2`}>
+      </div>
+      {/* Uploaded PDFs omit Skip; the remaining controls still flow naturally. */}
+      <div className="reader-quick-actions" data-reader-quick-actions="">
         <button
           type="button"
           onClick={onSave}
           aria-pressed={isSaved}
-          className={cn(
-            buttonVariants({ tone: isSaved ? "accentSoft" : "soft", size: "lg" }),
-            COMMAND,
-            CELL,
-            TOUCH_TARGET,
-          )}
+          className={cn(COMMAND, "reader-quick-action")}
         >
-          <Kbd pointerOnly>s</Kbd>
+          <IconBookmark size={16} filled={isSaved} />
           {isSaved ? BUTTON.saved : BUTTON.save}
         </button>
+        {notesAction}
         {onSkip && (
           <button
             type="button"
             onClick={onSkip}
-            className={cn(buttonVariants({ tone: "soft", size: "lg" }), COMMAND, CELL, TOUCH_TARGET)}
+            className={cn(COMMAND, "reader-quick-action")}
           >
-            <Kbd pointerOnly>x</Kbd>
+            <IconArrowRight size={16} />
             {BUTTON.skip}
           </button>
         )}
         <button
           type="button"
           onClick={onCopy}
-          className={cn(buttonVariants({ tone: "soft", size: "lg" }), COMMAND, CELL, TOUCH_TARGET)}
+          className={cn(COMMAND, "reader-quick-action")}
         >
-          <Kbd pointerOnly>c</Kbd>
+          <IconCopy size={16} />
           {BUTTON.copy}
         </button>
       </div>
-      {notesAction}
       {uploadAction}
     </div>
   );

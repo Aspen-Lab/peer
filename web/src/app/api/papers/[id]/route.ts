@@ -13,7 +13,8 @@ export async function GET(
 ) {
   const { id } = await params;
   const decodedId = decodeURIComponent(id);
-  const raw = await fetchPaperById(decodedId);
+  const raw = await fetchPaperById(decodedId).catch(() => undefined);
+  if (raw === undefined) return NextResponse.json({ error: "Paper source temporarily unavailable" }, { status: 503, headers: { "Cache-Control": "no-store" } });
   if (!raw) {
     return NextResponse.json({ error: "Paper not found" }, { status: 404 });
   }

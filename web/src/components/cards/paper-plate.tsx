@@ -395,18 +395,6 @@ export function PaperPlate({
           {terms.length > 0 ? (
             <>
               <div className="flex gap-[5%]">
-                {/* Numbering says "these are several, in an order". With one
-                    term there is no order to state, and "01" beside a lone
-                    word is decoration wearing a structure's clothes. */}
-                {terms.length > 1 && (
-                  <div className="flex flex-col gap-[0.28em] pt-[0.34em] font-mono text-micro tabular-nums tracking-[0.1em] text-[var(--plate-ink-faint)]">
-                    {terms.map((term, index) => (
-                      <span key={term} className="leading-[1.5]">
-                        {String(index + 1).padStart(2, "0")}
-                      </span>
-                    ))}
-                  </div>
-                )}
                 <div className="min-w-0 flex flex-col gap-[0.1em]">
                   {terms.map((term, index) => (
                     <span
@@ -418,12 +406,7 @@ export function PaperPlate({
                   ))}
                 </div>
               </div>
-              <span
-                aria-hidden
-                className={`mt-[0.7em] h-px w-[34%] bg-[var(--plate-ink-faint)] ${
-                  terms.length > 1 ? "ml-[calc(5%+2.1em)]" : ""
-                }`}
-              />
+              <span aria-hidden className="mt-[0.7em] h-px w-[34%] bg-[var(--plate-ink-faint)]" />
             </>
           ) : (
             // Nothing to set. The old last resort was the venue and the year

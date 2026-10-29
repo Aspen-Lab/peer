@@ -1,0 +1,71 @@
+.search-page { padding-top: 64px; padding-bottom: 96px; }
+.search-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 28px; }
+.search-heading h1 { color: var(--color-heading); font: 600 36px/1.15 var(--font-sans); letter-spacing: -.035em; }
+.search-heading p { margin-top: 10px; color: var(--color-text-muted); font: 16px/1.5 var(--font-sans); }
+.search-source { flex: none; color: var(--color-text-faint); font: 13px/1.4 var(--font-sans); }
+.search-field { display: flex; align-items: center; gap: 14px; min-height: 70px; padding: 10px 10px 10px 20px; border-radius: 12px; background: var(--color-surface); color: var(--color-text-muted); transition: box-shadow 150ms; }
+.search-field:focus-within { box-shadow: 0 0 0 2px var(--color-accent); }
+.search-field > svg { flex: none; }
+.search-field input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--color-heading); font: 17px/1.4 var(--font-sans); }
+.search-field input::placeholder { color: var(--color-text-faint); }
+.search-field input::-webkit-search-cancel-button { display: none; }
+.search-submit, .search-retry { min-height: 46px; padding: 0 22px; border-radius: 8px; background: var(--color-heading); color: var(--color-bg); font: 600 14px/1 var(--font-sans); cursor: pointer; }
+.search-submit:disabled { opacity: .5; cursor: default; }
+.search-clear { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 7px; color: var(--color-text-muted); font-size: 22px; cursor: pointer; }
+.search-clear:hover { background: var(--color-bg-secondary); color: var(--color-heading); }
+.search-starts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 72px; row-gap: 38px; margin-top: 46px; }
+.search-start-group { min-width: 0; }
+.search-start-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 14px; }
+.search-start-heading h2 { color: var(--color-heading); font: 600 16px/1.4 var(--font-sans); }
+.search-start-heading > button { color: var(--color-text-muted); font: 14px/1.4 var(--font-sans); cursor: pointer; }
+.search-start-heading > button:hover { color: var(--color-heading); }
+.search-start-group ul { display: flex; flex-wrap: wrap; gap: 8px; }
+.search-start-group li { max-width: 100%; }
+.search-start-group li button { display: block; max-width: 100%; padding: 10px 14px; border-radius: 8px; background: var(--color-surface); color: var(--color-text); font: 14px/1.4 var(--font-sans); text-align: left; overflow-wrap: anywhere; cursor: pointer; transition: background 150ms, color 150ms; }
+.search-start-group li button:hover { background: var(--color-bg-secondary); color: var(--color-heading); }
+.search-start-empty { margin-top: 40px; color: var(--color-text-muted); font: 15px/1.5 var(--font-sans); }
+.search-results-area { margin-top: 24px; }
+.search-results-area > div:first-child { margin-top: 0; }
+.search-results-area button { cursor: pointer; }
+.search-results-area button:focus-visible, .search-starts button:focus-visible, .search-field button:focus-visible, .search-result:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+.search-results-heading { min-height: 24px; margin: 30px 0 12px; color: var(--color-text-muted); font: 500 14px/1.5 var(--font-sans); }
+.search-result-list { display: grid; gap: 10px; max-width: 900px; }
+.search-result-list .search-result { min-width: 0; padding: 24px 26px; border: 0; border-radius: 12px; background: var(--color-surface); box-shadow: none; transition: background 150ms; }
+.search-result-list .search-result:hover { background: var(--color-bg-secondary); box-shadow: none; transform: none; }
+.search-result-list .search-result h3 { font: 600 19px/1.35 var(--font-sans); letter-spacing: -.01em; }
+.search-result-list .search-result .eyebrow { font: 500 12px/1.4 var(--font-sans); letter-spacing: 0; text-transform: none; }
+.search-result-list .search-result .text-meta, .search-result-list .search-result .text-caption { font: 14px/1.5 var(--font-sans); }
+.search-result-list .search-result .text-body-sm { max-width: 78ch; font-size: 15px; line-height: 1.6; }
+.search-result-list .search-result > div:last-child { justify-content: flex-start; margin-top: 12px; padding-top: 0; border: 0; }
+.search-empty { margin-top: 24px; }
+.search-empty h2 { font: 600 23px/1.3 var(--font-sans); }
+.search-empty p { font: 15px/1.55 var(--font-sans); }
+@media (max-width: 640px) {
+  .search-page { padding-top: 36px; }
+  .search-heading { align-items: flex-start; flex-direction: column; gap: 10px; margin-bottom: 22px; }
+  .search-heading h1 { font-size: 30px; }
+  .search-heading p { font-size: 15px; }
+  .search-field { min-height: 60px; gap: 10px; padding: 7px 7px 7px 14px; }
+  .search-field input { font-size: 16px; }
+  .search-submit { padding: 0 13px; }
+  .search-starts { grid-template-columns: 1fr; gap: 30px; margin-top: 34px; }
+  .search-result-list .search-result { padding: 20px; }
+}
+/* Filters are controls, so give them a soft surface instead of a frame. */
+.search-results-area > div:first-child > div:first-child > div > button,
+.search-results-area > div:first-child > div:first-child > button {
+  border: 0;
+  border-radius: 8px;
+  background: var(--color-surface);
+  box-shadow: none;
+  color: var(--color-text-muted);
+  font: 500 14px/1.3 var(--font-sans);
+  transform: none;
+}
+.search-results-area > div:first-child > div:first-child > div > button:hover,
+.search-results-area > div:first-child > div:first-child > button:hover { background: var(--color-bg-secondary); color: var(--color-heading); box-shadow: none; transform: none; }
+.search-results-area > div:first-child > div:first-child > div > button[aria-pressed="true"] { background: var(--color-accent-dim); color: var(--color-accent); }
+.search-submit { white-space: nowrap; }
+.search-jev-status { margin: -3px 0 16px; color: var(--color-text-muted); font: 14px/1.5 var(--font-sans); }
+.search-source a { color: var(--color-text-muted); text-decoration: underline; text-underline-offset: 3px; }
+.search-source a:hover { color: var(--color-heading); }

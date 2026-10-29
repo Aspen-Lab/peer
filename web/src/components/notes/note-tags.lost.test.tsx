@@ -48,7 +48,7 @@ describe("passageIsLost — the sticky whose passage the paper holds nowhere", (
 describe("storedBodyOf — the body of the paper's reading kept in this browser", () => {
   // re-aimed (§1c): an entry now carries the version and a recent time, which the gates below need (same cases as before)
   const NOW = 1_800_000_000_000;
-  const entry = (ts: number, paragraphs: string[], version = 14) => ({ ts: NOW - 1000 * ts, reading: { version, body: [{ paragraphs }] } });
+  const entry = (ts: number, paragraphs: string[], version = 16) => ({ ts: NOW - 1000 * ts, reading: { version, body: [{ paragraphs }] } });
   const store = (value: unknown) => ({ getItem: () => (typeof value === "string" ? value : JSON.stringify(value)) });
 
   it("is the newest reading kept under the paper's id, and no other paper's", () => {
@@ -61,8 +61,8 @@ describe("storedBodyOf — the body of the paper's reading kept in this browser"
     expect(storedBodyOf("p1", store({}), NOW)).toBeNull();
     expect(storedBodyOf("p1", store("{not json"), NOW)).toBeNull();
     expect(storedBodyOf("p1", { getItem: () => { throw new Error("blocked"); } }, NOW)).toBeNull();
-    expect(storedBodyOf("p1", store({ "p1|public|": { ts: NOW, reading: { version: 14, body: "x" } } }), NOW)).toBeNull();
-    expect(storedBodyOf("p1", store({ "p1|public|": { ts: NOW, reading: { version: 14, body: [{ paragraphs: [3] }] } } }), NOW)).toBeNull();
+    expect(storedBodyOf("p1", store({ "p1|public|": { ts: NOW, reading: { version: 16, body: "x" } } }), NOW)).toBeNull();
+    expect(storedBodyOf("p1", store({ "p1|public|": { ts: NOW, reading: { version: 16, body: [{ paragraphs: [3] }] } } }), NOW)).toBeNull();
   });
 
   // P10-36 (the manager's fix): a cached reading is used only as `use-reading.ts` uses it — the current version, inside a day.
@@ -76,11 +76,11 @@ describe("storedBodyOf — the body of the paper's reading kept in this browser"
 
   it("does not know a reading older than a day (the page would fetch it again), and uses one just inside the day", () => {
     const DAY = 24 * 60 * 60 * 1000;
-    const aged = (age: number) => ({ "p1|public|": { ts: NOW - age, reading: { version: 14, body: [{ paragraphs: ["x"] }] } } });
+    const aged = (age: number) => ({ "p1|public|": { ts: NOW - age, reading: { version: 16, body: [{ paragraphs: ["x"] }] } } });
     expect(storedBodyOf("p1", store(aged(DAY)), NOW)).toBeNull();
     expect(passageIsLost(ANCHOR, "h2", {}, storedBodyOf("p1", store(aged(DAY + 1)), NOW))).toBe(false);
     expect(storedBodyOf("p1", store(aged(DAY - 1)), NOW)).toEqual([{ paragraphs: ["x"] }]);
-    expect(storedBodyOf("p1", store({ "p1|public|": { reading: { version: 14, body: [{ paragraphs: ["x"] }] } } }), NOW)).toBeNull();
+    expect(storedBodyOf("p1", store({ "p1|public|": { reading: { version: 16, body: [{ paragraphs: ["x"] }] } } }), NOW)).toBeNull();
   });
 
   it("keeps its two gates the ones use-reading.ts applies", () => {

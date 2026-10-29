@@ -44,82 +44,34 @@ const tagWith = (html: string, attr: string) => {
   const hit = html.indexOf(attr);
   return hit < 0 ? "" : html.slice(html.lastIndexOf("<", hit), html.indexOf(">", hit) + 1);
 };
-const classOf = (tag: string) => /class="([^"]*)"/.exec(tag)?.[1] ?? "";
 
 const PANES = { details: mark("DETAILS"), progress: mark("PROGRESS") };
 
-describe("ReaderLayout, the three panes: the strip is the left pane's fixed zone, the map its scroll zone (P11-16; was P10-04b, A8)", () => {
+describe("ReaderLayout, desktop document", () => {
   const html = render(true, PANES);
-  const leftAt = html.indexOf("data-reader-left=");
-  const fixedAt = html.indexOf("data-reader-left-fixed");
-  const scrollAt = html.indexOf("data-reader-left-scroll");
-  const centreAt = html.indexOf("data-reader-centre");
+  const left = html.indexOf("data-reader-left=");
+  const centre = html.indexOf("data-reader-centre");
+  const sidebar = html.slice(left, centre);
 
-  it("has a fixed zone and a scroll zone of its own, inside the left pane and before the centre", () => {
-    expect(leftAt).toBeGreaterThan(-1);
-    expect(fixedAt).toBeGreaterThan(leftAt);
-    expect(scrollAt).toBeGreaterThan(fixedAt);
-    expect(centreAt).toBeGreaterThan(scrollAt);
-    expect(tagWith(html, "data-reader-left=")).toContain('data-mode="split"');
+  it("keeps only the outline in the independently scrollable sidebar", () => {
+    expect(sidebar).toContain('data-mark="MAP"');
+    expect(tagWith(html, "data-reader-left=")).toContain('data-mode="whole"');
+    for (const name of ["TITLE", "DECISION", "PROGRESS", "TABS", "DETAILS", "PLATE", "WORDS"]) {
+      expect(sidebar).not.toContain(`data-mark="${name}"`);
+    }
   });
 
-  it("the strip and the title and commands above it are in the fixed zone: they never scroll with the map", () => {
-    for (const name of ["TITLE", "DECISION", "PROGRESS", "TABS"]) {
-      expect(at(html, name)).toBeGreaterThan(fixedAt);
-      expect(at(html, name)).toBeLessThan(scrollAt);
-    }
-    expect(html.slice(fixedAt, scrollAt)).not.toContain('data-mark="MAP"');
-  });
-
-  it("the map, then the plate, then the details are the scroll zone's contents, in the DOM order the reader sees", () => {
-    for (const name of ["MAP", "PLATE", "DETAILS"]) {
-      expect(at(html, name)).toBeGreaterThan(scrollAt);
-      expect(at(html, name)).toBeLessThan(centreAt);
-    }
-    const order = ["MAP", "PLATE", "DETAILS"].map((name) => at(html, name));
+  it("puts the title, actions, details and tabs above the reading content", () => {
+    const order = ["TITLE", "DECISION", "DETAILS", "PROGRESS", "TABS", "COMMON", "WORDS", "ADDITIONS", "PLATE", "NEXT"].map((name) => at(html, name));
+    expect(order.every((index) => index > centre)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
-    // The scroll zone holds them and nothing of the column.
-    const scroll = html.slice(scrollAt, centreAt);
-    expect(scroll).not.toContain('data-mark="COMMON"');
-    expect(scroll).not.toContain('data-mark="WORDS"');
-    expect(scroll).not.toContain('data-mark="TABS"');
+    expect(html.split('aria-label="Reading controls"')).toHaveLength(2);
   });
 
-  it("the layout's own wrappers add no scroller: the pane's scroll zone is the one", () => {
-    const wrappers = (html.slice(fixedAt, centreAt).match(/<div\b[^>]*>/g) ?? []).filter((tag) => !tag.includes("data-reader-left-"));
-
-    expect(wrappers.length).toBeGreaterThan(0);
-    for (const tag of wrappers) expect(classOf(tag)).not.toMatch(/overflow|max-h-|min-h-|reader-panel/);
-  });
-
-  // A zone clips what overflows it (`overflow-y: auto` makes the x axis clip too), so the focus ring (2px + 3px offset) of a command at the
-  // zone's edge, or of a map row, needs room inside it. The old map had `xl:-mx-1.5 xl:px-1.5` for it; each zone's contents have it now.
-  it("each zone's contents stand in a wrapper with the focus ring's room (px-1.5)", () => {
-    const first = (at: number) => /<div\b[^>]*class="([^"]*)"/.exec(html.slice(html.indexOf(">", at) + 1))?.[1] ?? "";
-
-    expect(first(fixedAt).split(/\s+/)).toContain("px-1.5");
-    expect(first(scrollAt).split(/\s+/)).toContain("px-1.5");
-  });
-
-  it("a paper with no strip and no map (no body) has no zones: the pane itself scrolls as one", () => {
+  it("keeps the document and actions available when no outline exists", () => {
     const bare = render(true, { ...PANES, tabs: undefined, map: undefined, common: undefined });
-
-    expect(tagWith(bare, "data-reader-left=")).toContain('data-mode="whole"');
-    expect(bare).not.toContain("data-reader-left-fixed");
-    expect(bare).not.toContain("data-reader-left-scroll");
-    for (const name of ["TITLE", "DECISION", "PROGRESS", "PLATE", "DETAILS"]) expect(at(bare, name)).toBeGreaterThan(bare.indexOf("data-reader-left="));
-  });
-
-  it("the commands (the decision block) still follow the title (P7-14), whatever the zones hold", () => {
-    expect(at(html, "DECISION")).toBeGreaterThan(at(html, "TITLE"));
-    expect(html.slice(at(html, "TITLE"), at(html, "DECISION")).match(/data-mark=/g)).toHaveLength(1);
-  });
-
-  it("is not the old two-column spread: no head that scrolls away, no sticky tail of its own, no `reader-panel` utility", () => {
-    expect(html).not.toContain("data-reader-panel");
-    expect(html).not.toContain("data-reader-sticky");
-    expect(html).not.toContain("reader-panel");
-    expect(html).not.toContain("xl:grid");
+    expect(bare).not.toContain('data-mark="MAP"');
+    for (const name of ["TITLE", "DECISION", "DETAILS", "WORDS"]) expect(at(bare, name)).toBeGreaterThan(bare.indexOf("data-reader-centre"));
   });
 });
 

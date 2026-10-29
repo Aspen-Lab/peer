@@ -131,7 +131,7 @@ describe("JevSetup on the Profile page", () => {
   it("says it is optional, when it applies, and where the key lives, without claiming more than the code does", () => {
     const text = profileText();
     expect(text).toContain(
-      "Optional. Applies to your next briefing. Peer keeps the key in this browser, never in your account; its server passes the key to Jev while it screens your papers and does not store or log it.",
+      "Optional. Used for your next briefing and searches you run with Jev. Peer keeps the key in this browser, never in your account; its server passes the key to Jev while it screens your papers and does not store or log it.",
     );
   });
 
@@ -289,8 +289,8 @@ describe("what the Jev copy never says", () => {
     expect(all()).not.toMatch(/%|percent/i);
   });
 
-  it("states no number for the improvement: the only digits are the 50-candidate ceiling", () => {
-    const withoutCeiling = all().replace(/For each of the 50 best candidates/g, "For each of the best candidates");
+  it("states no number for the improvement: digits only describe candidate limits", () => {
+    const withoutCeiling = all().replace(/For each of the 50 best candidates/g, "For each of the best candidates").replace(/up to 12 results/g, "up to results");
     expect(withoutCeiling).not.toMatch(/\d/);
   });
 

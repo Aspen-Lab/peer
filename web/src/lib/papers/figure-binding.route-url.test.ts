@@ -145,6 +145,12 @@ describe("rule 1 — a bound figure of a PDF is the figure-image route's URL", (
     expect(resultUrl(bound)).toBe("/api/papers/openalex%3AW4400000001/figure-image?page=3&fig=1");
   });
 
+  it("answers a Semantic Scholar paper’s route", async () => {
+    const id = "semantic_scholar:cbc4266795a13b6124294e0fb15bfcdcc29417e2";
+    const bound = await bind({ id });
+    expect(resultUrl(bound)).toBe(`/api/papers/${encodeURIComponent(id)}/figure-image?page=3&fig=1`);
+  });
+
   it.each([
     ["Figure 3", 3],
     ["Fig. 3", 3],

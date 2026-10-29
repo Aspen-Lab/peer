@@ -11,7 +11,6 @@
 // selected tab has a bar under it as well as its colour. Peer's label face, as the commands above.
 
 import type { KeyboardEvent } from "react";
-import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { TABS } from "./copy";
 import { READER_TABS, type ReaderTab } from "./use-reader-tab";
@@ -61,7 +60,7 @@ export function ReaderTabs({ tab, onSelect }: { tab: ReaderTab; onSelect: (tab: 
       role="tablist"
       aria-label={TABS.label}
       onKeyDown={onKeyDown}
-      className="mt-8 grid grid-cols-2 gap-1 border border-border-strong p-1"
+      className="reader-tabs mt-8 flex items-center gap-5"
     >
       {READER_TABS.map((name) => {
         const selected = name === tab;
@@ -76,9 +75,8 @@ export function ReaderTabs({ tab, onSelect }: { tab: ReaderTab; onSelect: (tab: 
             tabIndex={selected ? 0 : -1}
             onClick={() => onSelect(name)}
             className={cn(
-              buttonVariants({ tone: selected ? "accentSoft" : "ghost", size: "md" }),
-              "eyebrow w-full px-2 [@media(hover:none)]:min-h-11",
-              selected && "shadow-[inset_0_-2px_0_0_currentColor]",
+              "reader-tab whitespace-nowrap [@media(hover:none)]:min-h-11",
+              selected && "reader-tab-selected",
             )}
           >
             {TABS[name]}

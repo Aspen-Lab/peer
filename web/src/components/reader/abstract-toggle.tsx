@@ -16,7 +16,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/cn";
-import { IconChevronDown } from "@/components/icons";
+import { IconBook, IconChevronDown } from "@/components/icons";
 import { ABSTRACT_LABEL } from "./copy";
 
 const ABSTRACT_PANEL_ID = "abstract-panel";
@@ -24,11 +24,13 @@ const ABSTRACT_PANEL_ID = "abstract-panel";
 export function AbstractToggle({
   className,
   children,
+  defaultOpen = false,
 }: {
   className?: string;
   children: React.ReactNode;
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
 
   return (
     <section className={className}>
@@ -38,15 +40,15 @@ export function AbstractToggle({
         aria-controls={ABSTRACT_PANEL_ID}
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "flex w-full items-center justify-between gap-4 h-12 px-4",
-          "border border-border-strong text-text-muted",
+          "reader-abstract-toggle flex w-full items-center justify-between gap-4 h-12",
+          "text-text-muted",
           "transition-[color,background-color,border-color] duration-150 ease-snap",
           "hover:text-heading hover:border-text-faint hover:bg-surface-hover",
           open && "text-heading",
         )}
       >
-        <span className="eyebrow inline-flex items-center gap-2">
-          <span aria-hidden className="block h-[6px] w-[6px] shrink-0 bg-current" />
+        <span className="reader-action inline-flex items-center gap-2">
+          <IconBook size={16} />
           {ABSTRACT_LABEL}
         </span>
         <IconChevronDown

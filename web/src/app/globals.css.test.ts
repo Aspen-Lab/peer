@@ -399,10 +399,10 @@ describe("globals.css — the reader's three panes (P11-10)", () => {
     return css.slice(start, css.indexOf("\n}", start) + 2);
   };
 
-  it("the grid is the left track, a 12px divider, the centre, a 12px divider and the margin", () => {
+  it("the grid is the left track, a 12px divider and the reading column", () => {
     const grid = ruleOf(".reader-shell");
     expect(grid).toMatch(/display:\s*grid;/);
-    expect(grid).toMatch(/grid-template-columns:\s*var\(--left-w\) 12px minmax\(0, 1fr\) 12px var\(--margin-w, 360px\);/);
+    expect(grid).toMatch(/grid-template-columns:\s*var\(--left-w\) 12px minmax\(0, 1fr\);/);
     expect(grid).toMatch(/--left-w:\s*var\(--left-pane-w, 320px\);/);
   });
 

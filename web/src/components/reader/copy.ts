@@ -173,7 +173,7 @@ export const STANDING = {
  * not place) has none.
  */
 export const MAP = {
-  heading: "Map",
+  heading: "Contents",
   /** P7-14 (R5): the map is the paper's one contents list, so it also says where the text was
    *  read from and how many words there are ("Read from PDF · 21 sections · 10,908 words · about
    *  61 min"), which the rail and the count line under "The paper" used to say. With no word count

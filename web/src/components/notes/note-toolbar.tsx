@@ -67,7 +67,7 @@ export function NoteToolbarView({
               type="button"
               aria-label={item.label}
               {...(item.kind === "type" ? { "aria-pressed": active === item.type } : {})}
-              title={item.keys ? `${item.label} (${item.keys.trim()})` : item.label}
+              title={item.label}
               disabled={disabled}
               // The caret stays in the block: pressing a button must not take focus from the textarea.
               onMouseDown={(e) => e.preventDefault()}

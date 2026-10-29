@@ -136,16 +136,13 @@ describe("ReaderLayout, the three panes, a paper with no body (R2; P11-16)", () 
   const html = render(true, PANES);
   const { left, centre, pane, column } = panes(html);
 
-  it("the left pane holds the controls, the title, the commands, the plate and the details; the centre the abstract, the additions and Next", () => {
-    expect(left).toBeGreaterThan(-1);
+  it("shows paper details in the reading column", () => {
     expect(centre).toBeGreaterThan(left);
-    expect(ascending([pane.indexOf('aria-label="Reading controls"'), ...order(pane, ["TITLE", "DECISION", "PROGRESS", "PLATE", "DETAILS"])])).toBe(true);
-    for (const name of ["TITLE", "DECISION", "PROGRESS", "PLATE", "DETAILS"]) {
-      expect(at(html, name)).toBeGreaterThan(left);
-      expect(at(html, name)).toBeLessThan(centre);
+    for (const name of ["TITLE", "DECISION", "PROGRESS", "DETAILS", "WORDS", "ADDITIONS", "PLATE", "NEXT"]) {
+      expect(column).toContain(`data-mark="${name}"`);
+      expect(pane).not.toContain(`data-mark="${name}"`);
     }
-    expect(ascending([centre, ...order(html, ["WORDS", "ADDITIONS", "NEXT"])])).toBe(true);
-    for (const name of ["WORDS", "ADDITIONS", "NEXT"]) expect(pane).not.toContain(`data-mark="${name}"`);
+    expect(column).toContain('aria-label="Reading controls"');
   });
 
   it("has no strip and no map to float, so no zones: the pane scrolls as one", () => {
@@ -160,39 +157,35 @@ describe("ReaderLayout, the three panes, a paper with no body (R2; P11-16)", () 
     expect(ascending(order(bare, ["TITLE", "DECISION", "DETAILS", "WORDS"]))).toBe(true);
   });
 
-  it("the column holds the paper's blocks and nothing of the pane", () => {
-    for (const name of ["TITLE", "DECISION", "PLATE", "DETAILS"]) expect(column).not.toContain(`data-mark="${name}"`);
+  it("keeps the paper blocks in the document", () => {
+    for (const name of ["TITLE", "DECISION", "PLATE", "DETAILS", "WORDS"]) expect(column).toContain(`data-mark="${name}"`);
   });
 });
 
 describe("ReaderLayout, the three panes, a paper with a body (R10; P11-16)", () => {
   const html = tabbed(true, { ...PANES, map: mark("MAP") });
-  const { fixed, scroll, column, left, centre, margin } = panes(html);
+  const { column, left, centre, margin } = panes(html);
 
   // P11-16 follow-up (ruling §1h.115 item 2), RE-AIMED from "the fixed zone: the reading controls, the title, the commands, the tab strip": the
   // shell has a header slot now, and the reading controls stand in the pane's header row beside the pin button — in the DOM order the reader
   // sees, the pin first — so the fixed zone is the title, the commands and the strip.
-  it("the fixed zone: the title, the commands, the report's progress, the tab strip — in that order, and nothing else", () => {
-    expect(fixed).not.toContain('aria-label="Reading controls"');
-    expect(ascending(order(fixed, ["TITLE", "DECISION", "PROGRESS", "TABS"]))).toBe(true);
-    for (const name of ["MAP", "PLATE", "DETAILS", "COMMON", "WORDS", "ADDITIONS", "NEXT"]) expect(fixed).not.toContain(`data-mark="${name}"`);
+  it("orders title, actions, tabs and reading content", () => {
+    expect(ascending(order(column, ["TITLE", "DECISION", "DETAILS", "PROGRESS", "TABS", "COMMON", "WORDS", "ADDITIONS", "PLATE", "NEXT"]))).toBe(true);
   });
 
   // P11-16 follow-up (ruling §1h.115 item 3): the progress stands directly after the commands, in the zone that never scrolls — it was the last
   // thing of the details, which put it at the foot of the scroll zone, under a map of fourteen rows.
-  it("the progress follows the commands directly, in the fixed zone — never in the scroll zone", () => {
-    expect(fixed.slice(fixed.indexOf('<i data-mark="DECISION">DECISION</i>') + '<i data-mark="DECISION">DECISION</i>'.length)).toMatch(/^(?:<\/div>)*<i data-mark="PROGRESS">PROGRESS<\/i>/);
-    expect(scroll).not.toContain('data-mark="PROGRESS"');
-    expect(column).not.toContain('data-mark="PROGRESS"');
+  it("keeps progress between actions and tabs", () => {
+    expect(at(html, "PROGRESS")).toBeGreaterThan(at(html, "DECISION"));
+    expect(at(html, "PROGRESS")).toBeLessThan(at(html, "TABS"));
   });
 
-  it("the pane's header row holds the pin and collapse button and then the reading controls, once, before the fixed zone", () => {
-    const row = html.slice(html.indexOf("data-reader-left-header"), html.indexOf("data-reader-left-fixed"));
-
-    expect(ascending([row.indexOf("reader-pin-button"), row.indexOf('aria-label="Reading controls"')])).toBe(true);
-    expect(html.split('aria-label="Reading controls"').length - 1).toBe(1);
-    // Nothing of the paper's blocks in the header.
-    for (const name of ["TITLE", "DECISION", "TABS", "MAP", "PLATE", "DETAILS"]) expect(row).not.toContain(`data-mark="${name}"`);
+  it("places reading controls in the document", () => {
+    const sidebar = html.slice(left, centre);
+    expect(sidebar).toContain("reader-pin-button");
+    expect(sidebar).not.toContain('aria-label="Reading controls"');
+    expect(column).toContain('aria-label="Reading controls"');
+    expect(html.split('aria-label="Reading controls"')).toHaveLength(2);
   });
 
   it("a paper with no strip and no map has the same header row: the controls beside the pin, then the title", () => {
@@ -202,15 +195,16 @@ describe("ReaderLayout, the three panes, a paper with a body (R10; P11-16)", () 
     expect(ascending([row.indexOf("reader-pin-button"), row.indexOf('aria-label="Reading controls"')])).toBe(true);
   });
 
-  it("the scroll zone: the map first, then the plate, then the details — and none of the fixed zone's or the column's blocks", () => {
-    expect(ascending(order(scroll, ["MAP", "PLATE", "DETAILS"]))).toBe(true);
-    for (const name of ["TITLE", "DECISION", "TABS", "COMMON", "WORDS", "ADDITIONS", "NEXT"]) expect(scroll).not.toContain(`data-mark="${name}"`);
-    expect(html).toContain('data-mode="split"');
+  it("keeps the outline separate from document content", () => {
+    const sidebar = html.slice(left, centre);
+    expect(sidebar).toContain('data-mark="MAP"');
+    for (const name of ["TITLE", "DECISION", "TABS", "PLATE", "DETAILS", "WORDS"]) expect(sidebar).not.toContain(`data-mark="${name}"`);
+    expect(html).toContain('data-mode="whole"');
   });
 
-  it("the column: the common blocks first, then the active tab's blocks, then Next", () => {
-    expect(ascending(order(column, ["COMMON", "WORDS", "ADDITIONS", "NEXT"]))).toBe(true);
-    for (const name of ["TITLE", "DECISION", "TABS", "MAP", "PLATE", "DETAILS"]) expect(column).not.toContain(`data-mark="${name}"`);
+  it("orders the document sections", () => {
+    expect(ascending(order(column, ["TITLE", "DECISION", "DETAILS", "TABS", "COMMON", "WORDS", "ADDITIONS", "PLATE", "NEXT"]))).toBe(true);
+    expect(column).not.toContain('data-mark="MAP"');
   });
 
   it("the DOM order is the visual order: the left pane, then the centre, then the margin", () => {
@@ -242,13 +236,10 @@ describe("ReaderLayout, the three panes, a paper with a body (R10; P11-16)", () 
 
   // P9-04 (X2), RE-AIMED: the panel scrolled as one, and nothing the layout put inside it scrolled, shrank or had a floor. The scroll zone
   // is the shell's one scroller now, and the layout's own wrappers in either zone still add none of those.
-  it("nothing the layout adds inside the pane's zones scrolls, shrinks or has a floor (P9-04, X2)", () => {
-    const wrappers = (zone: string) => zone.match(/<div\b[^>]*>/g) ?? [];
-
-    for (const zone of [fixed, scroll]) {
-      expect(wrappers(zone).length).toBeGreaterThan(0);
-      for (const tag of wrappers(zone)) expect(tag).not.toMatch(/class="[^"]*(?:overflow|shrink|min-h-|max-h-)[^"]*"/);
-    }
+  it("keeps the outline in the sidebar scroller", () => {
+    const sidebar = html.slice(left, centre);
+    expect(sidebar).toContain('data-mark="MAP"');
+    expect(sidebar).not.toContain("overflow-y-auto");
   });
 
   // goToPassage lands a paragraph at y 80 (`scroll-mt-20` = the masthead's 48 + 32, paper-body.tsx); a picked tab starts at the same y.
@@ -259,13 +250,9 @@ describe("ReaderLayout, the three panes, a paper with a body (R10; P11-16)", () 
     expect(tag('role="tabpanel"')).toMatch(/class="[^"]*\bscroll-mt-20\b/);
   });
 
-  it("the column's first block starts level with the pane's top, as the spread's did: its own top gaps are dropped", () => {
-    const commonTag = html.lastIndexOf("<div", html.indexOf('id="reader-common"'));
-    const start = html.lastIndexOf("<div", commonTag - 1);
-    const wrapper = html.slice(start, html.indexOf(">", start) + 1);
-
-    expect(wrapper).toContain("[&amp;&gt;:first-child&gt;:first-child]:mt-0");
-    expect(wrapper).toContain("[&amp;&gt;:first-child&gt;:first-child&gt;:first-child]:mt-0");
+  it("places reading controls above the title", () => {
+    expect(column.indexOf('aria-label="Reading controls"')).toBeLessThan(column.indexOf('data-mark="TITLE"'));
+    expect(at(html, "TITLE")).toBeLessThan(at(html, "WORDS"));
   });
 
   it("an empty words slot (Paper digestion) leaves the additions where they were in the tabpanel", () => {
@@ -303,22 +290,14 @@ describe("ReaderLayout, the map under the strip (P10-04, A8)", () => {
 
   // P11-16, RE-AIMED: the strip is the fixed zone's last block and the map the scroll zone's first — the strip never scrolls away, and
   // the map is what the pane scrolls. The two are no longer adjacent siblings, but nothing stands between them but the zones' edge.
-  it("on the three panes: the strip ends the left pane's fixed zone and the map opens its scroll zone (the terms slot is gone, P10-02)", () => {
+  it("shows paper details in the reading column0", () => {
     const html = withMap(true, PANES);
-    const { fixed, scroll, column } = panes(html);
-
-    expect(ascending(order(html, ["TITLE", "DECISION", "TABS", "MAP", "PLATE", "DETAILS"]))).toBe(true);
-    expect(fixed).toContain('data-mark="TABS"');
-    expect(fixed).not.toContain('data-mark="MAP"');
-    // Nothing follows the strip in the fixed zone but the closing tags of its wrappers; nothing precedes the map in the scroll zone but
-    // the zone's own tag and the opening tags of the layout's wrappers.
-    const tabsEnd = html.indexOf('<i data-mark="TABS">TABS</i>') + '<i data-mark="TABS">TABS</i>'.length;
-    expect(html.slice(tabsEnd, html.indexOf("data-reader-left-scroll"))).toMatch(/^(?:<\/div>)*<div [^>]*$/);
-    expect(scroll).toMatch(/^[^>]*>(?:<div[^>]*>)*<i data-mark="MAP">MAP<\/i>/);
-    expect(ascending(order(scroll, ["MAP", "PLATE", "DETAILS"]))).toBe(true);
-    // Nothing of it in the column, and the column is as it was.
+    const { pane, column } = panes(html);
+    expect(pane).toContain('data-mark="MAP"');
+    expect(pane).not.toContain('data-mark="TABS"');
+    expect(column).toContain('data-mark="TABS"');
     expect(column).not.toContain('data-mark="MAP"');
-    expect(html.split('data-mark="MAP"').length - 1).toBe(1);
+    expect(html.split('data-mark="MAP"')).toHaveLength(2);
   });
 
   it("in one column: directly under the strip and above the tabpanel, outside it", () => {
@@ -359,7 +338,7 @@ describe("ReaderLayout, the map under the strip (P10-04, A8)", () => {
 
     expect(page.match(/<ReadingMapView/g)).toHaveLength(1);
     expect(mount).toBeGreaterThan(page.indexOf("tabs={hasBody"));
-    expect(mount).toBeLessThan(page.indexOf("additions={digestion"));
+    expect(mount).toBeLessThan(page.indexOf("additions={<BookReader"));
     expect(page.slice(page.lastIndexOf("\n", mount), mount)).toMatch(/\bmap=\{/);
   });
 });
@@ -392,28 +371,11 @@ describe("reader-layout.tsx source (P7-14)", () => {
 
   // P11-16, RE-AIMED from "the spread's panel: {p.decision} right after {p.title}, then {p.tabs}, and nothing after it": the left pane's fixed
   // zone is the title, the commands and the strip; its scroll zone the map, the plate and the details.
-  it("the three panes: {p.decision} right after {p.title} and then {p.tabs} in the fixed zone; {p.map}, {p.plate}, {p.details} in the scroll zone", () => {
-    const zones = body.slice(body.indexOf("const head = ("), body.indexOf("<ReaderShell"));
-    const fixed = zones.slice(0, zones.indexOf("const rest = ("));
-    const scroll = zones.slice(zones.indexOf("const rest = ("));
-
-    // Nothing stands between the title and the commands but the opening of the wrapper that tightens their gap.
-    // Re-aimed (P11-20 follow-up, item 2b, §1c): the wrapper around {p.decision} carries `data-pane-commands` (the hook the compact rows read), which the strip of
-    // wrapper tags this line takes out must now allow; it still asserts that nothing but wrappers stands between the title and the commands.
-    expect(fixed.slice(fixed.indexOf("{p.title}") + "{p.title}".length, fixed.indexOf("{p.decision}")).replace(/<div (?:data-pane-commands="" )?className="[^"]*">/g, "").trim()).toBe("");
-    expect(fixed.indexOf("{p.tabs}")).toBeGreaterThan(fixed.indexOf("{p.decision}"));
-    // P11-16 follow-up: the progress stands between the commands and the strip, in the fixed zone.
-    expect(fixed.indexOf("{p.progress}")).toBeGreaterThan(fixed.indexOf("{p.decision}"));
-    expect(fixed.indexOf("{p.progress}")).toBeLessThan(fixed.indexOf("{p.tabs}"));
-    // The reading controls are the shell's `header`, beside the pin — not a block of either zone.
-    expect(fixed).not.toContain("<ReadingControls");
-    expect(spread).toContain("header={<ReadingControls spread />}");
-    expect(fixed).not.toContain("{p.map}");
-    expect(scroll.indexOf("{p.plate}")).toBeGreaterThan(scroll.indexOf("{p.map}"));
-    expect(scroll.indexOf("{p.details}")).toBeGreaterThan(scroll.indexOf("{p.plate}"));
-    expect(scroll).not.toContain("{p.tabs}");
-    expect(scroll).not.toContain("{p.progress}");
-    expect(spread).not.toContain("{p.common}");
+  it("shows paper details in the reading column1", () => {
+    expect(spread).toContain('left={{ whole: <div className={ZONE_INSET}>{p.map ??');
+    expect(spread.indexOf('{p.title}')).toBeLessThan(spread.indexOf('{p.decision}'));
+    expect(spread.indexOf('{p.decision}')).toBeLessThan(spread.indexOf('{p.tabs}'));
+    expect(spread.indexOf('{p.tabs}')).toBeLessThan(spread.indexOf('{panel}'));
   });
 
   it("one column: {p.details} right after {p.decision}, then {p.progress}, before the common blocks", () => {

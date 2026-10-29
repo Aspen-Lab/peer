@@ -8,37 +8,10 @@ import { useReaderPanesStore } from "@/store/reader-panes";
 import { PaneDivider } from "./pane-divider";
 import { fitPanes } from "./pane-layout";
 
-// The reader's shell (P11-10 rule 3; B P11-01 §2; ruling §1h.113 (a)): from a window of 1024 css px the paper's page is three panes in
-// one full-width grid, as Claude's own: a left pane that stays pinned or folds into a thin rail, the paper's text in the centre, and an
-// empty margin at the right, with a divider between each pair that the reader drags to put the boundary where they want it. The text
-// re-flows in the width it is given and never changes size.
-//
-//   grid-template-columns: var(--left-w) 12px minmax(0, 1fr) 12px var(--margin-w)
-//
-// The shell places blocks; it renders none of them. `left` is either `{ fixed, scroll }` — a zone that never scrolls (the title, the
-// commands, the tabs) and a zone that is the only scroller of the pane (the map) — or `{ whole }`, a pane that scrolls as one;
-// `centre` is the paper's text; `header` is what shares the pane's top row with the pin button (the reading controls). Below 1024 css px the page is today's one column and this component is not mounted (`useSpread`,
-// `spread.ts`).
-//
-// The left pane has three states, `data-state` on one DOM node — nothing unmounts, so the map's open rows, the decision block's observer
-// and the question field survive any change of state (B §6 item 2):
-//   pinned  a grid column, sticky under the masthead, window-high, scrolling inside itself;
-//   rail    a 48 px column holding one button; the pane is `inert` and out of sight;
-//   peek    the pane shown over the centre (fixed, a shadow, no re-flow): the pointer rested on the rail for 150 ms, or the rail was
-//           pressed on a touch screen. It closes 250 ms after the pointer leaves it, or on Escape (which goes no further: the page's own
-//           Escape, "back to the briefing", does not run); focus inside keeps it open. A press
-//           on the rail pins it; so does the pin button at the pane's top, which in a pinned pane collapses it again.
-// First visit: pinned, at every width the shell exists in (1024 up; the margin, then the pane, give way as the window narrows — ruling §1h.115
-// item 4, amending D6). The choice and the widths are kept per browser
-// (`store/reader-panes.ts`); what the window forces (`fitPanes`) is never written back.
-//
-// The margin is an empty `<aside data-reader-margin aria-label="Margin">`, never collapsible (ruling §1h.113: D7). Every card stands
-// in it as a fixed element placed from its measured rect (`registerMargin`, `lib/reader/margin.ts`); nothing is drawn INTO it.
-//
-// The centre's content is capped at 38 em and centred (B §2.4): a wider window adds blank gutter, not 150-character lines.
-//
-// Widths are unzoomed css px, written on the grid as `--left-pane-w` and `--margin-w` and read by the rules in globals.css (`.reader-shell`
-// and its parts). The dividers write the same two properties during a drag (`pane-divider.tsx`).
+// The reader uses a resizable left sidebar and one reading column. The invisible,
+// fixed anchor is measured only to position tools as overlays when requested;
+// it never reserves a third column. The left sidebar can still be pinned,
+// collapsed or peeked without remounting the reading content.
 
 /** The left pane's id: what the rail's button and the divider control. */
 export const LEFT_PANE_ID = "reader-left-pane";
@@ -101,7 +74,7 @@ export function ReaderShell({ left, centre, header }: ReaderShellProps) {
   // The reader's saved choice. The server snapshot is the store's INITIAL state, never the live one: the stores load after mount
   // (`skipHydration`, <StoreHydrator/>), and a hydrating render that already saw the loaded widths would not match the markup.
   const saved = useSyncExternalStore(useReaderPanesStore.subscribe, useReaderPanesStore.getState, useReaderPanesStore.getInitialState);
-  const fit = fitPanes({ viewport, left: saved.leftWidth, margin: saved.marginWidth, leftPinned: saved.leftPinned });
+  const fit = fitPanes({ viewport, left: saved.leftWidth, leftPinned: saved.leftPinned, hasMargin: false });
 
   const [peeking, setPeeking] = useState(false);
   // A pane that is pinned does not peek: forgotten at once, so that folding it again does not open it.
@@ -113,7 +86,7 @@ export function ReaderShell({ left, centre, header }: ReaderShellProps) {
   const lastPointer = useRef("mouse");
   const focusTo = useRef<"rail" | "pane" | null>(null);
 
-  // The shell's margin is where the cards stand: the measured rect, for as long as the shell is mounted.
+  // Measure the non-layout anchor so tools can be placed over the reading view when requested.
   useEffect(() => {
     const el = margin.current;
     return el ? registerMargin(el) : undefined;
@@ -302,7 +275,7 @@ export function ReaderShell({ left, centre, header }: ReaderShellProps) {
         <PaneDivider
           pane="left"
           value={fit.left}
-          room={{ viewport, other: fit.margin }}
+          room={{ viewport, other: 0 }}
           target={grid}
           variable="--left-pane-w"
           label="Resize left panel"
@@ -317,17 +290,7 @@ export function ReaderShell({ left, centre, header }: ReaderShellProps) {
           {centre}
         </div>
       </div>
-      <PaneDivider
-        pane="margin"
-        value={fit.margin}
-        room={{ viewport, other: fit.leftTrack }}
-        target={grid}
-        variable="--margin-w"
-        label="Resize margin"
-        controls={MARGIN_ID}
-        onCommit={(width) => useReaderPanesStore.getState().setMarginWidth(width)}
-      />
-      <aside ref={margin} id={MARGIN_ID} className="reader-margin" data-reader-margin="" aria-label="Margin" />
+      <aside ref={margin} id={MARGIN_ID} className="reader-margin" data-reader-margin="" aria-hidden="true" />
     </div>
   );
 }

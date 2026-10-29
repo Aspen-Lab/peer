@@ -216,6 +216,7 @@ export function takeStickyNote(
     Partial<Pick<ExplainSelection, "measure" | "bounds" | "source" | "paragraphId">> & { paragraphText?: string },
   paper: Citable,
   extras?: ReadingNoteExtras,
+  openWindow = true,
 ): { id: string; n: number } | null {
   const { ensureReadingNote, addSticky } = useNotesStore.getState();
   const noteId = ensureReadingNote(paper, extras);
@@ -228,8 +229,10 @@ export function takeStickyNote(
   });
   if (!made) return null;
   // R-open: the first card of an empty margin opens level with the selection's first line, as the selection is now.
-  const anchorTop = target.measure?.()?.bounds.top ?? target.bounds?.top;
-  useWindows.getState().open({ id: made.id, kind: "sticky", title: stickyTitle(made.n), ...(anchorTop !== undefined ? { anchorTop } : {}) });
+  if (openWindow) {
+    const anchorTop = target.measure?.()?.bounds.top ?? target.bounds?.top;
+    useWindows.getState().open({ id: made.id, kind: "sticky", title: stickyTitle(made.n), ...(anchorTop !== undefined ? { anchorTop } : {}) });
+  }
   return made;
 }
 
@@ -239,19 +242,22 @@ export function useTakeNote({
   questions,
   forYourQuestions,
   body,
+  onCreated,
 }: {
   paper: Paper;
   questions?: readonly string[];
   forYourQuestions?: readonly QuestionAnswers[];
   /** P10-09f: the paper's body as the page renders it; the paragraph the selection is in gives the anchor its range. */
   body?: readonly { paragraphs: readonly string[] }[];
+  onCreated?: () => void;
 }): (target: ExplainSelection) => void {
   return useCallback(
     (target: ExplainSelection) => {
       const paragraphText = body?.[target.sectionIndex]?.paragraphs[target.paragraphIndex];
-      takeStickyNote({ ...target, paragraphText }, citableFromPaper(paper), { questions, forYourQuestions });
+      const made = takeStickyNote({ ...target, paragraphText }, citableFromPaper(paper), { questions, forYourQuestions }, !onCreated);
+      if (made) onCreated?.();
     },
-    [paper, questions, forYourQuestions, body],
+    [paper, questions, forYourQuestions, body, onCreated],
   );
 }
 

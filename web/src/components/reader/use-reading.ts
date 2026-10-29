@@ -28,7 +28,7 @@ const TTL_MS = 24 * 60 * 60 * 1000;
  *  old full reading (P8-04). The version in the URL moves the cache's key with
  *  the bump, so an old body is never served to a newer client. The route
  *  ignores the parameter. */
-const READING_VERSION: PaperReading["version"] = 14;
+export const READING_VERSION: PaperReading["version"] = 16;
 
 type ReadingCache = Record<string, { reading: PaperReading; ts: number }>;
 
@@ -62,7 +62,7 @@ function readCache(): ReadingCache {
   }
 }
 
-function readCached(key: string): PaperReading | null {
+export function readCached(key: string): PaperReading | null {
   const entry = readCache()[key];
   if (!entry?.reading || entry.reading.version !== READING_VERSION) return null;
   if (Date.now() - (entry.ts ?? 0) >= TTL_MS) return null;

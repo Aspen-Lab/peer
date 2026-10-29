@@ -14,6 +14,7 @@ import {
   looksLikeFullText,
   type ExtractedDocument,
 } from "./html-text";
+import { readabilityOf } from "./readability";
 import { classifyHardAccessStatus } from "./paywall-status";
 import { extractPdfTextFromBytes, tryExtractPdfText } from "./pdf-text";
 import { collectSourceLinks, type SourceLink } from "./source-links";
@@ -408,7 +409,8 @@ export async function getFullText(input: FullTextInput): Promise<FullTextResult>
   cache.set(key, pending);
   try {
     const result = await pending;
-    cache.set(key, { result, ts: Date.now() });
+    if (readabilityOf(result) === "unknown") cache.delete(key);
+    else cache.set(key, { result, ts: Date.now() });
     return result;
   } catch (err) {
     cache.delete(key);

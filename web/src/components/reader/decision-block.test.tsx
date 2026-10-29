@@ -71,25 +71,25 @@ describe("DecisionBlock — Fit button, default (server-snapshot) render", () =>
 // P1-08 (§1a.6, §1f.19): an uploaded PDF's page passes no `onSkip`, and the
 // block then has no Skip button; every other page keeps it.
 describe("DecisionBlock — the Skip button (P1-08)", () => {
-  const skipButton = (html: string) => /<button[^>]*>(?:(?!<\/button>).)*>x<\/kbd>(?:(?!<\/button>).)*Skip<\/button>/.test(html);
+  const skipButton = (html: string) => /<button[^>]*>(?:(?!<\/button>).)*Skip<\/button>/.test(html);
 
-  it("renders Skip, with its x key, when the page gives onSkip", () => {
+  it("renders Skip when the page gives onSkip", () => {
     expect(skipButton(renderDecisionBlock())).toBe(true);
   });
 
-  it("renders no Skip button and no x key without onSkip; Save and Copy stay", () => {
+  it("renders no Skip button without onSkip; Save and Copy stay", () => {
     const html = renderDecisionBlock({ skip: false });
     expect(skipButton(html)).toBe(false);
     expect(html).not.toContain(">Skip<");
-    expect(html).not.toMatch(/>x<\/kbd>/);
-    expect(html).toContain(">s</kbd>");
-    expect(html).toContain(">c</kbd>");
+    expect(html).not.toContain("<kbd");
+    expect(html).toContain("Save</button>");
+    expect(html).toContain("Copy</button>");
   });
 
   // The merge of main (PR #34) moved the commands into `ReaderCommands`, which
   // is where the Skip button now lives, so the commands carry the rule
   // themselves: no `onSkip`, no Skip button and no `x` key; with it, both.
-  it("ReaderCommands itself: no Skip button and no x key without onSkip, both with it", () => {
+  it("ReaderCommands shows icons and labels without keyboard hints", () => {
     const commands = (onSkip?: () => void) =>
       renderToStaticMarkup(
         createElement(ReaderCommands, {
@@ -104,18 +104,19 @@ describe("DecisionBlock — the Skip button (P1-08)", () => {
 
     const without = commands();
     expect(without).not.toContain(">Skip<");
-    expect(without).not.toMatch(/>x<\/kbd>/);
-    expect(without).toContain(">s</kbd>");
-    expect(without).toContain(">c</kbd>");
+    expect(without).not.toContain("<kbd");
+    expect(without).toContain("<svg");
+    expect(without).toContain("Save</button>");
+    expect(without).toContain("Copy</button>");
 
     const withSkip = commands(NOOP);
     expect(withSkip).toContain("Skip</button>");
-    expect(withSkip).toMatch(/>x<\/kbd>/);
+    expect(withSkip).not.toContain("<kbd");
   });
 
   // P6-01b (§1h.23): the verdict row has as many tracks as it has commands, so
   // an uploaded PDF's page (no Skip) is not left with an empty third track.
-  it("ReaderCommands' verdict row: two tracks and Save, Copy without onSkip; three tracks and Save, Skip, Copy with it", () => {
+  it("ReaderCommands keeps the available actions together", () => {
     const verdictRow = (onSkip?: () => void) => {
       const html = renderToStaticMarkup(
         createElement(ReaderCommands, {
@@ -129,22 +130,20 @@ describe("DecisionBlock — the Skip button (P1-08)", () => {
       );
       // With no source, no read command and no upload row, the verdict row is
       // the only element whose class list names a grid track count.
-      const row = html.match(/<div class="([^"]*\bgrid-cols-\d+[^"]*)">((?:(?!<\/div>).)*)<\/div>/);
+      const row = html.match(/<div class="([^"]*reader-quick-actions[^"]*)"[^>]*>((?:(?!<\/div>).)*)<\/div>/);
       if (!row) throw new Error(`Verdict row not found in: ${html}`);
       const buttons = [...row[2].matchAll(/<button\b[^>]*>((?:(?!<\/button>).)*)<\/button>/g)].map((m) =>
-        m[1].replace(/<kbd\b[^>]*>(?:(?!<\/kbd>).)*<\/kbd>/g, ""),
+        m[1].replace(/<svg\b[^>]*>(?:(?!<\/svg>).)*<\/svg>/g, ""),
       );
       return { classes: row[1].split(/\s+/), buttons };
     };
 
     const without = verdictRow();
-    expect(without.classes).toContain("grid-cols-2");
-    expect(without.classes).not.toContain("grid-cols-3");
+    expect(without.classes).toContain("reader-quick-actions");
     expect(without.buttons).toEqual(["Save", "Copy"]);
 
     const withSkip = verdictRow(NOOP);
-    expect(withSkip.classes).toContain("grid-cols-3");
-    expect(withSkip.classes).not.toContain("grid-cols-2");
+    expect(withSkip.classes).toContain("reader-quick-actions");
     expect(withSkip.buttons).toEqual(["Save", "Skip", "Copy"]);
   });
 });
@@ -298,11 +297,12 @@ describe("DecisionBlock — the notes row (P7-14, R9)", () => {
     }),
   );
 
-  it("stands in the command stack: after Save · Skip · Copy, before the upload row and the sentence", () => {
+  it("stands among the actions, before the upload row and the sentence", () => {
     const at = (needle: string) => html.indexOf(needle);
 
     expect(at(">Copy<")).toBeGreaterThan(-1);
-    expect(at("NOTES-ROW")).toBeGreaterThan(at(">Copy<"));
+    expect(at("NOTES-ROW")).toBeGreaterThan(at(">Save<"));
+    expect(at(">Copy<")).toBeGreaterThan(at("NOTES-ROW"));
     expect(at("UPLOAD-ROW")).toBeGreaterThan(at("NOTES-ROW"));
     expect(at("SENTENCE-MARK")).toBeGreaterThan(at("UPLOAD-ROW"));
   });
@@ -348,7 +348,7 @@ describe("DecisionBlock — the commands, the details and the progress apart (P1
 
   it("the commands: the read command, the source, Save · Skip · Copy, the notes and the upload rows — and none of the rest", () => {
     const html = part("commands");
-    const rows = ["Read it here", "Open on arXiv", ">Save<", ">Skip<", ">Copy<", "NOTES-ROW", "UPLOAD-ROW"].map((needle) => html.indexOf(needle));
+    const rows = ["Read it here", "Open on arXiv", ">Save<", "NOTES-ROW", ">Skip<", ">Copy<", "UPLOAD-ROW"].map((needle) => html.indexOf(needle));
 
     expect(rows.every((index) => index >= 0)).toBe(true);
     expect([...rows].sort((a, b) => a - b)).toEqual(rows);

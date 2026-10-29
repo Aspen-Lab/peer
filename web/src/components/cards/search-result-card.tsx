@@ -4,11 +4,14 @@ import Link from "next/link";
 import { formatCount, formatDate } from "@/lib/format";
 import { cardShell } from "@/components/ui/card-shell";
 import { cn } from "@/lib/cn";
+import { InstitutionPill } from "@/components/institution-pill";
 
 interface SearchResult {
   id: string;
   title: string;
   authors: string[];
+  leadAffiliation?: string;
+  leadInstitutionId?: string;
   abstract: string;
   venue: string;
   sourceType: "journal" | "conference" | "arxiv" | "repository" | null;
@@ -152,7 +155,7 @@ export function SearchResultCard({ result }: { result: SearchResult }) {
   return (
     <Link
       href={`/papers/${encodeURIComponent(result.id)}`}
-      className={cn(cardShell({ padding: "md" }), "flex flex-col")}
+      className={cn(cardShell({ padding: "md" }), "search-result flex flex-col")}
     >
       {/* Top: type + OA badges */}
       {(badge || result.isOpenAccess) && (
@@ -189,6 +192,8 @@ export function SearchResultCard({ result }: { result: SearchResult }) {
           {result.authors.length > 3 && ` +${result.authors.length - 3}`}
         </p>
       )}
+
+      {result.leadAffiliation && <div className="mt-3"><InstitutionPill name={result.leadAffiliation} id={result.leadInstitutionId} /></div>}
 
       {/* Meta row: venue + date */}
       {(result.venue || result.publishedDate) && (

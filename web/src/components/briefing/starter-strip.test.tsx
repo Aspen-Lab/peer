@@ -63,11 +63,11 @@ describe("StarterStrip — the buttons (P7-16, R12)", () => {
     expect(ADD_KEY_HREF).toBe("/welcome?step=ai");
   });
 
-  it("they are real buttons on the card's own hairline, not running text", () => {
+  it("the secondary links have a touch target and visible keyboard focus", () => {
     for (const label of ["Set up Peer", "Add a key"]) {
       const { tag } = linkLabelled(label)!;
       expect(tag).toContain("h-10");
-      expect(tag).toContain("shadow-[inset_0_0_0_1px_var(--color-border-strong)]");
+      expect(tag).toContain("focus-visible:outline");
       expect(tag).not.toContain("underline");
     }
   });
@@ -88,7 +88,7 @@ describe("StarterStrip — what it already did, unchanged", () => {
   });
 
   it("still says the papers are a sample", () => {
-    expect(html).toContain("A sample, until you say otherwise");
+    expect(html).toContain("Sample briefing");
   });
 });
 
@@ -126,7 +126,7 @@ describe("StarterStrip — 'Add a key' only while there is no key (P7-16c, §1h.
 
   it("the rest of the card does not change with a key: the sample line, the six fields, the field of one's own", () => {
     const keyed = renderFor(withKey);
-    expect(keyed).toContain("A sample, until you say otherwise");
+    expect(keyed).toContain("Sample briefing");
     for (const topic of STARTER_TOPICS) expect(keyed).toContain(`<span class="truncate">${topic}</span>`);
     expect(keyed).toContain('aria-label="or type your field"');
     expect(keyed).toContain('aria-label="Use this"');

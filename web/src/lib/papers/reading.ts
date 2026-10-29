@@ -151,8 +151,11 @@ export interface PaperReading {
    *
    * 13 → 14 (P10-42): a sentence cut by a page break or a floating figure is one paragraph
    * again, so a reading cached under 13 can hold it in two. Read again once.
+   *
+   * 14 → 16: PDFs with narrow column gutters are re-extracted in reading order;
+   * cached passages use the previous extraction and need to be refreshed.
    */
-  version: 14;
+  version: 16;
   paperId: string;
   builtAt: string;
   provenance: ReadingProvenance;
@@ -803,7 +806,7 @@ export function buildReading(
   omitted.push({ block: "nextStep", reason: "needs_key" });
 
   return {
-    version: 14,
+    version: 16,
     paperId: paper.id,
     builtAt: now.toISOString(),
     provenance,

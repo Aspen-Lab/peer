@@ -230,7 +230,7 @@ describe("the route the page computes (§1f.13)", () => {
 describe("the map's rows and the body heading carry the mark", () => {
   const mapRow = (html: string, heading: string) => {
     const at = html.indexOf(heading);
-    return html.slice(html.lastIndexOf("<div", at), at + heading.length);
+    return html.slice(html.lastIndexOf("<li", at), at + heading.length);
   };
 
   it("tints a map row by its tier and titles it with the question numbers", () => {
@@ -246,7 +246,7 @@ describe("the map's rows and the body heading carry the mark", () => {
   it("leaves the map's rows untouched without a route, and for a section no question mentions", () => {
     const plain = renderToStaticMarkup(createElement(ReadingMapView, { map: reading.map! }));
     expect(plain).not.toContain("data-route");
-    expect(plain).not.toContain("title=");
+    expect(plain).not.toMatch(/\s+title=/);
     expect(plain).not.toContain("--color-route-");
 
     const onlyFirst: RouteResult = {

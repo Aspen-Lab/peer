@@ -1,0 +1,41 @@
+/* A quiet, solid navigation surface. Shape and contrast, rather than
+   dividers, distinguish navigation, the current page and the write action. */
+.peer-masthead {
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+}
+.peer-masthead[data-scrolled="true"] { box-shadow: 0 4px 20px color-mix(in srgb, #000 12%, transparent); }
+.peer-nav {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.peer-nav { gap: 3px; }
+.peer-nav-link, .peer-help, .peer-write {
+  border-radius: 8px;
+  height: 34px;
+}
+.peer-nav-link:hover, .peer-help:hover { background: var(--color-surface-hover); }
+.peer-nav-link[aria-current="page"] { background: var(--color-surface-hover); color: var(--color-heading); }
+.peer-write {
+  margin-right: 8px;
+  background: var(--color-heading);
+  color: var(--color-bg);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.peer-write:hover { opacity: .85; }
+.peer-write-current { background: var(--color-accent); color: var(--color-fixed-black); }
+.peer-masthead :is(a, button):focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+@media (max-width: 1023px) {
+  .peer-nav-label { display: none; }
+  .peer-nav-link { min-width: 36px; }
+}
+@media (hover: none) {
+  .peer-nav-link, .peer-help, .peer-write { min-height: 44px; }
+}

@@ -47,8 +47,8 @@ describe("the welcome wizard asks for no events or jobs", () => {
   });
 
   it("the Papers field writes straight to the paper topics: nothing is copied into another list", () => {
-    expect(page).toContain("onChangeRequired={store.updateTopics}");
-    expect(page).toContain("onChangeSoft={store.updateSoftTopics}");
+    expect(page).toContain("store.updateTopics([...profile.researchTopics, topic])");
+    expect(page).toContain("onChange={store.updateSoftTopics}");
     expect(page).not.toMatch(/Mirroring|updateEvent|updateJob/);
   });
 

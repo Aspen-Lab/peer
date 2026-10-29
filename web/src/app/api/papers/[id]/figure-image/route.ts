@@ -78,7 +78,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!stored) return reject(404, "Upload not found.", refusal);
     bytes = new Uint8Array(stored);
   } else {
-    const raw = await fetchPaperById(paperId);
+    const raw = await fetchPaperById(paperId).catch(() => undefined);
+    if (raw === undefined) return reject(503, "Paper source temporarily unavailable");
     if (!raw) return reject(404, "Paper not found");
     const paper = rawItemToPaper(raw);
 
@@ -88,8 +89,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       paperId: paper.id,
       url: paper.linkPaper ?? paper.linkArxiv ?? null,
       doi: paper.doi ?? null,
-      arxivId: paper.id.startsWith("arxiv:") ? paper.id.slice("arxiv:".length) : null,
-      openAlexId: paper.id.startsWith("openalex:") ? paper.id.slice("openalex:".length) : null,
+      arxivId: paper.id.startsWith("arxiv:") ? paper.id.slice("arxiv:".length) : raw.metadata.externalIds?.arxivId ?? null,
+      openAlexId: paper.id.startsWith("openalex:") ? paper.id.slice("openalex:".length) : raw.metadata.externalIds?.openalexId ?? null,
     });
     const link = fullText.status === "ok" ? fullText.sourceLink : undefined;
     if (!link || link.kind !== "pdf") return reject(404, "No PDF behind this reading");

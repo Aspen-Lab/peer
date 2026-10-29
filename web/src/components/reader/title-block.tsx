@@ -13,11 +13,12 @@
 // affiliation, and the line saying why a briefing paper is here) are `Bibliography`, the head of the pane's details in the scroll zone, whole at every
 // height. In one column the block is what it was, byte for byte.
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { Paper } from "@/types";
 import { formatDayAge } from "@/lib/format";
 import { shortVenue } from "@/components/cards/paper-plate";
 import { AUTHORS } from "./copy";
+import { InstitutionPill } from "@/components/institution-pill";
 
 /** Names shown before the byline asks to be opened. */
 const COLLAPSED_AUTHORS = 3;
@@ -58,7 +59,7 @@ export function initialName(name: string): string {
  * Serif, like the title above it: these are the paper's own words. The mono on
  * this page is Peer talking.
  */
-function AuthorLine({ authors, affiliation }: { authors: string[]; affiliation?: string }) {
+function AuthorLine({ authors, affiliation, institutionId }: { authors: string[]; affiliation?: string; institutionId?: string }) {
   const [expanded, setExpanded] = useState(false);
   const hidden = authors.length - COLLAPSED_AUTHORS;
   const className = "font-reading text-body-lg leading-[1.45] text-text mt-3";
@@ -88,7 +89,7 @@ function AuthorLine({ authors, affiliation }: { authors: string[]; affiliation?:
         )}
       </p>
       {affiliation && (
-        <p className="annotation text-text-faint mt-1.5">{affiliation}</p>
+        <div className="mt-2"><InstitutionPill name={affiliation} id={institutionId} /></div>
       )}
     </div>
   );
@@ -114,18 +115,24 @@ export function Bibliography({
   paper,
   recommendation = null,
   now,
+  access,
 }: {
-  paper: Pick<Paper, "venue" | "publishedDate" | "authors" | "leadAffiliation">;
+  paper: Pick<Paper, "venue" | "publishedDate" | "authors" | "leadAffiliation" | "leadInstitutionId">;
   recommendation?: string | null;
   now: number;
+  access?: ReactNode;
 }) {
   const line = metaLine(paper, now);
-  if (!line && paper.authors.length === 0 && !recommendation) return null;
+  if (!line && paper.authors.length === 0 && !paper.leadAffiliation && !recommendation && !access) return null;
   return (
     <div data-pane-bibliography="" className="mt-6">
-      {line && <p className="annotation text-meta text-text-muted">{line}</p>}
-      {paper.authors.length > 0 && <AuthorLine authors={paper.authors} affiliation={paper.leadAffiliation} />}
-      {recommendation && <Recommendation text={recommendation} />}
+      <table aria-label="Paper details" className="reader-sidebar-facts"><tbody>
+        {line && <tr><th scope="row">Published</th><td>{line}</td></tr>}
+        {paper.authors.length > 0 && <tr><th scope="row">Authors</th><td><AuthorLine authors={paper.authors} /></td></tr>}
+        {paper.leadAffiliation && <tr><th scope="row">Affiliation</th><td><InstitutionPill name={paper.leadAffiliation} id={paper.leadInstitutionId} /></td></tr>}
+        {recommendation && <tr><th scope="row">Relevance</th><td>{recommendation}</td></tr>}
+        {access && <tr><th scope="row">Access</th><td>{access}</td></tr>}
+      </tbody></table>
     </div>
   );
 }
@@ -171,7 +178,7 @@ export function TitleBlock({
         {paper.title}
       </h1>
       {paper.authors.length > 0 && (
-        <AuthorLine authors={paper.authors} affiliation={paper.leadAffiliation} />
+        <AuthorLine authors={paper.authors} affiliation={paper.leadAffiliation} institutionId={paper.leadInstitutionId} />
       )}
       {recommendation && <Recommendation text={recommendation} />}
     </header>

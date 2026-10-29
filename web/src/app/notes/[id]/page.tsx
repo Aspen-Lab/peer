@@ -12,6 +12,7 @@ import { PageContainer } from "@/components/ui/page-container";
 import { EmptyState } from "@/components/ui/empty-state";
 import { COMMAND } from "@/components/ui/command";
 import { useNotesHydrated, useNotesStore } from "@/store/notes";
+import "./notes-design.css";
 
 export default function NotePage() {
   const { id = "" } = useParams<{ id: string }>();
@@ -21,7 +22,7 @@ export default function NotePage() {
   return (
     // The board's width: the note keeps its own measure, and the room around
     // it carries the notes rail and the shelf.
-    <PageContainer width="board" rhythm="reader" className="pb-24">
+    <PageContainer width="board" rhythm="reader" className="notes-page pb-24">
       {!ready ? null : note ? (
         // Keyed by the note: moving to another note starts a fresh editor
         // rather than carrying one note's state into the next. P10-21 (X-B3):

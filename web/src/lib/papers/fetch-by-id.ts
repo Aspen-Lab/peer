@@ -6,6 +6,8 @@ import {
 } from "@/lib/utils/openalex";
 import { cleanDisplayText, cleanDisplayTextOrUndefined } from "@/lib/text/clean";
 import { fetchSemanticScholarText } from "./enrich";
+import { fetchSemanticScholar } from "@/lib/sources/semantic-scholar-client";
+import { paperToRawItem, type S2Paper } from "@/lib/sources/semantic-scholar";
 
 const MAILTO = process.env.OPENALEX_EMAIL ?? "peer@example.com";
 
@@ -110,9 +112,30 @@ async function fetchArxivPaper(arxivId: string): Promise<RawItem | null> {
   }
 }
 
+export class PaperLookupUnavailable extends Error {}
+
+async function fetchSemanticScholarPaper(id: string): Promise<RawItem | null> {
+  if (!/^[a-f0-9]{40}$/i.test(id)) return null;
+  const fields = "paperId,corpusId,title,abstract,authors,year,publicationDate,venue,citationCount,url,externalIds,openAccessPdf,fieldsOfStudy";
+  try {
+    const res = await fetchSemanticScholar(`https://api.semanticscholar.org/graph/v1/paper/${encodeURIComponent(id)}?fields=${fields}`, { next: { revalidate: 3600 } }, 8000);
+    if (res?.status === 404) return null;
+    if (!res?.ok) throw new PaperLookupUnavailable("Semantic Scholar unavailable");
+    const paper = await res.json() as S2Paper;
+    if (!/^[a-f0-9]{40}$/i.test(paper.paperId ?? "") || !paper.title) throw new PaperLookupUnavailable("Invalid Semantic Scholar record");
+    return { ...paperToRawItem(paper), id: `semantic_scholar:${id}` };
+  } catch (error) {
+    if (error instanceof PaperLookupUnavailable) throw error;
+    throw new PaperLookupUnavailable("Semantic Scholar unavailable");
+  }
+}
+
 export async function fetchPaperById(id: string): Promise<RawItem | null> {
   if (id.startsWith("openalex:")) {
     return fetchOpenAlexPaper(id.slice("openalex:".length));
+  }
+  if (id.startsWith("semantic_scholar:")) {
+    return fetchSemanticScholarPaper(id.slice("semantic_scholar:".length));
   }
   if (id.startsWith("arxiv:")) {
     return fetchArxivPaper(id.slice("arxiv:".length));

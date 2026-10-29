@@ -53,75 +53,29 @@ describe("the masthead's grid keeps a gap between its cells (N2)", () => {
     expect(header).toContain("gap-x-4");
   });
 
-  it("is otherwise the bar it was: from md, 48px, three columns, sticky", () => {
+  it("is a 48px sticky bar with two groups from md", () => {
     const header = classes(open(render(), "header"));
 
-    for (const cls of ["hidden", "md:grid", "sticky", "top-0", "z-50", "h-12", "px-6", "grid-cols-[1fr_auto_1fr]", "items-center"]) {
+    for (const cls of ["hidden", "md:grid", "sticky", "top-0", "z-50", "h-12", "px-6", "grid-cols-[1fr_auto]", "items-center"]) {
       expect(header).toContain(cls);
     }
   });
 });
 
-describe("the Briefing link drops its label to its arrow where the cells cannot hold the gap (N2)", () => {
-  // The rail's link is the one `href="/"` anchor that is not the wordmark: it carries the rail's name.
-  const back = (html: string) => open(html, "a", 'aria-label="← Briefing"');
-
-  it("keeps its accessible name, '← Briefing', whichever of the two forms is showing", () => {
+describe("the reader masthead", () => {
+  it("omits briefing pagination on a paper in the feed while keeping the main navigation", () => {
+    papers = [{ id: "openalex:W1" }, { id: "openalex:W2" }, { id: "openalex:W3" }];
     const html = render();
-    const tag = back(html);
-
-    expect(tag).toContain('href="/"');
-    expect(tag).toContain('aria-label="← Briefing"');
+    expect(html).not.toContain("← Briefing");
+    expect(html).not.toContain("Previous paper");
+    expect(html).not.toContain("Next paper");
+    expect(html).not.toContain("2 / 3");
+    expect(open(html, "a", 'aria-label="Main"')).toContain('href="/"');
   });
 
-  it("shows only the arrow below lg and the whole label from lg", () => {
-    const html = render();
-    const link = html.slice(html.indexOf(back(html)));
-    const inside = link.slice(0, link.indexOf("</a>"));
-    const label = open(inside, "span", "aria-hidden");
-    const word = open(inside, "span", "lg:inline");
-
-    // P9-40 re-aimed this test (§1c): it used to pin two spans, a `lg:hidden` "←" and a `hidden lg:inline`
-    // "← Briefing", which left "←← Briefing" in the link's textContent. The property is the same, the arrow below
-    // lg and the whole label from lg, but the arrow is now there at every width, in the one decorative span, and
-    // only the word (with its leading space) comes in from lg, inside it: one line of text, as it was.
-    expect(inside).toMatch(/href="\/"><span aria-hidden="true">←<span class="hidden lg:inline"> Briefing<\/span><\/span>$/);
-    expect(classes(word)).toEqual(expect.arrayContaining(["hidden", "lg:inline"]));
-    // Neither form is read out twice: the link's name is the aria-label, the span is decoration.
-    expect(label).toContain('aria-hidden="true"');
-  });
-
-  it("reads '← Briefing' once in its textContent, the arrow shared by the arrow-only and the labelled form", () => {
-    const html = render();
-    const link = html.slice(html.indexOf(back(html)));
-    const inside = link.slice(0, link.indexOf("</a>"));
-
-    // P9-23 left "←← Briefing": both forms were in the DOM, each with its own arrow, one of them display:none.
-    // A script or a test that reads `textContent` sees the DOM, not the screen.
-    expect(inside.replace(/<[^>]*>/g, "")).toBe("← Briefing");
-  });
-
-  it("is a touch target where there is no hover, as the arrow alone would be 14px wide", () => {
-    const tag = classes(back(render()));
-
-    expect(tag).toContain("[@media(hover:none)]:min-h-11");
-    expect(tag).toContain("[@media(hover:none)]:min-w-11");
-  });
-
-  it("is wider to hit than its glyph below lg: an invisible after box reaches 8px out each side, gone from lg", () => {
-    const tag = classes(back(render()));
-
-    // The arrow is about 8px wide in the bar's mono. `after:absolute` + `-inset-x-2` / `-inset-y-3` make a click
-    // area of about 24 x 42 px around it without taking any room in the grid, and the box ends inside the 16px gap.
-    expect(tag).toEqual(expect.arrayContaining(["relative", "after:absolute", "after:-inset-x-2", "after:-inset-y-3"]));
-    // From lg the whole label is the target and the box is not drawn.
-    expect(tag).toContain("lg:after:hidden");
-  });
-
-  it("is on a paper only: the briefing's masthead has no rail", () => {
-    pathname = "/";
-
+  it("omits the briefing link on a directly opened paper too", () => {
     expect(render()).not.toContain("← Briefing");
+    expect(open(render(), "a", 'aria-label="Peer"')).toContain('href="/"');
   });
 });
 
@@ -183,79 +137,7 @@ describe("below lg the wordmark is its mark alone, so the masthead fits with the
   });
 });
 
-describe("below lg the position text drops, the arrows stay and name it (P9-40, step 2)", () => {
-  // Step 1 (the wordmark is its mark) fits a mouse from 768 but not a touch tablet: with the 44px arrows and the
-  // 44px `?` the cells still need 844px, so at 768 and 820 the nav stood past the window. The rule's second step:
-  // the "2 of 5" text drops between md and lg, with the hairline after it; the arrows (the real prev / next
-  // buttons) stay, and their names say where you are, since the text that said it is gone.
-  const BRIEFING = ["openalex:W1", "openalex:W2", "openalex:W3", "openalex:W4", "openalex:W5"];
-  const onPaper = (n: number) => {
-    papers = BRIEFING.map((id) => ({ id }));
-    pathname = `/papers/${encodeURIComponent(BRIEFING[n - 1])}`;
-    return render();
-  };
-  /** From the Briefing link to the nav: the rail, the centre cell's whole markup. */
-  const rail = (html: string) => {
-    const from = html.lastIndexOf("<a", html.indexOf('aria-label="← Briefing"'));
-    return html.slice(from, html.indexOf("<nav", from));
-  };
-
-  it("names the position in each arrow: 'Previous paper, 2 of 5' and 'Next paper, 2 of 5'", () => {
-    const html = onPaper(2);
-
-    expect(open(html, "button", 'aria-label="Previous paper')).toContain('aria-label="Previous paper, 2 of 5"');
-    expect(open(html, "button", 'aria-label="Next paper')).toContain('aria-label="Next paper, 2 of 5"');
-  });
-
-  it.each([
-    [1, 'aria-label="Previous paper, 1 of 5"', 'aria-label="Next paper, 1 of 5"'],
-    [5, 'aria-label="Previous paper, 5 of 5"', 'aria-label="Next paper, 5 of 5"'],
-  ])("names the position at the ends too: paper %i of 5, and the missing direction is disabled", (n, prev, next) => {
-    const html = onPaper(n);
-    const prevTag = open(html, "button", "Previous paper");
-    const nextTag = open(html, "button", "Next paper");
-
-    expect(prevTag).toContain(prev);
-    expect(nextTag).toContain(next);
-    // The attribute, not the word: every step button carries the `disabled:` utility classes.
-    expect(n === 1 ? prevTag : nextTag).toContain(' disabled=""');
-    expect(n === 1 ? nextTag : prevTag).not.toContain(' disabled=""');
-  });
-
-  it("draws the position text from lg only: the 'N of M' span is hidden below it, as is the hairline after it", () => {
-    const html = rail(onPaper(2));
-    const text = open(html, "span", "tabular-nums");
-    const rules = html.match(/<span aria-hidden="true" class="[^"]*\bw-px\b[^"]*">/g) ?? [];
-
-    // The text is in the markup, for the widths that hold it: "2 of 5" once.
-    expect(html.replace(/<[^>]*>/g, "")).toContain("2 of 5");
-    expect(classes(text)).toEqual(expect.arrayContaining(["hidden", "lg:inline"]));
-    // Two hairlines frame it from lg (before it, after it); below lg the one after it goes with it, so the arrow
-    // and the keys keep exactly one between them.
-    expect(rules).toHaveLength(2);
-    expect(classes(rules[0] ?? "")).not.toContain("hidden");
-    expect(classes(rules[1] ?? "")).toEqual(expect.arrayContaining(["hidden", "lg:block"]));
-  });
-
-  it("keeps the arrows and the keycaps at every width: they are not hidden by the width", () => {
-    const html = rail(onPaper(2));
-    const buttons = html.match(/<button\b[^>]*>/g) ?? [];
-
-    expect(buttons).toHaveLength(2);
-    for (const b of buttons) expect(classes(b)).not.toContain("hidden");
-  });
-
-  it("is still the way back alone on a deep link: no position, no arrows, no text, no hairline", () => {
-    papers = [];
-    const html = rail(render());
-
-    expect(html.replace(/<[^>]*>/g, "")).toBe("← Briefing");
-    expect(html).not.toContain("<button");
-    expect(html).not.toContain("w-px");
-  });
-});
-
-describe("on a touch tablet below lg the hairlines are 4px either side, so the 44px targets fit at 768 (P9-40, step 3)", () => {
+describe("the navigation is grouped without divider lines", () => {
   // Measured after steps 1 and 2: with a mouse the cells fit from 768, and on touch from 820, but at 768 the touch
   // tablet's `?` still ended at 781px, 13px past the window (44px arrows, a 44px `?`). Five hairlines are visible
   // in the bar below lg, 17px each with their 8px margins; at 4px a side they are 9px, 37px less in all, and the `?`
@@ -266,23 +148,13 @@ describe("on a touch tablet below lg the hairlines are 4px either side, so the 4
     return (render().match(/<span aria-hidden="true" class="[^"]*\bw-px\b[^"]*">/g) ?? []).map(classes);
   };
 
-  it("gives every hairline that shows below lg a 4px margin where there is no hover, and keeps 8px otherwise", () => {
-    const shown = hairlines().filter((c) => !c.includes("hidden"));
-
-    // The rail's one (the other goes with the position text) and the nav's four: Main | Search | Saved | Profile | ?.
-    expect(shown).toHaveLength(5);
-    for (const c of shown) {
-      expect(c).toContain("mx-2");
-      expect(c).toContain("[@media(hover:none)]:max-lg:mx-1");
-    }
+  it("does not draw vertical separators between actions", () => {
+    expect(hairlines()).toHaveLength(0);
   });
 
-  it("leaves the hairline that comes in from lg as it was: 8px, drawn from lg only", () => {
-    const fromLg = hairlines().filter((c) => c.includes("hidden"));
-
-    expect(fromLg).toHaveLength(1);
-    expect(fromLg[0]).toEqual(expect.arrayContaining(["mx-2", "lg:block"]));
-    expect(fromLg[0]).not.toContain("[@media(hover:none)]:max-lg:mx-1");
+  it("keeps accessible names on navigation links", () => {
+    const html = render();
+    for (const name of ["Main", "Search", "Saved", "Profile"]) expect(html).toContain(`aria-label="${name}"`);
   });
 });
 
@@ -354,7 +226,7 @@ describe("the masthead is opaque once the page is scrolled", () => {
   it("takes the surface background when scrolled, and is not glass", () => {
     const header = classes(open(render(), "header"));
 
-    expect(header).toContain("data-[scrolled=true]:bg-surface");
+    expect(header).toContain("peer-masthead");
     expect(header).not.toContain("data-[scrolled=true]:glass-bar");
     expect(header.some((c) => /backdrop|glass/.test(c))).toBe(false);
     expect(header).toContain("sticky");

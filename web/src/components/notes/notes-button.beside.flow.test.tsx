@@ -15,8 +15,12 @@ vi.mock("react", async (importOriginal) => {
   const { hookRuntime } = await import("@/test-support/hook-runtime");
   return { ...actual, ...hookRuntime.hooks };
 });
+const navigation = vi.hoisted(() => ({ open: vi.fn(), inputs: vi.fn() }));
 vi.mock("./paper-notes", () => ({
-  usePaperNotes: ({ openWindow }: { openWindow?: () => void }) => ({ ready: true, own: undefined, citing: [], open: () => openWindow?.() }),
+  usePaperNotes: (inputs: unknown) => {
+    navigation.inputs(inputs);
+    return { ready: true, own: undefined, citing: [], open: navigation.open };
+  },
 }));
 vi.mock("@/lib/reader/margin", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/reader/margin")>();
@@ -93,7 +97,7 @@ describe("NotesButton feeds the tab its place (P11-14, A P11-19 C1)", () => {
     useWindows.setState({ windows: [sticky], clock: 1 });
     const tree = await mountButton("edge");
 
-    expect(viewOf(tree).props).toMatchObject({ variant: "edge", beside: true, marginLeft: 1000, shown: false });
+    expect(viewOf(tree).props).toMatchObject({ variant: "edge", beside: true, marginLeft: 1000 });
     const html = markupOf(tree);
     expect(html).toContain("left:1000px");
     expect(html).toContain("translateX(-100%)");
@@ -103,7 +107,7 @@ describe("NotesButton feeds the tab its place (P11-14, A P11-19 C1)", () => {
   it("with no card standing, the tab is on the window's edge, whatever the margin", async () => {
     const tree = await mountButton("edge");
 
-    expect(viewOf(tree).props).toMatchObject({ variant: "edge", beside: false, shown: false });
+    expect(viewOf(tree).props).toMatchObject({ variant: "edge", beside: false });
     const html = markupOf(tree);
     expect(html).toMatch(/\bright-0\b/);
     expect(html).not.toContain("left:");
@@ -120,28 +124,18 @@ describe("NotesButton feeds the tab its place (P11-14, A P11-19 C1)", () => {
     expect(html).not.toContain("left:");
   });
 
-  it("the notes window shown alone is a card beside which the tab stands", async () => {
-    // Nothing in the stack yet: the tab's press opens the window (`shown`), and the tab already stands beside where it will be.
+  it("pressing the tab does not open a window over the reader", async () => {
     const tree = await mountButton("edge", 1);
-
-    expect(viewOf(tree).props).toMatchObject({ variant: "edge", shown: true, beside: true, marginLeft: 1000 });
-    const html = markupOf(tree);
-    expect(html).toContain('aria-expanded="true"');
-    expect(html).toContain("left:1000px");
-    expect(html).not.toMatch(/\bright-0\b/);
-  });
-
-  it("a second press closes the window, and the tab is back on the window's edge", async () => {
-    const tree = await mountButton("edge", 2);
-
-    expect(viewOf(tree).props).toMatchObject({ variant: "edge", shown: false, beside: false });
-    expect(markupOf(tree)).toMatch(/\bright-0\b/);
+    expect(viewOf(tree).props).toMatchObject({ variant: "edge", beside: false });
+    expect(markupOf(tree)).not.toContain("aria-expanded");
+    expect(navigation.open).toHaveBeenCalled();
+    expect(navigation.inputs.mock.lastCall?.[0]).not.toHaveProperty("openWindow");
   });
 
   it("the phone's row is never beside anything, with a card standing or not", async () => {
     useWindows.setState({ windows: [sticky], clock: 1 });
     const tree = await mountButton("row");
 
-    expect(viewOf(tree).props).toMatchObject({ variant: "row", beside: false, shown: false });
+    expect(viewOf(tree).props).toMatchObject({ variant: "row", beside: false });
   });
 });

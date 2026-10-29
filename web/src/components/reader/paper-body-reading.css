@@ -1,0 +1,135 @@
+/* Paper prose: a comfortable measure with a steady ragged edge. Scale follows
+   the reader's existing A/A controls without changing their saved preference. */
+.reading-scaled #paper-body section[id^="paper-section-"] > div {
+  font-size: calc(19px * var(--reading-scale, 1));
+  line-height: 1.8;
+  max-width: 34em;
+  color: var(--color-text);
+  text-align: left;
+  hyphens: manual;
+}
+
+#paper-body section[id^="paper-section-"] > div > div + div {
+  margin-top: 1.4em;
+}
+
+#paper-body section[id^="paper-section-"] > h3:not(:last-child) {
+  margin-bottom: 0.8em;
+}
+.reading-scaled #paper-body section[id^="paper-section-"] > h3 {
+  max-width: 34em;
+  font-size: calc(24px * var(--reading-scale, 1));
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+#paper-body section[id^="paper-section-"] + section[id^="paper-section-"] {
+  margin-top: 3rem;
+}
+
+/* Reading first: facts line up as a quiet table, while the paper's words keep
+   a comfortable prose measure. The same rules work in either reading layout. */
+.reader-facts-table {
+  width: min(100%, 42rem);
+  border-collapse: collapse;
+  font: 400 14px/1.5 var(--font-sans);
+  color: var(--color-text);
+}
+.reader-facts-table tr { border-bottom: 1px solid var(--color-border-strong); }
+.reader-facts-table tr:first-child { border-top: 1px solid var(--color-border-strong); }
+.reader-facts-table th, .reader-facts-table td { padding: 10px 0; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.reader-facts-table th { width: 9rem; padding-right: 20px; color: var(--color-text-muted); font-weight: 400; }
+.reader-facts-table td { color: var(--color-heading); }
+.reader-centre h2.eyebrow {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.3;
+  text-transform: none;
+  color: var(--color-heading);
+}
+.reader-centre h2.eyebrow > span { width: 5px; height: 5px; border-radius: 50%; background: var(--color-accent); }
+.reader-centre h2.eyebrow + span { opacity: .6; }
+.reader-abstract-toggle {
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--color-border-strong);
+  color: var(--color-heading);
+  background: transparent;
+}
+.reader-abstract-toggle:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+.reader-abstract-prose, .reader-lead-prose {
+  max-width: 33em;
+  font-size: calc(18px * var(--reading-scale, 1));
+  line-height: 1.75;
+  color: var(--color-text);
+  text-align: left;
+  hyphens: manual;
+}
+.reader-lead-prose { font-size: calc(19px * var(--reading-scale, 1)); }
+.reader-abstract-prose p + p { margin-top: 1.3em; }
+.reader-related-list > li { padding: 12px 0; border-bottom: 1px solid var(--color-border-strong); }
+.reader-related-list > li:first-child { padding-top: 0; }
+.reader-related-list > li:last-child { border-bottom: 0; padding-bottom: 0; }
+@media (max-width: 480px) {
+  .reader-facts-table th { width: 6.5rem; padding-right: 12px; }
+}
+
+/* Keep the reading page's structure in type and spacing, not repeated rules. */
+.reader-paper-view h2.eyebrow + span[aria-hidden="true"],
+.reader-paper-view h2.eyebrow > span[aria-hidden="true"] {
+  display: none;
+}
+.reader-paper-view h2.eyebrow {
+  color: var(--color-heading);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.reader-paper-view .reader-facts-table tr,
+.reader-paper-view .reader-facts-table tr:first-child {
+  border: 0;
+}
+.reader-paper-view .reader-facts-table th,
+.reader-paper-view .reader-facts-table td {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.reader-paper-view .reader-related-list > li {
+  border: 0;
+  padding: 0;
+}
+.reader-paper-view .reader-related-list > li + li { margin-top: 20px; }
+.reader-paper-view .reader-abstract-toggle {
+  min-height: 48px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+.reader-paper-view .reader-abstract-toggle:hover { background: var(--color-surface-hover); }
+.reader-paper-view .reader-topic {
+  border-radius: 6px;
+  background: var(--color-surface);
+}
+.reader-paper-view .reader-topic:hover { background: var(--color-surface-hover); }
+.reader-paper-view .reader-topic:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.reader-paper-view [data-pane-upload] button {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+.reader-paper-view [data-pane-upload] button:hover { background: var(--color-surface-hover); }
+.reader-paper-view [data-pane-upload] button.border-accent { border-color: var(--color-accent); }
+.reader-paper-view [data-pane-upload] + p {
+  border-left: 0;
+  padding-left: 0;
+}
+.reader-result { padding: 4px 0; }

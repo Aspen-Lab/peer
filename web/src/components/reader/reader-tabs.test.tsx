@@ -52,11 +52,11 @@ describe("ReaderTabs — the strip", () => {
     expect(tabId("summary")).not.toBe(tabId("digestion"));
   });
 
-  it("is set in the label face, and is a touch target on a phone", () => {
+  it("uses legible unwrapped labels and is a touch target on a phone", () => {
     const html = render("digestion");
 
     for (const button of tabs(html)) {
-      expect(tag(button)).toContain("eyebrow");
+      expect(tag(button)).toContain("whitespace-nowrap");
       expect(tag(button)).toContain("[@media(hover:none)]:min-h-11");
     }
   });
@@ -67,8 +67,8 @@ describe("ReaderTabs — the strip", () => {
       const byId = (id: string) => tag(tabs(html).find((button) => tag(button).includes(`id="${id}"`))!);
       const other = active === "summary" ? "digestion" : "summary";
 
-      expect(byId(tabId(active))).toContain("inset_0_-2px_0_0_currentColor");
-      expect(byId(tabId(other))).not.toContain("inset_0_-2px_0_0_currentColor");
+      expect(byId(tabId(active))).toContain("reader-tab-selected");
+      expect(byId(tabId(other))).not.toContain("reader-tab-selected");
     }
   });
 });

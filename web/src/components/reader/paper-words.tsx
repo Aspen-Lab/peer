@@ -212,8 +212,8 @@ export function PaperWords({
         </SummaryBlock>
       )}
       <SummaryBlock id={SUMMARY_ID.abstract} className="mt-12">
-        <AbstractToggle>
-          <div className="font-reading text-lead leading-[1.6] text-text-muted measure-paper mt-4 space-y-4 reading-justify">
+        <AbstractToggle defaultOpen={lead === null && skim.length === 0}>
+          <div className="reader-abstract-prose font-reading text-lead leading-[1.6] text-text-muted measure-paper mt-4 space-y-4 reading-justify">
             {split > 0 && <Paragraph sentences={sentences.slice(0, split)} from={0} inked={inked} />}
             {split < sentences.length && (
               <Paragraph sentences={sentences.slice(split)} from={split} inked={inked} />

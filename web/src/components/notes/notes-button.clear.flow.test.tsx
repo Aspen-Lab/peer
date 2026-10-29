@@ -108,7 +108,6 @@ const STATES: { name: string; windows: FloatingWindow[]; presses?: number }[] = 
   { name: "a figure", windows: [card("figure", "figure", 1)] },
   { name: "the notes window with a figure stacked", windows: [card(NOTES_WINDOW_ID, "notes", 1), card("figure", "figure", 2)] },
   { name: "four cards stacked", windows: [card("s1", "sticky", 1), card(EXPLAIN_WINDOW_ID, "explain", 2), card(NOTES_WINDOW_ID, "notes", 3), card("figure", "figure", 4)] },
-  { name: "the notes window shown by the tab's own press", windows: [], presses: 1 },
 ];
 
 beforeEach(() => {
@@ -156,7 +155,7 @@ describe("the tab is clear of the text in every state (P11-34)", () => {
     useMarginStore.setState({ rect: marginAt(1024) });
     const tree = await mountButton(2);
 
-    expect(viewOf(tree).props).toMatchObject({ shown: false, beside: false });
+    expect(viewOf(tree).props).toMatchObject({ beside: false });
     expect(markupOf(tree)).toMatch(/\bright-0\b/);
     expect(px(markupOf(tree), "width")).toBeUndefined();
   });
@@ -169,7 +168,7 @@ describe("the tab is clear of the text in every state (P11-34)", () => {
 
     expect(typeof viewOf(tree).props.onOpen).toBe("function");
     expect(html.match(/<button\b/g)).toHaveLength(1);
-    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain("aria-expanded");
     expect(html).toContain(">Notes<");
   });
 });

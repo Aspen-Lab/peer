@@ -91,7 +91,8 @@
 // And a map of one row (no key, or the guide not yet answered) starts open, so a headless paper's map is its
 // paragraphs under their one row, not a closed line.
 
-import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import "./reading-map.css";
 import type { PaperReading } from "@/lib/papers/reading";
 import {
   gistRoute,
@@ -142,6 +143,29 @@ function depthOf(heading: string): number {
 /** P10-04: a row's level — the map's own (`level`), or, for a map built before levels, read off the heading. */
 function levelOfRow(row: ReadingMapSection): 1 | 2 | 3 {
   return row.level ?? (Math.min(depthOf(row.heading) + 1, 3) as 1 | 2 | 3);
+}
+
+/** Index the flat, ordered headings without inventing hierarchy for unnumbered sections. */
+export function mapHierarchy(sections: readonly ReadingMapSection[]) {
+  const ancestors: number[] = [];
+  const rows = sections.map((row, index) => {
+    const level = levelOfRow(row);
+    while (ancestors.length && levelOfRow(sections[ancestors[ancestors.length - 1]]) >= level) ancestors.pop();
+    const number = /^(\d+(?:\.\d+)*)\b/.exec(row.heading.trim())?.[1];
+    while (number && ancestors.length) {
+      const parentNumber = /^(\d+(?:\.\d+)*)\b/.exec(sections[ancestors[ancestors.length - 1]].heading.trim())?.[1];
+      if (!parentNumber || number.startsWith(`${parentNumber}.`)) break;
+      ancestors.pop();
+    }
+    const parents = [...ancestors];
+    ancestors.push(index);
+    return { parents, children: [] as number[] };
+  });
+  rows.forEach((row, index) => {
+    const parent = row.parents.at(-1);
+    if (parent !== undefined) rows[parent].children.push(index);
+  });
+  return rows;
 }
 
 /**
@@ -309,7 +333,7 @@ function MentionsLine({ hits }: { hits: ReadonlyArray<{ term: string; count: num
 function MetaLine({ parts }: { parts: ReturnType<typeof metaParts> }) {
   const last = parts[parts.length - 1];
   return (
-    <span className="annotation ml-auto min-w-0 max-w-full overflow-x-clip text-right text-text-faint">
+    <span className="reader-map-meta annotation ml-auto min-w-0 max-w-full overflow-x-clip text-right text-text-faint">
       <span className="block -mr-[2ch]">
         {metaRuns(parts).map((run, runIndex) => (
           <Fragment key={run.name}>
@@ -378,6 +402,48 @@ export function ReadingMapView({
   // P10-04: what each group row stands for, by its id.
   const groups = useMemo(() => groupTotals(map), [map]);
   const sectionIndexes = useMemo(() => sectionIndexesOf(map), [map]);
+  const hierarchy = useMemo(() => mapHierarchy(map.sections), [map.sections]);
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => {
+    const structure = mapHierarchy(map.sections);
+    return new Set(map.sections.filter((row, index) => levelOfRow(row) > 1 && structure[index].children.length > 0).map((row) => row.id));
+  });
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const lastObservedId = useRef<string | null>(null);
+  const mapId = useId();
+
+  // The paper scrolls in the window; follow the heading nearest the reading line.
+  useEffect(() => {
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      let current: string | null = null;
+      for (let i = 0; i < map.sections.length; i++) {
+        const row = map.sections[i];
+        const part = partOf(row);
+        const anchor = part ? paragraphAnchor(sectionIndexes[i], part.from) : sectionAnchor(sectionIndexes[i]);
+        const element = document.getElementById(anchor);
+        if (element && element.getBoundingClientRect().top <= 100) current = row.id;
+      }
+      setActiveId(current);
+      if (current === lastObservedId.current) return;
+      lastObservedId.current = current;
+      const index = map.sections.findIndex((row) => row.id === current);
+      if (index >= 0) {
+        const parents = hierarchy[index].parents.map((parent) => map.sections[parent].id);
+        setCollapsed((existing) => {
+          if (!parents.some((id) => existing.has(id))) return existing;
+          const next = new Set(existing);
+          parents.forEach((id) => next.delete(id));
+          return next;
+        });
+      }
+    };
+    const schedule = () => { if (!frame) frame = window.requestAnimationFrame(update); };
+    schedule();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    return () => { window.removeEventListener("scroll", schedule); window.removeEventListener("resize", schedule); if (frame) window.cancelAnimationFrame(frame); };
+  }, [hierarchy, map.sections, sectionIndexes]);
   if (map.sections.length === 0) return null;
   // Questions that point somewhere: an unmarked row then says so.
   const asked = routeAsksQuestions(route);
@@ -410,13 +476,19 @@ export function ReadingMapView({
       else next.add(id);
       return next;
     });
+  const toggleBranch = (id: string) => setCollapsed((current) => {
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  });
 
   // P11-16 (B P11-01 §2.3, §3.2): no scroller of its own. From 1024 css px the map stands in the left pane's scroll zone, which is the
   // pane's one scroller (the map used to scroll inside the old spread's sticky panel with `xl:overflow-y-auto`, a second scroller where
   // the layout now has one); in one column it was never bounded. The zone gives its contents the focus ring's room (`reader-layout.tsx`).
   return (
     <section aria-label={MAP.heading} className="mt-6">
-      <p className="eyebrow inline-flex items-center gap-2 text-text-faint">
+      <p data-map-title="" className="eyebrow inline-flex items-center gap-2 text-text-faint">
         <span aria-hidden className="block h-[6px] w-[6px] shrink-0 bg-current" />
         {MAP.heading}
       </p>
@@ -440,7 +512,7 @@ export function ReadingMapView({
         </button>
       </p>
       <div className={shownOnPhone ? undefined : "hidden sm:block"}>
-        <ol className="mt-2 space-y-1">
+        <ol data-map-list="" className="mt-2 space-y-1">
           {map.sections.map((row, k) => {
             const lines = row.paragraphs.filter((line) => line.opening !== null);
             const expanded = open.has(row.id);
@@ -477,33 +549,31 @@ export function ReadingMapView({
                 ? ROUTE.tiers.none
                 : null;
             const foldable = !group && (lines.length > 0 || Boolean(mark?.evidence));
+            const hasChildren = hierarchy[k].children.length > 0;
+            const branchOpen = !collapsed.has(row.id);
+            const hidden = hierarchy[k].parents.some((parent) => collapsed.has(map.sections[parent].id));
             return (
-              <li key={row.id} data-level={level} {...(group ? { "data-group": "" } : {})} style={{ paddingLeft: `${(level - 1) * INDENT_STEP_REM}rem` }}>
+              <li key={row.id} data-level={level} data-map-row="" data-expanded={expanded} data-active={activeId === row.id} id={`${mapId}-row-${k}`} hidden={hidden} {...(group ? { "data-group": "" } : {})} style={{ paddingLeft: `${(level - 1) * INDENT_STEP_REM}rem` }}>
                 <div
                   data-route={mark?.tier}
                   title={mark?.title}
                   className={markedClass(`flex items-baseline gap-2 ${TOUCH_CENTER}`, mark, "-mx-1 px-1")}
                 >
-                  {foldable ? (
-                    <button
-                      type="button"
-                      aria-expanded={expanded}
-                      aria-label={expanded ? MAP.closeLines(row.heading) : MAP.openLines(row.heading)}
-                      onClick={() => toggle(row.id)}
-                      className={`annotation w-3 shrink-0 text-text-faint transition-colors hover:text-heading ${TOUCH_TALL}`}
-                    >
-                      {expanded ? "−" : "+"}
+                  {hasChildren ? (
+                    <button type="button" aria-expanded={branchOpen} aria-label={`${branchOpen ? "Collapse" : "Expand"} subsections of ${row.heading}`} aria-controls={hierarchy[k].children.map((child) => `${mapId}-row-${child}`).join(" ")} onClick={() => toggleBranch(row.id)} className={`reader-map-toggle ${TOUCH_TALL}`}>
+                      <span className={`reader-map-chevron${branchOpen ? " is-open" : ""}`} aria-hidden>›</span>
                     </button>
                   ) : (
-                    <span aria-hidden className="w-3 shrink-0" />
+                    <span aria-hidden className="reader-map-toggle-spacer" />
                   )}
                   {/* The heading and its meta are one group: it is what wraps (the meta drops under the
                       heading when the heading would be left too little room), beside the fold toggle. */}
                   <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
                     <a
                       href={`#${rowAnchor}`}
-                      onClick={(event) => followSectionLink(event, rowAnchor, reveal)}
-                      className="min-w-0 flex-[1_1_14rem] font-reading text-body-sm leading-[1.45] text-text-muted transition-colors hover:text-heading"
+                      onClick={(event) => { setActiveId(row.id); followSectionLink(event, rowAnchor, reveal); }}
+                      aria-current={activeId === row.id ? "location" : undefined}
+                      className="min-w-0 flex-[1_1_14rem] font-reading text-body-sm leading-[1.45] text-text-muted transition-colors hover:text-heading [.reader-left_&]:font-sans"
                     >
                       <MathText text={row.heading} />
                     </a>
@@ -515,6 +585,7 @@ export function ReadingMapView({
                         would be left too little room. */}
                     <MetaLine parts={metaParts(shown, role)} />
                   </div>
+                  {foldable && <button type="button" aria-expanded={expanded} aria-label={expanded ? MAP.closeLines(row.heading) : MAP.openLines(row.heading)} onClick={() => toggle(row.id)} className={`reader-map-excerpt-toggle ${TOUCH_TALL}`}><span aria-hidden>···</span></button>}
                 </div>
                 {/* Peer's words: the tier and the counts behind it. */}
                 {fact && <p className="annotation pl-5 text-text-faint wrap-anywhere">{fact}</p>}

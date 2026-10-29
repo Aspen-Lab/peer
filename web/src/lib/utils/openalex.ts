@@ -23,11 +23,12 @@ export function reconstructAbstract(
  * `authorships` by position already, but says so explicitly, and a record
  * that has lost its order should not silently promote whoever is first.
  */
-function leadAffiliationOf(authorships: OpenAlexAuthorship[]): string | undefined {
-  const lead =
-    authorships.find((a) => a.author_position === "first") ?? authorships[0];
-  const name = lead?.institutions?.find((i) => i.display_name)?.display_name;
-  return cleanDisplayTextOrUndefined(name);
+export function leadInstitutionOf(authorships: OpenAlexAuthorship[]): { name?: string; id?: string } {
+  const lead = authorships.find((a) => a.author_position === "first") ?? authorships[0];
+  const institution = lead?.institutions?.find((i) => i.display_name);
+  const name = cleanDisplayTextOrUndefined(institution?.display_name);
+  const id = institution?.id?.match(/^(?:https:\/\/openalex\.org\/)?(I\d{1,15})$/)?.[1];
+  return { name, id };
 }
 
 export function normalizeOpenAlexId(openalexId: string): string {
@@ -38,7 +39,7 @@ interface OpenAlexAuthorship {
   author_position?: string;
   author: { display_name: string };
   /** Present in the `authorships` field Peer already selects. */
-  institutions?: { display_name?: string }[];
+  institutions?: { id?: string; display_name?: string }[];
 }
 
 interface OpenAlexConcept {
@@ -273,7 +274,8 @@ export function openAlexWorkToRawItem(w: OpenAlexWork): RawItem {
       .map((a) => a.author?.display_name)
       .map(cleanDisplayText)
       .filter((n): n is string => Boolean(n)),
-    leadAffiliation: leadAffiliationOf(w.authorships ?? []),
+    leadAffiliation: leadInstitutionOf(w.authorships ?? []).name,
+    leadInstitutionId: leadInstitutionOf(w.authorships ?? []).id,
     abstract: abstract || undefined,
     url: bestUrl(w),
     publishedAt: w.publication_date || "",

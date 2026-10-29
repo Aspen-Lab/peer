@@ -44,20 +44,21 @@ export type MathRun = { kind: "text"; value: string } | { kind: "math"; value: s
 /** A paragraph as its prose and its formulas, in order. Text with no
  *  brackets comes back as one run, so the common case costs one comparison. */
 export function splitMath(text: string): MathRun[] {
-  if (!text.includes(MATH_OPEN)) return [{ kind: "text", value: text }];
+  if (!text.includes(MATH_OPEN) && !text.includes("$") && !text.includes("\\(") && !text.includes("\\[")) return [{ kind: "text", value: text }];
   const runs: MathRun[] = [];
   let at = 0;
-  while (at < text.length) {
-    const open = text.indexOf(MATH_OPEN, at);
-    if (open < 0) break;
-    const close = text.indexOf(MATH_CLOSE, open + 1);
-    if (close < 0) break;
+  const delimiters = /⟦([^⟧]*)⟧|\\\(([\s\S]*?)\\\)|\\\[([\s\S]*?)\\\]|(?<!\\)\$\$([^$\n]+)\$\$|(?<!\\)\$([^$\n]+)\$/g;
+  for (const match of text.matchAll(delimiters)) {
+    const tex = match[1] ?? match[2] ?? match[3] ?? match[4] ?? match[5];
+    // Single dollar signs also denote money. Only interpret an unambiguous
+    // mathematical expression, and never swallow prose between prices.
+    if (match[5] !== undefined && (tex !== tex.trim() || !(/^[A-Za-zα-ωΑ-Ω]$/.test(tex) || /[\\^_{}=+*/-]|[α-ωΑ-Ω]/.test(tex)))) continue;
+    const open = match.index;
     if (open > at) runs.push({ kind: "text", value: text.slice(at, open) });
-    const tex = text.slice(open + 1, close);
     // A display marker inside a line — a block that was never lifted out —
     // reads as nothing rather than as "#3".
     if (!/^#\d+$/.test(tex)) runs.push({ kind: "math", value: tex });
-    at = close + 1;
+    at = open + match[0].length;
   }
   if (at < text.length) runs.push({ kind: "text", value: text.slice(at) });
   return runs;

@@ -56,12 +56,11 @@ describe("the title in the pane stands alone (title-block.tsx)", () => {
     expect(h1).not.toMatch(/\bsm:text-display\b/);
   });
 
-  it("one column is what it was, byte for byte: the venue line, the title, the byline, the recommendation", () => {
+  it("one column keeps the venue, title, byline, affiliation pill and recommendation", () => {
     const html = title(paper(), undefined, "Why it is here.");
 
-    expect(html).toBe(
-      '<header><p class="annotation text-meta text-text-muted mt-6">Nature Communications · 2d ago</p><h1 class="paper-line text-heading text-display-sm measure-title mt-2 sm:text-display xl:text-display-sm">A Survey of Shore Ecology</h1><div class="mt-3"><p class="font-reading text-body-lg leading-[1.45] text-text mt-3 mt-0 measure-lede">A. Writer, B. Reader, C. Author, <button type="button" aria-expanded="false" class="annotation text-text-faint hover:text-heading underline decoration-border-strong underline-offset-4 transition-colors [@media(hover:none)]:py-3">and 2 more</button></p><p class="annotation text-text-faint mt-1.5">University of Invented Studies, Department of Made-Up Science</p></div><p class="font-sans text-body-sm text-text-muted mt-1">Why it is here.</p></header>',
-    );
+    for (const text of ["Nature Communications", "A Survey of Shore Ecology", "A. Writer", AFFILIATION, "Why it is here."]) expect(html).toContain(text);
+    expect(html).toContain('class="institution-pill"');
     expect(title(paper(), false, "Why it is here.")).toBe(html);
   });
 });
@@ -88,11 +87,18 @@ describe("the bibliography heads the pane's details (title-block.tsx, decision-b
     expect(html).toContain('data-pane-bibliography=""');
   });
 
-  it("the venue line takes the details' rhythm, not the one column's 24 px top gap", () => {
-    const meta = /<p class="([^"]*)">Nature Communications/.exec(biblio(paper()))?.[1] ?? "";
+  it("aligns the metadata in labelled table rows", () => {
+    const html = biblio(paper(), "Why it is here.");
+    expect(html).toContain('<table aria-label="Paper details"');
+    expect(html).toContain('<th scope="row">Published</th>');
+    expect(html).toContain('<th scope="row">Authors</th>');
+    expect(html).toContain('<th scope="row">Affiliation</th>');
+    expect(html).toMatch(/<th scope="row">Relevance<\/th><td>Why it is here\.<\/td>/);
+  });
 
-    expect(meta).toContain("annotation");
-    expect(meta.split(/\s+/)).not.toContain("mt-6");
+  it("includes source access in the same table when available", () => {
+    const html = renderToStaticMarkup(createElement(Bibliography, { paper: paper(), now: NOW, access: createElement("button", null, "Source") }));
+    expect(html).toMatch(/<th scope="row">Access<\/th><td><button>Source<\/button><\/td>/);
   });
 
   it("says only what the record knows: no venue, no date, no authors, no recommendation — an upload — draws nothing at all", () => {

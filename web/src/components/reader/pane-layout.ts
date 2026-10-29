@@ -130,6 +130,8 @@ export interface PaneRequest {
   margin?: number;
   /** Whether the reader pinned the left pane. Absent on a first visit: pinned (ruling §1h.115 item 4). */
   leftPinned?: boolean;
+  /** A reader can omit the reserved margin and let tools float over the page. */
+  hasMargin?: boolean;
 }
 
 export interface PaneFit {
@@ -165,6 +167,14 @@ export function fitPanes(request: PaneRequest): PaneFit {
   const wantLeft = clampPane("left", finite(request.left) ? request.left : defaultPanePx("left", viewport));
   const wantMargin = clampPane("margin", finite(request.margin) ? request.margin : MARGIN_DEFAULT_PX);
   const wantPinned = request.leftPinned ?? true;
+
+  if (request.hasMargin === false) {
+    const available = Math.max(LEFT_MIN_PX, viewport - DIVIDER_PX - CENTRE_MIN_PX);
+    const left = Math.min(wantLeft, available);
+    const pinned = wantPinned && viewport >= LEFT_MIN_PX + DIVIDER_PX + CENTRE_MIN_PX;
+    const leftTrack = pinned ? left : RAIL_PX;
+    return { left, leftTrack, margin: 0, centre: Math.max(0, viewport - leftTrack - DIVIDER_PX), pinned, forced: wantPinned && !pinned };
+  }
 
   if (wantPinned) {
     let over = wantLeft + wantMargin + CENTRE_MIN_PX + gutters - viewport;

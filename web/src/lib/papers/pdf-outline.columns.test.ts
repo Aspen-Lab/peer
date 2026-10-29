@@ -124,6 +124,16 @@ describe("the gutter of a page set in two columns (P7-10)", () => {
     expect(gutterOf(columns(20), 10)).toEqual({ a: LEFT.edge, b: RIGHT.x });
   });
 
+  it("recognizes a narrow 1.7-em gutter and reads each column in order", () => {
+    const narrow = columns(20).map((item) => item.x === RIGHT.x ? { ...item, x: 307 } : item);
+    expect(gutterOf(narrow, 10)).toEqual({ a: LEFT.edge, b: 307 });
+    const lines = linesOfPage({ page: 1, items: narrow });
+    expect(labels(lines)).toEqual([
+      ...Array.from({ length: 20 }, (_, n) => `L${String(n + 1).padStart(2, "0")}`),
+      ...Array.from({ length: 20 }, (_, n) => `R${String(n + 1).padStart(2, "0")}`),
+    ]);
+  });
+
   it("finds none on a page of running text across its whole width", () => {
     const page = Array.from({ length: 20 }, (_, n) => run(fill("x").repeat(2).slice(0, 100), { x: 50, y: 700 - n * 12 }));
     expect(gutterOf(page, 10)).toBeNull();

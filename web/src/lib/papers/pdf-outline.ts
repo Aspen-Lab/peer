@@ -322,8 +322,8 @@ const SCRIPT_RATIO = 0.75;
 const SCRIPT_RISE = 7.5;
 /** ...or this far below it (a subscript). */
 const SCRIPT_DROP = 3.5;
-/** A gutter is at least this many ems wide. */
-const GUTTER_EM = 2;
+/** A gutter is at least this many ems wide. Some journals use a narrow 1.5-em gap. */
+const GUTTER_EM = 1.5;
 /** The gutter is looked for in the middle of the text's width: between these
  *  shares of it. */
 const GUTTER_SEARCH: readonly [number, number] = [0.35, 0.65];
@@ -792,7 +792,7 @@ function longestClearRun(rows: Row[], x0: number, width: number): Row[] {
 /**
  * The gutter of a page set in two columns, or null.
  *
- * A 2-em band is slid across the middle of the text's width, and the band
+ * A 1.5-em band is slid across the middle of the text's width, and the band
  * that stays empty for the most consecutive rows is the candidate. It is a
  * gutter when that run is at least `GUTTER_MIN_ROWS` rows with text on both
  * sides in at least that many of them, each side spans a good share of the
@@ -952,9 +952,8 @@ export function bodyStyle(lines: PdfLine[]): { size: number; font: string } {
 /** A running head is on at least this many pages (P10-33, BACKLOG-84): two pages that open with the same
  *  wording are a templated paragraph, or a repeated one, not a head. */
 const FURNITURE_MIN_PAGES = 3;
-/** The page's top or bottom band: this many of its rows from either edge. A head and a rule, a folio and a
- *  journal line, an author line above them: three. Wording mid-page, or the fifth row down, is the body's. */
-const FURNITURE_BAND_ROWS = 3;
+/** The page's top or bottom band: enough room for a four-line journal footer. */
+const FURNITURE_BAND_ROWS = 4;
 
 /** Whether a line stands in the top or bottom band of its page (`FURNITURE_BAND_ROWS` rows from an edge, rows
  *  being the page's distinct baselines to the nearest 3 points, so two columns' lines share one). */
@@ -1076,6 +1075,9 @@ export function headingOf(line: PdfLine, body: { size: number; font: string }): 
   const bigger = line.size >= body.size * HEADING_SIZE_RATIO;
   const otherFace = line.font !== body.font && line.size >= body.size * 0.95;
   if (!bigger && !otherFace) return null;
+  // A font change can be an inline emphasis inside prose. A lowercase opening
+  // at ordinary text size is a continuation, not a new unnumbered heading.
+  if (!numbered && !bigger && /^[‘“"'([{]*\p{Ll}/u.test(text)) return null;
   // An unnumbered heading is a word: "Abstract", "Discussion". A row of
   // symbols set in the maths face ("qe,ic0,1 ka,ic0,iqe,1") is an equation
   // the page happens to set apart.
@@ -1823,7 +1825,18 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
       if (full.length > 0) figureCaptions.push({ ...caption, caption: full });
       continue;
     }
-    const next = headingOf(line, body);
+    let next = headingOf(line, body);
+    // A long, ordinary-size line in an alternate font immediately following
+    // prose is usually a continuation with inline emphasis, not a heading.
+    const previousProse = held.at(-1);
+    if (next && !sectionNumberOf(next) && next.length > 40 && line.size < body.size * HEADING_SIZE_RATIO && previousProse?.page === line.page && previousProse.font === body.font && previousProse.y > line.y && previousProse.y - line.y <= body.size * 1.35) next = null;
+    // A numbered heading can wrap onto a lowercase line in the same face.
+    if (!next && heading !== null && sectionNumberOf(heading) && line.font !== body.font && wrapsHeading(lastHeading, line, line.text)) {
+      heading = joinLines(heading, line.text.trim(), vocab);
+      lastHeading = line;
+      canonical = canonicalizeHeading(heading);
+      continue;
+    }
     if (next) {
       if (heading !== null && wrapsHeading(lastHeading, line, next)) {
         heading = joinLines(heading, next, vocab);

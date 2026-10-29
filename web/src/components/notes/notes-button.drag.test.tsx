@@ -93,7 +93,7 @@ const STATES: { name: string; props: Record<string, unknown> }[] = [
   { name: "beside a card at 1366 px", props: { beside: true, marginLeft: 1006 } },
   { name: "beside a card at 1440 px", props: { beside: true, marginLeft: 1080 } },
   { name: "beside a card with no margin registered (under 1024 px)", props: { beside: true } },
-  { name: "the notes window shown by its own press", props: { beside: true, marginLeft: 920, shown: true } },
+  { name: "the notes window shown by its own press", props: { beside: true, marginLeft: 920 } },
   { name: "the paper has no note of its own yet", props: { beside: true, marginLeft: 920, has: false } },
 ];
 
@@ -154,10 +154,10 @@ describe("pressing the tab is as it was (P11-46)", () => {
   });
 
   it("is still one button that opens and closes the window: its press, its state and its place are untouched", () => {
-    const html = view({ beside: true, marginLeft: 744, shown: true });
+    const html = view({ beside: true, marginLeft: 744 });
 
     expect(html.match(/<button\b/g)).toHaveLength(1);
-    expect(html).toContain('aria-expanded="true"');
+    expect(html).not.toContain("aria-expanded");
     expect(html).toContain('type="button"');
     expect(html).toContain("left:744px");
     expect(html).toContain("translateX(-100%)");
@@ -231,7 +231,6 @@ const FLOW_STATES: { name: string; windows: FloatingWindow[]; presses?: number }
   { name: "the explain card", windows: [card(EXPLAIN_WINDOW_ID, "explain", 1)] },
   { name: "a figure", windows: [card("figure", "figure", 1)] },
   { name: "four cards stacked", windows: [card("s1", "sticky", 1), card(EXPLAIN_WINDOW_ID, "explain", 2), card(NOTES_WINDOW_ID, "notes", 3), card("figure", "figure", 4)] },
-  { name: "the notes window shown by the tab's own press", windows: [], presses: 1 },
 ];
 
 beforeEach(() => {
@@ -280,7 +279,7 @@ describe("the page's tab ignores a drag that began in the paper in every state (
     const tree = await mountButton(2);
     const html = markupOf(tree);
 
-    expect(viewOf(tree).props).toMatchObject({ shown: false, beside: false });
+    expect(viewOf(tree).props).toMatchObject({ beside: false });
     expect(passesThrough(html, GESTURES.text)).toBe(true);
     expect(passesThrough(html, GESTURES.face)).toBe(false);
   });

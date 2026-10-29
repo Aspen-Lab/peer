@@ -166,6 +166,13 @@ describe("takeStickyNote", () => {
     expect(useWindows.getState().windows).toMatchObject([{ id: made?.id, kind: "sticky", title: "Note 1" }]);
   });
 
+  it("can save a selected passage without opening a floating note", () => {
+    const made = takeStickyNote(target, PAPER, undefined, false);
+    const note = Object.values(useNotesStore.getState().notes)[0];
+    expect(note.blocks.find((b) => b.id === made?.id)?.anchor).toMatchObject({ paperId: "p1", paragraphId: "paper-section-1-p2" });
+    expect(useWindows.getState().windows).toEqual([]);
+  });
+
   it("numbers the next ones 2 and 3 in the order made, and the windows stand in the stack", () => {
     takeStickyNote(target, PAPER);
     takeStickyNote({ ...target, paragraphIndex: 0 }, PAPER);

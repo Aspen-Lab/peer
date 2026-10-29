@@ -320,12 +320,9 @@ export function ResultsBlock({
         <div className="space-y-4">
           {results.map((result, i) => (
             // Keyed by position: a model can write the same title twice.
-            // 8-04/S26: each result gets its own thin dark-outline box —
-            // border-heading/40 (near-black at 40% in light, the light
-            // heading colour at 40% in dark), small radius, ~16px padding.
             <div
               key={`${i}:${result.title}`}
-              className="rounded-md border border-heading/40 p-4"
+              className="reader-result"
             >
               <p className={CLAIM_CLASS}>
                 {scramble ? (
@@ -416,32 +413,25 @@ export function GlanceBlock({
   now: number;
   stagger: number;
 }) {
-  const facts: string[] = [];
-  if (paper.source === "arxiv" || paper.linkArxiv) facts.push(GLANCE.preprint);
-  else if (paper.venue) facts.push(GLANCE.journal(paper.venue));
-  if (paper.linkCode) facts.push(GLANCE.code);
+  const facts: { label: string; value: string }[] = [];
+  if (paper.source === "arxiv" || paper.linkArxiv) facts.push({ label: "Source", value: GLANCE.preprint });
+  else if (paper.venue) facts.push({ label: "Source", value: GLANCE.journal(paper.venue) });
+  if (paper.linkCode) facts.push({ label: "Code", value: GLANCE.code });
   const age = formatDayAge(paper.publishedDate, now);
-  if (age) facts.push(age);
-  if (paper.authors.length > 0) facts.push(GLANCE.team(paper.authors.length));
+  if (age) facts.push({ label: "Age", value: age });
+  if (paper.authors.length > 0) facts.push({ label: "Authors", value: GLANCE.team(paper.authors.length) });
   if (typeof paper.relevanceScore === "number" && paper.relevanceScore > 0) {
-    facts.push(GLANCE.match(paper.relevanceScore));
+    facts.push({ label: "Relevance", value: GLANCE.match(paper.relevanceScore) });
   }
   if (facts.length === 0) return null;
   return (
     <Section stagger={stagger}>
       <Heading label={REPORT_HEADING.glance} />
-      {/* One row of facts, each in its own cell: a glance is read across,
-          not down. */}
-      <ul className="flex flex-wrap gap-2">
+      <table className="reader-facts-table"><tbody>
         {facts.map((fact) => (
-          <li
-            key={fact}
-            className="font-mono text-meta text-text-muted border border-border-strong px-2.5 py-1"
-          >
-            {fact}
-          </li>
+          <tr key={fact.label}><th scope="row">{fact.label}</th><td>{fact.value}</td></tr>
         ))}
-      </ul>
+      </tbody></table>
     </Section>
   );
 }
@@ -479,7 +469,7 @@ export function RelatedBlock({
   return (
     <Section stagger={stagger}>
       <Heading label={REPORT_HEADING.related} />
-      <ul className="space-y-4 measure">
+      <ul className="reader-related-list measure">
         {related.map((p) => (
           <li key={p.id}>
             <Link
@@ -488,7 +478,7 @@ export function RelatedBlock({
             >
               {p.title}
             </Link>
-            <p className="font-mono text-meta text-text-faint mt-1">
+            <p className="font-sans text-body-sm text-text-muted mt-1">
               {[p.venue, p.publishedDate ? formatDayAge(p.publishedDate, now) : null]
                 .filter(Boolean)
                 .join(" · ")}

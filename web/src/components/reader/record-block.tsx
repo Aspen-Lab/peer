@@ -48,10 +48,10 @@ export function doors(paper: Paper, primaryUrl: string | null): Door[] {
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <li className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-4">
-      <span className="text-text-faint">{label}</span>
-      <span className="min-w-0 text-text">{children}</span>
-    </li>
+    <tr>
+      <th scope="row">{label}</th>
+      <td>{children}</td>
+    </tr>
   );
 }
 
@@ -69,8 +69,8 @@ export function RecordBlock({
   if (!published && !venue && links.length === 0) return null;
 
   return (
-    <Band label={RECORD.heading}>
-      <ul className="annotation text-text-muted space-y-3 measure-mono mt-4">
+    <Band label={RECORD.heading} gap="none" className="mt-8">
+      <table className="reader-facts-table mt-4"><tbody>
         {published && (
           <Row label={RECORD.published}>{published}</Row>
         )}
@@ -95,7 +95,7 @@ export function RecordBlock({
             </span>
           </Row>
         )}
-      </ul>
+      </tbody></table>
     </Band>
   );
 }

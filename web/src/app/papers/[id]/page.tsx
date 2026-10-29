@@ -34,7 +34,7 @@ import { BackToFeedLink } from "@/components/navigation/back-to-feed-link";
 import { hasImmediateFeedHistoryEntry } from "@/lib/navigation/feed-history";
 import { NONE } from "@/lib/navigation/card-focus";
 import { paperNav } from "@/lib/reader/paper-nav";
-import { paperKeysFor, registerReaderActions, selectionActions, type ReaderActions } from "@/lib/reader/reader-keys";
+import { registerReaderActions, selectionActions, type ReaderActions } from "@/lib/reader/reader-keys";
 import { recommendationLine } from "@/lib/reader/recommendation";
 import { scrollBehavior } from "@/lib/reader/scroll-motion";
 import { allocatePlateTerms } from "@/lib/papers/plate-terms";
@@ -78,7 +78,6 @@ import { moreReply, replyPair, requestReply, type ReplyResult } from "@/componen
 import { sayPlainly, type PlainTarget, type PlainView } from "@/components/reader/plain-button";
 import { RecordBlock } from "@/components/reader/record-block";
 import { InYourLibrary } from "@/components/reader/in-your-library";
-import { KeyLegend } from "@/components/reader/key-legend";
 import { DecisionBlock } from "@/components/reader/decision-block";
 import { QuoteList } from "@/components/reader/quote-list";
 import { ClaimList } from "@/components/reader/claim-list";
@@ -105,10 +104,12 @@ import {
 } from "@/components/reader/reader-layout";
 import { THUMB_BAR_PX, THUMB_BAR_QUERY } from "@/components/shell/thumb-bar";
 import { PAGE_CLASS, SPREAD_GRID } from "@/components/reader/spread";
+import { BookReader } from "@/components/reader/book-reader";
 import { useReading } from "@/components/reader/use-reading";
 import { useParagraphGuide } from "@/components/reader/use-paragraph-guide";
 import { PaperNotes } from "@/components/notes/paper-notes";
 import { NotesButton } from "@/components/notes/notes-button";
+import { usePaperNotes } from "@/components/notes/paper-notes";
 import { PAPER_BODY_ID } from "@/components/reader/paper-body";
 import { QuestionField, focusFirstEmptyQuestion } from "@/components/reader/question-field";
 import { ReadingMapView, readingRoute } from "@/components/reader/reading-map";
@@ -937,9 +938,9 @@ function Reader({
   );
   const explainOpen = useRef<(() => void) | null>(null);
   const openExplain = useCallback(() => explainOpen.current?.(), []);
-  // P10-09a (review 7.1, 8.4): "Take notes" on the selection — a numbered sticky note at the right, saved into the
-  // paper's own note. The pill that offers it and "Explain this" is `SelectionToolbar` (mounted by the box below).
-  const takeNote = useTakeNote({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions, body: reading?.body });
+  // Keep the selected passage with the paper's notes, then open the notes page.
+  const { open: openNotes } = usePaperNotes({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions });
+  const takeNote = useTakeNote({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions, body: reading?.body, onCreated: openNotes });
   // P11-17b (owner item 8; B P11-04 §5; ruling §1h.112): "Highlight" on the selection — the passage painted in the paper (Yellow, black words), kept as a
   // block of the paper's own note, the colour strip raised in the margin. Beside `takeNote`, with the same inputs. A Tier 0 act: it needs no key and no
   // model, so the toolbar offers it whether or not the page can explain (`canHighlight` below is its own gate, never `canExplain`'s: a paragraph, a heading or a caption of the
@@ -960,6 +961,7 @@ function Reader({
   const clearExplain = useCallback(() => selectExplain(null), [selectExplain]);
   const startOfTab = useCallback(() => scrollToTabStart(spread, document), [spread]);
   const { tab, select: selectTab, reveal } = useReaderTab({ hasBody, onChange: clearExplain, atStart: startOfTab });
+  const enterBookView = useCallback(() => selectTab("digestion"), [selectTab]);
   // P11-17b (rule 3; C P11-14's defect (c)): the notes' blue square for a note taken on a Summary block goes to that block, which stands only under the
   // "Summary" tab. The sticky notes register `reveal` for a paper's paragraphs (Paper digestion); this is the same for the Summary — the square asks the
   // page to show the Summary tab, and the jump follows once its blocks are on the page. A paper with no body has no tabs and is on its Summary always.
@@ -1422,7 +1424,7 @@ function Reader({
     <PageContainer
       width="reader"
       rhythm="reader"
-      className={`${PAGE_CLASS} md:pb-16 outline-none`}
+      className={`${PAGE_CLASS} reader-paper-view md:pb-16 outline-none`}
       tabIndex={-1}
       style={readingScaleStyle}
       // S22: withZoomTransition's own document.querySelector target — the
@@ -1439,7 +1441,7 @@ function Reader({
       <ReaderLayout
         spread={spread}
         plate={
-          !hasPlate ? null : (
+          !hasPlate || (spread && !plateIsFigure && !leadPending) ? null : (
           // A real figure: the caption is the image's, read once, from the
           // figcaption. First on the page: the rail — position and the way
           // back — is the masthead's on desktop and the thumb bar's on a phone.
@@ -1504,6 +1506,7 @@ function Reader({
           <DecisionBlock
             part="details"
             sentences={sentences}
+            compactDetails={hasBody && !model.failed}
             // P11-20 (item 2a): in the panes the fixed zone holds the title alone; the venue, byline, affiliation and recommendation head the details.
             paper={paper}
             recommendation={recommendation}
@@ -1526,6 +1529,7 @@ function Reader({
         progress={<DecisionBlock part="progress" stage={model.stage} />}
         // P7-14 (R10): the strip under the decision block, only on a paper Peer has read in full.
         tabs={hasBody ? <ReaderTabs tab={tab} onSelect={selectTab} /> : undefined}
+        bookHint={!hasBody && fromServer ? <p className="reader-book-hint">Book view needs full text</p> : undefined}
         tab={hasBody ? tab : undefined}
         // P10-04 (review 3.1): the map (P1-04, §1f.12: from the reading the server built, absent without a body)
         // stands directly under the strip and floats with it, under both tabs; it is the paper's one contents
@@ -1550,6 +1554,12 @@ function Reader({
         // `data-explain-source="summary"`; `contents` keeps the wrapper out of the layout, so nothing moves.
         words={digestion ? null : (
           <div data-explain-source="summary" className="contents">
+            {!hasBody && reading.abstract.sentences.length === 0 && !report?.skim?.length && (
+              <div className="border-l-2 border-accent pl-4 py-1">
+                <h2 className="text-title font-medium text-heading">No abstract available</h2>
+                <p className="mt-2 max-w-[48ch] text-body leading-relaxed text-text-muted">Peer could not find an abstract for this paper. Open the source to read the original record.</p>
+              </div>
+            )}
             <PaperWords
               endRef={wordsEndRef}
               reading={reading}
@@ -1561,7 +1571,8 @@ function Reader({
             />
           </div>
         )}
-        additions={digestion ? (
+        additions={<BookReader available={hasBody} showingPaper={digestion} onEnter={enterBookView}>
+          {digestion ? (
           <>
             {/* P7-14 (R10): Paper digestion — the paper: everything the extractor read. Its map
                 (P1-04, R5) is the layout's `map` slot now (P10-04), under the strip, under both tabs. */}
@@ -1674,10 +1685,6 @@ function Reader({
               <GlanceBlock paper={paper} now={now} stagger={stagger++} />
             </SummaryBlock>
 
-            <SummaryBlock id={SUMMARY_ID.related}>
-              <RelatedBlock related={related} now={now} stagger={stagger++} />
-            </SummaryBlock>
-
             {/* ── The blocks the rewrite added, kept under the old report ── */}
 
             <SummaryBlock id={SUMMARY_ID.caveats}>
@@ -1718,16 +1725,20 @@ function Reader({
                 under the same topics, and the topics as searches. On a paper
                 with no full text this stands where the column used to end
                 in air. */}
+            <SummaryBlock id={SUMMARY_ID.related}>
+              <RelatedBlock related={related} now={now} stagger={stagger++} />
+            </SummaryBlock>
+
             <SummaryBlock id={SUMMARY_ID.library}>
               <InYourLibrary paper={paper} />
             </SummaryBlock>
           </div>
         )}
+        </BookReader>}
         next={<NextRow nav={nav} next={nextPaper} />}
       />
       </SectionLinks>
       <ReaderToast toast={toast} />
-      <KeyLegend keys={paperKeysFor({ upload: isUploadId })} />
     </PageContainer>
     {/* P3-02: outside the zoomed container — the button and the card are placed
         in the window's pixels, which a `zoom` on an ancestor would scale — and
@@ -1750,10 +1761,6 @@ function Reader({
         on a mark (`onHighlightClick` above). One per paper, as the stickies and the figure host: it hides the strip when it unmounts. Outside the zoom
         container, as the cards are: it is placed in the window's pixels. */}
     <HighlightStripHost key={`highlight-strip:${paper.id}`} paperId={paper.id} />
-    {/* P7-14 (R9): the notes, as a small tab fixed at the window's right edge (from `md`; a phone has
-        the row in the command stack instead). Beside the explain box, for the same reason: it is
-        placed in the window's pixels, which the zoom on the page container would scale. */}
-    <NotesButton variant="edge" paper={paper} questions={settledQuestions(asked)} forYourQuestions={report?.forYourQuestions} />
     </>
   );
 }

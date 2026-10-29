@@ -71,6 +71,16 @@ const rowFixture = {
   color_theme: "system:ember" as const,
   updated_at: "2026-07-31T00:00:00.000Z",
 };
+
+describe("student career stages", () => {
+  it("preserves undergraduate and master's stages through profile storage", () => {
+    for (const careerStage of ["Undergraduate", "Master's student"] as const) {
+      const row = profilePatchToRow({ careerStage }, "user-1");
+      expect(row.career_stage).toBe(careerStage);
+      expect(profileRowToProfile({ ...rowFixture, career_stage: careerStage }).careerStage).toBe(careerStage);
+    }
+  });
+});
 const explicitEmptyIntent = {
   version: "feed-intent-v1" as const,
   project: { presence: "explicit-empty" as const }, challenge: { presence: "omitted" as const },

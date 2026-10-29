@@ -552,6 +552,7 @@ describe("scan 5 — every route that can reach a model is behind requireAiReque
       "src/app/api/papers/[id]/paragraph-guide/route.ts",
       "src/app/api/papers/[id]/plain/route.ts",
       "src/app/api/papers/report/route.ts",
+      "src/app/api/papers/search/jev/route.ts",
       "src/app/api/test-digest/route.ts",
     ]);
   });

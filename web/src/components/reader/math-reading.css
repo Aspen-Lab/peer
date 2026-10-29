@@ -1,0 +1,104 @@
+/* Math stays in KaTeX's mathematical faces, with a quieter colour than prose. */
+.reader-inline-math {
+  display: inline-block;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  vertical-align: -0.12em;
+  padding: 0.04em 0.13em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-surface) 90%, #a78bc8);
+  color: color-mix(in srgb, var(--color-heading) 84%, #8069ab);
+  scrollbar-width: none;
+}
+.reader-inline-math::-webkit-scrollbar,
+.reader-equation-scroll::-webkit-scrollbar { display: none; }
+.reader-inline-formula { display: inline-block; }
+.reader-inline-equation-actions { display: none; }
+
+/* Full expressions in a paragraph get their own reading surface; individual
+   symbols and values remain in the sentence that explains them. */
+#paper-body .reader-inline-equation {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin: 1em auto;
+  padding: 0.6em 0.9em;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-surface) 84%, #a78bc8);
+  text-align: center;
+}
+#paper-body .reader-inline-equation-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 8px; }
+#paper-body .reader-inline-equation-actions button {
+  display: inline-flex; align-items: center; gap: 5px; min-height: 30px;
+  padding: 0 8px; border: 0; border-radius: 6px; background: transparent;
+  color: var(--color-text-muted); font: 500 12px/1.25 var(--font-sans); cursor: pointer;
+}
+#paper-body .reader-inline-equation-actions button:hover { background: var(--color-surface-hover); color: var(--color-heading); }
+#paper-body .reader-inline-equation-actions button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+#paper-body .reader-inline-equation-actions [role="status"] { color: var(--color-text-muted); font: 500 12px/1.25 var(--font-sans); }
+
+.reader-equation {
+  --equation-ink: color-mix(in srgb, var(--color-heading) 82%, #8d76b1);
+  position: relative;
+  margin: 1.8em 0;
+  padding: 12px 16px 16px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-surface) 84%, #a78bc8);
+  color: var(--equation-ink);
+}
+.reader-equation-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font: 500 12px/1.25 var(--font-sans);
+}
+.reader-equation-number { color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.reader-equation-actions { display: flex; align-items: center; gap: 4px; }
+.reader-equation-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font: inherit;
+}
+.reader-equation-actions button:hover { background: var(--color-surface-hover); color: var(--color-heading); }
+.reader-equation-actions button:disabled { cursor: wait; opacity: .55; }
+.reader-equation-actions button:focus-visible,
+.reader-equation-scroll:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.reader-equation-scroll {
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.reader-equation-formula {
+  min-width: max-content;
+  padding: 14px 8px 8px;
+  text-align: center;
+  font-size: 1.04em;
+}
+.reader-equation-formula .katex-display { margin: 0; }
+.reader-equation-plain { display: block; white-space: pre-wrap; font: 1em/1.6 var(--font-reading); }
+.reader-equation-status {
+  position: absolute;
+  right: 18px;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-text-muted);
+  font: 500 12px/1.3 var(--font-sans);
+}
+@media (max-width: 480px) {
+  .reader-equation { padding: 10px 10px 14px; }
+  .reader-equation-actions button { min-height: 40px; }
+}

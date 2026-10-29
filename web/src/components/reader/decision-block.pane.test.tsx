@@ -14,6 +14,22 @@ const base = { sentences: ["SENTENCE-MARK."], stage: null, source: null, doi: "1
 const html = (props: Record<string, unknown>) => renderToStaticMarkup(createElement(DecisionBlock, { ...base, ...props } as never));
 
 describe("DecisionBlock, in the three panes (P11-16)", () => {
+  it("keeps source, upload and DOI available in a closed disclosure for a full-text paper", () => {
+    const details = html({ part: "details", compactDetails: true, uploadAction: createElement("button", null, "Upload PDF"), uploadStatus: createElement("p", null, "Upload complete") });
+    expect(details).toContain('<details class="reader-extra-details"><summary>Source and access</summary>');
+    const disclosure = details.slice(details.indexOf("<details"), details.indexOf("</details>"));
+    expect(disclosure).toContain("Upload PDF");
+    expect(disclosure).toContain("SENTENCE-MARK.");
+    expect(disclosure).toContain("doi:10.1021/jacs.5c15436");
+    expect(details.indexOf("Upload complete")).toBeGreaterThan(details.indexOf("</details>"));
+  });
+
+  it("leaves access details visible when there is no full text", () => {
+    const details = html({ part: "details", compactDetails: false });
+    expect(details).not.toContain("<details");
+    expect(details).toContain("SENTENCE-MARK.");
+  });
+
   it("the details draw no reading controls: the pane's header has them", () => {
     const details = html({ part: "details" });
 

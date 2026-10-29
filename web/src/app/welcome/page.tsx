@@ -16,19 +16,18 @@
 // (auto-redirect for brand-new users) lives in <FirstRunGate>.
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import "./welcome-design.css";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { useProfileStore } from "@/store/profile";
 import { useSyncGate, type AuthOutcome } from "@/components/profile-sync";
-import { careerStages, industryPreferences } from "@/types";
 import type { UserProfile } from "@/types";
 import {
   ChipInput,
   ChoiceGroup,
   RadioGroup,
   TogglePill,
-  TopicsField,
   industryLabels,
   PAPER_FOCUS_OPTIONS,
   PAPER_FRESHNESS_OPTIONS,
@@ -37,6 +36,7 @@ import {
   PAPER_IMPORTANCE_OPTIONS,
   PAPER_DISCOVERY_OPTIONS,
 } from "@/components/profile/field-kit";
+import { CareerStagePicker, DirectionPicker, RadarPicker } from "./welcome-inputs";
 import {
   AiKeyFields,
   ApiKeyHelp,
@@ -51,7 +51,6 @@ import { Callout } from "@/components/ui";
 import { buttonVariants } from "@/components/ui/button";
 import { cardShell } from "@/components/ui/card-shell";
 import { cn } from "@/lib/cn";
-import { SURFACE_TOPIC_DESCRIPTIONS } from "@/lib/profile/topic-copy";
 import {
   type StepKey,
   type StepMeta,
@@ -71,6 +70,16 @@ import {
 import { aiStepSummary } from "./summary";
 
 const DEFAULT_NAME = "Peer Member";
+const TOPIC_EXAMPLES = ["Artificial intelligence", "Climate science", "Materials science", "Neuroscience", "Design"];
+const STEP_STORY: Record<StepKey, string> = {
+  account: "A place for\nyour curiosity.",
+  basics: "A little more you.\nA lot less noise.",
+  topics: "Follow what\nmakes you curious.",
+  work: "Make space for\nyour big questions.",
+  radar: "Your field,\nyour way.",
+  ai: "A little help\nwhen you need it.",
+  persona: "Every curious mind\nis different.",
+};
 
 // The persona result lives in localStorage and never changes while this page
 // is mounted (the quiz is its own route) — a no-op subscription is enough.
@@ -122,6 +131,7 @@ export default function WelcomePage() {
   // never re-fires while the user is typing or when a remote sync lands
   // mid-session.
   const [manualStep, setManualStep] = useState<number | null>(null);
+  const [topicDraft, setTopicDraft] = useState("");
   const [autoStart, setAutoStart] = useState<number | null>(null);
   if (settled && autoStart === null) {
     setAutoStart(
@@ -143,7 +153,7 @@ export default function WelcomePage() {
   // Topics is the one gate: the feed needs at least one required topic to
   // build a real first briefing.
   const topicsSatisfied = profile.researchTopics.length > 0;
-  const canContinue = key === "topics" ? topicsSatisfied : true;
+  const canContinue = key === "topics" ? topicsSatisfied || !!topicDraft.trim() : true;
 
   // Live done-map: ticks update as the user types, and when a synced profile
   // lands mid-wizard old data ticks steps instead of silently pre-filling.
@@ -164,7 +174,16 @@ export default function WelcomePage() {
 
   // Base navigation on the computed `step` — the functional-updater form
   // would see `manualStep`, which stays null until the first manual move.
+  const addTopic = (value: string) => {
+    const topic = value.trim();
+    if (!topic) return;
+    if (!profile.researchTopics.some((existing) => existing.toLowerCase() === topic.toLowerCase())) {
+      store.updateTopics([...profile.researchTopics, topic]);
+    }
+    setTopicDraft("");
+  };
   const next = () => {
+    if (key === "topics" && topicDraft.trim()) addTopic(topicDraft);
     if (step !== null) setManualStep(Math.min(step + 1, total - 1));
   };
   const back = () => {
@@ -234,20 +253,30 @@ export default function WelcomePage() {
   const name = profile.displayName === DEFAULT_NAME ? "" : profile.displayName;
 
   return (
-    <div className="min-h-[100dvh] bg-bg flex flex-col items-center">
-      <div className="w-full max-w-[640px] px-6 py-12 lg:py-16">
+    <div className="welcome-page">
+      <div className="welcome-shell">
+        <aside className="welcome-visual" aria-label="About Peer">
+          <Image src="/onboarding/peer-messenger.png" alt="" fill priority sizes="(min-width: 768px) 42vw, 100vw" className="welcome-artwork" />
+          <div className="welcome-brand"><Image src="/logo-mark.png" alt="" width={32} height={32} /><span>Peer</span></div>
+          <div className="welcome-visual-copy">
+            <span>Your daily briefing, made personal</span>
+            <h2>{key ? STEP_STORY[key] : STEP_STORY.basics}</h2>
+          </div>
+          <p className="welcome-visual-footer">Good ideas find their way to you.</p>
+        </aside>
+      <div className="welcome-form-panel">
         {/* Header / brand + skip */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-2.5">
+        <div className="welcome-topbar">
+          <div className="flex items-center gap-2.5 invisible" aria-hidden="true">
             <Image src="/logo-mark.png" alt="Peer" width={28} height={28} className="opacity-90" />
             <span className="text-body-sm font-semibold tracking-[-0.01em] text-heading">Peer</span>
           </div>
           <button
             type="button"
             onClick={skipEverything}
-            className={cn(buttonVariants({ tone: "ghost", size: "sm" }))}
+            className="welcome-skip"
           >
-            Skip setup →
+            Skip setup <span aria-hidden>↗</span>
           </button>
         </div>
 
@@ -259,7 +288,7 @@ export default function WelcomePage() {
             <StepRail steps={steps} step={step} done={done} canJumpTo={canJumpTo} onJump={setStep} />
 
             {/* Step body — keyed so the entrance animation replays per step */}
-            <div key={key} className="animate-fade-in-up" onKeyDown={handleEnter}>
+            <div key={key} className="welcome-step" onKeyDown={handleEnter}>
               {key === "account" && (
                 <StepFrame {...accountStepCopy(auth)}>
                   <AccountStep auth={auth} />
@@ -269,28 +298,30 @@ export default function WelcomePage() {
               {key === "basics" && (
                 <StepFrame
                   kicker="Welcome"
-                  title="Let's get you set up."
-                  subtitle="A few quick details so Peer knows who it's briefing. All optional — change anything later in your profile."
+                  title="A little about you."
+                  subtitle="Make Peer yours. You can change this later."
                 >
                   <Field label="Your name">
+                    <div className="welcome-name-field">
+                    <span className="welcome-name-avatar" aria-hidden>{name.trim().charAt(0).toUpperCase() || "✳"}</span>
                     <input
                       type="text"
                       value={name}
                       onChange={(e) => store.updateDisplayName(e.target.value)}
-                      placeholder="Your name"
-                      className="w-full bg-bg-secondary/40 rounded-lg px-3 py-2.5 text-body text-text placeholder-text-faint/60 outline-none focus:bg-bg-secondary/60 focus:ring-2 focus:ring-accent/20 transition-all"
+                      placeholder="What should we call you?"
+                      aria-label="Your name"
+                      className="welcome-name-input"
                     />
+                    </div>
                   </Field>
                   <Field label="Career stage">
-                    <PillGroup
-                      options={careerStages.map((s) => ({ value: s, label: s }))}
+                    <CareerStagePicker
                       value={profile.careerStage}
-                      onChange={(v) => store.updateCareerStage(v as typeof profile.careerStage)}
+                      onChange={store.updateCareerStage}
                     />
                   </Field>
                   <Field label="Looking toward">
-                    <PillGroup
-                      options={industryPreferences.map((p) => ({ value: p, label: industryLabels[p] ?? p }))}
+                    <DirectionPicker
                       value={profile.industryVsAcademia}
                       onChange={(v) => store.updateIndustryPreference(v as typeof profile.industryVsAcademia)}
                     />
@@ -302,29 +333,20 @@ export default function WelcomePage() {
                 <StepFrame
                   kicker="The one that matters"
                   title="What should Peer track for you?"
-                  subtitle="This is the heart of your briefing. Add at least one Required topic. Peer looks for papers about these topics, even when they use different words, and ranks the closest matches first. Type a topic and press comma or Enter to turn it into a tag; drag a tag between columns to re-rank it."
+                  subtitle="Add at least one topic for your paper briefing."
                 >
-                  <Field
-                    label="Papers"
-                    hint={SURFACE_TOPIC_DESCRIPTIONS.papers}
-                  >
-                    <div data-enter-scope>
-                      <TopicsField
-                        required={profile.researchTopics}
-                        soft={profile.softTopics ?? []}
-                        onChangeRequired={store.updateTopics}
-                        onChangeSoft={store.updateSoftTopics}
-                      />
+                  <div data-enter-scope>
+                    <label htmlFor="onboarding-topic" className="welcome-topic-label"><span>Your topics</span><span>{profile.researchTopics.length} selected</span></label>
+                    <div className="welcome-topic-input">
+                      <input id="onboarding-topic" value={topicDraft} onChange={(e) => setTopicDraft(e.target.value)} onKeyDown={(e) => { if ((e.key === "Enter" || e.key === ",") && !e.nativeEvent.isComposing) { e.preventDefault(); addTopic(topicDraft); } }} placeholder="e.g. battery materials" className="min-w-0 flex-1 bg-transparent px-3 py-2 text-body text-text outline-none placeholder:text-text-faint" />
+                      <button type="button" onClick={() => addTopic(topicDraft)} disabled={!topicDraft.trim()} aria-label="Add topic" className="welcome-topic-add">+</button>
                     </div>
-                  </Field>
-                  {!topicsSatisfied && (
-                    <p id="topics-gate-note" className="mt-4 text-meta text-accent/90 flex items-center gap-1.5">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                        <circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" />
-                      </svg>
-                      Add one Required topic to continue — this is what your first briefing is built from.
-                    </p>
-                  )}
+                    {profile.researchTopics.length > 0 && <div className="mt-4 flex flex-wrap gap-2" aria-label="Selected topics" aria-live="polite">{profile.researchTopics.map((topic) => <span key={topic} className="welcome-topic-selected">{topic}<button type="button" aria-label={`Remove ${topic}`} onClick={() => store.updateTopics(profile.researchTopics.filter((item) => item !== topic))} className="rounded-full px-1 hover:bg-accent/10">×</button></span>)}</div>}
+                    <p className="mt-6 text-meta text-text-muted">Start with a field</p>
+                    <div className="welcome-topic-suggestions mt-2">{TOPIC_EXAMPLES.filter((topic) => !profile.researchTopics.some((item) => item.toLowerCase() === topic.toLowerCase())).map((topic) => <button key={topic} type="button" onClick={() => addTopic(topic)} className="welcome-topic-suggestion"><span className="welcome-topic-symbol" aria-hidden>{["✳", "◌", "⬡", "✺", "◇"][TOPIC_EXAMPLES.indexOf(topic)]}</span><span>{topic}</span><span className="welcome-topic-plus" aria-hidden>+</span></button>)}</div>
+                    <details className="welcome-more-topics mt-6"><summary className="cursor-pointer text-body-sm text-text-muted">Add related interests <span className="text-text-faint">(optional)</span></summary><div className="mt-3"><ChipInput values={profile.softTopics ?? []} onChange={store.updateSoftTopics} placeholder="Add an interest, then press Enter" tone="tag" /></div></details>
+                  </div>
+                  {!canContinue && <p id="topics-gate-note" className="text-meta text-text-muted">Add a topic to continue.</p>}
                 </StepFrame>
               )}
 
@@ -332,9 +354,9 @@ export default function WelcomePage() {
                 <StepFrame
                   kicker="Your work"
                   title="What are you working on, and with whom?"
-                  subtitle="Optional, but the single biggest lever on quality. Peer biases your briefing toward your real project, open problems, and your advisor's research lineage."
+                  subtitle="Optional. Add context for more relevant papers."
                 >
-                  <Field label="Current project" hint="1–3 sentences about what you're building right now.">
+                  <Field label="Current project">
                     <textarea
                       value={profile.currentProject ?? ""}
                       onChange={(e) => store.updateCurrentProject(e.target.value)}
@@ -343,7 +365,7 @@ export default function WelcomePage() {
                       className="w-full bg-bg-secondary/40 rounded-lg px-3 py-2.5 text-body text-text placeholder-text-faint/60 outline-none focus:bg-bg-secondary/60 focus:ring-2 focus:ring-accent/20 transition-all resize-y leading-relaxed"
                     />
                   </Field>
-                  <Field label="Open challenges" hint="The unknowns you wish someone would solve. Papers that mention these rise to the top.">
+                  <Field label="Open challenges">
                     <textarea
                       value={profile.currentChallenges ?? ""}
                       onChange={(e) => store.updateCurrentChallenges(e.target.value)}
@@ -354,7 +376,7 @@ export default function WelcomePage() {
                   </Field>
 
                   <div className="pt-2 border-t border-border/60 space-y-4">
-                    <Field label="School / org" hint="Used to pin down the right advisor.">
+                    <Field label="School / org">
                       <div data-enter-scope>
                         <SchoolAutocomplete
                           value={profile.school ?? ""}
@@ -384,13 +406,14 @@ export default function WelcomePage() {
                 <StepFrame
                   kicker="Tuning"
                   title="How should your radar sweep?"
-                  subtitle="Sensible defaults are already chosen — adjust only what you care about, or just continue."
+                  subtitle="Defaults are ready. Adjust what matters to you."
                 >
                   <div className="space-y-4">
-                    <ChoiceGroup label="Focus" value={profile.feedFocus} options={PAPER_FOCUS_OPTIONS} onChange={(v) => store.updateFeedFocus(v as typeof profile.feedFocus)} />
-                    <ChoiceGroup label="Freshness" value={profile.feedFreshness} options={PAPER_FRESHNESS_OPTIONS} onChange={(v) => store.updateFeedFreshness(v as typeof profile.feedFreshness)} />
-                    <ChoiceGroup label="Papers shown" value={profile.paperCount} options={PAPER_COUNT_OPTIONS} onChange={(v) => store.updatePaperCount(v as typeof profile.paperCount)} />
+                    <RadarPicker label="Focus" kind="focus" value={profile.feedFocus} options={PAPER_FOCUS_OPTIONS} onChange={(v) => store.updateFeedFocus(v as typeof profile.feedFocus)} />
+                    <RadarPicker label="Freshness" kind="freshness" value={profile.feedFreshness} options={PAPER_FRESHNESS_OPTIONS} onChange={(v) => store.updateFeedFreshness(v as typeof profile.feedFreshness)} />
+                    <RadarPicker label="Papers shown" kind="count" value={profile.paperCount} options={PAPER_COUNT_OPTIONS} onChange={(v) => store.updatePaperCount(v as typeof profile.paperCount)} />
 
+                    <details className="rounded-xl bg-surface/50 px-4 py-3"><summary className="cursor-pointer text-body-sm text-text-muted">More preferences</summary><div className="mt-4 space-y-4">
                     <Field label="Sources">
                       <RadioGroup
                         value={profile.feedSourceMix}
@@ -401,7 +424,7 @@ export default function WelcomePage() {
 
                     <Field
                       label="Preferred journals"
-                      hint="List the journals you trust most. Peer treats these as a primary source and gives papers from them a relevance boost (+1/3 of their score), so they rise to the top — though an exceptionally on-target paper from elsewhere can still win."
+                      hint="Add journals you trust."
                     >
                       <div data-enter-scope>
                         <ChipInput
@@ -422,6 +445,7 @@ export default function WelcomePage() {
                         <TogglePill label="Broad surveys" active={profile.feedAvoidBroadSurveys} onToggle={() => store.updateFeedAvoidBroadSurveys(!profile.feedAvoidBroadSurveys)} />
                       </div>
                     </Field>
+                    </div></details>
                   </div>
                 </StepFrame>
               )}
@@ -481,7 +505,7 @@ export default function WelcomePage() {
                 <StepFrame
                   kicker="One more thing"
                   title="Want Peer to learn your reading style?"
-                  subtitle="An optional 2-minute quiz that maps how you tend to work across five axes. It does not affect your feed — it is just a portrait of how you read."
+                  subtitle="Optional. Discover your reading style in two minutes."
                 >
                   <div className={cn(cardShell({ interactive: false, entrance: "none", padding: "none" }), "p-6 flex items-start gap-4")}>
                     <span className="inline-flex items-center justify-center w-11 h-11 rounded-full bg-accent-dim text-accent shrink-0">
@@ -500,8 +524,7 @@ export default function WelcomePage() {
                         )}
                       </p>
                       <p className="text-body-sm text-text-muted mt-1 leading-relaxed">
-                        Fifteen forced-choice questions. Not a test — a description of your
-                        defaults, useful for tuning what you see.
+                        15 questions to discover how you read. This does not change your feed.
                       </p>
                       <Link
                         href="/persona"
@@ -524,7 +547,7 @@ export default function WelcomePage() {
             </div>
 
             {/* Footer nav — sticky so Continue stays reachable on tall steps */}
-            <footer className="sticky bottom-0 z-10 -mx-6 mt-10 flex items-center justify-between gap-3 px-6 py-4 glass-bar">
+            <footer className="welcome-footer sticky bottom-0 z-10 mt-10 flex items-center justify-between gap-3 py-4">
               <button
                 type="button"
                 onClick={back}
@@ -551,10 +574,10 @@ export default function WelcomePage() {
                   type="button"
                   onClick={next}
                   disabled={!canContinue}
-                  aria-describedby={key === "topics" && !topicsSatisfied ? "topics-gate-note" : undefined}
+                  aria-describedby={key === "topics" && !canContinue ? "topics-gate-note" : undefined}
                   className={cn(
                     buttonVariants({ tone: "primary", size: "lg" }),
-                    "bg-heading hover:bg-heading/90 px-6",
+                    "welcome-continue px-6",
                     "disabled:opacity-100 disabled:bg-bg-secondary disabled:text-text-faint/70 disabled:shadow-none disabled:cursor-not-allowed disabled:active:scale-100",
                   )}
                 >
@@ -565,6 +588,7 @@ export default function WelcomePage() {
             </footer>
           </>
         )}
+      </div>
       </div>
     </div>
   );
@@ -590,72 +614,15 @@ function StepRail({
 }) {
   const total = steps.length;
   return (
-    <nav aria-label="Setup progress" className="mb-10">
-      <ol className="relative flex items-start">
-        <span aria-hidden className="absolute left-6 right-6 top-[15px] h-[1.5px] bg-heading/10" />
+    <nav aria-label="Setup progress" className="welcome-progress">
+      <div className="welcome-progress-caption"><span>{steps[step].label}</span><span>{step + 1} <span aria-hidden>/</span> {total}</span></div>
+      <ol className="welcome-progress-track">
         {steps.map((m, i) => {
-          const isCurrent = i === step;
-          const isDone = done[m.key];
           const locked = !canJumpTo(i);
-          return (
-            <li key={m.key} className="relative z-10 flex-1 flex justify-center">
-              <button
-                type="button"
-                disabled={locked}
-                onClick={() => onJump(i)}
-                aria-current={isCurrent ? "step" : undefined}
-                aria-label={
-                  locked
-                    ? `Step ${i + 1}: ${m.label} — locked until a required topic is added`
-                    : `Step ${i + 1}: ${m.label}${isDone ? " (completed)" : ""}`
-                }
-                title={locked ? "Add a required topic first" : undefined}
-                className={cn(
-                  "group flex flex-col items-center gap-1.5 bg-bg px-1 sm:px-1.5 pt-0.5 pb-1 rounded-lg outline-none",
-                  "focus-visible:ring-2 focus-visible:ring-accent/30",
-                  locked && "opacity-40 cursor-not-allowed",
-                )}
-              >
-                <span
-                  className={cn(
-                    "flex h-[26px] w-[26px] items-center justify-center rounded-full text-micro font-semibold tabular-nums",
-                    "transition-[background-color,color,scale,box-shadow]",
-                    isCurrent
-                      ? "bg-accent text-bg shadow-card scale-110"
-                      : isDone
-                        ? "bg-accent-dim text-accent"
-                        : "bg-bg-secondary text-text-faint group-hover:text-text-muted",
-                    !locked && !isCurrent && "group-active:scale-90",
-                  )}
-                >
-                  {isDone ? (
-                    <svg viewBox="0 0 12 12" className="h-3 w-3 animate-pop-in" aria-hidden>
-                      <path d="M2.5 6.5 5 9l4.5-5.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  ) : (
-                    i + 1
-                  )}
-                </span>
-                <span
-                  className={cn(
-                    "eyebrow text-text-faint",
-                    "hidden sm:block",
-                    isCurrent ? "text-heading" : isDone ? "text-text-muted" : "text-text-faint/80",
-                  )}
-                >
-                  {m.label}
-                </span>
-              </button>
-            </li>
-          );
+          return <li key={m.key}><button type="button" disabled={locked} onClick={() => onJump(i)} aria-current={i === step ? "step" : undefined} aria-label={locked ? `Step ${i + 1}: ${m.label} — locked until a required topic is added` : `Step ${i + 1}: ${m.label}${done[m.key] ? " (completed)" : ""}`} title={m.label} className={cn("welcome-progress-segment", i === step && "is-active", i !== step && done[m.key] && "is-complete")} /></li>;
         })}
       </ol>
-      <p className="sm:hidden mt-2.5 text-center text-meta text-text-faint tabular-nums">
-        {step + 1} / {total}
-      </p>
-      <p aria-live="polite" className="sr-only">
-        Step {step + 1} of {total}: {steps[step].label}
-      </p>
+      <p aria-live="polite" className="sr-only">Step {step + 1} of {total}: {steps[step].label}</p>
     </nav>
   );
 }
@@ -767,20 +734,18 @@ function StepFrame({
 }) {
   return (
     <div>
-      <p className={cn("eyebrow text-text-faint", "mb-2.5 flex items-center gap-2")}>
-        {kicker}
-      </p>
+      <p className="welcome-kicker">{kicker}</p>
       <h1
         tabIndex={-1}
         data-step-heading
-        className="display-line text-display-sm lg:text-display leading-[1.1] text-balance text-heading outline-none"
+        className="welcome-question text-balance outline-none"
       >
         {title}
       </h1>
-      <p className="text-text-muted mt-3 text-body leading-[1.6] max-w-[56ch]">
+      <p className="welcome-subtitle">
         {subtitle}
       </p>
-      <div className="mt-8 space-y-5">{children}</div>
+      <div className="welcome-fields mt-8 space-y-6">{children}</div>
     </div>
   );
 }
@@ -796,45 +761,11 @@ function Field({
 }) {
   return (
     <div>
-      <p className={cn("eyebrow text-text-faint", "text-text-faint/80 mb-1.5 block")}>
-        {label}
-      </p>
+      <p className="welcome-field-label">{label}</p>
       {children}
       {hint && (
         <p className="text-caption text-text-faint/75 mt-1.5 px-0.5 leading-relaxed">{hint}</p>
       )}
-    </div>
-  );
-}
-
-function PillGroup({
-  options,
-  value,
-  onChange,
-}: {
-  options: { value: string; label: string }[];
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {options.map((o) => {
-        const active = o.value === value;
-        return (
-          <button
-            key={o.value}
-            type="button"
-            onClick={() => onChange(o.value)}
-            className={`text-meta px-2.5 py-1 rounded-full transition-all ease-out active:scale-[0.94] ${
-              active
-                ? "bg-accent-dim text-accent shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_30%,transparent)] scale-[1.03]"
-                : "text-text-faint hover:text-text-muted bg-bg-secondary/40 hover:bg-bg-secondary/70"
-            }`}
-          >
-            {o.label}
-          </button>
-        );
-      })}
     </div>
   );
 }

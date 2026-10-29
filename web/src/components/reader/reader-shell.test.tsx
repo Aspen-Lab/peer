@@ -45,24 +45,23 @@ describe("ReaderShell — the grid", () => {
     const root = tagWith(html, "data-reader-shell");
     expect(root).toContain('class="reader-shell"');
     expect(root).toContain("--left-pane-w:320px");
-    expect(root).toContain("--margin-w:360px");
+    expect(root).toContain("--margin-w:0px");
     expect(root).toContain('data-left-state="pinned"');
   });
 
-  it("puts the left pane, the divider, the centre, the divider and the margin in that order — the DOM order is the visual order", () => {
+  it("places the left pane, divider, centre and invisible overlay anchor in order", () => {
     const html = render();
     const order = [
       html.indexOf("data-reader-left-cell"),
       html.indexOf('data-reader-divider="left"'),
       html.indexOf("data-reader-centre"),
-      html.indexOf('data-reader-divider="margin"'),
       html.indexOf("data-reader-margin"),
     ];
     expect(order.every((at) => at > 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
     // Five tracks' worth of children, no more: the grid is `left 12 centre 12 margin`.
     const directChildren = (html.match(/<(div|aside)[^>]*(data-reader-left-cell|data-reader-divider|data-reader-centre="|data-reader-margin)/g) ?? []).length;
-    expect(directChildren).toBe(5);
+    expect(directChildren).toBe(4);
   });
 
   it("shows each block exactly once, in every state (one DOM node per block)", () => {
@@ -195,17 +194,17 @@ describe("ReaderShell — a hydrating render", () => {
     useReaderPanesStore.setState({ leftPinned: false, leftWidth: 400, marginWidth: 450 });
     const html = render();
     expect(tagWith(html, "data-reader-shell")).toContain("--left-pane-w:320px");
-    expect(tagWith(html, "data-reader-shell")).toContain("--margin-w:360px");
+    expect(tagWith(html, "data-reader-shell")).toContain("--margin-w:0px");
     expect(tagWith(html, "data-reader-shell")).toContain('data-left-state="pinned"');
   });
 });
 
 describe("ReaderShell — the margin", () => {
-  it("is an empty aside named Margin: no children, no text, before anything is selected (item 5)", () => {
+  it("keeps an empty inaccessible anchor for floating tools", () => {
     const html = render();
     const aside = html.slice(html.indexOf("<aside"), html.indexOf("</aside>") + "</aside>".length);
     expect(aside).toMatch(/^<aside [^>]*><\/aside>$/);
-    expect(aside).toContain('aria-label="Margin"');
+    expect(aside).toContain('aria-hidden="true"');
     expect(aside).toContain("data-reader-margin");
     expect(aside).toContain(`id="${MARGIN_ID}"`);
   });
@@ -215,44 +214,40 @@ describe("ReaderShell — the margin", () => {
     expect(render()).toContain("data-reader-margin=");
   });
 
-  it("is not collapsible: no state, no toggle, no hidden margin — there is always one aside, and two dividers around the centre", () => {
+  it("never shows a margin divider, whether the left pane is open or collapsed", () => {
     for (const pinned of [undefined, true, false]) {
       choose({ leftPinned: pinned });
       const html = render();
       expect(count(html, "<aside")).toBe(1);
-      expect(html).toContain('data-reader-divider="margin"');
+      expect(html).not.toContain('data-reader-divider="margin"');
       expect(html).not.toMatch(/margin[^"]*collaps|collaps[^"]*margin/i);
     }
   });
 });
 
 describe("ReaderShell — the dividers", () => {
-  it("are two separators, each named, each reporting its pane's width, each controlling its pane", () => {
+  it("are one separator for the resizable left pane", () => {
     const html = render();
     const left = tagWith(html, 'data-reader-divider="left"');
-    const margin = tagWith(html, 'data-reader-divider="margin"');
     expect(left).toContain('role="separator"');
     expect(left).toContain('aria-label="Resize left panel"');
     expect(left).toContain('aria-valuenow="320"');
     expect(left).toContain(`aria-controls="${LEFT_PANE_ID}"`);
-    expect(margin).toContain('role="separator"');
-    expect(margin).toContain('aria-label="Resize margin"');
-    expect(margin).toContain('aria-valuenow="360"');
-    expect(margin).toContain(`aria-controls="${MARGIN_ID}"`);
+    expect(html).not.toContain('data-reader-divider="margin"');
   });
 
   it("report the remembered widths, and write them as the grid's custom properties", () => {
     choose({ leftPinned: true, leftWidth: 400, marginWidth: 450 });
     const html = render();
     expect(tagWith(html, "data-reader-shell")).toContain("--left-pane-w:400px");
-    expect(tagWith(html, "data-reader-shell")).toContain("--margin-w:450px");
+    expect(tagWith(html, "data-reader-shell")).toContain("--margin-w:0px");
     expect(tagWith(html, 'data-reader-divider="left"')).toContain('aria-valuenow="400"');
-    expect(tagWith(html, 'data-reader-divider="margin"')).toContain('aria-valuenow="450"');
+    expect(html).not.toContain('data-reader-divider="margin"');
   });
 
   it("the range of each is what the window leaves: at 1440 the left pane may reach 480, the margin 560", () => {
     const html = render();
     expect(tagWith(html, 'data-reader-divider="left"')).toContain('aria-valuemax="480"');
-    expect(tagWith(html, 'data-reader-divider="margin"')).toContain('aria-valuemax="560"');
+    expect(html).not.toContain('data-reader-divider="margin"');
   });
 });

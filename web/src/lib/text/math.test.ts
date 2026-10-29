@@ -49,4 +49,21 @@ describe("splitMath", () => {
   it("flattens to plain TeX for places that cannot draw", () => {
     expect(plainMath(`with ${inlineMath("h_{t}")} held`)).toBe("with h_{t} held");
   });
+
+  it("renders conventional TeX delimiters found in publisher text", () => {
+    expect(splitMath(String.raw`Let $x$ and \(\frac{a}{b}\) be given.`)).toEqual([
+      { kind: "text", value: "Let " }, { kind: "math", value: "x" },
+      { kind: "text", value: " and " }, { kind: "math", value: String.raw`\frac{a}{b}` },
+      { kind: "text", value: " be given." },
+    ]);
+    expect(splitMath(String.raw`Display \[x^2\] or $$y_1$$.`)).toEqual([
+      { kind: "text", value: "Display " }, { kind: "math", value: "x^2" },
+      { kind: "text", value: " or " }, { kind: "math", value: "y_1" }, { kind: "text", value: "." },
+    ]);
+  });
+
+  it("leaves prices and unmatched delimiters as prose", () => {
+    expect(splitMath("The cost rose from $5 to $10.")).toEqual([{ kind: "text", value: "The cost rose from $5 to $10." }]);
+    expect(splitMath(String.raw`An unmatched \(x is text.`)).toEqual([{ kind: "text", value: String.raw`An unmatched \(x is text.` }]);
+  });
 });

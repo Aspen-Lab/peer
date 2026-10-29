@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   reconstructAbstract,
   normalizeOpenAlexId,
+  leadInstitutionOf,
 } from "@/lib/utils/openalex";
 import { cleanDisplayText } from "@/lib/text/clean";
 
@@ -65,6 +66,7 @@ const SOURCE_TYPE_MAP: Record<string, string> = {
 interface OpenAlexAuthor {
   author_position: string;
   author: { display_name: string };
+  institutions?: { id?: string; display_name?: string }[];
 }
 
 interface OpenAlexWork {
@@ -180,6 +182,8 @@ export async function GET(req: NextRequest) {
       .map((a) => a.author.display_name)
       .map(cleanDisplayText)
       .filter(Boolean),
+    leadAffiliation: leadInstitutionOf(w.authorships ?? []).name,
+    leadInstitutionId: leadInstitutionOf(w.authorships ?? []).id,
     abstract: cleanDisplayText(reconstructAbstract(w.abstract_inverted_index)),
     venue: cleanDisplayText(w.primary_location?.source?.display_name),
     sourceType: classifySourceType(

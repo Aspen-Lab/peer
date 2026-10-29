@@ -17,4 +17,13 @@ describe("AbstractToggle", () => {
     expect(html).not.toContain("hidden abstract text");
     expect(html).toContain("Abstract");
   });
+
+  it("can show the abstract immediately when it is the primary reading content", () => {
+    const html = renderToStaticMarkup(
+      createElement(AbstractToggle, { defaultOpen: true, children: createElement("p", null, "paper abstract") }),
+    );
+    expect(html).toContain('aria-expanded="true"');
+    expect(html).toContain('id="abstract-panel"');
+    expect(html).toContain("paper abstract");
+  });
 });

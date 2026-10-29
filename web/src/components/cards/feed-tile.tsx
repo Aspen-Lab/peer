@@ -14,6 +14,10 @@ import { cardShell } from "@/components/ui/card-shell";
 import { cn } from "@/lib/cn";
 import { topicMarkOf } from "@/lib/papers/topic-mark";
 import { TopicMark } from "./topic-mark";
+import { ReadingAvailability } from "./reading-availability";
+import { InstitutionPill } from "@/components/institution-pill";
+import "./reading-availability.css";
+import "./feed-grid.css";
 
 type FeedItem = { kind: "paper"; data: Paper };
 
@@ -42,7 +46,7 @@ type BadgeKind = "paper" | "discussion";
 // Anything else (HN today, future blog/social adapters) renders as
 // "Discussion" so users don't mistake a thread for a peer-reviewed work.
 // Allowlist by id prefix — strict on purpose.
-const ACADEMIC_ID_PREFIXES = ["arxiv:", "openalex:"];
+const ACADEMIC_ID_PREFIXES = ["arxiv:", "openalex:", "semantic_scholar:"];
 
 // `shortVenue` moved next to the plate (its other user); re-exported so the
 // page and `short-venue.test.ts` keep importing it from here.
@@ -129,7 +133,7 @@ function SaveButton({
 const SELECTED_BG = "color-mix(in srgb, var(--color-accent) 15%, var(--color-surface))";
 
 
-function PaperTile({ paper, isRead, selected, plateTerms = [], line, index, total = 0 }: { paper: Paper; isRead: boolean; selected?: boolean; plateTerms?: string[]; line?: string | null; index?: number; total?: number }) {
+function PaperTile({ paper, isRead, selected, plateTerms = [], line }: { paper: Paper; isRead: boolean; selected?: boolean; plateTerms?: string[]; line?: string | null }) {
   const savePaper = useFeedStore((s) => s.savePaper);
   const unsavePaper = useFeedStore((s) => s.unsavePaper);
   const moreLikePaper = useFeedStore((s) => s.moreLikePaper);
@@ -165,19 +169,23 @@ function PaperTile({ paper, isRead, selected, plateTerms = [], line, index, tota
       rightLabel={paper.isSaved ? "Unsave" : "Save"}
       leftLabel="Not interested"
       rightActive={paper.isSaved}
+      className="feed-card-swipe"
     >
       <Link
         href={`/papers/${paper.id}`}
-        className={cn(paperShellClass(isRead), "transition-colors")}
+        className={cn(paperShellClass(isRead), "feed-card transition-colors")}
         // The transition belongs in the class string; only the tinted ground,
         // which is computed from the palette, has to be inline.
         style={selected ? { background: SELECTED_BG } : undefined}
       >
-        <PaperPlate paper={paper} terms={plateTerms} />
+        <div className="feed-card-cover">
+          <PaperPlate paper={paper} terms={plateTerms} />
+          <div className="feed-card-placeholder" aria-hidden="true"><TopicMark topic={mark.key} label={mark.label} size={30} strokeWidth={1.3} /></div>
+        </div>
         {/* `first:` — with no plate above it this block leads the card, and
             the top padding has to be the card's own rather than the shoulder
             under a picture. */}
-        <div className="px-5 pt-4 pb-4 first:pt-5">
+        <div className="feed-card-content px-5 pt-4 pb-4">
         {/* Venue and age lead, because they are what differs between two cards in
             the same briefing. The kind badge appears only for a "discussion" —
             the exception worth flagging, so a forum thread is never mistaken for
@@ -186,23 +194,6 @@ function PaperTile({ paper, isRead, selected, plateTerms = [], line, index, tota
             at the bottom. */}
         <div className="flex items-center gap-2 mb-2 min-w-0">
           {kind !== "paper" && <KindMark />}
-          {/* The card's place in today's briefing. The masonry is column-major,
-              so nothing else on screen says the reading order runs down column
-              one. A position, not a quality: `relevanceScore` is 55% a
-              within-day percentile, is overwritten by the rerank and reordered
-              past by `diversify`, so no percentage of it is a fact about this
-              paper. Outside the truncated span, because a long venue must not
-              eat it. */}
-          {typeof index === "number" && total > 1 && (
-            <>
-              <span className="annotation text-text-faint tabular-nums shrink-0">
-                {String(index + 1).padStart(2, "0")}
-              </span>
-              <span className="annotation text-text-faint shrink-0" aria-hidden>
-                ·
-              </span>
-            </>
-          )}
           {/* Sentence case, in the mono the reading page uses for the same
               fact. Set in tracked capitals this was the last small-caps label
               in the product, and it shouted the one line on the card that is
@@ -210,10 +201,7 @@ function PaperTile({ paper, isRead, selected, plateTerms = [], line, index, tota
           <span className="annotation text-text-faint truncate">
             {metaBits.join(" · ")}
           </span>
-          {/* The subject, at the far end of the filing line: the number and
-              the venue say where this card sits, the mark says what is in
-              it. Right-aligned so ten cards stack ten marks in a column the
-              eye can run down without reading a word. */}
+          {/* The subject mark sits opposite the source. */}
           <TopicMark
             topic={mark.key}
             label={mark.label}
@@ -236,11 +224,9 @@ function PaperTile({ paper, isRead, selected, plateTerms = [], line, index, tota
           <p className="text-body-sm text-text-muted mt-2 leading-[1.6] line-clamp-3 font-reading">
             {line}
           </p>
-        ) : paper.leadAffiliation ? (
-          <p className="text-body-sm text-text-faint mt-2 leading-[1.6] line-clamp-2">
-            {paper.leadAffiliation}
-          </p>
         ) : null}
+        {paper.leadAffiliation && <div className="mt-3"><InstitutionPill name={paper.leadAffiliation} id={paper.leadInstitutionId} /></div>}
+        <div className="feed-card-availability"><ReadingAvailability paper={paper} /></div>
         <div className="tile-chrome mt-4 flex items-center gap-1 min-w-0">
           {authorLine && (
             <span className="text-caption text-text-faint truncate mr-1">
@@ -306,16 +292,11 @@ export function FeedTile({
   selected,
   plateTerms,
   line,
-  index,
-  total,
 }: {
   item: FeedItem;
   selected?: boolean;
   /** Allocated across the whole briefing — see lib/papers/plate-terms.ts. */
   plateTerms?: string[];
-  /** Position in today's briefing, and how many there are. */
-  index?: number;
-  total?: number;
   /** Decided for the whole board — see lib/briefing/tile-lines.ts. A card
    *  cannot see that two other cards are carrying its sentence. */
   line?: string | null;
@@ -328,8 +309,6 @@ export function FeedTile({
       selected={selected}
       plateTerms={plateTerms}
       line={line}
-      index={index}
-      total={total}
     />
   );
 }

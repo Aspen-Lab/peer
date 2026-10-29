@@ -240,7 +240,7 @@ export function UploadButton({ className = "", targetPaper, onUploaded }: {
           // (`reader/reader-commands.tsx`) — the same height, edge and mono —
           // drawn dashed, because it is a place to drop a file, not a verdict.
           buttonVariants({ tone: "ghost", size: "lg" }),
-          "eyebrow w-full justify-start gap-2 px-3 border border-dashed border-border-strong text-text-muted hover:border-text-faint [@media(hover:none)]:min-h-11",
+          "reader-action w-full justify-start gap-2 px-3 border border-dashed border-border-strong text-text-muted hover:border-text-faint [@media(hover:none)]:min-h-11",
           isDragOver && "border-accent text-heading",
         ) : `group inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-md bg-[color:var(--color-fixed-black)] transition-[opacity,transform] duration-150 ease-snap hover:scale-125 active:scale-90 disabled:scale-100 disabled:opacity-50 disabled:cursor-wait ${
           isDragOver ? "opacity-75 scale-125" : ""
@@ -259,7 +259,7 @@ export function UploadButton({ className = "", targetPaper, onUploaded }: {
             for exactly that reason.) */}
         {targetPaper ? (
           <>
-            <UploadGlyph size={12} />
+            <UploadGlyph size={16} />
             {isUploading ? TARGET_UPLOAD.busy : TARGET_UPLOAD.label}
           </>
         ) : <svg

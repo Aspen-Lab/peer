@@ -108,7 +108,7 @@ export function ReadingControls({ spread = false }: { spread?: boolean }) {
     <div
       role="group"
       aria-label="Reading controls"
-      className={`${spread ? "" : "mt-5 "}inline-flex items-center gap-1 [@media(hover:none)]:gap-2 border border-border-strong p-1`}
+      className={`${spread ? "" : "mt-5 "}reader-controls inline-flex items-center gap-1 [@media(hover:none)]:gap-2 p-1`}
     >
       <IconButton
         aria-label="Larger text"

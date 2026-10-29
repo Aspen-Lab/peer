@@ -91,8 +91,8 @@ describe("the page puts the boundary round the box (P11-14 rule 5)", () => {
     expect(page.match(/<ExplainBox\b/g)).toHaveLength(1);
   });
 
-  it("leaves the selection actions, the sticky notes and the notes tab outside the boundary: a throw in the box takes none of them", () => {
+  it("leaves selection actions and existing note anchors outside the boundary", () => {
     const close = page.indexOf("</ExplainBoundary>");
-    for (const outside of ["<SelectionToolbar", "<StickyNotes", '<NotesButton variant="edge"']) expect(page.indexOf(outside), outside).toBeGreaterThan(close);
+    for (const outside of ["<SelectionToolbar", "<StickyNotes"]) expect(page.indexOf(outside), outside).toBeGreaterThan(close);
   });
 });

@@ -380,6 +380,7 @@ const Row = memo(function Row({ block: b, first, number, editing, sources, dragg
             onCitation={api.current.citation} onMissingNote={api.current.missingNote} />
         )}
         {hint && <span className="text-text-faint/70">{b.text.trim() ? ` ${hint}` : hint}</span>}
+        {first && b.type === "text" && !b.text && !hint && <span className="notes-empty-prompt">Start writing…</span>}
       </div>
     );
   }
@@ -1741,8 +1742,8 @@ export function NoteEditor({
     // Three columns where the window allows: the notes rail, the note, the
     // shelf to cite from. Below that the rail is a panel the bar opens, and
     // the shelf gives way to @.
-    <div className={compact ? undefined : "lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-12"}>
-      {!compact && <aside className="hidden lg:block">
+    <div className={compact ? undefined : "notes-editor lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-12"}>
+      {!compact && <aside className="notes-sidebar hidden lg:block">
         <div className="sticky top-24 flex max-h-[calc(100vh-8rem)] flex-col">
           <EditorRail
             currentId={note.id}
@@ -1757,9 +1758,9 @@ export function NoteEditor({
         </div>
       </aside>}
 
-      <div className="min-w-0">
+      <div className={compact ? "min-w-0" : "notes-document min-w-0"}>
         {/* The page's own bar: where it lives, that it is kept, and out. */}
-        {!compact && <div className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pl-10">
+        {!compact && <div className="notes-topbar relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pl-10">
           <div className="flex items-center gap-3">
             {/* P11-06 (the owner's item 3): "Back to paper" when opened from a paper, else the Saved link as it was. */}
             <NotesBackLink noteId={note.id} />
@@ -1840,7 +1841,7 @@ export function NoteEditor({
         <div
           ref={columnRef}
           className={cn(
-            compact ? "max-w-[44rem]" : "mt-8 max-w-[44rem]",
+            compact ? "max-w-[44rem]" : "notes-content mt-8 max-w-[44rem]",
             "[&_[aria-disabled=true]]:cursor-default [&_[aria-disabled=true]]:opacity-40 [&_[aria-disabled=true]]:hover:bg-transparent",
           )}
         >
@@ -1870,7 +1871,7 @@ export function NoteEditor({
             enabled={Boolean(editingBlock && isTextual(editingBlock.type))}
             onMark={(m) => editing && applyMark(editing, m)}
             onType={(t) => editing && applyType(editing, t)}
-            className={compact ? "sticky top-0 z-10 bg-surface py-1" : "sticky top-0 z-10 -ml-1 mt-4 bg-bg py-1 md:top-12"}
+            className={compact ? "sticky top-0 z-10 bg-surface py-1" : "notes-toolbar sticky top-0 z-10 -ml-1 mt-4 bg-bg py-1 md:top-12"}
           />
 
           <div
@@ -1894,7 +1895,7 @@ export function NoteEditor({
               e.preventDefault();
               dropPaper(paper, gapAt(rowsNow(), e.clientY));
             }}
-            className="relative mt-2"
+            className={compact ? "relative mt-2" : "notes-body relative mt-2"}
           >
             {doc.blocks.map((b, i) => (
               <Row
@@ -2017,10 +2018,6 @@ export function NoteEditor({
             </section>
           )}
 
-          {!compact && <p className="annotation mt-12 pl-10 leading-[1.7] text-text-faint">
-            / blocks · @ cite a paper, or drag one in from the rail · [[ link a note · # - 1. [] &gt; ``` --- as you type · Tab nests · ⌘⇧↑↓ moves ·
-            ⌘B ⌘I ⌘U ⌘⇧H ⌘E
-          </p>}
         </div>
       </div>
 

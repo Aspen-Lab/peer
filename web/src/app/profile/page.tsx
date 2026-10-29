@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   useState,
@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import "./profile-design.css";
 import Link from "next/link";
 import { useProfileStore } from "@/store/profile";
 import { formatTimeAgo } from "@/lib/format";
@@ -172,112 +173,58 @@ export default function ProfilePage() {
   const setName = updateDisplayName;
   const [showLogout, setShowLogout] = useState(false);
 
-  const firstName = name.trim().split(/\s+/)[0];
-
   const [mode, setMode] = useState<"view" | "edit">("view");
-
-  const signals = [
-    profile.researchTopics.length > 0,
-    (profile.softTopics ?? []).length > 0,
-  ];
-  const doneCount = signals.filter(Boolean).length;
-  const total = signals.length;
+  useEffect(() => {
+    const openJev = () => { if (window.location.hash === "#profile-jev-key") setMode("edit"); };
+    openJev();
+    window.addEventListener("hashchange", openJev);
+    return () => window.removeEventListener("hashchange", openJev);
+  }, []);
+  useEffect(() => {
+    if (mode !== "edit" || window.location.hash !== "#profile-jev-key") return;
+    const frame = requestAnimationFrame(() => document.getElementById("profile-jev-key")?.scrollIntoView({ block: "center" }));
+    return () => cancelAnimationFrame(frame);
+  }, [mode]);
+  const topicsCount = profile.researchTopics.length + (profile.softTopics ?? []).length;
 
   return (
-    <PageContainer width="shelf">
+    <PageContainer width="shelf" rhythm="none" className="profile-page">
       <PageSpread
         rail={
-      /* ── Header ── */
-      <header className="mb-8 xl:mb-0">
-        <p
-          className="eyebrow text-text-faint mb-3"
-        >
-          Your profile
-        </p>
-        <div className="flex items-start justify-between gap-6 flex-wrap xl:flex-col xl:gap-4">
-          <h1
-            className="display-line text-display lg:text-display-lg xl:text-display text-heading leading-[1.05]"
-          >
-            {firstName ? (
-              <>
-                {/* One uninterrupted grotesk line. The name used to be set in
-                    Newsreader italic 500 inside a `display-line` h1, so half
-                    the sentence was the paper's voice and half was Peer's. */}
-                <span>{firstName}</span>
-                &rsquo;s signals
-                <span className="text-text-faint/70">.</span>
-              </>
-            ) : (
-              <>
-                Your signals
-                <span className="text-text-faint/70">.</span>
-              </>
-            )}
-          </h1>
-          {mode === "view" ? (
-            <button
-              onClick={() => setMode("edit")}
-              className="group inline-flex items-center gap-1.5 h-9 pl-3 pr-4 rounded-full bg-accent-dim text-accent hover:bg-accent/15 transition-all ease-out active:scale-[0.96] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_25%,transparent)] text-body-sm font-medium"
-            >
-              <span className="transition-transform ease-out group-hover:-rotate-12">
-                <IconPencil />
-              </span>
-              Edit
-            </button>
-          ) : (
-            <button
-              onClick={() => setMode("view")}
-              className="group inline-flex items-center gap-1.5 h-9 pl-3 pr-4 rounded-full bg-heading text-bg hover:bg-heading/90 transition-all ease-out active:scale-[0.96] text-body-sm font-medium shadow-card"
-            >
-              <IconCheck />
-              Done
-            </button>
-          )}
-        </div>
-        <div className="mt-3.5 flex items-center gap-2.5">
-          <div className="flex items-center gap-1">
-            {signals.map((done, i) => (
-              <span
-                key={i}
-                className={`block w-1.5 h-1.5 rounded-full transition-colors duration-[var(--dur-base)] ${
-                  done ? "bg-accent" : "bg-border-strong/40"
-                }`}
-              />
-            ))}
-          </div>
-          <span className="text-meta text-text-faint tabular-nums">
-            <span className="text-text-muted font-medium">{doneCount}</span> of {total} signals set
-          </span>
+      <header className="profile-rail">
+        <p className="profile-rail-kicker">Your workspace</p>
+        <h1>Profile</h1>
+        <p className="profile-rail-intro">Make Peer yours, from the research you follow to the way you read.</p>
+        <nav aria-label="Profile sections" className="profile-nav">
+          <a href="#research-profile"><IconUser /> Research profile</a>
+          <a href="#reading-activity"><IconBook size={15} /> Reading activity</a>
+          <a href="#appearance"><span className="profile-nav-glyph" aria-hidden>◐</span> Appearance</a>
+          <a href="#briefings"><span className="profile-nav-glyph" aria-hidden>▤</span> Briefings</a>
+          <a href="#profile-data"><span className="profile-nav-glyph" aria-hidden>◇</span> Account &amp; data</a>
+        </nav>
+        <div className="profile-rail-note">
+          <span className="profile-rail-note-dot" />
+          <span>{topicsCount ? `${topicsCount} research ${topicsCount === 1 ? "topic" : "topics"}` : "Your research, in one place"}</span>
         </div>
       </header>
         }
       >
-      {/* ── Account — the app's only sign-in, so it is first, not 1700px
-          down under every settings block. Only when Supabase is configured. ── */}
-      <AccountSection className="mb-10 pb-8 border-b border-border" />
+      <AccountSection className="profile-account-intro" />
       <SyncStatusNotice />
 
-      {mode === "view" ? (
-        <>
-          <DashboardView
-            profile={profile}
-            displayName={name}
-            onEdit={() => setMode("edit")}
-          />
-          <AppearanceCard
-            colorTheme={profile.colorTheme}
-            onChange={updateColorTheme}
-          />
-          <ReadingCard profile={profile} />
-          <LearnedPreferences
-            profile={profile}
-            onReset={resetPreferenceLedger}
-          />
-          <PastBriefings />
-          <EmailSettings />
-          <ProfileUploads />
-        </>
-      ) : (
+      <section id="research-profile" className="profile-section profile-research">
+        <div className="profile-section-header">
+          <div>
+            <h2>Research profile</h2>
+            <p>The context behind your briefing.</p>
+          </div>
+          <button type="button" className="profile-edit-button" onClick={() => setMode(mode === "view" ? "edit" : "view")}>
+            {mode === "view" ? <><IconPencil /> Edit profile</> : <><IconCheck /> Done</>}
+          </button>
+        </div>
+        {mode === "view" ? (
+          <DashboardView profile={profile} displayName={name} onEdit={() => setMode("edit")} />
+        ) : (
         <EditView
           profile={profile}
           name={name}
@@ -303,8 +250,29 @@ export default function ProfilePage() {
           updateCareerStage={updateCareerStage}
           updateIndustryPreference={updateIndustryPreference}
         />
-      )}
+        )}
+      </section>
 
+      <section id="reading-activity" className="profile-section">
+        <div className="profile-section-header"><div><h2>Reading activity</h2><p>A look at what you have read and kept.</p></div></div>
+        <ReadingCard profile={profile} />
+        <LearnedPreferences profile={profile} onReset={resetPreferenceLedger} />
+      </section>
+
+      <section id="appearance" className="profile-section">
+        <div className="profile-section-header"><div><h2>Appearance</h2><p>Choose how Peer looks to you.</p></div></div>
+        <AppearanceCard colorTheme={profile.colorTheme} onChange={updateColorTheme} />
+      </section>
+
+      <section id="briefings" className="profile-section">
+        <div className="profile-section-header"><div><h2>Briefings</h2><p>Your delivery settings and past editions.</p></div></div>
+        <EmailSettings />
+        <PastBriefings />
+      </section>
+
+      <div id="profile-data" className="profile-section profile-data">
+        <div className="profile-section-header"><div><h2>Account &amp; data</h2><p>Manage your saved data and setup.</p></div></div>
+        <ProfileUploads />
       {/* ── Reset ── The three actions are text, 18 px tall to a mouse; where there is no hover each is a 44 px target
           (P9-52, A P9-W3's N5: `[@media(hover:none)]:min-h-11`, the rule P9-23 set), 12 px apart in the column. The
           second step of each two-step control (here "Confirm reset" and "Cancel"; "Reset all" and "Cancel" in What Peer
@@ -381,6 +349,7 @@ export default function ProfilePage() {
       </section>
 
       <VersionLine className="mt-10" />
+      </div>
       </PageSpread>
     </PageContainer>
   );
@@ -425,7 +394,7 @@ export function DashboardView({
 
   return (
     <div
-      className="relative rounded-3xl bg-surface shadow-card overflow-hidden animate-fade-in-up"
+      className="profile-overview relative rounded-3xl bg-surface shadow-card overflow-hidden animate-fade-in-up"
     >
       {/* ── Identity band ── */}
       <div className="relative px-7 pt-7 pb-6">
@@ -457,7 +426,7 @@ export function DashboardView({
               </p>
             ) : (
               <p className="text-title text-text-faint">
-                Unnamed — tap edit to introduce yourself
+                Add your name and research details
               </p>
             )}
           </div>
@@ -487,15 +456,22 @@ export function DashboardView({
 
       <div className="h-px bg-border/70 mx-7" />
 
-      {/* ── Signals (compact table) ── */}
+      {/* ── Research interests ── */}
       <div className="px-7 py-5">
-        <SectionHeader label="Signals" onAdjust={onEdit} />
+        <SectionHeader label="Research interests" onAdjust={onEdit} />
         <div className="mt-3 space-y-2">
-          <SignalRow tone="accent" icon={<IconHash />} label="Required" items={profile.researchTopics} />
+          <SignalRow tone="accent" icon={<IconHash />} label="Core topics" items={profile.researchTopics} />
           <SignalRow tone="tag" icon={<IconHash />} label="Explore" items={profile.softTopics ?? []} />
           <SignalRow tone="link" icon={<IconBook size={13} strokeWidth={1.9} />} label="Journals" items={profile.preferredJournals ?? []} />
         </div>
       </div>
+
+      {(profile.currentProject || profile.currentChallenges) && (
+        <div className="profile-overview-context px-7 py-5">
+          {profile.currentProject && <div><p className="profile-context-label">Current project</p><p>{profile.currentProject}</p></div>}
+          {profile.currentChallenges && <div><p className="profile-context-label">Questions you are exploring</p><p>{profile.currentChallenges}</p></div>}
+        </div>
+      )}
 
       <div className="h-px bg-border/70 mx-7" />
 
@@ -547,7 +523,7 @@ export function ReadingCard({
 
   return (
     <div
-      className="relative mt-5 rounded-3xl bg-surface shadow-card overflow-hidden animate-fade-in-up"
+      className="profile-reading relative mt-5 rounded-3xl bg-surface shadow-card overflow-hidden animate-fade-in-up"
       style={{ animationDelay: "80ms" }}
     >
       {/* ── Header kicker ── */}
@@ -565,7 +541,7 @@ export function ReadingCard({
         <p
           className="display-line text-heading leading-[1.15] text-display-sm lg:text-display"
         >
-          You&apos;ve kept{" "}
+          {totalSurfaced === 0 ? <>Your reading starts here.</> : <>You&apos;ve kept{" "}
           <span className="text-accent tabular-nums">
             {stats.saved}
           </span>{" "}
@@ -573,7 +549,7 @@ export function ReadingCard({
           <span className="tabular-nums">
             {totalSurfaced}
           </span>{" "}
-          Peer surfaced<span className="text-text-faint/70">.</span>
+          Peer surfaced<span className="text-text-faint/70">.</span></>}
         </p>
         {stats.saved > 0 && (
           <p
@@ -640,7 +616,7 @@ export function ReadingCard({
       )}
 
       {/* ── Archetype pull ── */}
-      <div className="relative mx-7 mb-6 rounded-2xl bg-bg-secondary/40 px-5 py-4 flex items-start gap-4">
+      {totalSurfaced > 0 && <div className="relative mx-7 mb-6 rounded-2xl bg-bg-secondary/40 px-5 py-4 flex items-start gap-4">
         <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-accent text-bg shrink-0 shadow-card text-lead">
           {archetype.glyph}
         </span>
@@ -657,7 +633,7 @@ export function ReadingCard({
             {archetype.description}
           </p>
         </div>
-      </div>
+      </div>}
 
     </div>
   );
@@ -980,7 +956,7 @@ function SignalRow({
             </span>
           ))
         ) : (
-          <span className="text-caption text-text-faint/60">—</span>
+          <span className="text-caption text-text-faint/60">Not set</span>
         )}
       </div>
       <span className="text-caption text-text-faint/50 tabular-nums w-5 text-right shrink-0">
@@ -1260,7 +1236,7 @@ function PastBriefings() {
           Past briefings
         </p>
         <p className="text-body-sm text-text-faint/80">
-          Your first daily briefing will land here once the cron fires at your preferred hour.
+          Your previous briefings will appear here.
         </p>
       </section>
     );
@@ -1907,7 +1883,7 @@ function EditView({
 
   return (
     <div
-      className="rounded-2xl bg-surface shadow-card divide-y divide-border/70 animate-fade-in-up"
+      className="profile-editor rounded-2xl bg-surface shadow-card divide-y divide-border/70 animate-fade-in-up"
     >
       <EditRow icon={<IconUser />} tone="neutral" label="Name">
         <input
@@ -1916,7 +1892,8 @@ function EditView({
           onChange={(e) => {
             setName(e.target.value);
           }}
-          placeholder="Aspen"
+          aria-label="Your name"
+          placeholder="Your name"
           className="w-full bg-bg-secondary/40 rounded-lg px-3 py-2 text-body text-text placeholder-text-faint/60 outline-none focus:bg-bg-secondary/60 focus:ring-2 focus:ring-accent/20 transition-all"
         />
       </EditRow>
@@ -1969,7 +1946,8 @@ function EditView({
         <textarea
           value={profile.currentProject ?? ""}
           onChange={(e) => updateCurrentProject(e.target.value)}
-          placeholder="What specific project are you working on right now?"
+          aria-label="Current project"
+          placeholder="What are you working on?"
           rows={3}
           className="w-full bg-bg-secondary/40 rounded-lg px-3 py-2 text-body text-text placeholder-text-faint/60 outline-none focus:bg-bg-secondary/60 focus:ring-2 focus:ring-accent/20 transition-all resize-y leading-relaxed"
         />
@@ -1982,7 +1960,8 @@ function EditView({
         <textarea
           value={profile.currentChallenges ?? ""}
           onChange={(e) => updateCurrentChallenges(e.target.value)}
-          placeholder="What open problems are you hunting information for?"
+          aria-label="Research challenges"
+          placeholder="What questions are you working through?"
           rows={3}
           className="w-full bg-bg-secondary/40 rounded-lg px-3 py-2 text-body text-text placeholder-text-faint/60 outline-none focus:bg-bg-secondary/60 focus:ring-2 focus:ring-accent/20 transition-all resize-y leading-relaxed"
         />
@@ -2007,6 +1986,8 @@ function EditView({
                 return (
                   <button
                     key={s}
+                    type="button"
+                    aria-pressed={active}
                     onClick={() => updateCareerStage(s)}
                     className={`text-meta px-2.5 py-1 rounded-full transition-all ease-out active:scale-[0.94] ${
                       active
@@ -2030,6 +2011,8 @@ function EditView({
                 return (
                   <button
                     key={p}
+                    type="button"
+                    aria-pressed={active}
                     onClick={() => updateIndustryPreference(p)}
                     className={`text-meta px-2.5 py-1 rounded-full transition-all ease-out active:scale-[0.94] ${
                       active
@@ -2252,7 +2235,7 @@ function AppearanceCard({
 }) {
   return (
     <section
-      className="mt-5 rounded-3xl bg-surface shadow-card overflow-hidden animate-fade-in-up"
+      className="profile-appearance mt-5 rounded-3xl bg-surface shadow-card overflow-hidden animate-fade-in-up"
       style={{ animationDelay: "40ms" }}
     >
       <div className="px-7 pt-6 pb-4">
@@ -2363,7 +2346,7 @@ function EditRow({
 }) {
   return (
     <div
-      className="flex items-start gap-4 px-5 py-4"
+      className="profile-edit-row flex items-start gap-4 px-5 py-4"
     >
       <div className="flex items-center gap-2.5 shrink-0 w-[108px] pt-1">
         <span

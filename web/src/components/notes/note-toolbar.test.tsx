@@ -54,13 +54,13 @@ describe("the buttons", () => {
     }
   });
 
-  it("are buttons that keep the caret where it was (mousedown does not take focus) and name their keys", () => {
+  it("are buttons that keep the caret where it was (mousedown does not take focus) and name their actions", () => {
     const html = view();
     expect(html.match(/<button\b/g)).toHaveLength(TOOLBAR_ITEMS.length);
     expect(html.match(/type="button"/g)).toHaveLength(TOOLBAR_ITEMS.length);
-    expect(html).toMatch(/title="Bold \([^"]*B\)"/);
-    expect(html).toMatch(/title="Underline \([^"]*U\)"/);
-    expect(html).toMatch(/title="Highlight \([^"]*H\)"/);
+    expect(html).toContain('title="Bold"');
+    expect(html).toContain('title="Underline"');
+    expect(html).toContain('title="Highlight"');
     expect(read("src/components/notes/note-toolbar.tsx")).toContain("onMouseDown");
     expect(read("src/components/notes/note-toolbar.tsx")).toContain("preventDefault");
   });

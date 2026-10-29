@@ -11,6 +11,7 @@ import { PLAIN_CAPS } from "@/lib/papers/plain";
 import { paragraphKey } from "@/store/plain-rewrites";
 import { PEERS_READING, PLAIN } from "./copy";
 import { PaperBody, type DrawRoute } from "./paper-body";
+import { Equation } from "./math";
 import { ParagraphPlainControl, PlainControl, type PlainControlProps, type PlainTarget, type PlainView } from "./plain-button";
 
 // P4-01 (blueprint §3.6 ⑥; rulings §1h.12 (h); §3d 15, 18): the body draws "Say it plainly"
@@ -97,12 +98,19 @@ function view(over: Partial<PlainView> = {}): PlainView {
 const render = (props: Record<string, unknown>) => renderToStaticMarkup(createElement(PaperBody, { reading, ...props }));
 const CONTROL = /<div data-plain-control="" class="[^"]*">.*?<\/div>/g;
 const controls = (html: string) => html.match(CONTROL) ?? [];
+// The fixture predates the equation toolbar. Keep the surrounding-paper
+// snapshot intact while using the current standalone equation component.
+const currentEquation = renderToStaticMarkup(createElement(Equation, { equation: { text: "r = k d", after: 0 } }));
+const withCurrentEquation = (html: string) => html.replace(
+  /<div class="group\/eq[^]*?<\/div><\/div><figure/,
+  `${currentEquation}<figure`,
+);
 
 describe("PaperBody without the `plain` prop — today's body", () => {
   it("renders the markup it rendered before, byte for byte, with a route and without one", () => {
-    expect(render({ route })).toBe(TODAY_WITH_ROUTE);
-    expect(render({})).toBe(TODAY_NO_ROUTE);
-    expect(render({ route, plain: undefined })).toBe(TODAY_WITH_ROUTE);
+    expect(render({ route })).toBe(withCurrentEquation(TODAY_WITH_ROUTE));
+    expect(render({})).toBe(withCurrentEquation(TODAY_NO_ROUTE));
+    expect(render({ route, plain: undefined })).toBe(withCurrentEquation(TODAY_WITH_ROUTE));
   });
 
   it("has no control, no rewrite and no word of Say it plainly anywhere in it", () => {
@@ -134,7 +142,7 @@ describe("PaperBody with the `plain` prop — where the control is", () => {
   it("leaves every paragraph's own markup as it was: take the controls out and it is today's body", () => {
     const html = render({ route, plain: view() });
 
-    expect(html.replace(CONTROL, "")).toBe(TODAY_WITH_ROUTE);
+    expect(html.replace(CONTROL, "")).toBe(withCurrentEquation(TODAY_WITH_ROUTE));
   });
 
   it("puts the control right after the paragraph, before what the paper set after it", () => {

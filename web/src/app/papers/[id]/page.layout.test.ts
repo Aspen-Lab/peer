@@ -120,12 +120,12 @@ function tabProblems(source: string): string[] {
   // The tab's own blocks: the abstract under Summary only; the map and the body under Digestion only.
   const words = between(code, " words={", " additions={");
   // Re-aimed (P10-08): the abstract's words stand in the Summary's explain container (`data-explain-source="summary"`).
-  if (!/^ words=\{digestion \? null : \( <div data-explain-source="summary" className="contents"> <PaperWords/.test(words)) problems.push("the abstract is shown on Paper digestion, or the words slot moved");
+  if (!/^ words=\{digestion \? null : \( <div data-explain-source="summary" className="contents">/.test(words) || !words.includes("<PaperWords")) problems.push("the abstract is shown on Paper digestion, or the words slot moved");
   const additions = between(code, " additions={", " next={");
   const split = additions.indexOf(") : (");
   const onDigestion = split < 0 ? "" : additions.slice(0, split);
   const onSummary = split < 0 ? "" : additions.slice(split);
-  if (!additions.startsWith(" additions={digestion ? (")) problems.push("the additions are not chosen by the tab");
+  if (!additions.startsWith(" additions={<BookReader") || !additions.includes("{digestion ? (")) problems.push("the additions are not chosen by the tab");
   // P10-04, RE-AIMED (review 3.1): the map left the additions for the layout's own `map` slot, directly under
   // the strip and under BOTH tabs; the body alone is Paper digestion's.
   for (const block of ["<PaperBody"]) {

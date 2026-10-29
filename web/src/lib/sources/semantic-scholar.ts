@@ -10,7 +10,7 @@ interface S2Author {
   name?: string | null;
 }
 
-interface S2Paper {
+export interface S2Paper {
   paperId: string;
   corpusId?: number;
   title?: string | null;
@@ -97,7 +97,7 @@ async function fetchOne(searchQuery: string, perQuery: number): Promise<RawItem[
   }
 }
 
-function paperToRawItem(paper: S2Paper): RawItem {
+export function paperToRawItem(paper: S2Paper): RawItem {
   const arxivId = paper.externalIds?.ArXiv;
   const doi = paper.externalIds?.DOI;
   const url =

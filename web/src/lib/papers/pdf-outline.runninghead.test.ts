@@ -42,6 +42,13 @@ describe("furnitureOf — a running head sits in the page's top or bottom band o
     expect(furnitureOf(lines, 4).size).toBe(1);
   });
 
+  it("recognizes all four lines of a repeated journal footer", () => {
+    const lines = [1, 2, 3, 4].flatMap(bodyLines);
+    const footer = ["Volume 15 Issue 10", "Open access journal", "example.org", "Page 1"];
+    for (const page of [1, 2, 3, 4]) footer.forEach((text, i) => lines.push(line(text, { page, y: 52 - i * 12 })));
+    expect(furnitureOf(lines, 4).size).toBe(4);
+  });
+
   it("does not take a line repeated at the same height in the middle of the page", () => {
     // Same words, same height, four pages — but between the page's lines, where a head never stands.
     const lines = [1, 2, 3, 4].flatMap(bodyLines);

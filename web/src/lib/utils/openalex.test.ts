@@ -195,3 +195,22 @@ describe("isExcludedOpenAlexRawItem — the pipeline choke point's own check (DA
     },
   );
 });
+
+
+describe("first author institution", () => {
+  it("keeps the name and OpenAlex ID from the same first author", () => {
+    const item = openAlexWorkToRawItem(work({ authorships: [
+      { author_position: "last", author: { display_name: "Other" }, institutions: [{ id: "https://openalex.org/I4", display_name: "Other University" }] },
+      { author_position: "first", author: { display_name: "Lead" }, institutions: [{ id: "https://openalex.org/I157725225", display_name: "University of Illinois Urbana-Champaign" }] },
+    ] }));
+    expect(item.leadAffiliation).toBe("University of Illinois Urbana-Champaign");
+    expect(item.leadInstitutionId).toBe("I157725225");
+  });
+  it("does not accept an unrelated institution ID URL", () => {
+    const item = openAlexWorkToRawItem(work({ authorships: [
+      { author: { display_name: "Lead" }, institutions: [{ id: "https://example.org/I4", display_name: "Some University" }] },
+    ] }));
+    expect(item.leadAffiliation).toBe("Some University");
+    expect(item.leadInstitutionId).toBeUndefined();
+  });
+});

@@ -368,13 +368,9 @@ function DailyBriefingPage() {
         // "shape of the day" was flat on most days, and whose "dim ones are
         // read" the deck already says in words.
         <Band label={TODAY.heading} gap="none">
-        {/* Masonry, not a fixed grid. Roughly four papers in ten carry an
-            extractable figure, so card heights genuinely differ; a uniform
-            grid either ragged-edges every row or reserves dead space on the
-            six cards with no image. CSS columns let each card be its own
-            height. */}
-        <div className="mt-4 board-columns gap-4 [column-fill:_balance]">
-          {papers.map((paper, index) => (
+        {/* Each row aligns its cards while keeping their content in reading order. */}
+        <div className="briefing-grid mt-4">
+          {papers.map((paper) => (
             <div
               key={paper.id}
               id={`paper-${paper.id}`}
@@ -386,14 +382,12 @@ function DailyBriefingPage() {
               // screenful is still dealt in order, 40ms apart: `useReveal`
               // staggers the hosts that are already on screen when it runs.
               data-reveal
-              className="rv mb-4 break-inside-avoid"
+              className="rv"
             >
               <FeedTile
                 item={{ kind: "paper", data: paper }}
                 plateTerms={plateTerms[paper.id]}
                 line={tileLines[paper.id] ?? null}
-                index={index}
-                total={papers.length}
               />
             </div>
           ))}

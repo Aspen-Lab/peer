@@ -82,12 +82,14 @@ interface CommandsProps {
 /** What the details need. */
 interface DetailsProps {
   sentences: string[];
+  /** Tuck secondary source and upload details away when the full text is already available. */
+  compactDetails?: boolean;
   /** P11-20 follow-up (ruling §1h.120): in the panes "Upload full article PDF" is an occasional act, not a reading control: it leaves the commands
    *  (`CommandsProps.uploadAction`, the same element) and stands in the details, beside the bibliographic lines. In one column it stays in the commands. */
   uploadAction?: ReactNode;
   /** P11-20 follow-up (item 2a): in the panes the paper's venue and age, byline, affiliation and recommendation head the details (`Bibliography`,
    *  `title-block.tsx`) — the fixed zone holds the title alone. In one column, and without a `paper`, this draws nothing: the title block has them. */
-  paper?: Pick<Paper, "venue" | "publishedDate" | "authors" | "leadAffiliation">;
+  paper?: Pick<Paper, "venue" | "publishedDate" | "authors" | "leadAffiliation" | "leadInstitutionId">;
   recommendation?: string | null;
   /** The clock `paper`'s age is read against. */
   now?: number;
@@ -133,15 +135,14 @@ function Commands({ onRead, readLabel, source, isSaved, onSave, onSkip, onCopy, 
   );
 }
 
-function Details({ sentences, paper, recommendation, now = 0, uploadAction, doi, showAddKey, keyNeedsSignIn = false, signInReturnTo, uploadStatus }: DetailsProps) {
+function Details({ sentences, paper, recommendation, now = 0, uploadAction, doi, showAddKey, keyNeedsSignIn = false, signInReturnTo, uploadStatus, compactDetails = false }: DetailsProps) {
   // From 1024 css px the sentence is a note in the left pane, set at the pane's size with a rule beside it, and the reading controls are
   // at the top of that pane. Below it the sentence is prose in the reading column, and the controls follow the private-PDF line. Either
   // way it follows the commands (P7-14, R2), at the same distance.
   const spread = useSpread();
 
-  return (
+  const extra = (
     <>
-      {spread && paper && <Bibliography paper={paper} recommendation={recommendation} now={now} />}
       {spread && uploadAction && <div data-pane-upload="" className="mt-6">{uploadAction}</div>}
       <p
         className={
@@ -166,8 +167,7 @@ function Details({ sentences, paper, recommendation, now = 0, uploadAction, doi,
           </>
         )}
       </p>
-      {uploadStatus}
-
+      {(!spread || !compactDetails) && uploadStatus}
       {!spread && <ReadingControls />}
 
       {doi && DOI_SHAPE.test(doi) && (
@@ -190,6 +190,14 @@ function Details({ sentences, paper, recommendation, now = 0, uploadAction, doi,
           doi:{doi}
         </a>
       )}
+    </>
+  );
+  const access = spread && compactDetails ? <details className="reader-extra-details"><summary>Source and access</summary>{extra}</details> : null;
+  return (
+    <>
+      {spread && paper && <Bibliography paper={paper} recommendation={recommendation} now={now} access={access} />}
+      {access ? !paper && access : extra}
+      {spread && compactDetails && uploadStatus}
     </>
   );
 }

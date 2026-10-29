@@ -107,18 +107,14 @@ describe("the commands' wrapper carries the hook the compact rules read (reader-
       }),
     );
 
-  it("in the panes the fixed zone holds the title, the commands (inside the hook), the progress and the strip, in that order, and nothing of the details", () => {
+  it("puts the title and actions in the document, outside the outline", () => {
     const html = page(true);
-    const zone = html.slice(html.indexOf("data-reader-left-fixed"), html.indexOf("data-reader-left-scroll"));
-    const at = (needle: string) => zone.indexOf(needle);
-
-    expect(zone.match(/data-pane-commands/g)).toHaveLength(1);
-    expect(/data-pane-commands=""[^>]*><i data-mark="DECISION">/.test(zone)).toBe(true);
-    expect([at("TITLE"), at("data-pane-commands"), at("PROGRESS"), at("TABS")].every((n) => n >= 0)).toBe(true);
-    expect(at("TITLE")).toBeLessThan(at("data-pane-commands"));
-    expect(at("data-pane-commands")).toBeLessThan(at("PROGRESS"));
-    expect(at("PROGRESS")).toBeLessThan(at("TABS"));
-    expect(zone).not.toContain("DETAILS");
+    const sidebar = html.slice(html.indexOf("data-reader-left="), html.indexOf("data-reader-centre"));
+    const document = html.slice(html.indexOf("data-reader-centre"));
+    expect(sidebar).toContain('data-mark="MAP"');
+    expect(sidebar).not.toContain('data-mark="TITLE"');
+    expect(document.indexOf('data-mark="TITLE"')).toBeLessThan(document.indexOf('data-mark="DECISION"'));
+    expect(document.indexOf('data-mark="DECISION"')).toBeLessThan(document.indexOf('data-mark="TABS"'));
   });
 
   it("in one column nothing carries it", () => {

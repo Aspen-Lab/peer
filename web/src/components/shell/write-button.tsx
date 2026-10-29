@@ -2,11 +2,8 @@
 
 // The one action in the masthead, among four words that are places.
 //
-// It is set apart the way the graph tells a term from a topic: outlined at
-// rest, filled when it is the state you are in — no hue, because the accent
-// is kept for signals. Pressed, it opens a note to write in; an untouched
-// blank one is reused, so pressing it twice does not leave an empty note
-// behind.
+// A filled action opens a note to write in. An untouched blank note is reused,
+// so pressing it twice does not leave an empty note behind.
 
 import { usePathname, useRouter } from "next/navigation";
 import { isUntouched } from "@/lib/notes/blocks";
@@ -34,13 +31,11 @@ export function WriteButton() {
       aria-current={here ? "page" : undefined}
       title="Write a note"
       className={cn(
-        "eyebrow mr-3 inline-flex h-7 items-center gap-1.5 px-2.5 transition-colors",
-        here
-          ? "bg-heading text-bg"
-          : "text-text-muted shadow-[inset_0_0_0_1px_var(--color-border-strong)] hover:bg-heading hover:text-bg hover:shadow-none",
+        "peer-write inline-flex h-8 items-center gap-1.5 px-3 transition-colors",
+        here && "peer-write-current",
       )}
     >
-      <WriteGlyph size={13} strokeWidth={1.3} />
+      <WriteGlyph size={15} strokeWidth={1.6} />
       Write
     </button>
   );

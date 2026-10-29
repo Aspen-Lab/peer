@@ -21,19 +21,14 @@
 // What it does is the band's old `open()` (`paper-notes.tsx`): the paper's own notes, made the
 // first time with the paper's title and your sticky notes (P10-09e: nothing else is placed in it).
 //
-// P10-09b (the owner's review 7.2): on the reading page the edge tab opens those notes as a floating window at
-// the right (`notes-window.tsx`) instead of navigating, and while the window stands the tab stands beside it
-// (360 px in), a second press closing it. The phone's row still navigates to the notes page (the phone is deferred).
+// Both variants navigate to the note's page, keeping the reading view clear.
 
-import { useState } from "react";
 import type { Paper } from "@/types";
 import type { QuestionAnswers } from "@/lib/papers/report";
-import { buttonVariants } from "@/components/ui/button";
-import { COMMAND } from "@/components/ui/command";
+import { IconBook } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { useMarginRect } from "@/lib/reader/margin";
 import { useWindows } from "@/lib/reader/windows";
-import { NotesWindow } from "./notes-window";
 import { usePaperNotes } from "./paper-notes";
 
 /** "Notes" until the paper has a note of its own; then it says what a press does. */
@@ -95,7 +90,6 @@ export const EDGE_TAB_PASSES_DRAG = "[:root:active_&:not(:active)]:pointer-event
 export function NotesButtonView({
   variant,
   has,
-  shown = false,
   beside = false,
   marginLeft,
   onOpen,
@@ -103,8 +97,6 @@ export function NotesButtonView({
   variant: "edge" | "row";
   /** The paper already has a note of its own. */
   has: boolean;
-  /** The notes window stands (the edge tab only): a press closes it. */
-  shown?: boolean;
   /** A card stands in the margin (the explain card, a sticky, the notes window): the edge tab stands beside it, not under it. */
   beside?: boolean;
   /** The margin's left edge in the window's pixels, where a shell has registered one; else the cards stand at the right edge, 360 px wide. */
@@ -118,14 +110,14 @@ export function NotesButtonView({
     return (
       <button
         type="button"
+        data-reader-notes=""
         onClick={onOpen}
         className={cn(
-          buttonVariants({ tone: "soft", size: "lg" }),
-          COMMAND,
-          "w-full justify-start px-3 md:hidden [@media(hover:none)]:min-h-11",
+          "reader-action",
+          "reader-quick-action",
         )}
       >
-        {label}
+        <IconBook size={16} /> {NOTES_LABEL.take}
       </button>
     );
   }
@@ -133,7 +125,6 @@ export function NotesButtonView({
     <button
       type="button"
       onClick={onOpen}
-      aria-expanded={shown}
       title={has ? undefined : TAKE_TITLE}
       style={squeezed ? { left: marginLeft, transform: "translateX(-100%)", width: EDGE_TAB_BESIDE_PX, lineHeight: 1 } : undefined}
       className={cn(
@@ -170,14 +161,9 @@ export function NotesButton({
   /** P2-05: the report's answers to them. */
   forYourQuestions?: readonly QuestionAnswers[];
 }) {
-  const [shown, setShown] = useState(false);
-  // The edge tab opens the window; the row (a phone) navigates, as the band always did.
-  const { ready, own, open } = usePaperNotes({
-    paper,
-    questions,
-    forYourQuestions,
-    openWindow: variant === "edge" ? () => setShown(true) : undefined,
-  });
+  // Both desktop and mobile open the note on its own page. usePaperNotes
+  // remembers the reader's place so returning to the paper restores it.
+  const { ready, own, open } = usePaperNotes({ paper, questions, forYourQuestions });
   const rect = useMarginRect();
   const standing = useWindows((s) => s.windows.length > 0);
   if (!ready) return null;
@@ -186,12 +172,10 @@ export function NotesButton({
       <NotesButtonView
         variant={variant}
         has={own !== undefined}
-        shown={variant === "edge" && shown}
-        beside={variant === "edge" && (standing || shown)}
+        beside={variant === "edge" && standing}
         marginLeft={rect?.left}
-        onOpen={variant === "edge" && shown ? () => setShown(false) : open}
+        onOpen={open}
       />
-      {variant === "edge" && shown && <NotesWindow paper={paper} onClose={() => setShown(false)} />}
     </>
   );
 }

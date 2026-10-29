@@ -100,20 +100,20 @@ describe("NotesButtonView — the tab at the right edge", () => {
 describe("NotesButtonView — the row in the command stack, for a phone", () => {
   const row = (has: boolean) => renderToStaticMarkup(createElement(NotesButtonView, { variant: "row", has, onOpen: () => {} }));
 
-  it("is a full-width command row, hidden from md up (the tab is there instead), a touch target", () => {
+  it("is an icon and label row available across screen sizes", () => {
     const html = row(false);
     const classes = (/class="([^"]*)"/.exec(html)?.[1] ?? "").split(" ");
 
-    expect(classes).toContain("w-full");
-    expect(classes).toContain("md:hidden");
+    expect(classes).toContain("reader-quick-action");
+    expect(classes).not.toContain("md:hidden");
     expect(classes).not.toContain("fixed");
-    expect(html).toContain("[@media(hover:none)]:min-h-11");
-    expect(html).toContain("eyebrow");
+    expect(html).toContain("reader-action");
+    expect(html).toContain("<svg");
   });
 
-  it("has the same two labels", () => {
-    expect(row(false)).toContain(">Notes<");
-    expect(row(true)).toContain(">Open your notes<");
+  it("keeps the notes label consistent whether a note already exists", () => {
+    expect(row(false)).toContain("Notes</button>");
+    expect(row(true)).toContain("Notes</button>");
   });
 });
 
@@ -223,21 +223,19 @@ describe("P10-09b — the edge tab opens the window, the row still navigates", (
     expect(direct).toBe(first.id);
   });
 
-  it("the tab's source mounts the window and the edge press toggles it; only the row navigates", () => {
+  it("the desktop and phone entry navigate to the notes page", () => {
     const src = readFileSync(resolve(process.cwd(), "src/components/notes/notes-button.tsx"), "utf8");
-    expect(src).toContain("<NotesWindow");
-    expect(src).toMatch(/variant === "edge"/);
-    expect(src).toContain("openWindow");
+    expect(src).not.toContain("<NotesWindow");
+    expect(src).toContain("usePaperNotes({ paper, questions, forYourQuestions })");
+    expect(src).toContain("onOpen={open}");
   });
 
-  it("the open tab stands beside the window, not under it", () => {
-    // P11-14 (re-aimed): `NotesButton` passes `beside` while the window stands (its card is in the stack); the view no longer reads `shown` for the place.
-    const html = renderToStaticMarkup(createElement(NotesButtonView, { variant: "edge", has: true, shown: true, beside: true, onOpen: () => {} }));
-    expect(html).toContain('aria-expanded="true"');
+  it("the tab stands beside another open card without implying an expanded note", () => {
+    const html = renderToStaticMarkup(createElement(NotesButtonView, { variant: "edge", has: true, beside: true, onOpen: () => {} }));
+    expect(html).not.toContain("aria-expanded");
     expect(html).toContain("360px");
-    const closed = renderToStaticMarkup(createElement(NotesButtonView, { variant: "edge", has: true, onOpen: () => {} }));
-    expect(closed).toContain('aria-expanded="false"');
-    expect(closed).not.toContain("360px");
+    const alone = renderToStaticMarkup(createElement(NotesButtonView, { variant: "edge", has: true, onOpen: () => {} }));
+    expect(alone).not.toContain("360px");
   });
 });
 

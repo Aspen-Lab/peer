@@ -4,12 +4,12 @@ import type { FeedEmptyReasonCode } from "@/lib/feed/types";
 
 /** The setup strip above a sample briefing. */
 export const STARTER = {
-  label: "A sample, until you say otherwise",
-  line: "These are real papers from today, across a few broad fields. Pick the one you work in and this becomes your briefing — everything else is optional.",
+  label: "Sample briefing",
+  line: "Choose a field to make this briefing yours.",
   placeholder: "or type your field",
   submit: "Use this",
   /** The line above the two buttons. It used to end in a grey "is here." link. */
-  rest: "Or take the longer setup: project, methods, sources, your own model key.",
+  rest: "Today’s papers span several fields.",
   /** The two buttons. "Add a key" goes straight to the key step. */
   setup: "Set up Peer",
   addKey: "Add a key",

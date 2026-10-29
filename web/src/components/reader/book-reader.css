@@ -1,0 +1,33 @@
+.reader-book-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 16px; }
+.reader-book[data-active="true"] { scroll-margin-top: 4rem; }
+.reader-book-local-toolbar { position: sticky; top: 3rem; z-index: 10; padding: 8px 0; background: var(--color-bg); }
+.reader-book-hint { display: block; margin-top: 16px; color: var(--color-text-muted); font: 400 13px/1.4 var(--font-sans); }
+.reader-book-mode, .reader-book-navigation button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 38px; padding: 0 12px; border: 0; border-radius: 8px;
+  background: var(--color-surface); color: var(--color-text-muted);
+  font: 500 14px/1.25 var(--font-sans); cursor: pointer;
+}
+.reader-book-mode:hover, .reader-book-navigation button:hover:not(:disabled) { color: var(--color-heading); background: var(--color-surface-hover); }
+.reader-book-mode[aria-pressed="true"] { color: var(--color-heading); }
+.reader-book-navigation { display: flex; align-items: center; gap: 8px; color: var(--color-text-muted); font: 500 13px/1.25 var(--font-sans); font-variant-numeric: tabular-nums; }
+.reader-book-navigation button { min-width: 38px; padding: 0; }
+.reader-book-navigation button:disabled { opacity: .35; cursor: default; }
+.reader-book-toolbar button:focus-visible, .reader-book-pages:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+.reader-book[data-active="true"] .reader-book-pages { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: none; }
+.reader-book[data-active="true"] .reader-book-pages::-webkit-scrollbar { display: none; }
+html:has(.reader-book[data-active="true"]) { scrollbar-width: none; }
+html:has(.reader-book[data-active="true"])::-webkit-scrollbar { display: none; }
+.reader-shell:has(.reader-book[data-active="true"]) .reader-centre-inner { max-width: 90rem; }
+.reader-paper-view:has(.reader-book[data-active="true"]) { max-width: none; }
+.reader-book[data-active="true"] #paper-body > section {
+  height: clamp(420px, calc(100vh - 220px), 760px);
+  margin-top: 24px;
+  columns: 2;
+  column-gap: clamp(16px, 4vw, 64px);
+  column-fill: auto;
+}
+.reader-book[data-active="true"] #paper-body h3 { break-after: avoid; }
+.reader-book[data-active="true"] #paper-body :is(figure, .reader-equation) { break-inside: avoid; }
+.reader-book[data-active="true"] #paper-body figure img { max-height: clamp(220px, calc(100vh - 380px), 540px); }
+@media (prefers-reduced-motion: reduce) { .reader-book-pages { scroll-behavior: auto; } }

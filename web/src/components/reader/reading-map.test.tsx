@@ -482,7 +482,7 @@ describe("ReadingMapView — each row says its words (P9-51, F08)", () => {
   it("lets the row drop its meta under the heading rather than squeeze the heading: wrap on the heading-and-meta group, a floor on the heading, the meta free to shrink", () => {
     const html = renderWords();
     const row =
-      /<div[^>]*class="([^"]*)"[^>]*><span aria-hidden="true" class="w-3 shrink-0"><\/span><div class="([^"]*)"><a href="#paper-section-2" class="([^"]*)">Problem Statement<\/a><span class="([^"]*)">/.exec(html);
+      /<div[^>]*class="([^"]*)"[^>]*><span aria-hidden="true" class="reader-map-toggle-spacer"><\/span><div class="([^"]*)"><a href="#paper-section-2" class="([^"]*)">Problem Statement<\/a><span class="([^"]*)">/.exec(html);
 
     expect(row, "the row, the group of its heading link and its meta").not.toBeNull();
     const [, rowClasses, groupClasses, headingClasses, metaClasses] = (row ?? []).map((c) => (c ?? "").split(/\s+/));
@@ -528,11 +528,11 @@ describe("ReadingMapView — the map's toggles are touch targets (P9-51, N5)", (
     }
   });
 
-  it("makes each row's fold toggle ('+' / '−') 44 px tall where there is no hover, its glyph and its name unchanged", () => {
+  it("makes each paragraph preview toggle 44 px tall where there is no hover", () => {
     const opened = render({ openRows: [0] });
-    const toggles = [...opened.matchAll(/<button\b[^>]*aria-label="((?:Show|Hide) how the paragraphs of [^"]*)"[^>]*class="([^"]*)"[^>]*>([^<]*)<\/button>/g)];
+    const toggles = [...opened.matchAll(/<button\b[^>]*aria-label="((?:Show|Hide) how the paragraphs of [^"]*)"[^>]*class="([^"]*)"[^>]*><span[^>]*>([^<]*)<\/span><\/button>/g)];
 
-    expect(toggles.map((m) => m[3]).sort()).toEqual(["+", "−"].sort());
+    expect(toggles.map((m) => m[3])).toEqual(["···", "···"]);
     for (const [, name, classes] of toggles) expect(classes.split(/\s+/), name).toContain(TOUCH);
   });
 
@@ -541,7 +541,7 @@ describe("ReadingMapView — the map's toggles are touch targets (P9-51, N5)", (
   // centred against the two lines), not the floor plus the meta line. With a mouse the row is as it was.
   it("centres the row's toggle against its heading and meta where there is no hover, so the floor does not stack on the wrapped meta", () => {
     const html = render({ openRows: [0] });
-    const row = /<div class="([^"]*)"><button\b[^>]*aria-expanded/.exec(html);
+    const row = /<div class="([^"]*)"><span aria-hidden="true" class="reader-map-toggle-spacer"/.exec(html);
     const rowClasses = (row?.[1] ?? "").split(/\s+/).filter(Boolean);
 
     expect(row, "a row with a fold toggle").not.toBeNull();

@@ -495,6 +495,7 @@ export function QuestionField({
   return (
     <section
       aria-label={ASK.heading}
+      data-ask-field=""
       className="mt-6"
       onFocus={() => setFocused(true)}
       onBlur={(event) => {

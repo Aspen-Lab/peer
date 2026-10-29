@@ -131,7 +131,7 @@ export function ChoiceGroup({
   onChange: (value: ChoiceValue) => void;
 }) {
   return (
-    <div>
+    <div className="profile-choice-group">
       <p className="eyebrow text-text-faint/80 mb-1.5">
         {label}
       </p>
@@ -142,9 +142,10 @@ export function ChoiceGroup({
             <button
               key={String(option.value)}
               type="button"
+              aria-pressed={active}
               onClick={() => onChange(option.value)}
               title={option.help}
-              className={`group text-left text-meta px-2.5 py-1.5 rounded-xl transition-all ease-out active:scale-[0.94] ${
+              className={`profile-choice-option group text-left text-meta px-2.5 py-1.5 rounded-xl transition-all ease-out active:scale-[0.94] ${
                 active
                   ? "bg-accent-dim text-accent shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_30%,transparent)] scale-[1.02]"
                   : "text-text-faint hover:text-text-muted bg-bg-secondary/40 hover:bg-bg-secondary/70"
@@ -469,6 +470,7 @@ export function ChipInput({
         <input
           ref={inputRef}
           type="text"
+          aria-label={placeholder ?? "Add item"}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={handleKey}
@@ -586,10 +588,7 @@ export function TopicsField({
           }}
         />
         <p className="mt-1.5 px-0.5 text-micro leading-snug text-text-faint/70">
-          Each result <strong>must</strong> be related to at least one of these.{" "}
-          <strong>Prefer full terms over acronyms</strong> — short acronyms can be
-          ambiguous and match unrelated fields, so spell the term out (you can add
-          the acronym too).
+          Papers must match at least one. Use full terms for clearer results.
         </p>
       </div>
       <div className="min-w-0">
@@ -611,8 +610,7 @@ export function TopicsField({
           }}
         />
         <p className="mt-1.5 px-0.5 text-micro leading-snug text-text-faint/70">
-          Matches on these topics score higher, but results without them can still
-          appear.
+          Related papers rank higher, but other results can still appear.
         </p>
       </div>
     </div>

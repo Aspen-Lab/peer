@@ -1,0 +1,7 @@
+.reading-availability { display: inline-flex; align-items: center; gap: 6px; margin-top: 14px; font: 500 13px/1.4 var(--font-sans); color: var(--color-text-muted); }
+.reading-availability::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .7; }
+.reading-availability-readable { color: var(--color-accent); }
+.reading-availability-checking { color: var(--color-text-faint); }
+.reading-availability-retry { cursor: pointer; text-align: left; }
+.reading-availability-retry:hover { color: var(--color-heading); }
+.reading-availability-retry:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
