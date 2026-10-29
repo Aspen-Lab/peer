@@ -35,7 +35,10 @@ export const LEFT_DEFAULT_WIDE_PX = 360;
 export const LEFT_WIDE_VIEWPORT_PX = 1536;
 export const LEFT_MAX_PX = 480;
 
-/** The centre's least width: about 58 characters of Newsreader at the lead size. A constant, independent of the A / A step. */
+/** The centre's least width where a caller gives none: 408px of text and the centre's 12 + 20px insets, about 50 characters of Newsreader at
+ *  the lead size (measured at 50.6 a line, P12-95). A constant, independent of the A / A step. The shell never reads it: it gives the scaled
+ *  `readingCentreMinimum` (the window's budget, about 58 characters; that figure was this comment's until P12-95, and never this number's)
+ *  and `readingCentreDragMinimum` (what a reader may drag to). */
 export const CENTRE_MIN_PX = 440;
 
 /** The margin's narrowest, widest and default width. 360 is the dock's width (`DOCK_WIDTH_PX`): the cards keep the size they were
