@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-29T00:35Z
+AS OF        2026-10-29T01:16Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
-LAST RULING  §1h.486   NEXT RULING §1h.487   NEXT ITEM ID P12-96   NEXT FREE PORT 4248
+LAST RULING  §1h.487   NEXT RULING §1h.488   NEXT ITEM ID P12-96   NEXT FREE PORT 4248
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
-RUNNING      (max 2, §1h.443) A P12-92 Theme B round 4 (head d2d2b8b4) ∥ C P12-95 (O1 drag floor); QUEUE: readers B4 (spawn text r4/readers/spawn-B.txt) → round 5 (after C P12-95) → B P12-93; DONE: Theme A, Theme C0, Theme C1 (§1h.486); STOP LINE waits on Theme B; OWNER: none open
+RUNNING      (max 2, §1h.443) C P12-95 (O1 drag floor) ∥ reader B4-r1 (blind, pack r2/a92/pack); QUEUE: reader B4-r2 → round 5 (A, after C P12-95) → B P12-93; DONE: Theme A, Theme C0, Theme C1; STOP LINE waits on Theme B (round 4 director 97.92 ×3); OWNER: none open
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
 OWNER'S PDFS P1–P6 (uploads in the manager's session; P4–P6 held out); upload UI only; never commit or quote
 CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB, Haiku, "20 * * * *", enabled, read back 06:23Z; prompt: at most two subagents (§1h.443)
@@ -769,6 +769,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-29T00:23Z | manager (Claude) | §1h.485: C1 phase 7 P5 5/5; phase 8 started | evidence: mgr/sealed-c1/P5-p7run*.json, P12-57-A phase 7 report | next: phase 8, A P12-92
 
 - 2026-10-29T00:35Z | manager (Claude) | §1h.486: C1 phase 8 P5 5/5; Theme C1 DONE; C P12-95 started | evidence: mgr/sealed-c1/P5-p8run*.json, P12-57-A phase 8 report | next: A P12-92, C P12-95
+
+- 2026-10-29T01:16Z | manager (Claude) | §1h.487: A P12-92 round 4 landed; E6 void; director 97.92 ×3; reader B4-r1 started | evidence: P12-92-A deliverable, r2/a92/pack | next: B4-r1, C P12-95
 
 ---
 

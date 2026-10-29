@@ -2831,6 +2831,40 @@ The C1 harness stops here. 37 of the 280 calls are left unspent.
 
 C P12-95 starts now in the freed slot.
 
+### §1h.487 — 2026-10-29 — THEME B ROUND 4 (A P12-92): 12/12 ON EACH PAPER; E5 GONE; E6 VOID (THE RULED 468 PX COLUMN); DIRECTOR 97.92 ×3; READERS NEXT
+
+**A P12-92, Theme B round 4** (deliverable landed `633951c0`; head walked `d2d2b8b4`; two container restarts survived by re-running every incomplete cell).
+
+The A's results:
+- The pass requirements hold on P1, P2 and P3.
+- Each paper has 12 / 12 PASS.
+- The A's score: **P1 97.92, P2 95.83, P3 97.92.**
+- Extras:
+  - **E2:** the standing 0.25 on each paper, unchanged;
+  - **E6:** a new 0.25 on P2. The W3 default mean is 57.89 characters a line, against the brief's line of 58.
+
+The marks on round 3's findings:
+- **GONE:** E5 (27 cells), E1, B7 on P3, E3, E4 and O2.
+- **STILL:** O1, O3 to O10.
+- The dividers' strips end at the legend: 0.00 px. The B1 scan reads 123 / 123, 72 / 72 and 60 / 60.
+
+**E6 is void (director's ruling).**
+- §1h.478 accepted the 20 px right padding with the text column at 468 px, measured at 57.96 (fit 58.4) characters a line. P2's 57.89 is the same 468 px column on different text: P1 reads 58.74 and P3 58.09.
+- The brief's line ("under 58 at W3 default is a new finding") was the manager's own wording. It was meant to catch a column narrower than ruled, and it was written too tight. The column is exactly as ruled.
+- B2's own sentence ("a useful text measure near the product's ~60-character floor") holds by the A's reading.
+- A rubric amendment records the ruled width before the readers score.
+- **The director's reading: P1, P2 and P3 each 97.92.** The score of record is the readers'.
+
+Recorded and unpriced:
+- **O11:** 1 px of hit-test slop.
+- **O12:** a 29 px drift of the reading place on P2 after a W1 → W4 → W1 resize. Round 3's pack shows the same.
+- **O13:** a selection across a figure is refused, with a visible message.
+- **The tab's 18 px hit area** is below WCAG 2.5.8's 24 px. §1h.478 took this compromise, like the phone tab's 20 px; it is reported to the owner.
+
+One phrase of the deliverable shared four words with a paper by chance: a generic phrase, from the rubric's own minimum-content line. The manager reworded it.
+
+→ **Readers B4-r1, then B4-r2** (blind; pack `r2/a92/pack`), one at a time beside C P12-95.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -3176,7 +3210,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-89 | DONE — landed 8ff00eea; manager mutations 136 / 64 / 33 red; 12,506 tests | E5: the notes tab never stands over the margin's pane divider | tests; own mutation; gates | checkpoint P12-89-C-<UTC>.md | briefs/P12-89.md; §1h.471 |
 | P12-90 | DONE — C (Sonnet); landed at 8bf1dadb (§1h.473) | Tier 1: no one-paragraph review piece (except a closing); refused corrections log their numbers | invented fixtures; own mutations; gates | checkpoint P12-90-C-<UTC>.md | briefs/P12-90.md; §1h.472 |
 | P12-91 | DONE — landed e56d6a40; manager mutations 3 / 8 red; 12,381 tests | Tier 1: no set_role setup from the first non-setup part; a split at a part's own edge is a no-op | invented fixtures; own mutations; gates | checkpoint P12-91-C-<UTC>.md | briefs/P12-91.md; §1h.477 |
-| P12-92 | IN_PROGRESS — A (Sonnet), scratch p12/r2/a92, port 4247 | Theme B round 4 on the landed head | the walk, the matrix, E5 / E2 / O1 re-measured | P12-92-A-<UTC>.md | briefs/P12-92.md; §1h.480 |
+| P12-92 | DONE — A (Sonnet), deliverable 633951c0; A 97.92 / 95.83 / 97.92; E6 void → director 97.92 ×3; readers B4 next (§1h.487) | Theme B round 4 on the landed head | the walk, the matrix, E5 / E2 / O1 re-measured | P12-92-A-<UTC>.md | briefs/P12-92.md; §1h.480 |
 | P12-94 | DONE — landed 84534087; manager mutations 14 / 4 red; 12,534 tests; subset test 30,000 cases | Tier 1: no correction against a high / medium part; a low part's correction needs a look that agrees | invented fixtures; differential subset test; own mutations; gates | checkpoint P12-94-C-<UTC>.md | briefs/P12-94.md; §1h.482 |
 | P12-95 | IN_PROGRESS — C (Sonnet), scratch p12/c95 | Theme B, owner's O1: drag floor ~50 chars; default layout unchanged | Chromium measure; default-fit pin; own mutations; gates | checkpoint P12-95-C-<UTC>.md | briefs/P12-95.md; §1h.484 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
