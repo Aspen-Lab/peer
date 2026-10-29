@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-29T00:13Z
+AS OF        2026-10-29T00:23Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
-LAST RULING  §1h.484   NEXT RULING §1h.485   NEXT ITEM ID P12-96   NEXT FREE PORT 4248
+LAST RULING  §1h.485   NEXT RULING §1h.486   NEXT ITEM ID P12-96   NEXT FREE PORT 4248
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
-RUNNING      (max 2, §1h.443) A P12-92 Theme B round 4 (head d2d2b8b4) ∥ A P12-57 phase 7 (P5 × 5, head d657933e); QUEUE: phase 8 (P5 × 5) → C P12-95 (O1 drag floor) → readers B4 (spawn text r4/readers/spawn-B.txt) → round 5 → B P12-93; DONE: Theme A, Theme C0; C1 waits on P5; OWNER: none open
+RUNNING      (max 2, §1h.443) A P12-92 Theme B round 4 (head d2d2b8b4) ∥ A P12-57 phase 8 (P5 × 5, head fcc83d20); QUEUE: C P12-95 (O1 drag floor) → readers B4 (spawn text r4/readers/spawn-B.txt) → round 5 → B P12-93; DONE: Theme A, Theme C0; C1 waits on P5; OWNER: none open
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
 OWNER'S PDFS P1–P6 (uploads in the manager's session; P4–P6 held out); upload UI only; never commit or quote
 CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB, Haiku, "20 * * * *", enabled, read back 06:23Z; prompt: at most two subagents (§1h.443)
@@ -765,6 +765,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-29T00:05Z | manager (Claude) | §1h.483: C P12-94 landed (84534087); no move_start in any recorded run; phase 7 started | evidence: mgr/mutv/u94a.out, u94b.out, mgr/gates-V.log | next: phase 7, A P12-92
 
 - 2026-10-29T00:13Z | owner (via the manager) | O1 decided: option 1 (同意); §1h.484: drag floor ~50 chars, default unchanged; C P12-95 briefed; B1 W3 needs a useful range from round 5 | evidence: the owner's reply | next: phase 7, A P12-92, C P12-95
+
+- 2026-10-29T00:23Z | manager (Claude) | §1h.485: C1 phase 7 P5 5/5; phase 8 started | evidence: mgr/sealed-c1/P5-p7run*.json, P12-57-A phase 7 report | next: phase 8, A P12-92
 
 ---
 

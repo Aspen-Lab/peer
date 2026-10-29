@@ -235,3 +235,7 @@ On `cf572402`: P1 5/5, P2 5/5, P3 5/5, P4 5/5, P5 2/5 (three damaged runs: M1 ×
 ## Dated amendment, ruling §1h.484 (2026-10-29): B1 at W3 needs a useful range (the owner's O1)
 
 From round 5, B1's W3 cell (853 × 480) passes only if an outward drag of the margin divider grows the margin by at least 32 px. Round 4 is scored by B1's letter, as before.
+
+## Scores — Theme C1 phase 7 (§1h.485)
+
+On `d657933e`: P5 5 / 5 exact. Consecutive passes: P1 2, P2 2, P3 3, P4 5, P5 1, P6 2. Phase 8 (P5 × 5) decides C1.

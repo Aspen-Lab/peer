@@ -2784,6 +2784,21 @@ The model stub the walks use answers against parts 1 and 2. On a paper where tho
 - C P12-95 starts when a slot frees, after A P12-57 phase 8, which is short and on the C1 line.
 - Round 5 walks the head with C P12-95.
 
+### §1h.485 — 2026-10-29 — C1 PHASE 7: P5 5/5 EXACT (12 CONFIDENT-DRAFT REFUSALS, TWO LOW LOOKS TO THE DRAFT); PHASE 8 STARTED
+
+**A P12-57 phase 7** (report landed `fcc83d20`, two commits; P5 × 5 on `d657933e`; 12 calls, 233 of 280 spent; no quota answer; key hits 0).
+
+**C1, scored by the manager: P5 5 / 5 exact.**
+- Every run is 9 / 9 parts, with no row unlike C0.
+- Two runs were reviewed and three fell back (all-refused). No correction was kept in any run.
+
+**The refusals:** 15 in all.
+- 12 are `confident-draft` (11 on part 1 and 1 on part 5): the same splits at 61 and 187 and the `set_role` of part 1 that did damage in phase 6.
+- 3 are `same-role`.
+- The two `contradicts-low` looks, both on part 2, went to the draft.
+
+**Count:** P5 has 1 consecutive pass. **Phase 8** (P5 × 5) is the second, within the 47 calls left.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -3094,7 +3109,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-54 | DONE — C (Sonnet); landed (R13b) with the revision at 5 | R13b: one-page figure calls up to 27,000,000 bytes | invented-input test; own mutation; gates | checkpoint P12-54-C-<UTC>.md; manager verifies | briefs/P12-54.md; §1h.429 |
 | P12-55 | DONE — C (Sonnet); landed (R11a, R12a) | R11a ceilings with grid clustering; R12a strokes honour the clip | invented-input tests; 5 re-aimed budget tests named; own mutations; gates | checkpoint P12-55-C-<UTC>.md; manager verifies | briefs/P12-55.md; §1h.429 |
 | P12-56 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | R14a Extended Data; R6b the line before; R15a the bar | invented-input tests; own mutations; gates | checkpoint P12-56-C-<UTC>.md; manager verifies | briefs/P12-56.md; §1h.429 (d), §1h.431 |
-| P12-57 | PHASE 7 RUNNING — A (Sonnet), P5 × 5 on 84534087; then phase 8 (P5 × 5); ceiling 280 | C1 with the owner's test key: phase 1 harness on P1; phase 2 arms after C P12-53 and Tier 0 land | BYOK path, rows, Google calls, hygiene 0 | report P12-57-A-<UTC>.md | briefs/P12-57.md; §1h.430 |
+| P12-57 | PHASE 8 RUNNING — phase 7 report fcc83d20: P5 5/5; phase 8 P5 × 5 (47 calls left of 280) | C1 with the owner's test key: phase 1 harness on P1; phase 2 arms after C P12-53 and Tier 0 land | BYOK path, rows, Google calls, hygiene 0 | report P12-57-A-<UTC>.md | briefs/P12-57.md; §1h.430 |
 | P12-58 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | D1: upload keeps its document; reading says pending; the page keeps asking | route and hook tests; own mutations; gates | checkpoint P12-58-C-<UTC>.md; manager verifies | briefs/P12-58.md; §1h.432 |
 | P12-59 | DONE — B (Sonnet), report on the branch | the 55 s request; P5's memory by stage; P1 / P3 titles | file:line; three rules each | report P12-59-B-<UTC>.md | briefs/P12-59.md; §1h.432 |
 | P12-60 | DONE — B (Sonnet), report on the branch | open only the figure's page: memory by stage on P5; cache today; three candidates measured | file:line; measures | report P12-60-B-<UTC>.md | briefs/P12-60.md; §1h.433 |
