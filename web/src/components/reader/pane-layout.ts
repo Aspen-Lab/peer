@@ -200,6 +200,21 @@ export function readingCentreMinimum(scale: number): number {
   return Math.ceil(476 * scale + 24);
 }
 
+/**
+ * P12-95 (the owner's O1; ruling §1h.484): the least a reader can DRAG the centre to — about 50 characters of the body text at this step,
+ * with the same 12 + 20px insets as the budget above.
+ *
+ * `readingCentreMinimum` is what the window keeps for the centre until the reader asks for something else; this is what the reader may
+ * ask for. At 853 x 480 the budget leaves the margin divider a 1px range (the centre at 500, the margin at its 280 floor, 281 beside the
+ * rail); with this floor the same window gives it 280 to 347. The text column at the floor is `402 * scale` px, which measures 49.4 to
+ * 51.2 characters a line at the eight steps (Newsreader at 17.5px * scale, justified and hyphenated, in a 853 x 480 window: 50.0 at the
+ * default step and 50.2 at the largest; the numbers are in the P12-95 checkpoint) — "about 50", inside the 48 to 52 the owner's O1 asked
+ * for. Which layout registers (`railMinimumWidth`) and what a first visit shows (`fitPanes`) do not use it.
+ */
+export function readingCentreDragMinimum(scale: number): number {
+  return Math.ceil(402 * scale + 32);
+}
+
 export function railMinimumWidth(scale: number): number {
   return RAIL_PX + MARGIN_MIN_PX + 2 * DIVIDER_PX + readingCentreMinimum(scale);
 }

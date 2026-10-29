@@ -21,6 +21,8 @@ import {
   defaultPanePx,
   fitPanes,
   paneRange,
+  readingCentreDragMinimum,
+  readingCentreMinimum,
   stepPane,
 } from "./pane-layout";
 
@@ -283,5 +285,39 @@ describe("fitPanes — what gives way when the window is too narrow for the reme
   it("a window that is not a number is read as the shell's minimum", () => {
     expect(fitPanes({ viewport: Number.NaN })).toEqual(fitPanes({ viewport: SHELL_MIN_VIEWPORT_PX }));
     expect(fitPanes({ viewport: Number.NaN }).centre).toBe(CENTRE_MIN_PX);
+  });
+});
+
+// The reading steps (`READING_SCALE_STEPS`, `store/reading-prefs.ts`), written out: the pane numbers are held against the same eight.
+const STEPS = [0.85, 0.925, 1, 1.1, 1.2, 1.32, 1.45, 1.6] as const;
+
+// P12-95 rule 1 (the owner's O1; ruling §1h.484): the centre a reader can drag down to is about 50 characters of the body text, where the
+// window keeps about 58 for it until the reader asks. The 402 is the number measured in Chromium at 853 x 480 (the P12-95 checkpoint):
+// the paper's body text at a 402 px column set 50.0 characters a line at the default step and 50.2 at the largest, 49.4 to 51.2 over the eight.
+describe("readingCentreDragMinimum — the least a reader can drag the centre to", () => {
+  it("is 402 px of text a step plus the centre's 12 + 20 px insets, rounded up", () => {
+    expect(STEPS.map(readingCentreDragMinimum)).toEqual([374, 404, 434, 475, 515, 563, 615, 676]);
+  });
+
+  it("leaves a text column of 402 x the step, to the pixel", () => {
+    for (const scale of STEPS) {
+      const column = readingCentreDragMinimum(scale) - 32;
+      expect(column, `step ${scale}`).toBeGreaterThanOrEqual(402 * scale);
+      expect(column, `step ${scale}`).toBeLessThan(402 * scale + 1);
+    }
+  });
+
+  it("is under the reading budget at every step: the drag may go where the first visit does not", () => {
+    for (const scale of STEPS) {
+      expect(readingCentreDragMinimum(scale), `step ${scale}`).toBeLessThan(readingCentreMinimum(scale));
+    }
+    // The budget itself did not move (P12-07; C P12-89): 476 px of text a step plus 24.
+    expect(STEPS.map(readingCentreMinimum)).toEqual([429, 465, 500, 548, 596, 653, 715, 786]);
+  });
+
+  it("is what a margin divider at 853 px (a rail, the centre at its floor) can be dragged to: 280 to 347 at the default step, where it was 280 to 281", () => {
+    const room = (centreMinimum: number) => ({ viewport: 853, other: RAIL_PX, centreMinimum });
+    expect(paneRange("margin", room(readingCentreMinimum(1)))).toEqual({ min: 280, max: 281 });
+    expect(paneRange("margin", room(readingCentreDragMinimum(1)))).toEqual({ min: 280, max: 347 });
   });
 });
