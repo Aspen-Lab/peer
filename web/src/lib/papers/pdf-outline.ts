@@ -2904,10 +2904,16 @@ function openingStart(
 // a few characters, and the outline read them as the paper's prose, as rows of their own when one has the
 // shape of a heading ("5 Min"), and as an equation when they stand close enough to fold. The text next to a
 // figure's caption that is nothing else is dropped: three or more lines in a row, each short, unpunctuated
-// and either free of any word of four letters or set smaller than the body.
+// and either free of any word of four letters or set smaller than the body. P12-97 (R-B): a line set smaller than
+// the body may be up to 60 characters; at the body's size the limit stays 25.
 
 /** A line of figure text is at most this many characters. */
 const PANEL_LINE_MAX = 25;
+/** P12-97 (R-B): a line set smaller than the body (`SMALLER_THAN_BODY`) is figure text up to this many characters. An
+ *  axis title, a legend entry or a panel title is set small in the figure's own face and runs to a line of a sentence;
+ *  at 25 it was no panel line, and it cut the tick strings on either side of it into runs too short to be figure text.
+ *  At the body's size the limit stays `PANEL_LINE_MAX`: a body line of 26 to 60 characters is a line of prose. */
+const PANEL_SMALL_LINE_MAX = 60;
 /** Fewer lines in a row than this are not figure text: the short last line of a paragraph is one. */
 const PANEL_RUN_MIN = 3;
 /** Figure text is "next to" a caption within this many body sizes of it on the page. */
@@ -2917,9 +2923,10 @@ const SMALLER_THAN_BODY = 0.95;
 
 function isPanelLine(line: PdfLine, body: { size: number }): boolean {
   const text = line.text.trim();
-  if (line.block || text.length === 0 || text.length > PANEL_LINE_MAX) return false;
+  const small = line.size < body.size * SMALLER_THAN_BODY;
+  if (line.block || text.length === 0 || text.length > (small ? PANEL_SMALL_LINE_MAX : PANEL_LINE_MAX)) return false;
   if (SENTENCE_END.test(text) || captionOf(line) || equationOf(line)) return false;
-  return !/\p{L}{4,}/u.test(text) || line.size < body.size * SMALLER_THAN_BODY;
+  return !/\p{L}{4,}/u.test(text) || small;
 }
 
 /**
