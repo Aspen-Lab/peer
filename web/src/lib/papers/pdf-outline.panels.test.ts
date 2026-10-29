@@ -158,3 +158,145 @@ describe("a line set smaller than the body is figure text up to 60 characters (P
     expect(textOf(pages)).toContain(LABELS[0]);
   });
 });
+
+// ── R-A: the stretch to the caption ──────────────────────────────────────────────────────────────────────
+
+/** Tick strings: panel lines of any size, none with a word of four letters. */
+const TICKS = ["0.0 0.5 1.0", "1.5 2.0", "0 100 200", "300 400"];
+/** A line at the body's size of 30 characters with words of four letters: not a panel line, and not a body line (40). */
+const AXIS_TITLE = "Discharge capacity over cycles";
+const FORTY = "Mean discharge capacity at the fifth one"; // 40 characters, at the body's size
+const THIRTY_NINE = "Mean discharge capacity at the fifth on"; // 39 characters
+
+/** A tall figure: its tick strings `distance` body sizes (10 pt) above its caption, nothing but the drawing between. */
+const tall = (distance: number, ticks: Row[] = TICKS.map((t, i) => r(t, "small", i === 0 ? 24 : 14))): PdfPageText[] => [
+  page(1, [...opening(), ...ticks, r(CAPTION, "body", distance * 10), ...para(...RESULTS)]),
+];
+
+describe("a run of panel lines is beside a caption when only non-body lines lie between (P12-97, R-A)", () => {
+  it.each([10, 25, 40, 50])("takes tick strings %i body sizes above the caption of a tall figure", (distance) => {
+    // Before: the run was beside a caption only within 8 body sizes of it, and these stayed paragraphs.
+    expect(textOf(tall(distance))).toBe(PROSE);
+    expect(outlineOf(tall(distance)).figureCaptions?.map((c) => c.label)).toEqual(["Figure 2"]);
+  });
+
+  it("takes tick strings at the body's size too: a short numeric line is not a body line", () => {
+    const body = TICKS.map((t, i) => r(t, "body", i === 0 ? 24 : 14));
+    expect(textOf(tall(40, body))).toBe(PROSE);
+  });
+
+  it("takes a run below a caption, a table's rows under its title, as far as the first body line", () => {
+    const table = [page(1, [...opening(), r("Table 2: Capacity of the films over the cycles.", "body", 24), ...TICKS.map((t, i) => r(t, "small", i === 0 ? 400 : 14)), ...para(...RESULTS)])];
+    expect(textOf(table)).toBe(PROSE);
+  });
+
+  it("passes the lines of the figure that are not panel lines, to reach a run beyond them", () => {
+    // Two runs of ticks, an axis title between them (30 characters at the body's size: no panel line and no body line)
+    // and the caption 40 body sizes under the first. The axis title stays where it is; both runs go.
+    const rows: Row[] = [
+      r(TICKS[0], "small", 24),
+      r(TICKS[1], "small", 14),
+      r(TICKS[2], "small", 14),
+      r(AXIS_TITLE, "body", 14),
+      r(TICKS[3], "small", 14),
+      r("5 10 15", "small", 14),
+      r("20 25", "small", 14),
+    ];
+    const text = textOf(tall(40, rows));
+    expect(text).not.toMatch(/0\.0 0\.5|1\.5 2\.0|0 100 200|300 400|5 10 15|20 25/);
+    expect(text).toContain(AXIS_TITLE);
+  });
+
+  it("stops at the first body line: a paragraph between the figure's text and its caption keeps the text a paragraph", () => {
+    // The run is 12 body sizes above the caption in a straight line, but a paragraph of six lines of prose stands
+    // between: the run is the end of the section above the figure, not the figure's text.
+    const pages = [
+      page(1, [
+        ...opening(),
+        ...TICKS.slice(0, 3).map((t, i) => r(t, "small", i === 0 ? 24 : 14)),
+        ...para(...RESULTS, ...METHODS),
+        r(CAPTION, "body", 28),
+        ...para(...INTRO),
+      ]),
+    ];
+    expect(textOf(pages)).toContain(TICKS.slice(0, 3).join(" "));
+    expect(textOf(pages)).toContain(RESULTS[0]);
+  });
+
+  it("counts a body line from 40 characters, set within 5 % of the body's size", () => {
+    expect(FORTY).toHaveLength(40);
+    expect(THIRTY_NINE).toHaveLength(39);
+    const between = (line: string, kind: Kind): PdfPageText[] => [
+      page(1, [
+        ...opening(),
+        ...TICKS.slice(0, 3).map((t, i) => r(t, "small", i === 0 ? 24 : 14)),
+        r(line, kind, 14),
+        r(CAPTION, "body", 80),
+        ...para(...RESULTS),
+      ]),
+    ];
+    // 40 characters: a body line, so the stretch from the caption ends at it, and the run above it (94 points, more
+    // than 8 body sizes, from the caption) stays. At 39 it is the figure's own line and the stretch goes on.
+    expect(textOf(between(FORTY, "body"))).toContain(TICKS.slice(0, 3).join(" "));
+    expect(textOf(between(FORTY, "near")), "9.6 pt is within 5 % of 10").toContain(TICKS.slice(0, 3).join(" "));
+    expect(textOf(between(THIRTY_NINE, "body"))).not.toContain(TICKS[0]);
+    expect(textOf(between(THIRTY_NINE, "body"))).toContain(THIRTY_NINE);
+  });
+
+  it("does not reach across a page: a run at the foot of one page is not beside the caption that opens the next", () => {
+    // Page 1 ends on the run and a line of 30 characters at the body's size (a non-body line, so the stretch would go on
+    // through it, and the line keeps the run from being the page's margin print); page 2 opens on a caption.
+    const pages = [
+      page(1, [...opening(), ...TICKS.slice(0, 3).map((t, i) => r(t, "small", i === 0 ? 24 : 14)), r(AXIS_TITLE, "body", 14)]),
+      page(2, [r(CAPTION, "body"), ...para(...RESULTS)]),
+    ];
+    expect(textOf(pages)).toContain(TICKS.slice(0, 3).join(" "));
+  });
+
+  it("still takes the run within 8 body sizes of the caption, whatever stands between", () => {
+    // The old reach, kept as one way to be beside a caption: a body line 4 body sizes above the caption does not take
+    // the run beyond it out of reach.
+    const pages = [
+      page(1, [
+        ...opening(),
+        ...TICKS.slice(0, 3).map((t, i) => r(t, "small", i === 0 ? 24 : 14)),
+        r(RESULTS[0], "body", 14),
+        r(CAPTION, "body", 14),
+        ...para(...RESULTS.slice(1)),
+      ]),
+    ];
+    expect(textOf(pages)).not.toContain(TICKS[0]);
+    expect(textOf(pages)).toContain(RESULTS[0]);
+  });
+
+  it("keeps a heading a heading and a caption a caption, with a tall figure beside them", () => {
+    const pages = [
+      page(1, [
+        ...opening(),
+        ...TICKS.map((t, i) => r(t, "small", i === 0 ? 24 : 14)),
+        r(CAPTION, "body", 400),
+        r("2 Results", "num", 24),
+        ...prose(...RESULTS),
+      ]),
+    ];
+    expect(headingsOf(pages)).toEqual(["1 Introduction", "2 Results"]);
+    expect(textOf(pages)).toBe(PROSE);
+    expect(outlineOf(pages).figureCaptions).toEqual([
+      { ordinal: 2, label: "Figure 2", caption: "Capacity of the films over the cycles.", page: 1 },
+    ]);
+  });
+
+  it("keeps a heading with a body-sized tick string above it, a heading", () => {
+    const pages = [
+      page(1, [
+        ...opening(),
+        r("2 Results", "num", 24),
+        ...TICKS.map((t, i) => r(t, "small", i === 0 ? 24 : 14)),
+        r(CAPTION, "body", 300),
+        ...para(...RESULTS),
+      ]),
+    ];
+    expect(headingsOf(pages)).toEqual(["1 Introduction", "2 Results"]);
+    expect(textOf(pages)).toBe(PROSE);
+  });
+});

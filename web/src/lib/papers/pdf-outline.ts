@@ -2905,7 +2905,8 @@ function openingStart(
 // shape of a heading ("5 Min"), and as an equation when they stand close enough to fold. The text next to a
 // figure's caption that is nothing else is dropped: three or more lines in a row, each short, unpunctuated
 // and either free of any word of four letters or set smaller than the body. P12-97 (R-B): a line set smaller than
-// the body may be up to 60 characters; at the body's size the limit stays 25.
+// the body may be up to 60 characters; at the body's size the limit stays 25. P12-97 (R-A): the run is beside the
+// caption when it stands within 8 body sizes of it or when only lines that are not body lines lie between them.
 
 /** A line of figure text is at most this many characters. */
 const PANEL_LINE_MAX = 25;
@@ -2920,6 +2921,11 @@ const PANEL_RUN_MIN = 3;
 const PANEL_REACH = 8;
 /** A line is set smaller than the body below this share of its size. */
 const SMALLER_THAN_BODY = 0.95;
+/** P12-97 (R-A): a body line is set within this share of the body's size, in the body's measure... */
+const BODY_LINE_SLACK = 0.05;
+/** ...and is at least this many characters long: a paragraph's full line, not a label, a tick string or the short last
+ *  line of a paragraph. The figure text of a tall figure stands beside its caption through lines that are not these. */
+const BODY_LINE_MIN = 40;
 
 function isPanelLine(line: PdfLine, body: { size: number }): boolean {
   const text = line.text.trim();
@@ -2942,22 +2948,47 @@ function figureTextOf(
   furniture: Set<string>,
 ): Set<number> {
   const captions: PdfLine[] = [];
+  // Where each caption stands in `read`: its first line and the last line it runs on to.
+  const spans: [number, number][] = [];
   const taken = new Set<number>();
   for (let i = 0; i < read.length; i++) {
     if (skipped[i] || !captionOf(read[i])) continue;
     captions.push(read[i]);
     taken.add(i);
+    const first = i;
     const end = captionEnd(read, i, pitch, body, furniture);
     while (i < end) taken.add(++i);
+    spans.push([first, i]);
   }
   const figure = new Set<number>();
   if (captions.length === 0) return figure;
   const reach = body.size * PANEL_REACH;
+  // P12-97 (R-A): the stretch of each caption: the lines of its page from its first line up, and from its last line
+  // down, that no body line, no other caption and no page break cuts it off from. A figure is taller than the reach
+  // (25 to 66 body sizes on the owner's papers), and what the reach left uncovered above its lowest 8 body sizes was
+  // the figure's tick strings and panel words, read as the paper's paragraphs.
+  const isBodyLine = (line: PdfLine): boolean =>
+    Math.abs(line.size - body.size) <= body.size * BODY_LINE_SLACK && line.text.trim().length >= BODY_LINE_MIN;
+  const stretch = new Set<number>();
+  for (const [first, last] of spans) {
+    const page = read[first].page;
+    const walk = (from: number, step: 1 | -1) => {
+      for (let j = from; j >= 0 && j < read.length && read[j].page === page; j += step) {
+        if (skipped[j]) continue;
+        if (taken.has(j) || isBodyLine(read[j])) break;
+        stretch.add(j);
+      }
+    };
+    walk(first - 1, -1);
+    walk(last + 1, 1);
+  }
   let run: number[] = [];
   const close = () => {
     if (run.length >= PANEL_RUN_MIN) {
       const page = read[run[0]].page;
-      const beside = captions.some((c) => c.page === page && run.some((i) => Math.abs(c.y - read[i].y) <= reach));
+      const beside =
+        run.some((i) => stretch.has(i)) ||
+        captions.some((c) => c.page === page && run.some((i) => Math.abs(c.y - read[i].y) <= reach));
       if (beside) for (const i of run) figure.add(i);
     }
     run = [];
